@@ -72,6 +72,7 @@ const userTypeOptions = [
   "event_coordinator",
   "staff",
   "admin",
+  "duper_admin",
   "super_admin",
 ];
 

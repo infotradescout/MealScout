@@ -3,6 +3,7 @@ import { z } from "zod";
 import { isAuthenticated } from "./unifiedAuth";
 import { createModerationService } from "./moderationService";
 import { db } from "./db";
+import { isAdminUserType } from "./roleAccess";
 import {
   recommendationFlags,
   profileContentFlags,
@@ -266,8 +267,7 @@ export function registerModerationRoutes(app: Express) {
         // Check admin/moderator permissions
         const user = (req as any).user;
         if (
-          user?.userType !== "admin" &&
-          user?.userType !== "super_admin" &&
+          !isAdminUserType(user?.userType) &&
           user?.userType !== "moderator"
         ) {
           return res.status(403).json({ error: "Unauthorized" });
@@ -298,8 +298,7 @@ export function registerModerationRoutes(app: Express) {
         // Check admin/moderator permissions
         const user = (req as any).user;
         if (
-          user?.userType !== "admin" &&
-          user?.userType !== "super_admin" &&
+          !isAdminUserType(user?.userType) &&
           user?.userType !== "moderator"
         ) {
           return res.status(403).json({ error: "Unauthorized" });
@@ -329,9 +328,9 @@ export function registerModerationRoutes(app: Express) {
     isAuthenticated,
     async (req: Request, res: Response) => {
       try {
-        // Check admin/super_admin permissions only
+        // Check admin-family permissions only
         const user = (req as any).user;
-        if (user?.userType !== "admin" && user?.userType !== "super_admin") {
+        if (!isAdminUserType(user?.userType)) {
           return res.status(403).json({ error: "Unauthorized" });
         }
 
@@ -363,8 +362,7 @@ export function registerModerationRoutes(app: Express) {
         // Check admin/moderator permissions
         const user = (req as any).user;
         if (
-          user?.userType !== "admin" &&
-          user?.userType !== "super_admin" &&
+          !isAdminUserType(user?.userType) &&
           user?.userType !== "moderator"
         ) {
           return res.status(403).json({ error: "Unauthorized" });

@@ -5,6 +5,7 @@ import { logAudit } from "./auditLogger";
 import { sendAccountSetupInvite } from "./utils/accountSetup";
 import { ensurePremiumTrialForUserId } from "./services/premiumTrial";
 import bcrypt from "bcryptjs";
+import { canAssignUserType, getRoleAssignmentDeniedMessage, isInternalTeamUserType } from "./roleAccess";
 
 /**
  * Staff Management & User Creation Routes
@@ -74,8 +75,8 @@ export function registerStaffRoutes(app: Express) {
             .json({ error: "Cannot modify super admin account" });
         }
 
-        // Cannot promote admin/staff to staff (no-op or error)
-        if (user.userType === "admin" || user.userType === "staff") {
+        // Cannot promote existing internal team accounts to staff (no-op or error)
+        if (isInternalTeamUserType(user.userType)) {
           return res
             .status(400)
             .json({ error: "User is already staff or admin" });
@@ -216,19 +217,15 @@ export function registerStaffRoutes(app: Express) {
           "event_coordinator",
           "staff",
           "admin",
+          "duper_admin",
         ];
         const targetUserType =
           userType && validUserTypes.includes(userType) ? userType : "customer";
 
-        // Only admins can create staff or admin accounts
-        if (
-          (targetUserType === "staff" || targetUserType === "admin") &&
-          staffUser.userType !== "admin" &&
-          staffUser.userType !== "super_admin"
-        ) {
+        if (!canAssignUserType(staffUser.userType, targetUserType)) {
           return res
             .status(403)
-            .json({ error: "Only admins can create staff or admin accounts" });
+            .json({ error: getRoleAssignmentDeniedMessage(targetUserType) });
         }
 
         const normalizedEmail = email.trim().toLowerCase();
@@ -251,7 +248,7 @@ export function registerStaffRoutes(app: Express) {
         });
 
         // Internal team accounts should be able to log in immediately.
-        if (targetUserType === "staff" || targetUserType === "admin") {
+        if (isInternalTeamUserType(targetUserType)) {
           await storage.updateUser(user.id, { emailVerified: true });
         }
 

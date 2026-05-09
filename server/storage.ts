@@ -128,6 +128,7 @@ import {
 import bcrypt from "bcryptjs";
 import { syncUserToBrevo } from "./brevoCrm";
 import { ensureAffiliateTag } from "./affiliateTagService";
+import { shouldAssignAffiliateTagForUserType } from "./roleAccess";
 import {
   getBusinessAccessContext,
   hasBusinessPermissionForRestaurant,
@@ -388,6 +389,7 @@ export interface IStorage {
       | "event_coordinator"
       | "staff"
       | "admin"
+      | "duper_admin"
       | "super_admin";
   }): Promise<User>;
 
@@ -731,6 +733,7 @@ export interface IStorage {
       | "event_coordinator"
       | "staff"
       | "admin"
+      | "duper_admin"
       | "super_admin",
   ): Promise<User>;
   deleteUser(userId: string): Promise<void>;
@@ -1225,7 +1228,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   private shouldAssignAffiliateTag(userType?: string | null) {
-    return userType !== "admin" && userType !== "super_admin";
+    return shouldAssignAffiliateTagForUserType(userType);
   }
 
   async syncParkingPassSeriesFromHost(hostId: string): Promise<string | null> {
@@ -1806,6 +1809,7 @@ export class DatabaseStorage implements IStorage {
       | "event_coordinator"
       | "staff"
       | "admin"
+      | "duper_admin"
       | "super_admin",
   ): Promise<User> {
     return this.usersRepository.updateUserType(id, userType);
@@ -2247,6 +2251,7 @@ export class DatabaseStorage implements IStorage {
           eventCoordinator: number;
           staff: number;
           admin: number;
+          duperAdmin: number;
           superAdmin: number;
           other: number;
         },
@@ -2275,6 +2280,9 @@ export class DatabaseStorage implements IStorage {
           case "admin":
             acc.admin += 1;
             break;
+          case "duper_admin":
+            acc.duperAdmin += 1;
+            break;
           case "super_admin":
             acc.superAdmin += 1;
             break;
@@ -2291,6 +2299,7 @@ export class DatabaseStorage implements IStorage {
         eventCoordinator: 0,
         staff: 0,
         admin: 0,
+        duperAdmin: 0,
         superAdmin: 0,
         other: 0,
       },
@@ -2305,6 +2314,7 @@ export class DatabaseStorage implements IStorage {
       memberCounts.eventCoordinator +
       memberCounts.staff +
       memberCounts.admin +
+      memberCounts.duperAdmin +
       memberCounts.superAdmin +
       memberCounts.other;
 
@@ -2386,6 +2396,7 @@ export class DatabaseStorage implements IStorage {
       | "event_coordinator"
       | "staff"
       | "admin"
+      | "duper_admin"
       | "super_admin";
   }): Promise<User> {
     return this.usersRepository.createUserInvite(data);

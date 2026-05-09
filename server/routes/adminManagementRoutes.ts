@@ -27,6 +27,13 @@ import { distributedRateLimit } from "../middleware/distributedRateLimit";
 import { forwardGeocode } from "../utils/geocoding";
 import { ensurePremiumTrialForUserId } from "../services/premiumTrial";
 import {
+  canAssignUserType,
+  getRoleAssignmentDeniedMessage,
+  isAdminUserType,
+  isInternalTeamUserType,
+  shouldAssignAffiliateTagForUserType,
+} from "../roleAccess";
+import {
   deals,
   eventBookings,
   eventInterests,
@@ -106,7 +113,7 @@ const buildSignalLane = (parts: Array<string | null | undefined>) =>
   parts.map((part) => String(part || "unknown")).join(":");
 
 const shouldAssignAffiliateTag = (candidateUserType?: string | null) =>
-  candidateUserType !== "admin" && candidateUserType !== "super_admin";
+  shouldAssignAffiliateTagForUserType(candidateUserType);
 
 const toCountDeltaLine = (
   label: string,
@@ -1050,10 +1057,7 @@ export function registerAdminManagementRoutes(app: Express) {
     return false;
   };
   const requireAdminUser = (req: any, res: any) => {
-    if (
-      req.user?.userType !== "admin" &&
-      req.user?.userType !== "super_admin"
-    ) {
+    if (!isAdminUserType(req.user?.userType)) {
       res.status(403).json({ message: "Admin access required" });
       return false;
     }
@@ -1173,23 +1177,6 @@ export function registerAdminManagementRoutes(app: Express) {
           userType,
         } = req.body;
 
-        if (req.user?.userType === "staff") {
-          if (userType === "admin" || userType === "super_admin") {
-            return res.status(403).json({
-              message: "Staff cannot create admin or super admin accounts",
-            });
-          }
-        }
-
-        if (
-          userType === "super_admin" &&
-          req.user?.userType !== "super_admin"
-        ) {
-          return res.status(403).json({
-            message: "Only super admins can create super admin accounts",
-          });
-        }
-
         // Validate required fields
         const normalizedEmail = email?.trim().toLowerCase();
         const validUserTypes = [
@@ -1200,6 +1187,7 @@ export function registerAdminManagementRoutes(app: Express) {
           "event_coordinator",
           "staff",
           "admin",
+          "duper_admin",
           "super_admin",
         ];
 
@@ -1210,6 +1198,12 @@ export function registerAdminManagementRoutes(app: Express) {
         ) {
           return res.status(400).json({
             message: "Valid email and userType are required",
+          });
+        }
+
+        if (!canAssignUserType(req.user?.userType, userType)) {
+          return res.status(403).json({
+            message: getRoleAssignmentDeniedMessage(userType),
           });
         }
 
@@ -1263,10 +1257,7 @@ export function registerAdminManagementRoutes(app: Express) {
           }
         }
 
-        const userIsInternalTeam =
-          userType === "staff" ||
-          userType === "admin" ||
-          userType === "super_admin";
+        const userIsInternalTeam = isInternalTeamUserType(userType);
 
         let createdHostId: string | null = null;
         const [user] = await db.transaction(async (tx: any) => {
@@ -1425,11 +1416,11 @@ export function registerAdminManagementRoutes(app: Express) {
         }
       }
 
-      // Also verify email if admin/super_admin
+      // Also verify email for admin-family users.
       if (
         user &&
         !user.emailVerified &&
-        (user.userType === "admin" || user.userType === "super_admin")
+        isAdminUserType(user.userType)
       ) {
         try {
           user = await storage.updateUser(user.id, { emailVerified: true });
@@ -1439,9 +1430,7 @@ export function registerAdminManagementRoutes(app: Express) {
       }
 
       if (
-        user.userType === "admin" ||
-        user.userType === "super_admin" ||
-        user.userType === "staff"
+        isInternalTeamUserType(user.userType)
       ) {
         res.json(sanitizeUser(user, { includeStripe: true }));
       } else {
@@ -3232,10 +3221,7 @@ export function registerAdminManagementRoutes(app: Express) {
         const accessInfo = await validateFeedAccess(bearerToken);
 
         const userType = String(req.user?.userType || "").trim();
-        const userIsStaff =
-          userType === "staff" ||
-          userType === "admin" ||
-          userType === "super_admin";
+        const userIsStaff = isInternalTeamUserType(userType);
 
         if (!accessInfo && !userIsStaff) {
           return res.status(401).json({

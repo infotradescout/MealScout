@@ -27,6 +27,12 @@ import { db } from "./db";
 import { users } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { ensureAffiliateTag, resolveAffiliateUserId } from "./affiliateTagService";
+import {
+  isAdminUserType,
+  isDuperAdminUserType,
+  isRootAdminUserType,
+  shouldAssignAffiliateTagForUserType,
+} from "./roleAccess";
 
 // Extend session to include app context for multi-app OAuth
 declare module "express-session" {
@@ -209,6 +215,7 @@ export async function setupUnifiedAuth(app: Express) {
         return "/supplier/dashboard";
       case "staff":
         return "/staff";
+      case "duper_admin":
       case "admin":
       case "super_admin":
         return "/admin/dashboard";
@@ -266,6 +273,8 @@ export async function setupUnifiedAuth(app: Express) {
       const supportsWelcome =
         user.userType === "customer" ||
         user.userType === "restaurant_owner" ||
+        user.userType === "duper_admin" ||
+        user.userType === "super_admin" ||
         user.userType === "admin";
 
       if (supportsWelcome) {
@@ -362,7 +371,7 @@ export async function setupUnifiedAuth(app: Express) {
       if (
         user &&
         !user.emailVerified &&
-        (user.userType === "admin" || user.userType === "super_admin")
+        isAdminUserType(user.userType)
       ) {
         try {
           user = await storage.updateUser(user.id, { emailVerified: true });
@@ -1486,6 +1495,7 @@ export async function setupUnifiedAuth(app: Express) {
       const mapRolesToUserType = (r?: string[]): User["userType"] => {
         if (!r || r.length === 0) return "customer";
         if (r.includes("mealscout_super_admin")) return "super_admin";
+        if (r.includes("mealscout_duper_admin")) return "duper_admin";
         if (r.includes("mealscout_admin") || r.includes("admin"))
           return "admin";
         if (
@@ -1526,7 +1536,7 @@ export async function setupUnifiedAuth(app: Express) {
         tsUserData,
         userType === "super_admin"
           ? "admin"
-          : (userType as "customer" | "restaurant_owner" | "admin"),
+          : (userType as "customer" | "restaurant_owner" | "admin" | "duper_admin"),
       );
       kickAffiliateTag(user);
       await applyAffiliateReferral(req, user);
@@ -1981,7 +1991,7 @@ async function applyAffiliateReferral(req: any, user: User) {
 }
 
 function kickAffiliateTag(user: User) {
-  if (user.userType === "admin" || user.userType === "super_admin") return;
+  if (!shouldAssignAffiliateTagForUserType(user.userType)) return;
   if (user.affiliateTag) return;
   ensureAffiliateTag(user.id).catch((error) =>
     console.error("[affiliate] Failed to assign tag:", error),
@@ -2002,9 +2012,7 @@ export const isRestaurantOwner = (req: any, res: any, next: any) => {
     return res.status(401).json({ error: "Authentication required" });
   }
 
-  if (
-    !["restaurant_owner", "admin", "super_admin"].includes(req.user.userType)
-  ) {
+  if (req.user.userType !== "restaurant_owner" && !isAdminUserType(req.user.userType)) {
     return res.status(403).json({ error: "Restaurant owner access required" });
   }
 
@@ -2018,6 +2026,7 @@ type UserRole =
   | "supplier"
   | "staff"
   | "admin"
+  | "duper_admin"
   | "super_admin";
 
 export const requireRole =
@@ -2032,7 +2041,14 @@ export const requireRole =
     }
 
     const userRole = req.user?.userType as UserRole;
-    if (userRole === "super_admin") {
+    if (isRootAdminUserType(userRole)) {
+      return next();
+    }
+
+    if (
+      isDuperAdminUserType(userRole) &&
+      allowedRoles.some((role) => role !== "super_admin")
+    ) {
       return next();
     }
 
@@ -2057,22 +2073,23 @@ export const requireRole =
   };
 
 // Convenience middleware for admin-only endpoints
-export const isAdmin = requireRole(["admin", "super_admin"]);
+export const isAdmin = requireRole(["admin", "duper_admin", "super_admin"]);
 
 // Convenience middleware for super admin only
 export const isSuperAdmin = requireRole(["super_admin"]);
 
 // Convenience middleware for staff or admin
-export const isStaffOrAdmin = requireRole(["staff", "admin", "super_admin"]);
+export const isStaffOrAdmin = requireRole(["staff", "admin", "duper_admin", "super_admin"]);
 
 // Convenience middleware for restaurant owner or admin
 export const isRestaurantOwnerOrAdmin = requireRole([
   "restaurant_owner",
   "admin",
+  "duper_admin",
   "super_admin",
 ]);
 
-export const isSupplierOrAdmin = requireRole(["supplier", "admin", "super_admin"]);
+export const isSupplierOrAdmin = requireRole(["supplier", "admin", "duper_admin", "super_admin"]);
 
 // API Key authentication middleware
 export const apiKeyAuth = async (req: any, res: any, next: any) => {
@@ -2153,8 +2170,7 @@ export const verifyResourceOwnership = (
         // Allow if user is owner or admin
         if (
           restaurant.ownerId !== req.user.id &&
-          req.user.userType !== "admin" &&
-          req.user.userType !== "super_admin"
+          !isAdminUserType(req.user.userType)
         ) {
           return res
             .status(403)
@@ -2173,8 +2189,7 @@ export const verifyResourceOwnership = (
         }
 
         // Allow if user is restaurant owner or admin
-        const isAdmin =
-          req.user.userType === "admin" || req.user.userType === "super_admin";
+        const isAdmin = isAdminUserType(req.user.userType);
         const canManageDeals =
           restaurant.ownerId === req.user.id
             ? true

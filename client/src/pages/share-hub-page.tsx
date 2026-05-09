@@ -7,7 +7,7 @@ export default function ShareHubPage() {
   const userType = String(user?.userType || "");
 
   const mode =
-    userType === "admin" || userType === "super_admin"
+    userType === "admin" || userType === "duper_admin" || userType === "super_admin"
       ? "admin"
       : userType === "staff"
         ? "staff"

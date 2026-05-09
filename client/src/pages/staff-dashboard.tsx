@@ -34,6 +34,15 @@ interface CreatedAccount {
   restaurantId?: string;
 }
 
+const isAdminFamilyUserType = (userType?: string | null) =>
+  userType === "admin" || userType === "duper_admin" || userType === "super_admin";
+
+const isInternalTeamUserType = (userType?: string | null) =>
+  userType === "staff" || isAdminFamilyUserType(userType);
+
+const canAssignDuperAdminRole = (userType?: string | null) =>
+  userType === "duper_admin" || userType === "super_admin";
+
 export default function StaffDashboard() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -71,7 +80,10 @@ export default function StaffDashboard() {
   const canEditHostLocations =
     user?.userType === "admin" ||
     user?.userType === "staff" ||
+    user?.userType === "duper_admin" ||
     user?.userType === "super_admin";
+  const canAssignInternalRoles = isAdminFamilyUserType(user?.userType);
+  const canAssignDuperRole = canAssignDuperAdminRole(user?.userType);
 
   // Verify staff access
   const { data: staffCheck, isLoading: checkingAccess } = useQuery({
@@ -202,7 +214,7 @@ export default function StaffDashboard() {
 
   if (
     !staffCheck ||
-    (user?.userType !== "staff" && user?.userType !== "admin")
+    !isInternalTeamUserType(user?.userType)
   ) {
     return (
       <div className="max-w-md mx-auto mt-20 p-6 text-center">
@@ -304,7 +316,7 @@ export default function StaffDashboard() {
           <TabsContent value="accounts">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-8">
               {/* Create Any User Type (Admin only) */}
-              {user?.userType === "admin" && (
+              {isAdminFamilyUserType(user?.userType) && (
                 <Card className="md:col-span-2">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
@@ -353,8 +365,15 @@ export default function StaffDashboard() {
                           <option value="event_coordinator">
                             Event Coordinator
                           </option>
-                          <option value="staff">Staff</option>
-                          <option value="admin">Admin</option>
+                          {canAssignInternalRoles && (
+                            <option value="staff">Staff</option>
+                          )}
+                          {canAssignInternalRoles && (
+                            <option value="admin">Admin</option>
+                          )}
+                          {canAssignDuperRole && (
+                            <option value="duper_admin">Duperrr Admin</option>
+                          )}
                         </select>
                       </div>
                       <div>
@@ -623,7 +642,7 @@ export default function StaffDashboard() {
         </Tabs>
 
         {/* Quick Links */}
-        {user?.userType === "admin" && (
+        {isAdminFamilyUserType(user?.userType) && (
           <Card className="mt-8">
             <CardHeader>
               <CardTitle>Admin Quick Links</CardTitle>

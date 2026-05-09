@@ -210,7 +210,7 @@ export function setupWebSocketServer(httpServer: Server): SocketIOServer {
           );
 
           if (
-            ["staff", "admin", "super_admin"].includes(
+            ["staff", "admin", "duper_admin", "super_admin"].includes(
               String(socket.user?.userType || ""),
             )
           ) {

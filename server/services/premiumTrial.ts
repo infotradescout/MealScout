@@ -12,7 +12,7 @@ export async function ensurePremiumTrialForUser(user: User): Promise<User> {
   }
 
   // Never grant trials to staff/admin accounts.
-  const ineligibleTypes = new Set(["staff", "admin", "super_admin"]);
+  const ineligibleTypes = new Set(["staff", "admin", "duper_admin", "super_admin"]);
   if (ineligibleTypes.has(String(user.userType || ""))) {
     return user;
   }

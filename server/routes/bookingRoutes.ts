@@ -71,7 +71,7 @@ export function registerBookingRoutes(
           req.user.id,
           "manageParkingPass",
         );
-        const isAdmin = ["admin", "super_admin", "staff"].includes(
+        const isAdmin = ["admin", "duper_admin", "super_admin", "staff"].includes(
           req.user?.userType || "",
         );
         if (!isOwner && !isAdmin) {
@@ -163,7 +163,7 @@ export function registerBookingRoutes(
           req.user.id,
           "manageParkingPass",
         );
-        const isAdmin = ["admin", "super_admin", "staff"].includes(
+        const isAdmin = ["admin", "duper_admin", "super_admin", "staff"].includes(
           req.user?.userType || "",
         );
         if (!isOwner && !isAdmin) {
@@ -716,7 +716,7 @@ export function registerBookingRoutes(
           req.user.id,
           "manageParkingPass",
         );
-        const isAdmin = ["admin", "super_admin", "staff"].includes(
+        const isAdmin = ["admin", "duper_admin", "super_admin", "staff"].includes(
           req.user?.userType || "",
         );
         if (!isOwner && !isAdmin) {
@@ -760,7 +760,7 @@ export function registerBookingRoutes(
           req.user.id,
           "manageParkingPass",
         );
-        const isAdmin = ["admin", "super_admin", "staff"].includes(
+        const isAdmin = ["admin", "duper_admin", "super_admin", "staff"].includes(
           req.user?.userType || "",
         );
         if (!isOwner && !isAdmin) {
@@ -858,7 +858,7 @@ export function registerBookingRoutes(
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
-      const isAdmin = ["admin", "super_admin", "staff"].includes(
+      const isAdmin = ["admin", "duper_admin", "super_admin", "staff"].includes(
         req.user?.userType || "",
       );
       let includePending = false;

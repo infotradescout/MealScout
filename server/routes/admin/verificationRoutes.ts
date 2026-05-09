@@ -12,6 +12,7 @@ import type { IStorage } from "../../storage";
 import { emailService } from "../../emailService";
 import { ensurePremiumTrialForUserId } from "../../services/premiumTrial";
 import { db } from "../../db";
+import { isAdminUserType } from "../../roleAccess";
 
 export type VerificationDeps = {
   storage: IStorage;
@@ -22,8 +23,7 @@ export function registerVerificationAdminRoutes(
   deps: VerificationDeps,
 ) {
   const { storage } = deps;
-  const isAdminUser = (req: any) =>
-    req.user?.userType === "admin" || req.user?.userType === "super_admin";
+  const isAdminUser = (req: any) => isAdminUserType(req.user?.userType);
 
   // GET /api/admin/verifications - List all verification requests (with optional status filter)
   app.get(

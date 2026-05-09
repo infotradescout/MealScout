@@ -156,6 +156,7 @@ const OnlineMenuPage = lazy(() => import("@/pages/online-menu"));
 const PickupCheckoutPage = lazy(() => import("@/pages/pickup-checkout"));
 const OrderConfirmationPage = lazy(() => import("@/pages/order-confirmation"));
 const ScoutPage = lazy(() => import("@/pages/explore-preview"));
+const FoodTruckRush = lazy(() => import("@/pages/food-truck-rush"));
 
 // Loading fallback component
 const PageLoader = () => (
@@ -179,6 +180,7 @@ const publicRoutePrefixes = [
   "/scout",
   "/explore",
   "/explore-preview",
+  "/food-truck-rush",
   "/login",
   "/signup",
   "/customer-signup",
@@ -312,6 +314,7 @@ function Router() {
             <Route path="/explore" component={RedirectToScout} />
             <Route path="/explore-preview" component={RedirectToScout} />
             <Route path="/scout" component={ScoutPage} />
+            <Route path="/food-truck-rush" component={FoodTruckRush} />
             <Route path="/login" component={Login} />
             <Route path="/signup" component={CustomerSignup} />
             <Route path="/customer-signup" component={CustomerSignup} />
@@ -448,6 +451,7 @@ function Router() {
             <Route path="/explore" component={RedirectToScout} />
             <Route path="/explore-preview" component={RedirectToScout} />
             <Route path="/scout" component={ScoutPage} />
+            <Route path="/food-truck-rush" component={FoodTruckRush} />
             <Route path="/login" component={Login} />
             <Route path="/signup" component={CustomerSignup} />
             <Route path="/customer-signup" component={CustomerSignup} />

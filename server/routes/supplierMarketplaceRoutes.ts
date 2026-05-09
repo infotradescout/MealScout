@@ -449,7 +449,7 @@ const isSupplierProfileOrAdmin = async (req: any, res: any, next: any) => {
   }
 
   const userType = String(req.user?.userType || "");
-  if (["supplier", "admin", "super_admin"].includes(userType)) {
+  if (["supplier", "admin", "duper_admin", "super_admin"].includes(userType)) {
     return next();
   }
 

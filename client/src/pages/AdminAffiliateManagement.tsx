@@ -229,6 +229,7 @@ export default function AdminAffiliateManagement() {
             <option value="event_coordinator">Event Coordinator</option>
             <option value="staff">Staff</option>
             <option value="admin">Admin</option>
+            <option value="duper_admin">Duperrr Admin</option>
             <option value="super_admin">Super Admin</option>
           </select>
         </CardContent>

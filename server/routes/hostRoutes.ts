@@ -85,6 +85,7 @@ export function registerHostRoutes(app: Express) {
   const isStaffOrAdminUser = (user: any) =>
     user?.userType === "staff" ||
     user?.userType === "admin" ||
+    user?.userType === "duper_admin" ||
     user?.userType === "super_admin";
 
   const normalizeLocationValue = (value?: string | null) =>
@@ -1052,7 +1053,7 @@ export function registerHostRoutes(app: Express) {
           String(
             process.env.MEALSCOUT_TEST_PROMOS_REQUIRE_ADMIN || "",
           ).toLowerCase() === "true";
-        const isAdminUser = ["admin", "super_admin", "staff"].includes(
+        const isAdminUser = ["admin", "duper_admin", "super_admin", "staff"].includes(
           String(req.user?.userType || ""),
         );
         const bookingFeePromoEnabled =
@@ -1163,7 +1164,7 @@ export function registerHostRoutes(app: Express) {
         }
         if (
           !truck.isVerified &&
-          !["admin", "super_admin", "staff"].includes(req.user?.userType)
+          !["admin", "duper_admin", "super_admin", "staff"].includes(req.user?.userType)
         ) {
           return res.status(403).json({
             message:
@@ -1172,7 +1173,7 @@ export function registerHostRoutes(app: Express) {
         }
         if (
           req.user?.userType &&
-          !["food_truck", "admin", "super_admin", "staff"].includes(
+          !["food_truck", "admin", "duper_admin", "super_admin", "staff"].includes(
             req.user.userType,
           )
         ) {

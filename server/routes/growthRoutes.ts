@@ -55,6 +55,7 @@ import {
   getSocialQueueStatus,
   runSocialQueueProcessor,
 } from "../services/socialQueueProcessor";
+import { isAdminUserType } from "../roleAccess";
 
 function bucketScore(
   count: number,
@@ -76,7 +77,7 @@ function bucketScore2(count: number, t1: number, t2: number): number {
 
 function isAdmin(req: Request): boolean {
   const user = (req as any).user;
-  return user && (user.userType === "admin" || user.userType === "super_admin");
+  return user && isAdminUserType(user.userType);
 }
 
 export function registerGrowthRoutes(app: Express): void {

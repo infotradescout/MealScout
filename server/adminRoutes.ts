@@ -28,6 +28,7 @@ import { logAudit } from "./auditLogger";
 import { storage } from "./storage";
 import { sendAccountSetupInvite } from "./utils/accountSetup";
 import { getJobQueueStats } from "./jobs/jobQueue";
+import { canAssignUserType, getRoleAssignmentDeniedMessage, isInternalTeamUserType } from "./roleAccess";
 
 const router = Router();
 
@@ -1037,16 +1038,17 @@ router.post("/users/create", isAdmin, async (req: any, res) => {
       "event_coordinator",
       "staff",
       "admin",
+      "duper_admin",
       "super_admin",
     ];
     if (!validUserTypes.includes(userType)) {
       return res.status(400).json({ message: "Invalid user type" });
     }
 
-    if (userType === "super_admin" && req.user.userType !== "super_admin") {
+    if (!canAssignUserType(req.user?.userType, userType)) {
       return res
         .status(403)
-        .json({ message: "Only super admins can create super admin accounts" });
+        .json({ message: getRoleAssignmentDeniedMessage(userType) });
     }
 
     const normalizedEmail = String(email).trim().toLowerCase();
@@ -1068,7 +1070,7 @@ router.post("/users/create", isAdmin, async (req: any, res) => {
     });
 
     // Internal staff/admin onboarding should not block on email verification.
-    if (["staff", "admin", "super_admin"].includes(userType)) {
+    if (isInternalTeamUserType(userType)) {
       await storage.updateUser(user.id, { emailVerified: true });
     }
 

@@ -121,7 +121,7 @@ export async function setupRestaurantAuth(app: Express) {
       }
 
       // Allow shared business accounts (host + restaurant/bar/truck) to use this login flow.
-      const blockedUserTypes = new Set(["admin", "super_admin", "staff"]);
+      const blockedUserTypes = new Set(["admin", "duper_admin", "super_admin", "staff"]);
       if (blockedUserTypes.has(String(user.userType || ""))) {
         return res.status(401).json({ error: "Invalid email or password" });
       }
@@ -162,7 +162,7 @@ export const isRestaurantOwner = (req: any, res: any, next: any) => {
   }
 
   if (
-    !["restaurant_owner", "admin", "super_admin"].includes(req.user.userType)
+    !["restaurant_owner", "admin", "duper_admin", "super_admin"].includes(req.user.userType)
   ) {
     return res.status(403).json({ error: "Restaurant owner access required" });
   }

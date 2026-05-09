@@ -186,7 +186,12 @@ export default function RestaurantSignup() {
   // Redirect admin/staff away from this flow to their dashboard
   useEffect(() => {
     if (!isAuthenticated || !user) return;
-    if (user.userType === "admin" || user.userType === "staff") {
+    if (
+      user.userType === "admin" ||
+      user.userType === "duper_admin" ||
+      user.userType === "super_admin" ||
+      user.userType === "staff"
+    ) {
       setLocation("/restaurant-owner-dashboard");
     }
   }, [isAuthenticated, user, setLocation]);
@@ -1055,7 +1060,12 @@ export default function RestaurantSignup() {
       />
 
       <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6">
-        {isAuthenticated && user && user.userType !== "admin" && user.userType !== "staff" && (
+        {isAuthenticated &&
+          user &&
+          user.userType !== "admin" &&
+          user.userType !== "duper_admin" &&
+          user.userType !== "super_admin" &&
+          user.userType !== "staff" && (
           <Card className="mb-4 border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)] shadow-clean">
             <CardContent className="p-4">
               <p className="text-sm font-semibold text-[color:var(--text-primary)]">

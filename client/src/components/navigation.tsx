@@ -133,7 +133,10 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
   const isRestaurantOwner = user?.userType === "restaurant_owner";
   const isFoodTruck = user?.userType === "food_truck";
   const isSupplier = user?.userType === "supplier";
-  const isAdmin = user?.userType === "admin" || user?.userType === "super_admin";
+  const isAdmin =
+    user?.userType === "admin" ||
+    user?.userType === "duper_admin" ||
+    user?.userType === "super_admin";
   const isStaff = user?.userType === "staff";
   const isEventCoordinator = user?.userType === "event_coordinator";
 

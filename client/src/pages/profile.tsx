@@ -275,6 +275,8 @@ export default function ProfilePage() {
                                 ? "Staff"
                                 : user?.userType === "admin"
                                   ? "Admin"
+                                  : user?.userType === "duper_admin"
+                                    ? "Duperrr Admin"
                                   : user?.userType === "super_admin"
                                     ? "Super Admin"
                                     : "Food Explorer"}

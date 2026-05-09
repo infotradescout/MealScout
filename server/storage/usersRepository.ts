@@ -12,6 +12,7 @@ import { eq, and, or, isNull, desc } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { syncUserToBrevo } from "../brevoCrm";
 import { ensureAffiliateTag } from "../affiliateTagService";
+import { isAdminUserType, shouldAssignAffiliateTagForUserType } from "../roleAccess";
 
 // ── Cached table-info (module-level singleton, matches the instance cache in DatabaseStorage) ──
 
@@ -99,7 +100,7 @@ async function selectUsersSafe(whereSql: string, params: any[]): Promise<any[]> 
 }
 
 function shouldAssignAffiliateTag(userType?: string | null): boolean {
-  return userType !== "admin" && userType !== "super_admin";
+  return shouldAssignAffiliateTagForUserType(userType);
 }
 
 // ── Repository factory ────────────────────────────────────────────────────────
@@ -221,6 +222,7 @@ export function createUsersRepository() {
         | "event_coordinator"
         | "staff"
         | "admin"
+        | "duper_admin"
         | "super_admin",
     ): Promise<User> {
       const SUPER_ADMIN_EMAIL = process.env.ADMIN_EMAIL || "info.mealscout@gmail.com";
@@ -231,9 +233,9 @@ export function createUsersRepository() {
 
       const affiliatePercent =
         userType === "staff" ? 25
-        : userType === "admin" || userType === "super_admin" ? 0
+        : isAdminUserType(userType) ? 0
         : undefined;
-      const shouldAutoVerify = userType === "admin" || userType === "super_admin";
+      const shouldAutoVerify = isAdminUserType(userType);
       const [updatedUser] = await db
         .update(users)
         .set({
@@ -601,7 +603,7 @@ export function createUsersRepository() {
       const hashedPassword = await bcrypt.hash(userData.tempPassword, 10);
       const affiliatePercent =
         userData.userType === "staff" ? 25
-        : userData.userType === "admin" || userData.userType === "super_admin" ? 0
+        : isAdminUserType(userData.userType) ? 0
         : undefined;
 
       const [user] = await db
@@ -642,13 +644,14 @@ export function createUsersRepository() {
         | "event_coordinator"
         | "staff"
         | "admin"
+        | "duper_admin"
         | "super_admin";
     }): Promise<User> {
       const affiliatePercent =
         data.userType === "staff" ? 25
-        : data.userType === "admin" || data.userType === "super_admin" ? 0
+        : isAdminUserType(data.userType) ? 0
         : undefined;
-      const shouldAutoVerify = data.userType === "admin" || data.userType === "super_admin";
+      const shouldAutoVerify = isAdminUserType(data.userType);
 
       const [user] = await db
         .insert(users)

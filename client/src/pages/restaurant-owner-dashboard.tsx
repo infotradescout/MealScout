@@ -170,7 +170,9 @@ export default function RestaurantOwnerDashboard() {
   const isFoodTruck = user?.userType === "food_truck";
   const isHost = user?.userType === "host";
   const isAdmin =
-    user?.userType === "admin" || user?.userType === "super_admin";
+    user?.userType === "admin" ||
+    user?.userType === "duper_admin" ||
+    user?.userType === "super_admin";
   const isStaff = user?.userType === "staff";
   const { data: businessAccess } = useQuery<{
     hasAnyAccess: boolean;

@@ -48,6 +48,7 @@ const membershipUpdateSchema = z.object({
 
 const isElevated = (user: any) =>
   user?.userType === "admin" ||
+  user?.userType === "duper_admin" ||
   user?.userType === "super_admin" ||
   user?.userType === "staff";
 

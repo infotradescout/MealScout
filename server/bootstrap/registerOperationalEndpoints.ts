@@ -10,6 +10,7 @@
 
 import type { Express } from "express";
 import { isAuthenticated } from "../unifiedAuth";
+import { isInternalTeamUserType } from "../roleAccess";
 import {
   getParkingPassOnboardingQueue,
   getParkingPassPricingAudit,
@@ -32,7 +33,7 @@ import {
 
 function isAdmin(req: any, res: any, next: any) {
   const user = req.user;
-  if (!user || (user.userType !== "admin" && user.userType !== "super_admin" && user.userType !== "staff")) {
+  if (!user || !isInternalTeamUserType(user.userType)) {
     return res.status(403).json({ message: "Admin access required" });
   }
   next();

@@ -73,7 +73,7 @@ async function getAffiliateRecipientsForUser(
   return uniqueIds
     .map((id) => map.get(id))
     .filter((row): row is NonNullable<typeof row> => Boolean(row))
-    .filter((row) => row.userType !== "admin" && row.userType !== "super_admin")
+    .filter((row) => !["admin", "duper_admin", "super_admin"].includes(String(row.userType || "")))
     .map((row) => ({
       affiliateUserId: row.id,
       percent: Math.max(

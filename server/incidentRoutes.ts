@@ -71,7 +71,7 @@ function hasValidCronSecret(req: Request): boolean {
 
 function isPrivilegedOpsUser(req: Request): boolean {
   const userType = String((req as any)?.user?.userType || '').trim();
-  return ['staff', 'admin', 'super_admin'].includes(userType);
+  return ['staff', 'admin', 'duper_admin', 'super_admin'].includes(userType);
 }
 
 function isLocalDevRequest(req: Request): boolean {

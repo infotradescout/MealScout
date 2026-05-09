@@ -36,6 +36,8 @@ export default function WelcomeLocationModal({
     user &&
     (user.userType === "restaurant_owner" ||
       user.userType === "staff" ||
+    user.userType === "duper_admin" ||
+    user.userType === "super_admin" ||
       user.userType === "admin");
 
   const handleAutoDetect = async () => {

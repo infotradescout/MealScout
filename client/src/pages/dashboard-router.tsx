@@ -26,7 +26,7 @@ export default function DashboardRouter() {
 
     const primaryType = String(user.userType || "").trim();
 
-    if (primaryType === "admin" || primaryType === "super_admin") {
+    if (primaryType === "admin" || primaryType === "duper_admin" || primaryType === "super_admin") {
       setLocation("/admin/dashboard");
       return;
     }
@@ -62,7 +62,7 @@ export default function DashboardRouter() {
     }
 
     // Fallback for legacy accounts where userType is missing/inconsistent.
-    if (roles.has("admin") || roles.has("super_admin")) {
+    if (roles.has("admin") || roles.has("duper_admin") || roles.has("super_admin")) {
       setLocation("/admin/dashboard");
       return;
     }

@@ -1431,6 +1431,7 @@ export default function MapPage() {
   const isStaffOrAdmin =
     user?.userType === "staff" ||
     user?.userType === "admin" ||
+    user?.userType === "duper_admin" ||
     user?.userType === "super_admin";
   const showMapDiagnostics = isStaffOrAdmin;
 

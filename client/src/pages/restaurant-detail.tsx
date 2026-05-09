@@ -144,6 +144,7 @@ export default function RestaurantDetailPage() {
   const isStaffOrAdmin =
     user?.userType === "staff" ||
     user?.userType === "admin" ||
+    user?.userType === "duper_admin" ||
     user?.userType === "super_admin";
 
   const isFoodTruck =

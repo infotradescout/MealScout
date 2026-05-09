@@ -505,7 +505,7 @@ export default function ParkingPassPage() {
     retry: false,
     refetchOnWindowFocus: false,
   });
-  const isAdminOrStaff = ["admin", "super_admin", "staff"].includes(
+  const isAdminOrStaff = ["admin", "duper_admin", "super_admin", "staff"].includes(
     user?.userType || "",
   );
   const [adminParkingMode, setAdminParkingMode] = useState<

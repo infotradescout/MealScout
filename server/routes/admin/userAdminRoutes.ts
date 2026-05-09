@@ -17,6 +17,7 @@ import {
 import { listParkingPassOccurrences } from "../../services/parkingPassVirtual";
 import { runParkingPassIntegrity } from "../../services/parkingPassIntegrity";
 import { isSlotWithinHours } from "@shared/parkingPassSlots";
+import { canAssignUserType, getRoleAssignmentDeniedMessage } from "../../roleAccess";
 import {
   deals,
   eventBookings,
@@ -247,17 +248,16 @@ export function registerUserAdminRoutes(
             "event_coordinator",
             "staff",
             "admin",
+            "duper_admin",
             "super_admin",
           ];
           if (!allowedTypes.includes(userType)) {
             return res.status(400).json({ message: "Invalid user type" });
           }
-          if (req.user?.userType === "staff") {
-            if (userType === "admin" || userType === "super_admin") {
-              return res.status(403).json({
-                message: "Staff cannot assign admin roles",
-              });
-            }
+          if (!canAssignUserType(req.user?.userType, userType)) {
+            return res.status(403).json({
+              message: getRoleAssignmentDeniedMessage(userType),
+            });
           }
           await storage.updateUserType(userId, userType);
         }
@@ -834,11 +834,18 @@ export function registerUserAdminRoutes(
           "event_coordinator",
           "staff",
           "admin",
+          "duper_admin",
           "super_admin",
         ];
 
         if (!allowedTypes.includes(userType)) {
           return res.status(400).json({ message: "Invalid user type" });
+        }
+
+        if (!canAssignUserType(req.user?.userType, userType)) {
+          return res.status(403).json({
+            message: getRoleAssignmentDeniedMessage(userType),
+          });
         }
 
         await storage.updateUserType(req.params.id, userType);

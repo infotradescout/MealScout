@@ -151,7 +151,7 @@ export function registerSupplierPaymentRoutes(
           .toUpperCase();
         const isTestDollarPromo =
           normalizedPromoCode === "TEST1" || normalizedPromoCode === "FREE100";
-        const isAdminUser = ["admin", "super_admin", "staff"].includes(
+        const isAdminUser = ["admin", "duper_admin", "super_admin", "staff"].includes(
           String(req.user?.userType || ""),
         );
         if (normalizedPromoCode) {

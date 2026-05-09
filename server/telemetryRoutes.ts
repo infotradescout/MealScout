@@ -744,7 +744,7 @@ router.get("/heartbeat", isAdmin, async (req, res) => {
             count(*)::int as total_users,
             count(*) filter (
               where coalesce(is_disabled, false) = false
-              and user_type not in ('admin', 'super_admin', 'staff')
+              and user_type not in ('admin', 'duper_admin', 'super_admin', 'staff')
               and (
                 email_verified = true
                 or google_id is not null
@@ -756,7 +756,7 @@ router.get("/heartbeat", isAdmin, async (req, res) => {
             count(*) filter (
               where created_at >= ${startDate}
               and coalesce(is_disabled, false) = false
-              and user_type not in ('admin', 'super_admin', 'staff')
+              and user_type not in ('admin', 'duper_admin', 'super_admin', 'staff')
               and (
                 email_verified = true
                 or google_id is not null
@@ -768,7 +768,7 @@ router.get("/heartbeat", isAdmin, async (req, res) => {
             count(*) filter (
               where created_at >= ${sevenDayStart}
               and coalesce(is_disabled, false) = false
-              and user_type not in ('admin', 'super_admin', 'staff')
+              and user_type not in ('admin', 'duper_admin', 'super_admin', 'staff')
               and (
                 email_verified = true
                 or google_id is not null
@@ -780,7 +780,7 @@ router.get("/heartbeat", isAdmin, async (req, res) => {
             count(*) filter (
               where created_at >= ${thirtyDayStart}
               and coalesce(is_disabled, false) = false
-              and user_type not in ('admin', 'super_admin', 'staff')
+              and user_type not in ('admin', 'duper_admin', 'super_admin', 'staff')
               and (
                 email_verified = true
                 or google_id is not null
@@ -804,7 +804,7 @@ router.get("/heartbeat", isAdmin, async (req, res) => {
             and(
               gte(users.createdAt, startDate),
               sql`coalesce(${users.isDisabled}, false) = false`,
-              sql`${users.userType} not in ('admin', 'super_admin', 'staff')`,
+              sql`${users.userType} not in ('admin', 'duper_admin', 'super_admin', 'staff')`,
               sql`(
                 ${users.emailVerified} = true
                 or ${users.googleId} is not null
@@ -827,7 +827,7 @@ router.get("/heartbeat", isAdmin, async (req, res) => {
               where r.is_food_truck = true
               and lower(coalesce(owner.email, '')) <> ${importSystemEmail}
               and coalesce(owner.is_disabled, false) = false
-              and owner.user_type not in ('admin', 'super_admin', 'staff')
+              and owner.user_type not in ('admin', 'duper_admin', 'super_admin', 'staff')
               and (
                 owner.email_verified = true
                 or owner.google_id is not null
@@ -841,7 +841,7 @@ router.get("/heartbeat", isAdmin, async (req, res) => {
               and r.created_at >= ${thirtyDayStart}
               and lower(coalesce(owner.email, '')) <> ${importSystemEmail}
               and coalesce(owner.is_disabled, false) = false
-              and owner.user_type not in ('admin', 'super_admin', 'staff')
+              and owner.user_type not in ('admin', 'duper_admin', 'super_admin', 'staff')
               and (
                 owner.email_verified = true
                 or owner.google_id is not null
@@ -855,7 +855,7 @@ router.get("/heartbeat", isAdmin, async (req, res) => {
               and r.is_verified = true
               and lower(coalesce(owner.email, '')) <> ${importSystemEmail}
               and coalesce(owner.is_disabled, false) = false
-              and owner.user_type not in ('admin', 'super_admin', 'staff')
+              and owner.user_type not in ('admin', 'duper_admin', 'super_admin', 'staff')
               and (
                 owner.email_verified = true
                 or owner.google_id is not null
@@ -869,7 +869,7 @@ router.get("/heartbeat", isAdmin, async (req, res) => {
               and r.mobile_online = true
               and lower(coalesce(owner.email, '')) <> ${importSystemEmail}
               and coalesce(owner.is_disabled, false) = false
-              and owner.user_type not in ('admin', 'super_admin', 'staff')
+              and owner.user_type not in ('admin', 'duper_admin', 'super_admin', 'staff')
               and (
                 owner.email_verified = true
                 or owner.google_id is not null

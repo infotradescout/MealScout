@@ -566,6 +566,7 @@ export default function DealCreation() {
   const isAdminOrStaff =
     user &&
     (user.userType === "admin" ||
+      user.userType === "duper_admin" ||
       user.userType === "super_admin" ||
       user.userType === "staff");
   const canManageDeals =

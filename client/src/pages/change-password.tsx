@@ -51,6 +51,7 @@ export default function ChangePassword() {
           setLocation("/restaurant-owner-dashboard");
         } else if (
           user?.userType === "admin" ||
+          user?.userType === "duper_admin" ||
           user?.userType === "super_admin" ||
           user?.userType === "staff"
         ) {

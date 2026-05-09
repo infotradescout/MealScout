@@ -24,6 +24,7 @@ type EventCoordinatorRouteDependencies = {
 const allowedRoles = new Set([
   "event_coordinator",
   "admin",
+  "duper_admin",
   "super_admin",
   "staff",
 ]);
@@ -45,7 +46,7 @@ export function registerEventCoordinatorRoutes(
   { hasBusinessDistributionAccess }: EventCoordinatorRouteDependencies,
 ) {
   const ensurePaidEventAccess = async (req: any, res: any) => {
-    if (["admin", "super_admin", "staff"].includes(req.user?.userType)) {
+    if (["admin", "duper_admin", "super_admin", "staff"].includes(req.user?.userType)) {
       return true;
     }
 
@@ -159,6 +160,7 @@ export function registerEventCoordinatorRoutes(
           (host && event.hostId === host.id) ||
           event.coordinatorUserId === req.user.id ||
           req.user.userType === "admin" ||
+          req.user.userType === "duper_admin" ||
           req.user.userType === "super_admin";
         if (!ownsEvent) {
           return res.status(403).json({ message: "Not authorized" });
@@ -249,6 +251,7 @@ export function registerEventCoordinatorRoutes(
           (host && event.hostId === host.id) ||
           event.coordinatorUserId === req.user.id ||
           req.user.userType === "admin" ||
+          req.user.userType === "duper_admin" ||
           req.user.userType === "super_admin";
         if (!ownsEvent) {
           return res.status(403).json({ message: "Not authorized" });
@@ -462,7 +465,7 @@ export function registerEventCoordinatorRoutes(
         const ownsEvent =
           (host && event.hostId === host.id) ||
           event.coordinatorUserId === req.user.id ||
-          ["admin", "super_admin", "staff"].includes(req.user.userType);
+          ["admin", "duper_admin", "super_admin", "staff"].includes(req.user.userType);
         if (!ownsEvent) return res.status(403).json({ message: "Not authorized" });
         const schema = z.object({
           name: z.string().min(1).optional(),
@@ -509,7 +512,7 @@ export function registerEventCoordinatorRoutes(
         const ownsEvent =
           (host && event.hostId === host.id) ||
           event.coordinatorUserId === req.user.id ||
-          ["admin", "super_admin", "staff"].includes(req.user.userType);
+          ["admin", "duper_admin", "super_admin", "staff"].includes(req.user.userType);
         if (!ownsEvent) return res.status(403).json({ message: "Not authorized" });
         if ((event as any).status === "cancelled") {
           return res.status(409).json({ message: "Event is already cancelled" });

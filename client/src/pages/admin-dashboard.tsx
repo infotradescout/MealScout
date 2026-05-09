@@ -70,10 +70,20 @@ interface DashboardStats {
     eventCoordinator: number;
     staff: number;
     admin: number;
+    duperAdmin: number;
     superAdmin: number;
     other: number;
   };
 }
+
+const isAdminFamilyUserType = (userType?: string | null) =>
+  userType === "admin" || userType === "duper_admin" || userType === "super_admin";
+
+const isDuperOrRootUserType = (userType?: string | null) =>
+  userType === "duper_admin" || userType === "super_admin";
+
+const isRootSuperAdminUserType = (userType?: string | null) =>
+  userType === "super_admin";
 
 interface PendingRestaurant {
   id: string;
@@ -1304,10 +1314,16 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
       | "restaurant_owner"
       | "staff"
       | "event_coordinator"
-      | "host",
+        | "host"
+        | "admin"
+        | "duper_admin"
+        | "super_admin",
   });
   const [geocoding, setGeocoding] = useState(false);
   const [inviteSentEmail, setInviteSentEmail] = useState("");
+      const canAssignAdminRole = isAdminFamilyUserType(adminUser?.userType);
+      const canAssignDuperAdminRole = isDuperOrRootUserType(adminUser?.userType);
+      const canAssignSuperAdminRole = isRootSuperAdminUserType(adminUser?.userType);
 
   const createUser = useMutation({
     mutationFn: async (data: typeof formData) => {
@@ -1472,11 +1488,13 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
             <option value="host">Host (Parking/Events)</option>
             <option value="event_coordinator">Event Coordinator</option>
             <option value="staff">Staff</option>
-            {(adminUser?.userType === "admin" ||
-              adminUser?.userType === "super_admin") && (
+            {canAssignAdminRole && (
               <option value="admin">Admin</option>
             )}
-            {adminUser?.userType === "super_admin" && (
+            {canAssignDuperAdminRole && (
+              <option value="duper_admin">Duperrr Admin</option>
+            )}
+            {canAssignSuperAdminRole && (
               <option value="super_admin">Super Admin</option>
             )}
           </select>
@@ -1493,6 +1511,12 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
               "Event coordinator - organize events (NO PAYMENTS through us)"}
             {formData.userType === "host" &&
               "Host - rent parking spots/lots to food trucks (hourly/daily/weekly/monthly)"}
+            {formData.userType === "admin" &&
+              "Admin - manage platform operations and internal workflows"}
+            {formData.userType === "duper_admin" &&
+              "Duperrr Admin - elevated admin access without super admin grants"}
+            {formData.userType === "super_admin" &&
+              "Super Admin - root platform administration"}
           </p>
         </div>
 
@@ -1885,12 +1909,13 @@ function StaffManagementTab() {
     (user) =>
       user.userType !== "admin" &&
       user.userType !== "staff" &&
+      user.userType !== "duper_admin" &&
       user.userType !== "super_admin",
   );
 
-  // Filter out super_admin from staff members list (they should never appear here)
+  // Filter out elevated admins from staff members list (they should never appear here)
   const displayStaffMembers = staffMembers.filter(
-    (staff) => staff.userType !== "super_admin",
+    (staff) => staff.userType !== "duper_admin" && staff.userType !== "super_admin",
   );
 
   const filteredStaffMembers = useMemo(() => {
@@ -2182,9 +2207,9 @@ export default function AdminDashboard() {
     retry: false,
   });
   const isStaff = adminUser?.userType === "staff";
-  const isAdminOrSuper =
-    adminUser?.userType === "admin" || adminUser?.userType === "super_admin";
-  const isSuperAdmin = adminUser?.userType === "super_admin";
+  const isAdminOrSuper = isAdminFamilyUserType(adminUser?.userType);
+  const isDuperOrSuper = isDuperOrRootUserType(adminUser?.userType);
+  const isSuperAdmin = isRootSuperAdminUserType(adminUser?.userType);
 
   // Fetch dashboard stats
   const { data: dashboardTotals, isLoading: statsLoading } =
@@ -3230,6 +3255,7 @@ export default function AdminDashboard() {
   const sortedUsers = useMemo(() => {
     const typeOrder = [
       "super_admin",
+      "duper_admin",
       "admin",
       "staff",
       "restaurant_owner",
@@ -3280,12 +3306,15 @@ export default function AdminDashboard() {
     if (isAdminOrSuper) {
       base.push({ value: "admin", label: "Admins" });
     }
+    if (isDuperOrSuper) {
+      base.push({ value: "duper_admin", label: "Duperrr Admins" });
+    }
     if (isSuperAdmin) {
       base.push({ value: "super_admin", label: "Super Admins" });
     }
 
     return base;
-  }, [isAdminOrSuper, isSuperAdmin]);
+  }, [isAdminOrSuper, isDuperOrSuper, isSuperAdmin]);
 
   const userCountsByType = useMemo(() => {
     const counts = new Map<string, number>();
@@ -5340,6 +5369,7 @@ export default function AdminDashboard() {
       eventCoordinator: 0,
       staff: 0,
       admin: 0,
+      duperAdmin: 0,
       superAdmin: 0,
       other: 0,
     },
@@ -5642,6 +5672,12 @@ export default function AdminDashboard() {
                 <p className="text-muted-foreground">Admins</p>
                 <p className="font-semibold">
                   {dashboardStats.memberCounts?.admin ?? 0}
+                </p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Duperrr Admins</p>
+                <p className="font-semibold">
+                  {dashboardStats.memberCounts?.duperAdmin ?? 0}
                 </p>
               </div>
               <div>
@@ -7480,11 +7516,13 @@ export default function AdminDashboard() {
                               Event Coordinator
                             </option>
                             <option value="staff">Staff</option>
-                            {(adminUser?.userType === "admin" ||
-                              adminUser?.userType === "super_admin") && (
+                            {isAdminFamilyUserType(adminUser?.userType) && (
                               <option value="admin">Admin</option>
                             )}
-                            {adminUser?.userType === "super_admin" && (
+                            {isDuperOrRootUserType(adminUser?.userType) && (
+                              <option value="duper_admin">Duperrr Admin</option>
+                            )}
+                            {isRootSuperAdminUserType(adminUser?.userType) && (
                               <option value="super_admin">Super Admin</option>
                             )}
                           </select>
@@ -7996,11 +8034,13 @@ export default function AdminDashboard() {
                           Event Coordinator
                         </option>
                         <option value="staff">Staff</option>
-                        {(adminUser?.userType === "admin" ||
-                          adminUser?.userType === "super_admin") && (
+                        {isAdminFamilyUserType(adminUser?.userType) && (
                           <option value="admin">Admin</option>
                         )}
-                        {adminUser?.userType === "super_admin" && (
+                        {isDuperOrRootUserType(adminUser?.userType) && (
+                          <option value="duper_admin">Duperrr Admin</option>
+                        )}
+                        {isRootSuperAdminUserType(adminUser?.userType) && (
                           <option value="super_admin">Super Admin</option>
                         )}
                       </select>
@@ -8161,6 +8201,8 @@ export default function AdminDashboard() {
                     <Badge
                       variant={
                         selectedUser.userType === "admin"
+                          || selectedUser.userType === "duper_admin"
+                          || selectedUser.userType === "super_admin"
                           ? "destructive"
                           : "secondary"
                       }
@@ -9525,8 +9567,8 @@ export default function AdminDashboard() {
                 </div>
               )}
 
-              {/* Danger Zone - Super Admin Only */}
-              {adminUser?.userType === "super_admin" && (
+              {/* Danger Zone - elevated admins only */}
+              {isDuperOrRootUserType(adminUser?.userType) && (
                 <div className="border border-destructive/50 rounded-lg p-4 bg-destructive/5">
                   <h3 className="font-semibold mb-2 text-destructive flex items-center">
                     <AlertCircle className="w-4 h-4 mr-2" />

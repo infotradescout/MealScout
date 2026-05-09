@@ -268,6 +268,7 @@ export function registerMediaRoutes(app: Express) {
       if (
         image.uploadedByUserId !== req.user.id &&
         req.user.userType !== "admin" &&
+        req.user.userType !== "duper_admin" &&
         req.user.userType !== "super_admin"
       ) {
         return res.status(403).json({ message: "Not authorized" });

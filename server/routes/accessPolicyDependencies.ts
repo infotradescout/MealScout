@@ -269,7 +269,7 @@ export function createRouteAccessPolicyDependencies(
     try {
       const user = await storage.getUser(key);
       if (user) {
-        if (["admin", "super_admin"].includes(String(user.userType || ""))) {
+        if (["admin", "duper_admin", "super_admin"].includes(String(user.userType || ""))) {
           hasAccess = true;
         } else if (hasAccountAgeTrialAccess(user)) {
           hasAccess = true;
