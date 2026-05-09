@@ -42,7 +42,7 @@ export default function Welcome() {
             </Link>
           </div>
 
-          <p className="mt-7 text-base font-semibold italic text-white/88 drop-shadow-[0_2px_16px_rgba(0,0,0,0.85)]">
+          <p className="mt-7 inline-flex rounded-full border border-amber-300/20 bg-black/28 px-5 py-2 text-[13px] font-black uppercase tracking-[0.24em] text-amber-100/95 shadow-[0_0_24px_rgba(245,158,11,0.18)] backdrop-blur-md">
             Follow The Flavor
           </p>
         </section>
