@@ -78,7 +78,7 @@ export default function RestaurantDetailPage() {
   const [isSendingBusinessMessage, setIsSendingBusinessMessage] =
     useState(false);
   const [businessMessage, setBusinessMessage] = useState({
-    topic: "General question",
+    topic: "Question",
     message: "",
   });
   const [bookingForm, setBookingForm] = useState({
@@ -304,9 +304,9 @@ export default function RestaurantDetailPage() {
 
       toast({
         title: "Message sent",
-        description: `${restaurantName} can reply to your account email.`,
+        description: `${restaurantName} can reply directly to your account email.`,
       });
-      setBusinessMessage({ topic: "General question", message: "" });
+      setBusinessMessage({ topic: "Question", message: "" });
     } catch (error: any) {
       toast({
         title: "Message failed",
@@ -804,18 +804,23 @@ export default function RestaurantDetailPage() {
                   data-testid="button-message-business"
                 >
                   <Mail className="w-4 h-4 mr-2" />
-                  Message
+                  Contact
                 </Button>
               </DialogTrigger>
               <DialogContent className="sm:max-w-lg">
                 <DialogHeader>
-                  <DialogTitle>Message {restaurantName}</DialogTitle>
+                  <DialogTitle>Contact {restaurantName}</DialogTitle>
                 </DialogHeader>
                 <div className="grid gap-4 py-2">
                   <p className="text-sm text-muted-foreground">
-                    We will send your message through MealScout and share your
-                    account email so the business can reply. We do not include
-                    your live location.
+                    Ask about hours, menu details, dietary needs, catering, or
+                    booking. MealScout sends this to the business owner and
+                    shares your account email so they can reply. We do not
+                    include your live location.
+                  </p>
+                  <p className="rounded-lg border border-amber-400/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+                    Do not send payment details, passwords, or sensitive medical
+                    information here.
                   </p>
                   <div className="grid gap-2">
                     <Label htmlFor="business-message-topic">Topic</Label>
@@ -830,6 +835,33 @@ export default function RestaurantDetailPage() {
                       }
                       placeholder="Question, catering, hours, menu..."
                     />
+                    <div className="flex flex-wrap gap-2">
+                      {[
+                        "Question",
+                        "Menu",
+                        "Catering",
+                        "Booking",
+                        "Dietary need",
+                      ].map((topic) => (
+                        <button
+                          key={topic}
+                          type="button"
+                          className={`rounded-full border px-3 py-1 text-xs transition ${
+                            businessMessage.topic === topic
+                              ? "border-amber-300 bg-amber-300 text-black"
+                              : "border-white/10 bg-white/5 text-white/70"
+                          }`}
+                          onClick={() =>
+                            setBusinessMessage((prev) => ({
+                              ...prev,
+                              topic,
+                            }))
+                          }
+                        >
+                          {topic}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                   <div className="grid gap-2">
                     <Label htmlFor="business-message-body">Message</Label>
@@ -842,10 +874,16 @@ export default function RestaurantDetailPage() {
                           message: e.target.value,
                         }))
                       }
-                      placeholder="Ask a clear question or tell them what you need."
+                      placeholder="Example: Hi, do you have gluten-free options today? If so, what would you recommend?"
                       rows={5}
                       maxLength={2000}
                     />
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>
+                        Reply goes to {user?.email || "your account email"}.
+                      </span>
+                      <span>{businessMessage.message.length}/2000</span>
+                    </div>
                   </div>
                 </div>
                 <DialogFooter>

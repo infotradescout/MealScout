@@ -655,7 +655,7 @@ export function registerRestaurantCoreRoutes(
           });
         }
 
-        const topic = String(req.body?.topic || "general")
+        const topic = String(req.body?.topic || "Question")
           .trim()
           .slice(0, 60);
         const message = String(req.body?.message || "").trim();
@@ -678,19 +678,22 @@ export function registerRestaurantCoreRoutes(
         const safeSenderName = escapeHtml(senderName);
         const safeSenderEmail = escapeHtml(senderEmail);
         const safeTopic = escapeHtml(topic || "General question");
+        const subjectTopic = topic || "Question";
         const html = `
-          <p><strong>${safeSenderName}</strong> sent a message to <strong>${safeBusinessName}</strong> from MealScout.</p>
+          <p><strong>${safeSenderName}</strong> contacted <strong>${safeBusinessName}</strong> from MealScout.</p>
           <p><strong>Topic:</strong> ${safeTopic}</p>
+          <hr style="border:none;border-top:1px solid #e5e7eb;margin:16px 0;" />
           ${messageBodyToHtml(message)}
-          <p><strong>Reply email:</strong> ${safeSenderEmail}</p>
-          <p style="color:#6b7280;font-size:13px;">We only shared the sender's account email because they chose to message your business. No live location data was included.</p>
+          <hr style="border:none;border-top:1px solid #e5e7eb;margin:16px 0;" />
+          <p><strong>Reply directly to:</strong> ${safeSenderEmail}</p>
+          <p style="color:#6b7280;font-size:13px;">MealScout shared this email address because the user chose to contact your business. No live location data, payment details, or private preference data was included.</p>
           <p><a href="${dashboardUrl}">Open your MealScout dashboard</a></p>
         `;
-        const text = `${senderName} sent ${businessName} a MealScout message.\n\nTopic: ${topic || "General question"}\n\n${message}\n\nReply email: ${senderEmail}\n\nNo live location data was included. Dashboard: ${dashboardUrl}`;
+        const text = `${senderName} contacted ${businessName} from MealScout.\n\nTopic: ${subjectTopic}\n\n${message}\n\nReply directly to: ${senderEmail}\n\nMealScout shared this email address because the user chose to contact your business. No live location data, payment details, or private preference data was included.\n\nDashboard: ${dashboardUrl}`;
 
         const ok = await emailService.sendBasicEmail(
           owner.email,
-          `New MealScout message for ${businessName}`,
+          `MealScout ${subjectTopic}: ${businessName}`,
           html,
           text,
           "general",
