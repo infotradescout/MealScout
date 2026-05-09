@@ -28,6 +28,7 @@ import {
   restaurantUserRecommendations,
   telemetryEvents,
   users,
+  videoStories,
   insertMenuSchema,
   insertMenuCategorySchema,
   insertMenuItemSchema,
@@ -42,7 +43,7 @@ import {
   type MenuItemVariant,
   type MenuItemModifier,
 } from "@shared/schema";
-import { eq, and, asc, inArray } from "drizzle-orm";
+import { eq, and, asc, inArray, isNotNull, isNull } from "drizzle-orm";
 import { isAuthenticated, isRestaurantOwner } from "../unifiedAuth";
 import { storage } from "../storage";
 import { parseMenuCsv } from "../utils/menuCsvParser";
@@ -210,22 +211,36 @@ export function registerMenuRoutes(app: Express) {
       const viewerFavoriteRestaurantIds = new Set<string>();
       const viewerFollowRestaurantIds = new Set<string>();
       const viewerRecommendationRestaurantIds = new Set<string>();
+      const viewerVideoRecommendationRestaurantIds = new Set<string>();
 
       if (viewerId) {
-        const [favoriteRows, followRows, recommendationRows] = await Promise.all([
-          db
-            .select({ restaurantId: restaurantFavorites.restaurantId })
-            .from(restaurantFavorites)
-            .where(eq(restaurantFavorites.userId, viewerId)),
-          db
-            .select({ restaurantId: restaurantFollows.restaurantId })
-            .from(restaurantFollows)
-            .where(eq(restaurantFollows.userId, viewerId)),
-          db
-            .select({ restaurantId: restaurantUserRecommendations.restaurantId })
-            .from(restaurantUserRecommendations)
-            .where(eq(restaurantUserRecommendations.userId, viewerId)),
-        ]);
+        const [favoriteRows, followRows, recommendationRows, videoRows] =
+          await Promise.all([
+            db
+              .select({ restaurantId: restaurantFavorites.restaurantId })
+              .from(restaurantFavorites)
+              .where(eq(restaurantFavorites.userId, viewerId)),
+            db
+              .select({ restaurantId: restaurantFollows.restaurantId })
+              .from(restaurantFollows)
+              .where(eq(restaurantFollows.userId, viewerId)),
+            db
+              .select({ restaurantId: restaurantUserRecommendations.restaurantId })
+              .from(restaurantUserRecommendations)
+              .where(eq(restaurantUserRecommendations.userId, viewerId)),
+            db
+              .select({ restaurantId: videoStories.restaurantId })
+              .from(videoStories)
+              .where(
+                and(
+                  eq(videoStories.userId, viewerId),
+                  eq(videoStories.status, "ready"),
+                  eq(videoStories.isApproved, true),
+                  isNull(videoStories.deletedAt),
+                  isNotNull(videoStories.restaurantId),
+                ),
+              ),
+          ]);
 
         favoriteRows.forEach((row) =>
           viewerFavoriteRestaurantIds.add(String(row.restaurantId)),
@@ -236,6 +251,11 @@ export function registerMenuRoutes(app: Express) {
         recommendationRows.forEach((row) =>
           viewerRecommendationRestaurantIds.add(String(row.restaurantId)),
         );
+        videoRows.forEach((row) => {
+          if (row.restaurantId) {
+            viewerVideoRecommendationRestaurantIds.add(String(row.restaurantId));
+          }
+        });
       }
 
       const rows = await db
@@ -346,6 +366,7 @@ export function registerMenuRoutes(app: Express) {
             favorite: 0,
             follow: 0,
             recommendation: 0,
+            videoRecommendation: 0,
             freshness: 0,
             businessTrust: 0,
             businessType: 0,
@@ -408,18 +429,23 @@ export function registerMenuRoutes(app: Express) {
 
           const restaurantId = String(row.restaurantId || "");
           if (viewerFavoriteRestaurantIds.has(restaurantId)) {
-            score += 70;
-            signals.favorite = 70;
+            score += 80;
+            signals.favorite = 80;
             reasons.push("your favorite");
           }
+          if (viewerVideoRecommendationRestaurantIds.has(restaurantId)) {
+            score += 65;
+            signals.videoRecommendation = 65;
+            reasons.push("your video recommendation");
+          }
           if (viewerRecommendationRestaurantIds.has(restaurantId)) {
-            score += 55;
-            signals.recommendation = 55;
+            score += 50;
+            signals.recommendation = 50;
             reasons.push("you recommended it");
           }
           if (viewerFollowRestaurantIds.has(restaurantId)) {
-            score += 40;
-            signals.follow = 40;
+            score += 35;
+            signals.follow = 35;
             reasons.push("you follow this place");
           }
 
