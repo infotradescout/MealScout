@@ -207,7 +207,7 @@ export function registerSeoRoutes(app: Express) {
         "/host-signup",
         "/event-signup",
         "/search",
-        "/map",
+        "/scout",
         "/parking-pass",
         "/deals",
         "/deals/featured",

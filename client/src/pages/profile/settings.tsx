@@ -570,7 +570,7 @@ export default function SettingsPage() {
             </Link>
             <Link href="/parking-pass-manage">
               <Button variant="outline" className="w-full justify-start">
-                Parking hosts
+                Parking Pass hosts
               </Button>
             </Link>
             <Link href="/profile/notifications">

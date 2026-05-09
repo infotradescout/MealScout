@@ -278,6 +278,30 @@ const hasListingPricing = (listing: ParkingPassListing) =>
   (listing.weeklyPriceCents ?? 0) > 0 ||
   (listing.monthlyPriceCents ?? 0) > 0;
 
+const isParkingPassListingPublicVisible = (listing: ParkingPassListing) => {
+  const status = String(listing?.status || "").toLowerCase();
+  if (
+    status &&
+    ["deleted", "archived", "inactive", "cancelled", "canceled", "expired", "unavailable", "draft"].includes(status)
+  ) {
+    return false;
+  }
+  const hostStatus = String((listing as any)?.host?.status || "").toLowerCase();
+  if (
+    hostStatus &&
+    ["deleted", "archived", "inactive", "cancelled", "canceled", "expired", "unavailable"].includes(hostStatus)
+  ) {
+    return false;
+  }
+  if ((listing as any)?.deletedAt || (listing as any)?.archivedAt || (listing as any)?.cancelledAt) {
+    return false;
+  }
+  if ((listing as any)?.host?.deletedAt || (listing as any)?.host?.archivedAt) {
+    return false;
+  }
+  return true;
+};
+
 const normalizeDollar = (value: string | number) => {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return 0;
@@ -830,6 +854,7 @@ export default function ParkingPassPage() {
     if (!Array.isArray(data)) return [];
     return data.filter((listing: any) => {
       if (!listing?.host) return false;
+      if (!isParkingPassListingPublicVisible(listing)) return false;
       if (!hasListingPricing(listing)) return false;
       // Show priced locations even when fully booked so pins don't disappear from the map.
       // Booking is still gated elsewhere via `listingHasAvailability(...)`.
@@ -3662,8 +3687,9 @@ export default function ParkingPassPage() {
                       Parking Pass settings
                     </p>
                     <p className="text-xs text-orange-700">
-                      Manage location details, pins, and amenities for your
-                      listings.
+                      Manage location details, availability, blackout dates,
+                      pricing, and amenities for places where food trucks can
+                      park.
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
@@ -3718,7 +3744,8 @@ export default function ParkingPassPage() {
                             Blackout dates
                           </p>
                           <p className="text-xs text-orange-700">
-                            Block specific days when trucks cannot park.
+                            Block specific days when trucks cannot park. This
+                            is your Parking Pass schedule control.
                           </p>
                         </div>
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">

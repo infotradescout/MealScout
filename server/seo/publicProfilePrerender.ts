@@ -454,7 +454,7 @@ async function restaurantPage(baseUrl: string, restaurantId: string) {
         ? [{ label: "Catering", href: `${canonicalPath}?service=catering` }]
         : []),
       { label: "Find food nearby", href: "/find-food" },
-      { label: "MealScout map", href: "/map" },
+      { label: "Scout local dashboard", href: "/scout" },
     ],
     body: [
       row.cuisineType ? `Cuisine: ${row.cuisineType}` : "",
@@ -521,7 +521,7 @@ async function hostPage(baseUrl: string, hostId: string) {
     links: [
       { label: "Open location", href: canonicalPath },
       { label: "Book parking", href: "/parking-pass" },
-      { label: "Find food trucks", href: "/map" },
+      { label: "Find food trucks", href: "/scout" },
     ],
     body: [
       row.locationType ? `Location type: ${row.locationType}` : "",
