@@ -65,6 +65,7 @@ const signupSchema = z
     businessName: z.string().optional(),
     businessCity: z.string().optional(),
     businessState: z.string().optional(),
+    menuSourceUrl: z.string().optional(),
     eventName: z.string().optional(),
     hostLocationName: z.string().optional(),
     supplierBusinessName: z.string().optional(),
@@ -217,20 +218,20 @@ export default function CustomerSignup() {
     accountType === "host"
       ? "/host-signup"
       : accountType === "event_organizer"
-        ? "/event-signup"
+          ? "/event-signup"
         : accountType === "business"
-          ? "/restaurant-signup"
+          ? getBusinessRedirectPath()
           : "/scout";
 
   const getBusinessRedirectPath = () => {
-    if (businessSubType === "restaurant") {
-      return "/restaurant-signup";
+    if (businessSubType === "food_truck") {
+      return "/truck-onboarding?source=post-verification&claim=1";
     }
 
-    const params = new URLSearchParams({ businessType: businessSubType });
-    if (businessSubType === "food_truck") {
-      params.set("claim", "1");
-    }
+    const params = new URLSearchParams({
+      businessType: businessSubType,
+      source: "post-verification",
+    });
     return `/restaurant-signup?${params.toString()}`;
   };
 
@@ -280,6 +281,7 @@ export default function CustomerSignup() {
       businessName: "",
       businessCity: "",
       businessState: "",
+      menuSourceUrl: "",
       eventName: "",
       hostLocationName: "",
       supplierBusinessName: "",
@@ -322,6 +324,7 @@ export default function CustomerSignup() {
             state: data.businessState || existing.state || "",
             phone: data.phone || existing.phone || "",
             businessType: businessSubType,
+            menuSourceUrl: data.menuSourceUrl || existing.menuSourceUrl || "",
           }),
         );
       } else if (accountType === "host") {
@@ -452,6 +455,7 @@ export default function CustomerSignup() {
         {
           ...signupData,
           businessType: businessSubType,
+          menuSourceUrl: signupData.menuSourceUrl || undefined,
           intendedNextPath: getBusinessRedirectPath(),
         }
       );
@@ -984,7 +988,41 @@ export default function CustomerSignup() {
           {/* Signup Form */}
           <div className="bg-[var(--bg-card)] border border-[color:var(--border-subtle)] rounded-2xl shadow-clean-lg p-4">
             {/* Account type selection inside form */}
-            <div className="flex justify-center mb-4">
+            <div className="mb-4 rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)] p-3">
+              <div className="text-xs font-black uppercase tracking-[0.16em] text-[color:var(--text-muted)]">
+                Selected path
+              </div>
+              <div className="mt-1 flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-black text-[color:var(--text-primary)]">
+                    {accountType === "business"
+                      ? businessSubType === "food_truck"
+                        ? "Food truck owner"
+                        : businessSubType === "private_chef"
+                          ? "Private chef"
+                          : `${businessSubType.replace("_", " ")} owner`
+                      : accountType === "host"
+                        ? "Parking pass host"
+                        : accountType === "event_organizer"
+                          ? "Event organizer"
+                          : accountType === "supplier"
+                            ? "Supplier"
+                            : "Diner"}
+                  </div>
+                  <p className="text-xs text-[color:var(--text-secondary)]">
+                    Need a different path? Go back to the role picker.
+                  </p>
+                </div>
+                <Link
+                  href="/signup"
+                  className="shrink-0 rounded-full border border-[color:var(--border-subtle)] px-3 py-1 text-xs font-bold text-[color:var(--text-primary)] hover:bg-[var(--bg-surface)]"
+                >
+                  Change
+                </Link>
+              </div>
+            </div>
+
+            <div className="hidden justify-center mb-4">
               <div className="inline-flex rounded-full bg-[var(--bg-surface)] border border-[color:var(--border-subtle)] shadow-clean text-[11px] font-medium text-[color:var(--text-secondary)] overflow-hidden">
                 <button
                   type="button"
@@ -1220,6 +1258,26 @@ export default function CustomerSignup() {
                         )}
                       />
                     </div>
+                    <FormField
+                      control={form.control}
+                      name="menuSourceUrl"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Menu import link</FormLabel>
+                          <FormControl>
+                            <Input
+                              data-testid="input-menu-source-url"
+                              placeholder="Website, online menu, PDF, or ordering page URL"
+                              {...field}
+                            />
+                          </FormControl>
+                          <p className="text-[11px] leading-snug text-[color:var(--text-secondary)]">
+                            Optional, but powerful: we’ll carry this into menu setup so your menu can be imported or reviewed after verification.
+                          </p>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
                   </div>
                 )}
 

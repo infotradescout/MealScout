@@ -387,7 +387,12 @@ function Router() {
             />
             <Route path="/for-events" component={ForEvents} />
             <Route path="/find-food" component={FindFood} />
-            <Route path="/event-signup" component={EventSignup} />
+            <Route
+              path="/event-signup"
+              component={() => (
+                <Redirect to="/customer-signup?role=event_coordinator" />
+              )}
+            />
             <Route path="/events" component={EventsRouter} />
             <Route path="/events/public" component={EventsPage} />
             <Route path="/event/:slug" component={EventDetailPage} />
