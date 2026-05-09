@@ -253,6 +253,10 @@ const accountSettingsSchema = z.object({
           newRestaurants: z.boolean().optional(),
           weeklyDigest: z.boolean().optional(),
           nearbyEvents: z.boolean().optional(),
+          followedActivity: z.boolean().optional(),
+          businessMessages: z.boolean().optional(),
+          recommendations: z.boolean().optional(),
+          account: z.boolean().optional(),
         })
         .optional(),
       location: z

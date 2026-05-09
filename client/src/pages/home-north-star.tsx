@@ -83,7 +83,7 @@ export default function Home() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
-          <Link href="/restaurant-signup">
+          <Link href="/customer-signup?role=business">
             <Card className="hover:shadow-clean-lg transition-shadow cursor-pointer h-full border-2 hover:border-[color:var(--status-warning)]">
               <CardContent className="p-8">
                 <div className="flex flex-col items-center text-center space-y-4">
@@ -105,7 +105,7 @@ export default function Home() {
             </Card>
           </Link>
 
-          <Link href="/host-signup">
+          <Link href="/customer-signup?role=host">
             <Card className="hover:shadow-clean-lg transition-shadow cursor-pointer h-full border-2 hover:border-[color:var(--status-success)]">
               <CardContent className="p-8">
                 <div className="flex flex-col items-center text-center space-y-4">
@@ -126,7 +126,7 @@ export default function Home() {
             </Card>
           </Link>
 
-          <Link href="/event-signup">
+          <Link href="/customer-signup?role=event_coordinator">
             <Card className="hover:shadow-clean-lg transition-shadow cursor-pointer h-full border-2 hover:border-[color:var(--accent-text)]">
               <CardContent className="p-8">
                 <div className="flex flex-col items-center text-center space-y-4">

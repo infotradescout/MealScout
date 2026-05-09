@@ -59,7 +59,7 @@ export default function ProfilePage() {
         Icon: Calendar,
       }
     : {
-        href: "/event-signup",
+        href: "/customer-signup?role=event_coordinator",
         title: "Book Trucks for Your Event",
         description: "Festivals, concerts, markets - connect with vendors ->",
         Icon: PartyPopper,
@@ -452,7 +452,7 @@ export default function ProfilePage() {
 
           {/* Restaurant Owner Option (de-emphasized in menu) */}
           {user?.userType === "customer" && (
-            <Link href="/restaurant-signup">
+            <Link href="/customer-signup?role=business">
               <Card className="bg-[var(--bg-card)] hover:bg-[var(--bg-surface-muted)] transition-colors cursor-pointer border border-[color:var(--border-subtle)] shadow-clean">
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">

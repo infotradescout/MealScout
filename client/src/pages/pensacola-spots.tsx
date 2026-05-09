@@ -78,7 +78,7 @@ export default function PensacolaSpots() {
     return (
       <Button asChild>
         <a
-          href={`/restaurant-signup?businessType=food_truck&claim=1&redirect=${encodeURIComponent(
+          href={`/customer-signup?role=business&businessType=food_truck&claim=1&redirect=${encodeURIComponent(
             "/truck-discovery?city=Pensacola%2C%20FL",
           )}`}
         >
@@ -202,7 +202,7 @@ export default function PensacolaSpots() {
                             {cardLocked ? (
                               <Button asChild>
                                 <a
-                                  href={`/restaurant-signup?businessType=food_truck&claim=1&redirect=${encodeURIComponent(
+                                  href={`/customer-signup?role=business&businessType=food_truck&claim=1&redirect=${encodeURIComponent(
                                     "/truck-discovery?city=Pensacola%2C%20FL",
                                   )}`}
                                 >

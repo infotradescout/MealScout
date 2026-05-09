@@ -961,7 +961,7 @@ export default function SuppliersPage() {
               Add a restaurant or food truck profile to request supplies and
               calculate local delivery distance.
               <div className="pt-3">
-                <Link href="/restaurant-signup">
+                <Link href="/customer-signup?role=business">
                   <Button size="sm" variant="outline">
                     Create my business profile
                   </Button>

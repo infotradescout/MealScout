@@ -59,6 +59,7 @@ import { registerStripeWebhookRoutes } from "./routes/stripeWebhookRoutes";
 import { registerTruckClaimRoutes } from "./routes/truckClaimRoutes";
 import { registerMenuRoutes } from "./routes/menuRoutes";
 import { registerPickupOrderRoutes } from "./routes/pickupOrderRoutes";
+import { registerNotificationRoutes } from "./routes/notificationRoutes";
 import {
   notifyNearbyDealSubscribers,
   notifyRestaurantFollowersOfDeal,
@@ -87,6 +88,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   await setupUnifiedAuth(app);
 
   registerAuthAccountRoutes(app);
+  registerNotificationRoutes(app);
 
   registerLocationDemandRoutes(app);
   registerLocationUtilityRoutes(app, { hasBusinessDistributionAccess });

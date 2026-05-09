@@ -125,7 +125,7 @@ export default function HostLocationPartnerPage() {
                 now by creating your host profile.
               </p>
               <div className="flex flex-wrap gap-3">
-                <Link href="/host-signup">
+                <Link href="/customer-signup?role=host">
                   <Button>Create Host Profile</Button>
                 </Link>
                 <Link href="/for-hosts">

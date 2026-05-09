@@ -8,7 +8,7 @@ import {
   type TradeScoutUserData,
 } from "@shared/schema";
 import { db, pool } from "../db";
-import { eq, and, or, isNull, desc } from "drizzle-orm";
+import { eq, and, or, isNull, desc, sql } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { syncUserToBrevo } from "../brevoCrm";
 import { ensureAffiliateTag } from "../affiliateTagService";
@@ -118,6 +118,11 @@ function shouldAssignAffiliateTag(userType?: string | null): boolean {
   return shouldAssignAffiliateTagForUserType(userType);
 }
 
+function normalizeEmail(value: unknown): string | null {
+  const email = String(value || "").trim().toLowerCase();
+  return email || null;
+}
+
 function getSafePublicSignupUserType(userType: User["userType"]): User["userType"] {
   if (isAdminUserType(userType) || userType === "staff") return "customer";
   const allowed = new Set<string>([
@@ -211,10 +216,10 @@ export function createUsersRepository() {
     },
 
     async getUserByEmail(email: string): Promise<User | undefined> {
-      const normalizedEmail = String(email || "").trim();
+      const normalizedEmail = normalizeEmail(email);
       if (!normalizedEmail) return undefined;
       try {
-        const rows = await selectUsersSafe(`where "email" = $1 limit 1`, [
+        const rows = await selectUsersSafe(`where lower("email") = $1 limit 1`, [
           normalizedEmail,
         ]);
         const row = (rows[0] as any) || undefined;
@@ -231,7 +236,7 @@ export function createUsersRepository() {
           .from(users)
           .where(
             and(
-              eq(users.email, normalizedEmail),
+              sql`lower(${users.email}) = ${normalizedEmail}`,
               or(eq(users.isDisabled, false), isNull(users.isDisabled)),
             ),
           );
@@ -340,6 +345,7 @@ export function createUsersRepository() {
             : getSafePublicSignupUserType(userType);
         if (authType === "tradescout") {
           const tsData = userData as TradeScoutUserData;
+          const normalizedEmail = normalizeEmail(tsData.email);
           let existingUser = await db
             .select()
             .from(users)
@@ -355,8 +361,8 @@ export function createUsersRepository() {
             const [user] = await db
               .update(users)
               .set({
-                email: tsData.email ?? current.email,
-                ...(tsData.email ? { emailVerified: true } : {}),
+                email: normalizedEmail ?? current.email,
+                ...(normalizedEmail ? { emailVerified: true } : {}),
                 firstName: tsData.firstName ?? current.firstName,
                 lastName: tsData.lastName ?? current.lastName,
                 appContext: newAppContext,
@@ -368,11 +374,11 @@ export function createUsersRepository() {
             return user;
           }
 
-          if (tsData.email) {
+          if (normalizedEmail) {
             existingUser = await db
               .select()
               .from(users)
-              .where(eq(users.email, tsData.email))
+              .where(sql`lower(${users.email}) = ${normalizedEmail}`)
               .limit(1);
             if (existingUser.length > 0) {
               const current = existingUser[0];
@@ -402,8 +408,8 @@ export function createUsersRepository() {
             .values({
               userType: insertUserType,
               tradescoutId: tsData.tradescoutId,
-              email: tsData.email ?? undefined,
-              emailVerified: Boolean(tsData.email),
+              email: normalizedEmail ?? undefined,
+              emailVerified: Boolean(normalizedEmail),
               firstName: tsData.firstName ?? undefined,
               lastName: tsData.lastName ?? undefined,
               appContext,
@@ -413,6 +419,7 @@ export function createUsersRepository() {
           return user;
         } else if (authType === "google") {
           const googleData = userData as GoogleUserData;
+          const normalizedEmail = normalizeEmail(googleData.email);
           let existingUser = await db
             .select()
             .from(users)
@@ -428,7 +435,7 @@ export function createUsersRepository() {
             const [user] = await db
               .update(users)
               .set({
-                email: googleData.email,
+                email: normalizedEmail,
                 emailVerified: true,
                 firstName: googleData.firstName,
                 lastName: googleData.lastName,
@@ -443,11 +450,11 @@ export function createUsersRepository() {
             return user;
           }
 
-          if (googleData.email) {
+          if (normalizedEmail) {
             existingUser = await db
               .select()
               .from(users)
-              .where(eq(users.email, googleData.email))
+              .where(sql`lower(${users.email}) = ${normalizedEmail}`)
               .limit(1);
             if (existingUser.length > 0) {
               const current = existingUser[0];
@@ -481,7 +488,7 @@ export function createUsersRepository() {
             .values({
               userType: insertUserType,
               googleId: googleData.googleId,
-              email: googleData.email,
+              email: normalizedEmail,
               emailVerified: true,
               firstName: googleData.firstName,
               lastName: googleData.lastName,
@@ -494,6 +501,7 @@ export function createUsersRepository() {
           return user;
         } else if (authType === "facebook") {
           const facebookData = userData as FacebookUserData;
+          const normalizedEmail = normalizeEmail(facebookData.email);
           let existingUser = await db
             .select()
             .from(users)
@@ -509,7 +517,7 @@ export function createUsersRepository() {
             const [user] = await db
               .update(users)
               .set({
-                email: facebookData.email,
+                email: normalizedEmail,
                 emailVerified: true,
                 firstName: facebookData.firstName,
                 lastName: facebookData.lastName,
@@ -524,11 +532,11 @@ export function createUsersRepository() {
             return user;
           }
 
-          if (facebookData.email) {
+          if (normalizedEmail) {
             existingUser = await db
               .select()
               .from(users)
-              .where(eq(users.email, facebookData.email))
+              .where(sql`lower(${users.email}) = ${normalizedEmail}`)
               .limit(1);
             if (existingUser.length > 0) {
               const current = existingUser[0];
@@ -563,7 +571,7 @@ export function createUsersRepository() {
             .values({
               userType: insertUserType,
               facebookId: facebookData.facebookId,
-              email: facebookData.email,
+              email: normalizedEmail,
               emailVerified: true,
               firstName: facebookData.firstName,
               lastName: facebookData.lastName,
@@ -576,11 +584,12 @@ export function createUsersRepository() {
           return user;
         } else {
           const emailData = userData as EmailUserData;
+          const normalizedEmail = normalizeEmail(emailData.email);
           const [user] = await db
             .insert(users)
             .values({
               userType: insertUserType,
-              email: emailData.email,
+              email: normalizedEmail,
               firstName: emailData.firstName,
               lastName: emailData.lastName,
               phone: emailData.phone,
@@ -596,14 +605,15 @@ export function createUsersRepository() {
         if (error.code === "23505") {
           if (authType === "tradescout") {
             const tsData = userData as TradeScoutUserData;
+            const normalizedEmail = normalizeEmail(tsData.email);
             const existingUser = await db
               .select()
               .from(users)
               .where(
-                tsData.email
+                normalizedEmail
                   ? or(
                       eq(users.tradescoutId, tsData.tradescoutId),
-                      eq(users.email, tsData.email),
+                      sql`lower(${users.email}) = ${normalizedEmail}`,
                     )
                   : eq(users.tradescoutId, tsData.tradescoutId),
               )
@@ -614,8 +624,8 @@ export function createUsersRepository() {
                 .update(users)
                 .set({
                   tradescoutId: tsData.tradescoutId,
-                  email: tsData.email ?? current.email,
-                  ...(tsData.email ? { emailVerified: true } : {}),
+                  email: normalizedEmail ?? current.email,
+                  ...(normalizedEmail ? { emailVerified: true } : {}),
                   firstName: tsData.firstName ?? current.firstName,
                   lastName: tsData.lastName ?? current.lastName,
                   updatedAt: new Date(),
@@ -627,14 +637,15 @@ export function createUsersRepository() {
             }
           } else if (authType === "google") {
             const googleData = userData as GoogleUserData;
+            const normalizedEmail = normalizeEmail(googleData.email);
             const existingUser = await db
               .select()
               .from(users)
               .where(
-                googleData.email
+                normalizedEmail
                   ? or(
                       eq(users.googleId, googleData.googleId),
-                      eq(users.email, googleData.email),
+                      sql`lower(${users.email}) = ${normalizedEmail}`,
                     )
                   : eq(users.googleId, googleData.googleId),
               )
@@ -644,7 +655,8 @@ export function createUsersRepository() {
                 .update(users)
                 .set({
                   googleId: googleData.googleId,
-                  email: googleData.email,
+                  email: normalizedEmail,
+                  emailVerified: true,
                   firstName: googleData.firstName,
                   lastName: googleData.lastName,
                   profileImageUrl: googleData.profileImageUrl,
@@ -658,14 +670,15 @@ export function createUsersRepository() {
             }
           } else if (authType === "facebook") {
             const facebookData = userData as FacebookUserData;
+            const normalizedEmail = normalizeEmail(facebookData.email);
             const existingUser = await db
               .select()
               .from(users)
               .where(
-                facebookData.email
+                normalizedEmail
                   ? or(
                       eq(users.facebookId, facebookData.facebookId),
-                      eq(users.email, facebookData.email),
+                      sql`lower(${users.email}) = ${normalizedEmail}`,
                     )
                   : eq(users.facebookId, facebookData.facebookId),
               )
@@ -675,7 +688,8 @@ export function createUsersRepository() {
                 .update(users)
                 .set({
                   facebookId: facebookData.facebookId,
-                  email: facebookData.email,
+                  email: normalizedEmail,
+                  emailVerified: true,
                   firstName: facebookData.firstName,
                   lastName: facebookData.lastName,
                   profileImageUrl: facebookData.profileImageUrl,

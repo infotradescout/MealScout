@@ -1,4 +1,5 @@
 import { emailService, isEmailConfigured } from "../emailService";
+import { notifyUser } from "../productNotifications";
 import { db } from "../db";
 import {
   restaurantFollows,
@@ -150,8 +151,6 @@ export async function notifyNearbyDealSubscribers(params: {
   lat: number;
   lng: number;
 }) {
-  if (!isEmailConfigured()) return;
-
   const baseUrl = process.env.PUBLIC_BASE_URL || "http://localhost:5000";
   const dealUrl = `${baseUrl.replace(/\/+$/, "")}/deals/${params.dealId}`;
 
@@ -159,6 +158,7 @@ export async function notifyNearbyDealSubscribers(params: {
     .select({
       userId: users.id,
       email: users.email,
+      phone: users.phone,
       accountSettings: users.accountSettings,
       latitude: userAddresses.latitude,
       longitude: userAddresses.longitude,
@@ -181,8 +181,7 @@ export async function notifyNearbyDealSubscribers(params: {
     );
 
   for (const candidate of candidates) {
-    if (!candidate.email || candidate.userId === params.creatorUserId) continue;
-    if (!isEmailChannelEnabled(candidate.accountSettings)) continue;
+    if (candidate.userId === params.creatorUserId) continue;
     if (!isDealAlertsEnabled(candidate.accountSettings)) continue;
 
     const radiusKm = getNearbyDealRadiusKm(candidate.accountSettings);
@@ -195,13 +194,26 @@ export async function notifyNearbyDealSubscribers(params: {
     const distanceKm = haversineKm(params.lat, params.lng, userLat, userLng);
     if (distanceKm > radiusKm) continue;
 
-    await emailService.sendBasicEmail(
-      candidate.email,
-      `New deal near you: ${params.restaurantName}`,
-      `<p>A new deal was just posted near your location.</p><p><strong>${params.dealTitle}</strong> at <strong>${params.restaurantName}</strong>.</p><p><a href="${dealUrl}">View deal</a></p>`,
-      `New deal near you: ${params.dealTitle} at ${params.restaurantName}. View: ${dealUrl}`,
-      "general",
-    );
+    await notifyUser({
+      user: {
+        id: String(candidate.userId),
+        email: candidate.email,
+        phone: candidate.phone,
+        accountSettings: candidate.accountSettings,
+      },
+      topic: "dealAlerts",
+      title: `New deal near you: ${params.restaurantName}`,
+      body: `${params.dealTitle} is available near your saved location.`,
+      actionUrl: `/deals/${params.dealId}`,
+      sourceType: "deal",
+      sourceId: params.dealId,
+      actorUserId: params.creatorUserId,
+      channels: ["in_app", "email"],
+      metadata: {
+        restaurantName: params.restaurantName,
+        distanceKm,
+      },
+    });
   }
 }
 
@@ -212,8 +224,6 @@ export async function notifyRestaurantFollowersOfDeal(params: {
   dealTitle: string;
   restaurantName: string;
 }) {
-  if (!isEmailConfigured()) return;
-
   const baseUrl = process.env.PUBLIC_BASE_URL || "http://localhost:5000";
   const cleanBaseUrl = baseUrl.replace(/\/+$/, "");
   const dealUrl = `${cleanBaseUrl}/deals/${params.dealId}`;
@@ -225,6 +235,7 @@ export async function notifyRestaurantFollowersOfDeal(params: {
     .select({
       userId: users.id,
       email: users.email,
+      phone: users.phone,
       accountSettings: users.accountSettings,
     })
     .from(restaurantFollows)
@@ -238,17 +249,28 @@ export async function notifyRestaurantFollowersOfDeal(params: {
     );
 
   for (const follower of followers) {
-    if (!follower.email || follower.userId === params.creatorUserId) continue;
-    if (!isEmailChannelEnabled(follower.accountSettings)) continue;
+    if (follower.userId === params.creatorUserId) continue;
     if (!isFollowedActivityEnabled(follower.accountSettings)) continue;
 
-    await emailService.sendBasicEmail(
-      follower.email,
-      `${params.restaurantName} posted a new deal on MealScout`,
-      `<p><strong>${safeRestaurantName}</strong> posted something new for people who follow them on MealScout.</p><p><strong>${safeDealTitle}</strong></p><p><a href="${dealUrl}">View it on MealScout</a></p><p style="color:#6b7280;font-size:13px;">You received this because you follow ${safeRestaurantName}. You can change these emails in <a href="${settingsUrl}">notification settings</a>.</p>`,
-      `${params.restaurantName} posted a new deal on MealScout: ${params.dealTitle}. View: ${dealUrl}\n\nYou received this because you follow ${params.restaurantName}. Change email settings: ${settingsUrl}`,
-      "general",
-    );
+    await notifyUser({
+      user: {
+        id: String(follower.userId),
+        email: follower.email,
+        phone: follower.phone,
+        accountSettings: follower.accountSettings,
+      },
+      topic: "followedActivity",
+      title: `${params.restaurantName} posted a new deal`,
+      body: `${params.dealTitle} is live for people following ${params.restaurantName}.`,
+      actionUrl: `/deals/${params.dealId}`,
+      sourceType: "deal",
+      sourceId: params.dealId,
+      actorUserId: params.creatorUserId,
+      channels: ["in_app", "email"],
+      emailHtml: `<p><strong>${safeRestaurantName}</strong> posted something new for people who follow them on MealScout.</p><p><strong>${safeDealTitle}</strong></p><p><a href="${dealUrl}">View it on MealScout</a></p><p style="color:#6b7280;font-size:13px;">You received this because you follow ${safeRestaurantName}. You can change these emails in <a href="${settingsUrl}">notification settings</a>.</p>`,
+      emailText: `${params.restaurantName} posted a new deal on MealScout: ${params.dealTitle}. View: ${dealUrl}\n\nYou received this because you follow ${params.restaurantName}. Change email settings: ${settingsUrl}`,
+      metadata: { restaurantName: params.restaurantName },
+    });
   }
 }
 

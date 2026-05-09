@@ -1199,11 +1199,22 @@ export async function setupUnifiedAuth(app: Express) {
       const intendedNextPath =
         getSafeRedirectPath(req.body?.intendedNextPath) || "/restaurant-signup";
 
+      const verificationAccountLabel =
+        businessType === "food_truck"
+          ? "food truck"
+          : businessType === "caterer"
+            ? "caterer"
+            : businessType === "private_chef"
+              ? "private chef"
+              : businessType === "bar"
+                ? "bar"
+                : "restaurant owner";
+
       // Send welcome email with verification link (don't block auth flow)
       void sendWelcomeOrVerification(
         user,
         req,
-        "restaurant owner",
+        verificationAccountLabel,
         intendedNextPath,
       );
       // Send admin signup notification with context asynchronously
@@ -1952,7 +1963,7 @@ export async function setupUnifiedAuth(app: Express) {
         getSafeRedirectPath(req.query.redirect) ||
         getDefaultPostVerificationRedirect(user);
 
-      const redirectUrl = `${redirectBase}/post-verification?verified=1&redirect=${encodeURIComponent(
+      const redirectUrl = `${redirectBase}/login?verified=1&redirect=${encodeURIComponent(
         defaultRedirectPath,
       )}`;
       res.redirect(redirectUrl);

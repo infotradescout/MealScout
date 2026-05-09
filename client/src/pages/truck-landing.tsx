@@ -254,7 +254,7 @@ export default function TruckLanding() {
                     See Pensacola host spots
                   </div>
                 </Link>
-                <Link href="/restaurant-signup?businessType=food_truck&claim=1&redirect=%2Ftruck-discovery%3Fcity%3DPensacola%252C%2520FL">
+                <Link href="/customer-signup?role=business&businessType=food_truck&claim=1&redirect=%2Ftruck-discovery%3Fcity%3DPensacola%252C%2520FL">
                   <div className="rounded-lg border px-3 py-2 text-sm font-medium text-[var(--ink-dark)] transition-colors hover:bg-[var(--card-muted)]" style={{ borderColor: "var(--border)" }}>
                     Claim my truck
                   </div>

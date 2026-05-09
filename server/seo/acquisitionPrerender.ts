@@ -104,7 +104,7 @@ export function registerAcquisitionPrerenderRoutes(
         "Start with your profile, then activate offers and booking visibility to keep demand compounding over time.",
       ],
       ctaLinks: [
-        { label: "Owner Signup", href: "/restaurant-signup" },
+        { label: "Owner Signup", href: "/customer-signup?role=business" },
         { label: "Claim Food Truck", href: "/claim-truck" },
         { label: "Scout Local Dashboard", href: "/scout" },
         { label: "Sitemap", href: "/sitemap" },

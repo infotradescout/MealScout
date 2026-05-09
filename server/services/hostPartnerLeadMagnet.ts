@@ -143,7 +143,7 @@ async function sentRecently(leadId: string, step: number, cutoff: Date) {
 async function sendStep1Email(lead: any): Promise<boolean> {
   const base = publicBaseUrl();
   const firstName = String(lead?.firstName || "there");
-  const hostSignupUrl = `${base}/host-signup`;
+  const hostSignupUrl = `${base}/customer-signup?role=host`;
   const forHostsUrl = `${base}/for-hosts`;
   const subject = "Your location can host food trucks on MealScout";
   const html = `

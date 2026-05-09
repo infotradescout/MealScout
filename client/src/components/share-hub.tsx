@@ -21,7 +21,7 @@ const USER_ITEMS: ShareHubItem[] = [
     key: "owner-signup",
     title: "1) Owner Signup",
     description: "Primary link for restaurant owners and food truck operators to start.",
-    href: "/restaurant-signup",
+    href: "/customer-signup?role=business",
     audience: "Restaurant + Food Truck Owners",
     priority: 1,
     outreachText:

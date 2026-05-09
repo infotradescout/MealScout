@@ -39,6 +39,9 @@ type NotificationPrefs = {
     newRestaurants: boolean;
     weeklyDigest: boolean;
     nearbyEvents: boolean;
+    businessMessages: boolean;
+    recommendations: boolean;
+    account: boolean;
   };
   location: {
     enabled: boolean;
@@ -57,6 +60,21 @@ type SettingsResponse = {
   };
 };
 
+type InAppNotification = {
+  id: string;
+  title: string;
+  body: string;
+  topic: string;
+  actionUrl?: string | null;
+  priority: string;
+  createdAt?: string;
+  isRead: boolean;
+};
+
+type NotificationsResponse = {
+  notifications: InAppNotification[];
+};
+
 const DEFAULT_PREFS: NotificationPrefs = {
   channels: {
     push: true,
@@ -70,6 +88,9 @@ const DEFAULT_PREFS: NotificationPrefs = {
     newRestaurants: false,
     weeklyDigest: true,
     nearbyEvents: true,
+    businessMessages: true,
+    recommendations: true,
+    account: true,
   },
   location: {
     enabled: true,
@@ -111,6 +132,11 @@ function buildPrefs(
         topics.newRestaurants ?? DEFAULT_PREFS.topics.newRestaurants,
       weeklyDigest: topics.weeklyDigest ?? DEFAULT_PREFS.topics.weeklyDigest,
       nearbyEvents: topics.nearbyEvents ?? DEFAULT_PREFS.topics.nearbyEvents,
+      businessMessages:
+        topics.businessMessages ?? DEFAULT_PREFS.topics.businessMessages,
+      recommendations:
+        topics.recommendations ?? DEFAULT_PREFS.topics.recommendations,
+      account: topics.account ?? DEFAULT_PREFS.topics.account,
     },
     location: {
       enabled: location.enabled ?? DEFAULT_PREFS.location.enabled,
@@ -151,6 +177,21 @@ export default function NotificationsPage() {
     queryFn: async () => {
       const res = await fetch("/api/settings/me", { credentials: "include" });
       if (!res.ok) throw new Error("Failed to load notification settings");
+      return res.json();
+    },
+  });
+  const {
+    data: notificationsData,
+    isLoading: notificationsLoading,
+    refetch: refetchNotifications,
+  } = useQuery<NotificationsResponse>({
+    queryKey: ["/api/notifications", "profile"],
+    enabled: isAuthenticated,
+    queryFn: async () => {
+      const res = await fetch("/api/notifications?limit=25", {
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to load notifications");
       return res.json();
     },
   });
@@ -240,6 +281,23 @@ export default function NotificationsPage() {
     }
   };
 
+  const markRead = async (notificationId: string) => {
+    try {
+      const res = await fetch(`/api/notifications/${notificationId}/read`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to mark notification read");
+      await refetchNotifications();
+    } catch (error: any) {
+      toast({
+        title: "Could not update notification",
+        description: error?.message || "Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const maybeEnablePush = async (enabled: boolean) => {
     setChannels({ push: enabled });
     if (!enabled) {
@@ -277,6 +335,9 @@ export default function NotificationsPage() {
     }
   };
 
+  const notifications = notificationsData?.notifications || [];
+  const unreadCount = notifications.filter((item) => !item.isRead).length;
+
   return (
     <div className="max-w-md mx-auto bg-[var(--bg-layered)] min-h-screen relative pb-20">
       <BackHeader
@@ -289,6 +350,93 @@ export default function NotificationsPage() {
 
       {/* Content */}
       <div className="px-4 sm:px-6 py-6 space-y-6">
+        <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center justify-between">
+              <span className="flex items-center">
+                <Bell className="w-5 h-5 mr-2" />
+                In-app inbox
+              </span>
+              {unreadCount > 0 ? (
+                <span className="rounded-full bg-[color:var(--action-primary)] px-2 py-0.5 text-xs font-black text-[color:var(--action-primary-text)]">
+                  {unreadCount} new
+                </span>
+              ) : null}
+            </CardTitle>
+            <p className="text-sm text-muted-foreground">
+              A private record of MealScout actions and alerts. These signals
+              help us learn what is useful without exposing private message
+              content in public ranking.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {notificationsLoading ? (
+              <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Loading notifications...
+              </div>
+            ) : notifications.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-[color:var(--border-subtle)] p-4 text-sm text-muted-foreground">
+                No in-app notifications yet. Follows, saved spots, business
+                replies, recommendations, orders, and local alerts will collect
+                here.
+              </div>
+            ) : (
+              notifications.map((item) => (
+                <div
+                  key={item.id}
+                  className={`rounded-2xl border p-3 ${
+                    item.isRead
+                      ? "border-[color:var(--border-subtle)] bg-[var(--bg-surface)]"
+                      : "border-[color:var(--action-primary)] bg-[var(--bg-surface-muted)]"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-black text-[color:var(--text-primary)]">
+                        {item.title}
+                      </p>
+                      <p className="mt-1 text-sm text-[color:var(--text-secondary)]">
+                        {item.body}
+                      </p>
+                      <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] font-bold uppercase tracking-[0.12em] text-[color:var(--text-muted)]">
+                        <span>{item.topic}</span>
+                        {item.createdAt ? (
+                          <span>
+                            {new Date(item.createdAt).toLocaleDateString()}
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+                    {!item.isRead ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => markRead(item.id)}
+                      >
+                        Read
+                      </Button>
+                    ) : null}
+                  </div>
+                  {item.actionUrl ? (
+                    <Button
+                      type="button"
+                      variant="link"
+                      className="mt-2 h-auto p-0 text-[color:var(--action-primary)]"
+                      onClick={() => {
+                        window.location.href = item.actionUrl || "/scout";
+                      }}
+                    >
+                      Open action
+                    </Button>
+                  ) : null}
+                </div>
+              ))
+            )}
+          </CardContent>
+        </Card>
+
         <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">
           <CardContent className="pt-6 flex items-center justify-between gap-3">
             <div className="text-sm">
@@ -455,6 +603,49 @@ export default function NotificationsPage() {
                 checked={prefs.topics.nearbyEvents}
                 onCheckedChange={(next) => setTopics({ nearbyEvents: next })}
                 data-testid="switch-nearby-events"
+              />
+            </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium">Business messages</p>
+                <p className="text-sm text-muted-foreground">
+                  Replies and follow-ups from restaurants, trucks, hosts, and
+                  suppliers
+                </p>
+              </div>
+              <Switch
+                checked={prefs.topics.businessMessages}
+                onCheckedChange={(next) =>
+                  setTopics({ businessMessages: next })
+                }
+                data-testid="switch-business-messages"
+              />
+            </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium">Recommendations</p>
+                <p className="text-sm text-muted-foreground">
+                  Signals from favorites, follows, recommendations, and local
+                  food activity
+                </p>
+              </div>
+              <Switch
+                checked={prefs.topics.recommendations}
+                onCheckedChange={(next) => setTopics({ recommendations: next })}
+                data-testid="switch-recommendations"
+              />
+            </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium">Account and security</p>
+                <p className="text-sm text-muted-foreground">
+                  Verification, password, payment, and safety updates
+                </p>
+              </div>
+              <Switch
+                checked={prefs.topics.account}
+                onCheckedChange={(next) => setTopics({ account: next })}
+                data-testid="switch-account-security"
               />
             </div>
           </CardContent>

@@ -58,7 +58,7 @@ function htmlForStep(step: number, lead: any): string {
   const base = publicBaseUrl();
   const firstName = String(lead?.firstName || "there");
   const forHostsUrl = `${base}/for-hosts`;
-  const hostSignupUrl = `${base}/host-signup`;
+  const hostSignupUrl = `${base}/customer-signup?role=host`;
   const parkingPassUrl = `${base}/parking-pass`;
   const businessName = String(lead?.businessName || "your business");
 

@@ -328,7 +328,7 @@ export function registerLocationDemandRoutes(app: Express) {
               <p><strong>Address:</strong> ${result.locationRequest.address}</p>
               <p><strong>Interested trucks:</strong> ${result.interestCount}</p>
               <p><strong>Required:</strong> ${result.minInterestedTrucks}</p>
-              <p><a href="${(process.env.PUBLIC_BASE_URL || "").replace(/\/+$/, "")}/host-signup">Claim this demand and publish your first paid slot</a></p>
+              <p><a href="${(process.env.PUBLIC_BASE_URL || "").replace(/\/+$/, "")}/customer-signup?role=host">Claim this demand and publish your first paid slot</a></p>
             `;
             await emailService
               .sendBasicEmail(hostUser.email, thresholdSubject, thresholdHtml)
