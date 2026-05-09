@@ -27,6 +27,7 @@ const DealEdit = lazy(() => import("@/pages/deal-edit"));
 const DealDetail = lazy(() => import("@/pages/deal-detail"));
 const Subscribe = lazy(() => import("@/pages/subscribe"));
 const Search = lazy(() => import("@/pages/search"));
+const Trending = lazy(() => import("@/pages/trending"));
 const MapPage = lazy(() => import("@/pages/map"));
 const ReviewsPage = lazy(() => import("@/pages/reviews"));
 const Favorites = lazy(() => import("@/pages/favorites"));
@@ -189,6 +190,7 @@ const publicRoutePrefixes = [
   "/deal-creation",
   "/deal/",
   "/search",
+  "/trending",
   "/map",
   "/video",
   "/category/",
@@ -323,6 +325,7 @@ function Router() {
             <Route path="/deal-creation" component={DealCreation} />
             <Route path="/deal/:id" component={DealDetail} />
             <Route path="/search" component={Search} />
+            <Route path="/trending" component={Trending} />
             <Route path="/map" component={MapPage} />
             <Route path="/suppliers" component={SuppliersPage} />
             <Route
@@ -490,6 +493,7 @@ function Router() {
             <Route path="/for-events" component={ForEvents} />
             <Route path="/find-food" component={FindFood} />
             <Route path="/search" component={Search} />
+            <Route path="/trending" component={Trending} />
             <Route path="/map" component={MapPage} />
             <Route path="/suppliers" component={SuppliersPage} />
             <Route

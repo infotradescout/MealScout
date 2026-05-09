@@ -19,6 +19,7 @@ import {
   Search,
   Sparkles,
   Tag,
+  TrendingUp,
   Utensils,
   User as UserIcon,
 } from "lucide-react";
@@ -260,6 +261,7 @@ type DiscoveryLayerId =
   | "liveNow"
   | "localBoard"
   | "cravings"
+  | "trending"
   | "menuItems"
   | "foodTrucks"
   | "restaurants"
@@ -286,6 +288,11 @@ const DISCOVERY_LAYERS: Record<
     title: "Explore by Craving",
     href: "/find-food",
     subtitle: "Jump into local food by mood, not by chain category.",
+  },
+  trending: {
+    title: "Trending Now",
+    href: "/trending",
+    subtitle: "Cuisines, dishes, videos, and local spots gaining momentum.",
   },
   menuItems: {
     title: "New Local Menu Items",
@@ -1879,6 +1886,13 @@ function LocalFoodDashboard({
       icon: <Utensils className="h-4 w-4" aria-hidden="true" />,
     },
     {
+      label: "Trending",
+      value: "Live",
+      detail: "local heat",
+      href: DISCOVERY_LAYERS.trending.href,
+      icon: <TrendingUp className="h-4 w-4" aria-hidden="true" />,
+    },
+    {
       label: "Deals",
       value: dealCount,
       detail: dealCount > 0 ? "active" : "none posted",
@@ -1903,6 +1917,7 @@ function LocalFoodDashboard({
 
   const lanes = [
     { label: "All trucks", href: "/truck-discovery" },
+    { label: "Trending", href: DISCOVERY_LAYERS.trending.href },
     { label: "Find dinner", href: "/find-food" },
     { label: "Menus", href: DISCOVERY_LAYERS.menuItems.href },
     { label: "Deals", href: "/deals" },

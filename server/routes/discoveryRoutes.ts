@@ -62,6 +62,191 @@ function getFreshnessGateConfig() {
 }
 
 export function registerDiscoveryRoutes(app: Express) {
+  const rowsOf = (result: any) =>
+    Array.isArray(result) ? result : Array.isArray(result?.rows) ? result.rows : [];
+
+  app.get("/api/public/trending", async (req, res) => {
+    try {
+      const limit = Math.max(
+        4,
+        Math.min(24, Number.parseInt(String(req.query.limit || "12"), 10) || 12),
+      );
+      const windowDays = Math.max(
+        1,
+        Math.min(30, Number.parseInt(String(req.query.days || "14"), 10) || 14),
+      );
+      const since = new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000);
+
+      const [itemResult, cuisineResult, placeResult, signalResult] =
+        await Promise.all([
+          db.execute(sql`
+            with menu_interest as (
+              select
+                nullif(properties->>'itemId', '') as item_id,
+                count(*) filter (where event_name = 'menu_item_click')::int as clicks,
+                count(*) filter (where event_name = 'menu_item_impression')::int as impressions,
+                max(created_at) as last_seen_at
+              from telemetry_events
+              where created_at >= ${since}
+                and event_name in ('menu_item_click', 'menu_item_impression')
+                and nullif(properties->>'itemId', '') is not null
+              group by nullif(properties->>'itemId', '')
+            )
+            select
+              mi.item_id as id,
+              m.name,
+              m.description,
+              m.price_cents as "priceCents",
+              m.image_url as "imageUrl",
+              m.restaurant_id as "restaurantId",
+              r.name as "restaurantName",
+              r.city as "restaurantCity",
+              r.state as "restaurantState",
+              r.cuisine_type as "cuisineType",
+              mi.clicks,
+              mi.impressions,
+              mi.last_seen_at as "lastSeenAt",
+              (
+                mi.clicks * 10
+                + least(mi.impressions, 50)
+                + case when m.updated_at >= ${since} then 8 else 0 end
+                + least(coalesce(r.ranking_score, 0), 200) / 20
+              )::int as "trendScore"
+            from menu_interest mi
+            inner join menu_items m on m.id = mi.item_id
+            inner join menus menu on menu.id = m.menu_id
+            inner join restaurants r on r.id = m.restaurant_id
+            where m.is_available = true
+              and menu.is_active = true
+              and r.is_active = true
+            order by "trendScore" desc, mi.last_seen_at desc
+            limit ${limit}
+          `),
+          db.execute(sql`
+            with cuisine_items as (
+              select
+                coalesce(nullif(trim(r.cuisine_type), ''), 'Local food') as cuisine,
+                count(distinct m.id)::int as menu_items,
+                count(distinct r.id)::int as places,
+                max(m.updated_at) as last_menu_update
+              from menu_items m
+              inner join menus menu on menu.id = m.menu_id
+              inner join restaurants r on r.id = m.restaurant_id
+              where m.is_available = true
+                and menu.is_active = true
+                and r.is_active = true
+              group by coalesce(nullif(trim(r.cuisine_type), ''), 'Local food')
+            ),
+            cuisine_interest as (
+              select
+                coalesce(nullif(trim(r.cuisine_type), ''), 'Local food') as cuisine,
+                count(*) filter (where te.event_name = 'menu_item_click')::int as clicks,
+                count(*) filter (where te.event_name = 'menu_item_impression')::int as impressions
+              from telemetry_events te
+              inner join menu_items m on m.id = nullif(te.properties->>'itemId', '')
+              inner join restaurants r on r.id = m.restaurant_id
+              where te.created_at >= ${since}
+                and te.event_name in ('menu_item_click', 'menu_item_impression')
+              group by coalesce(nullif(trim(r.cuisine_type), ''), 'Local food')
+            )
+            select
+              ci.cuisine,
+              ci.menu_items as "menuItems",
+              ci.places,
+              coalesce(cx.clicks, 0) as clicks,
+              coalesce(cx.impressions, 0) as impressions,
+              (
+                coalesce(cx.clicks, 0) * 10
+                + least(coalesce(cx.impressions, 0), 100)
+                + least(ci.menu_items, 40)
+                + least(ci.places, 20) * 2
+                + case when ci.last_menu_update >= ${since} then 10 else 0 end
+              )::int as "trendScore"
+            from cuisine_items ci
+            left join cuisine_interest cx on cx.cuisine = ci.cuisine
+            order by "trendScore" desc, ci.places desc
+            limit ${limit}
+          `),
+          db.execute(sql`
+            with restaurant_interest as (
+              select
+                nullif(properties->>'restaurantId', '') as restaurant_id,
+                count(*) filter (where event_name like '%click%')::int as clicks,
+                count(*)::int as events,
+                max(created_at) as last_seen_at
+              from telemetry_events
+              where created_at >= ${since}
+                and nullif(properties->>'restaurantId', '') is not null
+              group by nullif(properties->>'restaurantId', '')
+            ),
+            video_counts as (
+              select restaurant_id, count(*)::int as video_recommendations
+              from video_stories
+              where created_at >= ${since}
+                and restaurant_id is not null
+                and status = 'ready'
+                and is_approved = true
+                and deleted_at is null
+              group by restaurant_id
+            )
+            select
+              r.id,
+              r.name,
+              r.city,
+              r.state,
+              r.cuisine_type as "cuisineType",
+              r.logo_url as "logoUrl",
+              r.cover_image_url as "coverImageUrl",
+              r.business_type as "businessType",
+              r.is_food_truck as "isFoodTruck",
+              coalesce(ri.clicks, 0) as clicks,
+              coalesce(ri.events, 0) as events,
+              coalesce(vc.video_recommendations, 0) as "videoRecommendations",
+              (
+                coalesce(ri.clicks, 0) * 8
+                + coalesce(ri.events, 0) * 2
+                + coalesce(vc.video_recommendations, 0) * 18
+                + least(coalesce(r.ranking_score, 0), 200) / 10
+              )::int as "trendScore"
+            from restaurants r
+            left join restaurant_interest ri on ri.restaurant_id = r.id
+            left join video_counts vc on vc.restaurant_id = r.id
+            where r.is_active = true
+              and (
+                coalesce(ri.events, 0) > 0
+                or coalesce(vc.video_recommendations, 0) > 0
+                or coalesce(r.ranking_score, 0) > 0
+              )
+            order by "trendScore" desc, coalesce(ri.last_seen_at, r.updated_at, r.created_at) desc
+            limit ${limit}
+          `),
+          db.execute(sql`
+            select
+              event_name as "eventName",
+              count(*)::int as count,
+              max(created_at) as "lastSeenAt"
+            from telemetry_events
+            where created_at >= ${since}
+            group by event_name
+            order by count(*) desc
+            limit 10
+          `),
+        ]);
+
+      res.json({
+        generatedAt: new Date().toISOString(),
+        windowDays,
+        items: rowsOf(itemResult),
+        cuisines: rowsOf(cuisineResult),
+        places: rowsOf(placeResult),
+        signals: rowsOf(signalResult),
+      });
+    } catch (error) {
+      console.error("Error fetching trending discovery:", error);
+      res.status(500).json({ message: "Failed to fetch trending discovery" });
+    }
+  });
+
   app.get("/api/public/discovery/city/:citySlug/time/:timeKey", async (req, res) => {
     try {
       const citySlug = normalizeSlug(req.params.citySlug);
