@@ -23,26 +23,26 @@ export default function Welcome() {
         />
         <div
           aria-hidden="true"
-          className="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.34)_0%,rgba(0,0,0,0.56)_46%,rgba(0,0,0,0.86)_100%)]"
+          className="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.22)_0%,rgba(0,0,0,0.43)_46%,rgba(0,0,0,0.72)_100%)]"
         />
 
         <section className="relative z-10 flex min-h-[100dvh] flex-col items-center justify-center px-6 py-10 text-center">
           <img
             src="/brand/mealscout-logo-pin.png"
             alt="MealScout"
-            className="mb-10 h-auto w-56 max-w-[72vw] drop-shadow-[0_4px_30px_rgba(0,0,0,0.78)]"
+            className="mb-8 h-auto w-48 max-w-[62vw] drop-shadow-[0_4px_26px_rgba(0,0,0,0.72)]"
           />
 
-          <div className="flex w-full max-w-xs flex-col gap-3">
+          <div className="flex w-full max-w-[18rem] flex-col gap-3">
             <Link
               href="/customer-signup"
-              className="inline-flex h-14 items-center justify-center rounded-full bg-amber-400 px-7 text-base font-black text-black shadow-[0_0_32px_rgba(245,158,11,0.42)] transition hover:bg-amber-300 active:scale-[0.98]"
+              className="inline-flex h-12 items-center justify-center rounded-full bg-amber-400 px-6 text-[15px] font-black text-black shadow-[0_0_26px_rgba(245,158,11,0.36)] transition hover:bg-amber-300 active:scale-[0.98]"
             >
               Sign up
             </Link>
             <Link
               href="/login"
-              className="inline-flex h-14 items-center justify-center rounded-full border border-white/25 bg-black/42 px-7 text-base font-black text-white backdrop-blur-md transition hover:bg-white/12 active:scale-[0.98]"
+              className="inline-flex h-12 items-center justify-center rounded-full border border-white/25 bg-black/38 px-6 text-[15px] font-black text-white backdrop-blur-md transition hover:bg-white/12 active:scale-[0.98]"
             >
               Log in
             </Link>
