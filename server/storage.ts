@@ -1144,6 +1144,25 @@ export class DatabaseStorage implements IStorage {
     return result.rows || [];
   }
 
+  private hasEventEnded(event: any): boolean {
+    const eventDate = event?.date ? new Date(event.date) : null;
+    if (!eventDate || !Number.isFinite(eventDate.getTime())) return false;
+
+    const endTime = String(event?.endTime || "").trim();
+    const match = endTime.match(/^(\d{1,2}):(\d{2})/);
+    if (match) {
+      const hour = Number(match[1]);
+      const minute = Number(match[2]);
+      if (Number.isFinite(hour) && Number.isFinite(minute)) {
+        eventDate.setHours(hour, minute, 0, 0);
+      }
+    } else {
+      eventDate.setHours(23, 59, 59, 999);
+    }
+
+    return eventDate.getTime() < Date.now();
+  }
+
   private async selectHostsSafe(
     whereSql: string,
     params: any[],
@@ -1579,7 +1598,9 @@ export class DatabaseStorage implements IStorage {
 
     // Use a schema-safe projection so older DBs missing newer events columns
     // (for example `coordinator_user_id`) do not break map/discovery feeds.
-    const eventRows = await this.selectUpcomingEventsSafe(today);
+    const eventRows = (await this.selectUpcomingEventsSafe(today)).filter(
+      (event: any) => !this.hasEventEnded(event),
+    );
 
     const hostIds = Array.from(
       new Set<string>(
