@@ -740,6 +740,14 @@ export default function ExplorePreview() {
     recommendedRestaurantsData,
   ]);
 
+  const savedRestaurants = useMemo<RestaurantSummary[]>(() => {
+    return favoriteRestaurantsData
+      .map((favorite: any) => favorite?.restaurant)
+      .filter((restaurant: any): restaurant is RestaurantSummary =>
+        Boolean(restaurant?.id),
+      );
+  }, [favoriteRestaurantsData]);
+
   /* --------- parking pass hosts --------- */
 
   const { data: parkingPassData, isLoading: parkingPassLoading } = useQuery<ParkingPassListing[]>({
@@ -1590,22 +1598,51 @@ export default function ExplorePreview() {
                 linkHref="/favorites"
                 subtitle="Your personal shortlist for trucks, restaurants, deals, and places to revisit."
               />
-              <button
-                type="button"
-                onClick={() => navigate("/favorites")}
-                className="w-full text-left rounded-3xl bg-white/5 ring-1 ring-white/10 backdrop-blur-md p-5 hover:bg-white/8 transition-colors active:scale-[0.99]"
-              >
-                <div className="flex items-center gap-4">
-                  <span className="h-12 w-12 rounded-full bg-amber-400/15 ring-1 ring-amber-300/40 flex items-center justify-center shrink-0" aria-hidden="true">
-                    <Bookmark className="h-5 w-5 text-amber-300" />
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-white font-semibold">Your saved spots</p>
-                    <p className="text-white/60 text-sm mt-0.5">Trucks, restaurants, and deals you've saved.</p>
-                  </div>
-                  <ChevronRight className="h-5 w-5 text-white/50" aria-hidden="true" />
+              {user && savedRestaurants.length > 0 ? (
+                <div className="overflow-x-auto atmo-hide-scrollbar -mr-5">
+                  <ul className="flex gap-3 pr-5" role="list" aria-label="Your saved restaurants">
+                    {savedRestaurants.slice(0, 8).map((restaurant) => (
+                      <li key={restaurant.id} className="shrink-0 w-[210px]">
+                        <SavedRestaurantCard restaurant={restaurant} />
+                      </li>
+                    ))}
+                    <li className="shrink-0 w-[150px]">
+                      <button
+                        type="button"
+                        onClick={() => navigate("/favorites")}
+                        className="h-full min-h-[132px] w-full rounded-3xl bg-white/5 ring-1 ring-white/10 px-4 py-5 text-left hover:bg-white/8 transition-colors"
+                      >
+                        <Bookmark className="mb-4 h-5 w-5 text-amber-300" />
+                        <p className="text-sm font-semibold text-white">View all saved</p>
+                        <p className="mt-1 text-xs text-white/50">Restaurants and deals</p>
+                      </button>
+                    </li>
+                  </ul>
                 </div>
-              </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => navigate(user ? "/favorites" : "/login?redirect=/scout")}
+                  className="w-full text-left rounded-3xl bg-white/5 ring-1 ring-white/10 backdrop-blur-md p-5 hover:bg-white/8 transition-colors active:scale-[0.99]"
+                >
+                  <div className="flex items-center gap-4">
+                    <span className="h-12 w-12 rounded-full bg-amber-400/15 ring-1 ring-amber-300/40 flex items-center justify-center shrink-0" aria-hidden="true">
+                      <Bookmark className="h-5 w-5 text-amber-300" />
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-white font-semibold">
+                        {user ? "No saved spots yet" : "Save your food map"}
+                      </p>
+                      <p className="text-white/60 text-sm mt-0.5">
+                        {user
+                          ? "Tap Save on restaurants worth coming back to."
+                          : "Sign in to keep restaurants, deals, and places you want to revisit."}
+                      </p>
+                    </div>
+                    <ChevronRight className="h-5 w-5 text-white/50" aria-hidden="true" />
+                  </div>
+                </button>
+              )}
             </section>
           </div>
         )}
@@ -2622,6 +2659,65 @@ function NearbyRestaurantCard({
             <Sparkles className="h-3 w-3" aria-hidden="true" />
             {isRecommended ? "Rec'd" : "Rec"}
           </button>
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+function SavedRestaurantCard({ restaurant }: { restaurant: RestaurantSummary }) {
+  const name = restaurant.businessName || restaurant.name || "Restaurant";
+  const img =
+    restaurant.coverImageUrl ||
+    restaurant.heroImageUrl ||
+    restaurant.imageUrl ||
+    restaurant.logoUrl;
+  const location = restaurant.neighborhood || restaurant.city || restaurant.address;
+  const cuisine = restaurant.cuisineType;
+
+  return (
+    <Link
+      href={`/restaurant/${restaurant.id}`}
+      className="block overflow-hidden rounded-3xl bg-white/5 ring-1 ring-white/10 transition hover:bg-white/8 hover:ring-amber-300/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70"
+      aria-label={`Open saved restaurant ${name}`}
+    >
+      <div className="relative h-24 bg-black/50">
+        {img ? (
+          <img
+            src={img}
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover"
+            loading="lazy"
+          />
+        ) : (
+          <div
+            className="absolute inset-0"
+            style={{
+              backgroundImage:
+                "linear-gradient(145deg, rgba(245,158,11,0.22), rgba(2,6,23,0.92))",
+            }}
+            aria-hidden="true"
+          />
+        )}
+        <div
+          className="absolute inset-0"
+          style={{
+            backgroundImage:
+              "linear-gradient(180deg, rgba(0,0,0,0.05), rgba(0,0,0,0.78))",
+          }}
+          aria-hidden="true"
+        />
+        <span className="absolute left-2.5 top-2.5 inline-flex items-center gap-1 rounded-full bg-amber-300 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-black">
+          <Bookmark className="h-3 w-3" aria-hidden="true" />
+          Saved
+        </span>
+      </div>
+      <div className="px-3 py-3">
+        <p className="truncate text-sm font-semibold text-white">{name}</p>
+        <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px]">
+          {cuisine && <span className="text-amber-200/80">{cuisine}</span>}
+          {cuisine && location && <span className="text-white/25">·</span>}
+          {location && <span className="truncate text-white/55">{location}</span>}
         </div>
       </div>
     </Link>
