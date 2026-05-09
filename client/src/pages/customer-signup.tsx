@@ -11,6 +11,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Form,
   FormControl,
   FormField,
@@ -18,7 +25,21 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { Mail, Eye, EyeOff, UserPlus, ArrowLeft } from "lucide-react";
+import {
+  Beer,
+  Building2,
+  CalendarDays,
+  ChefHat,
+  Eye,
+  EyeOff,
+  Mail,
+  MapPinned,
+  Package,
+  Truck,
+  UserPlus,
+  UtensilsCrossed,
+  type LucideIcon,
+} from "lucide-react";
 import { BackHeader } from "@/components/back-header";
 import { SEOHead } from "@/components/seo-head";
 import {
@@ -56,6 +77,89 @@ const signupSchema = z
 
 type SignupFormData = z.infer<typeof signupSchema>;
 
+type AccountType = "diner" | "host" | "event_organizer" | "business" | "supplier";
+type BusinessSubType = "restaurant" | "bar" | "food_truck" | "caterer" | "private_chef";
+
+type SignupFlowOption = {
+  id: string;
+  accountType: AccountType;
+  businessSubType?: BusinessSubType;
+  label: string;
+  description: string;
+  icon: LucideIcon;
+};
+
+const signupFlowOptions: SignupFlowOption[] = [
+  {
+    id: "diner",
+    accountType: "diner",
+    label: "Diner",
+    description: "Save favorite spots, deals, and local food finds.",
+    icon: UserPlus,
+  },
+  {
+    id: "event_organizer",
+    accountType: "event_organizer",
+    label: "Event Organizer",
+    description: "Coordinate vendors, events, and truck demand.",
+    icon: CalendarDays,
+  },
+  {
+    id: "food_truck",
+    accountType: "business",
+    businessSubType: "food_truck",
+    label: "Food Truck",
+    description: "Claim your truck and get discovered around town.",
+    icon: Truck,
+  },
+  {
+    id: "restaurant",
+    accountType: "business",
+    businessSubType: "restaurant",
+    label: "Restaurant",
+    description: "Create your profile, menu, and local deal surfaces.",
+    icon: Building2,
+  },
+  {
+    id: "bar",
+    accountType: "business",
+    businessSubType: "bar",
+    label: "Bar",
+    description: "Promote food, drinks, specials, and events.",
+    icon: Beer,
+  },
+  {
+    id: "caterer",
+    accountType: "business",
+    businessSubType: "caterer",
+    label: "Caterer",
+    description: "Build a catering profile for local bookings.",
+    icon: UtensilsCrossed,
+  },
+  {
+    id: "private_chef",
+    accountType: "business",
+    businessSubType: "private_chef",
+    label: "Private Chef",
+    description: "Get discovered for private meals and events.",
+    icon: ChefHat,
+  },
+  {
+    id: "host",
+    accountType: "host",
+    label: "Host",
+    description: "Offer parking or event space to food trucks.",
+    icon: MapPinned,
+  },
+  {
+    id: "supplier",
+    accountType: "supplier",
+    label: "Supplier",
+    description: "Sell products to restaurants and food trucks.",
+    icon: Package,
+  },
+];
+
 export default function CustomerSignup() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -68,12 +172,7 @@ export default function CustomerSignup() {
 
   const searchParams = new URLSearchParams(window.location.search);
   const role = searchParams.get("role");
-  const initialAccountType:
-    | "diner"
-    | "host"
-    | "event_organizer"
-    | "business"
-    | "supplier" =
+  const initialAccountType: AccountType =
     role === "business"
       ? "business"
       : role === "host"
@@ -85,16 +184,20 @@ export default function CustomerSignup() {
         : role === "supplier"
           ? "supplier"
           : "diner";
-  const [accountType, setAccountType] = useState<
-    "diner" | "host" | "event_organizer" | "business" | "supplier"
-  >(
-    initialAccountType
+  const businessTypeParam = searchParams.get("businessType");
+  const initialBusinessSubType: BusinessSubType =
+    businessTypeParam === "food_truck" ||
+    businessTypeParam === "bar" ||
+    businessTypeParam === "caterer" ||
+    businessTypeParam === "private_chef"
+      ? businessTypeParam
+      : "restaurant";
+  const hasExplicitSignupFlow = Boolean(role || businessTypeParam);
+  const [accountType, setAccountType] = useState<AccountType>(initialAccountType);
+  const [businessSubType, setBusinessSubType] = useState<BusinessSubType>(
+    initialAccountType === "business" ? initialBusinessSubType : "restaurant"
   );
-  const initialBusinessSubType: "restaurant" | "food_truck" =
-    searchParams.get("businessType") === "food_truck" ? "food_truck" : "restaurant";
-  const [businessSubType, setBusinessSubType] = useState<
-    "restaurant" | "food_truck"
-  >(initialAccountType === "business" ? initialBusinessSubType : "restaurant");
+  const [accountChooserOpen, setAccountChooserOpen] = useState(!hasExplicitSignupFlow);
   const SIGNUP_DRAFT_KEY = "mealscout:customer-signup-draft";
   const POST_VERIFICATION_REDIRECT_KEY = "mealscout:post-verification-redirect";
 
@@ -107,10 +210,35 @@ export default function CustomerSignup() {
           ? "/restaurant-signup"
           : "/scout";
 
-  const getBusinessRedirectPath = () =>
-    businessSubType === "food_truck"
-      ? "/restaurant-signup?businessType=food_truck&claim=1"
-      : "/restaurant-signup";
+  const getBusinessRedirectPath = () => {
+    if (businessSubType === "restaurant") {
+      return "/restaurant-signup";
+    }
+
+    const params = new URLSearchParams({ businessType: businessSubType });
+    if (businessSubType === "food_truck") {
+      params.set("claim", "1");
+    }
+    return `/restaurant-signup?${params.toString()}`;
+  };
+
+  const selectSignupFlow = (option: SignupFlowOption) => {
+    setAccountType(option.accountType);
+    setBusinessSubType(option.businessSubType || "restaurant");
+    setAccountChooserOpen(false);
+
+    const params = new URLSearchParams();
+    if (option.accountType === "business") {
+      params.set("role", "business");
+      params.set("businessType", option.businessSubType || "restaurant");
+    } else if (option.accountType === "event_organizer") {
+      params.set("role", "event_coordinator");
+    } else {
+      params.set("role", option.accountType);
+    }
+
+    window.history.replaceState({}, "", `/customer-signup?${params.toString()}`);
+  };
 
   const goToVerificationHandoff = (redirectPath: string) => {
     try {
@@ -371,11 +499,7 @@ export default function CustomerSignup() {
     }
 
     if (accountType === "business") {
-      const businessRedirect =
-        businessSubType === "food_truck"
-          ? "/restaurant-signup?businessType=food_truck&claim=1"
-          : "/restaurant-signup";
-      setLocation(businessRedirect);
+      setLocation(getBusinessRedirectPath());
       return;
     }
 
@@ -647,6 +771,42 @@ export default function CustomerSignup() {
         icon={UserPlus}
         className="bg-[hsl(var(--background))/0.94] border-b border-[color:var(--border-subtle)] shadow-clean"
       />
+      <Dialog open={accountChooserOpen} onOpenChange={setAccountChooserOpen}>
+        <DialogContent className="flex max-h-[calc(100vh-1rem)] max-w-[calc(100vw-1rem)] flex-col gap-3 overflow-hidden rounded-2xl border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-3 shadow-clean-lg sm:max-w-md sm:p-4">
+          <DialogHeader className="space-y-1 text-left">
+            <DialogTitle className="text-xl font-extrabold uppercase tracking-tight text-[color:var(--text-primary)]">
+              Choose account type
+            </DialogTitle>
+            <DialogDescription className="text-sm text-[color:var(--text-secondary)]">
+              Pick the path that matches what you want to do first.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid flex-1 grid-cols-2 gap-1.5 overflow-y-auto sm:gap-2">
+            {signupFlowOptions.map((option) => {
+              const Icon = option.icon;
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={() => selectSignupFlow(option)}
+                  className="group flex min-h-[96px] flex-col rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-3 text-left shadow-clean transition hover:border-[color:var(--action-primary)] hover:bg-[var(--bg-surface-muted)]"
+                  data-testid={`button-signup-flow-${option.id}`}
+                >
+                  <span className="mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-[color:var(--action-primary)] text-[color:var(--action-primary-text)] shadow-clean">
+                    <Icon className="h-4 w-4" aria-hidden="true" />
+                  </span>
+                  <span className="text-sm font-extrabold text-[color:var(--text-primary)]">
+                    {option.label}
+                  </span>
+                  <span className="mt-1 text-[11px] leading-snug text-[color:var(--text-secondary)]">
+                    {option.description}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <main className="flex-1 px-4 py-2 max-w-md mx-auto flex flex-col justify-between">
         {/* Top: hero + form */}

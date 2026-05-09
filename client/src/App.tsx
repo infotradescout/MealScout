@@ -19,7 +19,6 @@ import Welcome from "@/pages/welcome";
 
 // Lazy load all other pages - they only download when the user navigates to them
 const CustomerSignup = lazy(() => import("@/pages/customer-signup"));
-const SignupRole = lazy(() => import("@/pages/signup-role"));
 const RestaurantSignup = lazy(() => import("@/pages/restaurant-signup"));
 const CityLanding = lazy(() => import("@/pages/city-landing"));
 const CityDiscoveryPage = lazy(() => import("@/pages/city-discovery"));
@@ -314,7 +313,7 @@ function Router() {
             <Route path="/explore-preview" component={RedirectToScout} />
             <Route path="/scout" component={ScoutPage} />
             <Route path="/login" component={Login} />
-            <Route path="/signup" component={SignupRole} />
+            <Route path="/signup" component={CustomerSignup} />
             <Route path="/customer-signup" component={CustomerSignup} />
             <Route path="/restaurant-signup" component={RestaurantSignup} />
             <Route path="/claim-truck" component={ClaimTruckPage} />
@@ -445,7 +444,7 @@ function Router() {
             <Route path="/explore-preview" component={RedirectToScout} />
             <Route path="/scout" component={ScoutPage} />
             <Route path="/login" component={Login} />
-            <Route path="/signup" component={SignupRole} />
+            <Route path="/signup" component={CustomerSignup} />
             <Route path="/customer-signup" component={CustomerSignup} />
             <Route path="/restaurant-signup" component={RestaurantSignup} />
             <Route path="/claim-truck" component={ClaimTruckPage} />
