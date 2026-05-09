@@ -14,41 +14,55 @@ export async function setupRestaurantAuth(app: Express) {
   // Check for Google OAuth environment variables
   if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
     // Google Strategy for restaurant owners
-    passport.use('google-restaurant', new GoogleStrategy({
-      clientID: process.env.GOOGLE_CLIENT_ID,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      callbackURL: `/api/auth/google/callback`,
-    },
-    async (accessToken: string, refreshToken: string, profile: any, done: any) => {
-      try {
-        // Extract user data from Google profile
-        const userData: GoogleUserData = {
-          googleId: profile.id,
-          email: profile.emails?.[0]?.value,
-          firstName: profile.name?.givenName || null,
-          lastName: profile.name?.familyName || null,
-          profileImageUrl: profile.photos?.[0]?.value || null,
-          googleAccessToken: accessToken,
-        };
+    passport.use(
+      "google-restaurant",
+      new GoogleStrategy(
+        {
+          clientID: process.env.GOOGLE_CLIENT_ID,
+          clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+          callbackURL: `/api/auth/google/callback`,
+        },
+        async (
+          accessToken: string,
+          refreshToken: string,
+          profile: any,
+          done: any,
+        ) => {
+          try {
+            // Extract user data from Google profile
+            const userData: GoogleUserData = {
+              googleId: profile.id,
+              email: profile.emails?.[0]?.value,
+              firstName: profile.name?.givenName || null,
+              lastName: profile.name?.familyName || null,
+              profileImageUrl: profile.photos?.[0]?.value || null,
+              googleAccessToken: accessToken,
+            };
 
-        // Create or update restaurant owner in database
-        const user = await storage.upsertUserByAuth('google', userData, 'restaurant_owner');
-        return done(null, user);
-      } catch (error) {
-        return done(error, null);
-      }
-    }));
+            // Create or update restaurant owner in database
+            const user = await storage.upsertUserByAuth(
+              "google",
+              userData,
+              "restaurant_owner",
+            );
+            return done(null, user);
+          } catch (error) {
+            return done(error, null);
+          }
+        },
+      ),
+    );
   }
 
   // Google OAuth routes for restaurant owners
   app.get("/api/auth/google", (req, res, next) => {
-    passport.authenticate('google-restaurant', {
-      scope: ['profile', 'email']
+    passport.authenticate("google-restaurant", {
+      scope: ["profile", "email"],
     })(req, res, next);
   });
 
   app.get("/api/auth/google/callback", (req, res, next) => {
-    passport.authenticate('google-restaurant', {
+    passport.authenticate("google-restaurant", {
       successRedirect: "/restaurant-signup",
       failureRedirect: "/restaurant-signup?error=auth_failed",
     })(req, res, next);
@@ -69,13 +83,17 @@ export async function setupRestaurantAuth(app: Express) {
       }
 
       if (phone.length < 10) {
-        return res.status(400).json({ error: "Valid phone number is required" });
+        return res
+          .status(400)
+          .json({ error: "Valid phone number is required" });
       }
 
       // Check if user already exists
       const existingUser = await storage.getUserByEmail(email);
       if (existingUser) {
-        return res.status(400).json({ error: "User with this email already exists" });
+        return res
+          .status(400)
+          .json({ error: "User with this email already exists" });
       }
 
       // Hash password
@@ -90,14 +108,23 @@ export async function setupRestaurantAuth(app: Express) {
       };
 
       // Create restaurant owner in database
-      const user = await storage.upsertUserByAuth('email', userData, 'restaurant_owner');
+      const user = await storage.upsertUserByAuth(
+        "email",
+        userData,
+        "restaurant_owner",
+      );
 
       // Log in the user
       req.login(user, (err) => {
         if (err) {
-          return res.status(500).json({ error: "Failed to log in after registration" });
+          return res
+            .status(500)
+            .json({ error: "Failed to log in after registration" });
         }
-        res.json({ user: sanitizeUser(user), message: "Registration successful" });
+        res.json({
+          user: sanitizeUser(user),
+          message: "Registration successful",
+        });
       });
     } catch (error) {
       console.error("Restaurant registration error:", error);
@@ -111,7 +138,9 @@ export async function setupRestaurantAuth(app: Express) {
       const { email, password } = req.body;
 
       if (!email || !password) {
-        return res.status(400).json({ error: "Email and password are required" });
+        return res
+          .status(400)
+          .json({ error: "Email and password are required" });
       }
 
       // Find user by email
@@ -121,13 +150,21 @@ export async function setupRestaurantAuth(app: Express) {
       }
 
       // Allow shared business accounts (host + restaurant/bar/truck) to use this login flow.
-      const blockedUserTypes = new Set(["admin", "duper_admin", "super_admin", "staff"]);
+      const blockedUserTypes = new Set([
+        "admin",
+        "duper_admin",
+        "super_admin",
+        "staff",
+      ]);
       if (blockedUserTypes.has(String(user.userType || ""))) {
         return res.status(401).json({ error: "Invalid email or password" });
       }
 
       // Verify password
-      if (!user.passwordHash || !await bcrypt.compare(password, user.passwordHash)) {
+      if (
+        !user.passwordHash ||
+        !(await bcrypt.compare(password, user.passwordHash))
+      ) {
         return res.status(401).json({ error: "Invalid email or password" });
       }
 
@@ -162,7 +199,9 @@ export const isRestaurantOwner = (req: any, res: any, next: any) => {
   }
 
   if (
-    !["restaurant_owner", "admin", "duper_admin", "super_admin"].includes(req.user.userType)
+    !["restaurant_owner", "admin", "duper_admin", "super_admin"].includes(
+      req.user.userType,
+    )
   ) {
     return res.status(403).json({ error: "Restaurant owner access required" });
   }

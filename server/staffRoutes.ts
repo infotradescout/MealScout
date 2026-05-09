@@ -5,7 +5,11 @@ import { logAudit } from "./auditLogger";
 import { sendAccountSetupInvite } from "./utils/accountSetup";
 import { ensurePremiumTrialForUserId } from "./services/premiumTrial";
 import bcrypt from "bcryptjs";
-import { canAssignUserType, getRoleAssignmentDeniedMessage, isInternalTeamUserType } from "./roleAccess";
+import {
+  canAssignUserType,
+  getRoleAssignmentDeniedMessage,
+  isInternalTeamUserType,
+} from "./roleAccess";
 
 /**
  * Staff Management & User Creation Routes
@@ -411,7 +415,10 @@ export function registerStaffRoutes(app: Express) {
           try {
             await ensurePremiumTrialForUserId(user.id);
           } catch (e) {
-            console.warn("ensurePremiumTrialForUserId failed after staff create:", e);
+            console.warn(
+              "ensurePremiumTrialForUserId failed after staff create:",
+              e,
+            );
           }
         }
 
@@ -473,13 +480,10 @@ export function registerStaffRoutes(app: Express) {
         }
 
         if (!newPassword || typeof newPassword !== "string") {
-          return res
-            .status(400)
-            .json({ error: "Password is required" });
+          return res.status(400).json({ error: "Password is required" });
         }
-        const { isPasswordStrong, PASSWORD_REQUIREMENTS } = await import(
-          "./utils/passwordPolicy"
-        );
+        const { isPasswordStrong, PASSWORD_REQUIREMENTS } =
+          await import("./utils/passwordPolicy");
         if (!isPasswordStrong(newPassword)) {
           return res.status(400).json({ error: PASSWORD_REQUIREMENTS });
         }

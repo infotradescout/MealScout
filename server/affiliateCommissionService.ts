@@ -28,8 +28,10 @@ async function getAffiliateRecipientsForUser(
 
   if (!owner) return [];
 
-  const affiliateIds = [owner.affiliateCloserUserId, owner.affiliateBookerUserId]
-    .filter((id): id is string => Boolean(id));
+  const affiliateIds = [
+    owner.affiliateCloserUserId,
+    owner.affiliateBookerUserId,
+  ].filter((id): id is string => Boolean(id));
   const uniqueIds = Array.from(new Set(affiliateIds));
 
   if (uniqueIds.length === 0) return [];
@@ -73,7 +75,12 @@ async function getAffiliateRecipientsForUser(
   return uniqueIds
     .map((id) => map.get(id))
     .filter((row): row is NonNullable<typeof row> => Boolean(row))
-    .filter((row) => !["admin", "duper_admin", "super_admin"].includes(String(row.userType || "")))
+    .filter(
+      (row) =>
+        !["admin", "duper_admin", "super_admin"].includes(
+          String(row.userType || ""),
+        ),
+    )
     .map((row) => ({
       affiliateUserId: row.id,
       percent: Math.max(
@@ -124,11 +131,7 @@ async function createCommissionEntry(
 
   try {
     const { createCreditFromCommission } = await import("./creditService");
-    await createCreditFromCommission(
-      affiliateUserId,
-      commission.id,
-      amount,
-    );
+    await createCreditFromCommission(affiliateUserId, commission.id, amount);
   } catch (error) {
     console.error("[affiliate] Failed to create credit:", error);
   }

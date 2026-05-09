@@ -42,11 +42,7 @@ import { registerSupplierShoppingListOptimizeRoutes } from "./suppliers/shopping
 import { registerSupplierShoppingListsRoutes } from "./suppliers/shoppingListsRoutes";
 import { registerSupplierSupplyIntelRoutes } from "./suppliers/supplyIntelRoutes";
 
-const parsePageLimit = (
-  raw: unknown,
-  fallback: number,
-  max: number,
-) => {
+const parsePageLimit = (raw: unknown, fallback: number, max: number) => {
   const n = Number(raw);
   if (!Number.isFinite(n)) return fallback;
   return Math.max(1, Math.min(max, Math.floor(n)));
@@ -68,12 +64,20 @@ const computeOnPlatformPaymentFees = (supplierGrossCents: number) => {
   const gross = Math.max(0, Math.round(Number(supplierGrossCents || 0)));
 
   // Platform keeps a fixed $1 on supplier on-platform transactions by default.
-  const platformBaseFeeCents =
-    Math.max(0, Number(process.env.SUPPLIER_ORDER_PLATFORM_FIXED_CENTS || 100) || 100);
+  const platformBaseFeeCents = Math.max(
+    0,
+    Number(process.env.SUPPLIER_ORDER_PLATFORM_FIXED_CENTS || 100) || 100,
+  );
 
   // Stripe processing estimate (cards are 2.9% + $0.30 by default).
-  const stripeFeeBps = Math.max(0, Number(process.env.SUPPLIER_ORDER_STRIPE_FEE_BPS || 290) || 290);
-  const stripeFeeFixed = Math.max(0, Number(process.env.SUPPLIER_ORDER_STRIPE_FEE_FIXED_CENTS || 30) || 30);
+  const stripeFeeBps = Math.max(
+    0,
+    Number(process.env.SUPPLIER_ORDER_STRIPE_FEE_BPS || 290) || 290,
+  );
+  const stripeFeeFixed = Math.max(
+    0,
+    Number(process.env.SUPPLIER_ORDER_STRIPE_FEE_FIXED_CENTS || 30) || 30,
+  );
   const stripeFeeEstimateCents =
     Math.max(0, Math.round((gross * stripeFeeBps) / 10_000)) + stripeFeeFixed;
 
@@ -87,13 +91,17 @@ const computeOnPlatformPaymentFees = (supplierGrossCents: number) => {
     Number(process.env.SUPPLIER_ORDER_MS_PROCESSING_FIXED_CENTS || 0) || 0,
   );
   const msProcessingFeeCents =
-    Math.max(0, Math.round((gross * msProcessingFeeBps) / 10_000)) + msProcessingFeeFixedCents;
+    Math.max(0, Math.round((gross * msProcessingFeeBps) / 10_000)) +
+    msProcessingFeeFixedCents;
 
   const processingTotalCents = stripeFeeEstimateCents + msProcessingFeeCents;
 
   // Split processing costs between buyer and seller.
   const buyerProcessingFeeCents = Math.ceil(processingTotalCents / 2);
-  const sellerProcessingFeeCents = Math.max(0, processingTotalCents - buyerProcessingFeeCents);
+  const sellerProcessingFeeCents = Math.max(
+    0,
+    processingTotalCents - buyerProcessingFeeCents,
+  );
 
   // `platformFeeCents` is what seller contributes to the platform side.
   const platformFeeCents = platformBaseFeeCents + sellerProcessingFeeCents;
@@ -115,7 +123,10 @@ const computeOnPlatformPaymentFees = (supplierGrossCents: number) => {
 
 const estimateCardProcessingFeeCents = (amountCents: number) => {
   const amount = Math.max(0, Math.round(Number(amountCents || 0)));
-  const cardBps = Math.max(0, Number(process.env.SUPPLIER_ORDER_STRIPE_FEE_BPS || 290) || 290);
+  const cardBps = Math.max(
+    0,
+    Number(process.env.SUPPLIER_ORDER_STRIPE_FEE_BPS || 290) || 290,
+  );
   const cardFixed = Math.max(
     0,
     Number(process.env.SUPPLIER_ORDER_STRIPE_FEE_FIXED_CENTS || 30) || 30,
@@ -125,11 +136,24 @@ const estimateCardProcessingFeeCents = (amountCents: number) => {
 
 const estimateAchProcessingFeeCents = (amountCents: number) => {
   const amount = Math.max(0, Math.round(Number(amountCents || 0)));
-  const achBps = Math.max(0, Number(process.env.SUPPLIER_ORDER_ACH_FEE_BPS || 80) || 80);
-  const achFixed = Math.max(0, Number(process.env.SUPPLIER_ORDER_ACH_FEE_FIXED_CENTS || 0) || 0);
-  const achCapRaw = String(process.env.SUPPLIER_ORDER_ACH_FEE_CAP_CENTS || "").trim();
+  const achBps = Math.max(
+    0,
+    Number(process.env.SUPPLIER_ORDER_ACH_FEE_BPS || 80) || 80,
+  );
+  const achFixed = Math.max(
+    0,
+    Number(process.env.SUPPLIER_ORDER_ACH_FEE_FIXED_CENTS || 0) || 0,
+  );
+  const achCapRaw = String(
+    process.env.SUPPLIER_ORDER_ACH_FEE_CAP_CENTS || "",
+  ).trim();
   const achCapCents =
-    achCapRaw === "" ? 500 : Math.max(0, Number(process.env.SUPPLIER_ORDER_ACH_FEE_CAP_CENTS || 0) || 0);
+    achCapRaw === ""
+      ? 500
+      : Math.max(
+          0,
+          Number(process.env.SUPPLIER_ORDER_ACH_FEE_CAP_CENTS || 0) || 0,
+        );
 
   const percentPart = Math.max(0, Math.round((amount * achBps) / 10_000));
   const uncapped = percentPart + achFixed;
@@ -144,12 +168,19 @@ const computeAchCheaperThresholdCents = () => {
   );
   const maxAmount = Math.max(
     minAmount,
-    Number(process.env.SUPPLIER_ORDER_ACH_CHEAPER_MAX_SCAN_CENTS || 500_000) || 500_000,
+    Number(process.env.SUPPLIER_ORDER_ACH_CHEAPER_MAX_SCAN_CENTS || 500_000) ||
+      500_000,
   );
-  const step = Math.max(1, Number(process.env.SUPPLIER_ORDER_ACH_CHEAPER_SCAN_STEP_CENTS || 1) || 1);
+  const step = Math.max(
+    1,
+    Number(process.env.SUPPLIER_ORDER_ACH_CHEAPER_SCAN_STEP_CENTS || 1) || 1,
+  );
 
   for (let amount = minAmount; amount <= maxAmount; amount += step) {
-    if (estimateAchProcessingFeeCents(amount) <= estimateCardProcessingFeeCents(amount)) {
+    if (
+      estimateAchProcessingFeeCents(amount) <=
+      estimateCardProcessingFeeCents(amount)
+    ) {
       return amount;
     }
   }
@@ -165,7 +196,10 @@ const normalizeSupplyKey = (raw: string) =>
     .replace(/\s+/g, " ")
     .trim();
 
-const haversineMiles = (a: { lat: number; lon: number }, b: { lat: number; lon: number }) => {
+const haversineMiles = (
+  a: { lat: number; lon: number },
+  b: { lat: number; lon: number },
+) => {
   const toRad = (deg: number) => (deg * Math.PI) / 180;
   const R = 3958.7613; // earth radius (miles)
   const dLat = toRad(b.lat - a.lat);
@@ -178,15 +212,24 @@ const haversineMiles = (a: { lat: number; lon: number }, b: { lat: number; lon: 
   return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
 };
 
-async function resolveBuyerRestaurantOrThrow(req: any, buyerRestaurantId: string) {
+async function resolveBuyerRestaurantOrThrow(
+  req: any,
+  buyerRestaurantId: string,
+) {
   const buyerRestaurant = await storage.getRestaurant(buyerRestaurantId);
-  if (!buyerRestaurant || String(buyerRestaurant.ownerId) !== String(req.user.id)) {
+  if (
+    !buyerRestaurant ||
+    String(buyerRestaurant.ownerId) !== String(req.user.id)
+  ) {
     throw new Error("Not authorized");
   }
   return buyerRestaurant;
 }
 
-async function resolveBuyerRestaurantOrNull(req: any, buyerRestaurantId: unknown) {
+async function resolveBuyerRestaurantOrNull(
+  req: any,
+  buyerRestaurantId: unknown,
+) {
   const id = String(buyerRestaurantId || "").trim();
   if (!id) return null;
   return resolveBuyerRestaurantOrThrow(req, id);
@@ -207,7 +250,10 @@ async function resolveSupplyShoppingListOrThrow(req: any, listId: string) {
 
 async function findLocalSuppliersForBuyer(buyerRestaurant: any) {
   const radiusMiles = Number(process.env.SUPPLY_LOCAL_RADIUS_MILES || 75) || 75;
-  const limit = Math.min(Number(process.env.SUPPLY_LOCAL_SUPPLIER_LIMIT || 60) || 60, 200);
+  const limit = Math.min(
+    Number(process.env.SUPPLY_LOCAL_SUPPLIER_LIMIT || 60) || 60,
+    200,
+  );
 
   const conditions: any[] = [eq(suppliers.isActive, true)];
   const buyerState = String((buyerRestaurant as any).state || "").trim();
@@ -233,7 +279,10 @@ async function findLocalSuppliersForBuyer(buyerRestaurant: any) {
       const lat = Number(s.latitude);
       const lon = Number(s.longitude);
       if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
-      const distanceMiles = haversineMiles({ lat: buyerLat, lon: buyerLon }, { lat, lon });
+      const distanceMiles = haversineMiles(
+        { lat: buyerLat, lon: buyerLon },
+        { lat, lon },
+      );
       return { supplier: s, distanceMiles };
     })
     .filter(Boolean) as Array<{ supplier: any; distanceMiles: number }>;
@@ -308,7 +357,8 @@ async function recordDemandAndNotifyIfUnlisted(params: {
       ),
     )
     .limit(1);
-  if (existing) return { created: false, notified: 0, reason: "already_listed" };
+  if (existing)
+    return { created: false, notified: 0, reason: "already_listed" };
 
   const now = new Date();
   const buyer = params.buyerRestaurant ?? null;
@@ -331,11 +381,13 @@ async function recordDemandAndNotifyIfUnlisted(params: {
 
   const notifyEnabled =
     String(process.env.SUPPLY_DEMAND_NOTIFY || "").toLowerCase() !== "false";
-  if (!notifyEnabled) return { created: true, notified: 0, demandId: demand?.id };
+  if (!notifyEnabled)
+    return { created: true, notified: 0, demandId: demand?.id };
   if (!buyer) return { created: true, notified: 0, demandId: demand?.id };
 
   const localSuppliers = await findLocalSuppliersForBuyer(buyer);
-  if (localSuppliers.length === 0) return { created: true, notified: 0, demandId: demand?.id };
+  if (localSuppliers.length === 0)
+    return { created: true, notified: 0, demandId: demand?.id };
 
   const supplierIds = localSuppliers.map((s: any) => String(s.id));
   const existingNotifs = await db
@@ -352,7 +404,8 @@ async function recordDemandAndNotifyIfUnlisted(params: {
     (existingNotifs as any[]).map((n: any) => [String(n.supplierId), n]),
   );
 
-  const ttlHours = Number(process.env.SUPPLY_DEMAND_NOTIFY_TTL_HOURS || 24) || 24;
+  const ttlHours =
+    Number(process.env.SUPPLY_DEMAND_NOTIFY_TTL_HOURS || 24) || 24;
   const ttlMs = ttlHours * 60 * 60 * 1000;
   const nowMs = now.getTime();
 
@@ -366,9 +419,9 @@ async function recordDemandAndNotifyIfUnlisted(params: {
   let notified = 0;
   for (const supplier of toNotify) {
     try {
-      const supplierUser = await storage.getUser(String((supplier as any).userId)).catch(
-        () => null,
-      );
+      const supplierUser = await storage
+        .getUser(String((supplier as any).userId))
+        .catch(() => null);
       const to =
         String((supplier as any).contactEmail || "").trim() ||
         String((supplierUser as any)?.email || "").trim();
@@ -376,7 +429,10 @@ async function recordDemandAndNotifyIfUnlisted(params: {
 
       const baseUrl = process.env.PUBLIC_BASE_URL || "http://localhost:5000";
       const manageUrl = `${baseUrl.replace(/\/+$/, "")}/supplier/dashboard`;
-      const location = [params.buyerRestaurant.city, params.buyerRestaurant.state]
+      const location = [
+        params.buyerRestaurant.city,
+        params.buyerRestaurant.state,
+      ]
         .map((s: any) => String(s || "").trim())
         .filter(Boolean)
         .join(", ");
@@ -393,7 +449,13 @@ async function recordDemandAndNotifyIfUnlisted(params: {
         </p>
       `;
       enqueueInProcessJob("supply-demand-email", async () => {
-        await emailService.sendBasicEmail(to, subject, html, undefined, "general");
+        await emailService.sendBasicEmail(
+          to,
+          subject,
+          html,
+          undefined,
+          "general",
+        );
       });
 
       await db
@@ -404,7 +466,10 @@ async function recordDemandAndNotifyIfUnlisted(params: {
           lastNotifiedAt: now,
         } as any)
         .onConflictDoUpdate({
-          target: [supplyDemandNotifications.supplierId, supplyDemandNotifications.itemKey] as any,
+          target: [
+            supplyDemandNotifications.supplierId,
+            supplyDemandNotifications.itemKey,
+          ] as any,
           set: { lastNotifiedAt: now } as any,
         });
 
@@ -465,7 +530,9 @@ const isSupplierProfileOrAdmin = async (req: any, res: any, next: any) => {
     }
   } catch (error) {
     console.error("Error checking supplier profile access:", error);
-    return res.status(500).json({ message: "Failed to verify supplier access" });
+    return res
+      .status(500)
+      .json({ message: "Failed to verify supplier access" });
   }
 
   return res.status(403).json({
@@ -508,13 +575,20 @@ const toDayKey = (value: Date) => {
   return `${yyyy}-${mm}-${dd}`;
 };
 
-async function resolveSupplyItemIds(params: { itemKey?: string | null; itemName?: string | null }) {
+async function resolveSupplyItemIds(params: {
+  itemKey?: string | null;
+  itemName?: string | null;
+}) {
   const rawKey = String(params.itemKey || "").trim();
   const rawName = String(params.itemName || "").trim();
   const normalizedKey = normalizeSupplyKey(rawKey || rawName);
 
   const itemCandidates = await db
-    .select({ id: supplyItems.id, itemKey: supplyItems.itemKey, canonicalName: supplyItems.canonicalName })
+    .select({
+      id: supplyItems.id,
+      itemKey: supplyItems.itemKey,
+      canonicalName: supplyItems.canonicalName,
+    })
     .from(supplyItems)
     .where(
       or(
@@ -538,14 +612,18 @@ async function resolveSupplyItemIds(params: { itemKey?: string | null; itemName?
   const itemIds = Array.from(
     new Set([
       ...itemCandidates.map((row: any) => String(row.id || "")).filter(Boolean),
-      ...aliasCandidates.map((row: any) => String(row.itemId || "")).filter(Boolean),
+      ...aliasCandidates
+        .map((row: any) => String(row.itemId || ""))
+        .filter(Boolean),
     ]),
   );
 
   return {
     normalizedKey,
     itemIds,
-    canonicalName: String(itemCandidates[0]?.canonicalName || rawName || rawKey || normalizedKey),
+    canonicalName: String(
+      itemCandidates[0]?.canonicalName || rawName || rawKey || normalizedKey,
+    ),
   };
 }
 
@@ -555,22 +633,38 @@ async function getLocalizedPriceOffers(params: {
   buyerRestaurant?: any | null;
   maxRadiusMiles?: number | null;
 }) {
-  const { itemIds } = await resolveSupplyItemIds({ itemKey: params.itemKey, itemName: params.itemName });
+  const { itemIds } = await resolveSupplyItemIds({
+    itemKey: params.itemKey,
+    itemName: params.itemName,
+  });
   if (itemIds.length === 0) return [] as any[];
 
   const priceRows = await db
     .select()
     .from(supplyPrices)
-    .where(and(inArray(supplyPrices.itemId, itemIds), eq(supplyPrices.currency, "usd")))
+    .where(
+      and(
+        inArray(supplyPrices.itemId, itemIds),
+        eq(supplyPrices.currency, "usd"),
+      ),
+    )
     .orderBy(desc(supplyPrices.observedAt))
     .limit(2000);
   if (priceRows.length === 0) return [] as any[];
 
   const storeIds = Array.from(
-    new Set((priceRows as any[]).map((row) => String(row.storeId || "")).filter(Boolean)),
+    new Set(
+      (priceRows as any[])
+        .map((row) => String(row.storeId || ""))
+        .filter(Boolean),
+    ),
   );
   const locationIds = Array.from(
-    new Set((priceRows as any[]).map((row) => String(row.storeLocationId || "")).filter(Boolean)),
+    new Set(
+      (priceRows as any[])
+        .map((row) => String(row.storeLocationId || ""))
+        .filter(Boolean),
+    ),
   );
 
   const [stores, locations] = await Promise.all([
@@ -578,18 +672,32 @@ async function getLocalizedPriceOffers(params: {
       ? db
           .select()
           .from(supplyStores)
-          .where(and(inArray(supplyStores.id, storeIds), eq(supplyStores.isActive, true)))
+          .where(
+            and(
+              inArray(supplyStores.id, storeIds),
+              eq(supplyStores.isActive, true),
+            ),
+          )
       : Promise.resolve([] as any[]),
     locationIds.length > 0
       ? db
           .select()
           .from(supplyStoreLocations)
-          .where(and(inArray(supplyStoreLocations.id, locationIds), eq(supplyStoreLocations.isActive, true)))
+          .where(
+            and(
+              inArray(supplyStoreLocations.id, locationIds),
+              eq(supplyStoreLocations.isActive, true),
+            ),
+          )
       : Promise.resolve([] as any[]),
   ]);
 
-  const storeById = new Map((stores as any[]).map((row: any) => [String(row.id), row]));
-  const locationById = new Map((locations as any[]).map((row: any) => [String(row.id), row]));
+  const storeById = new Map(
+    (stores as any[]).map((row: any) => [String(row.id), row]),
+  );
+  const locationById = new Map(
+    (locations as any[]).map((row: any) => [String(row.id), row]),
+  );
 
   const buyerLat = Number(params.buyerRestaurant?.latitude);
   const buyerLon = Number(params.buyerRestaurant?.longitude);
@@ -636,7 +744,8 @@ async function getLocalizedPriceOffers(params: {
     })
     .filter(Boolean)
     .sort((a: any, b: any) => {
-      if (a.unitPriceCents !== b.unitPriceCents) return a.unitPriceCents - b.unitPriceCents;
+      if (a.unitPriceCents !== b.unitPriceCents)
+        return a.unitPriceCents - b.unitPriceCents;
       const aObserved = new Date(a.observedAt || 0).getTime();
       const bObserved = new Date(b.observedAt || 0).getTime();
       return bObserved - aObserved;
@@ -667,19 +776,22 @@ async function getWatchSnapshotTrend(params: {
     .limit(Math.max(2, params.limitDays));
 
   const newest = snapshots[0] as any;
-  const newestMedian = newest?.medianPriceCents === null || newest?.medianPriceCents === undefined
-    ? null
-    : Number(newest.medianPriceCents);
+  const newestMedian =
+    newest?.medianPriceCents === null || newest?.medianPriceCents === undefined
+      ? null
+      : Number(newest.medianPriceCents);
 
   const day7 = snapshots[6] as any;
   const day30 = snapshots[29] as any;
 
-  const median7 = day7?.medianPriceCents === null || day7?.medianPriceCents === undefined
-    ? null
-    : Number(day7.medianPriceCents);
-  const median30 = day30?.medianPriceCents === null || day30?.medianPriceCents === undefined
-    ? null
-    : Number(day30.medianPriceCents);
+  const median7 =
+    day7?.medianPriceCents === null || day7?.medianPriceCents === undefined
+      ? null
+      : Number(day7.medianPriceCents);
+  const median30 =
+    day30?.medianPriceCents === null || day30?.medianPriceCents === undefined
+      ? null
+      : Number(day30.medianPriceCents);
 
   const pct = (latest: number | null, baseline: number | null) => {
     if (latest === null || baseline === null || baseline <= 0) return null;
@@ -765,4 +877,3 @@ export function registerSupplierMarketplaceRoutes(app: Express) {
     parseBeforeTimestamp,
   });
 }
-

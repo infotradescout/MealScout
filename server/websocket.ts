@@ -164,7 +164,9 @@ export function setupWebSocketServer(httpServer: Server): SocketIOServer {
     .split(",")
     .map((o) => o.trim())
     .filter(Boolean);
-  const allowedOrigins = Array.from(new Set([...defaultOrigins, ...extraOrigins]));
+  const allowedOrigins = Array.from(
+    new Set([...defaultOrigins, ...extraOrigins]),
+  );
   io = new SocketIOServer<
     ClientToServerEvents,
     ServerToClientEvents,

@@ -71,9 +71,12 @@ export function registerBookingRoutes(
           req.user.id,
           "manageParkingPass",
         );
-        const isAdmin = ["admin", "duper_admin", "super_admin", "staff"].includes(
-          req.user?.userType || "",
-        );
+        const isAdmin = [
+          "admin",
+          "duper_admin",
+          "super_admin",
+          "staff",
+        ].includes(req.user?.userType || "");
         if (!isOwner && !isAdmin) {
           return res.status(403).json({ message: "Not authorized" });
         }
@@ -163,9 +166,12 @@ export function registerBookingRoutes(
           req.user.id,
           "manageParkingPass",
         );
-        const isAdmin = ["admin", "duper_admin", "super_admin", "staff"].includes(
-          req.user?.userType || "",
-        );
+        const isAdmin = [
+          "admin",
+          "duper_admin",
+          "super_admin",
+          "staff",
+        ].includes(req.user?.userType || "");
         if (!isOwner && !isAdmin) {
           return res.status(403).json({ message: "Not authorized" });
         }
@@ -654,10 +660,7 @@ export function registerBookingRoutes(
             },
           });
         } catch (trackingError) {
-          console.warn(
-            "Failed to track manual schedule usage:",
-            trackingError,
-          );
+          console.warn("Failed to track manual schedule usage:", trackingError);
         }
 
         res.json(created);
@@ -716,9 +719,12 @@ export function registerBookingRoutes(
           req.user.id,
           "manageParkingPass",
         );
-        const isAdmin = ["admin", "duper_admin", "super_admin", "staff"].includes(
-          req.user?.userType || "",
-        );
+        const isAdmin = [
+          "admin",
+          "duper_admin",
+          "super_admin",
+          "staff",
+        ].includes(req.user?.userType || "");
         if (!isOwner && !isAdmin) {
           return res
             .status(403)
@@ -760,9 +766,12 @@ export function registerBookingRoutes(
           req.user.id,
           "manageParkingPass",
         );
-        const isAdmin = ["admin", "duper_admin", "super_admin", "staff"].includes(
-          req.user?.userType || "",
-        );
+        const isAdmin = [
+          "admin",
+          "duper_admin",
+          "super_admin",
+          "staff",
+        ].includes(req.user?.userType || "");
         if (!isOwner && !isAdmin) {
           return res
             .status(403)

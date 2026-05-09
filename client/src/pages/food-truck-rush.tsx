@@ -210,7 +210,10 @@ const lateWeights: Array<[GameObjectKind, number]> = [
 ];
 
 function getRank(score: number) {
-  return ranks.find((entry) => score >= entry.min)?.rank ?? ranks[ranks.length - 1].rank;
+  return (
+    ranks.find((entry) => score >= entry.min)?.rank ??
+    ranks[ranks.length - 1].rank
+  );
 }
 
 function clampLane(lane: number): Lane {
@@ -232,25 +235,47 @@ function chooseWeightedKind(weights: Array<[GameObjectKind, number]>) {
 function pickLane(kind: GameObjectKind): Lane {
   const roll = Math.random();
 
-  if (kind === "normal" || kind === "vip") return roll < 0.7 ? 0 : clampLane(Math.floor(Math.random() * 3));
-  if (kind === "restock" || kind === "soldOut") return roll < 0.75 ? 1 : clampLane(Math.floor(Math.random() * 3));
-  if (kind === "host" || kind === "permit") return roll < 0.75 ? 2 : clampLane(Math.floor(Math.random() * 3));
+  if (kind === "normal" || kind === "vip")
+    return roll < 0.7 ? 0 : clampLane(Math.floor(Math.random() * 3));
+  if (kind === "restock" || kind === "soldOut")
+    return roll < 0.75 ? 1 : clampLane(Math.floor(Math.random() * 3));
+  if (kind === "host" || kind === "permit")
+    return roll < 0.75 ? 2 : clampLane(Math.floor(Math.random() * 3));
   return clampLane(Math.floor(Math.random() * 3));
 }
 
 function getDifficulty(elapsedSeconds: number) {
   if (elapsedSeconds < 10) {
-    return { spawnEvery: 1650, travelMs: 5200, maxActive: 2, weights: easyWeights };
+    return {
+      spawnEvery: 1650,
+      travelMs: 5200,
+      maxActive: 2,
+      weights: easyWeights,
+    };
   }
 
   if (elapsedSeconds < 25) {
-    return { spawnEvery: 1225, travelMs: 4550, maxActive: 3, weights: moderateWeights };
+    return {
+      spawnEvery: 1225,
+      travelMs: 4550,
+      maxActive: 3,
+      weights: moderateWeights,
+    };
   }
 
-  return { spawnEvery: 925, travelMs: 3900, maxActive: 4, weights: lateWeights };
+  return {
+    spawnEvery: 925,
+    travelMs: 3900,
+    maxActive: 4,
+    weights: lateWeights,
+  };
 }
 
-function createGameObject(elapsedSeconds: number, now: number, id: number): GameObject {
+function createGameObject(
+  elapsedSeconds: number,
+  now: number,
+  id: number,
+): GameObject {
   const difficulty = getDifficulty(elapsedSeconds);
   const kind = chooseWeightedKind(difficulty.weights);
   const travelJitter = Math.floor(Math.random() * 450);
@@ -364,7 +389,9 @@ function FoodTruckRush() {
 
     const target = objectsInLane[0];
     const definition = objectDefinitions[target.kind];
-    syncActiveObjects(activeObjectsRef.current.filter((object) => object.id !== target.id));
+    syncActiveObjects(
+      activeObjectsRef.current.filter((object) => object.id !== target.id),
+    );
 
     if (definition.hazard) {
       applyPenalty(
@@ -383,7 +410,13 @@ function FoodTruckRush() {
         bonus ? " | Streak bonus +50" : ""
       }`,
     );
-  }, [addServedStreak, applyPenalty, changeScore, gameState, syncActiveObjects]);
+  }, [
+    addServedStreak,
+    applyPenalty,
+    changeScore,
+    gameState,
+    syncActiveObjects,
+  ]);
 
   const setLane = useCallback((lane: Lane) => {
     playerLaneRef.current = lane;
@@ -430,7 +463,10 @@ function FoodTruckRush() {
     const intervalId = window.setInterval(() => {
       const currentTime = Date.now();
       const elapsedSeconds = (currentTime - startTimeRef.current) / 1000;
-      const secondsLeft = Math.max(0, Math.ceil((endTimeRef.current - currentTime) / 1000));
+      const secondsLeft = Math.max(
+        0,
+        Math.ceil((endTimeRef.current - currentTime) / 1000),
+      );
 
       setNow(currentTime);
       setTimeLeft(secondsLeft);
@@ -441,14 +477,24 @@ function FoodTruckRush() {
       }
 
       const difficulty = getDifficulty(elapsedSeconds);
-      const expiredObjects = activeObjectsRef.current.filter((object) => currentTime >= object.expiresAt);
-      let nextObjects = activeObjectsRef.current.filter((object) => currentTime < object.expiresAt);
+      const expiredObjects = activeObjectsRef.current.filter(
+        (object) => currentTime >= object.expiresAt,
+      );
+      let nextObjects = activeObjectsRef.current.filter(
+        (object) => currentTime < object.expiresAt,
+      );
 
       expiredObjects.forEach(handleExpiredObject);
 
-      if (currentTime - lastSpawnRef.current >= difficulty.spawnEvery && nextObjects.length < difficulty.maxActive) {
+      if (
+        currentTime - lastSpawnRef.current >= difficulty.spawnEvery &&
+        nextObjects.length < difficulty.maxActive
+      ) {
         objectIdRef.current += 1;
-        nextObjects = [...nextObjects, createGameObject(elapsedSeconds, currentTime, objectIdRef.current)];
+        nextObjects = [
+          ...nextObjects,
+          createGameObject(elapsedSeconds, currentTime, objectIdRef.current),
+        ];
         lastSpawnRef.current = currentTime;
       }
 
@@ -496,22 +542,30 @@ function FoodTruckRush() {
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-[color:var(--accent-text)]">
               MealScout Mini Game
             </p>
-            <h1 className="mt-2 text-3xl font-black leading-tight sm:text-4xl">Food Truck Rush</h1>
+            <h1 className="mt-2 text-3xl font-black leading-tight sm:text-4xl">
+              Food Truck Rush
+            </h1>
             <p className="mt-2 max-w-2xl text-sm font-medium text-[color:var(--text-secondary)] sm:text-base">
               Serve customers. Dodge problems. Build your streak.
             </p>
           </div>
           <div className="grid grid-cols-3 gap-2 text-center sm:min-w-80">
             <div className="rounded-lg border border-subtle bg-white/75 px-3 py-2">
-              <p className="text-xs font-semibold text-[color:var(--text-muted)]">Score</p>
+              <p className="text-xs font-semibold text-[color:var(--text-muted)]">
+                Score
+              </p>
               <p className="text-2xl font-black">{score}</p>
             </div>
             <div className="rounded-lg border border-subtle bg-white/75 px-3 py-2">
-              <p className="text-xs font-semibold text-[color:var(--text-muted)]">Timer</p>
+              <p className="text-xs font-semibold text-[color:var(--text-muted)]">
+                Timer
+              </p>
               <p className="text-2xl font-black">{timeLeft}s</p>
             </div>
             <div className="rounded-lg border border-subtle bg-white/75 px-3 py-2">
-              <p className="text-xs font-semibold text-[color:var(--text-muted)]">Streak</p>
+              <p className="text-xs font-semibold text-[color:var(--text-muted)]">
+                Streak
+              </p>
               <p className="text-2xl font-black">{streak}</p>
             </div>
           </div>
@@ -524,11 +578,17 @@ function FoodTruckRush() {
                 <div className="mb-5 inline-flex h-16 w-16 items-center justify-center rounded-lg bg-orange-100 text-4xl ring-1 ring-orange-200">
                   🚚
                 </div>
-                <h2 className="text-2xl font-black sm:text-3xl">Food Truck Rush</h2>
+                <h2 className="text-2xl font-black sm:text-3xl">
+                  Food Truck Rush
+                </h2>
                 <p className="mt-3 max-w-xl text-base font-medium text-[color:var(--text-secondary)]">
                   Serve customers. Dodge problems. Build your streak.
                 </p>
-                <Button className="mt-6 w-full sm:w-auto" size="lg" onClick={startGame}>
+                <Button
+                  className="mt-6 w-full sm:w-auto"
+                  size="lg"
+                  onClick={startGame}
+                >
                   <Play aria-hidden="true" />
                   Start Game
                 </Button>
@@ -536,15 +596,21 @@ function FoodTruckRush() {
               <div className="grid gap-3 rounded-lg border border-subtle bg-white/70 p-4 text-sm font-semibold text-[color:var(--text-secondary)]">
                 <div className="flex items-center justify-between gap-3">
                   <span>Customers</span>
-                  <span className="rounded-md bg-emerald-100 px-2 py-1 text-emerald-800">Serve</span>
+                  <span className="rounded-md bg-emerald-100 px-2 py-1 text-emerald-800">
+                    Serve
+                  </span>
                 </div>
                 <div className="flex items-center justify-between gap-3">
                   <span>Prep / Inventory</span>
-                  <span className="rounded-md bg-sky-100 px-2 py-1 text-sky-800">Restock</span>
+                  <span className="rounded-md bg-sky-100 px-2 py-1 text-sky-800">
+                    Restock
+                  </span>
                 </div>
                 <div className="flex items-center justify-between gap-3">
                   <span>Operations / Event</span>
-                  <span className="rounded-md bg-orange-100 px-2 py-1 text-orange-800">Handle</span>
+                  <span className="rounded-md bg-orange-100 px-2 py-1 text-orange-800">
+                    Handle
+                  </span>
                 </div>
               </div>
             </CardContent>
@@ -554,7 +620,10 @@ function FoodTruckRush() {
         {gameState === "playing" && (
           <section className="grid gap-4 lg:grid-cols-[1fr_18rem]">
             <div className="rounded-lg border border-subtle bg-[color:var(--bg-card)] p-4 shadow-clean">
-              <div className="mb-4 h-2 overflow-hidden rounded-full bg-slate-200" aria-hidden="true">
+              <div
+                className="mb-4 h-2 overflow-hidden rounded-full bg-slate-200"
+                aria-hidden="true"
+              >
                 <div
                   className="h-full rounded-full bg-[color:var(--action-primary)] transition-[width] duration-200"
                   style={{ width: `${progressPercent}%` }}
@@ -563,17 +632,24 @@ function FoodTruckRush() {
 
               <div className="grid min-h-[360px] grid-cols-3 gap-2 sm:min-h-[430px] sm:gap-3">
                 {lanes.map((lane) => {
-                  const laneObjects = activeObjects.filter((object) => object.lane === lane.id);
+                  const laneObjects = activeObjects.filter(
+                    (object) => object.lane === lane.id,
+                  );
 
                   return (
                     <div
                       key={lane.id}
                       className={`relative overflow-hidden rounded-lg border border-subtle bg-white/72 transition ring-offset-2 ${
-                        playerLane === lane.id ? "ring-2 ring-[color:var(--action-primary)]" : ""
+                        playerLane === lane.id
+                          ? "ring-2 ring-[color:var(--action-primary)]"
+                          : ""
                       }`}
                     >
                       <div className="absolute inset-x-2 top-2 z-10 flex items-center gap-2 rounded-md bg-white/85 px-2 py-1 text-[11px] font-bold text-[color:var(--text-secondary)] shadow-sm sm:text-xs">
-                        <span className={`h-2 w-2 rounded-full ${lane.tone}`} aria-hidden="true" />
+                        <span
+                          className={`h-2 w-2 rounded-full ${lane.tone}`}
+                          aria-hidden="true"
+                        />
                         <span className="truncate">{lane.title}</span>
                       </div>
 
@@ -583,7 +659,11 @@ function FoodTruckRush() {
                         const definition = objectDefinitions[object.kind];
                         const objectProgress = Math.min(
                           1,
-                          Math.max(0, (now - object.spawnedAt) / (object.expiresAt - object.spawnedAt)),
+                          Math.max(
+                            0,
+                            (now - object.spawnedAt) /
+                              (object.expiresAt - object.spawnedAt),
+                          ),
                         );
                         const topPosition = 12 + objectProgress * 66;
 
@@ -597,7 +677,10 @@ function FoodTruckRush() {
                             }`}
                             style={{ top: `${topPosition}%` }}
                           >
-                            <div className="text-2xl leading-none sm:text-3xl" aria-hidden="true">
+                            <div
+                              className="text-2xl leading-none sm:text-3xl"
+                              aria-hidden="true"
+                            >
                               {definition.icon}
                             </div>
                             <div className="mt-1 truncate text-[10px] font-black uppercase tracking-wide sm:text-xs">
@@ -609,10 +692,15 @@ function FoodTruckRush() {
 
                       {playerLane === lane.id && (
                         <div className="absolute inset-x-2 bottom-3 z-30 rounded-lg border border-orange-200 bg-orange-50 px-2 py-2 text-center shadow-md">
-                          <div className="text-3xl leading-none" aria-hidden="true">
+                          <div
+                            className="text-3xl leading-none"
+                            aria-hidden="true"
+                          >
                             🚚
                           </div>
-                          <div className="mt-1 text-[10px] font-black uppercase tracking-wide text-orange-900">Truck</div>
+                          <div className="mt-1 text-[10px] font-black uppercase tracking-wide text-orange-900">
+                            Truck
+                          </div>
                         </div>
                       )}
                     </div>
@@ -623,17 +711,29 @@ function FoodTruckRush() {
 
             <aside className="flex flex-col gap-3">
               <div className="rounded-lg border border-subtle bg-[color:var(--bg-card)] p-4 shadow-clean">
-                <p className="text-xs font-bold uppercase tracking-[0.18em] text-[color:var(--text-muted)]">Rank Preview</p>
+                <p className="text-xs font-bold uppercase tracking-[0.18em] text-[color:var(--text-muted)]">
+                  Rank Preview
+                </p>
                 <p className="mt-2 text-xl font-black">{rank.name}</p>
               </div>
 
-              <div className="rounded-lg border border-subtle bg-[color:var(--bg-card)] p-4 shadow-clean" aria-live="polite">
-                <p className="text-xs font-bold uppercase tracking-[0.18em] text-[color:var(--text-muted)]">Last Action</p>
-                <p className="mt-2 min-h-12 text-base font-black text-[color:var(--text-primary)]">{lastMessage}</p>
+              <div
+                className="rounded-lg border border-subtle bg-[color:var(--bg-card)] p-4 shadow-clean"
+                aria-live="polite"
+              >
+                <p className="text-xs font-bold uppercase tracking-[0.18em] text-[color:var(--text-muted)]">
+                  Last Action
+                </p>
+                <p className="mt-2 min-h-12 text-base font-black text-[color:var(--text-primary)]">
+                  {lastMessage}
+                </p>
               </div>
 
               <div className="hidden rounded-lg border border-subtle bg-white/80 p-4 text-sm font-semibold text-[color:var(--text-secondary)] shadow-clean md:block">
-                <p>Desktop: A or Left Arrow moves left. D or Right Arrow moves right. Space or Enter interacts.</p>
+                <p>
+                  Desktop: A or Left Arrow moves left. D or Right Arrow moves
+                  right. Space or Enter interacts.
+                </p>
               </div>
 
               <div className="grid grid-cols-3 gap-2 md:hidden">
@@ -650,7 +750,12 @@ function FoodTruckRush() {
                 ))}
               </div>
 
-              <Button type="button" size="lg" onClick={handleInteract} className="h-14 text-base font-black">
+              <Button
+                type="button"
+                size="lg"
+                onClick={handleInteract}
+                className="h-14 text-base font-black"
+              >
                 Interact / Serve
               </Button>
             </aside>
@@ -661,14 +766,22 @@ function FoodTruckRush() {
           <Card className="overflow-hidden rounded-lg border-subtle bg-[color:var(--bg-card)]">
             <CardContent className="grid gap-6 p-6 md:grid-cols-[0.9fr_1fr] md:items-center">
               <div className="rounded-lg border border-subtle bg-white/80 p-5 text-center">
-                <p className="text-xs font-bold uppercase tracking-[0.18em] text-[color:var(--text-muted)]">Final Score</p>
+                <p className="text-xs font-bold uppercase tracking-[0.18em] text-[color:var(--text-muted)]">
+                  Final Score
+                </p>
                 <p className="mt-2 text-6xl font-black leading-none">{score}</p>
-                <p className="mt-4 text-2xl font-black text-[color:var(--accent-text)]">{rank.name}</p>
+                <p className="mt-4 text-2xl font-black text-[color:var(--accent-text)]">
+                  {rank.name}
+                </p>
               </div>
 
               <div>
-                <h2 className="text-2xl font-black sm:text-3xl">Rush complete</h2>
-                <p className="mt-3 text-base font-semibold text-[color:var(--text-secondary)]">{rank.copy}</p>
+                <h2 className="text-2xl font-black sm:text-3xl">
+                  Rush complete
+                </h2>
+                <p className="mt-3 text-base font-semibold text-[color:var(--text-secondary)]">
+                  {rank.copy}
+                </p>
                 <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
                   <Button type="button" onClick={startGame}>
                     <RotateCcw aria-hidden="true" />

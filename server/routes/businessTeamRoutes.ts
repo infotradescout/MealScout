@@ -59,136 +59,143 @@ export function registerBusinessTeamRoutes(app: Express) {
       res.json(context);
     } catch (error) {
       console.error("Error loading business access context:", error);
-      res.status(500).json({ message: "Failed to load business access context" });
+      res
+        .status(500)
+        .json({ message: "Failed to load business access context" });
     }
   });
 
-  app.get("/api/business/team/funnel", isAuthenticated, async (req: any, res) => {
-    try {
-      const rawDays = Number(req.query?.days || 30);
-      const days = Number.isFinite(rawDays)
-        ? Math.max(1, Math.min(Math.floor(rawDays), 365))
-        : 30;
-      const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  app.get(
+    "/api/business/team/funnel",
+    isAuthenticated,
+    async (req: any, res) => {
+      try {
+        const rawDays = Number(req.query?.days || 30);
+        const days = Number.isFinite(rawDays)
+          ? Math.max(1, Math.min(Math.floor(rawDays), 365))
+          : 30;
+        const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
-      const shareEvents = await db
-        .select({
-          action: sql<string>`coalesce(${telemetryEvents.properties}->>'action', 'unknown')`,
-          itemKey: sql<string>`coalesce(${telemetryEvents.properties}->>'itemKey', 'unknown')`,
-          count: sql<number>`count(*)`,
-        })
-        .from(telemetryEvents)
-        .where(
-          and(
-            eq(telemetryEvents.userId, req.user.id),
-            eq(telemetryEvents.eventName, "share_hub_action"),
-            gte(telemetryEvents.createdAt, since),
-          ),
-        )
-        .groupBy(
-          sql`coalesce(${telemetryEvents.properties}->>'action', 'unknown')`,
-          sql`coalesce(${telemetryEvents.properties}->>'itemKey', 'unknown')`,
-        )
-        .orderBy(desc(sql`count(*)`));
+        const shareEvents = await db
+          .select({
+            action: sql<string>`coalesce(${telemetryEvents.properties}->>'action', 'unknown')`,
+            itemKey: sql<string>`coalesce(${telemetryEvents.properties}->>'itemKey', 'unknown')`,
+            count: sql<number>`count(*)`,
+          })
+          .from(telemetryEvents)
+          .where(
+            and(
+              eq(telemetryEvents.userId, req.user.id),
+              eq(telemetryEvents.eventName, "share_hub_action"),
+              gte(telemetryEvents.createdAt, since),
+            ),
+          )
+          .groupBy(
+            sql`coalesce(${telemetryEvents.properties}->>'action', 'unknown')`,
+            sql`coalesce(${telemetryEvents.properties}->>'itemKey', 'unknown')`,
+          )
+          .orderBy(desc(sql`count(*)`));
 
-      const referralRows = await db
-        .select({
-          status: referrals.status,
-          count: sql<number>`count(*)`,
-        })
-        .from(referrals)
-        .where(
-          and(
-            eq(referrals.affiliateUserId, req.user.id),
-            gte(referrals.clickedAt, since),
-          ),
-        )
-        .groupBy(referrals.status);
+        const referralRows = await db
+          .select({
+            status: referrals.status,
+            count: sql<number>`count(*)`,
+          })
+          .from(referrals)
+          .where(
+            and(
+              eq(referrals.affiliateUserId, req.user.id),
+              gte(referrals.clickedAt, since),
+            ),
+          )
+          .groupBy(referrals.status);
 
-      const [commissionTotals] = await db
-        .select({
-          commissionsEarnedCents:
-            sql<number>`coalesce(sum(${affiliateCommissionLedger.sourceAmountCents}), 0)`,
-        })
-        .from(affiliateCommissionLedger)
-        .where(
-          and(
-            eq(affiliateCommissionLedger.affiliateUserId, req.user.id),
-            gte(affiliateCommissionLedger.createdAt, since),
-          ),
-        );
+        const [commissionTotals] = await db
+          .select({
+            commissionsEarnedCents: sql<number>`coalesce(sum(${affiliateCommissionLedger.sourceAmountCents}), 0)`,
+          })
+          .from(affiliateCommissionLedger)
+          .where(
+            and(
+              eq(affiliateCommissionLedger.affiliateUserId, req.user.id),
+              gte(affiliateCommissionLedger.createdAt, since),
+            ),
+          );
 
-      const actionCounts = {
-        open: 0,
-        copy_link: 0,
-        copy_outreach: 0,
-        share: 0,
-      };
-      const topItems = new Map<string, number>();
-      let shareHubActionTotal = 0;
+        const actionCounts = {
+          open: 0,
+          copy_link: 0,
+          copy_outreach: 0,
+          share: 0,
+        };
+        const topItems = new Map<string, number>();
+        let shareHubActionTotal = 0;
 
-      for (const row of shareEvents) {
-        const count = Number(row.count || 0);
-        shareHubActionTotal += count;
-        const action = String(row.action || "unknown");
-        if (action in actionCounts) {
-          (actionCounts as any)[action] += count;
+        for (const row of shareEvents) {
+          const count = Number(row.count || 0);
+          shareHubActionTotal += count;
+          const action = String(row.action || "unknown");
+          if (action in actionCounts) {
+            (actionCounts as any)[action] += count;
+          }
+          const itemKey = String(row.itemKey || "unknown");
+          topItems.set(itemKey, (topItems.get(itemKey) || 0) + count);
         }
-        const itemKey = String(row.itemKey || "unknown");
-        topItems.set(itemKey, (topItems.get(itemKey) || 0) + count);
+
+        let clicked = 0;
+        let signedUp = 0;
+        let activated = 0;
+        let paid = 0;
+        for (const row of referralRows) {
+          const status = String(row.status || "clicked");
+          const count = Number(row.count || 0);
+          if (status === "clicked") clicked += count;
+          if (status === "signed_up") signedUp += count;
+          if (status === "activated") activated += count;
+          if (status === "paid") paid += count;
+        }
+
+        const effectiveClicks = clicked + signedUp + activated + paid;
+        const signupsOrBetter = signedUp + activated + paid;
+        const activationOrBetter = activated + paid;
+
+        res.json({
+          days,
+          since: since.toISOString(),
+          shareHubActions: {
+            total: shareHubActionTotal,
+            byAction: actionCounts,
+            topItems: Array.from(topItems.entries())
+              .map(([itemKey, count]) => ({ itemKey, count }))
+              .sort((a, b) => b.count - a.count)
+              .slice(0, 8),
+          },
+          referrals: {
+            clicked: effectiveClicks,
+            signedUp: signupsOrBetter,
+            activated: activationOrBetter,
+            paid,
+            signupRate:
+              effectiveClicks > 0
+                ? Number(((signupsOrBetter / effectiveClicks) * 100).toFixed(1))
+                : 0,
+            paidRate:
+              effectiveClicks > 0
+                ? Number(((paid / effectiveClicks) * 100).toFixed(1))
+                : 0,
+          },
+          commissions: {
+            sourceRevenueCents: Number(
+              commissionTotals?.commissionsEarnedCents || 0,
+            ),
+          },
+        });
+      } catch (error) {
+        console.error("Error loading business team funnel:", error);
+        res.status(500).json({ message: "Failed to load funnel metrics" });
       }
-
-      let clicked = 0;
-      let signedUp = 0;
-      let activated = 0;
-      let paid = 0;
-      for (const row of referralRows) {
-        const status = String(row.status || "clicked");
-        const count = Number(row.count || 0);
-        if (status === "clicked") clicked += count;
-        if (status === "signed_up") signedUp += count;
-        if (status === "activated") activated += count;
-        if (status === "paid") paid += count;
-      }
-
-      const effectiveClicks = clicked + signedUp + activated + paid;
-      const signupsOrBetter = signedUp + activated + paid;
-      const activationOrBetter = activated + paid;
-
-      res.json({
-        days,
-        since: since.toISOString(),
-        shareHubActions: {
-          total: shareHubActionTotal,
-          byAction: actionCounts,
-          topItems: Array.from(topItems.entries())
-            .map(([itemKey, count]) => ({ itemKey, count }))
-            .sort((a, b) => b.count - a.count)
-            .slice(0, 8),
-        },
-        referrals: {
-          clicked: effectiveClicks,
-          signedUp: signupsOrBetter,
-          activated: activationOrBetter,
-          paid,
-          signupRate:
-            effectiveClicks > 0
-              ? Number(((signupsOrBetter / effectiveClicks) * 100).toFixed(1))
-              : 0,
-          paidRate:
-            effectiveClicks > 0
-              ? Number(((paid / effectiveClicks) * 100).toFixed(1))
-              : 0,
-        },
-        commissions: {
-          sourceRevenueCents: Number(commissionTotals?.commissionsEarnedCents || 0),
-        },
-      });
-    } catch (error) {
-      console.error("Error loading business team funnel:", error);
-      res.status(500).json({ message: "Failed to load funnel metrics" });
-    }
-  });
+    },
+  );
 
   app.get("/api/business/team", isAuthenticated, async (req: any, res) => {
     try {
@@ -198,7 +205,11 @@ export function registerBusinessTeamRoutes(app: Express) {
         .map((r) => r.id);
 
       if (!accessibleRestaurantIds.length) {
-        return res.json({ members: [], invites: [], restaurants: context.restaurants });
+        return res.json({
+          members: [],
+          invites: [],
+          restaurants: context.restaurants,
+        });
       }
 
       const members = await db
@@ -251,143 +262,162 @@ export function registerBusinessTeamRoutes(app: Express) {
     }
   });
 
-  app.post("/api/business/team/invites", isAuthenticated, async (req: any, res) => {
-    try {
-      const parsed = inviteCreateSchema.parse(req.body || {});
-      const owner = await getRestaurantOwnerUser(parsed.restaurantId);
-      if (!owner) {
-        return res.status(404).json({ message: "Restaurant not found" });
-      }
+  app.post(
+    "/api/business/team/invites",
+    isAuthenticated,
+    async (req: any, res) => {
+      try {
+        const parsed = inviteCreateSchema.parse(req.body || {});
+        const owner = await getRestaurantOwnerUser(parsed.restaurantId);
+        if (!owner) {
+          return res.status(404).json({ message: "Restaurant not found" });
+        }
 
-      const canInvite =
-        isElevated(req.user) || owner.ownerId === req.user.id;
-      if (!canInvite) {
-        return res.status(403).json({ message: "Only business owners can invite staff." });
-      }
+        const canInvite = isElevated(req.user) || owner.ownerId === req.user.id;
+        if (!canInvite) {
+          return res
+            .status(403)
+            .json({ message: "Only business owners can invite staff." });
+        }
 
-      const token = randomBytes(24).toString("hex");
-      const tokenHash = createHash("sha256").update(token).digest("hex");
-      const expiresAt = new Date(
-        Date.now() + parsed.expiresInDays * 24 * 60 * 60 * 1000,
-      );
+        const token = randomBytes(24).toString("hex");
+        const tokenHash = createHash("sha256").update(token).digest("hex");
+        const expiresAt = new Date(
+          Date.now() + parsed.expiresInDays * 24 * 60 * 60 * 1000,
+        );
 
-      const [invite] = await db
-        .insert(businessStaffInvites)
-        .values({
-          restaurantId: parsed.restaurantId,
-          createdByUserId: req.user.id,
-          email: parsed.email || null,
-          tokenHash,
-          permissions: parsed.permissions,
-          expiresAt,
-          status: "pending",
-          updatedAt: new Date(),
-        })
-        .returning();
-
-      const baseUrl = (process.env.PUBLIC_BASE_URL || "https://www.mealscout.us").replace(
-        /\/+$/,
-        "",
-      );
-      const inviteUrl = `${baseUrl}/business-team/accept?token=${encodeURIComponent(token)}`;
-
-      res.json({ invite, inviteUrl });
-    } catch (error: any) {
-      console.error("Error creating business staff invite:", error);
-      res.status(400).json({ message: error?.message || "Failed to create invite" });
-    }
-  });
-
-  app.post("/api/business/team/invites/accept", isAuthenticated, async (req: any, res) => {
-    try {
-      const parsed = inviteAcceptSchema.parse(req.body || {});
-      const tokenHash = createHash("sha256").update(parsed.token).digest("hex");
-
-      const [invite] = await db
-        .select()
-        .from(businessStaffInvites)
-        .where(eq(businessStaffInvites.tokenHash, tokenHash))
-        .limit(1);
-
-      if (!invite) {
-        return res.status(404).json({ message: "Invite not found" });
-      }
-      if (invite.status !== "pending") {
-        return res.status(400).json({ message: "Invite is no longer active" });
-      }
-      if (invite.expiresAt && new Date(invite.expiresAt).getTime() < Date.now()) {
-        await db
-          .update(businessStaffInvites)
-          .set({ status: "expired", updatedAt: new Date() })
-          .where(eq(businessStaffInvites.id, invite.id));
-        return res.status(400).json({ message: "Invite has expired" });
-      }
-
-      const inviteEmail = String(invite.email || "")
-        .trim()
-        .toLowerCase();
-      const userEmail = String(req.user?.email || "")
-        .trim()
-        .toLowerCase();
-      if (inviteEmail && (!userEmail || userEmail !== inviteEmail)) {
-        return res.status(403).json({
-          message: "This invite is assigned to a different email address.",
-        });
-      }
-
-      const owner = await getRestaurantOwnerUser(invite.restaurantId);
-      if (!owner) {
-        return res.status(404).json({ message: "Restaurant not found" });
-      }
-
-      const existing = await db
-        .select({ id: businessStaffMemberships.id })
-        .from(businessStaffMemberships)
-        .where(
-          and(
-            eq(businessStaffMemberships.restaurantId, invite.restaurantId),
-            eq(businessStaffMemberships.userId, req.user.id),
-          ),
-        )
-        .limit(1);
-
-      if (existing.length > 0) {
-        await db
-          .update(businessStaffMemberships)
-          .set({
-            permissions: invite.permissions,
-            status: "active",
-            revokedAt: null,
+        const [invite] = await db
+          .insert(businessStaffInvites)
+          .values({
+            restaurantId: parsed.restaurantId,
+            createdByUserId: req.user.id,
+            email: parsed.email || null,
+            tokenHash,
+            permissions: parsed.permissions,
+            expiresAt,
+            status: "pending",
             updatedAt: new Date(),
           })
-          .where(eq(businessStaffMemberships.id, existing[0].id));
-      } else {
-        await db.insert(businessStaffMemberships).values({
-          restaurantId: invite.restaurantId,
-          userId: req.user.id,
-          invitedByUserId: invite.createdByUserId,
-          permissions: invite.permissions,
-          status: "active",
-          updatedAt: new Date(),
-        });
+          .returning();
+
+        const baseUrl = (
+          process.env.PUBLIC_BASE_URL || "https://www.mealscout.us"
+        ).replace(/\/+$/, "");
+        const inviteUrl = `${baseUrl}/business-team/accept?token=${encodeURIComponent(token)}`;
+
+        res.json({ invite, inviteUrl });
+      } catch (error: any) {
+        console.error("Error creating business staff invite:", error);
+        res
+          .status(400)
+          .json({ message: error?.message || "Failed to create invite" });
       }
+    },
+  );
 
-      await db
-        .update(businessStaffInvites)
-        .set({
-          status: "accepted",
-          acceptedByUserId: req.user.id,
-          acceptedAt: new Date(),
-          updatedAt: new Date(),
-        })
-        .where(eq(businessStaffInvites.id, invite.id));
+  app.post(
+    "/api/business/team/invites/accept",
+    isAuthenticated,
+    async (req: any, res) => {
+      try {
+        const parsed = inviteAcceptSchema.parse(req.body || {});
+        const tokenHash = createHash("sha256")
+          .update(parsed.token)
+          .digest("hex");
 
-      res.json({ success: true });
-    } catch (error: any) {
-      console.error("Error accepting business staff invite:", error);
-      res.status(400).json({ message: error?.message || "Failed to accept invite" });
-    }
-  });
+        const [invite] = await db
+          .select()
+          .from(businessStaffInvites)
+          .where(eq(businessStaffInvites.tokenHash, tokenHash))
+          .limit(1);
+
+        if (!invite) {
+          return res.status(404).json({ message: "Invite not found" });
+        }
+        if (invite.status !== "pending") {
+          return res
+            .status(400)
+            .json({ message: "Invite is no longer active" });
+        }
+        if (
+          invite.expiresAt &&
+          new Date(invite.expiresAt).getTime() < Date.now()
+        ) {
+          await db
+            .update(businessStaffInvites)
+            .set({ status: "expired", updatedAt: new Date() })
+            .where(eq(businessStaffInvites.id, invite.id));
+          return res.status(400).json({ message: "Invite has expired" });
+        }
+
+        const inviteEmail = String(invite.email || "")
+          .trim()
+          .toLowerCase();
+        const userEmail = String(req.user?.email || "")
+          .trim()
+          .toLowerCase();
+        if (inviteEmail && (!userEmail || userEmail !== inviteEmail)) {
+          return res.status(403).json({
+            message: "This invite is assigned to a different email address.",
+          });
+        }
+
+        const owner = await getRestaurantOwnerUser(invite.restaurantId);
+        if (!owner) {
+          return res.status(404).json({ message: "Restaurant not found" });
+        }
+
+        const existing = await db
+          .select({ id: businessStaffMemberships.id })
+          .from(businessStaffMemberships)
+          .where(
+            and(
+              eq(businessStaffMemberships.restaurantId, invite.restaurantId),
+              eq(businessStaffMemberships.userId, req.user.id),
+            ),
+          )
+          .limit(1);
+
+        if (existing.length > 0) {
+          await db
+            .update(businessStaffMemberships)
+            .set({
+              permissions: invite.permissions,
+              status: "active",
+              revokedAt: null,
+              updatedAt: new Date(),
+            })
+            .where(eq(businessStaffMemberships.id, existing[0].id));
+        } else {
+          await db.insert(businessStaffMemberships).values({
+            restaurantId: invite.restaurantId,
+            userId: req.user.id,
+            invitedByUserId: invite.createdByUserId,
+            permissions: invite.permissions,
+            status: "active",
+            updatedAt: new Date(),
+          });
+        }
+
+        await db
+          .update(businessStaffInvites)
+          .set({
+            status: "accepted",
+            acceptedByUserId: req.user.id,
+            acceptedAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(eq(businessStaffInvites.id, invite.id));
+
+        res.json({ success: true });
+      } catch (error: any) {
+        console.error("Error accepting business staff invite:", error);
+        res
+          .status(400)
+          .json({ message: error?.message || "Failed to accept invite" });
+      }
+    },
+  );
 
   app.patch(
     "/api/business/team/members/:membershipId",
@@ -411,7 +441,9 @@ export function registerBusinessTeamRoutes(app: Express) {
           return res.status(404).json({ message: "Restaurant not found" });
         }
         if (!isElevated(req.user) && owner.ownerId !== req.user.id) {
-          return res.status(403).json({ message: "Only business owners can edit access." });
+          return res
+            .status(403)
+            .json({ message: "Only business owners can edit access." });
         }
 
         const [updated] = await db
@@ -425,7 +457,9 @@ export function registerBusinessTeamRoutes(app: Express) {
         res.json(updated);
       } catch (error: any) {
         console.error("Error updating business team member:", error);
-        res.status(400).json({ message: error?.message || "Failed to update member" });
+        res
+          .status(400)
+          .json({ message: error?.message || "Failed to update member" });
       }
     },
   );
@@ -450,7 +484,9 @@ export function registerBusinessTeamRoutes(app: Express) {
           return res.status(404).json({ message: "Restaurant not found" });
         }
         if (!isElevated(req.user) && owner.ownerId !== req.user.id) {
-          return res.status(403).json({ message: "Only business owners can remove members." });
+          return res
+            .status(403)
+            .json({ message: "Only business owners can remove members." });
         }
 
         await db
@@ -464,7 +500,9 @@ export function registerBusinessTeamRoutes(app: Express) {
         res.json({ success: true });
       } catch (error: any) {
         console.error("Error removing business team member:", error);
-        res.status(400).json({ message: error?.message || "Failed to remove member" });
+        res
+          .status(400)
+          .json({ message: error?.message || "Failed to remove member" });
       }
     },
   );
@@ -489,7 +527,9 @@ export function registerBusinessTeamRoutes(app: Express) {
           return res.status(404).json({ message: "Restaurant not found" });
         }
         if (!isElevated(req.user) && owner.ownerId !== req.user.id) {
-          return res.status(403).json({ message: "Only business owners can revoke invites." });
+          return res
+            .status(403)
+            .json({ message: "Only business owners can revoke invites." });
         }
 
         await db
@@ -503,7 +543,9 @@ export function registerBusinessTeamRoutes(app: Express) {
         res.json({ success: true });
       } catch (error: any) {
         console.error("Error revoking invite:", error);
-        res.status(400).json({ message: error?.message || "Failed to revoke invite" });
+        res
+          .status(400)
+          .json({ message: error?.message || "Failed to revoke invite" });
       }
     },
   );

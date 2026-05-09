@@ -17,7 +17,10 @@ import {
 import { listParkingPassOccurrences } from "../../services/parkingPassVirtual";
 import { runParkingPassIntegrity } from "../../services/parkingPassIntegrity";
 import { isSlotWithinHours } from "@shared/parkingPassSlots";
-import { canAssignUserType, getRoleAssignmentDeniedMessage } from "../../roleAccess";
+import {
+  canAssignUserType,
+  getRoleAssignmentDeniedMessage,
+} from "../../roleAccess";
 import {
   deals,
   eventBookings,

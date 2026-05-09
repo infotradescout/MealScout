@@ -30,25 +30,33 @@ export function isDuperAdminUserType(userType: unknown): boolean {
 
 export function isAdminUserType(userType: unknown): boolean {
   const role = getUserType(userType);
-  return role === "admin" || role === DUPER_ADMIN_ROLE || role === ROOT_ADMIN_ROLE;
+  return (
+    role === "admin" || role === DUPER_ADMIN_ROLE || role === ROOT_ADMIN_ROLE
+  );
 }
 
 export function isInternalTeamUserType(userType: unknown): boolean {
   return getUserType(userType) === "staff" || isAdminUserType(userType);
 }
 
-export function canAssignUserType(actorUserType: unknown, targetUserType: unknown): boolean {
+export function canAssignUserType(
+  actorUserType: unknown,
+  targetUserType: unknown,
+): boolean {
   const actor = getUserType(actorUserType);
   const target = getUserType(targetUserType);
 
   if (!VALID_USER_TYPES.includes(target as UserType)) return false;
   if (target === ROOT_ADMIN_ROLE) return actor === ROOT_ADMIN_ROLE;
-  if (target === DUPER_ADMIN_ROLE) return actor === ROOT_ADMIN_ROLE || actor === DUPER_ADMIN_ROLE;
+  if (target === DUPER_ADMIN_ROLE)
+    return actor === ROOT_ADMIN_ROLE || actor === DUPER_ADMIN_ROLE;
   if (target === "admin" || target === "staff") return isAdminUserType(actor);
   return isInternalTeamUserType(actor);
 }
 
-export function getRoleAssignmentDeniedMessage(targetUserType: unknown): string {
+export function getRoleAssignmentDeniedMessage(
+  targetUserType: unknown,
+): string {
   const target = getUserType(targetUserType);
   if (target === ROOT_ADMIN_ROLE) {
     return "Only super admins can assign super admin accounts";
@@ -62,7 +70,11 @@ export function getRoleAssignmentDeniedMessage(targetUserType: unknown): string 
   return "You do not have permission to assign this user type";
 }
 
-export function shouldAssignAffiliateTagForUserType(userType?: string | null): boolean {
+export function shouldAssignAffiliateTagForUserType(
+  userType?: string | null,
+): boolean {
   const role = getUserType(userType);
-  return role !== "admin" && role !== DUPER_ADMIN_ROLE && role !== ROOT_ADMIN_ROLE;
+  return (
+    role !== "admin" && role !== DUPER_ADMIN_ROLE && role !== ROOT_ADMIN_ROLE
+  );
 }

@@ -116,12 +116,18 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
       });
       toast({
         title: t("toast.bugSentTitle", "Bug report sent!"),
-        description: t("toast.bugSentDescription", "Thank you for helping us improve MealScout."),
+        description: t(
+          "toast.bugSentDescription",
+          "Thank you for helping us improve MealScout.",
+        ),
       });
     } catch {
       toast({
         title: t("toast.bugFailedTitle", "Failed to send report"),
-        description: t("toast.bugFailedDescription", "Please try again or contact support."),
+        description: t(
+          "toast.bugFailedDescription",
+          "Please try again or contact support.",
+        ),
         variant: "destructive",
       });
     } finally {
@@ -157,22 +163,35 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
 
   const hasBusinessTeamAccess = Boolean(businessAccess?.hasAnyAccess);
   const canManageDeals =
-    isAdmin || isStaff || isRestaurantOwner || isFoodTruck ||
+    isAdmin ||
+    isStaff ||
+    isRestaurantOwner ||
+    isFoodTruck ||
     businessAccess?.permissions?.manageDeals === true;
 
   const [isHost, setIsHost] = useState(false);
   useEffect(() => {
-    if (!user) { setIsHost(false); return; }
+    if (!user) {
+      setIsHost(false);
+      return;
+    }
     let cancelled = false;
     fetch("/api/hosts")
       .then(async (res) => {
         if (cancelled) return;
-        if (!res.ok) { setIsHost(false); return; }
+        if (!res.ok) {
+          setIsHost(false);
+          return;
+        }
         const hosts = await res.json().catch(() => []);
         setIsHost(Array.isArray(hosts) && hosts.length > 0);
       })
-      .catch(() => { if (!cancelled) setIsHost(false); });
-    return () => { cancelled = true; };
+      .catch(() => {
+        if (!cancelled) setIsHost(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [user?.id]);
 
   // Hide nav on giveaway wheel page — record mode and fullscreen are handled
@@ -193,36 +212,40 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
   const dashboardPath = !user
     ? "/customer-signup"
     : isAdmin
-    ? "/admin/dashboard"
-    : isStaff
-    ? "/staff"
-    : isEventCoordinator
-    ? "/event-coordinator/dashboard"
-    : isSupplier
-    ? "/supplier/dashboard"
-    : isFoodTruck || isRestaurantOwner || hasBusinessTeamAccess
-    ? "/restaurant-owner-dashboard"
-    : isHost
-    ? "/host/dashboard"
-    : "/scout";
+      ? "/admin/dashboard"
+      : isStaff
+        ? "/staff"
+        : isEventCoordinator
+          ? "/event-coordinator/dashboard"
+          : isSupplier
+            ? "/supplier/dashboard"
+            : isFoodTruck || isRestaurantOwner || hasBusinessTeamAccess
+              ? "/restaurant-owner-dashboard"
+              : isHost
+                ? "/host/dashboard"
+                : "/scout";
 
   // ── USER-SPECIFIC slot (3rd item in desktop bar) ─────────────────────────
   // This must be a DIFFERENT destination from dashboardPath to avoid duplicates.
   const userSpecificItem: NavItem = !user
     ? { path: "/customer-signup", icon: UserPlus, label: "Join" }
     : isAdmin || isStaff
-    ? { path: "/admin/control-center", icon: Shield, label: "Control" }
-    : isEventCoordinator
-    ? { path: "/events", icon: Calendar, label: "Events" }
-    : isSupplier
-    ? { path: "/supply/orders", icon: Package, label: "Orders" }
-    : isFoodTruck || isRestaurantOwner || hasBusinessTeamAccess
-    ? canManageDeals
-      ? { path: "/deal-creation", icon: Plus, label: "Deals" }
-      : { path: "/restaurant-owner-dashboard", icon: Store, label: "Business" }
-    : isHost
-    ? { path: "/events", icon: Calendar, label: "Events" }
-    : { path: "/favorites", icon: Bookmark, label: "Saved" };
+      ? { path: "/admin/control-center", icon: Shield, label: "Control" }
+      : isEventCoordinator
+        ? { path: "/events", icon: Calendar, label: "Events" }
+        : isSupplier
+          ? { path: "/supply/orders", icon: Package, label: "Orders" }
+          : isFoodTruck || isRestaurantOwner || hasBusinessTeamAccess
+            ? canManageDeals
+              ? { path: "/deal-creation", icon: Plus, label: "Deals" }
+              : {
+                  path: "/restaurant-owner-dashboard",
+                  icon: Store,
+                  label: "Business",
+                }
+            : isHost
+              ? { path: "/events", icon: Calendar, label: "Events" }
+              : { path: "/favorites", icon: Bookmark, label: "Saved" };
 
   // ── MORE sheet items (everything not in the 5-item bar) ──────────────────
   const buildMoreItems = (): NavItem[] => {
@@ -244,11 +267,19 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
         { path: "/events", icon: Calendar, label: "Events" },
         { path: "/admin/dashboard", icon: Shield, label: "Admin" },
         { path: "/staff", icon: Users, label: "Staff" },
-        { path: "/restaurant-owner-dashboard", icon: Store, label: "Restaurant" },
+        {
+          path: "/restaurant-owner-dashboard",
+          icon: Store,
+          label: "Restaurant",
+        },
         { path: "/host/dashboard", icon: Users, label: "Host" },
         { path: "/parking-pass", icon: ParkingSquare, label: "Parking" },
         { path: "/deals/featured", icon: Receipt, label: "Featured Deals" },
-        { path: "/admin/giveaway-wheel", icon: LayoutDashboard, label: "Giveaway Wheel" },
+        {
+          path: "/admin/giveaway-wheel",
+          icon: LayoutDashboard,
+          label: "Giveaway Wheel",
+        },
         { path: "/profile", icon: User, label: "Profile" },
       );
     } else if (isEventCoordinator) {
@@ -256,7 +287,11 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
         { path: "/scout", icon: Compass, label: "Scout" },
         { path: "/video", icon: Clapperboard, label: "Video" },
         { path: "/favorites", icon: Heart, label: "Saved" },
-        { path: "/event-coordinator/dashboard", icon: LayoutDashboard, label: "Dashboard" },
+        {
+          path: "/event-coordinator/dashboard",
+          icon: LayoutDashboard,
+          label: "Dashboard",
+        },
         { path: "/profile", icon: User, label: "Profile" },
       );
     } else if (isSupplier) {
@@ -264,7 +299,11 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
         { path: "/scout", icon: Compass, label: "Scout" },
         { path: "/video", icon: Clapperboard, label: "Video" },
         { path: "/favorites", icon: Heart, label: "Saved" },
-        { path: "/supplier/dashboard", icon: LayoutDashboard, label: "Dashboard" },
+        {
+          path: "/supplier/dashboard",
+          icon: LayoutDashboard,
+          label: "Dashboard",
+        },
         { path: "/profile", icon: User, label: "Profile" },
       );
     } else if (isFoodTruck || isRestaurantOwner || hasBusinessTeamAccess) {
@@ -315,8 +354,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
   const moreItems = buildMoreItems();
   const isActive = (path: string) =>
     location === path || location.startsWith(`${path}/`);
-  const isScoutExperience =
-    isActive("/scout");
+  const isScoutExperience = isActive("/scout");
 
   // ── DESKTOP quick-action bar ─────────────────────────────────────────────
   // Deduplicate: if userSpecificItem points to the same path as dashboardPath,
@@ -338,15 +376,18 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     { path: "/profile", icon: User, label: "Profile" },
   ];
   const dashboardIsScout = dashboardPath === "/scout";
-  const desktopItems = isScoutExperience || dashboardIsScout
-    ? scoutExperienceItems
-    : defaultDesktopItems;
-  const mobileSecondItem: NavItem = isScoutExperience || dashboardIsScout
-    ? { path: "/favorites", icon: Heart, label: "Saved" }
-    : { path: dashboardPath, icon: LayoutDashboard, label: "Dashboard" };
-  const mobileThirdItem: NavItem = isScoutExperience || dashboardIsScout
-    ? { path: "/deals/featured", icon: Receipt, label: "Deals" }
-    : userSpecificItem;
+  const desktopItems =
+    isScoutExperience || dashboardIsScout
+      ? scoutExperienceItems
+      : defaultDesktopItems;
+  const mobileSecondItem: NavItem =
+    isScoutExperience || dashboardIsScout
+      ? { path: "/favorites", icon: Heart, label: "Saved" }
+      : { path: dashboardPath, icon: LayoutDashboard, label: "Dashboard" };
+  const mobileThirdItem: NavItem =
+    isScoutExperience || dashboardIsScout
+      ? { path: "/deals/featured", icon: Receipt, label: "Deals" }
+      : userSpecificItem;
   const showMobileThirdItem =
     Boolean(mobileThirdItem.path) &&
     (isScoutExperience || dashboardIsScout || userSpecificIsUnique);
@@ -354,7 +395,10 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
   return (
     <>
       {/* Desktop top-right pill */}
-      <div data-nav-root={scope} className="hidden lg:block fixed top-6 right-6 z-50">
+      <div
+        data-nav-root={scope}
+        className="hidden lg:block fixed top-6 right-6 z-50"
+      >
         <div className="rounded-2xl border border-white/5 bg-[#120805]/40 backdrop-blur-xl shadow-[0_8px_32px_rgba(0,0,0,0.4)] p-2">
           <div className="flex items-center gap-1">
             {desktopItems.map((item) =>
@@ -390,7 +434,8 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
           <div
             className="relative flex items-end justify-between gap-1 h-[68px] px-3 rounded-full bg-[#120805]/65 backdrop-blur-xl ring-1 ring-white/10"
             style={{
-              boxShadow: "0 0 0 1px rgba(255,90,47,0.10), 0 18px 48px rgba(0,0,0,0.65)",
+              boxShadow:
+                "0 0 0 1px rgba(255,90,47,0.10), 0 18px 48px rgba(0,0,0,0.65)",
             }}
           >
             {/* 1 — Scout (center raised) */}
@@ -402,12 +447,17 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
             >
               <span
                 className="flex h-12 w-12 items-center justify-center rounded-full bg-[#120805]/70 ring-2 ring-orange-500 -mt-6"
-                style={{ boxShadow: "0 0 0 4px rgba(255,90,47,0.15), 0 0 24px rgba(255,90,47,0.35)" }}
+                style={{
+                  boxShadow:
+                    "0 0 0 4px rgba(255,90,47,0.15), 0 0 24px rgba(255,90,47,0.35)",
+                }}
                 aria-hidden="true"
               >
                 <Search className="h-5 w-5 text-orange-300" />
               </span>
-              <span className="text-[11px] font-medium text-orange-300">Scout</span>
+              <span className="text-[11px] font-medium text-orange-300">
+                Scout
+              </span>
             </Link>
 
             {/* 2 — Scout-local secondary action, otherwise Dashboard */}
@@ -426,7 +476,9 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
               }`}
             >
               <mobileSecondItem.icon className="h-5 w-5" aria-hidden="true" />
-              <span className="text-[11px] font-medium">{mobileSecondItem.label}</span>
+              <span className="text-[11px] font-medium">
+                {mobileSecondItem.label}
+              </span>
             </Link>
 
             {/* 3 — Scout-local saved action, otherwise user-specific */}
@@ -434,13 +486,19 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
               <Link
                 href={mobileThirdItem.path}
                 aria-label={mobileThirdItem.label}
-                aria-current={isActive(mobileThirdItem.path) ? "page" : undefined}
+                aria-current={
+                  isActive(mobileThirdItem.path) ? "page" : undefined
+                }
                 className={`flex flex-col items-center justify-end gap-0.5 flex-1 min-w-0 h-full pb-2 transition-colors ${
-                  isActive(mobileThirdItem.path) ? "text-orange-300" : "text-white/70 hover:text-white"
+                  isActive(mobileThirdItem.path)
+                    ? "text-orange-300"
+                    : "text-white/70 hover:text-white"
                 }`}
               >
                 <mobileThirdItem.icon className="h-5 w-5" aria-hidden="true" />
-                <span className="text-[11px] font-medium">{mobileThirdItem.label}</span>
+                <span className="text-[11px] font-medium">
+                  {mobileThirdItem.label}
+                </span>
               </Link>
             ) : null}
 
@@ -450,7 +508,9 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
               aria-label="Share"
               aria-current={isActive("/share-hub") ? "page" : undefined}
               className={`flex flex-col items-center justify-end gap-0.5 flex-1 min-w-0 h-full pb-2 transition-colors ${
-                isActive("/share-hub") ? "text-orange-300" : "text-white/70 hover:text-white"
+                isActive("/share-hub")
+                  ? "text-orange-300"
+                  : "text-white/70 hover:text-white"
               }`}
             >
               <Share2 className="h-5 w-5" aria-hidden="true" />
@@ -515,14 +575,18 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
                         active
                           ? "bg-primary/20 ring-1 ring-primary/40"
                           : item.isBug
-                          ? "bg-primary/10"
-                          : "bg-white/5"
+                            ? "bg-primary/10"
+                            : "bg-white/5"
                       }`}
                       aria-hidden="true"
                     >
                       <item.icon
                         className={`h-5 w-5 ${
-                          active ? "text-orange-300" : item.isBug ? "text-primary animate-pulse" : "text-white/70"
+                          active
+                            ? "text-orange-300"
+                            : item.isBug
+                              ? "text-primary animate-pulse"
+                              : "text-white/70"
                         }`}
                       />
                     </span>
@@ -551,7 +615,10 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
                   <button
                     key={item.label}
                     type="button"
-                    onClick={() => { item.onClick?.(); setMoreOpen(false); }}
+                    onClick={() => {
+                      item.onClick?.();
+                      setMoreOpen(false);
+                    }}
                     disabled={isReporting}
                     aria-label={item.label}
                     className="flex flex-col items-center justify-start pt-3 px-1 rounded-2xl hover:bg-white/5 transition-colors disabled:opacity-60"

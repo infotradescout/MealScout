@@ -35,7 +35,9 @@ interface CreatedAccount {
 }
 
 const isAdminFamilyUserType = (userType?: string | null) =>
-  userType === "admin" || userType === "duper_admin" || userType === "super_admin";
+  userType === "admin" ||
+  userType === "duper_admin" ||
+  userType === "super_admin";
 
 const isInternalTeamUserType = (userType?: string | null) =>
   userType === "staff" || isAdminFamilyUserType(userType);
@@ -212,10 +214,7 @@ export default function StaffDashboard() {
     );
   }
 
-  if (
-    !staffCheck ||
-    !isInternalTeamUserType(user?.userType)
-  ) {
+  if (!staffCheck || !isInternalTeamUserType(user?.userType)) {
     return (
       <div className="max-w-md mx-auto mt-20 p-6 text-center">
         <AlertCircle className="w-16 h-16 text-[color:var(--status-error)] mx-auto mb-4" />

@@ -12,7 +12,12 @@ export async function ensurePremiumTrialForUser(user: User): Promise<User> {
   }
 
   // Never grant trials to staff/admin accounts.
-  const ineligibleTypes = new Set(["staff", "admin", "duper_admin", "super_admin"]);
+  const ineligibleTypes = new Set([
+    "staff",
+    "admin",
+    "duper_admin",
+    "super_admin",
+  ]);
   if (ineligibleTypes.has(String(user.userType || ""))) {
     return user;
   }
@@ -39,19 +44,19 @@ export async function ensurePremiumTrialForUser(user: User): Promise<User> {
   const hasSameWindow =
     user.trialStartedAt &&
     user.trialEndsAt &&
-    Math.abs(new Date(user.trialStartedAt).getTime() - startedAt.getTime()) < 1_000 &&
+    Math.abs(new Date(user.trialStartedAt).getTime() - startedAt.getTime()) <
+      1_000 &&
     Math.abs(new Date(user.trialEndsAt).getTime() - endsAt.getTime()) < 1_000;
 
   if (hasSameWindow) {
     return user;
   }
   const trialStillActive = endsAt.getTime() > Date.now();
-  const nextInterval =
-    trialStillActive
-      ? "trial"
-      : user.subscriptionBillingInterval === "trial"
-        ? null
-        : user.subscriptionBillingInterval;
+  const nextInterval = trialStillActive
+    ? "trial"
+    : user.subscriptionBillingInterval === "trial"
+      ? null
+      : user.subscriptionBillingInterval;
 
   const updated = await storage.updateUser(user.id, {
     trialStartedAt: startedAt,

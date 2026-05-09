@@ -7,7 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { RestaurantTrustPanel } from "@/components/RestaurantTrustPanel";
-import { FlagRecommendationDialog, FlagProfileContentDialog } from "@/components/moderation/FlagDialogs";
+import {
+  FlagRecommendationDialog,
+  FlagProfileContentDialog,
+} from "@/components/moderation/FlagDialogs";
 import { BackHeader } from "@/components/back-header";
 import {
   MapPin,
@@ -121,7 +124,9 @@ export default function RestaurantDetailPage() {
     queryKey: ["/api/public/canonical", "restaurant", restaurantId],
     enabled: !!restaurantId,
     queryFn: async () => {
-      const res = await fetch(`/api/public/canonical/restaurant/${restaurantId}`);
+      const res = await fetch(
+        `/api/public/canonical/restaurant/${restaurantId}`,
+      );
       if (!res.ok) {
         throw new Error("Failed to load canonical restaurant data");
       }
@@ -133,7 +138,9 @@ export default function RestaurantDetailPage() {
     queryKey: ["/api/public/evidence", "restaurant", restaurantId],
     enabled: !!restaurantId,
     queryFn: async () => {
-      const res = await fetch(`/api/public/evidence/restaurant/${restaurantId}`);
+      const res = await fetch(
+        `/api/public/evidence/restaurant/${restaurantId}`,
+      );
       if (!res.ok) {
         throw new Error("Failed to load restaurant evidence");
       }
@@ -186,7 +193,8 @@ export default function RestaurantDetailPage() {
             .join(", "),
           type: "manual" as const,
           isPublic: true,
-          lastConfirmedAt: item.manual.lastConfirmedAt || item.createdAt || null,
+          lastConfirmedAt:
+            item.manual.lastConfirmedAt || item.createdAt || null,
         };
       }
 
@@ -275,9 +283,13 @@ export default function RestaurantDetailPage() {
       return;
     }
     try {
-      await apiRequest("POST", `/api/recommendations/${recommendationId}/reaction`, {
-        reaction: current === next ? "clear" : next,
-      });
+      await apiRequest(
+        "POST",
+        `/api/recommendations/${recommendationId}/reaction`,
+        {
+          reaction: current === next ? "clear" : next,
+        },
+      );
       await refetchRecommendations();
     } catch (error: any) {
       toast({
@@ -306,7 +318,11 @@ export default function RestaurantDetailPage() {
         await navigator.clipboard.writeText(`${shareText} ${shareUrl}`);
       }
 
-      await apiRequest("POST", `/api/recommendations/${recommendationId}/share`, {});
+      await apiRequest(
+        "POST",
+        `/api/recommendations/${recommendationId}/share`,
+        {},
+      );
       await refetchRecommendations();
     } catch {
       // Ignore user-cancelled share actions.
@@ -335,10 +351,16 @@ export default function RestaurantDetailPage() {
           <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mx-auto mb-6">
             <Store className="w-8 h-8 text-white/30" />
           </div>
-          <h2 className="text-2xl font-serif font-bold text-white mb-3">Not Found</h2>
-          <p className="text-white/50 text-sm mb-8">This spot doesn't exist or may have moved.</p>
+          <h2 className="text-2xl font-serif font-bold text-white mb-3">
+            Not Found
+          </h2>
+          <p className="text-white/50 text-sm mb-8">
+            This spot doesn't exist or may have moved.
+          </p>
           <Link href="/">
-            <Button className="bg-primary text-black font-bold uppercase tracking-widest text-[10px] rounded-xl px-8 py-6">Back to Scout</Button>
+            <Button className="bg-primary text-black font-bold uppercase tracking-widest text-[10px] rounded-xl px-8 py-6">
+              Back to Scout
+            </Button>
           </Link>
         </div>
         <Navigation />
@@ -401,7 +423,8 @@ export default function RestaurantDetailPage() {
     "@type": "WebPage",
     name: `${restaurantName} source of truth`,
     url: `https://www.mealscout.us${profilePath}`,
-    dateModified: canonical?.updatedAt || (restaurant as any)?.updatedAt || undefined,
+    dateModified:
+      canonical?.updatedAt || (restaurant as any)?.updatedAt || undefined,
     about: {
       "@type": isFoodTruck ? "FoodTruck" : "Restaurant",
       name: restaurantName,
@@ -438,16 +461,26 @@ export default function RestaurantDetailPage() {
         <div className="absolute bottom-6 left-6 right-6">
           <div className="flex items-center gap-2 mb-2">
             {(restaurant as any)?.cuisineType && (
-              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary">{(restaurant as any).cuisineType}</span>
+              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary">
+                {(restaurant as any).cuisineType}
+              </span>
             )}
             {isFoodTruck && (
-              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/40">· Food Truck</span>
+              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/40">
+                · Food Truck
+              </span>
             )}
           </div>
-          <h1 className="text-3xl font-serif font-bold text-white leading-tight" data-testid="text-restaurant-name">
+          <h1
+            className="text-3xl font-serif font-bold text-white leading-tight"
+            data-testid="text-restaurant-name"
+          >
             {(restaurant as any)?.name}
             {(restaurant as any)?.isVerified && (
-              <CheckCircle className="inline w-5 h-5 text-primary ml-2 align-middle" data-testid="icon-verified-restaurant" />
+              <CheckCircle
+                className="inline w-5 h-5 text-primary ml-2 align-middle"
+                data-testid="icon-verified-restaurant"
+              />
             )}
           </h1>
         </div>
@@ -461,19 +494,34 @@ export default function RestaurantDetailPage() {
             {currentRating > 0 && (
               <div className="flex items-center gap-1.5">
                 <Star className="w-4 h-4 fill-primary text-primary" />
-                <span className="text-sm font-bold text-white" data-testid="text-rating">{currentRating.toFixed(1)}</span>
-                <span className="text-xs text-white/40" data-testid="text-review-count">({reviewCount})</span>
+                <span
+                  className="text-sm font-bold text-white"
+                  data-testid="text-rating"
+                >
+                  {currentRating.toFixed(1)}
+                </span>
+                <span
+                  className="text-xs text-white/40"
+                  data-testid="text-review-count"
+                >
+                  ({reviewCount})
+                </span>
               </div>
             )}
             <div className="flex items-center gap-1.5 text-xs text-emerald-400">
               <Clock className="w-3.5 h-3.5" />
-              <span className="font-semibold uppercase tracking-wider">Open now</span>
+              <span className="font-semibold uppercase tracking-wider">
+                Open now
+              </span>
             </div>
             <div className="ml-auto">
               <ShareButton
                 url={profilePath}
                 title={`Check out ${(restaurant as any)?.name || "this spot"} on MealScout`}
-                description={(restaurant as any)?.description || "Discover this location on MealScout."}
+                description={
+                  (restaurant as any)?.description ||
+                  "Discover this location on MealScout."
+                }
                 size="sm"
                 variant="outline"
               />
@@ -484,7 +532,12 @@ export default function RestaurantDetailPage() {
           {(restaurant as any)?.address && (
             <div className="flex items-start gap-3 mb-3">
               <MapPin className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
-              <p className="text-sm text-white/70 font-medium" data-testid="text-restaurant-address">{(restaurant as any)?.address}</p>
+              <p
+                className="text-sm text-white/70 font-medium"
+                data-testid="text-restaurant-address"
+              >
+                {(restaurant as any)?.address}
+              </p>
             </div>
           )}
 
@@ -492,7 +545,12 @@ export default function RestaurantDetailPage() {
           {(restaurant as any)?.phone && (
             <div className="flex items-center gap-3 mb-6">
               <Phone className="w-4 h-4 text-primary flex-shrink-0" />
-              <p className="text-sm text-white/70 font-medium" data-testid="text-restaurant-phone">{(restaurant as any)?.phone}</p>
+              <p
+                className="text-sm text-white/70 font-medium"
+                data-testid="text-restaurant-phone"
+              >
+                {(restaurant as any)?.phone}
+              </p>
             </div>
           )}
 
@@ -509,7 +567,9 @@ export default function RestaurantDetailPage() {
                     </h2>
                   </div>
                   <div className="flex flex-wrap gap-2 justify-end">
-                    <Badge variant="outline">{canonical.machineReadiness}</Badge>
+                    <Badge variant="outline">
+                      {canonical.machineReadiness}
+                    </Badge>
                     <Badge variant="secondary">{canonical.freshness}</Badge>
                     {canonical.verified ? (
                       <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">
@@ -545,7 +605,9 @@ export default function RestaurantDetailPage() {
                   <div>
                     Live location{" "}
                     <span className="text-foreground font-medium">
-                      {canonical.evidenceSummary?.liveLocationActive ? "Yes" : "No"}
+                      {canonical.evidenceSummary?.liveLocationActive
+                        ? "Yes"
+                        : "No"}
                     </span>
                   </div>
                 </div>
@@ -553,11 +615,13 @@ export default function RestaurantDetailPage() {
                 {Array.isArray(canonical.sourceTruthStatements) &&
                 canonical.sourceTruthStatements.length > 0 ? (
                   <div className="space-y-1">
-                    {canonical.sourceTruthStatements.slice(0, 4).map((item: string) => (
-                      <p key={item} className="text-sm text-foreground">
-                        {item}
-                      </p>
-                    ))}
+                    {canonical.sourceTruthStatements
+                      .slice(0, 4)
+                      .map((item: string) => (
+                        <p key={item} className="text-sm text-foreground">
+                          {item}
+                        </p>
+                      ))}
                   </div>
                 ) : null}
 
@@ -565,7 +629,11 @@ export default function RestaurantDetailPage() {
                 canonical.knowledgeGaps.length > 0 ? (
                   <div className="flex flex-wrap gap-2">
                     {canonical.knowledgeGaps.slice(0, 4).map((gap: string) => (
-                      <Badge key={gap} variant="outline" className="text-[11px]">
+                      <Badge
+                        key={gap}
+                        variant="outline"
+                        className="text-[11px]"
+                      >
                         gap: {gap.replace(/_/g, " ")}
                       </Badge>
                     ))}
@@ -588,7 +656,9 @@ export default function RestaurantDetailPage() {
                     </h2>
                   </div>
                   <Badge variant="outline">
-                    {evidence.windowHours ? `${Math.round(evidence.windowHours / 24)}d window` : "window"}
+                    {evidence.windowHours
+                      ? `${Math.round(evidence.windowHours / 24)}d window`
+                      : "window"}
                   </Badge>
                 </div>
 
@@ -635,7 +705,11 @@ export default function RestaurantDetailPage() {
                 evidence.externalPressure.topBots.length > 0 ? (
                   <div className="flex flex-wrap gap-2">
                     {evidence.externalPressure.topBots.map((bot: any) => (
-                      <Badge key={bot.label} variant="secondary" className="text-[11px]">
+                      <Badge
+                        key={bot.label}
+                        variant="secondary"
+                        className="text-[11px]"
+                      >
                         {bot.label}: {bot.count}
                       </Badge>
                     ))}
@@ -645,11 +719,16 @@ export default function RestaurantDetailPage() {
                 {Array.isArray(evidence.demand?.topQueries) &&
                 evidence.demand.topQueries.length > 0 ? (
                   <div className="space-y-1">
-                    {evidence.demand.topQueries.slice(0, 3).map((query: any) => (
-                      <p key={query.query} className="text-sm text-foreground">
-                        demand: {query.query} ({query.count})
-                      </p>
-                    ))}
+                    {evidence.demand.topQueries
+                      .slice(0, 3)
+                      .map((query: any) => (
+                        <p
+                          key={query.query}
+                          className="text-sm text-foreground"
+                        >
+                          demand: {query.query} ({query.count})
+                        </p>
+                      ))}
                   </div>
                 ) : null}
               </CardContent>
@@ -806,10 +885,14 @@ export default function RestaurantDetailPage() {
         {isFoodTruck && (
           <div className="mb-10">
             <div className="flex items-center gap-2 mb-5">
-              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary">Parking Schedule</span>
+              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary">
+                Parking Schedule
+              </span>
             </div>
             {scheduleLoading ? (
-              <div className="bg-white/5 border border-white/10 rounded-3xl p-6 text-center text-white/40 text-sm">Loading schedule...</div>
+              <div className="bg-white/5 border border-white/10 rounded-3xl p-6 text-center text-white/40 text-sm">
+                Loading schedule...
+              </div>
             ) : parkingScheduleItems.length > 0 ? (
               <ParkingScheduleCalendar
                 items={parkingScheduleItems}
@@ -817,7 +900,9 @@ export default function RestaurantDetailPage() {
               />
             ) : (
               <div className="bg-white/5 border border-white/10 rounded-3xl p-8 text-center">
-                <p className="text-white/40 text-sm">No upcoming stops scheduled yet.</p>
+                <p className="text-white/40 text-sm">
+                  No upcoming stops scheduled yet.
+                </p>
               </div>
             )}
           </div>
@@ -826,7 +911,9 @@ export default function RestaurantDetailPage() {
         {/* Current Specials */}
         <div className="mb-10" id="restaurant-specials">
           <div className="flex items-center gap-2 mb-5">
-            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary">Tonight's Specials</span>
+            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary">
+              Tonight's Specials
+            </span>
           </div>
           {restaurantDeals.length > 0 ? (
             <div className="space-y-4">
@@ -836,7 +923,9 @@ export default function RestaurantDetailPage() {
             </div>
           ) : (
             <div className="bg-white/5 border border-white/10 rounded-3xl p-8 text-center">
-              <p className="text-white/40 text-sm">No specials right now — check back soon.</p>
+              <p className="text-white/40 text-sm">
+                No specials right now — check back soon.
+              </p>
             </div>
           )}
         </div>
@@ -844,7 +933,9 @@ export default function RestaurantDetailPage() {
         {/* Reviews */}
         <div className="mb-10">
           <div className="flex items-center justify-between mb-5">
-            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary">Community Reviews</span>
+            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary">
+              Community Reviews
+            </span>
             <Button
               className="bg-white/5 border border-white/10 text-white font-bold uppercase tracking-widest text-[10px] rounded-xl px-4 py-2 hover:bg-white/10 transition-all"
               size="sm"
@@ -857,17 +948,25 @@ export default function RestaurantDetailPage() {
           {Array.isArray(reviews) && reviews.length > 0 ? (
             <div className="space-y-3">
               {reviews.slice(0, 3).map((review: any) => (
-                <div key={review.id} className="bg-white/5 border border-white/10 rounded-2xl p-5">
+                <div
+                  key={review.id}
+                  className="bg-white/5 border border-white/10 rounded-2xl p-5"
+                >
                   <div className="flex items-start gap-3">
                     <div className="w-9 h-9 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
                       <span className="text-sm font-bold text-primary">U</span>
                     </div>
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-2">
-                        <span className="text-sm font-bold text-white">Community Member</span>
+                        <span className="text-sm font-bold text-white">
+                          Community Member
+                        </span>
                         <div className="flex gap-0.5">
                           {[1, 2, 3, 4, 5].map((star) => (
-                            <Star key={star} className={`w-3 h-3 ${star <= (review.rating || 0) ? "fill-primary text-primary" : "text-white/20"}`} />
+                            <Star
+                              key={star}
+                              className={`w-3 h-3 ${star <= (review.rating || 0) ? "fill-primary text-primary" : "text-white/20"}`}
+                            />
                           ))}
                         </div>
                       </div>
@@ -880,7 +979,9 @@ export default function RestaurantDetailPage() {
           ) : (
             <div className="bg-white/5 border border-white/10 rounded-3xl p-8 text-center">
               <Star className="w-8 h-8 text-white/20 mx-auto mb-3" />
-              <p className="text-white/40 text-sm">No reviews yet — be the first to stop by and share.</p>
+              <p className="text-white/40 text-sm">
+                No reviews yet — be the first to stop by and share.
+              </p>
             </div>
           )}
         </div>
@@ -899,9 +1000,7 @@ export default function RestaurantDetailPage() {
               Community Recommendations
             </span>
             <div className="flex items-center gap-2">
-              <Badge variant="outline">
-                {recommendationRows.length} total
-              </Badge>
+              <Badge variant="outline">{recommendationRows.length} total</Badge>
               {restaurantId && (
                 <FlagProfileContentDialog restaurantId={restaurantId} />
               )}
@@ -930,7 +1029,9 @@ export default function RestaurantDetailPage() {
                         <Button
                           size="sm"
                           variant={
-                            rec.viewerReaction === "like" ? "default" : "outline"
+                            rec.viewerReaction === "like"
+                              ? "default"
+                              : "outline"
                           }
                           className="h-8 px-2"
                           onClick={() =>
@@ -981,7 +1082,9 @@ export default function RestaurantDetailPage() {
             </div>
           ) : (
             <div className="bg-white/5 border border-white/10 rounded-3xl p-8 text-center">
-              <p className="text-white/40 text-sm">No recommendations yet. Stop by and be the first.</p>
+              <p className="text-white/40 text-sm">
+                No recommendations yet. Stop by and be the first.
+              </p>
             </div>
           )}
         </div>

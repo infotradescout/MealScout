@@ -26,7 +26,10 @@ import {
 import { db } from "./db";
 import { users } from "@shared/schema";
 import { eq } from "drizzle-orm";
-import { ensureAffiliateTag, resolveAffiliateUserId } from "./affiliateTagService";
+import {
+  ensureAffiliateTag,
+  resolveAffiliateUserId,
+} from "./affiliateTagService";
 import {
   isAdminUserType,
   isDuperAdminUserType,
@@ -294,10 +297,7 @@ export async function setupUnifiedAuth(app: Express) {
           );
       }
     } catch (error) {
-      console.error(
-        `Failed to prepare ${welcomeLabel} welcome email:`,
-        error,
-      );
+      console.error(`Failed to prepare ${welcomeLabel} welcome email:`, error);
     }
   };
 
@@ -321,8 +321,7 @@ export async function setupUnifiedAuth(app: Express) {
   };
 
   // Ensure configured super admin email is upgraded
-  const superAdminEmail =
-    process.env.ADMIN_EMAIL || "info.mealscout@gmail.com";
+  const superAdminEmail = process.env.ADMIN_EMAIL || "info.mealscout@gmail.com";
   if (superAdminEmail) {
     try {
       const existing = await storage.getUserByEmail(superAdminEmail);
@@ -330,10 +329,7 @@ export async function setupUnifiedAuth(app: Express) {
         await storage.updateUserType(existing.id, "super_admin");
       }
     } catch (err) {
-      console.warn(
-        "⚠️  Failed startup super admin auto-upgrade:",
-        err,
-      );
+      console.warn("⚠️  Failed startup super admin auto-upgrade:", err);
     }
   }
 
@@ -368,18 +364,11 @@ export async function setupUnifiedAuth(app: Express) {
         }
       }
 
-      if (
-        user &&
-        !user.emailVerified &&
-        isAdminUserType(user.userType)
-      ) {
+      if (user && !user.emailVerified && isAdminUserType(user.userType)) {
         try {
           user = await storage.updateUser(user.id, { emailVerified: true });
         } catch (err) {
-          console.warn(
-            "⚠️  Failed to auto-verify admin account email:",
-            err,
-          );
+          console.warn("⚠️  Failed to auto-verify admin account email:", err);
         }
       }
 
@@ -696,7 +685,9 @@ export async function setupUnifiedAuth(app: Express) {
           console.log(
             "✅ Google restaurant OAuth success, session saved, redirecting...",
           );
-          res.redirect(`${redirectBase}/restaurant-signup?auth=success&t=${Date.now()}`);
+          res.redirect(
+            `${redirectBase}/restaurant-signup?auth=success&t=${Date.now()}`,
+          );
         });
       },
     );
@@ -1292,7 +1283,11 @@ export async function setupUnifiedAuth(app: Express) {
         passwordHash,
       };
 
-      const user = await storage.upsertUserByAuth("email", userData, "supplier");
+      const user = await storage.upsertUserByAuth(
+        "email",
+        userData,
+        "supplier",
+      );
       kickAffiliateTag(user);
       await applyAffiliateReferral(req, user);
 
@@ -1313,7 +1308,8 @@ export async function setupUnifiedAuth(app: Express) {
 
       // Require email verification before first login/session.
       res.status(201).json({
-        message: "Supplier account created. Please verify your email before logging in.",
+        message:
+          "Supplier account created. Please verify your email before logging in.",
         requiresEmailVerification: true,
       });
     } catch (error) {
@@ -1536,7 +1532,11 @@ export async function setupUnifiedAuth(app: Express) {
         tsUserData,
         userType === "super_admin"
           ? "admin"
-          : (userType as "customer" | "restaurant_owner" | "admin" | "duper_admin"),
+          : (userType as
+              | "customer"
+              | "restaurant_owner"
+              | "admin"
+              | "duper_admin"),
       );
       kickAffiliateTag(user);
       await applyAffiliateReferral(req, user);
@@ -1661,7 +1661,10 @@ export async function setupUnifiedAuth(app: Express) {
       const resetToken = `${tokenId}.${verifier}`;
 
       // Store only a hash of the verifier for lookup (not the full token).
-      const tokenHash = crypto.createHash("sha256").update(verifier).digest("hex");
+      const tokenHash = crypto
+        .createHash("sha256")
+        .update(verifier)
+        .digest("hex");
       const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
 
       // Clean up existing tokens for this user
@@ -1962,9 +1965,10 @@ export async function setupUnifiedAuth(app: Express) {
 
 async function applyAffiliateReferral(req: any, user: User) {
   try {
-    const ref = typeof req.cookies?.referralId === "string"
-      ? req.cookies.referralId.trim()
-      : "";
+    const ref =
+      typeof req.cookies?.referralId === "string"
+        ? req.cookies.referralId.trim()
+        : "";
     if (!ref) return;
     if (user.affiliateCloserUserId) return;
     const affiliateUserId = await resolveAffiliateUserId(ref);
@@ -1975,7 +1979,10 @@ async function applyAffiliateReferral(req: any, user: User) {
       .from(users)
       .where(eq(users.id, affiliateUserId))
       .limit(1);
-    const percentSnapshot = Math.max(Number(affiliate?.affiliatePercent ?? 5), 0);
+    const percentSnapshot = Math.max(
+      Number(affiliate?.affiliatePercent ?? 5),
+      0,
+    );
 
     await db
       .update(users)
@@ -2012,7 +2019,10 @@ export const isRestaurantOwner = (req: any, res: any, next: any) => {
     return res.status(401).json({ error: "Authentication required" });
   }
 
-  if (req.user.userType !== "restaurant_owner" && !isAdminUserType(req.user.userType)) {
+  if (
+    req.user.userType !== "restaurant_owner" &&
+    !isAdminUserType(req.user.userType)
+  ) {
     return res.status(403).json({ error: "Restaurant owner access required" });
   }
 
@@ -2079,7 +2089,12 @@ export const isAdmin = requireRole(["admin", "duper_admin", "super_admin"]);
 export const isSuperAdmin = requireRole(["super_admin"]);
 
 // Convenience middleware for staff or admin
-export const isStaffOrAdmin = requireRole(["staff", "admin", "duper_admin", "super_admin"]);
+export const isStaffOrAdmin = requireRole([
+  "staff",
+  "admin",
+  "duper_admin",
+  "super_admin",
+]);
 
 // Convenience middleware for restaurant owner or admin
 export const isRestaurantOwnerOrAdmin = requireRole([
@@ -2089,7 +2104,12 @@ export const isRestaurantOwnerOrAdmin = requireRole([
   "super_admin",
 ]);
 
-export const isSupplierOrAdmin = requireRole(["supplier", "admin", "duper_admin", "super_admin"]);
+export const isSupplierOrAdmin = requireRole([
+  "supplier",
+  "admin",
+  "duper_admin",
+  "super_admin",
+]);
 
 // API Key authentication middleware
 export const apiKeyAuth = async (req: any, res: any, next: any) => {

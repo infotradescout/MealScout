@@ -106,11 +106,10 @@ export function registerModerationRoutes(app: Express) {
           new Date().getTime() - recentFlag.flaggedAt.getTime() <
             24 * 60 * 60 * 1000
         ) {
-          return res
-            .status(429)
-            .json({
-              error: "You already flagged this recommendation in the last 24 hours",
-            });
+          return res.status(429).json({
+            error:
+              "You already flagged this recommendation in the last 24 hours",
+          });
         }
 
         const result = await moderationService.flagRecommendation(
@@ -127,11 +126,9 @@ export function registerModerationRoutes(app: Express) {
           message: "Recommendation flagged for review",
         });
       } catch (error: any) {
-        res
-          .status(error.status || 400)
-          .json({
-            error: error.message,
-          });
+        res.status(error.status || 400).json({
+          error: error.message,
+        });
       }
     },
   );
@@ -165,11 +162,9 @@ export function registerModerationRoutes(app: Express) {
           message: "Profile content flagged for review",
         });
       } catch (error: any) {
-        res
-          .status(error.status || 400)
-          .json({
-            error: error.message,
-          });
+        res.status(error.status || 400).json({
+          error: error.message,
+        });
       }
     },
   );
@@ -187,11 +182,9 @@ export function registerModerationRoutes(app: Express) {
         const flags = await moderationService.getUserFlags(userId);
         res.json(flags);
       } catch (error: any) {
-        res
-          .status(500)
-          .json({
-            error: error.message,
-          });
+        res.status(500).json({
+          error: error.message,
+        });
       }
     },
   );
@@ -206,16 +199,13 @@ export function registerModerationRoutes(app: Express) {
         if (!userId) {
           return res.status(401).json({ error: "Unauthorized" });
         }
-        const reputation = await moderationService.getReporterReputation(
-          userId,
-        );
+        const reputation =
+          await moderationService.getReporterReputation(userId);
         res.json(reputation);
       } catch (error: any) {
-        res
-          .status(500)
-          .json({
-            error: error.message,
-          });
+        res.status(500).json({
+          error: error.message,
+        });
       }
     },
   );
@@ -245,11 +235,9 @@ export function registerModerationRoutes(app: Express) {
           message: "Appeal submitted for review",
         });
       } catch (error: any) {
-        res
-          .status(error.status || 400)
-          .json({
-            error: error.message,
-          });
+        res.status(error.status || 400).json({
+          error: error.message,
+        });
       }
     },
   );
@@ -280,11 +268,9 @@ export function registerModerationRoutes(app: Express) {
         );
         res.json(queue);
       } catch (error: any) {
-        res
-          .status(500)
-          .json({
-            error: error.message,
-          });
+        res.status(500).json({
+          error: error.message,
+        });
       }
     },
   );
@@ -313,11 +299,9 @@ export function registerModerationRoutes(app: Express) {
 
         res.json(caseDetails);
       } catch (error: any) {
-        res
-          .status(500)
-          .json({
-            error: error.message,
-          });
+        res.status(500).json({
+          error: error.message,
+        });
       }
     },
   );
@@ -344,11 +328,9 @@ export function registerModerationRoutes(app: Express) {
         await moderationService.assignCase(caseId, moderatorId);
         res.json({ message: "Case assigned to moderator" });
       } catch (error: any) {
-        res
-          .status(500)
-          .json({
-            error: error.message,
-          });
+        res.status(500).json({
+          error: error.message,
+        });
       }
     },
   );
@@ -387,11 +369,9 @@ export function registerModerationRoutes(app: Express) {
 
         res.json({ message: "Case resolved" });
       } catch (error: any) {
-        res
-          .status(error.status || 400)
-          .json({
-            error: error.message,
-          });
+        res.status(error.status || 400).json({
+          error: error.message,
+        });
       }
     },
   );

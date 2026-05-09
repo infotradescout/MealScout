@@ -250,7 +250,9 @@ export default function AdminGeoAds() {
       minDailyFootTraffic: ad.minDailyFootTraffic ?? "",
       maxDailyFootTraffic: ad.maxDailyFootTraffic ?? "",
       priority: ad.priority ?? 0,
-      startAt: ad.startAt ? new Date(ad.startAt).toISOString().slice(0, 16) : "",
+      startAt: ad.startAt
+        ? new Date(ad.startAt).toISOString().slice(0, 16)
+        : "",
       endAt: ad.endAt ? new Date(ad.endAt).toISOString().slice(0, 16) : "",
     });
   };
@@ -355,7 +357,10 @@ export default function AdminGeoAds() {
                   <Input
                     value={form.targetUrl}
                     onChange={(e) =>
-                      setForm((prev) => ({ ...prev, targetUrl: e.target.value }))
+                      setForm((prev) => ({
+                        ...prev,
+                        targetUrl: e.target.value,
+                      }))
                     }
                     placeholder="https://mealscout.us/deals"
                   />
@@ -426,7 +431,9 @@ export default function AdminGeoAds() {
                             }
                             return {
                               ...prev,
-                              placements: Array.from(next) as GeoAdForm["placements"],
+                              placements: Array.from(
+                                next,
+                              ) as GeoAdForm["placements"],
                             };
                           });
                         }}
@@ -565,7 +572,10 @@ export default function AdminGeoAds() {
               </div>
 
               <div className="flex flex-wrap gap-3">
-                <Button onClick={handleSubmit} disabled={createAd.isPending || updateAd.isPending}>
+                <Button
+                  onClick={handleSubmit}
+                  disabled={createAd.isPending || updateAd.isPending}
+                >
                   {(createAd.isPending || updateAd.isPending) && (
                     <Loader2 className="w-4 h-4 animate-spin" />
                   )}
@@ -599,7 +609,9 @@ export default function AdminGeoAds() {
             <Card>
               <CardHeader>
                 <CardTitle>Active Metrics</CardTitle>
-                <CardDescription>Latest metrics for the selected ad.</CardDescription>
+                <CardDescription>
+                  Latest metrics for the selected ad.
+                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
                 {editingId ? (
@@ -619,11 +631,15 @@ export default function AdminGeoAds() {
                     <div className="p-3 rounded-lg border">
                       <div className="text-muted-foreground">CTR</div>
                       <div className="text-xl font-semibold">
-                        {metrics?.ctr ? `${(metrics.ctr * 100).toFixed(1)}%` : "0%"}
+                        {metrics?.ctr
+                          ? `${(metrics.ctr * 100).toFixed(1)}%`
+                          : "0%"}
                       </div>
                     </div>
                     <div className="p-3 rounded-lg border">
-                      <div className="text-muted-foreground">Foot Traffic (24h)</div>
+                      <div className="text-muted-foreground">
+                        Foot Traffic (24h)
+                      </div>
                       <div className="text-xl font-semibold">
                         {metrics?.footTraffic24h ?? 0}
                       </div>
@@ -640,9 +656,7 @@ export default function AdminGeoAds() {
             <Card>
               <CardHeader>
                 <CardTitle>Campaigns</CardTitle>
-                <CardDescription>
-                  {ads.length} total campaigns
-                </CardDescription>
+                <CardDescription>{ads.length} total campaigns</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
                 {isLoading ? (
@@ -691,6 +705,3 @@ export default function AdminGeoAds() {
     </div>
   );
 }
-
-
-

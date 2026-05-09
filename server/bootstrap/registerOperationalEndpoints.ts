@@ -61,7 +61,12 @@ export function registerOperationalEndpoints(app: Express): void {
         });
       } catch (error: any) {
         console.error("Manual parking pass reminder trigger failed:", error);
-        res.status(500).json({ ok: false, message: error?.message || "Failed to trigger reminders" });
+        res
+          .status(500)
+          .json({
+            ok: false,
+            message: error?.message || "Failed to trigger reminders",
+          });
       }
     },
   );
@@ -72,7 +77,9 @@ export function registerOperationalEndpoints(app: Express): void {
     isAdmin,
     async (req: any, res) => {
       try {
-        const result = await sendParkingPassReminderForHost(String(req.params.hostId || ""));
+        const result = await sendParkingPassReminderForHost(
+          String(req.params.hostId || ""),
+        );
         if (!result.ok) return res.status(400).json(result);
         res.json({
           ...result,
@@ -81,7 +88,12 @@ export function registerOperationalEndpoints(app: Express): void {
         });
       } catch (error: any) {
         console.error("Manual host parking pass reminder failed:", error);
-        res.status(500).json({ ok: false, message: error?.message || "Failed to send host reminder" });
+        res
+          .status(500)
+          .json({
+            ok: false,
+            message: error?.message || "Failed to send host reminder",
+          });
       }
     },
   );
@@ -96,7 +108,12 @@ export function registerOperationalEndpoints(app: Express): void {
         res.json({ ok: true, ...queue });
       } catch (error: any) {
         console.error("Failed to load parking pass onboarding queue:", error);
-        res.status(500).json({ ok: false, message: error?.message || "Failed to load onboarding queue" });
+        res
+          .status(500)
+          .json({
+            ok: false,
+            message: error?.message || "Failed to load onboarding queue",
+          });
       }
     },
   );
@@ -111,7 +128,12 @@ export function registerOperationalEndpoints(app: Express): void {
         res.json({ ok: true, ...audit });
       } catch (error: any) {
         console.error("Failed to load parking pass pricing audit:", error);
-        res.status(500).json({ ok: false, message: error?.message || "Failed to load pricing audit" });
+        res
+          .status(500)
+          .json({
+            ok: false,
+            message: error?.message || "Failed to load pricing audit",
+          });
       }
     },
   );
@@ -126,7 +148,12 @@ export function registerOperationalEndpoints(app: Express): void {
         res.json({ ok: true, ...result });
       } catch (error: any) {
         console.error("Failed to repair parking pass pricing drift:", error);
-        res.status(500).json({ ok: false, message: error?.message || "Failed to repair pricing drift" });
+        res
+          .status(500)
+          .json({
+            ok: false,
+            message: error?.message || "Failed to repair pricing drift",
+          });
       }
     },
   );
@@ -142,8 +169,17 @@ export function registerOperationalEndpoints(app: Express): void {
         const stats = await runLocationDemandActivationCron();
         res.json({ ok: true, stats });
       } catch (error: any) {
-        console.error("Manual location demand activation trigger failed:", error);
-        res.status(500).json({ ok: false, message: error?.message || "Failed to trigger location demand activation" });
+        console.error(
+          "Manual location demand activation trigger failed:",
+          error,
+        );
+        res
+          .status(500)
+          .json({
+            ok: false,
+            message:
+              error?.message || "Failed to trigger location demand activation",
+          });
       }
     },
   );
@@ -158,7 +194,13 @@ export function registerOperationalEndpoints(app: Express): void {
         res.json({ ok: true, ...kpis });
       } catch (error: any) {
         console.error("Failed to load location demand funnel KPIs:", error);
-        res.status(500).json({ ok: false, message: error?.message || "Failed to load location demand funnel KPIs" });
+        res
+          .status(500)
+          .json({
+            ok: false,
+            message:
+              error?.message || "Failed to load location demand funnel KPIs",
+          });
       }
     },
   );
@@ -176,7 +218,12 @@ export function registerOperationalEndpoints(app: Express): void {
         res.json({ ok: true, ...snapRest });
       } catch (error: any) {
         console.error("Failed to get map watchdog snapshot:", error);
-        res.status(500).json({ ok: false, message: error?.message || "Failed to get snapshot" });
+        res
+          .status(500)
+          .json({
+            ok: false,
+            message: error?.message || "Failed to get snapshot",
+          });
       }
     },
   );
@@ -192,7 +239,12 @@ export function registerOperationalEndpoints(app: Express): void {
         res.json({ ok: true, ...resultRest });
       } catch (error: any) {
         console.error("Failed to run map watchdog:", error);
-        res.status(500).json({ ok: false, message: error?.message || "Failed to run map watchdog" });
+        res
+          .status(500)
+          .json({
+            ok: false,
+            message: error?.message || "Failed to run map watchdog",
+          });
       }
     },
   );

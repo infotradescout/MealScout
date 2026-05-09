@@ -72,7 +72,10 @@ const dealSchema = z
       }
       return true;
     },
-    { message: "End date is required for non-ongoing deals", path: ["endDate"] }
+    {
+      message: "End date is required for non-ongoing deals",
+      path: ["endDate"],
+    },
   )
   .refine(
     (data) => {
@@ -88,7 +91,7 @@ const dealSchema = z
     {
       message: "Times are required unless available during business hours",
       path: ["startTime"],
-    }
+    },
   );
 
 type DealFormData = z.infer<typeof dealSchema>;
@@ -143,9 +146,8 @@ export default function DealCreation() {
       Array.isArray(restaurants) && restaurants.length > 0
         ? restaurants[0]
         : null;
-    const existing =
-      (restaurant?.socialAutopostSettings ||
-        {}) as Partial<SocialAutopostSettings>;
+    const existing = (restaurant?.socialAutopostSettings ||
+      {}) as Partial<SocialAutopostSettings>;
     return {
       ...defaultSocialAutopostSettings,
       ...existing,
@@ -187,7 +189,7 @@ export default function DealCreation() {
   console.log("Deal Creation - Subscription Data:", subscription);
   console.log(
     "Deal Creation - Is Subscription Loading:",
-    isSubscriptionLoading
+    isSubscriptionLoading,
   );
 
   // Fetch current deal count for limits
@@ -255,20 +257,20 @@ export default function DealCreation() {
   };
 
   const handleDealShareMessage = (message: string) => {
-    setDealSharePrompt((current) => (current ? { ...current, message } : current));
+    setDealSharePrompt((current) =>
+      current ? { ...current, message } : current,
+    );
   };
 
-  const handleDealSharePost = async (
-    payload?: {
-      message: string;
-      link: string;
-      selectedPlatforms: {
-        facebook: boolean;
-        instagram: boolean;
-        x: boolean;
-      };
-    },
-  ) => {
+  const handleDealSharePost = async (payload?: {
+    message: string;
+    link: string;
+    selectedPlatforms: {
+      facebook: boolean;
+      instagram: boolean;
+      x: boolean;
+    };
+  }) => {
     const activePrompt = payload ?? dealSharePrompt;
     if (!activePrompt) return;
     setIsSharingDeal(true);
@@ -337,7 +339,7 @@ export default function DealCreation() {
     mutationFn: async (data: DealFormData) => {
       if (!Array.isArray(restaurants) || restaurants.length === 0) {
         throw new Error(
-          "No restaurant found. Please register a restaurant first."
+          "No restaurant found. Please register a restaurant first.",
         );
       }
 
@@ -445,7 +447,8 @@ export default function DealCreation() {
     if (!canManageDeals) {
       toast({
         title: "Permission required",
-        description: "Your account does not have permission to publish specials.",
+        description:
+          "Your account does not have permission to publish specials.",
         variant: "destructive",
       });
       return;
@@ -523,7 +526,9 @@ export default function DealCreation() {
               Please log in to create specials
             </p>
             <Button
-              onClick={() => (window.location.href = authUrl("/api/auth/google/restaurant"))}
+              onClick={() =>
+                (window.location.href = authUrl("/api/auth/google/restaurant"))
+              }
               className="w-full"
             >
               Log In
@@ -584,14 +589,14 @@ export default function DealCreation() {
     (Boolean(isAdminOrStaff) ||
       Boolean(
         subscription &&
-          ((subscription as any).status === "active" ||
-            (subscription as any).hasAccess === true),
+        ((subscription as any).status === "active" ||
+          (subscription as any).hasAccess === true),
       ));
 
   if (!isSubscriptionError && subscription && !hasAccess) {
     console.log(
       "Blocking due to subscription status:",
-      (subscription as any).status
+      (subscription as any).status,
     );
     return (
       <div className="max-w-md mx-auto bg-[var(--bg-layered)] min-h-screen flex items-center justify-center px-4">
@@ -833,7 +838,7 @@ export default function DealCreation() {
                     form.setValue("title", "Happy Hour Special");
                     form.setValue(
                       "description",
-                      "Enjoy discounted drinks and appetizers during our happy hour! Perfect for after-work relaxation."
+                      "Enjoy discounted drinks and appetizers during our happy hour! Perfect for after-work relaxation.",
                     );
                     form.setValue("dealType", "percentage");
                     form.setValue("discountValue", "25");
@@ -854,7 +859,7 @@ export default function DealCreation() {
                     form.setValue("title", "Lunch Combo Deal");
                     form.setValue(
                       "description",
-                      "Get a main dish, side, and drink for one great price during lunch hours!"
+                      "Get a main dish, side, and drink for one great price during lunch hours!",
                     );
                     form.setValue("dealType", "fixed");
                     form.setValue("discountValue", "5");
@@ -876,7 +881,7 @@ export default function DealCreation() {
                     form.setValue("title", "Family Night Special");
                     form.setValue(
                       "description",
-                      "Perfect for families! Kids eat free with adult entree purchase on weekends."
+                      "Perfect for families! Kids eat free with adult entree purchase on weekends.",
                     );
                     form.setValue("dealType", "percentage");
                     form.setValue("discountValue", "30");
@@ -1204,7 +1209,7 @@ export default function DealCreation() {
                             type="time"
                             {...field}
                             disabled={form.watch(
-                              "availableDuringBusinessHours"
+                              "availableDuringBusinessHours",
                             )}
                             data-testid="input-start-time"
                           />
@@ -1232,7 +1237,7 @@ export default function DealCreation() {
                             type="time"
                             {...field}
                             disabled={form.watch(
-                              "availableDuringBusinessHours"
+                              "availableDuringBusinessHours",
                             )}
                             data-testid="input-end-time"
                           />
@@ -1316,13 +1321,13 @@ export default function DealCreation() {
                   className="text-muted-foreground text-xs mb-4"
                   data-testid="text-facebook-desc"
                 >
-                  Connect your Facebook page to automatically post specials and tag
-                  @MealScout
+                  Connect your Facebook page to automatically post specials and
+                  tag @MealScout
                 </p>
                 {!canManageBusinessProfile && (
                   <p className="text-xs text-amber-700 mb-3">
-                    Your team role can publish specials, but profile/social links
-                    are view-only without profile access.
+                    Your team role can publish specials, but profile/social
+                    links are view-only without profile access.
                   </p>
                 )}
 
@@ -1427,7 +1432,9 @@ export default function DealCreation() {
                     >
                       <input
                         type="checkbox"
-                        checked={dealSharePrompt.selectedPlatforms[platform.key]}
+                        checked={
+                          dealSharePrompt.selectedPlatforms[platform.key]
+                        }
                         onChange={() => handleDealShareToggle(platform.key)}
                       />
                       {platform.label}
@@ -1467,25 +1474,3 @@ export default function DealCreation() {
     </div>
   );
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

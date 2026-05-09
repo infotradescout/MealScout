@@ -12,13 +12,22 @@ import { eq, and, or, isNull, desc } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { syncUserToBrevo } from "../brevoCrm";
 import { ensureAffiliateTag } from "../affiliateTagService";
-import { isAdminUserType, shouldAssignAffiliateTagForUserType } from "../roleAccess";
+import {
+  isAdminUserType,
+  shouldAssignAffiliateTagForUserType,
+} from "../roleAccess";
 
 // ── Cached table-info (module-level singleton, matches the instance cache in DatabaseStorage) ──
 
-let userTableInfoPromise: Promise<{ schema: string; columns: Set<string> }> | null = null;
+let userTableInfoPromise: Promise<{
+  schema: string;
+  columns: Set<string>;
+}> | null = null;
 
-async function getUserTableInfo(): Promise<{ schema: string; columns: Set<string> }> {
+async function getUserTableInfo(): Promise<{
+  schema: string;
+  columns: Set<string>;
+}> {
   if (userTableInfoPromise) return userTableInfoPromise;
   userTableInfoPromise = (async () => {
     try {
@@ -44,14 +53,20 @@ async function getUserTableInfo(): Promise<{ schema: string; columns: Set<string
       );
       return { schema, columns };
     } catch (error) {
-      console.warn("getUserTableInfo failed; using safe user projection:", error);
+      console.warn(
+        "getUserTableInfo failed; using safe user projection:",
+        error,
+      );
       return { schema: "public", columns: new Set<string>() };
     }
   })();
   return userTableInfoPromise;
 }
 
-async function selectUsersSafe(whereSql: string, params: any[]): Promise<any[]> {
+async function selectUsersSafe(
+  whereSql: string,
+  params: any[],
+): Promise<any[]> {
   if (!pool) return [];
   const { schema, columns } = await getUserTableInfo();
   const has = (col: string) => columns.size === 0 || columns.has(col);
@@ -146,7 +161,9 @@ export function createUsersRepository() {
       const normalizedId = String(id || "").trim();
       if (!normalizedId) return undefined;
       try {
-        const rows = await selectUsersSafe(`where "id" = $1 limit 1`, [normalizedId]);
+        const rows = await selectUsersSafe(`where "id" = $1 limit 1`, [
+          normalizedId,
+        ]);
         const row = (rows[0] as any) || undefined;
         if (!row) return undefined;
         if (row.isDisabled === true) return undefined;
@@ -156,7 +173,12 @@ export function createUsersRepository() {
         const [user] = await db
           .select()
           .from(users)
-          .where(and(eq(users.id, normalizedId), or(eq(users.isDisabled, false), isNull(users.isDisabled))));
+          .where(
+            and(
+              eq(users.id, normalizedId),
+              or(eq(users.isDisabled, false), isNull(users.isDisabled)),
+            ),
+          );
         return user;
       }
     },
@@ -165,7 +187,10 @@ export function createUsersRepository() {
       const [user] = await db
         .insert(users)
         .values(userData)
-        .onConflictDoUpdate({ target: users.facebookId, set: { ...userData, updatedAt: new Date() } })
+        .onConflictDoUpdate({
+          target: users.facebookId,
+          set: { ...userData, updatedAt: new Date() },
+        })
         .returning();
       return user;
     },
@@ -174,17 +199,27 @@ export function createUsersRepository() {
       const normalizedEmail = String(email || "").trim();
       if (!normalizedEmail) return undefined;
       try {
-        const rows = await selectUsersSafe(`where "email" = $1 limit 1`, [normalizedEmail]);
+        const rows = await selectUsersSafe(`where "email" = $1 limit 1`, [
+          normalizedEmail,
+        ]);
         const row = (rows[0] as any) || undefined;
         if (!row) return undefined;
         if (row.isDisabled === true) return undefined;
         return row as any;
       } catch (error) {
-        console.warn("getUserByEmail safe projection failed, falling back:", error);
+        console.warn(
+          "getUserByEmail safe projection failed, falling back:",
+          error,
+        );
         const [user] = await db
           .select()
           .from(users)
-          .where(and(eq(users.email, normalizedEmail), or(eq(users.isDisabled, false), isNull(users.isDisabled))));
+          .where(
+            and(
+              eq(users.email, normalizedEmail),
+              or(eq(users.isDisabled, false), isNull(users.isDisabled)),
+            ),
+          );
         return user;
       }
     },
@@ -193,17 +228,27 @@ export function createUsersRepository() {
       const normalizedPhone = String(phone || "").trim();
       if (!normalizedPhone) return undefined;
       try {
-        const rows = await selectUsersSafe(`where "phone" = $1 limit 1`, [normalizedPhone]);
+        const rows = await selectUsersSafe(`where "phone" = $1 limit 1`, [
+          normalizedPhone,
+        ]);
         const row = (rows[0] as any) || undefined;
         if (!row) return undefined;
         if (row.isDisabled === true) return undefined;
         return row as any;
       } catch (error) {
-        console.warn("getUserByPhone safe projection failed, falling back:", error);
+        console.warn(
+          "getUserByPhone safe projection failed, falling back:",
+          error,
+        );
         const [user] = await db
           .select()
           .from(users)
-          .where(and(eq(users.phone, normalizedPhone), or(eq(users.isDisabled, false), isNull(users.isDisabled))));
+          .where(
+            and(
+              eq(users.phone, normalizedPhone),
+              or(eq(users.isDisabled, false), isNull(users.isDisabled)),
+            ),
+          );
         return user;
       }
     },
@@ -225,16 +270,15 @@ export function createUsersRepository() {
         | "duper_admin"
         | "super_admin",
     ): Promise<User> {
-      const SUPER_ADMIN_EMAIL = process.env.ADMIN_EMAIL || "info.mealscout@gmail.com";
+      const SUPER_ADMIN_EMAIL =
+        process.env.ADMIN_EMAIL || "info.mealscout@gmail.com";
       const user = await this.getUser(id);
       if (user?.email === SUPER_ADMIN_EMAIL && userType !== "super_admin") {
         throw new Error("Cannot modify super admin account");
       }
 
       const affiliatePercent =
-        userType === "staff" ? 25
-        : isAdminUserType(userType) ? 0
-        : undefined;
+        userType === "staff" ? 25 : isAdminUserType(userType) ? 0 : undefined;
       const shouldAutoVerify = isAdminUserType(userType);
       const [updatedUser] = await db
         .update(users)
@@ -266,18 +310,29 @@ export function createUsersRepository() {
 
     async upsertUserByAuth(
       authType: "google" | "email" | "facebook" | "tradescout",
-      userData: GoogleUserData | EmailUserData | FacebookUserData | TradeScoutUserData,
+      userData:
+        | GoogleUserData
+        | EmailUserData
+        | FacebookUserData
+        | TradeScoutUserData,
       userType: User["userType"] = "customer",
       appContext: "mealscout" | "tradescout" = "mealscout",
     ): Promise<User> {
       try {
         if (authType === "tradescout") {
           const tsData = userData as TradeScoutUserData;
-          let existingUser = await db.select().from(users).where(eq(users.tradescoutId, tsData.tradescoutId)).limit(1);
+          let existingUser = await db
+            .select()
+            .from(users)
+            .where(eq(users.tradescoutId, tsData.tradescoutId))
+            .limit(1);
 
           if (existingUser.length > 0) {
             const current = existingUser[0];
-            const newAppContext = current.appContext && current.appContext !== appContext ? "both" : appContext;
+            const newAppContext =
+              current.appContext && current.appContext !== appContext
+                ? "both"
+                : appContext;
             const [user] = await db
               .update(users)
               .set({
@@ -295,10 +350,17 @@ export function createUsersRepository() {
           }
 
           if (tsData.email) {
-            existingUser = await db.select().from(users).where(eq(users.email, tsData.email)).limit(1);
+            existingUser = await db
+              .select()
+              .from(users)
+              .where(eq(users.email, tsData.email))
+              .limit(1);
             if (existingUser.length > 0) {
               const current = existingUser[0];
-              const newAppContext = current.appContext && current.appContext !== appContext ? "both" : appContext;
+              const newAppContext =
+                current.appContext && current.appContext !== appContext
+                  ? "both"
+                  : appContext;
               const [user] = await db
                 .update(users)
                 .set({
@@ -332,11 +394,18 @@ export function createUsersRepository() {
           return user;
         } else if (authType === "google") {
           const googleData = userData as GoogleUserData;
-          let existingUser = await db.select().from(users).where(eq(users.googleId, googleData.googleId)).limit(1);
+          let existingUser = await db
+            .select()
+            .from(users)
+            .where(eq(users.googleId, googleData.googleId))
+            .limit(1);
 
           if (existingUser.length > 0) {
             const current = existingUser[0];
-            const newAppContext = current.appContext && current.appContext !== appContext ? "both" : appContext;
+            const newAppContext =
+              current.appContext && current.appContext !== appContext
+                ? "both"
+                : appContext;
             const [user] = await db
               .update(users)
               .set({
@@ -356,10 +425,17 @@ export function createUsersRepository() {
           }
 
           if (googleData.email) {
-            existingUser = await db.select().from(users).where(eq(users.email, googleData.email)).limit(1);
+            existingUser = await db
+              .select()
+              .from(users)
+              .where(eq(users.email, googleData.email))
+              .limit(1);
             if (existingUser.length > 0) {
               const current = existingUser[0];
-              const newAppContext = current.appContext && current.appContext !== appContext ? "both" : appContext;
+              const newAppContext =
+                current.appContext && current.appContext !== appContext
+                  ? "both"
+                  : appContext;
               const [user] = await db
                 .update(users)
                 .set({
@@ -367,7 +443,9 @@ export function createUsersRepository() {
                   emailVerified: true,
                   firstName: googleData.firstName || existingUser[0].firstName,
                   lastName: googleData.lastName || existingUser[0].lastName,
-                  profileImageUrl: googleData.profileImageUrl || existingUser[0].profileImageUrl,
+                  profileImageUrl:
+                    googleData.profileImageUrl ||
+                    existingUser[0].profileImageUrl,
                   googleAccessToken: googleData.googleAccessToken,
                   appContext: newAppContext,
                   updatedAt: new Date(),
@@ -397,11 +475,18 @@ export function createUsersRepository() {
           return user;
         } else if (authType === "facebook") {
           const facebookData = userData as FacebookUserData;
-          let existingUser = await db.select().from(users).where(eq(users.facebookId, facebookData.facebookId)).limit(1);
+          let existingUser = await db
+            .select()
+            .from(users)
+            .where(eq(users.facebookId, facebookData.facebookId))
+            .limit(1);
 
           if (existingUser.length > 0) {
             const current = existingUser[0];
-            const newAppContext = current.appContext && current.appContext !== appContext ? "both" : appContext;
+            const newAppContext =
+              current.appContext && current.appContext !== appContext
+                ? "both"
+                : appContext;
             const [user] = await db
               .update(users)
               .set({
@@ -421,18 +506,28 @@ export function createUsersRepository() {
           }
 
           if (facebookData.email) {
-            existingUser = await db.select().from(users).where(eq(users.email, facebookData.email)).limit(1);
+            existingUser = await db
+              .select()
+              .from(users)
+              .where(eq(users.email, facebookData.email))
+              .limit(1);
             if (existingUser.length > 0) {
               const current = existingUser[0];
-              const newAppContext = current.appContext && current.appContext !== appContext ? "both" : appContext;
+              const newAppContext =
+                current.appContext && current.appContext !== appContext
+                  ? "both"
+                  : appContext;
               const [user] = await db
                 .update(users)
                 .set({
                   facebookId: facebookData.facebookId,
                   emailVerified: true,
-                  firstName: facebookData.firstName || existingUser[0].firstName,
+                  firstName:
+                    facebookData.firstName || existingUser[0].firstName,
                   lastName: facebookData.lastName || existingUser[0].lastName,
-                  profileImageUrl: facebookData.profileImageUrl || existingUser[0].profileImageUrl,
+                  profileImageUrl:
+                    facebookData.profileImageUrl ||
+                    existingUser[0].profileImageUrl,
                   facebookAccessToken: facebookData.facebookAccessToken,
                   appContext: newAppContext,
                   updatedAt: new Date(),
@@ -487,7 +582,10 @@ export function createUsersRepository() {
               .from(users)
               .where(
                 tsData.email
-                  ? or(eq(users.tradescoutId, tsData.tradescoutId), eq(users.email, tsData.email))
+                  ? or(
+                      eq(users.tradescoutId, tsData.tradescoutId),
+                      eq(users.email, tsData.email),
+                    )
                   : eq(users.tradescoutId, tsData.tradescoutId),
               )
               .limit(1);
@@ -515,7 +613,10 @@ export function createUsersRepository() {
               .from(users)
               .where(
                 googleData.email
-                  ? or(eq(users.googleId, googleData.googleId), eq(users.email, googleData.email))
+                  ? or(
+                      eq(users.googleId, googleData.googleId),
+                      eq(users.email, googleData.email),
+                    )
                   : eq(users.googleId, googleData.googleId),
               )
               .limit(1);
@@ -543,7 +644,10 @@ export function createUsersRepository() {
               .from(users)
               .where(
                 facebookData.email
-                  ? or(eq(users.facebookId, facebookData.facebookId), eq(users.email, facebookData.email))
+                  ? or(
+                      eq(users.facebookId, facebookData.facebookId),
+                      eq(users.email, facebookData.email),
+                    )
                   : eq(users.facebookId, facebookData.facebookId),
               )
               .limit(1);
@@ -577,9 +681,15 @@ export function createUsersRepository() {
         const whereSql = hasDisabled
           ? `where coalesce("is_disabled"::boolean, false) = false`
           : "";
-        return (await selectUsersSafe(`${whereSql} order by "created_at" desc`, [])) as any;
+        return (await selectUsersSafe(
+          `${whereSql} order by "created_at" desc`,
+          [],
+        )) as any;
       } catch (error) {
-        console.warn("getAllUsers safe projection failed, falling back:", error);
+        console.warn(
+          "getAllUsers safe projection failed, falling back:",
+          error,
+        );
         return await db
           .select()
           .from(users)
@@ -589,7 +699,10 @@ export function createUsersRepository() {
     },
 
     async updateUserStatus(userId: string, isActive: boolean): Promise<void> {
-      await db.update(users).set({ isDisabled: !isActive }).where(eq(users.id, userId));
+      await db
+        .update(users)
+        .set({ isDisabled: !isActive })
+        .where(eq(users.id, userId));
     },
 
     async createUserManually(userData: {
@@ -602,9 +715,11 @@ export function createUsersRepository() {
     }): Promise<User> {
       const hashedPassword = await bcrypt.hash(userData.tempPassword, 10);
       const affiliatePercent =
-        userData.userType === "staff" ? 25
-        : isAdminUserType(userData.userType) ? 0
-        : undefined;
+        userData.userType === "staff"
+          ? 25
+          : isAdminUserType(userData.userType)
+            ? 0
+            : undefined;
 
       const [user] = await db
         .insert(users)
@@ -648,9 +763,11 @@ export function createUsersRepository() {
         | "super_admin";
     }): Promise<User> {
       const affiliatePercent =
-        data.userType === "staff" ? 25
-        : isAdminUserType(data.userType) ? 0
-        : undefined;
+        data.userType === "staff"
+          ? 25
+          : isAdminUserType(data.userType)
+            ? 0
+            : undefined;
       const shouldAutoVerify = isAdminUserType(data.userType);
 
       const [user] = await db

@@ -28,7 +28,11 @@ import { logAudit } from "./auditLogger";
 import { storage } from "./storage";
 import { sendAccountSetupInvite } from "./utils/accountSetup";
 import { getJobQueueStats } from "./jobs/jobQueue";
-import { canAssignUserType, getRoleAssignmentDeniedMessage, isInternalTeamUserType } from "./roleAccess";
+import {
+  canAssignUserType,
+  getRoleAssignmentDeniedMessage,
+  isInternalTeamUserType,
+} from "./roleAccess";
 
 const router = Router();
 
@@ -116,8 +120,10 @@ const BOT_SIGNATURES = [
   },
 ];
 
-const AUTOMATION_SIGNATURE = /curl|python|wget|httpclient|libwww|scrapy|postman|axios|node-fetch|go-http-client/i;
-const BOT_HINT_SIGNATURE = /bot|crawler|crawl|spider|fetcher|preview|scan|slurp|archive/i;
+const AUTOMATION_SIGNATURE =
+  /curl|python|wget|httpclient|libwww|scrapy|postman|axios|node-fetch|go-http-client/i;
+const BOT_HINT_SIGNATURE =
+  /bot|crawler|crawl|spider|fetcher|preview|scan|slurp|archive/i;
 const BROWSER_SIGNATURE = /mozilla|chrome|safari|firefox|edge|opr\//i;
 
 function classifyTrafficLog(log: {
@@ -236,8 +242,8 @@ router.get("/stats", isAdmin, async (req, res) => {
         .then(
           (tickets: any[]) =>
             tickets.filter(
-              (t: any) => t.priority === "high" || t.priority === "critical"
-            ).length
+              (t: any) => t.priority === "high" || t.priority === "critical",
+            ).length,
         ),
       db
         .select()
@@ -245,8 +251,8 @@ router.get("/stats", isAdmin, async (req, res) => {
         .where(
           gte(
             moderationEvents.createdAt,
-            new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
-          )
+            new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000),
+          ),
         )
         .then((m: any[]) => m.length),
       db
@@ -298,7 +304,7 @@ router.get("/audit-logs", isAdmin, async (req, res) => {
     }
     if (resourceType) {
       filtered = filtered.filter(
-        (log: any) => log.resourceType === resourceType
+        (log: any) => log.resourceType === resourceType,
       );
     }
     if (userId) {
@@ -309,7 +315,7 @@ router.get("/audit-logs", isAdmin, async (req, res) => {
       filtered = filtered.filter(
         (log: any) =>
           log.id.toLowerCase().includes(searchLower) ||
-          log.resourceId?.toLowerCase().includes(searchLower)
+          log.resourceId?.toLowerCase().includes(searchLower),
       );
     }
 
@@ -502,7 +508,7 @@ router.patch("/support-tickets/:id", isAdmin, async (req, res) => {
       req.params.id,
       "system",
       "internal",
-      { changes: updates }
+      { changes: updates },
     );
 
     res.json(updated[0]);
@@ -577,9 +583,7 @@ router.get("/request-logs", isStaffOrAdmin, async (req, res) => {
     const startDate = startParam
       ? new Date(`${startParam}T00:00:00`)
       : new Date(Date.now() - 48 * 60 * 60 * 1000);
-    const endDate = endParam
-      ? new Date(`${endParam}T23:59:59`)
-      : new Date();
+    const endDate = endParam ? new Date(`${endParam}T23:59:59`) : new Date();
 
     const logs = await db
       .select(requestLogLegacySelect)
@@ -587,8 +591,8 @@ router.get("/request-logs", isStaffOrAdmin, async (req, res) => {
       .where(
         and(
           gte(requestLogs.createdAt, startDate),
-          lte(requestLogs.createdAt, endDate)
-        )
+          lte(requestLogs.createdAt, endDate),
+        ),
       )
       .orderBy(desc(requestLogs.createdAt))
       .limit(Number.isFinite(limit) ? Math.min(limit, 20000) : 2000);
@@ -669,8 +673,10 @@ router.get("/bot-traffic", isStaffOrAdmin, async (req, res) => {
       if (classified.isBot) totals.botRequests += 1;
       if (classified.isLLM) totals.llmRequests += 1;
       if (classified.isSearchCrawler) totals.searchCrawlerRequests += 1;
-      if (classified.category === "browser_human") totals.humanBrowserRequests += 1;
-      if (classified.category === "automation_script") totals.automationRequests += 1;
+      if (classified.category === "browser_human")
+        totals.humanBrowserRequests += 1;
+      if (classified.category === "automation_script")
+        totals.automationRequests += 1;
 
       const existingAgent = agentMap.get(agentKey) || {
         label: classified.label,
@@ -684,7 +690,8 @@ router.get("/bot-traffic", isStaffOrAdmin, async (req, res) => {
       existingAgent.lastSeen = log.createdAt
         ? new Date(log.createdAt).toISOString()
         : existingAgent.lastSeen;
-      existingAgent.topPaths[pathKey] = (existingAgent.topPaths[pathKey] || 0) + 1;
+      existingAgent.topPaths[pathKey] =
+        (existingAgent.topPaths[pathKey] || 0) + 1;
       agentMap.set(agentKey, existingAgent);
 
       const existingPath = pathMap.get(pathKey) || {
@@ -726,9 +733,13 @@ router.get("/bot-traffic", isStaffOrAdmin, async (req, res) => {
       summary: {
         ...totals,
         humanShare:
-          totals.requests > 0 ? totals.humanBrowserRequests / totals.requests : 0,
-        llmShare: totals.requests > 0 ? totals.llmRequests / totals.requests : 0,
-        botShare: totals.requests > 0 ? totals.botRequests / totals.requests : 0,
+          totals.requests > 0
+            ? totals.humanBrowserRequests / totals.requests
+            : 0,
+        llmShare:
+          totals.requests > 0 ? totals.llmRequests / totals.requests : 0,
+        botShare:
+          totals.requests > 0 ? totals.botRequests / totals.requests : 0,
       },
       categories: categoryCounts,
       topAgents,
@@ -827,7 +838,7 @@ router.patch("/moderation-events/:id", isAdmin, async (req, res) => {
       req.params.id,
       "system",
       "internal",
-      { action: actionTaken, status }
+      { action: actionTaken, status },
     );
 
     res.json(updated[0]);
@@ -875,7 +886,7 @@ router.post("/moderation-events", isAdmin, async (req, res) => {
       event[0].id,
       "system",
       "internal",
-      { eventType, reason }
+      { eventType, reason },
     );
 
     res.json(event[0]);
@@ -922,9 +933,8 @@ router.post("/grant-lifetime-access", isAdmin, async (req, res) => {
     }
 
     // Verify restaurant exists
-    const { restaurants, restaurantSubscriptions } = await import(
-      "@shared/schema"
-    );
+    const { restaurants, restaurantSubscriptions } =
+      await import("@shared/schema");
     const restaurant = await db
       .select()
       .from(restaurants)
@@ -990,7 +1000,7 @@ router.post("/grant-lifetime-access", isAdmin, async (req, res) => {
       restaurantId,
       "",
       "",
-      { reason }
+      { reason },
     );
 
     res.json({
@@ -1088,7 +1098,11 @@ router.post("/users/create", isAdmin, async (req: any, res) => {
       });
     }
 
-    if ((userType === "host" || userType === "event_coordinator") && businessName && address) {
+    if (
+      (userType === "host" || userType === "event_coordinator") &&
+      businessName &&
+      address
+    ) {
       const footTrafficMap: Record<string, number> = {
         low: 50,
         medium: 150,
@@ -1103,7 +1117,9 @@ router.post("/users/create", isAdmin, async (req: any, res) => {
       }
 
       const resolvedLocationType =
-        userType === "event_coordinator" ? "event_coordinator" : locationType || "other";
+        userType === "event_coordinator"
+          ? "event_coordinator"
+          : locationType || "other";
 
       const hostData: any = {
         userId: user.id,
@@ -1137,7 +1153,7 @@ router.post("/users/create", isAdmin, async (req: any, res) => {
       user.id,
       req.ip,
       req.headers["user-agent"],
-      { userType, setupEmailSent: emailSent }
+      { userType, setupEmailSent: emailSent },
     );
 
     res.status(201).json({
@@ -1212,7 +1228,7 @@ router.post("/hosts/create", isAdmin, async (req: any, res) => {
       host.id,
       req.ip,
       req.headers["user-agent"],
-      { userId }
+      { userId },
     );
 
     res.status(201).json({
@@ -1263,7 +1279,7 @@ router.delete("/users/:userId", isAdmin, async (req: any, res) => {
       userId,
       req.ip,
       req.headers["user-agent"],
-      {}
+      {},
     );
 
     res.json({ message: "User deleted successfully" });
@@ -1279,9 +1295,8 @@ router.delete("/users/:userId", isAdmin, async (req: any, res) => {
  */
 router.get("/lifetime-restaurants", isAdmin, async (req, res) => {
   try {
-    const { restaurants, restaurantSubscriptions } = await import(
-      "@shared/schema"
-    );
+    const { restaurants, restaurantSubscriptions } =
+      await import("@shared/schema");
 
     const lifetimeRestaurants = await db
       .select({
@@ -1295,7 +1310,7 @@ router.get("/lifetime-restaurants", isAdmin, async (req, res) => {
       .from(restaurantSubscriptions)
       .innerJoin(
         restaurants,
-        eq(restaurantSubscriptions.restaurantId, restaurants.id)
+        eq(restaurantSubscriptions.restaurantId, restaurants.id),
       )
       .where(eq(restaurantSubscriptions.isLifetimeFree, true))
       .orderBy(desc(restaurantSubscriptions.lifetimeGrantedAt));
@@ -1356,7 +1371,7 @@ router.delete(
         restaurantId,
         "",
         "",
-        {}
+        {},
       );
 
       res.json({ message: "Lifetime access revoked successfully" });
@@ -1364,7 +1379,7 @@ router.delete(
       console.error("Error revoking lifetime access:", error);
       res.status(500).json({ message: "Failed to revoke lifetime access" });
     }
-  }
+  },
 );
 
 /**
@@ -1467,7 +1482,7 @@ router.post("/review-report/:reportId", isAdmin, async (req, res) => {
       report[0].storyId,
       "",
       "",
-      { reportId, notes }
+      { reportId, notes },
     );
 
     res.json({

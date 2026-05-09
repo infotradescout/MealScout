@@ -602,9 +602,7 @@ export interface IStorage {
   ): Promise<LocationRequest>;
   getLocationRequestById(id: string): Promise<LocationRequest | undefined>;
   expireStaleLocationRequests(): Promise<number>;
-  createTruckInterest(
-    interest: InsertTruckInterest,
-  ): Promise<{
+  createTruckInterest(interest: InsertTruckInterest): Promise<{
     interestId: string;
     locationRequest: LocationRequest;
     interestCount: number;
@@ -778,12 +776,14 @@ export interface IStorage {
 export class DatabaseStorage implements IStorage {
   private readonly authTokensRepository = createAuthTokensRepository();
   private readonly hostsEventsRepository = createHostsEventsRepository();
-  private readonly restaurantsDealsRepository = createRestaurantsDealsRepository({
-    ensureCityExists: async (name: string, state: string | null) =>
-      this.ensureCityExists(name, state),
-  });
+  private readonly restaurantsDealsRepository =
+    createRestaurantsDealsRepository({
+      ensureCityExists: async (name: string, state: string | null) =>
+        this.ensureCityExists(name, state),
+    });
   private readonly usersRepository = createUsersRepository();
-  private readonly paymentsSubscriptionsRepository = createPaymentsSubscriptionsRepository();
+  private readonly paymentsSubscriptionsRepository =
+    createPaymentsSubscriptionsRepository();
   private readonly analyticsRepository = createAnalyticsRepository();
   private readonly parkingPassRepository = createParkingPassRepository({
     getHost: (id: string) => this.getHost(id),
@@ -1570,7 +1570,10 @@ export class DatabaseStorage implements IStorage {
     seriesId: string,
     date: Date,
   ): Promise<void> {
-    return this.parkingPassRepository.deleteParkingPassBlackoutDate(seriesId, date);
+    return this.parkingPassRepository.deleteParkingPassBlackoutDate(
+      seriesId,
+      date,
+    );
   }
 
   async createEvent(event: InsertEvent): Promise<Event> {
@@ -1674,7 +1677,10 @@ export class DatabaseStorage implements IStorage {
     eventId: string,
     truckId: string,
   ): Promise<EventInterest | undefined> {
-    return this.hostsEventsRepository.getEventInterestByTruckId(eventId, truckId);
+    return this.hostsEventsRepository.getEventInterestByTruckId(
+      eventId,
+      truckId,
+    );
   }
 
   async getOpenLocationRequests(): Promise<LocationRequest[]> {
@@ -1734,8 +1740,14 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Stripe helpers
-  async updateUserStripeCustomerId(userId: string, customerId: string): Promise<void> {
-    return this.paymentsSubscriptionsRepository.updateUserStripeCustomerId(userId, customerId);
+  async updateUserStripeCustomerId(
+    userId: string,
+    customerId: string,
+  ): Promise<void> {
+    return this.paymentsSubscriptionsRepository.updateUserStripeCustomerId(
+      userId,
+      customerId,
+    );
   }
 
   async updateUserStripeInfo(
@@ -1744,7 +1756,12 @@ export class DatabaseStorage implements IStorage {
     stripeSubscriptionId: string,
     subscriptionBillingInterval?: string,
   ): Promise<User> {
-    return this.paymentsSubscriptionsRepository.updateUserStripeInfo(id, stripeCustomerId, stripeSubscriptionId, subscriptionBillingInterval);
+    return this.paymentsSubscriptionsRepository.updateUserStripeInfo(
+      id,
+      stripeCustomerId,
+      stripeSubscriptionId,
+      subscriptionBillingInterval,
+    );
   }
 
   async updateUser(
@@ -1815,12 +1832,20 @@ export class DatabaseStorage implements IStorage {
     return this.usersRepository.updateUserType(id, userType);
   }
 
-  async getUserByStripeCustomerId(stripeCustomerId: string): Promise<User | undefined> {
-    return this.paymentsSubscriptionsRepository.getUserByStripeCustomerId(stripeCustomerId);
+  async getUserByStripeCustomerId(
+    stripeCustomerId: string,
+  ): Promise<User | undefined> {
+    return this.paymentsSubscriptionsRepository.getUserByStripeCustomerId(
+      stripeCustomerId,
+    );
   }
 
-  async getUserByStripeSubscriptionId(stripeSubscriptionId: string): Promise<User | undefined> {
-    return this.paymentsSubscriptionsRepository.getUserByStripeSubscriptionId(stripeSubscriptionId);
+  async getUserByStripeSubscriptionId(
+    stripeSubscriptionId: string,
+  ): Promise<User | undefined> {
+    return this.paymentsSubscriptionsRepository.getUserByStripeSubscriptionId(
+      stripeSubscriptionId,
+    );
   }
 
   async upsertUserByAuth(
@@ -1833,7 +1858,12 @@ export class DatabaseStorage implements IStorage {
     userType: User["userType"] = "customer",
     appContext: "mealscout" | "tradescout" = "mealscout",
   ): Promise<User> {
-    return this.usersRepository.upsertUserByAuth(authType, userData, userType, appContext);
+    return this.usersRepository.upsertUserByAuth(
+      authType,
+      userData,
+      userType,
+      appContext,
+    );
   }
 
   async createRestaurant(restaurant: InsertRestaurant): Promise<Restaurant> {
@@ -1882,7 +1912,11 @@ export class DatabaseStorage implements IStorage {
     lng: number,
     radiusKm: number,
   ): Promise<Restaurant[]> {
-    return this.restaurantsDealsRepository.getNearbyRestaurants(lat, lng, radiusKm);
+    return this.restaurantsDealsRepository.getNearbyRestaurants(
+      lat,
+      lng,
+      radiusKm,
+    );
   }
 
   async getSubscribedRestaurants(
@@ -1890,7 +1924,11 @@ export class DatabaseStorage implements IStorage {
     lng: number,
     radiusKm: number,
   ): Promise<Restaurant[]> {
-    return this.restaurantsDealsRepository.getSubscribedRestaurants(lat, lng, radiusKm);
+    return this.restaurantsDealsRepository.getSubscribedRestaurants(
+      lat,
+      lng,
+      radiusKm,
+    );
   }
 
   async verifyRestaurantOwnership(
@@ -2207,8 +2245,7 @@ export class DatabaseStorage implements IStorage {
         ),
       db
         .select({
-          count:
-            sql<number>`cast(count(distinct ${restaurants.ownerId}) as integer)`,
+          count: sql<number>`cast(count(distinct ${restaurants.ownerId}) as integer)`,
         })
         .from(restaurants)
         .where(
@@ -4566,9 +4603,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async markRecommendationClicked(recommendationId: string): Promise<void> {
-    return this.analyticsRepository.markRecommendationClicked(
-      recommendationId,
-    );
+    return this.analyticsRepository.markRecommendationClicked(recommendationId);
   }
 
   async getRestaurantRecommendationsAnalytics(
@@ -4630,9 +4665,7 @@ export class DatabaseStorage implements IStorage {
     return result.rowCount || 0;
   }
 
-  async createTruckInterest(
-    interest: InsertTruckInterest,
-  ): Promise<{
+  async createTruckInterest(interest: InsertTruckInterest): Promise<{
     interestId: string;
     locationRequest: LocationRequest;
     interestCount: number;
@@ -4664,7 +4697,9 @@ export class DatabaseStorage implements IStorage {
         const [countRow] = await tx
           .select({ count: sql<number>`count(*)` })
           .from(truckInterests)
-          .where(eq(truckInterests.locationRequestId, interest.locationRequestId));
+          .where(
+            eq(truckInterests.locationRequestId, interest.locationRequestId),
+          );
         const interestCount = Number(countRow?.count ?? 0);
         const minInterestedTrucks = Math.max(
           1,
@@ -4709,9 +4744,7 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async getLocationDemandQueue(
-    limit = 100,
-  ): Promise<
+  async getLocationDemandQueue(limit = 100): Promise<
     Array<
       LocationRequest & {
         interestCount: number;
@@ -5006,7 +5039,9 @@ export class DatabaseStorage implements IStorage {
   async getPasswordResetTokenByTokenHash(
     tokenHash: string,
   ): Promise<PasswordResetToken | undefined> {
-    return this.authTokensRepository.getPasswordResetTokenByTokenHash(tokenHash);
+    return this.authTokensRepository.getPasswordResetTokenByTokenHash(
+      tokenHash,
+    );
   }
 
   async markPasswordResetTokenUsed(id: string): Promise<PasswordResetToken> {
@@ -5298,15 +5333,15 @@ export class DatabaseStorage implements IStorage {
       const inserted = await db
         .insert(lisaClaims)
         .values({
-        subjectType: claim.subjectType,
-        subjectId: claim.subjectId,
-        actorType: claim.actorType || null,
-        actorId: claim.actorId || null,
-        app: claim.app,
-        claimType: claim.claimType,
-        claimValue: claim.claimValue,
-        source: claim.source,
-        confidence: claim.confidence?.toString() || "1.0",
+          subjectType: claim.subjectType,
+          subjectId: claim.subjectId,
+          actorType: claim.actorType || null,
+          actorId: claim.actorId || null,
+          app: claim.app,
+          claimType: claim.claimType,
+          claimValue: claim.claimValue,
+          source: claim.source,
+          confidence: claim.confidence?.toString() || "1.0",
         })
         .returning();
 

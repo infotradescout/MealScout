@@ -1205,9 +1205,9 @@ export default function MapPage() {
   >(null);
   const [hostCoords, setHostCoords] = useState<Record<string, GeoPoint>>({});
   const [eventCoords, setEventCoords] = useState<Record<string, GeoPoint>>({});
-  const [supplierCoords, setSupplierCoords] = useState<Record<string, GeoPoint>>(
-    {},
-  );
+  const [supplierCoords, setSupplierCoords] = useState<
+    Record<string, GeoPoint>
+  >({});
   const geocodeInFlight = useRef(false);
   const [geocodeCache, setGeocodeCache] = useState<
     Record<string, GeocodeCacheEntry>
@@ -1904,8 +1904,7 @@ export default function MapPage() {
   }, []);
 
   const mapLocations: MapLocationsResponse = useMemo(() => {
-    const source =
-      mapLocationsData ??
+    const source = mapLocationsData ??
       cachedMapLocations ?? {
         hostLocations: [],
         eventLocations: [],
@@ -1965,9 +1964,9 @@ export default function MapPage() {
 
   const hasViewportOverlayData = Boolean(
     viewportOverlaysData &&
-      (viewportOverlaysData.hostLocations?.length > 0 ||
-        viewportOverlaysData.eventLocations?.length > 0 ||
-        viewportOverlaysData.supplierLocations?.length > 0),
+    (viewportOverlaysData.hostLocations?.length > 0 ||
+      viewportOverlaysData.eventLocations?.length > 0 ||
+      viewportOverlaysData.supplierLocations?.length > 0),
   );
 
   const activeMapLocations: MapLocationsResponse = useMemo(() => {
@@ -4238,7 +4237,8 @@ export default function MapPage() {
                 {selectedParkingHost.host.showFuelPrices &&
                   fuelPriceSummary(selectedParkingHost.host.fuelPrices) && (
                     <div className="mb-1.5 rounded-md border border-emerald-400/40 bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-900">
-                      Gas: {fuelPriceSummary(selectedParkingHost.host.fuelPrices)}
+                      Gas:{" "}
+                      {fuelPriceSummary(selectedParkingHost.host.fuelPrices)}
                     </div>
                   )}
                 {selectedParkingHost.distanceLabel && (
@@ -4407,9 +4407,8 @@ export default function MapPage() {
               </Button>
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
-              {visibleLiveTrucks.length} trucks ·{" "}
-              {visibleHostLocations.length} hosts ·{" "}
-              {visibleEventLocations.length} events ·{" "}
+              {visibleLiveTrucks.length} trucks · {visibleHostLocations.length}{" "}
+              hosts · {visibleEventLocations.length} events ·{" "}
               {visibleSupplierLocations.length} suppliers · {deals.length} deals
             </p>
           </header>
@@ -4545,7 +4544,8 @@ export default function MapPage() {
                         type="button"
                         className="flex w-full items-start justify-between gap-3 px-3 py-2 text-left hover:bg-muted/40"
                         onClick={() => {
-                          window.location.href = supplier.profileUrl || "/suppliers";
+                          window.location.href =
+                            supplier.profileUrl || "/suppliers";
                         }}
                       >
                         <div className="min-w-0">

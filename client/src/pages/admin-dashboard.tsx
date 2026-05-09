@@ -77,7 +77,9 @@ interface DashboardStats {
 }
 
 const isAdminFamilyUserType = (userType?: string | null) =>
-  userType === "admin" || userType === "duper_admin" || userType === "super_admin";
+  userType === "admin" ||
+  userType === "duper_admin" ||
+  userType === "super_admin";
 
 const isDuperOrRootUserType = (userType?: string | null) =>
   userType === "duper_admin" || userType === "super_admin";
@@ -134,8 +136,11 @@ const toTitleCase = (value: string) =>
     .trim()
     .replace(/\b\w/g, (char) => char.toUpperCase());
 
-const buildBriefSentence = (item: { title: string; why: string; next: string }) =>
-  `${item.title}. ${item.why} ${item.next}`;
+const buildBriefSentence = (item: {
+  title: string;
+  why: string;
+  next: string;
+}) => `${item.title}. ${item.why} ${item.next}`;
 
 interface DashboardTotalsResponse {
   generatedAt: string;
@@ -1314,16 +1319,16 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
       | "restaurant_owner"
       | "staff"
       | "event_coordinator"
-        | "host"
-        | "admin"
-        | "duper_admin"
-        | "super_admin",
+      | "host"
+      | "admin"
+      | "duper_admin"
+      | "super_admin",
   });
   const [geocoding, setGeocoding] = useState(false);
   const [inviteSentEmail, setInviteSentEmail] = useState("");
-      const canAssignAdminRole = isAdminFamilyUserType(adminUser?.userType);
-      const canAssignDuperAdminRole = isDuperOrRootUserType(adminUser?.userType);
-      const canAssignSuperAdminRole = isRootSuperAdminUserType(adminUser?.userType);
+  const canAssignAdminRole = isAdminFamilyUserType(adminUser?.userType);
+  const canAssignDuperAdminRole = isDuperOrRootUserType(adminUser?.userType);
+  const canAssignSuperAdminRole = isRootSuperAdminUserType(adminUser?.userType);
 
   const createUser = useMutation({
     mutationFn: async (data: typeof formData) => {
@@ -1488,9 +1493,7 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
             <option value="host">Host (Parking/Events)</option>
             <option value="event_coordinator">Event Coordinator</option>
             <option value="staff">Staff</option>
-            {canAssignAdminRole && (
-              <option value="admin">Admin</option>
-            )}
+            {canAssignAdminRole && <option value="admin">Admin</option>}
             {canAssignDuperAdminRole && (
               <option value="duper_admin">Duperrr Admin</option>
             )}
@@ -1915,7 +1918,8 @@ function StaffManagementTab() {
 
   // Filter out elevated admins from staff members list (they should never appear here)
   const displayStaffMembers = staffMembers.filter(
-    (staff) => staff.userType !== "duper_admin" && staff.userType !== "super_admin",
+    (staff) =>
+      staff.userType !== "duper_admin" && staff.userType !== "super_admin",
   );
 
   const filteredStaffMembers = useMemo(() => {
@@ -2059,14 +2063,18 @@ export default function AdminDashboard() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [selectedTab, setSelectedTab] = useState("overview");
-  const [briefStatus, setBriefStatus] = useState<Record<string, { until: number }>>(() => {
+  const [briefStatus, setBriefStatus] = useState<
+    Record<string, { until: number }>
+  >(() => {
     if (typeof window === "undefined") return {};
     try {
       const raw = window.localStorage.getItem("lisa-dashboard-brief-state-v1");
       const parsed = raw ? JSON.parse(raw) : {};
       const now = Date.now();
       return Object.fromEntries(
-        Object.entries(parsed || {}).filter(([, value]: any) => Number(value?.until || 0) > now),
+        Object.entries(parsed || {}).filter(
+          ([, value]: any) => Number(value?.until || 0) > now,
+        ),
       ) as Record<string, { until: number }>;
     } catch {
       return {};
@@ -2313,7 +2321,8 @@ export default function AdminDashboard() {
       });
     },
   });
-  const isTruthOnlyMode = lisaMarketIntel?.signalContract?.mode === "truth_only";
+  const isTruthOnlyMode =
+    lisaMarketIntel?.signalContract?.mode === "truth_only";
   const promoteNowItems = useMemo(() => {
     if (isTruthOnlyMode) return [];
     const momentum = Array.isArray(lisaMarketIntel?.contentMomentum)
@@ -2327,8 +2336,11 @@ export default function AdminDashboard() {
         ? `Promote this restaurant now and attach a deal or event while attention is active.`
         : "Promote this story now while attention is active.",
       changed: lisaMarketIntel?.dailyBriefChanges?.promotion,
-      rankReason: "Ranked #1 because it has the strongest live content momentum right now.",
-      href: item.restaurantId ? `/restaurant/${item.restaurantId}` : "/admin/control-center",
+      rankReason:
+        "Ranked #1 because it has the strongest live content momentum right now.",
+      href: item.restaurantId
+        ? `/restaurant/${item.restaurantId}`
+        : "/admin/control-center",
       actionLabel: item.restaurantId ? "Open restaurant" : "Open stream",
     }));
   }, [isTruthOnlyMode, lisaMarketIntel]);
@@ -2338,7 +2350,9 @@ export default function AdminDashboard() {
     const trends = Array.isArray(lisaMarketIntel?.trendWatch)
       ? lisaMarketIntel.trendWatch
       : [];
-    const cityDemand = Array.isArray(lisaMarketIntel?.advertiserSignals?.cityDemand)
+    const cityDemand = Array.isArray(
+      lisaMarketIntel?.advertiserSignals?.cityDemand,
+    )
       ? lisaMarketIntel.advertiserSignals.cityDemand
       : [];
     const demandRows = [
@@ -2365,7 +2379,8 @@ export default function AdminDashboard() {
         why: `${Number(item.requestCount ?? 0)} requests and ${Number(item.interestCount ?? 0)} interest signals point to local demand.`,
         next: "Sell ads here, recruit inventory here, or create a city page that captures the traffic.",
         changed: lisaMarketIntel?.changeSinceYesterday?.summary,
-        rankReason: "Ranked highly because this location cluster is showing the strongest local demand mix.",
+        rankReason:
+          "Ranked highly because this location cluster is showing the strongest local demand mix.",
         href: "/admin/control-center",
         actionLabel: "Open stream",
       })),
@@ -2386,25 +2401,28 @@ export default function AdminDashboard() {
         (Array.isArray(item.reasons) && item.reasons[0]) ||
         "Review this asset for acquisition, partnership, or cleanup.",
       changed: lisaMarketIntel?.dailyBriefChanges?.acquisition,
-      rankReason: "Ranked #1 because outside attention is ahead of quality more than the other current targets.",
+      rankReason:
+        "Ranked #1 because outside attention is ahead of quality more than the other current targets.",
       href: item.canonicalPath || "/admin/control-center",
       actionLabel: "Open target",
     }));
   }, [isTruthOnlyMode, lisaMarketIntel]);
 
   const authorityGapItems = useMemo(() => {
-    const items = Array.isArray(lisaPriorities?.items) ? lisaPriorities.items : [];
+    const items = Array.isArray(lisaPriorities?.items)
+      ? lisaPriorities.items
+      : [];
     return items.slice(0, 4).map((item: any) => ({
       id: `${item.entityType}:${item.entityId}`,
       title: item.title || `${item.entityType} ${item.entityId}`,
       why: `${item.quality || "unknown"} quality and ${item.freshness || "unknown"} freshness are limiting how trustworthy this page feels.`,
-      next:
-        (Array.isArray(item.reasons) && item.reasons.length > 0
-          ? item.reasons.map((reason: string) => toTitleCase(reason)).join(" • ")
-          : "Improve the page, data completeness, and freshness.")
-          .slice(0, 180),
+      next: (Array.isArray(item.reasons) && item.reasons.length > 0
+        ? item.reasons.map((reason: string) => toTitleCase(reason)).join(" • ")
+        : "Improve the page, data completeness, and freshness."
+      ).slice(0, 180),
       changed: lisaMarketIntel?.changeSinceYesterday?.summary,
-      rankReason: "Ranked highly because page weakness is limiting authority on a high-interest entity.",
+      rankReason:
+        "Ranked highly because page weakness is limiting authority on a high-interest entity.",
       href: "/admin/control-center",
       actionLabel: "Open stream",
     }));
@@ -2419,19 +2437,24 @@ export default function AdminDashboard() {
       .map((signal: any, index: number) => ({
         id: `${signal.id || "signal"}:${index}`,
         title: signal.title || "Observed machine attention",
-        why: signal.summary || "Outside systems are interacting with a MealScout page.",
+        why:
+          signal.summary ||
+          "Outside systems are interacting with a MealScout page.",
         next:
           signal.subjectType === "path"
             ? `Strengthen ${signal.subjectId || "this page"} so outside machines find something worth citing.`
             : "Strengthen the related public entity page and attach fresher information.",
         changed: lisaMarketIntel?.dailyBriefChanges?.machineAttention,
-        rankReason: "Ranked #1 because it is the strongest current off-platform attention signal.",
+        rankReason:
+          "Ranked #1 because it is the strongest current off-platform attention signal.",
         href:
-          signal.subjectType === "path" && String(signal.subjectId || "").startsWith("/")
+          signal.subjectType === "path" &&
+          String(signal.subjectId || "").startsWith("/")
             ? String(signal.subjectId)
             : "/admin/control-center",
         actionLabel:
-          signal.subjectType === "path" && String(signal.subjectId || "").startsWith("/")
+          signal.subjectType === "path" &&
+          String(signal.subjectId || "").startsWith("/")
             ? "Open page"
             : "Open stream",
       }));
@@ -2446,7 +2469,10 @@ export default function AdminDashboard() {
   );
 
   const foodTrendItems = useMemo(
-    () => (Array.isArray(lisaMarketIntel?.trendWatch) ? lisaMarketIntel.trendWatch : []),
+    () =>
+      Array.isArray(lisaMarketIntel?.trendWatch)
+        ? lisaMarketIntel.trendWatch
+        : [],
     [lisaMarketIntel],
   );
 
@@ -2471,7 +2497,10 @@ export default function AdminDashboard() {
     [lisaMarketIntel],
   );
 
-  const deferBrief = (briefKey: string, mode: "dismiss" | "snooze" | "done") => {
+  const deferBrief = (
+    briefKey: string,
+    mode: "dismiss" | "snooze" | "done",
+  ) => {
     const hours = mode === "done" ? 24 * 7 : mode === "snooze" ? 4 : 16;
     setBriefStatus((current) => ({
       ...current,
@@ -2516,7 +2545,10 @@ export default function AdminDashboard() {
   const topPromotionItem = pickVisibleBrief(promoteNowItems, "promote");
   const topDemandItem = pickVisibleBrief(demandSpikeItems, "demand");
   const topAcquisitionItem = pickVisibleBrief(acquisitionWatchItems, "acquire");
-  const topMachineAttentionItem = pickVisibleBrief(machineAttentionItems, "machine");
+  const topMachineAttentionItem = pickVisibleBrief(
+    machineAttentionItems,
+    "machine",
+  );
   const retryMapPinGeocode = useMutation({
     mutationFn: async () => {
       const res = await apiRequest(
@@ -5438,7 +5470,11 @@ export default function AdminDashboard() {
   const demandStuck24h = Number(demandSummary?.threshold_met_stuck_24h ?? 0);
   const demandStuck72h = Number(demandSummary?.threshold_met_stuck_72h ?? 0);
   const demandAlertLevel =
-    demandStuck72h > 0 ? "critical" : demandStuck24h > 0 ? "warning" : "healthy";
+    demandStuck72h > 0
+      ? "critical"
+      : demandStuck24h > 0
+        ? "warning"
+        : "healthy";
   const demandAlertBadgeVariant =
     demandAlertLevel === "critical"
       ? "destructive"
@@ -5462,7 +5498,9 @@ export default function AdminDashboard() {
               <Shield className="w-8 h-8 text-primary" />
             </div>
             <div>
-              <h1 className="text-3xl font-serif font-bold text-white tracking-tight">Admin Dashboard</h1>
+              <h1 className="text-3xl font-serif font-bold text-white tracking-tight">
+                Admin Dashboard
+              </h1>
               <p className="text-primary text-sm font-medium uppercase tracking-[0.2em] mt-1">
                 Platform Control & Intelligence
               </p>
@@ -5496,10 +5534,13 @@ export default function AdminDashboard() {
                     LISA
                   </span>
                 </div>
-                <h2 className="text-lg font-semibold">Livestream is in Control Center</h2>
+                <h2 className="text-lg font-semibold">
+                  Livestream is in Control Center
+                </h2>
                 <p className="text-sm text-muted-foreground">
                   Open the live MealScout signal feed, truth registry, bot
-                  traffic, and market intelligence from the admin control center.
+                  traffic, and market intelligence from the admin control
+                  center.
                 </p>
               </div>
               <Link href="/admin/control-center">
@@ -5517,9 +5558,12 @@ export default function AdminDashboard() {
                     MODERATION
                   </span>
                 </div>
-                <h2 className="text-lg font-semibold">Review Flagged Content</h2>
+                <h2 className="text-lg font-semibold">
+                  Review Flagged Content
+                </h2>
                 <p className="text-sm text-muted-foreground">
-                  Review flagged recommendations and profile content, assign cases, and resolve reports.
+                  Review flagged recommendations and profile content, assign
+                  cases, and resolve reports.
                 </p>
               </div>
               <Link href="/admin/moderation/queue">
@@ -5904,7 +5948,11 @@ export default function AdminDashboard() {
         )}
 
         {/* Main Content Tabs */}
-        <Tabs value={selectedTab} onValueChange={setSelectedTab} className="w-full">
+        <Tabs
+          value={selectedTab}
+          onValueChange={setSelectedTab}
+          className="w-full"
+        >
           <TabsList className="mb-8 flex flex-wrap h-auto gap-2 bg-black/20 backdrop-blur-md p-2 rounded-2xl border border-white/5 overflow-x-auto">
             <TabsTrigger
               value="overview"
@@ -6169,7 +6217,8 @@ export default function AdminDashboard() {
                   <div>
                     <CardTitle>Location Demand Funnel</CardTitle>
                     <CardDescription>
-                      Track threshold to claimed to published to booked conversion.
+                      Track threshold to claimed to published to booked
+                      conversion.
                     </CardDescription>
                     <div className="mt-2 flex flex-wrap items-center gap-2">
                       <Badge variant={demandAlertBadgeVariant}>
@@ -6209,17 +6258,23 @@ export default function AdminDashboard() {
                       Threshold open
                     </div>
                     <div className="text-xl font-semibold">
-                      {Number(locationDemandFunnel?.summary?.threshold_met_open ?? 0)}
+                      {Number(
+                        locationDemandFunnel?.summary?.threshold_met_open ?? 0,
+                      )}
                     </div>
                   </div>
                   <div className="rounded-md border p-3">
                     <div className="text-xs text-muted-foreground">Claimed</div>
                     <div className="text-xl font-semibold">
-                      {Number(locationDemandFunnel?.summary?.claimed_total ?? 0)}
+                      {Number(
+                        locationDemandFunnel?.summary?.claimed_total ?? 0,
+                      )}
                     </div>
                   </div>
                   <div className="rounded-md border p-3">
-                    <div className="text-xs text-muted-foreground">Published</div>
+                    <div className="text-xs text-muted-foreground">
+                      Published
+                    </div>
                     <div className="text-xl font-semibold">
                       {Number(
                         locationDemandFunnel?.summary
@@ -6262,8 +6317,8 @@ export default function AdminDashboard() {
                     <div className="font-semibold">
                       {Math.round(
                         Number(
-                          locationDemandFunnel?.summary?.publishRateFromClaimed ??
-                            0,
+                          locationDemandFunnel?.summary
+                            ?.publishRateFromClaimed ?? 0,
                         ) * 100,
                       )}
                       %
@@ -6276,8 +6331,8 @@ export default function AdminDashboard() {
                     <div className="font-semibold">
                       {Math.round(
                         Number(
-                          locationDemandFunnel?.summary?.bookingRateFromClaimed ??
-                            0,
+                          locationDemandFunnel?.summary
+                            ?.bookingRateFromClaimed ?? 0,
                         ) * 100,
                       )}
                       %
@@ -6856,7 +6911,8 @@ export default function AdminDashboard() {
               <CardHeader>
                 <CardTitle>LISA Opportunity Console</CardTitle>
                 <CardDescription>
-                  First-party truth now, with recommendation cards only when signal density is sufficient
+                  First-party truth now, with recommendation cards only when
+                  signal density is sufficient
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -6879,31 +6935,65 @@ export default function AdminDashboard() {
                 </div>
                 <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
                   <div className="rounded-lg border p-2">
-                    <div className="text-[11px] text-muted-foreground">Human sessions now</div>
-                    <div className="text-lg font-semibold">{Number(lisaMarketIntel?.truthCounters?.humanSessionsNow ?? 0)}</div>
+                    <div className="text-[11px] text-muted-foreground">
+                      Human sessions now
+                    </div>
+                    <div className="text-lg font-semibold">
+                      {Number(
+                        lisaMarketIntel?.truthCounters?.humanSessionsNow ?? 0,
+                      )}
+                    </div>
                   </div>
                   <div className="rounded-lg border p-2">
-                    <div className="text-[11px] text-muted-foreground">Intent actions now</div>
-                    <div className="text-lg font-semibold">{Number(lisaMarketIntel?.truthCounters?.intentActionsNow ?? 0)}</div>
+                    <div className="text-[11px] text-muted-foreground">
+                      Intent actions now
+                    </div>
+                    <div className="text-lg font-semibold">
+                      {Number(
+                        lisaMarketIntel?.truthCounters?.intentActionsNow ?? 0,
+                      )}
+                    </div>
                   </div>
                   <div className="rounded-lg border p-2">
-                    <div className="text-[11px] text-muted-foreground">Repeated interest</div>
-                    <div className="text-lg font-semibold">{Number(lisaMarketIntel?.truthCounters?.repeatedBusinessInterestNow ?? 0)}</div>
+                    <div className="text-[11px] text-muted-foreground">
+                      Repeated interest
+                    </div>
+                    <div className="text-lg font-semibold">
+                      {Number(
+                        lisaMarketIntel?.truthCounters
+                          ?.repeatedBusinessInterestNow ?? 0,
+                      )}
+                    </div>
                   </div>
                   <div className="rounded-lg border p-2">
-                    <div className="text-[11px] text-muted-foreground">Machine discovery</div>
-                    <div className="text-lg font-semibold">{Number(lisaMarketIntel?.truthCounters?.machineDiscoveryNow ?? 0)}</div>
+                    <div className="text-[11px] text-muted-foreground">
+                      Machine discovery
+                    </div>
+                    <div className="text-lg font-semibold">
+                      {Number(
+                        lisaMarketIntel?.truthCounters?.machineDiscoveryNow ??
+                          0,
+                      )}
+                    </div>
                   </div>
                   <div className="rounded-lg border p-2">
-                    <div className="text-[11px] text-muted-foreground">Friction cases</div>
-                    <div className="text-lg font-semibold">{Number(lisaMarketIntel?.truthCounters?.frictionCasesNow ?? 0)}</div>
+                    <div className="text-[11px] text-muted-foreground">
+                      Friction cases
+                    </div>
+                    <div className="text-lg font-semibold">
+                      {Number(
+                        lisaMarketIntel?.truthCounters?.frictionCasesNow ?? 0,
+                      )}
+                    </div>
                   </div>
                 </div>
 
                 <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
                   <Card>
                     <CardHeader>
-                      <CardTitle className="text-base">Top content promotion candidate</CardTitle>
+                      <CardTitle className="text-base">
+                        Top content promotion candidate
+                      </CardTitle>
                     </CardHeader>
                     <CardContent className="text-sm text-muted-foreground">
                       {topPromotionItem
@@ -6916,7 +7006,8 @@ export default function AdminDashboard() {
                       ) : null}
                       {topPromotionItem?.changed ? (
                         <div className="mt-1 text-xs text-muted-foreground">
-                          What changed since yesterday: {topPromotionItem.changed}
+                          What changed since yesterday:{" "}
+                          {topPromotionItem.changed}
                         </div>
                       ) : null}
                       {topPromotionItem ? (
@@ -6926,13 +7017,46 @@ export default function AdminDashboard() {
                               {topPromotionItem.actionLabel}
                             </Button>
                           </Link>
-                          <Button size="sm" variant="ghost" onClick={() => handleBriefAction(`promote:${topPromotionItem.id}`, "snooze", topPromotionItem.title, topPromotionItem.href)}>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() =>
+                              handleBriefAction(
+                                `promote:${topPromotionItem.id}`,
+                                "snooze",
+                                topPromotionItem.title,
+                                topPromotionItem.href,
+                              )
+                            }
+                          >
                             Snooze
                           </Button>
-                          <Button size="sm" variant="ghost" onClick={() => handleBriefAction(`promote:${topPromotionItem.id}`, "done", topPromotionItem.title, topPromotionItem.href)}>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() =>
+                              handleBriefAction(
+                                `promote:${topPromotionItem.id}`,
+                                "done",
+                                topPromotionItem.title,
+                                topPromotionItem.href,
+                              )
+                            }
+                          >
                             Done
                           </Button>
-                          <Button size="sm" variant="ghost" onClick={() => handleBriefAction(`promote:${topPromotionItem.id}`, "dismiss", topPromotionItem.title, topPromotionItem.href)}>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() =>
+                              handleBriefAction(
+                                `promote:${topPromotionItem.id}`,
+                                "dismiss",
+                                topPromotionItem.title,
+                                topPromotionItem.href,
+                              )
+                            }
+                          >
                             Dismiss
                           </Button>
                         </div>
@@ -6941,7 +7065,9 @@ export default function AdminDashboard() {
                   </Card>
                   <Card>
                     <CardHeader>
-                      <CardTitle className="text-base">Biggest demand spike</CardTitle>
+                      <CardTitle className="text-base">
+                        Biggest demand spike
+                      </CardTitle>
                     </CardHeader>
                     <CardContent className="text-sm text-muted-foreground">
                       {topDemandItem
@@ -6964,13 +7090,46 @@ export default function AdminDashboard() {
                               {topDemandItem.actionLabel}
                             </Button>
                           </Link>
-                          <Button size="sm" variant="ghost" onClick={() => handleBriefAction(`demand:${topDemandItem.id}`, "snooze", topDemandItem.title, topDemandItem.href)}>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() =>
+                              handleBriefAction(
+                                `demand:${topDemandItem.id}`,
+                                "snooze",
+                                topDemandItem.title,
+                                topDemandItem.href,
+                              )
+                            }
+                          >
                             Snooze
                           </Button>
-                          <Button size="sm" variant="ghost" onClick={() => handleBriefAction(`demand:${topDemandItem.id}`, "done", topDemandItem.title, topDemandItem.href)}>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() =>
+                              handleBriefAction(
+                                `demand:${topDemandItem.id}`,
+                                "done",
+                                topDemandItem.title,
+                                topDemandItem.href,
+                              )
+                            }
+                          >
                             Done
                           </Button>
-                          <Button size="sm" variant="ghost" onClick={() => handleBriefAction(`demand:${topDemandItem.id}`, "dismiss", topDemandItem.title, topDemandItem.href)}>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() =>
+                              handleBriefAction(
+                                `demand:${topDemandItem.id}`,
+                                "dismiss",
+                                topDemandItem.title,
+                                topDemandItem.href,
+                              )
+                            }
+                          >
                             Dismiss
                           </Button>
                         </div>
@@ -6979,7 +7138,9 @@ export default function AdminDashboard() {
                   </Card>
                   <Card>
                     <CardHeader>
-                      <CardTitle className="text-base">Strongest supply/acquisition watch target</CardTitle>
+                      <CardTitle className="text-base">
+                        Strongest supply/acquisition watch target
+                      </CardTitle>
                     </CardHeader>
                     <CardContent className="text-sm text-muted-foreground">
                       {topAcquisitionItem
@@ -6992,7 +7153,8 @@ export default function AdminDashboard() {
                       ) : null}
                       {topAcquisitionItem?.changed ? (
                         <div className="mt-1 text-xs text-muted-foreground">
-                          What changed since yesterday: {topAcquisitionItem.changed}
+                          What changed since yesterday:{" "}
+                          {topAcquisitionItem.changed}
                         </div>
                       ) : null}
                       {topAcquisitionItem ? (
@@ -7002,13 +7164,46 @@ export default function AdminDashboard() {
                               {topAcquisitionItem.actionLabel}
                             </Button>
                           </Link>
-                          <Button size="sm" variant="ghost" onClick={() => handleBriefAction(`acquire:${topAcquisitionItem.id}`, "snooze", topAcquisitionItem.title, topAcquisitionItem.href)}>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() =>
+                              handleBriefAction(
+                                `acquire:${topAcquisitionItem.id}`,
+                                "snooze",
+                                topAcquisitionItem.title,
+                                topAcquisitionItem.href,
+                              )
+                            }
+                          >
                             Snooze
                           </Button>
-                          <Button size="sm" variant="ghost" onClick={() => handleBriefAction(`acquire:${topAcquisitionItem.id}`, "done", topAcquisitionItem.title, topAcquisitionItem.href)}>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() =>
+                              handleBriefAction(
+                                `acquire:${topAcquisitionItem.id}`,
+                                "done",
+                                topAcquisitionItem.title,
+                                topAcquisitionItem.href,
+                              )
+                            }
+                          >
                             Done
                           </Button>
-                          <Button size="sm" variant="ghost" onClick={() => handleBriefAction(`acquire:${topAcquisitionItem.id}`, "dismiss", topAcquisitionItem.title, topAcquisitionItem.href)}>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() =>
+                              handleBriefAction(
+                                `acquire:${topAcquisitionItem.id}`,
+                                "dismiss",
+                                topAcquisitionItem.title,
+                                topAcquisitionItem.href,
+                              )
+                            }
+                          >
                             Dismiss
                           </Button>
                         </div>
@@ -7017,7 +7212,9 @@ export default function AdminDashboard() {
                   </Card>
                   <Card>
                     <CardHeader>
-                      <CardTitle className="text-base">Machine discovery pressure to address</CardTitle>
+                      <CardTitle className="text-base">
+                        Machine discovery pressure to address
+                      </CardTitle>
                     </CardHeader>
                     <CardContent className="text-sm text-muted-foreground">
                       {topMachineAttentionItem
@@ -7030,7 +7227,8 @@ export default function AdminDashboard() {
                       ) : null}
                       {topMachineAttentionItem?.changed ? (
                         <div className="mt-1 text-xs text-muted-foreground">
-                          What changed since yesterday: {topMachineAttentionItem.changed}
+                          What changed since yesterday:{" "}
+                          {topMachineAttentionItem.changed}
                         </div>
                       ) : null}
                       {topMachineAttentionItem ? (
@@ -7040,13 +7238,46 @@ export default function AdminDashboard() {
                               {topMachineAttentionItem.actionLabel}
                             </Button>
                           </Link>
-                          <Button size="sm" variant="ghost" onClick={() => handleBriefAction(`machine:${topMachineAttentionItem.id}`, "snooze", topMachineAttentionItem.title, topMachineAttentionItem.href)}>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() =>
+                              handleBriefAction(
+                                `machine:${topMachineAttentionItem.id}`,
+                                "snooze",
+                                topMachineAttentionItem.title,
+                                topMachineAttentionItem.href,
+                              )
+                            }
+                          >
                             Snooze
                           </Button>
-                          <Button size="sm" variant="ghost" onClick={() => handleBriefAction(`machine:${topMachineAttentionItem.id}`, "done", topMachineAttentionItem.title, topMachineAttentionItem.href)}>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() =>
+                              handleBriefAction(
+                                `machine:${topMachineAttentionItem.id}`,
+                                "done",
+                                topMachineAttentionItem.title,
+                                topMachineAttentionItem.href,
+                              )
+                            }
+                          >
                             Done
                           </Button>
-                          <Button size="sm" variant="ghost" onClick={() => handleBriefAction(`machine:${topMachineAttentionItem.id}`, "dismiss", topMachineAttentionItem.title, topMachineAttentionItem.href)}>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() =>
+                              handleBriefAction(
+                                `machine:${topMachineAttentionItem.id}`,
+                                "dismiss",
+                                topMachineAttentionItem.title,
+                                topMachineAttentionItem.href,
+                              )
+                            }
+                          >
                             Dismiss
                           </Button>
                         </div>
@@ -7058,12 +7289,17 @@ export default function AdminDashboard() {
                 <div className="grid gap-4 lg:grid-cols-2">
                   <Card>
                     <CardHeader>
-                      <CardTitle className="text-base">What Changed Since Yesterday</CardTitle>
+                      <CardTitle className="text-base">
+                        What Changed Since Yesterday
+                      </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-3">
                       {yesterdayChangeItems.length ? (
                         yesterdayChangeItems.slice(0, 4).map((item: any) => (
-                          <div key={item.id} className="rounded-lg border px-3 py-3 text-sm">
+                          <div
+                            key={item.id}
+                            className="rounded-lg border px-3 py-3 text-sm"
+                          >
                             <div className="flex items-center justify-between gap-2">
                               <div className="font-medium">{item.title}</div>
                               <Badge variant="outline">
@@ -7071,7 +7307,9 @@ export default function AdminDashboard() {
                                 {item.delta}
                               </Badge>
                             </div>
-                            <div className="mt-2 text-muted-foreground">{item.summary}</div>
+                            <div className="mt-2 text-muted-foreground">
+                              {item.summary}
+                            </div>
                             <div className="mt-2 text-muted-foreground">
                               What to do: {item.next}
                             </div>
@@ -7079,7 +7317,8 @@ export default function AdminDashboard() {
                         ))
                       ) : (
                         <div className="text-sm text-muted-foreground">
-                          Yesterday-to-today movement is still too light to summarize yet.
+                          Yesterday-to-today movement is still too light to
+                          summarize yet.
                         </div>
                       )}
                     </CardContent>
@@ -7087,23 +7326,32 @@ export default function AdminDashboard() {
 
                   <Card>
                     <CardHeader>
-                      <CardTitle className="text-base">Food Trend Watch</CardTitle>
+                      <CardTitle className="text-base">
+                        Food Trend Watch
+                      </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-3">
                       {foodTrendItems.length ? (
                         foodTrendItems.slice(0, 4).map((item: any) => (
-                          <div key={item.id} className="rounded-lg border px-3 py-3 text-sm">
+                          <div
+                            key={item.id}
+                            className="rounded-lg border px-3 py-3 text-sm"
+                          >
                             <div className="flex items-center justify-between gap-2">
                               <div className="font-medium">{item.label}</div>
                               <div className="flex gap-2">
-                                <Badge variant="outline">{item.currentCount} now</Badge>
+                                <Badge variant="outline">
+                                  {item.currentCount} now
+                                </Badge>
                                 <Badge variant="outline">
                                   {item.delta > 0 ? "+" : ""}
                                   {item.delta}
                                 </Badge>
                               </div>
                             </div>
-                            <div className="mt-2 text-muted-foreground">{item.summary}</div>
+                            <div className="mt-2 text-muted-foreground">
+                              {item.summary}
+                            </div>
                             <div className="mt-2 text-muted-foreground">
                               What to do: {item.next}
                             </div>
@@ -7126,7 +7374,10 @@ export default function AdminDashboard() {
                     <CardContent className="space-y-3">
                       {promoteNowItems.length ? (
                         promoteNowItems.map((item: any) => (
-                          <div key={item.id} className="rounded-lg border px-3 py-3 text-sm">
+                          <div
+                            key={item.id}
+                            className="rounded-lg border px-3 py-3 text-sm"
+                          >
                             <div className="font-medium">{item.title}</div>
                             <div className="mt-2 text-muted-foreground">
                               Why it matters: {item.why}
@@ -7151,7 +7402,10 @@ export default function AdminDashboard() {
                     <CardContent className="space-y-3">
                       {demandSpikeItems.length ? (
                         demandSpikeItems.map((item: any) => (
-                          <div key={item.id} className="rounded-lg border px-3 py-3 text-sm">
+                          <div
+                            key={item.id}
+                            className="rounded-lg border px-3 py-3 text-sm"
+                          >
                             <div className="font-medium">{item.title}</div>
                             <div className="mt-2 text-muted-foreground">
                               Why it matters: {item.why}
@@ -7199,7 +7453,8 @@ export default function AdminDashboard() {
                       {priceScoutSupplySummary ? (
                         <div className="flex flex-wrap gap-2 text-xs">
                           <Badge variant="outline">
-                            {priceScoutSupplySummary.totalRecentRecords} supply records
+                            {priceScoutSupplySummary.totalRecentRecords} supply
+                            records
                           </Badge>
                           <Badge variant="outline">
                             {priceScoutSupplySummary.snapshotCount} snapshots
@@ -7214,24 +7469,38 @@ export default function AdminDashboard() {
                       ) : null}
                       {priceScoutDeals.length ? (
                         priceScoutDeals.slice(0, 4).map((item: any) => (
-                          <div key={item.id} className="rounded-lg border px-3 py-3 text-sm">
+                          <div
+                            key={item.id}
+                            className="rounded-lg border px-3 py-3 text-sm"
+                          >
                             <div className="flex items-center justify-between gap-2">
-                              <div className="font-medium">{item.restaurantName}</div>
-                              <Badge variant="outline">value {item.valueScore}</Badge>
+                              <div className="font-medium">
+                                {item.restaurantName}
+                              </div>
+                              <Badge variant="outline">
+                                value {item.valueScore}
+                              </Badge>
                             </div>
-                            <div className="mt-2 text-muted-foreground">{item.title}</div>
+                            <div className="mt-2 text-muted-foreground">
+                              {item.title}
+                            </div>
                             <div className="mt-2 text-muted-foreground">
                               Why it matters: {item.priceSignal}
-                              {item.cuisineType ? ` in ${item.cuisineType}.` : "."}
+                              {item.cuisineType
+                                ? ` in ${item.cuisineType}.`
+                                : "."}
                             </div>
                             <div className="mt-2 text-muted-foreground">
-                              What to do: Promote this offer, fold it into advertiser packages, and use it as proof of local value coverage.
+                              What to do: Promote this offer, fold it into
+                              advertiser packages, and use it as proof of local
+                              value coverage.
                             </div>
                           </div>
                         ))
                       ) : (
                         <div className="text-sm text-muted-foreground">
-                          Price Scout needs more active deals before it can rank value cleanly.
+                          Price Scout needs more active deals before it can rank
+                          value cleanly.
                         </div>
                       )}
                       {priceScoutSupplySpotlight.length ? (
@@ -7239,17 +7508,24 @@ export default function AdminDashboard() {
                           <div className="text-xs font-medium text-muted-foreground">
                             Supply lane spotlight
                           </div>
-                          {priceScoutSupplySpotlight.slice(0, 2).map((signal: any) => (
-                            <div
-                              key={`${signal.lane}:${signal.itemKey}:${signal.createdAt}`}
-                              className="rounded-lg border px-3 py-2 text-xs"
-                            >
-                              <div className="font-medium">{signal.itemName}</div>
-                              <div className="mt-1 text-muted-foreground">
-                                {String(signal.signalType || "signal").replace(/_/g, " ")} in {signal.areaKey}
+                          {priceScoutSupplySpotlight
+                            .slice(0, 2)
+                            .map((signal: any) => (
+                              <div
+                                key={`${signal.lane}:${signal.itemKey}:${signal.createdAt}`}
+                                className="rounded-lg border px-3 py-2 text-xs"
+                              >
+                                <div className="font-medium">
+                                  {signal.itemName}
+                                </div>
+                                <div className="mt-1 text-muted-foreground">
+                                  {String(
+                                    signal.signalType || "signal",
+                                  ).replace(/_/g, " ")}{" "}
+                                  in {signal.areaKey}
+                                </div>
                               </div>
-                            </div>
-                          ))}
+                            ))}
                         </div>
                       ) : null}
                     </CardContent>
@@ -7257,12 +7533,17 @@ export default function AdminDashboard() {
 
                   <Card>
                     <CardHeader>
-                      <CardTitle className="text-base">Machine Attention</CardTitle>
+                      <CardTitle className="text-base">
+                        Machine Attention
+                      </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-3">
                       {machineAttentionItems.length ? (
                         machineAttentionItems.map((item: any) => (
-                          <div key={item.id} className="rounded-lg border px-3 py-3 text-sm">
+                          <div
+                            key={item.id}
+                            className="rounded-lg border px-3 py-3 text-sm"
+                          >
                             <div className="font-medium">{item.title}</div>
                             <div className="mt-2 text-muted-foreground">
                               Why it matters: {item.why}
@@ -7274,7 +7555,8 @@ export default function AdminDashboard() {
                         ))
                       ) : (
                         <div className="text-sm text-muted-foreground">
-                          No meaningful outside machine attention is visible yet.
+                          No meaningful outside machine attention is visible
+                          yet.
                         </div>
                       )}
                     </CardContent>
@@ -7284,12 +7566,17 @@ export default function AdminDashboard() {
                 <div className="grid gap-4 lg:grid-cols-2">
                   <Card>
                     <CardHeader>
-                      <CardTitle className="text-base">Acquisition Targets</CardTitle>
+                      <CardTitle className="text-base">
+                        Acquisition Targets
+                      </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-3">
                       {acquisitionWatchItems.length ? (
                         acquisitionWatchItems.map((item: any) => (
-                          <div key={item.id} className="rounded-lg border px-3 py-3 text-sm">
+                          <div
+                            key={item.id}
+                            className="rounded-lg border px-3 py-3 text-sm"
+                          >
                             <div className="font-medium">{item.title}</div>
                             <div className="mt-2 text-muted-foreground">
                               Why it matters: {item.why}
@@ -7309,12 +7596,17 @@ export default function AdminDashboard() {
 
                   <Card>
                     <CardHeader>
-                      <CardTitle className="text-base">Pages To Improve</CardTitle>
+                      <CardTitle className="text-base">
+                        Pages To Improve
+                      </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-3">
                       {authorityGapItems.length ? (
                         authorityGapItems.map((item: any) => (
-                          <div key={item.id} className="rounded-lg border px-3 py-3 text-sm">
+                          <div
+                            key={item.id}
+                            className="rounded-lg border px-3 py-3 text-sm"
+                          >
                             <div className="font-medium">{item.title}</div>
                             <div className="mt-2 text-muted-foreground">
                               Why it matters: {item.why}
@@ -8200,9 +8492,9 @@ export default function AdminDashboard() {
                     <p className="text-xs text-muted-foreground">User Type</p>
                     <Badge
                       variant={
-                        selectedUser.userType === "admin"
-                          || selectedUser.userType === "duper_admin"
-                          || selectedUser.userType === "super_admin"
+                        selectedUser.userType === "admin" ||
+                        selectedUser.userType === "duper_admin" ||
+                        selectedUser.userType === "super_admin"
                           ? "destructive"
                           : "secondary"
                       }

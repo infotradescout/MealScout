@@ -27,14 +27,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import {
-  Mail,
-  Eye,
-  EyeOff,
-  ArrowLeft,
-  ArrowRight,
-  Store,
-} from "lucide-react";
+import { Mail, Eye, EyeOff, ArrowLeft, ArrowRight, Store } from "lucide-react";
 import DocumentUpload from "@/components/document-upload";
 import { BackHeader } from "@/components/back-header";
 import { SEOHead } from "@/components/seo-head";
@@ -44,10 +37,7 @@ import {
   trackFunnelEventOncePerSession,
 } from "@/utils/funnelTelemetry";
 import { HOST_ONBOARDING_COPY as COPY } from "@/copy/hostOnboarding.copy";
-import {
-  PASSWORD_REGEX,
-  PASSWORD_REQUIREMENTS,
-} from "@/utils/passwordPolicy";
+import { PASSWORD_REGEX, PASSWORD_REQUIREMENTS } from "@/utils/passwordPolicy";
 import { authUrl } from "@/lib/api";
 
 /**
@@ -63,9 +53,12 @@ const restaurantSchema = z
     city: z.string().min(1, "City is required"),
     state: z.string().min(2, "State is required"),
     phone: z.string().min(10, COPY.validation.restaurant.phoneInvalid),
-    businessType: z.enum(["restaurant", "bar", "food_truck", "caterer", "private_chef"], {
-      required_error: COPY.validation.restaurant.businessTypeRequired,
-    }),
+    businessType: z.enum(
+      ["restaurant", "bar", "food_truck", "caterer", "private_chef"],
+      {
+        required_error: COPY.validation.restaurant.businessTypeRequired,
+      },
+    ),
     confirmNotFoodTruck: z.boolean().default(false),
     cuisineType: z.string().min(1, COPY.validation.restaurant.cuisineRequired),
     description: z
@@ -94,7 +87,7 @@ const restaurantSchema = z
       .boolean()
       .refine(
         (val) => val === true,
-        COPY.validation.restaurant.acceptTermsRequired
+        COPY.validation.restaurant.acceptTermsRequired,
       ),
   })
   .superRefine((data, ctx) => {
@@ -158,7 +151,7 @@ function assertNever(x: never): never {
 
 function hostOnboardingTransition(
   state: HostOnboardingState,
-  event: HostOnboardingEvent
+  event: HostOnboardingEvent,
 ): HostOnboardingState {
   switch (state.step) {
     case "restaurant":
@@ -204,18 +197,20 @@ export default function RestaurantSignup() {
   const [claimLoading, setClaimLoading] = useState(false);
   const [claimSelection, setClaimSelection] = useState<any | null>(null);
   const [claimError, setClaimError] = useState("");
-  const [claimRequestingId, setClaimRequestingId] = useState<string | null>(null);
+  const [claimRequestingId, setClaimRequestingId] = useState<string | null>(
+    null,
+  );
   const [claimAutoSearch, setClaimAutoSearch] = useState(false);
   const [licenseNumber, setLicenseNumber] = useState("");
   const [onboardingState, dispatchOnboarding] = useReducer(
     hostOnboardingTransition,
     {
       step: "restaurant",
-    } as HostOnboardingState
+    } as HostOnboardingState,
   );
   const [createdRestaurant, setCreatedRestaurant] = useState<any>(null);
   const [verificationDocuments, setVerificationDocuments] = useState<string[]>(
-    []
+    [],
   );
   const currentStep: HostOnboardingStep = onboardingState.step;
 
@@ -237,7 +232,8 @@ export default function RestaurantSignup() {
   const menuBuilderHref = useMemo(() => {
     const params = new URLSearchParams({ src: "onboarding" });
     if (menuSourceUrl) params.set("menuSource", menuSourceUrl);
-    if (createdRestaurant?.id) params.set("restaurantId", String(createdRestaurant.id));
+    if (createdRestaurant?.id)
+      params.set("restaurantId", String(createdRestaurant.id));
     return `/menu-builder?${params.toString()}`;
   }, [createdRestaurant?.id, menuSourceUrl]);
 
@@ -246,7 +242,8 @@ export default function RestaurantSignup() {
       src: "onboarding",
       setup: "schedule",
     });
-    if (createdRestaurant?.id) params.set("restaurantId", String(createdRestaurant.id));
+    if (createdRestaurant?.id)
+      params.set("restaurantId", String(createdRestaurant.id));
     return `/restaurant-owner-dashboard?${params.toString()}`;
   }, [createdRestaurant?.id]);
 
@@ -365,12 +362,16 @@ export default function RestaurantSignup() {
   }, [form]);
 
   useEffect(() => {
-    trackFunnelEventOncePerSession(FUNNEL_EVENTS.activationStarted, "restaurant_signup_view", {
-      page: "restaurant-signup",
-      stage: "business_onboarding_view",
-      businessType: selectedBusinessType,
-      authMode,
-    });
+    trackFunnelEventOncePerSession(
+      FUNNEL_EVENTS.activationStarted,
+      "restaurant_signup_view",
+      {
+        page: "restaurant-signup",
+        stage: "business_onboarding_view",
+        businessType: selectedBusinessType,
+        authMode,
+      },
+    );
   }, [selectedBusinessType, authMode]);
 
   useEffect(() => {
@@ -397,7 +398,7 @@ export default function RestaurantSignup() {
       try {
         window.localStorage.setItem(
           RESTAURANT_DRAFT_KEY,
-          JSON.stringify(value)
+          JSON.stringify(value),
         );
       } catch {
         // ignore storage errors
@@ -412,7 +413,7 @@ export default function RestaurantSignup() {
       const res = await apiRequest(
         "POST",
         "/api/auth/restaurant/register",
-        signupData
+        signupData,
       );
       return await res.json();
     },
@@ -623,7 +624,7 @@ export default function RestaurantSignup() {
             (createdRestaurant as any)?.claimedFromImportId
               ? licenseNumber.trim()
               : undefined,
-        }
+        },
       );
     },
     onSuccess: () => {
@@ -666,9 +667,8 @@ export default function RestaurantSignup() {
 
     try {
       // Create restaurant first
-      const restaurant = await createRestaurantMutation.mutateAsync(
-        restaurantData
-      );
+      const restaurant =
+        await createRestaurantMutation.mutateAsync(restaurantData);
 
       // Normal flow continues to verification step
       setCreatedRestaurant(restaurant);
@@ -728,8 +728,8 @@ export default function RestaurantSignup() {
 
   const isAutoBusinessVerified = Boolean(
     createdRestaurant?.isVerified &&
-      (createdRestaurant as any)?.claimedFromImportId &&
-      selectedBusinessType === "food_truck",
+    (createdRestaurant as any)?.claimedFromImportId &&
+    selectedBusinessType === "food_truck",
   );
 
   const handleRequestTruck = async (listingId: string) => {
@@ -752,7 +752,9 @@ export default function RestaurantSignup() {
         return;
       }
       toast({
-        title: data?.emailSent ? "Email sent to owner" : "Email could not be sent",
+        title: data?.emailSent
+          ? "Email sent to owner"
+          : "Email could not be sent",
         description: data?.emailSent
           ? "We sent them a link to finish setting up their account."
           : "An admin should check Email Delivery in the dashboard.",
@@ -871,7 +873,10 @@ export default function RestaurantSignup() {
               </CardContent>
             </Card>
 
-            <Card className="border-[color:var(--border-subtle)] bg-[var(--bg-card)] shadow-clean-lg" data-signup-section>
+            <Card
+              className="border-[color:var(--border-subtle)] bg-[var(--bg-card)] shadow-clean-lg"
+              data-signup-section
+            >
               <CardContent className="p-6">
                 <div className="mb-5 grid grid-cols-2 rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-1">
                   <Button
@@ -898,14 +903,30 @@ export default function RestaurantSignup() {
                   type="button"
                   data-testid="button-google-signin"
                   variant="outline"
-                  onClick={() => (window.location.href = authUrl("/api/auth/google/restaurant"))}
+                  onClick={() =>
+                    (window.location.href = authUrl(
+                      "/api/auth/google/restaurant",
+                    ))
+                  }
                   className="mb-4 w-full justify-center gap-2 border-[color:var(--border-subtle)]"
                 >
                   <svg className="h-5 w-5" viewBox="0 0 24 24">
-                    <path fill="#4285f4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                    <path fill="#34a853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                    <path fill="#fbbc05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
-                    <path fill="#ea4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+                    <path
+                      fill="#4285f4"
+                      d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                    />
+                    <path
+                      fill="#34a853"
+                      d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                    />
+                    <path
+                      fill="#fbbc05"
+                      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+                    />
+                    <path
+                      fill="#ea4335"
+                      d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                    />
                   </svg>
                   {COPY.unauth.oauth.button}
                 </Button>
@@ -919,119 +940,280 @@ export default function RestaurantSignup() {
 
                 {authMode === "signup" ? (
                   <Form {...signupForm}>
-                    <form onSubmit={signupForm.handleSubmit(onSignup)} className="space-y-4">
+                    <form
+                      onSubmit={signupForm.handleSubmit(onSignup)}
+                      className="space-y-4"
+                    >
                       <div className="grid gap-4 sm:grid-cols-2">
-                        <FormField control={signupForm.control} name="firstName" render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>{COPY.forms.signup.firstNameLabel}</FormLabel>
-                            <FormControl>
-                              <Input data-testid="input-first-name" autoComplete="given-name" placeholder={COPY.forms.signup.firstNamePlaceholder} {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )} />
-                        <FormField control={signupForm.control} name="lastName" render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>{COPY.forms.signup.lastNameLabel}</FormLabel>
-                            <FormControl>
-                              <Input data-testid="input-last-name" autoComplete="family-name" placeholder={COPY.forms.signup.lastNamePlaceholder} {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )} />
+                        <FormField
+                          control={signupForm.control}
+                          name="firstName"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>
+                                {COPY.forms.signup.firstNameLabel}
+                              </FormLabel>
+                              <FormControl>
+                                <Input
+                                  data-testid="input-first-name"
+                                  autoComplete="given-name"
+                                  placeholder={
+                                    COPY.forms.signup.firstNamePlaceholder
+                                  }
+                                  {...field}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={signupForm.control}
+                          name="lastName"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>
+                                {COPY.forms.signup.lastNameLabel}
+                              </FormLabel>
+                              <FormControl>
+                                <Input
+                                  data-testid="input-last-name"
+                                  autoComplete="family-name"
+                                  placeholder={
+                                    COPY.forms.signup.lastNamePlaceholder
+                                  }
+                                  {...field}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
                       </div>
 
-                      <FormField control={signupForm.control} name="email" render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{COPY.forms.signup.emailLabel}</FormLabel>
-                          <FormControl>
-                            <div className="relative">
-                              <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[color:var(--text-secondary)]" />
-                              <Input data-testid="input-email" type="email" autoComplete="email" placeholder={COPY.forms.signup.emailPlaceholder} className="pl-9" {...field} />
-                            </div>
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )} />
+                      <FormField
+                        control={signupForm.control}
+                        name="email"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>
+                              {COPY.forms.signup.emailLabel}
+                            </FormLabel>
+                            <FormControl>
+                              <div className="relative">
+                                <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[color:var(--text-secondary)]" />
+                                <Input
+                                  data-testid="input-email"
+                                  type="email"
+                                  autoComplete="email"
+                                  placeholder={
+                                    COPY.forms.signup.emailPlaceholder
+                                  }
+                                  className="pl-9"
+                                  {...field}
+                                />
+                              </div>
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
 
-                      <FormField control={signupForm.control} name="phone" render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{COPY.forms.signup.phoneLabel}</FormLabel>
-                          <FormControl>
-                            <Input data-testid="input-phone" type="tel" autoComplete="tel" placeholder={COPY.forms.signup.phonePlaceholder} {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )} />
+                      <FormField
+                        control={signupForm.control}
+                        name="phone"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>
+                              {COPY.forms.signup.phoneLabel}
+                            </FormLabel>
+                            <FormControl>
+                              <Input
+                                data-testid="input-phone"
+                                type="tel"
+                                autoComplete="tel"
+                                placeholder={COPY.forms.signup.phonePlaceholder}
+                                {...field}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
 
-                      <FormField control={signupForm.control} name="password" render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{COPY.forms.signup.passwordLabel}</FormLabel>
-                          <FormControl>
-                            <div className="relative">
-                              <Input data-testid="input-password" type={showPassword ? "text" : "password"} autoComplete="new-password" placeholder={COPY.forms.signup.passwordPlaceholder} className="pr-10" {...field} />
-                              <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 text-[color:var(--text-secondary)]" onClick={() => setShowPassword(!showPassword)}>
-                                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                              </button>
-                            </div>
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )} />
+                      <FormField
+                        control={signupForm.control}
+                        name="password"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>
+                              {COPY.forms.signup.passwordLabel}
+                            </FormLabel>
+                            <FormControl>
+                              <div className="relative">
+                                <Input
+                                  data-testid="input-password"
+                                  type={showPassword ? "text" : "password"}
+                                  autoComplete="new-password"
+                                  placeholder={
+                                    COPY.forms.signup.passwordPlaceholder
+                                  }
+                                  className="pr-10"
+                                  {...field}
+                                />
+                                <button
+                                  type="button"
+                                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[color:var(--text-secondary)]"
+                                  onClick={() => setShowPassword(!showPassword)}
+                                >
+                                  {showPassword ? (
+                                    <EyeOff className="h-4 w-4" />
+                                  ) : (
+                                    <Eye className="h-4 w-4" />
+                                  )}
+                                </button>
+                              </div>
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
 
-                      <FormField control={signupForm.control} name="confirmPassword" render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{COPY.forms.signup.confirmPasswordLabel}</FormLabel>
-                          <FormControl>
-                            <div className="relative">
-                              <Input data-testid="input-confirm-password" type={showConfirmPassword ? "text" : "password"} autoComplete="new-password" placeholder={COPY.forms.signup.confirmPasswordPlaceholder} className="pr-10" {...field} />
-                              <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 text-[color:var(--text-secondary)]" onClick={() => setShowConfirmPassword(!showConfirmPassword)}>
-                                {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                              </button>
-                            </div>
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )} />
+                      <FormField
+                        control={signupForm.control}
+                        name="confirmPassword"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>
+                              {COPY.forms.signup.confirmPasswordLabel}
+                            </FormLabel>
+                            <FormControl>
+                              <div className="relative">
+                                <Input
+                                  data-testid="input-confirm-password"
+                                  type={
+                                    showConfirmPassword ? "text" : "password"
+                                  }
+                                  autoComplete="new-password"
+                                  placeholder={
+                                    COPY.forms.signup.confirmPasswordPlaceholder
+                                  }
+                                  className="pr-10"
+                                  {...field}
+                                />
+                                <button
+                                  type="button"
+                                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[color:var(--text-secondary)]"
+                                  onClick={() =>
+                                    setShowConfirmPassword(!showConfirmPassword)
+                                  }
+                                >
+                                  {showConfirmPassword ? (
+                                    <EyeOff className="h-4 w-4" />
+                                  ) : (
+                                    <Eye className="h-4 w-4" />
+                                  )}
+                                </button>
+                              </div>
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
 
-                      <Button type="submit" className="w-full action-primary hover:bg-[color:var(--action-hover)]" disabled={signupMutation.isPending} data-testid="button-signup-submit">
-                        {signupMutation.isPending ? COPY.unauth.signupCta.buttonPending : COPY.unauth.signupCta.buttonIdle}
+                      <Button
+                        type="submit"
+                        className="w-full action-primary hover:bg-[color:var(--action-hover)]"
+                        disabled={signupMutation.isPending}
+                        data-testid="button-signup-submit"
+                      >
+                        {signupMutation.isPending
+                          ? COPY.unauth.signupCta.buttonPending
+                          : COPY.unauth.signupCta.buttonIdle}
                       </Button>
                     </form>
                   </Form>
                 ) : (
                   <Form {...loginForm}>
-                    <form onSubmit={loginForm.handleSubmit(onLogin)} className="space-y-4">
-                      <FormField control={loginForm.control} name="email" render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{COPY.forms.login.emailLabel}</FormLabel>
-                          <FormControl>
-                            <div className="relative">
-                              <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[color:var(--text-secondary)]" />
-                              <Input data-testid="input-login-email" type="email" autoComplete="email" placeholder={COPY.forms.login.emailPlaceholder} className="pl-9" {...field} />
-                            </div>
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )} />
+                    <form
+                      onSubmit={loginForm.handleSubmit(onLogin)}
+                      className="space-y-4"
+                    >
+                      <FormField
+                        control={loginForm.control}
+                        name="email"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>{COPY.forms.login.emailLabel}</FormLabel>
+                            <FormControl>
+                              <div className="relative">
+                                <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[color:var(--text-secondary)]" />
+                                <Input
+                                  data-testid="input-login-email"
+                                  type="email"
+                                  autoComplete="email"
+                                  placeholder={
+                                    COPY.forms.login.emailPlaceholder
+                                  }
+                                  className="pl-9"
+                                  {...field}
+                                />
+                              </div>
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
 
-                      <FormField control={loginForm.control} name="password" render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{COPY.forms.login.passwordLabel}</FormLabel>
-                          <FormControl>
-                            <div className="relative">
-                              <Input data-testid="input-login-password" type={showLoginPassword ? "text" : "password"} autoComplete="current-password" placeholder={COPY.forms.login.passwordPlaceholder} className="pr-10" {...field} />
-                              <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 text-[color:var(--text-secondary)]" onClick={() => setShowLoginPassword(!showLoginPassword)}>
-                                {showLoginPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                              </button>
-                            </div>
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )} />
+                      <FormField
+                        control={loginForm.control}
+                        name="password"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>
+                              {COPY.forms.login.passwordLabel}
+                            </FormLabel>
+                            <FormControl>
+                              <div className="relative">
+                                <Input
+                                  data-testid="input-login-password"
+                                  type={showLoginPassword ? "text" : "password"}
+                                  autoComplete="current-password"
+                                  placeholder={
+                                    COPY.forms.login.passwordPlaceholder
+                                  }
+                                  className="pr-10"
+                                  {...field}
+                                />
+                                <button
+                                  type="button"
+                                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[color:var(--text-secondary)]"
+                                  onClick={() =>
+                                    setShowLoginPassword(!showLoginPassword)
+                                  }
+                                >
+                                  {showLoginPassword ? (
+                                    <EyeOff className="h-4 w-4" />
+                                  ) : (
+                                    <Eye className="h-4 w-4" />
+                                  )}
+                                </button>
+                              </div>
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
 
-                      <Button type="submit" className="w-full action-primary hover:bg-[color:var(--action-hover)]" disabled={loginMutation.isPending} data-testid="button-login-submit">
-                        {loginMutation.isPending ? COPY.unauth.loginCta.buttonPending : COPY.unauth.loginCta.buttonIdle}
+                      <Button
+                        type="submit"
+                        className="w-full action-primary hover:bg-[color:var(--action-hover)]"
+                        disabled={loginMutation.isPending}
+                        data-testid="button-login-submit"
+                      >
+                        {loginMutation.isPending
+                          ? COPY.unauth.loginCta.buttonPending
+                          : COPY.unauth.loginCta.buttonIdle}
                       </Button>
                     </form>
                   </Form>
@@ -1066,23 +1248,23 @@ export default function RestaurantSignup() {
           user.userType !== "duper_admin" &&
           user.userType !== "super_admin" &&
           user.userType !== "staff" && (
-          <Card className="mb-4 border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)] shadow-clean">
-            <CardContent className="p-4">
-              <p className="text-sm font-semibold text-[color:var(--text-primary)]">
-                {COPY.main.authenticatedBanner.title}
-              </p>
-              <p className="mt-1 text-xs text-[color:var(--text-secondary)]">
-                {COPY.main.authenticatedBanner.body}
-              </p>
-              <p className="mt-2 text-xs text-[color:var(--text-secondary)]">
-                {COPY.main.authenticatedBanner.freeLine}
-              </p>
-              <p className="mt-1 text-xs font-semibold text-[color:var(--text-primary)]">
-                {COPY.main.authenticatedBanner.paidLine}
-              </p>
-            </CardContent>
-          </Card>
-        )}
+            <Card className="mb-4 border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)] shadow-clean">
+              <CardContent className="p-4">
+                <p className="text-sm font-semibold text-[color:var(--text-primary)]">
+                  {COPY.main.authenticatedBanner.title}
+                </p>
+                <p className="mt-1 text-xs text-[color:var(--text-secondary)]">
+                  {COPY.main.authenticatedBanner.body}
+                </p>
+                <p className="mt-2 text-xs text-[color:var(--text-secondary)]">
+                  {COPY.main.authenticatedBanner.freeLine}
+                </p>
+                <p className="mt-1 text-xs font-semibold text-[color:var(--text-primary)]">
+                  {COPY.main.authenticatedBanner.paidLine}
+                </p>
+              </CardContent>
+            </Card>
+          )}
 
         <Card className="mb-6 border-[color:var(--border-subtle)] bg-[var(--bg-card)] shadow-clean-lg">
           <CardContent className="p-6">
@@ -1099,12 +1281,16 @@ export default function RestaurantSignup() {
         </Card>
 
         <div className="mb-5 flex items-center justify-center gap-4">
-          <div className={`flex items-center gap-2 rounded-full border px-3 py-1 text-sm ${currentStep === "restaurant" ? "border-[color:var(--action-primary)] bg-[var(--bg-surface-muted)] text-[color:var(--action-primary)]" : "border-[color:var(--border-subtle)] text-[color:var(--text-secondary)]"}`}>
+          <div
+            className={`flex items-center gap-2 rounded-full border px-3 py-1 text-sm ${currentStep === "restaurant" ? "border-[color:var(--action-primary)] bg-[var(--bg-surface-muted)] text-[color:var(--action-primary)]" : "border-[color:var(--border-subtle)] text-[color:var(--text-secondary)]"}`}
+          >
             <span className="font-bold">1</span>
             <span>{COPY.steps.businessDetails}</span>
           </div>
           <div className="h-px w-8 bg-[color:var(--border-subtle)]" />
-          <div className={`flex items-center gap-2 rounded-full border px-3 py-1 text-sm ${currentStep === "verification" ? "border-[color:var(--action-primary)] bg-[var(--bg-surface-muted)] text-[color:var(--action-primary)]" : "border-[color:var(--border-subtle)] text-[color:var(--text-secondary)]"}`}>
+          <div
+            className={`flex items-center gap-2 rounded-full border px-3 py-1 text-sm ${currentStep === "verification" ? "border-[color:var(--action-primary)] bg-[var(--bg-surface-muted)] text-[color:var(--action-primary)]" : "border-[color:var(--border-subtle)] text-[color:var(--text-secondary)]"}`}
+          >
             <span className="font-bold">2</span>
             <span>{COPY.steps.businessVerification}</span>
           </div>
@@ -1114,34 +1300,78 @@ export default function RestaurantSignup() {
           <Card className="border-[color:var(--border-subtle)] bg-[var(--bg-card)] shadow-clean-lg">
             <CardContent className="p-6">
               <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit, handleRestaurantInvalid)} className="space-y-6">
+                <form
+                  onSubmit={form.handleSubmit(
+                    onSubmit,
+                    handleRestaurantInvalid,
+                  )}
+                  className="space-y-6"
+                >
                   <div className="grid gap-4 sm:grid-cols-2">
-                    <FormField control={form.control} name="name" render={({ field }) => (
-                      <FormItem>
-                        <FormLabel data-testid="label-business-name">{COPY.forms.restaurant.nameLabel}</FormLabel>
-                        <FormControl><Input placeholder={COPY.forms.restaurant.namePlaceholder} data-testid="input-business-name" {...field} /></FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )} />
-                    <FormField control={form.control} name="businessType" render={({ field }) => (
-                      <FormItem>
-                        <FormLabel data-testid="label-business-type">{COPY.forms.restaurant.businessTypeLabel}</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                          <FormControl><SelectTrigger data-testid="select-business-type"><SelectValue placeholder={COPY.forms.restaurant.businessTypePlaceholder} /></SelectTrigger></FormControl>
-                          <SelectContent>
-                            <SelectItem value="food_truck">Food Truck</SelectItem>
-                            <SelectItem value="restaurant">Restaurant</SelectItem>
-                            <SelectItem value="bar">Bar</SelectItem>
-                            <SelectItem value="caterer">Caterer</SelectItem>
-                            <SelectItem value="private_chef">Private Chef</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <p className="text-xs text-[color:var(--text-secondary)]">
-                          {COPY.forms.restaurant.businessTypeHelp}
-                        </p>
-                        <FormMessage />
-                      </FormItem>
-                    )} />
+                    <FormField
+                      control={form.control}
+                      name="name"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel data-testid="label-business-name">
+                            {COPY.forms.restaurant.nameLabel}
+                          </FormLabel>
+                          <FormControl>
+                            <Input
+                              placeholder={
+                                COPY.forms.restaurant.namePlaceholder
+                              }
+                              data-testid="input-business-name"
+                              {...field}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="businessType"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel data-testid="label-business-type">
+                            {COPY.forms.restaurant.businessTypeLabel}
+                          </FormLabel>
+                          <Select
+                            onValueChange={field.onChange}
+                            defaultValue={field.value}
+                          >
+                            <FormControl>
+                              <SelectTrigger data-testid="select-business-type">
+                                <SelectValue
+                                  placeholder={
+                                    COPY.forms.restaurant
+                                      .businessTypePlaceholder
+                                  }
+                                />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="food_truck">
+                                Food Truck
+                              </SelectItem>
+                              <SelectItem value="restaurant">
+                                Restaurant
+                              </SelectItem>
+                              <SelectItem value="bar">Bar</SelectItem>
+                              <SelectItem value="caterer">Caterer</SelectItem>
+                              <SelectItem value="private_chef">
+                                Private Chef
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <p className="text-xs text-[color:var(--text-secondary)]">
+                            {COPY.forms.restaurant.businessTypeHelp}
+                          </p>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
                   </div>
 
                   {selectedBusinessType !== "food_truck" && (
@@ -1159,7 +1389,9 @@ export default function RestaurantSignup() {
                                 }
                               />
                             </FormControl>
-                            <span>{COPY.forms.restaurant.stationaryConfirmLabel}</span>
+                            <span>
+                              {COPY.forms.restaurant.stationaryConfirmLabel}
+                            </span>
                           </label>
                           <p className="text-xs text-[color:var(--text-secondary)]">
                             {COPY.forms.restaurant.stationaryWarning}
@@ -1172,25 +1404,61 @@ export default function RestaurantSignup() {
 
                   {selectedBusinessType === "food_truck" && (
                     <div className="space-y-3 rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)] p-4">
-                      <h3 className="text-sm font-semibold text-[color:var(--text-primary)]">{COPY.forms.restaurant.claimTitle}</h3>
-                      <p className="text-xs text-[color:var(--text-secondary)]">{COPY.forms.restaurant.claimDescription}</p>
+                      <h3 className="text-sm font-semibold text-[color:var(--text-primary)]">
+                        {COPY.forms.restaurant.claimTitle}
+                      </h3>
+                      <p className="text-xs text-[color:var(--text-secondary)]">
+                        {COPY.forms.restaurant.claimDescription}
+                      </p>
                       <div className="flex flex-col gap-2 sm:flex-row">
-                        <Input value={claimQuery} onChange={(e) => setClaimQuery(e.target.value)} placeholder={COPY.forms.restaurant.claimSearchPlaceholder} data-testid="input-claim-search" />
-                        <Button type="button" variant="outline" onClick={handleClaimSearch} disabled={claimLoading} data-testid="button-claim-search">{COPY.forms.restaurant.claimSearchButton}</Button>
+                        <Input
+                          value={claimQuery}
+                          onChange={(e) => setClaimQuery(e.target.value)}
+                          placeholder={
+                            COPY.forms.restaurant.claimSearchPlaceholder
+                          }
+                          data-testid="input-claim-search"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={handleClaimSearch}
+                          disabled={claimLoading}
+                          data-testid="button-claim-search"
+                        >
+                          {COPY.forms.restaurant.claimSearchButton}
+                        </Button>
                       </div>
                       {claimSelection && (
                         <div className="rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-3 text-xs">
-                          <p className="font-semibold text-[color:var(--text-primary)]">{COPY.forms.restaurant.claimSelectedLabel}</p>
-                          <p className="text-[color:var(--text-secondary)]">{claimSelection.name}</p>
-                          <Button type="button" variant="ghost" size="sm" onClick={() => setClaimSelection(null)} data-testid="button-claim-clear">{COPY.forms.restaurant.claimClearButton}</Button>
+                          <p className="font-semibold text-[color:var(--text-primary)]">
+                            {COPY.forms.restaurant.claimSelectedLabel}
+                          </p>
+                          <p className="text-[color:var(--text-secondary)]">
+                            {claimSelection.name}
+                          </p>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setClaimSelection(null)}
+                            data-testid="button-claim-clear"
+                          >
+                            {COPY.forms.restaurant.claimClearButton}
+                          </Button>
                         </div>
                       )}
                       {claimResults.length > 0 && !claimSelection && (
                         <div className="space-y-2">
                           {claimResults.map((listing) => (
-                            <div key={listing.id} className="flex items-center justify-between rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-3 text-xs">
+                            <div
+                              key={listing.id}
+                              className="flex items-center justify-between rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-3 text-xs"
+                            >
                               <div>
-                                <p className="font-medium text-[color:var(--text-primary)]">{listing.name}</p>
+                                <p className="font-medium text-[color:var(--text-primary)]">
+                                  {listing.name}
+                                </p>
                                 {listing.invited && (
                                   <p className="text-[11px] text-[color:var(--text-secondary)]">
                                     This truck has an invited owner.
@@ -1198,7 +1466,14 @@ export default function RestaurantSignup() {
                                 )}
                               </div>
                               {listing.canClaim !== false ? (
-                                <Button type="button" size="sm" onClick={() => applyClaimSelection(listing)} data-testid={`button-claim-select-${listing.id}`}>{COPY.forms.restaurant.claimSelectButton}</Button>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  onClick={() => applyClaimSelection(listing)}
+                                  data-testid={`button-claim-select-${listing.id}`}
+                                >
+                                  {COPY.forms.restaurant.claimSelectButton}
+                                </Button>
                               ) : (
                                 <Button
                                   type="button"
@@ -1206,12 +1481,15 @@ export default function RestaurantSignup() {
                                   variant="outline"
                                   disabled={
                                     claimRequestingId === listing.id ||
-                                    Number(listing.requestCooldownMinutes || 0) > 0
+                                    Number(
+                                      listing.requestCooldownMinutes || 0,
+                                    ) > 0
                                   }
                                   onClick={() => handleRequestTruck(listing.id)}
                                   data-testid={`button-claim-request-${listing.id}`}
                                 >
-                                  {Number(listing.requestCooldownMinutes || 0) > 0
+                                  {Number(listing.requestCooldownMinutes || 0) >
+                                  0
                                     ? `Try again in ${listing.requestCooldownMinutes}m`
                                     : claimRequestingId === listing.id
                                       ? "Sending..."
@@ -1222,84 +1500,281 @@ export default function RestaurantSignup() {
                           ))}
                         </div>
                       )}
-                      {claimError && <p className="text-xs text-[color:var(--text-secondary)]">{claimError}</p>}
+                      {claimError && (
+                        <p className="text-xs text-[color:var(--text-secondary)]">
+                          {claimError}
+                        </p>
+                      )}
                     </div>
                   )}
 
                   <div className="grid gap-4 sm:grid-cols-2">
-                    <FormField control={form.control} name="address" render={({ field }) => (
-                      <FormItem className="sm:col-span-2">
-                        <FormLabel data-testid="label-address">{COPY.forms.restaurant.addressLabel}</FormLabel>
-                        <FormControl><Input placeholder={COPY.forms.restaurant.addressPlaceholder} data-testid="input-address" {...field} /></FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )} />
-                    <FormField control={form.control} name="city" render={({ field }) => (
-                      <FormItem>
-                        <FormLabel data-testid="label-city">{COPY.forms.restaurant.cityLabel}</FormLabel>
-                        <FormControl><Input placeholder={COPY.forms.restaurant.cityPlaceholder} data-testid="input-city" {...field} /></FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )} />
-                    <FormField control={form.control} name="state" render={({ field }) => (
-                      <FormItem>
-                        <FormLabel data-testid="label-state">{COPY.forms.restaurant.stateLabel}</FormLabel>
-                        <FormControl><Input placeholder={COPY.forms.restaurant.statePlaceholder} data-testid="input-state" {...field} /></FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )} />
-                    <FormField control={form.control} name="phone" render={({ field }) => (
-                      <FormItem>
-                        <FormLabel data-testid="label-phone">{COPY.forms.restaurant.phoneLabel}</FormLabel>
-                        <FormControl><Input type="tel" placeholder={COPY.forms.restaurant.phonePlaceholder} data-testid="input-phone" {...field} /></FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )} />
-                    <FormField control={form.control} name="cuisineType" render={({ field }) => (
-                      <FormItem>
-                        <FormLabel data-testid="label-cuisine-type">{COPY.forms.restaurant.cuisineLabel}</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                          <FormControl><SelectTrigger data-testid="select-cuisine"><SelectValue placeholder={COPY.forms.restaurant.cuisinePlaceholder} /></SelectTrigger></FormControl>
-                          <SelectContent>
-                            <SelectItem value="american">American</SelectItem>
-                            <SelectItem value="bbq">BBQ</SelectItem>
-                            <SelectItem value="breakfast">Breakfast</SelectItem>
-                            <SelectItem value="burgers">Burgers</SelectItem>
-                            <SelectItem value="cajun">Cajun</SelectItem>
-                            <SelectItem value="caribbean">Caribbean</SelectItem>
-                            <SelectItem value="coffee">Coffee & Café</SelectItem>
-                            <SelectItem value="dessert">Dessert</SelectItem>
-                            <SelectItem value="healthy">Healthy & Bowls</SelectItem>
-                            <SelectItem value="keto">Keto & Low-Carb</SelectItem>
-                            <SelectItem value="paleo">Paleo</SelectItem>
-                            <SelectItem value="other">Other</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )} />
+                    <FormField
+                      control={form.control}
+                      name="address"
+                      render={({ field }) => (
+                        <FormItem className="sm:col-span-2">
+                          <FormLabel data-testid="label-address">
+                            {COPY.forms.restaurant.addressLabel}
+                          </FormLabel>
+                          <FormControl>
+                            <Input
+                              placeholder={
+                                COPY.forms.restaurant.addressPlaceholder
+                              }
+                              data-testid="input-address"
+                              {...field}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="city"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel data-testid="label-city">
+                            {COPY.forms.restaurant.cityLabel}
+                          </FormLabel>
+                          <FormControl>
+                            <Input
+                              placeholder={
+                                COPY.forms.restaurant.cityPlaceholder
+                              }
+                              data-testid="input-city"
+                              {...field}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="state"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel data-testid="label-state">
+                            {COPY.forms.restaurant.stateLabel}
+                          </FormLabel>
+                          <FormControl>
+                            <Input
+                              placeholder={
+                                COPY.forms.restaurant.statePlaceholder
+                              }
+                              data-testid="input-state"
+                              {...field}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="phone"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel data-testid="label-phone">
+                            {COPY.forms.restaurant.phoneLabel}
+                          </FormLabel>
+                          <FormControl>
+                            <Input
+                              type="tel"
+                              placeholder={
+                                COPY.forms.restaurant.phonePlaceholder
+                              }
+                              data-testid="input-phone"
+                              {...field}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="cuisineType"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel data-testid="label-cuisine-type">
+                            {COPY.forms.restaurant.cuisineLabel}
+                          </FormLabel>
+                          <Select
+                            onValueChange={field.onChange}
+                            defaultValue={field.value}
+                          >
+                            <FormControl>
+                              <SelectTrigger data-testid="select-cuisine">
+                                <SelectValue
+                                  placeholder={
+                                    COPY.forms.restaurant.cuisinePlaceholder
+                                  }
+                                />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="american">American</SelectItem>
+                              <SelectItem value="bbq">BBQ</SelectItem>
+                              <SelectItem value="breakfast">
+                                Breakfast
+                              </SelectItem>
+                              <SelectItem value="burgers">Burgers</SelectItem>
+                              <SelectItem value="cajun">Cajun</SelectItem>
+                              <SelectItem value="caribbean">
+                                Caribbean
+                              </SelectItem>
+                              <SelectItem value="coffee">
+                                Coffee & Café
+                              </SelectItem>
+                              <SelectItem value="dessert">Dessert</SelectItem>
+                              <SelectItem value="healthy">
+                                Healthy & Bowls
+                              </SelectItem>
+                              <SelectItem value="keto">
+                                Keto & Low-Carb
+                              </SelectItem>
+                              <SelectItem value="paleo">Paleo</SelectItem>
+                              <SelectItem value="other">Other</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
                   </div>
 
                   <div className="space-y-4 rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-4">
-                    <FormField control={form.control} name="description" render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>About Your Business <span className="font-normal text-[color:var(--text-secondary)]">(Optional)</span></FormLabel>
-                        <FormControl>
-                          <textarea placeholder="Tell customers what makes your restaurant unique..." rows={4} maxLength={500} className="w-full rounded-md border border-[color:var(--border-strong)] bg-[color:var(--field-bg)] px-3 py-2 text-sm text-[color:var(--text-primary)]" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )} />
+                    <FormField
+                      control={form.control}
+                      name="description"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>
+                            About Your Business{" "}
+                            <span className="font-normal text-[color:var(--text-secondary)]">
+                              (Optional)
+                            </span>
+                          </FormLabel>
+                          <FormControl>
+                            <textarea
+                              placeholder="Tell customers what makes your restaurant unique..."
+                              rows={4}
+                              maxLength={500}
+                              className="w-full rounded-md border border-[color:var(--border-strong)] bg-[color:var(--field-bg)] px-3 py-2 text-sm text-[color:var(--text-primary)]"
+                              {...field}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
                     <div className="grid gap-4 sm:grid-cols-3">
-                      <FormField control={form.control} name="websiteUrl" render={({ field }) => (<FormItem><FormLabel>Website</FormLabel><FormControl><Input type="url" placeholder="https://..." {...field} /></FormControl><FormMessage /></FormItem>)} />
-                      <FormField control={form.control} name="instagramUrl" render={({ field }) => (<FormItem><FormLabel>Instagram</FormLabel><FormControl><Input type="url" placeholder="https://..." {...field} /></FormControl><FormMessage /></FormItem>)} />
-                      <FormField control={form.control} name="facebookPageUrl" render={({ field }) => (<FormItem><FormLabel>Facebook</FormLabel><FormControl><Input type="url" placeholder="https://..." {...field} /></FormControl><FormMessage /></FormItem>)} />
+                      <FormField
+                        control={form.control}
+                        name="websiteUrl"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Website</FormLabel>
+                            <FormControl>
+                              <Input
+                                type="url"
+                                placeholder="https://..."
+                                {...field}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="instagramUrl"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Instagram</FormLabel>
+                            <FormControl>
+                              <Input
+                                type="url"
+                                placeholder="https://..."
+                                {...field}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="facebookPageUrl"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Facebook</FormLabel>
+                            <FormControl>
+                              <Input
+                                type="url"
+                                placeholder="https://..."
+                                {...field}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
                     </div>
                     {selectedBusinessType !== "food_truck" && (
                       <div className="grid gap-2 sm:grid-cols-3">
-                        <FormField control={form.control} name="hasParking" render={({ field }) => (<FormItem className="flex items-center gap-2 rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-3"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel className="m-0">Parking Available</FormLabel></FormItem>)} />
-                        <FormField control={form.control} name="hasWifi" render={({ field }) => (<FormItem className="flex items-center gap-2 rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-3"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel className="m-0">Free Wi-Fi</FormLabel></FormItem>)} />
-                        <FormField control={form.control} name="hasOutdoorSeating" render={({ field }) => (<FormItem className="flex items-center gap-2 rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-3"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel className="m-0">Outdoor Seating</FormLabel></FormItem>)} />
+                        <FormField
+                          control={form.control}
+                          name="hasParking"
+                          render={({ field }) => (
+                            <FormItem className="flex items-center gap-2 rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-3">
+                              <FormControl>
+                                <Checkbox
+                                  checked={field.value}
+                                  onCheckedChange={field.onChange}
+                                />
+                              </FormControl>
+                              <FormLabel className="m-0">
+                                Parking Available
+                              </FormLabel>
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="hasWifi"
+                          render={({ field }) => (
+                            <FormItem className="flex items-center gap-2 rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-3">
+                              <FormControl>
+                                <Checkbox
+                                  checked={field.value}
+                                  onCheckedChange={field.onChange}
+                                />
+                              </FormControl>
+                              <FormLabel className="m-0">Free Wi-Fi</FormLabel>
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="hasOutdoorSeating"
+                          render={({ field }) => (
+                            <FormItem className="flex items-center gap-2 rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-3">
+                              <FormControl>
+                                <Checkbox
+                                  checked={field.value}
+                                  onCheckedChange={field.onChange}
+                                />
+                              </FormControl>
+                              <FormLabel className="m-0">
+                                Outdoor Seating
+                              </FormLabel>
+                            </FormItem>
+                          )}
+                        />
                       </div>
                     )}
                   </div>
@@ -1322,23 +1797,52 @@ export default function RestaurantSignup() {
                     </p>
                   </div>
 
-                  <FormField control={form.control} name="acceptTerms" render={({ field }) => (
-                    <FormItem className="flex items-start gap-3 rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-4">
-                      <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} className="mt-1" data-testid="checkbox-terms" /></FormControl>
-                      <div className="space-y-1">
-                        <FormLabel className="text-sm text-[color:var(--text-secondary)]" data-testid="label-terms">
-                          {COPY.terms.labelPrefix}{" "}
-                          <Link href="/terms-of-service"><span className="cursor-pointer text-[color:var(--accent-text)] underline">{COPY.terms.termsText}</span></Link>{" "}
-                          {COPY.terms.andText}{" "}
-                          <Link href="/privacy-policy"><span className="cursor-pointer text-[color:var(--accent-text)] underline">{COPY.terms.privacyText}</span></Link>
-                        </FormLabel>
-                        <FormMessage />
-                      </div>
-                    </FormItem>
-                  )} />
+                  <FormField
+                    control={form.control}
+                    name="acceptTerms"
+                    render={({ field }) => (
+                      <FormItem className="flex items-start gap-3 rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-4">
+                        <FormControl>
+                          <Checkbox
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                            className="mt-1"
+                            data-testid="checkbox-terms"
+                          />
+                        </FormControl>
+                        <div className="space-y-1">
+                          <FormLabel
+                            className="text-sm text-[color:var(--text-secondary)]"
+                            data-testid="label-terms"
+                          >
+                            {COPY.terms.labelPrefix}{" "}
+                            <Link href="/terms-of-service">
+                              <span className="cursor-pointer text-[color:var(--accent-text)] underline">
+                                {COPY.terms.termsText}
+                              </span>
+                            </Link>{" "}
+                            {COPY.terms.andText}{" "}
+                            <Link href="/privacy-policy">
+                              <span className="cursor-pointer text-[color:var(--accent-text)] underline">
+                                {COPY.terms.privacyText}
+                              </span>
+                            </Link>
+                          </FormLabel>
+                          <FormMessage />
+                        </div>
+                      </FormItem>
+                    )}
+                  />
 
-                  <Button type="submit" className="w-full action-primary hover:bg-[color:var(--action-hover)]" disabled={createRestaurantMutation.isPending} data-testid="button-start-trial">
-                    {createRestaurantMutation.isPending ? COPY.cta.restaurantSubmit.pending : COPY.cta.restaurantSubmit.idle}
+                  <Button
+                    type="submit"
+                    className="w-full action-primary hover:bg-[color:var(--action-hover)]"
+                    disabled={createRestaurantMutation.isPending}
+                    data-testid="button-start-trial"
+                  >
+                    {createRestaurantMutation.isPending
+                      ? COPY.cta.restaurantSubmit.pending
+                      : COPY.cta.restaurantSubmit.idle}
                   </Button>
                 </form>
               </Form>
@@ -1349,29 +1853,35 @@ export default function RestaurantSignup() {
         {currentStep === "verification" && createdRestaurant && (
           <Card className="border-[color:var(--border-subtle)] bg-[var(--bg-card)] shadow-clean-lg">
             <CardHeader className="pb-2">
-              <CardTitle className="text-base font-semibold text-[color:var(--text-primary)]">{COPY.verification.title}</CardTitle>
-              <p className="text-xs text-[color:var(--text-secondary)]">{COPY.verification.intro}</p>
+              <CardTitle className="text-base font-semibold text-[color:var(--text-primary)]">
+                {COPY.verification.title}
+              </CardTitle>
+              <p className="text-xs text-[color:var(--text-secondary)]">
+                {COPY.verification.intro}
+              </p>
             </CardHeader>
             <CardContent className="space-y-4">
               {isAutoBusinessVerified && (
                 <div className="rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-900">
-                  <div className="font-semibold">
-                    ✓ Business Verified
-                  </div>
+                  <div className="font-semibold">✓ Business Verified</div>
                   <div className="mt-1 text-xs">
-                    Your business was automatically verified. You can now book parking passes and access all features.
-                    You still need to confirm your email to log in.
+                    Your business was automatically verified. You can now book
+                    parking passes and access all features. You still need to
+                    confirm your email to log in.
                   </div>
                 </div>
               )}
               {!isAutoBusinessVerified && (
                 <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-                  <strong>Verification required</strong> — {COPY.verification.pendingBanner}
+                  <strong>Verification required</strong> —{" "}
+                  {COPY.verification.pendingBanner}
                 </div>
               )}
               <div className="rounded-xl border border-dashed border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)] p-4">
                 <ul className="list-disc space-y-1 pl-4 text-xs text-[color:var(--text-secondary)]">
-                  {COPY.verification.bullets.map((item) => (<li key={item}>{item}</li>))}
+                  {COPY.verification.bullets.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
                 </ul>
               </div>
               {!isAutoBusinessVerified && (
@@ -1383,7 +1893,8 @@ export default function RestaurantSignup() {
                           License number (required)
                         </div>
                         <div className="mt-1 text-xs text-[color:var(--text-secondary)]">
-                          Enter the license number exactly as it appears on your document.
+                          Enter the license number exactly as it appears on your
+                          document.
                         </div>
                         <Input
                           className="mt-3"
@@ -1394,36 +1905,71 @@ export default function RestaurantSignup() {
                         />
                       </div>
                     )}
-                <DocumentUpload
-                  onDocumentsChange={setVerificationDocuments}
-                  maxFiles={5}
-                  maxFileSize={10 * 1024 * 1024}
-                  acceptedTypes={["image/jpeg", "image/jpg", "image/png", "application/pdf"]}
-                />
+                  <DocumentUpload
+                    onDocumentsChange={setVerificationDocuments}
+                    maxFiles={5}
+                    maxFileSize={10 * 1024 * 1024}
+                    acceptedTypes={[
+                      "image/jpeg",
+                      "image/jpg",
+                      "image/png",
+                      "application/pdf",
+                    ]}
+                  />
                 </>
               )}
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <Button type="button" variant="outline" onClick={() => dispatchOnboarding({ type: "BACK_TO_RESTAURANT" })} data-testid="button-back-to-restaurant">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() =>
+                    dispatchOnboarding({ type: "BACK_TO_RESTAURANT" })
+                  }
+                  data-testid="button-back-to-restaurant"
+                >
                   <ArrowLeft className="mr-2 h-4 w-4" />
                   {COPY.verification.backButton}
                 </Button>
                 <div className="flex flex-col gap-2 sm:flex-row">
                   {(!claimSelection || isAutoBusinessVerified) && (
-                    <Button type="button" variant="outline" onClick={handleSkipVerification} data-testid="button-skip-verification">
-                      {isAutoBusinessVerified ? "Continue" : COPY.verification.skipButton}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleSkipVerification}
+                      data-testid="button-skip-verification"
+                    >
+                      {isAutoBusinessVerified
+                        ? "Continue"
+                        : COPY.verification.skipButton}
                     </Button>
                   )}
                   {!isAutoBusinessVerified ? (
-                    <Button type="button" onClick={handleVerificationSubmit} disabled={createVerificationRequestMutation.isPending || verificationDocuments.length === 0} className="action-primary hover:bg-[color:var(--action-hover)]" data-testid="button-submit-verification">
+                    <Button
+                      type="button"
+                      onClick={handleVerificationSubmit}
+                      disabled={
+                        createVerificationRequestMutation.isPending ||
+                        verificationDocuments.length === 0
+                      }
+                      className="action-primary hover:bg-[color:var(--action-hover)]"
+                      data-testid="button-submit-verification"
+                    >
                       {createVerificationRequestMutation.isPending ? (
                         <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
                       ) : (
                         <ArrowRight className="mr-2 h-4 w-4" />
                       )}
-                      {createVerificationRequestMutation.isPending ? COPY.verification.submitPending : COPY.verification.submitIdle}
+                      {createVerificationRequestMutation.isPending
+                        ? COPY.verification.submitPending
+                        : COPY.verification.submitIdle}
                     </Button>
                   ) : (
-                    <Button type="button" onClick={handleSkipVerification} className="action-primary hover:bg-[color:var(--action-hover)]" data-testid="button-continue-verified">
+                    <Button
+                      type="button"
+                      onClick={handleSkipVerification}
+                      className="action-primary hover:bg-[color:var(--action-hover)]"
+                      data-testid="button-continue-verified"
+                    >
                       <ArrowRight className="mr-2 h-4 w-4" />
                       Continue to setup
                     </Button>
@@ -1437,7 +1983,3 @@ export default function RestaurantSignup() {
     </div>
   );
 }
-
-
-
-

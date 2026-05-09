@@ -90,7 +90,10 @@ router.get("/velocity", isAdmin, async (req, res) => {
  */
 router.get("/premium-ops", isAdmin, async (req, res) => {
   try {
-    const days = Math.min(Math.max(parseInt(req.query.days as string) || 30, 1), 90);
+    const days = Math.min(
+      Math.max(parseInt(req.query.days as string) || 30, 1),
+      90,
+    );
     const startDate = getRange(days);
 
     const [totalsRows, dailyRows] = await Promise.all([
@@ -121,18 +124,23 @@ router.get("/premium-ops", isAdmin, async (req, res) => {
             inArray(telemetryEvents.eventName, [...PREMIUM_OPS_EVENT_NAMES]),
           ),
         )
-        .groupBy(sql`DATE(${telemetryEvents.createdAt})`, telemetryEvents.eventName)
+        .groupBy(
+          sql`DATE(${telemetryEvents.createdAt})`,
+          telemetryEvents.eventName,
+        )
         .orderBy(sql`DATE(${telemetryEvents.createdAt})`),
     ]);
 
     const totalsByEvent = Object.fromEntries(
-      totalsRows.map((row: { eventName: string; count: number; uniqueUsers: number }) => [
-        row.eventName,
-        {
-          count: Number(row.count || 0),
-          uniqueUsers: Number(row.uniqueUsers || 0),
-        },
-      ]),
+      totalsRows.map(
+        (row: { eventName: string; count: number; uniqueUsers: number }) => [
+          row.eventName,
+          {
+            count: Number(row.count || 0),
+            uniqueUsers: Number(row.uniqueUsers || 0),
+          },
+        ],
+      ),
     );
 
     const byDate = new Map<
@@ -148,14 +156,13 @@ router.get("/premium-ops", isAdmin, async (req, res) => {
 
     for (const row of dailyRows) {
       const date = String(row.date);
-      const existing =
-        byDate.get(date) || {
-          date,
-          premium_summary_viewed: 0,
-          premium_summary_emailed: 0,
-          premium_live_location_used: 0,
-          premium_manual_schedule_used: 0,
-        };
+      const existing = byDate.get(date) || {
+        date,
+        premium_summary_viewed: 0,
+        premium_summary_emailed: 0,
+        premium_live_location_used: 0,
+        premium_manual_schedule_used: 0,
+      };
 
       const count = Number(row.count || 0);
       if (row.eventName === "premium_summary_viewed") {
@@ -184,8 +191,7 @@ router.get("/premium-ops", isAdmin, async (req, res) => {
         summaryEmailed: totalsByEvent.premium_summary_emailed?.count || 0,
         summaryEmailedUniqueUsers:
           totalsByEvent.premium_summary_emailed?.uniqueUsers || 0,
-        liveLocationUsed:
-          totalsByEvent.premium_live_location_used?.count || 0,
+        liveLocationUsed: totalsByEvent.premium_live_location_used?.count || 0,
         liveLocationUsedUniqueUsers:
           totalsByEvent.premium_live_location_used?.uniqueUsers || 0,
         manualScheduleUsed:
@@ -220,7 +226,7 @@ router.get("/fill-rates", isAdmin, async (req, res) => {
 
     for (const event of allEvents) {
       const acceptedCount = event.interests.filter(
-        (i: any) => i.status === "accepted"
+        (i: any) => i.status === "accepted",
       ).length;
       const max = event.maxTrucks || 1; // Avoid division by zero
 
@@ -294,8 +300,8 @@ router.get("/decision-time", isAdmin, async (req, res) => {
       .where(
         and(
           sql`event_name IN ('interest_accepted', 'interest_declined')`,
-          gte(telemetryEvents.createdAt, getRange(90))
-        )
+          gte(telemetryEvents.createdAt, getRange(90)),
+        ),
       );
 
     // This requires us to match these events back to the creation time of the interest.
@@ -372,7 +378,10 @@ router.get("/digest-coverage", isAdmin, async (req, res) => {
  */
 router.get("/ux-recovery", isAdmin, async (req, res) => {
   try {
-    const days = Math.min(Math.max(parseInt(req.query.days as string) || 7, 1), 90);
+    const days = Math.min(
+      Math.max(parseInt(req.query.days as string) || 7, 1),
+      90,
+    );
     const startDate = getRange(days);
 
     const rows = await db
@@ -392,13 +401,15 @@ router.get("/ux-recovery", isAdmin, async (req, res) => {
       .orderBy(desc(sql`count(*)`));
 
     const byEventName = Object.fromEntries(
-      rows.map((row: { eventName: string; count: number; uniqueUsers: number }) => [
-        row.eventName,
-        {
-          count: Number(row.count || 0),
-          uniqueUsers: Number(row.uniqueUsers || 0),
-        },
-      ]),
+      rows.map(
+        (row: { eventName: string; count: number; uniqueUsers: number }) => [
+          row.eventName,
+          {
+            count: Number(row.count || 0),
+            uniqueUsers: Number(row.uniqueUsers || 0),
+          },
+        ],
+      ),
     );
 
     const events = UX_RECOVERY_EVENT_NAMES.map((name) => ({
@@ -420,9 +431,7 @@ router.get("/ux-recovery", isAdmin, async (req, res) => {
       days,
       totals,
       events,
-      topEvents: [...events]
-        .sort((a, b) => b.count - a.count)
-        .slice(0, 8),
+      topEvents: [...events].sort((a, b) => b.count - a.count).slice(0, 8),
     });
   } catch (error) {
     console.error("Error fetching ux recovery telemetry:", error);
@@ -439,7 +448,10 @@ router.get("/ux-recovery", isAdmin, async (req, res) => {
  */
 router.get("/open-call-series", isAdmin, async (req, res) => {
   try {
-    const days = Math.min(Math.max(parseInt(req.query.days as string) || 30, 1), 90);
+    const days = Math.min(
+      Math.max(parseInt(req.query.days as string) || 30, 1),
+      90,
+    );
     const decisionsSince = getRange(days);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -533,13 +545,17 @@ router.get("/open-call-series", isAdmin, async (req, res) => {
       (publishedSeriesRows?.[0] as any)?.count || 0,
     );
 
-    const upcomingCapacityRow = Array.isArray((upcomingCapacityRows as any)?.rows)
+    const upcomingCapacityRow = Array.isArray(
+      (upcomingCapacityRows as any)?.rows,
+    )
       ? (upcomingCapacityRows as any).rows[0]
       : Array.isArray(upcomingCapacityRows)
         ? (upcomingCapacityRows as any)[0]
         : null;
 
-    const upcomingAcceptedRow = Array.isArray((upcomingAcceptedRows as any)?.rows)
+    const upcomingAcceptedRow = Array.isArray(
+      (upcomingAcceptedRows as any)?.rows,
+    )
       ? (upcomingAcceptedRows as any).rows[0]
       : Array.isArray(upcomingAcceptedRows)
         ? (upcomingAcceptedRows as any)[0]
@@ -564,11 +580,17 @@ router.get("/open-call-series", isAdmin, async (req, res) => {
         : [];
 
     const upcomingEventsCount = Number(upcomingCapacityRow?.events_count || 0);
-    const upcomingCapacityTotal = Number(upcomingCapacityRow?.capacity_total || 0);
-    const upcomingAcceptedTotal = Number(upcomingAcceptedRow?.accepted_total || 0);
+    const upcomingCapacityTotal = Number(
+      upcomingCapacityRow?.capacity_total || 0,
+    );
+    const upcomingAcceptedTotal = Number(
+      upcomingAcceptedRow?.accepted_total || 0,
+    );
     const fillRatePct =
       upcomingCapacityTotal > 0
-        ? Number(((upcomingAcceptedTotal / upcomingCapacityTotal) * 100).toFixed(2))
+        ? Number(
+            ((upcomingAcceptedTotal / upcomingCapacityTotal) * 100).toFixed(2),
+          )
         : 0;
 
     const throughputByName = new Map<string, number>(
@@ -599,7 +621,9 @@ router.get("/open-call-series", isAdmin, async (req, res) => {
         declinedDecisions,
         acceptanceRatePct,
         seriesCancelled: Number(cancellationRow?.series_cancelled || 0),
-        occurrencesCancelled: Number(cancellationRow?.occurrences_cancelled || 0),
+        occurrencesCancelled: Number(
+          cancellationRow?.occurrences_cancelled || 0,
+        ),
         trucksImpacted: Number(cancellationRow?.trucks_impacted || 0),
       },
       topSeries: (seriesRows as any[]).map((row: any) => {
@@ -619,7 +643,9 @@ router.get("/open-call-series", isAdmin, async (req, res) => {
     });
   } catch (error) {
     console.error("Error fetching open-call series telemetry:", error);
-    res.status(500).json({ error: "Failed to fetch open-call series telemetry" });
+    res
+      .status(500)
+      .json({ error: "Failed to fetch open-call series telemetry" });
   }
 });
 
@@ -629,7 +655,10 @@ router.get("/open-call-series", isAdmin, async (req, res) => {
  */
 router.get("/funnel", isAdmin, async (req, res) => {
   try {
-    const days = Math.min(Math.max(parseInt(req.query.days as string) || 30, 1), 90);
+    const days = Math.min(
+      Math.max(parseInt(req.query.days as string) || 30, 1),
+      90,
+    );
     const startDate = getRange(days);
 
     const [totalsRows, accountTypeRows] = await Promise.all([
@@ -644,7 +673,9 @@ router.get("/funnel", isAdmin, async (req, res) => {
         .where(
           and(
             gte(telemetryEvents.createdAt, startDate),
-            inArray(telemetryEvents.eventName, [...TRACTION_FUNNEL_EVENT_NAMES]),
+            inArray(telemetryEvents.eventName, [
+              ...TRACTION_FUNNEL_EVENT_NAMES,
+            ]),
           ),
         )
         .groupBy(telemetryEvents.eventName),
@@ -665,18 +696,27 @@ router.get("/funnel", isAdmin, async (req, res) => {
             ]),
           ),
         )
-        .groupBy(sql`coalesce(${telemetryEvents.properties}->>'accountType', 'unknown')`),
+        .groupBy(
+          sql`coalesce(${telemetryEvents.properties}->>'accountType', 'unknown')`,
+        ),
     ]);
 
     const totalsByEvent = Object.fromEntries(
-      totalsRows.map((row: { eventName: string; count: number; uniqueUsers: number; uniqueActors: number }) => [
-        row.eventName,
-        {
-          count: Number(row.count || 0),
-          uniqueUsers: Number(row.uniqueUsers || 0),
-          uniqueActors: Number(row.uniqueActors || 0),
-        },
-      ]),
+      totalsRows.map(
+        (row: {
+          eventName: string;
+          count: number;
+          uniqueUsers: number;
+          uniqueActors: number;
+        }) => [
+          row.eventName,
+          {
+            count: Number(row.count || 0),
+            uniqueUsers: Number(row.uniqueUsers || 0),
+            uniqueActors: Number(row.uniqueActors || 0),
+          },
+        ],
+      ),
     );
 
     const stepCounts = {
@@ -697,19 +737,38 @@ router.get("/funnel", isAdmin, async (req, res) => {
       days,
       steps: stepCounts,
       rates: {
-        ctrLandingToCta: rate(stepCounts.primaryCtaClick, stepCounts.landingView),
-        ctaToSignupStart: rate(stepCounts.signupStarted, stepCounts.primaryCtaClick),
-        signupStartToSubmit: rate(stepCounts.signupSubmitted, stepCounts.signupStarted),
-        submitToCompleted: rate(stepCounts.signupCompleted, stepCounts.signupSubmitted),
-        completedToActivation: rate(stepCounts.activationStarted, stepCounts.signupCompleted),
+        ctrLandingToCta: rate(
+          stepCounts.primaryCtaClick,
+          stepCounts.landingView,
+        ),
+        ctaToSignupStart: rate(
+          stepCounts.signupStarted,
+          stepCounts.primaryCtaClick,
+        ),
+        signupStartToSubmit: rate(
+          stepCounts.signupSubmitted,
+          stepCounts.signupStarted,
+        ),
+        submitToCompleted: rate(
+          stepCounts.signupCompleted,
+          stepCounts.signupSubmitted,
+        ),
+        completedToActivation: rate(
+          stepCounts.activationStarted,
+          stepCounts.signupCompleted,
+        ),
       },
       actorCounts: {
         landingView: totalsByEvent.funnel_landing_view?.uniqueActors || 0,
-        primaryCtaClick: totalsByEvent.funnel_primary_cta_click?.uniqueActors || 0,
+        primaryCtaClick:
+          totalsByEvent.funnel_primary_cta_click?.uniqueActors || 0,
         signupStarted: totalsByEvent.funnel_signup_started?.uniqueActors || 0,
-        signupSubmitted: totalsByEvent.funnel_signup_submitted?.uniqueActors || 0,
-        signupCompleted: totalsByEvent.funnel_signup_completed?.uniqueActors || 0,
-        activationStarted: totalsByEvent.funnel_activation_started?.uniqueActors || 0,
+        signupSubmitted:
+          totalsByEvent.funnel_signup_submitted?.uniqueActors || 0,
+        signupCompleted:
+          totalsByEvent.funnel_signup_completed?.uniqueActors || 0,
+        activationStarted:
+          totalsByEvent.funnel_activation_started?.uniqueActors || 0,
       },
       byAccountType: (accountTypeRows as any[]).map((row: any) => ({
         accountType: String(row.accountType || "unknown"),
@@ -728,18 +787,29 @@ router.get("/funnel", isAdmin, async (req, res) => {
  */
 router.get("/heartbeat", isAdmin, async (req, res) => {
   try {
-    const days = Math.min(Math.max(parseInt(req.query.days as string) || 30, 1), 90);
+    const days = Math.min(
+      Math.max(parseInt(req.query.days as string) || 30, 1),
+      90,
+    );
     const startDate = getRange(days);
     const sevenDayStart = getRange(7);
     const thirtyDayStart = getRange(30);
     const now = new Date();
     const fourteenDaysOut = new Date(now);
     fourteenDaysOut.setDate(fourteenDaysOut.getDate() + 14);
-    const importSystemEmail = String(IMPORT_SYSTEM_EMAIL || "").trim().toLowerCase();
+    const importSystemEmail = String(IMPORT_SYSTEM_EMAIL || "")
+      .trim()
+      .toLowerCase();
 
-    const [userCountsRows, newUsersByTypeRows, restaurantRows, eventRows, interestRows, valueRows] =
-      await Promise.all([
-        db.execute(sql`
+    const [
+      userCountsRows,
+      newUsersByTypeRows,
+      restaurantRows,
+      eventRows,
+      interestRows,
+      valueRows,
+    ] = await Promise.all([
+      db.execute(sql`
           select
             count(*)::int as total_users,
             count(*) filter (
@@ -794,28 +864,28 @@ router.get("/heartbeat", isAdmin, async (req, res) => {
             )::int as total_supply_side_users
           from users
         `),
-        db
-          .select({
-            userType: users.userType,
-            count: sql<number>`count(*)`,
-          })
-          .from(users)
-          .where(
-            and(
-              gte(users.createdAt, startDate),
-              sql`coalesce(${users.isDisabled}, false) = false`,
-              sql`${users.userType} not in ('admin', 'duper_admin', 'super_admin', 'staff')`,
-              sql`(
+      db
+        .select({
+          userType: users.userType,
+          count: sql<number>`count(*)`,
+        })
+        .from(users)
+        .where(
+          and(
+            gte(users.createdAt, startDate),
+            sql`coalesce(${users.isDisabled}, false) = false`,
+            sql`${users.userType} not in ('admin', 'duper_admin', 'super_admin', 'staff')`,
+            sql`(
                 ${users.emailVerified} = true
                 or ${users.googleId} is not null
                 or ${users.facebookId} is not null
                 or ${users.tradescoutId} is not null
                 or (${users.passwordHash} is not null and coalesce(${users.mustResetPassword}, false) = false)
               )`,
-            ),
-          )
-          .groupBy(users.userType),
-        db.execute(sql`
+          ),
+        )
+        .groupBy(users.userType),
+      db.execute(sql`
           select
             count(*)::int as total_restaurants,
             count(*) filter (where is_food_truck = true)::int as total_food_trucks,
@@ -881,21 +951,21 @@ router.get("/heartbeat", isAdmin, async (req, res) => {
           from restaurants r
           left join users owner on owner.id = r.owner_id
         `),
-        db.execute(sql`
+      db.execute(sql`
           select
             count(*) filter (where date >= ${now} and date <= ${fourteenDaysOut} and status in ('open', 'booked'))::int as events_upcoming_14d,
             count(*) filter (where created_at >= ${thirtyDayStart})::int as events_created_30d,
             count(distinct host_id) filter (where date >= ${startDate})::int as active_hosts_window
           from events
         `),
-        db.execute(sql`
+      db.execute(sql`
           select
             count(*) filter (where created_at >= ${thirtyDayStart})::int as interests_30d,
             count(*) filter (where created_at >= ${thirtyDayStart} and status = 'accepted')::int as interests_accepted_30d,
             count(distinct truck_id) filter (where created_at >= ${startDate})::int as active_trucks_window
           from event_interests
         `),
-        db.execute(sql`
+      db.execute(sql`
           select
             count(*) filter (
               where is_active = true
@@ -909,7 +979,7 @@ router.get("/heartbeat", isAdmin, async (req, res) => {
             (select count(*)::int from host_partner_leads where created_at >= ${thirtyDayStart}) as host_partner_leads_30d
           from deals
         `),
-      ]);
+    ]);
 
     const userCounts = userCountsRows.rows[0] as any;
     const restaurantCounts = restaurantRows.rows[0] as any;
@@ -918,8 +988,13 @@ router.get("/heartbeat", isAdmin, async (req, res) => {
     const valueCounts = valueRows.rows[0] as any;
 
     const interests30d = Number(interestCounts?.interests_30d || 0);
-    const interestsAccepted30d = Number(interestCounts?.interests_accepted_30d || 0);
-    const acceptanceRatePct = interests30d > 0 ? Number(((interestsAccepted30d / interests30d) * 100).toFixed(1)) : 0;
+    const interestsAccepted30d = Number(
+      interestCounts?.interests_accepted_30d || 0,
+    );
+    const acceptanceRatePct =
+      interests30d > 0
+        ? Number(((interestsAccepted30d / interests30d) * 100).toFixed(1))
+        : 0;
 
     res.json({
       days,
@@ -931,7 +1006,12 @@ router.get("/heartbeat", isAdmin, async (req, res) => {
         newUsersWindow: Number(userCounts?.new_activated_users_window || 0),
         newUsers7d: Number(userCounts?.new_activated_users_7d || 0),
         newUsers30d: Number(userCounts?.new_activated_users_30d || 0),
-        newUsersByTypeWindow: (newUsersByTypeRows as Array<{ userType: string | null; count: number }>).map((row) => ({
+        newUsersByTypeWindow: (
+          newUsersByTypeRows as Array<{
+            userType: string | null;
+            count: number;
+          }>
+        ).map((row) => ({
           userType: String(row.userType || "unknown"),
           count: Number(row.count || 0),
         })),
@@ -939,11 +1019,21 @@ router.get("/heartbeat", isAdmin, async (req, res) => {
       marketplace: {
         totalRestaurants: Number(restaurantCounts?.total_restaurants || 0),
         totalFoodTrucks: Number(restaurantCounts?.total_food_trucks || 0),
-        totalRealFoodTrucks: Number(restaurantCounts?.total_real_food_trucks || 0),
-        importedClaimableTruckProfiles: Number(restaurantCounts?.imported_claimable_truck_profiles || 0),
-        newFoodTrucks30d: Number(restaurantCounts?.new_real_food_trucks_30d || 0),
-        verifiedFoodTrucks: Number(restaurantCounts?.verified_real_food_trucks || 0),
-        trucksCurrentlyOnline: Number(restaurantCounts?.real_trucks_currently_online || 0),
+        totalRealFoodTrucks: Number(
+          restaurantCounts?.total_real_food_trucks || 0,
+        ),
+        importedClaimableTruckProfiles: Number(
+          restaurantCounts?.imported_claimable_truck_profiles || 0,
+        ),
+        newFoodTrucks30d: Number(
+          restaurantCounts?.new_real_food_trucks_30d || 0,
+        ),
+        verifiedFoodTrucks: Number(
+          restaurantCounts?.verified_real_food_trucks || 0,
+        ),
+        trucksCurrentlyOnline: Number(
+          restaurantCounts?.real_trucks_currently_online || 0,
+        ),
         activeTrucksWindow: Number(interestCounts?.active_trucks_window || 0),
         activeHostsWindow: Number(eventCounts?.active_hosts_window || 0),
         eventsUpcoming14d: Number(eventCounts?.events_upcoming_14d || 0),

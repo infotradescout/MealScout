@@ -118,9 +118,16 @@ export function registerVerificationAdminRoutes(
               <p>Head to <a href="https://mealscout.us/parking-pass">mealscout.us/parking-pass</a> to find available spots near you.</p>
             `;
           try {
-            await emailService.sendBasicEmail(claimContext.ownerEmail, subject, body);
+            await emailService.sendBasicEmail(
+              claimContext.ownerEmail,
+              subject,
+              body,
+            );
           } catch (emailError) {
-            console.warn("Failed to send owner approval notification email:", emailError);
+            console.warn(
+              "Failed to send owner approval notification email:",
+              emailError,
+            );
           }
         }
 
@@ -169,7 +176,10 @@ export function registerVerificationAdminRoutes(
             `,
           );
         } catch (emailError) {
-          console.warn("Failed to send internal approval notification email:", emailError);
+          console.warn(
+            "Failed to send internal approval notification email:",
+            emailError,
+          );
         }
 
         res.json({ success: true, message: "Verification request approved" });

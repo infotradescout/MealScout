@@ -15,10 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { AlertCircle, CheckCircle, Lock } from "lucide-react";
-import {
-  PASSWORD_REGEX,
-  PASSWORD_REQUIREMENTS,
-} from "@/utils/passwordPolicy";
+import { PASSWORD_REGEX, PASSWORD_REQUIREMENTS } from "@/utils/passwordPolicy";
 
 export default function ChangePassword() {
   const [, setLocation] = useLocation();
@@ -146,7 +143,9 @@ export default function ChangePassword() {
                 placeholder="Enter your temporary password"
               />
               {errors.currentPassword && (
-                <p className="text-sm text-[color:var(--status-error)]">{errors.currentPassword}</p>
+                <p className="text-sm text-[color:var(--status-error)]">
+                  {errors.currentPassword}
+                </p>
               )}
             </div>
 
@@ -162,7 +161,9 @@ export default function ChangePassword() {
                 placeholder="At least 8 characters"
               />
               {errors.newPassword && (
-                <p className="text-sm text-[color:var(--status-error)]">{errors.newPassword}</p>
+                <p className="text-sm text-[color:var(--status-error)]">
+                  {errors.newPassword}
+                </p>
               )}
             </div>
 
@@ -178,7 +179,9 @@ export default function ChangePassword() {
                 placeholder="Re-enter your new password"
               />
               {errors.confirmPassword && (
-                <p className="text-sm text-[color:var(--status-error)]">{errors.confirmPassword}</p>
+                <p className="text-sm text-[color:var(--status-error)]">
+                  {errors.confirmPassword}
+                </p>
               )}
             </div>
 
@@ -206,7 +209,3 @@ export default function ChangePassword() {
     </div>
   );
 }
-
-
-
-

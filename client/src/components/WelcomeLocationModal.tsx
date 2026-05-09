@@ -16,7 +16,7 @@ interface WelcomeLocationModalProps {
   open: boolean;
   onLocationSet: (
     location: { lat: number; lng: number },
-    locationName: string
+    locationName: string,
   ) => void;
   onSkip: () => void;
 }
@@ -36,8 +36,8 @@ export default function WelcomeLocationModal({
     user &&
     (user.userType === "restaurant_owner" ||
       user.userType === "staff" ||
-    user.userType === "duper_admin" ||
-    user.userType === "super_admin" ||
+      user.userType === "duper_admin" ||
+      user.userType === "super_admin" ||
       user.userType === "admin");
 
   const handleAutoDetect = async () => {
@@ -58,7 +58,7 @@ export default function WelcomeLocationModal({
             timeout: 8000,
             maximumAge: 0,
           });
-        }
+        },
       );
 
       const newLocation = {
@@ -69,7 +69,7 @@ export default function WelcomeLocationModal({
       // Reverse geocode to get location name
       try {
         const response = await fetch(
-          `/api/location/reverse?lat=${encodeURIComponent(String(newLocation.lat))}&lng=${encodeURIComponent(String(newLocation.lng))}`
+          `/api/location/reverse?lat=${encodeURIComponent(String(newLocation.lat))}&lng=${encodeURIComponent(String(newLocation.lng))}`,
         );
         const data = await response.json();
         const locationName = String(data?.label || "Your Location");
@@ -79,7 +79,7 @@ export default function WelcomeLocationModal({
       }
     } catch (error: any) {
       setError(
-        "Unable to detect your location. Please enter it manually or skip."
+        "Unable to detect your location. Please enter it manually or skip.",
       );
     } finally {
       setIsDetecting(false);
@@ -94,9 +94,7 @@ export default function WelcomeLocationModal({
 
     try {
       const response = await fetch(
-        `/api/location/search?q=${encodeURIComponent(
-          manualLocation
-        )}&limit=1`
+        `/api/location/search?q=${encodeURIComponent(manualLocation)}&limit=1`,
       );
       const data = await response.json();
 
@@ -189,7 +187,11 @@ export default function WelcomeLocationModal({
               </Button>
             </div>
 
-            {error && <p className="text-sm text-[color:var(--status-error)]">{error}</p>}
+            {error && (
+              <p className="text-sm text-[color:var(--status-error)]">
+                {error}
+              </p>
+            )}
           </div>
 
           {/* Skip option */}
@@ -211,5 +213,3 @@ export default function WelcomeLocationModal({
     </Dialog>
   );
 }
-
-

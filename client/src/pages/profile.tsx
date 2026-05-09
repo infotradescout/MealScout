@@ -102,7 +102,11 @@ export default function ProfilePage() {
           <p className="text-muted-foreground mb-6">
             Log in to access your profile, settings, and deal history
           </p>
-          <Button onClick={() => (window.location.href = authUrl("/api/auth/facebook"))}>
+          <Button
+            onClick={() =>
+              (window.location.href = authUrl("/api/auth/facebook"))
+            }
+          >
             Sign In with Facebook
           </Button>
         </div>
@@ -277,9 +281,9 @@ export default function ProfilePage() {
                                   ? "Admin"
                                   : user?.userType === "duper_admin"
                                     ? "Duperrr Admin"
-                                  : user?.userType === "super_admin"
-                                    ? "Super Admin"
-                                    : "Food Explorer"}
+                                    : user?.userType === "super_admin"
+                                      ? "Super Admin"
+                                      : "Food Explorer"}
                   </span>
                 </div>
               </div>

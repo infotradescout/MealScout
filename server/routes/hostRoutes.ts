@@ -753,7 +753,6 @@ export function registerHostRoutes(app: Express) {
 
   registerHostEventsRoutes(app);
 
-
   // =====================================================================
   // STRIPE CONNECT & PAYMENT ENDPOINTS
   // =====================================================================
@@ -1032,7 +1031,9 @@ export function registerHostRoutes(app: Express) {
         res.json({ requests });
       } catch (error: unknown) {
         console.error("Error loading payout request history:", error);
-        res.status(500).json({ message: "Failed to load payout request history" });
+        res
+          .status(500)
+          .json({ message: "Failed to load payout request history" });
       }
     },
   );
@@ -1053,9 +1054,12 @@ export function registerHostRoutes(app: Express) {
           String(
             process.env.MEALSCOUT_TEST_PROMOS_REQUIRE_ADMIN || "",
           ).toLowerCase() === "true";
-        const isAdminUser = ["admin", "duper_admin", "super_admin", "staff"].includes(
-          String(req.user?.userType || ""),
-        );
+        const isAdminUser = [
+          "admin",
+          "duper_admin",
+          "super_admin",
+          "staff",
+        ].includes(String(req.user?.userType || ""));
         const bookingFeePromoEnabled =
           String(process.env.BOOKFEE10_ENABLED || "").toLowerCase() ===
             "true" || process.env.NODE_ENV !== "production";
@@ -1164,7 +1168,9 @@ export function registerHostRoutes(app: Express) {
         }
         if (
           !truck.isVerified &&
-          !["admin", "duper_admin", "super_admin", "staff"].includes(req.user?.userType)
+          !["admin", "duper_admin", "super_admin", "staff"].includes(
+            req.user?.userType,
+          )
         ) {
           return res.status(403).json({
             message:
@@ -1173,9 +1179,13 @@ export function registerHostRoutes(app: Express) {
         }
         if (
           req.user?.userType &&
-          !["food_truck", "admin", "duper_admin", "super_admin", "staff"].includes(
-            req.user.userType,
-          )
+          ![
+            "food_truck",
+            "admin",
+            "duper_admin",
+            "super_admin",
+            "staff",
+          ].includes(req.user.userType)
         ) {
           return res.status(403).json({
             message: "Only food truck accounts can book Parking Pass slots.",
@@ -1855,4 +1865,3 @@ export function registerHostRoutes(app: Express) {
     },
   );
 }
-
