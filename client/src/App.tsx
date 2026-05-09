@@ -122,7 +122,6 @@ const EventCoordinatorDashboard = lazy(
 );
 const DashboardRouter = lazy(() => import("@/pages/dashboard-router"));
 const TruckDiscovery = lazy(() => import("@/pages/truck-discovery"));
-const EventSignup = lazy(() => import("@/pages/event-signup"));
 const EventsPage = lazy(() => import("@/pages/events"));
 const EventsRouter = lazy(() => import("@/pages/events-router"));
 const EventDetailPage = lazy(() => import("@/pages/event-detail"));
@@ -172,6 +171,22 @@ const RedirectToScout = () => {
   useEffect(() => {
     setLocation("/scout");
   }, [setLocation]);
+
+  return <PageLoader />;
+};
+
+const RedirectToEventOnboarding = () => {
+  const [, setLocation] = useLocation();
+  const { user, authState } = useAuth();
+
+  useEffect(() => {
+    if (authState === "loading") return;
+    if (user?.userType === "event_coordinator") {
+      setLocation("/event-coordinator/dashboard");
+      return;
+    }
+    setLocation("/customer-signup?role=event_coordinator");
+  }, [authState, setLocation, user?.userType]);
 
   return <PageLoader />;
 };
@@ -395,9 +410,7 @@ function Router() {
             <Route path="/find-food" component={FindFood} />
             <Route
               path="/event-signup"
-              component={() => (
-                <Redirect to="/customer-signup?role=event_coordinator" />
-              )}
+              component={RedirectToEventOnboarding}
             />
             <Route path="/events" component={EventsRouter} />
             <Route path="/events/public" component={EventsPage} />
@@ -597,7 +610,7 @@ function Router() {
             <Route path="/contact" component={Contact} />
             <Route path="/install" component={InstallApp} />
             <Route path="/host-signup" component={HostSignup} />
-            <Route path="/event-signup" component={EventSignup} />
+            <Route path="/event-signup" component={RedirectToEventOnboarding} />
             <Route path="/events" component={EventsRouter} />
             <Route path="/events/public" component={EventsPage} />
             <Route path="/event/:slug" component={EventDetailPage} />

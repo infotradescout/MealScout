@@ -218,7 +218,7 @@ export default function CustomerSignup() {
     accountType === "host"
       ? "/host-signup"
       : accountType === "event_organizer"
-          ? "/event-signup"
+          ? "/dashboard"
         : accountType === "business"
           ? getBusinessRedirectPath()
           : "/scout";
@@ -586,7 +586,7 @@ export default function CustomerSignup() {
       return;
     }
     if (accountType === "event_organizer") {
-      setLocation("/event-signup");
+      setLocation("/dashboard");
       return;
     }
 
