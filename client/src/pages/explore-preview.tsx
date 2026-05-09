@@ -135,6 +135,12 @@ interface RestaurantSummary {
   neighborhood?: string | null;
   address?: string | null;
   activeDealsCount?: number;
+  activeDealCount?: number;
+  favoriteCount?: number | null;
+  followCount?: number | null;
+  recommendationCount?: number | null;
+  videoRecommendationCount?: number | null;
+  communityActivityCount?: number | null;
   distanceMiles?: number | null;
   distance?: number | null;
   description?: string | null;
@@ -2428,7 +2434,14 @@ function NearbyRestaurantCard({
   const img = restaurant.coverImageUrl || restaurant.heroImageUrl || restaurant.imageUrl || restaurant.logoUrl;
   const cuisine = restaurant.cuisineType;
   const location = restaurant.neighborhood || restaurant.city;
-  const dealCount = restaurant.activeDealsCount ?? 0;
+  const dealCount = restaurant.activeDealsCount ?? restaurant.activeDealCount ?? 0;
+  const favoriteCount = Number(restaurant.favoriteCount || 0);
+  const followCount = Number(restaurant.followCount || 0);
+  const recommendationCount = Number(restaurant.recommendationCount || 0);
+  const videoRecommendationCount = Number(
+    restaurant.videoRecommendationCount || 0,
+  );
+  const communityActivityCount = Number(restaurant.communityActivityCount || 0);
   const dist = restaurant.distanceMiles ?? (restaurant.distance ? restaurant.distance * 0.621371 : null);
   const distLabel = typeof dist === "number" && Number.isFinite(dist)
     ? `${dist.toFixed(dist < 10 ? 1 : 0)} mi`
@@ -2449,6 +2462,27 @@ function NearbyRestaurantCard({
     typeof cents === "number" && Number.isFinite(cents) && cents > 0
       ? `$${(cents / 100).toFixed(cents % 100 === 0 ? 0 : 2)}`
       : null;
+  const trustSignals = [
+    videoRecommendationCount > 0
+      ? `${videoRecommendationCount} video rec${videoRecommendationCount === 1 ? "" : "s"}`
+      : null,
+    recommendationCount > 0
+      ? `${recommendationCount} rec${recommendationCount === 1 ? "" : "s"}`
+      : null,
+    favoriteCount > 0
+      ? `${favoriteCount} save${favoriteCount === 1 ? "" : "s"}`
+      : null,
+    followCount > 0
+      ? `${followCount} follow${followCount === 1 ? "" : "s"}`
+      : null,
+    communityActivityCount > 0 ? "active buzz" : null,
+  ].filter((signal): signal is string => Boolean(signal));
+  const rankingReason =
+    trustSignals.length > 0
+      ? `Ranked by ${trustSignals.slice(0, 2).join(" + ")}`
+      : distLabel
+        ? "Ranked by nearby local relevance"
+        : "Ranked by local relevance";
 
   const sendRestaurantAction = async (
     action: "favorite" | "follow" | "recommend",
@@ -2604,6 +2638,14 @@ function NearbyRestaurantCard({
           </div>
         )}
         <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] font-bold uppercase tracking-wide">
+          {trustSignals.slice(0, 2).map((signal) => (
+            <span
+              key={signal}
+              className="rounded-full bg-emerald-300/12 px-2 py-1 text-emerald-200"
+            >
+              {signal}
+            </span>
+          ))}
           <span className="rounded-full bg-white/8 px-2 py-1 text-white/65">
             Menu
           </span>
@@ -2613,6 +2655,9 @@ function NearbyRestaurantCard({
             </span>
           )}
         </div>
+        <p className="mt-2 text-[10px] font-semibold text-white/45">
+          {rankingReason}
+        </p>
         <div
           className="mt-2 grid grid-cols-3 gap-1.5 text-[10px] font-bold"
           aria-label={`${name} quick actions`}
