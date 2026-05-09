@@ -125,6 +125,19 @@ test.describe("welcome and Scout routing law", () => {
     await expect(page.getByTestId("scout-map-container")).toHaveCount(0);
   });
 
+  test("welcome signup opens the account type chooser", async ({ page }) => {
+    await mockGuest(page);
+
+    await page.goto(`${FRONTEND}/`, { waitUntil: "domcontentloaded" });
+    await dismissBetaDialog(page);
+    await page.getByRole("link", { name: /^sign up$/i }).click();
+
+    await expect(page).toHaveURL(/\/signup(?:[?#].*)?$/);
+    await expect(page.getByRole("dialog", { name: /choose account type/i })).toBeVisible();
+    await expect(page.getByTestId("button-signup-flow-food_truck")).toBeVisible();
+    await expect(page.getByTestId("button-signup-flow-private_chef")).toBeVisible();
+  });
+
   test("logged-in root redirects to Scout", async ({ page }) => {
     await mockCustomer(page);
     await mockScoutFeeds(page);
