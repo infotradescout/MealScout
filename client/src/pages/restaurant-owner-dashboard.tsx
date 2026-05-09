@@ -1311,12 +1311,19 @@ export default function RestaurantOwnerDashboard() {
         const hasMenu = Boolean((currentRestaurant as any).menuUrl || (currentRestaurant as any).hasMenu);
         const hasAddress = Boolean((currentRestaurant as any).address || (currentRestaurant as any).city);
         const hasPhone = Boolean((currentRestaurant as any).phone || (currentRestaurant as any).contactPhone);
+        const hasSchedule = Boolean(
+          (currentRestaurant as any).operatingHours ||
+          (currentRestaurant as any).businessHours ||
+          (currentRestaurant as any).hours ||
+          (currentRestaurant as any).schedulePublished,
+        );
         const hasDeal = (stats?.activeDeals || 0) > 0;
         const checklistItems = [
           { label: "Profile photo or logo uploaded", done: hasPhoto, href: `/edit-restaurant/${selectedRestaurant}` },
           { label: "Address or service area set", done: hasAddress, href: `/edit-restaurant/${selectedRestaurant}` },
           { label: "Phone number added", done: hasPhone, href: `/edit-restaurant/${selectedRestaurant}` },
           { label: "Online menu linked or built", done: hasMenu, href: `/menu-builder/${selectedRestaurant}` },
+          { label: "Schedule or operating hours published", done: hasSchedule, href: "/restaurant-owner-dashboard?setup=schedule" },
           { label: "First special or deal created", done: hasDeal, href: "/deal-creation" },
         ];
         const completedCount = checklistItems.filter((i) => i.done).length;

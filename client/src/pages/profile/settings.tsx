@@ -558,6 +558,11 @@ export default function SettingsPage() {
                 Menus and imports
               </Button>
             </Link>
+            <Link href="/restaurant-owner-dashboard?src=settings&setup=schedule">
+              <Button variant="outline" className="w-full justify-start">
+                Schedule and hours
+              </Button>
+            </Link>
             <Link href="/scout">
               <Button variant="outline" className="w-full justify-start">
                 Scout discovery

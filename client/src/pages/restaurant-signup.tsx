@@ -236,6 +236,15 @@ export default function RestaurantSignup() {
     return `/menu-builder?${params.toString()}`;
   }, [createdRestaurant?.id, menuSourceUrl]);
 
+  const scheduleSetupHref = useMemo(() => {
+    const params = new URLSearchParams({
+      src: "onboarding",
+      setup: "schedule",
+    });
+    if (createdRestaurant?.id) params.set("restaurantId", String(createdRestaurant.id));
+    return `/restaurant-owner-dashboard?${params.toString()}`;
+  }, [createdRestaurant?.id]);
+
   const persistMenuImportDraft = (restaurantId?: string | null) => {
     if (typeof window === "undefined") return;
     if (!menuSourceUrl && !restaurantId) return;
@@ -623,7 +632,11 @@ export default function RestaurantSignup() {
         title: COPY.notifications.verification.successTitle,
         description: COPY.notifications.verification.successDescription,
       });
-      setLocation(selectedBusinessType === "food_truck" ? "/parking-pass?src=onboarding" : menuBuilderHref);
+      setLocation(
+        selectedBusinessType === "food_truck"
+          ? `${scheduleSetupHref}&truck=1`
+          : menuBuilderHref,
+      );
     },
     onError: (error) => {
       toast({
@@ -701,7 +714,11 @@ export default function RestaurantSignup() {
       title: COPY.notifications.verification.skippedTitle,
       description: COPY.notifications.verification.skippedDescription,
     });
-    setLocation(selectedBusinessType === "food_truck" ? "/parking-pass?src=onboarding" : menuBuilderHref);
+    setLocation(
+      selectedBusinessType === "food_truck"
+        ? `${scheduleSetupHref}&truck=1`
+        : menuBuilderHref,
+    );
   };
 
   const isAutoBusinessVerified = Boolean(

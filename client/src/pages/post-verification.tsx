@@ -47,8 +47,8 @@ function getSetupBrief(redirectPath: string) {
     return {
       label: "Food truck setup",
       description:
-        "Claim or create the truck, confirm service area, then add or import the menu before going live.",
-      steps: ["Personal login", "Truck profile", "Menu import", "Live status"],
+        "Claim or create the truck, confirm service area, add or import the menu, then publish schedule and live status.",
+      steps: ["Personal login", "Truck profile", "Menu import", "Schedule"],
     };
   }
   if (redirectPath.startsWith("/restaurant-signup")) {
@@ -56,7 +56,7 @@ function getSetupBrief(redirectPath: string) {
       label: "Business setup",
       description:
         "Finish the business profile, add location and hours, then build or import the menu customers will see on Scout.",
-      steps: ["Personal login", "Business profile", "Menu setup", "Publish"],
+      steps: ["Personal login", "Business profile", "Menu setup", "Hours"],
     };
   }
   if (redirectPath.startsWith("/host-signup")) {
