@@ -30,12 +30,12 @@ export default function Welcome() {
           <img
             src="/brand/mealscout-logo-pin.png"
             alt="MealScout"
-            className="mb-8 h-auto w-48 max-w-[62vw] drop-shadow-[0_4px_26px_rgba(0,0,0,0.72)]"
+            className="mb-8 h-auto w-40 max-w-[52vw] drop-shadow-[0_4px_22px_rgba(0,0,0,0.68)]"
           />
 
           <div className="flex w-full max-w-[18rem] flex-col gap-3">
             <Link
-              href="/signup"
+              href="/customer-signup"
               className="inline-flex h-12 items-center justify-center rounded-full bg-amber-400 px-6 text-[15px] font-black text-black shadow-[0_0_26px_rgba(245,158,11,0.36)] transition hover:bg-amber-300 active:scale-[0.98]"
             >
               Sign up
