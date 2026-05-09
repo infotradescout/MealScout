@@ -141,6 +141,8 @@ interface RestaurantSummary {
   recommendationCount?: number | null;
   videoRecommendationCount?: number | null;
   communityActivityCount?: number | null;
+  homeRankingScore?: number | null;
+  homeRankingReason?: string | null;
   distanceMiles?: number | null;
   distance?: number | null;
   description?: string | null;
@@ -2478,7 +2480,10 @@ function NearbyRestaurantCard({
     communityActivityCount > 0 ? "active buzz" : null,
   ].filter((signal): signal is string => Boolean(signal));
   const rankingReason =
-    trustSignals.length > 0
+    typeof restaurant.homeRankingReason === "string" &&
+    restaurant.homeRankingReason.trim().length > 0
+      ? restaurant.homeRankingReason.trim()
+      : trustSignals.length > 0
       ? `Ranked by ${trustSignals.slice(0, 2).join(" + ")}`
       : distLabel
         ? "Ranked by nearby local relevance"

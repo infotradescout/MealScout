@@ -24,6 +24,10 @@ import {
   telemetryEvents,
   truckImportListings,
 } from "@shared/schema";
+import {
+  computeHomeRankingScore,
+  getHomeRankingReasons,
+} from "@shared/rankingPolicy";
 
 const ensureTrialForUser = ensurePremiumTrialForUser;
 
@@ -466,25 +470,60 @@ export function registerRestaurantCoreRoutes(
         ]),
       );
 
+      const attachTrustSignals = (restaurant: any, distance: number | null) => {
+        const restaurantId = String(restaurant.id || "");
+        const favoriteCount = favoritesByRestaurant.get(restaurantId) || 0;
+        const followCount = followsByRestaurant.get(restaurantId) || 0;
+        const recommendationCount =
+          recommendationsByRestaurant.get(restaurantId) || 0;
+        const videoRecommendationCount =
+          videoRecommendationsByRestaurant.get(restaurantId) || 0;
+        const activeDealCount = activeDealsByRestaurant.get(restaurantId) || 0;
+        const communityActivityCount =
+          Number(reactionByRestaurant.get(restaurantId) || 0) +
+          Number(sharesByRestaurant.get(restaurantId) || 0) +
+          Number(videoEngagementByRestaurant.get(restaurantId) || 0);
+        const hasDistance =
+          typeof distance === "number" && Number.isFinite(distance);
+        const locationBoost = hasDistance
+          ? Math.max(0, 1 - Math.min(distance, radiusKm) / radiusKm)
+          : 0;
+        const homeRankingScore = computeHomeRankingScore({
+          recommendationCount,
+          videoRecommendationCount,
+          followCount,
+          favoriteCount,
+          activeDealCount,
+          locationBoost,
+          liveTruckBoost: 0,
+          communityActivityCount,
+        });
+
+        return {
+          ...restaurant,
+          distance,
+          favoriteCount,
+          followCount,
+          recommendationCount,
+          videoRecommendationCount,
+          communityActivityCount,
+          activeDealCount,
+          homeRankingScore,
+          homeRankingReason: getHomeRankingReasons({
+            recommendationCount,
+            videoRecommendationCount,
+            followCount,
+            favoriteCount,
+            activeDealCount,
+            hasLocationBoost: locationBoost > 0,
+          }),
+        };
+      };
+
       const withDistance = activeRestaurants
         .map((restaurant: any) => {
           if (!hasLocation || Number.isNaN(userLat) || Number.isNaN(userLng)) {
-            const restaurantId = String(restaurant.id || "");
-            return {
-              ...restaurant,
-              distance: null,
-              favoriteCount: favoritesByRestaurant.get(restaurantId) || 0,
-              followCount: followsByRestaurant.get(restaurantId) || 0,
-              recommendationCount:
-                recommendationsByRestaurant.get(restaurantId) || 0,
-              videoRecommendationCount:
-                videoRecommendationsByRestaurant.get(restaurantId) || 0,
-              communityActivityCount:
-                Number(reactionByRestaurant.get(restaurantId) || 0) +
-                Number(sharesByRestaurant.get(restaurantId) || 0) +
-                Number(videoEngagementByRestaurant.get(restaurantId) || 0),
-              activeDealCount: activeDealsByRestaurant.get(restaurantId) || 0,
-            };
+            return attachTrustSignals(restaurant, null);
           }
 
           const latRaw =
@@ -512,26 +551,21 @@ export function registerRestaurantCoreRoutes(
           const distanceKm = earthRadiusKm * c;
           if (!Number.isFinite(distanceKm) || distanceKm > radiusKm) return null;
 
-          const restaurantId = String(restaurant.id || "");
-          return {
-            ...restaurant,
-            distance: distanceKm * 0.621371,
-            favoriteCount: favoritesByRestaurant.get(restaurantId) || 0,
-            followCount: followsByRestaurant.get(restaurantId) || 0,
-            recommendationCount:
-              recommendationsByRestaurant.get(restaurantId) || 0,
-            videoRecommendationCount:
-              videoRecommendationsByRestaurant.get(restaurantId) || 0,
-            communityActivityCount:
-              Number(reactionByRestaurant.get(restaurantId) || 0) +
-              Number(sharesByRestaurant.get(restaurantId) || 0) +
-              Number(videoEngagementByRestaurant.get(restaurantId) || 0),
-            activeDealCount: activeDealsByRestaurant.get(restaurantId) || 0,
-          };
+          return attachTrustSignals(restaurant, distanceKm * 0.621371);
         })
         .filter(Boolean) as Array<any>;
 
       const sorted = withDistance.sort((a: any, b: any) => {
+        const aScore =
+          typeof a.homeRankingScore === "number" && Number.isFinite(a.homeRankingScore)
+            ? a.homeRankingScore
+            : 0;
+        const bScore =
+          typeof b.homeRankingScore === "number" && Number.isFinite(b.homeRankingScore)
+            ? b.homeRankingScore
+            : 0;
+        if (aScore !== bScore) return bScore - aScore;
+
         const aDistance =
           typeof a.distance === "number" && Number.isFinite(a.distance)
             ? a.distance
