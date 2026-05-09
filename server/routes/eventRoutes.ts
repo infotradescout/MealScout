@@ -74,8 +74,12 @@ const unavailableParkingStatuses = new Set([
 export const isParkingPassFeedCandidate = (event: any) => {
   const eventStatus = normalizeParkingStatus(event?.status || "open");
   const seriesStatus = normalizeParkingStatus(event?.seriesStatus || "published");
+  const hostStatus = normalizeParkingStatus(event?.host?.status || event?.hostStatus || "");
   if (unavailableParkingStatuses.has(eventStatus)) return false;
   if (seriesStatus && seriesStatus !== "published") return false;
+  if (hostStatus && unavailableParkingStatuses.has(hostStatus)) return false;
+  if (event?.deletedAt || event?.archivedAt || event?.cancelledAt) return false;
+  if (event?.host?.deletedAt || event?.host?.archivedAt || event?.host?.cancelledAt) return false;
 
   const eventDate = event?.date ? new Date(event.date) : null;
   if (!eventDate || !Number.isFinite(eventDate.getTime())) return false;
@@ -106,7 +110,10 @@ export const hasParkingPassAvailability = (event: any) => {
 
 export const sanitizeParkingPassPublicFeedRows = (events: any[]) =>
   (Array.isArray(events) ? events : []).filter(
-    (event) => isParkingPassFeedCandidate(event) && hasParkingPassAvailability(event),
+    (event) =>
+      isParkingPassFeedCandidate(event) &&
+      isParkingPassPublicReady(event) &&
+      hasParkingPassAvailability(event),
   );
 
 type EventRouteDependencies = {
@@ -574,11 +581,12 @@ export function registerEventRoutes(
       res.setHeader("Cache-Control", "public, max-age=60");
       const isAuthed = Boolean(req.isAuthenticated?.() && req.user?.id);
 
-      const feed =
+      const feed = sanitizeParkingPassPublicFeedRows(
         parkingPassPublicFeedCache &&
         parkingPassPublicFeedCache.expiresAt > Date.now()
           ? parkingPassPublicFeedCache.payload
-          : await buildParkingPassPublicFeed();
+          : await buildParkingPassPublicFeed(),
+      );
 
       const pensacolaEvents = (Array.isArray(feed) ? feed : []).filter(
         (row: any) => {
@@ -965,6 +973,9 @@ export function registerEventRoutes(
           for (const host of allHosts as any[]) {
             const hostId = String(host?.id || "").trim();
             if (!hostId) continue;
+            const hostStatus = normalizeParkingStatus(host?.status || "");
+            if (hostStatus && unavailableParkingStatuses.has(hostStatus)) continue;
+            if (host?.deletedAt || host?.archivedAt || host?.cancelledAt) continue;
             if (
               !isHostProfileMapEligible({
                 businessName: host?.businessName,
@@ -1033,6 +1044,11 @@ export function registerEventRoutes(
           const hostId = String(row?.host?.id || "").trim();
           if (!hostId) return;
           if (row?.isDisabled === true) return;
+          const seriesStatus = normalizeParkingStatus(row?.series?.status || "");
+          const hostStatus = normalizeParkingStatus(row?.host?.status || "");
+          if (seriesStatus !== "published") return;
+          if (hostStatus && unavailableParkingStatuses.has(hostStatus)) return;
+          if (row?.host?.deletedAt || row?.host?.archivedAt || row?.host?.cancelledAt) return;
           if (
             !isHostProfileMapEligible({
               businessName: row?.host?.businessName,
