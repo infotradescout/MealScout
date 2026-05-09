@@ -194,12 +194,17 @@ export async function setupUnifiedAuth(app: Express) {
   ): string => {
     switch (user.userType) {
       case "host":
-        return "/host/dashboard";
+        return "/host-signup";
       case "event_coordinator":
-        return "/event-coordinator/dashboard";
+        return "/event-signup";
       case "restaurant_owner":
+        return "/restaurant-signup";
       case "food_truck":
-        return "/restaurant-owner-dashboard";
+        return "/restaurant-signup?businessType=food_truck&claim=1";
+      case "caterer":
+        return "/restaurant-signup?businessType=caterer";
+      case "private_chef":
+        return "/restaurant-signup?businessType=private_chef";
       case "supplier":
         return "/supplier/dashboard";
       case "staff":
@@ -1023,6 +1028,16 @@ export async function setupUnifiedAuth(app: Express) {
   app.post("/api/auth/customer/register", async (req, res) => {
     try {
       const { email, firstName, lastName, phone, password, otpCode } = req.body;
+      const requestedAccountType = String(
+        req.body?.accountType || req.body?.userType || "",
+      ).trim();
+      const registrationUserType =
+        requestedAccountType === "host"
+          ? "host"
+          : requestedAccountType === "event_coordinator" ||
+              requestedAccountType === "event_organizer"
+            ? "event_coordinator"
+            : "customer";
 
       if (!email || !firstName || !lastName || !phone || !password) {
         return res.status(400).json({ error: "All fields are required" });
@@ -1078,7 +1093,7 @@ export async function setupUnifiedAuth(app: Express) {
       const user = await storage.upsertUserByAuth(
         "email",
         userData,
-        "customer",
+        registrationUserType,
       );
       kickAffiliateTag(user);
       await applyAffiliateReferral(req, user);
@@ -1112,6 +1127,15 @@ export async function setupUnifiedAuth(app: Express) {
   app.post("/api/auth/restaurant/register", async (req, res) => {
     try {
       const { email, firstName, lastName, phone, password, otpCode } = req.body;
+      const businessType = String(req.body?.businessType || "").trim();
+      const registrationUserType =
+        businessType === "food_truck"
+          ? "food_truck"
+          : businessType === "caterer"
+            ? "caterer"
+            : businessType === "private_chef"
+              ? "private_chef"
+              : "restaurant_owner";
 
       if (!email || !firstName || !lastName || !phone || !password) {
         return res.status(400).json({ error: "All fields are required" });
@@ -1167,7 +1191,7 @@ export async function setupUnifiedAuth(app: Express) {
       const user = await storage.upsertUserByAuth(
         "email",
         userData,
-        "restaurant_owner",
+        registrationUserType,
       );
       kickAffiliateTag(user);
       await applyAffiliateReferral(req, user);

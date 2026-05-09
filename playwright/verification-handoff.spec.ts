@@ -30,6 +30,13 @@ async function mockUser(page: any, userType: string) {
   });
 }
 
+async function dismissBetaDisclaimer(page: any) {
+  const closeButton = page.getByTestId("button-beta-disclaimer-close");
+  if (await closeButton.isVisible().catch(() => false)) {
+    await closeButton.click();
+  }
+}
+
 test.describe("verification handoff routing", () => {
   test("fresh verified email redirect beats stale session storage", async ({ page }) => {
     await mockGuest(page);
@@ -50,6 +57,7 @@ test.describe("verification handoff routing", () => {
       )}`,
       { waitUntil: "domcontentloaded" },
     );
+    await dismissBetaDisclaimer(page);
 
     const loginLink = page.getByRole("link", {
       name: /log in to continue|i verified, log in/i,
@@ -82,6 +90,7 @@ test.describe("verification handoff routing", () => {
       )}`,
       { waitUntil: "domcontentloaded" },
     );
+    await dismissBetaDisclaimer(page);
 
     const loginLink = page.getByRole("link", {
       name: /i verified, log in|log in to continue/i,
@@ -147,6 +156,7 @@ test.describe("verification handoff routing", () => {
       `${FRONTEND}/login?redirect=${encodeURIComponent("/event-signup")}`,
       { waitUntil: "domcontentloaded" },
     );
+    await dismissBetaDisclaimer(page);
 
     await page.getByTestId("button-email-login").click();
     await page.getByTestId("input-email").fill("event-user@example.test");
