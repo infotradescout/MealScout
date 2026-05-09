@@ -1,4 +1,5 @@
 import type { Express } from "express";
+import crypto from "crypto";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import { db } from "../db";
@@ -101,6 +102,22 @@ export function registerRestaurantCoreRoutes(
           restaurantId: safeRestaurantId,
           ...(properties || {}),
         },
+      });
+    } catch (error) {
+      console.warn(`[telemetry] Failed to record ${eventName}:`, error);
+    }
+  };
+
+  const trackBusinessConversationEvent = async (
+    eventName: string,
+    properties: Record<string, any>,
+    userId?: string | null,
+  ) => {
+    try {
+      await db.insert(telemetryEvents).values({
+        eventName,
+        userId: userId || null,
+        properties,
       });
     } catch (error) {
       console.warn(`[telemetry] Failed to record ${eventName}:`, error);
@@ -690,10 +707,12 @@ export function registerRestaurantCoreRoutes(
           rawGuestName ||
           "A MealScout user";
         const businessName = restaurant.name || "your business";
+        const conversationId = crypto.randomUUID();
         const baseUrl = String(
           process.env.PUBLIC_BASE_URL || "http://localhost:5000",
         ).replace(/\/+$/, "");
         const dashboardUrl = `${baseUrl}/restaurant-owner-dashboard`;
+        const trackedDashboardUrl = `${baseUrl}/api/restaurants/messages/${conversationId}/open?restaurantId=${encodeURIComponent(restaurantId)}`;
         const safeBusinessName = escapeHtml(businessName);
         const safeSenderName = escapeHtml(senderName);
         const safeSenderEmail = escapeHtml(replyEmail);
@@ -716,9 +735,9 @@ export function registerRestaurantCoreRoutes(
           <hr style="border:none;border-top:1px solid #e5e7eb;margin:16px 0;" />
           ${replyLine}
           <p style="color:#6b7280;font-size:13px;">MealScout shared this email address because the user chose to contact your business. No live location data, payment details, or private preference data was included.</p>
-          <p><a href="${dashboardUrl}">Open your MealScout dashboard</a></p>
+          <p><a href="${trackedDashboardUrl}">Open your MealScout dashboard</a></p>
         `;
-        const text = `${senderName} contacted ${businessName} from MealScout.\n\nTopic: ${subjectTopic}\n\n${message}\n\n${textReplyLine}\n\nMealScout shared this reply info because the user chose to contact your business. No live location data, payment details, or private preference data was included.\n\nDashboard: ${dashboardUrl}`;
+        const text = `${senderName} contacted ${businessName} from MealScout.\n\nTopic: ${subjectTopic}\n\n${message}\n\n${textReplyLine}\n\nMealScout shared this reply info because the user chose to contact your business. No live location data, payment details, or private preference data was included.\n\nDashboard: ${trackedDashboardUrl}`;
 
         const ok = await emailService.sendBasicEmail(
           owner.email,
@@ -728,21 +747,66 @@ export function registerRestaurantCoreRoutes(
           "general",
         );
 
+        await trackBusinessConversationEvent(
+          "business_contact_intent_sent",
+          {
+            conversationId,
+            restaurantId,
+            restaurantOwnerId: restaurant.ownerId,
+            topic,
+            preferredReply,
+            senderKind: userId ? "registered_user" : "guest",
+            hasReplyEmail: Boolean(replyEmail),
+            hasPhone: Boolean(phone),
+            messageLength: message.length,
+            delivered: ok,
+            source: "restaurant_profile",
+          },
+          userId,
+        );
+
         if (userId) {
           await trackEngagement("restaurant_user_message_sent", userId, restaurantId, {
+            conversationId,
             topic,
             preferredReply,
             delivered: ok,
           });
         }
 
-        res.json({ success: ok });
+        res.json({ success: ok, conversationId });
       } catch (error: any) {
         console.error("Error sending business message:", error);
         res.status(500).json({
           message: error?.message || "Failed to send message",
         });
       }
+    },
+  );
+
+  app.get(
+    "/api/restaurants/messages/:conversationId/open",
+    async (req: any, res) => {
+      const conversationId = String(req.params.conversationId || "").trim();
+      const restaurantId = String(req.query.restaurantId || "").trim();
+      const baseUrl = String(
+        process.env.PUBLIC_BASE_URL || "http://localhost:5000",
+      ).replace(/\/+$/, "");
+
+      if (conversationId) {
+        await trackBusinessConversationEvent(
+          "business_contact_owner_return_opened",
+          {
+            conversationId,
+            restaurantId: restaurantId || null,
+            source: "business_contact_email",
+            userAgent: String(req.headers["user-agent"] || "").slice(0, 240),
+          },
+          req.user?.id || null,
+        );
+      }
+
+      res.redirect(`${baseUrl}/restaurant-owner-dashboard`);
     },
   );
 
