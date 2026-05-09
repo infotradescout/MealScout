@@ -11,13 +11,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
   Form,
   FormControl,
   FormField,
@@ -86,6 +79,7 @@ type SignupFlowOption = {
   businessSubType?: BusinessSubType;
   label: string;
   description: string;
+  href: string;
   icon: LucideIcon;
 };
 
@@ -95,6 +89,7 @@ const signupFlowOptions: SignupFlowOption[] = [
     accountType: "diner",
     label: "Diner",
     description: "Save favorite spots, deals, and local food finds.",
+    href: "/customer-signup?role=diner",
     icon: UserPlus,
   },
   {
@@ -102,6 +97,7 @@ const signupFlowOptions: SignupFlowOption[] = [
     accountType: "event_organizer",
     label: "Event Organizer",
     description: "Coordinate vendors, events, and truck demand.",
+    href: "/event-signup",
     icon: CalendarDays,
   },
   {
@@ -110,6 +106,7 @@ const signupFlowOptions: SignupFlowOption[] = [
     businessSubType: "food_truck",
     label: "Food Truck",
     description: "Claim your truck and get discovered around town.",
+    href: "/restaurant-signup?businessType=food_truck&claim=1",
     icon: Truck,
   },
   {
@@ -118,6 +115,7 @@ const signupFlowOptions: SignupFlowOption[] = [
     businessSubType: "restaurant",
     label: "Restaurant",
     description: "Create your profile, menu, and local deal surfaces.",
+    href: "/restaurant-signup?businessType=restaurant",
     icon: Building2,
   },
   {
@@ -126,6 +124,7 @@ const signupFlowOptions: SignupFlowOption[] = [
     businessSubType: "bar",
     label: "Bar",
     description: "Promote food, drinks, specials, and events.",
+    href: "/restaurant-signup?businessType=bar",
     icon: Beer,
   },
   {
@@ -134,6 +133,7 @@ const signupFlowOptions: SignupFlowOption[] = [
     businessSubType: "caterer",
     label: "Caterer",
     description: "Build a catering profile for local bookings.",
+    href: "/restaurant-signup?businessType=caterer",
     icon: UtensilsCrossed,
   },
   {
@@ -142,6 +142,7 @@ const signupFlowOptions: SignupFlowOption[] = [
     businessSubType: "private_chef",
     label: "Private Chef",
     description: "Get discovered for private meals and events.",
+    href: "/restaurant-signup?businessType=private_chef",
     icon: ChefHat,
   },
   {
@@ -149,6 +150,7 @@ const signupFlowOptions: SignupFlowOption[] = [
     accountType: "host",
     label: "Host",
     description: "Offer parking or event space to food trucks.",
+    href: "/host-signup",
     icon: MapPinned,
   },
   {
@@ -156,6 +158,7 @@ const signupFlowOptions: SignupFlowOption[] = [
     accountType: "supplier",
     label: "Supplier",
     description: "Sell products to restaurants and food trucks.",
+    href: "/customer-signup?role=supplier",
     icon: Package,
   },
 ];
@@ -197,7 +200,6 @@ export default function CustomerSignup() {
   const [businessSubType, setBusinessSubType] = useState<BusinessSubType>(
     initialAccountType === "business" ? initialBusinessSubType : "restaurant"
   );
-  const [accountChooserOpen, setAccountChooserOpen] = useState(!hasExplicitSignupFlow);
   const SIGNUP_DRAFT_KEY = "mealscout:customer-signup-draft";
   const POST_VERIFICATION_REDIRECT_KEY = "mealscout:post-verification-redirect";
 
@@ -223,21 +225,7 @@ export default function CustomerSignup() {
   };
 
   const selectSignupFlow = (option: SignupFlowOption) => {
-    setAccountType(option.accountType);
-    setBusinessSubType(option.businessSubType || "restaurant");
-    setAccountChooserOpen(false);
-
-    const params = new URLSearchParams();
-    if (option.accountType === "business") {
-      params.set("role", "business");
-      params.set("businessType", option.businessSubType || "restaurant");
-    } else if (option.accountType === "event_organizer") {
-      params.set("role", "event_coordinator");
-    } else {
-      params.set("role", option.accountType);
-    }
-
-    window.history.replaceState({}, "", `/customer-signup?${params.toString()}`);
+    setLocation(option.href);
   };
 
   const goToVerificationHandoff = (redirectPath: string) => {
@@ -638,6 +626,63 @@ export default function CustomerSignup() {
     );
   }
 
+  if (!hasExplicitSignupFlow) {
+    return (
+      <div className="min-h-screen bg-[var(--bg-layered)] flex flex-col">
+        <SEOHead
+          title="Sign Up - MealScout | Choose Account Type"
+          description="Choose the MealScout account path that fits you: diner, food truck, restaurant, chef, host, event organizer, or supplier."
+          canonicalUrl="https://www.mealscout.us/signup"
+          noIndex={true}
+        />
+        <BackHeader
+          title="Choose Account Type"
+          fallbackHref="/"
+          icon={UserPlus}
+          className="bg-[hsl(var(--background))/0.94] border-b border-[color:var(--border-subtle)] shadow-clean"
+        />
+        <main className="mx-auto flex w-full max-w-md flex-1 flex-col px-4 py-5">
+          <div className="mb-4 text-center">
+            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-[color:var(--action-primary)] text-[color:var(--action-primary-text)] shadow-clean-lg">
+              <UserPlus className="h-6 w-6" aria-hidden="true" />
+            </div>
+            <h1 className="text-2xl font-black uppercase tracking-tight text-[color:var(--text-primary)]">
+              What are you here to do?
+            </h1>
+            <p className="mt-1 text-sm text-[color:var(--text-secondary)]">
+              Pick your path first so MealScout can send you to the right setup.
+            </p>
+          </div>
+
+          <div className="grid flex-1 grid-cols-2 gap-2">
+            {signupFlowOptions.map((option) => {
+              const Icon = option.icon;
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={() => selectSignupFlow(option)}
+                  className="group flex min-h-[104px] flex-col rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-3 text-left shadow-clean transition hover:border-[color:var(--action-primary)] hover:bg-[var(--bg-surface-muted)]"
+                  data-testid={`button-signup-flow-${option.id}`}
+                >
+                  <span className="mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-[color:var(--action-primary)] text-[color:var(--action-primary-text)] shadow-clean">
+                    <Icon className="h-4 w-4" aria-hidden="true" />
+                  </span>
+                  <span className="text-sm font-black text-[color:var(--text-primary)]">
+                    {option.label}
+                  </span>
+                  <span className="mt-1 text-[11px] leading-snug text-[color:var(--text-secondary)]">
+                    {option.description}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   if (isAuthenticated) {
     return (
       <div className="min-h-screen bg-[var(--bg-layered)] flex flex-col">
@@ -771,42 +816,6 @@ export default function CustomerSignup() {
         icon={UserPlus}
         className="bg-[hsl(var(--background))/0.94] border-b border-[color:var(--border-subtle)] shadow-clean"
       />
-      <Dialog open={accountChooserOpen} onOpenChange={setAccountChooserOpen}>
-        <DialogContent className="flex max-h-[calc(100vh-1rem)] max-w-[calc(100vw-1rem)] flex-col gap-3 overflow-hidden rounded-2xl border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-3 shadow-clean-lg sm:max-w-md sm:p-4">
-          <DialogHeader className="space-y-1 text-left">
-            <DialogTitle className="text-xl font-extrabold uppercase tracking-tight text-[color:var(--text-primary)]">
-              Choose account type
-            </DialogTitle>
-            <DialogDescription className="text-sm text-[color:var(--text-secondary)]">
-              Pick the path that matches what you want to do first.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid flex-1 grid-cols-2 gap-1.5 overflow-y-auto sm:gap-2">
-            {signupFlowOptions.map((option) => {
-              const Icon = option.icon;
-              return (
-                <button
-                  key={option.id}
-                  type="button"
-                  onClick={() => selectSignupFlow(option)}
-                  className="group flex min-h-[96px] flex-col rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-3 text-left shadow-clean transition hover:border-[color:var(--action-primary)] hover:bg-[var(--bg-surface-muted)]"
-                  data-testid={`button-signup-flow-${option.id}`}
-                >
-                  <span className="mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-[color:var(--action-primary)] text-[color:var(--action-primary-text)] shadow-clean">
-                    <Icon className="h-4 w-4" aria-hidden="true" />
-                  </span>
-                  <span className="text-sm font-extrabold text-[color:var(--text-primary)]">
-                    {option.label}
-                  </span>
-                  <span className="mt-1 text-[11px] leading-snug text-[color:var(--text-secondary)]">
-                    {option.description}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </DialogContent>
-      </Dialog>
 
       <main className="flex-1 px-4 py-2 max-w-md mx-auto flex flex-col justify-between">
         {/* Top: hero + form */}
