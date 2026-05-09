@@ -476,8 +476,8 @@ export default function CustomerSignup() {
     },
     onError: (error) => {
       toast({
-        title: "Business signup failed",
-        description: error.message || "Failed to create business account",
+        title: "Signup failed",
+        description: error.message || "Failed to create your account",
         variant: "destructive",
       });
     },
@@ -616,7 +616,7 @@ export default function CustomerSignup() {
       if (!digitsOnly || digitsOnly.length < 10) {
         form.setError("phone", {
           type: "manual",
-          message: "Valid phone number is required for business accounts",
+          message: "Valid phone number is required for business profile managers",
         });
         return;
       }
@@ -955,7 +955,7 @@ export default function CustomerSignup() {
             </h2>
             <p className="text-[color:var(--text-secondary)] text-xs leading-snug max-w-sm mx-auto">
               {accountType === "business"
-                ? "Create your login so we can connect your restaurant or truck, list your deals, and pass savings directly to your regulars."
+                ? "Create your personal login first. Then we’ll attach and finish the business profile you manage."
                 : accountType === "host"
                 ? "Post and manage parking-host locations for trucks and local diners."
                 : accountType === "event_organizer"
@@ -1107,11 +1107,13 @@ export default function CustomerSignup() {
 
             <div className="text-center mb-4">
               <h3 className="text-lg font-bold text-[color:var(--text-primary)] mb-1">
-                Sign Up with Email
+                {accountType === "business"
+                  ? "Create Your Personal Login"
+                  : "Sign Up with Email"}
               </h3>
               <p className="text-[color:var(--text-secondary)] text-xs">
                 {accountType === "business"
-                  ? "This login powers your business dashboard. Pricing stays transparent and your discounts go straight to your guests."
+                  ? "Your login belongs to you. The business profile is attached next, so teams, ownership, and future locations stay clean."
                   : accountType === "host"
                   ? "This login lets you manage host locations and parking availability."
                   : accountType === "event_organizer"
@@ -1131,10 +1133,10 @@ export default function CustomerSignup() {
                   <div className="rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)] p-3 space-y-3">
                     <div>
                       <div className="text-sm font-black text-[color:var(--text-primary)]">
-                        Business basics
+                        Business profile seed
                       </div>
                       <p className="text-xs text-[color:var(--text-secondary)]">
-                        We will carry this into your profile setup after email verification.
+                        These details start the profile attached to your personal login. You’ll finish the full setup after email verification.
                       </p>
                     </div>
                     <FormField
