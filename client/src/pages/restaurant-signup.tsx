@@ -215,6 +215,43 @@ export default function RestaurantSignup() {
   const currentStep: HostOnboardingStep = onboardingState.step;
 
   const RESTAURANT_DRAFT_KEY = "mealscout:restaurant-signup-draft";
+  const MENU_IMPORT_DRAFT_KEY = "mealscout:menu-import-draft";
+
+  const menuSourceUrl = useMemo(() => {
+    if (typeof window === "undefined") return "";
+    try {
+      const stored = window.localStorage.getItem(RESTAURANT_DRAFT_KEY);
+      if (!stored) return "";
+      const parsed = JSON.parse(stored) as { menuSourceUrl?: string };
+      return String(parsed.menuSourceUrl || "").trim();
+    } catch {
+      return "";
+    }
+  }, []);
+
+  const menuBuilderHref = useMemo(() => {
+    const params = new URLSearchParams({ src: "onboarding" });
+    if (menuSourceUrl) params.set("menuSource", menuSourceUrl);
+    if (createdRestaurant?.id) params.set("restaurantId", String(createdRestaurant.id));
+    return `/menu-builder?${params.toString()}`;
+  }, [createdRestaurant?.id, menuSourceUrl]);
+
+  const persistMenuImportDraft = (restaurantId?: string | null) => {
+    if (typeof window === "undefined") return;
+    if (!menuSourceUrl && !restaurantId) return;
+    try {
+      window.localStorage.setItem(
+        MENU_IMPORT_DRAFT_KEY,
+        JSON.stringify({
+          sourceUrl: menuSourceUrl,
+          restaurantId: restaurantId || createdRestaurant?.id || null,
+          createdAt: new Date().toISOString(),
+        }),
+      );
+    } catch {
+      // Menu import source is a convenience; never block onboarding.
+    }
+  };
 
   const restaurantDefaultValues = useMemo<RestaurantFormData>(() => {
     const base: RestaurantFormData = {
@@ -581,15 +618,12 @@ export default function RestaurantSignup() {
         stage: "verification_submitted",
         businessType: selectedBusinessType,
       });
+      persistMenuImportDraft(createdRestaurant?.id || null);
       toast({
         title: COPY.notifications.verification.successTitle,
         description: COPY.notifications.verification.successDescription,
       });
-      setLocation(
-        selectedBusinessType === "food_truck"
-          ? "/parking-pass?src=onboarding"
-          : "/restaurant-owner-dashboard?src=onboarding",
-      );
+      setLocation(selectedBusinessType === "food_truck" ? "/parking-pass?src=onboarding" : menuBuilderHref);
     },
     onError: (error) => {
       toast({
@@ -662,15 +696,12 @@ export default function RestaurantSignup() {
   };
 
   const handleSkipVerification = () => {
+    persistMenuImportDraft(createdRestaurant?.id || null);
     toast({
       title: COPY.notifications.verification.skippedTitle,
       description: COPY.notifications.verification.skippedDescription,
     });
-    setLocation(
-      selectedBusinessType === "food_truck"
-        ? "/parking-pass?src=onboarding"
-        : "/restaurant-owner-dashboard?src=onboarding",
-    );
+    setLocation(selectedBusinessType === "food_truck" ? "/parking-pass?src=onboarding" : menuBuilderHref);
   };
 
   const isAutoBusinessVerified = Boolean(

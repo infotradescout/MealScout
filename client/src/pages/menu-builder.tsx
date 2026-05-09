@@ -2,7 +2,7 @@
  * Menu Builder — Business dashboard page
  * Allows restaurant/bar/truck owners to create and manage their online menus.
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
@@ -123,6 +123,23 @@ function useRestaurantId(): string | null {
   return (user as any)?.restaurantId ?? null;
 }
 
+const MENU_IMPORT_DRAFT_KEY = "mealscout:menu-import-draft";
+
+function getInitialMenuSourceUrl() {
+  if (typeof window === "undefined") return "";
+  const params = new URLSearchParams(window.location.search);
+  const querySource = String(params.get("menuSource") || "").trim();
+  if (querySource) return querySource;
+  try {
+    const stored = window.localStorage.getItem(MENU_IMPORT_DRAFT_KEY);
+    if (!stored) return "";
+    const parsed = JSON.parse(stored) as { sourceUrl?: string };
+    return String(parsed.sourceUrl || "").trim();
+  } catch {
+    return "";
+  }
+}
+
 // ──────────────────────────────── main page ───────────────────────────────────
 export default function MenuBuilderPage() {
   const restaurantId = useRestaurantId();
@@ -135,6 +152,23 @@ export default function MenuBuilderPage() {
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importType, setImportType] = useState<"csv" | "pdf">("csv");
   const [isImporting, setIsImporting] = useState(false);
+  const [menuSourceUrl, setMenuSourceUrl] = useState(getInitialMenuSourceUrl);
+
+  useEffect(() => {
+    if (!menuSourceUrl.trim()) return;
+    try {
+      window.localStorage.setItem(
+        MENU_IMPORT_DRAFT_KEY,
+        JSON.stringify({
+          sourceUrl: menuSourceUrl.trim(),
+          restaurantId,
+          updatedAt: new Date().toISOString(),
+        }),
+      );
+    } catch {
+      // Draft persistence is only a convenience.
+    }
+  }, [menuSourceUrl, restaurantId]);
 
   // fetch menus list
   const menusQuery = useQuery<Menu[]>({
@@ -279,6 +313,60 @@ export default function MenuBuilderPage() {
           </div>
         </div>
 
+        <Card className="mb-6 border-amber-300/30 bg-amber-50/70 dark:bg-amber-950/20">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg">Menu setup</CardTitle>
+            <CardDescription>
+              Import what you already have, then review it before publishing to Scout.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div>
+              <Label htmlFor="menu-source-url">Website, PDF, or online menu source</Label>
+              <Input
+                id="menu-source-url"
+                value={menuSourceUrl}
+                onChange={(event) => setMenuSourceUrl(event.target.value)}
+                placeholder="Paste your website, menu PDF, or existing online menu URL"
+              />
+              <p className="mt-1 text-xs text-muted-foreground">
+                MealScout keeps this source with your setup so you can use it while importing or rebuilding the menu.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                onClick={() => {
+                  if (!selectedMenuId) {
+                    setShowNewMenuDialog(true);
+                    return;
+                  }
+                  setShowImportDialog(true);
+                }}
+              >
+                <Upload className="mr-2 h-4 w-4" />
+                {selectedMenuId ? "Upload CSV/PDF import" : "Create menu to import"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowNewMenuDialog(true)}
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Build manually
+              </Button>
+              {restaurantId ? (
+                <Link href={`/menu/${restaurantId}`} target="_blank">
+                  <Button type="button" variant="outline">
+                    <Eye className="mr-2 h-4 w-4" />
+                    Public preview
+                  </Button>
+                </Link>
+              ) : null}
+            </div>
+          </CardContent>
+        </Card>
+
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           {/* Left sidebar: menu list */}
           <div className="lg:col-span-1 space-y-2">
@@ -312,9 +400,21 @@ export default function MenuBuilderPage() {
               </button>
             ))}
             {menus.length === 0 && !menusQuery.isLoading && (
-              <p className="text-sm text-muted-foreground text-center py-6">
-                No menus yet. Create one to get started.
-              </p>
+              <div className="rounded-lg border border-dashed p-4 text-center">
+                <p className="text-sm font-medium">No menus yet.</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Create your first menu, then import or add items.
+                </p>
+                <Button
+                  type="button"
+                  size="sm"
+                  className="mt-3"
+                  onClick={() => setShowNewMenuDialog(true)}
+                >
+                  <Plus className="mr-1 h-4 w-4" />
+                  Create menu
+                </Button>
+              </div>
             )}
           </div>
 
@@ -326,8 +426,16 @@ export default function MenuBuilderPage() {
                   <UtensilsCrossed className="w-10 h-10 text-muted-foreground mb-3" />
                   <h3 className="font-medium mb-1">Select or create a menu</h3>
                   <p className="text-sm text-muted-foreground">
-                    Choose a menu from the left, or create a new one.
+                    Choose a menu from the left, create a new one, or keep the source URL above while you rebuild.
                   </p>
+                  <Button
+                    type="button"
+                    className="mt-4"
+                    onClick={() => setShowNewMenuDialog(true)}
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    Create first menu
+                  </Button>
                 </CardContent>
               </Card>
             ) : fullMenuQuery.isLoading ? (
@@ -417,6 +525,19 @@ export default function MenuBuilderPage() {
             <DialogTitle>Import Menu Items</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
+            {menuSourceUrl.trim() ? (
+              <div className="rounded-lg border bg-muted/40 p-3 text-sm">
+                <div className="font-medium">Source saved from onboarding</div>
+                <a
+                  href={menuSourceUrl.trim()}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-1 block break-all text-primary underline"
+                >
+                  {menuSourceUrl.trim()}
+                </a>
+              </div>
+            ) : null}
             <div>
               <Label>Import Format</Label>
               <div className="flex gap-2 mt-2">

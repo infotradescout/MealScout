@@ -538,6 +538,44 @@ export default function SettingsPage() {
       </header>
 
       <div className="px-4 sm:px-6 py-6">
+        <Card className="mb-6 border-amber-300/25 bg-amber-50/60 dark:bg-amber-950/20">
+          <CardHeader>
+            <CardTitle>Quick setup lanes</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-2 sm:grid-cols-2">
+            <Link href="/profile">
+              <Button variant="outline" className="w-full justify-start">
+                Personal profile
+              </Button>
+            </Link>
+            <Link href="/restaurant-owner-dashboard?src=settings">
+              <Button variant="outline" className="w-full justify-start">
+                Business profiles
+              </Button>
+            </Link>
+            <Link href="/menu-builder?src=settings">
+              <Button variant="outline" className="w-full justify-start">
+                Menus and imports
+              </Button>
+            </Link>
+            <Link href="/scout">
+              <Button variant="outline" className="w-full justify-start">
+                Scout discovery
+              </Button>
+            </Link>
+            <Link href="/parking-pass-manage">
+              <Button variant="outline" className="w-full justify-start">
+                Parking hosts
+              </Button>
+            </Link>
+            <Link href="/profile/notifications">
+              <Button variant="outline" className="w-full justify-start">
+                Notifications
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+
         <Tabs defaultValue="profile" className="space-y-6">
           <TabsList className="grid h-auto w-full grid-cols-2 gap-1 sm:grid-cols-4">
             <TabsTrigger value="profile">
