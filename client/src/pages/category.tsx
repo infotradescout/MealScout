@@ -30,6 +30,8 @@ type CategoryMenuItem = {
   restaurantName?: string | null;
   restaurantCity?: string | null;
   cuisineType?: string | null;
+  discoveryReasons?: string[] | null;
+  discoveryScore?: number | null;
 };
 
 const categoryConfig = {
@@ -408,6 +410,19 @@ export default function CategoryPage() {
                           {item.description}
                         </p>
                       )}
+                      {Array.isArray(item.discoveryReasons) &&
+                        item.discoveryReasons.length > 0 && (
+                          <div className="mt-3 flex flex-wrap gap-1.5">
+                            {item.discoveryReasons.slice(0, 3).map((reason) => (
+                              <span
+                                key={reason}
+                                className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary"
+                              >
+                                {reason}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                     </CardContent>
                   </Card>
                 </Link>

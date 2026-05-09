@@ -168,6 +168,8 @@ interface LocalMenuItemFeedItem extends MenuPreviewItem {
   cuisineType?: string | null;
   distanceMiles?: number | null;
   dietaryTags?: string[] | null;
+  discoveryReasons?: string[] | null;
+  discoveryScore?: number | null;
 }
 
 interface RestaurantRelationshipSnapshot {
@@ -2539,6 +2541,12 @@ function LocalMenuItemCard({ item }: { item: LocalMenuItemFeedItem }) {
             ))}
           </div>
         )}
+        {Array.isArray(item.discoveryReasons) &&
+          item.discoveryReasons.length > 0 && (
+            <p className="mt-2 text-[10px] font-semibold text-orange-200/70">
+              {item.discoveryReasons.slice(0, 2).join(" + ")}
+            </p>
+          )}
       </div>
     </Link>
   );

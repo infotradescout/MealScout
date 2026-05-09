@@ -149,6 +149,17 @@ export function registerMenuRoutes(app: Express) {
             ),
           )
         : [];
+      const businessTypeFilter = String(req.query.businessType || "")
+        .trim()
+        .toLowerCase();
+      const itemTypeFilter = String(req.query.itemType || "")
+        .trim()
+        .toLowerCase();
+      const preferenceTerms = String(req.query.preferences || "")
+        .toLowerCase()
+        .split(",")
+        .map((term) => term.trim())
+        .filter(Boolean);
 
       const rows = await db
         .select({
@@ -168,6 +179,8 @@ export function registerMenuRoutes(app: Express) {
           restaurantLongitude: restaurants.longitude,
           isFoodTruck: restaurants.isFoodTruck,
           businessType: restaurants.businessType,
+          favoriteCount: restaurants.goldenPlateCount,
+          rankingScore: restaurants.rankingScore,
         })
         .from(menuItems)
         .innerJoin(menus, eq(menus.id, menuItems.menuId))
@@ -200,6 +213,30 @@ export function registerMenuRoutes(app: Express) {
 
       const withDistance = matchedRows
         .map((row: any) => {
+          if (
+            businessTypeFilter &&
+            !String(row.businessType || "")
+              .toLowerCase()
+              .includes(businessTypeFilter) &&
+            !(businessTypeFilter === "food_truck" && row.isFoodTruck)
+          ) {
+            return null;
+          }
+
+          const itemHaystack = [
+            row.name,
+            row.description,
+            row.cuisineType,
+            row.businessType,
+            ...(Array.isArray(row.dietaryTags) ? row.dietaryTags : []),
+          ]
+            .join(" ")
+            .toLowerCase();
+
+          if (itemTypeFilter && !itemHaystack.includes(itemTypeFilter)) {
+            return null;
+          }
+
           const targetLat = Number(row.restaurantLatitude);
           const targetLng = Number(row.restaurantLongitude);
           let distanceKm: number | null = null;
@@ -224,14 +261,75 @@ export function registerMenuRoutes(app: Express) {
             }
           }
 
+          const reasons: string[] = [];
+          let score = 0;
+          if (queryTerms.length > 0) {
+            const name = String(row.name || "").toLowerCase();
+            const description = String(row.description || "").toLowerCase();
+            const cuisine = String(row.cuisineType || "").toLowerCase();
+            const matchedName = queryTerms.some((term) => name.includes(term));
+            const matchedDescription = queryTerms.some((term) =>
+              description.includes(term),
+            );
+            const matchedCuisine = queryTerms.some((term) =>
+              cuisine.includes(term),
+            );
+            if (matchedName) {
+              score += 80;
+              reasons.push("name match");
+            }
+            if (matchedDescription) {
+              score += 24;
+              reasons.push("menu description match");
+            }
+            if (matchedCuisine) {
+              score += 18;
+              reasons.push("food type match");
+            }
+          }
+
+          if (typeof distanceKm === "number") {
+            const locationScore = Math.max(
+              0,
+              Math.round((1 - Math.min(distanceKm, radiusKm) / radiusKm) * 35),
+            );
+            score += locationScore;
+            if (locationScore > 0) reasons.push("near you");
+          }
+
+          if (row.isFoodTruck) {
+            score += 6;
+            reasons.push("food truck");
+          }
+
+          const tags = Array.isArray(row.dietaryTags) ? row.dietaryTags : [];
+          const preferenceMatches = preferenceTerms.filter((term) =>
+            tags.some((tag: string) => String(tag).toLowerCase().includes(term)),
+          );
+          if (preferenceMatches.length > 0) {
+            score += preferenceMatches.length * 20;
+            reasons.push("matches preferences");
+          }
+
+          const businessScore = Number(row.rankingScore || 0);
+          if (businessScore > 0) {
+            score += Math.min(20, Math.round(businessScore / 10));
+            reasons.push("trusted local signal");
+          }
+
           return {
             ...row,
             distanceMiles:
               typeof distanceKm === "number" ? distanceKm * 0.621371 : null,
+            discoveryScore: score,
+            discoveryReasons: reasons.slice(0, 4),
           };
         })
         .filter(Boolean)
         .sort((a: any, b: any) => {
+          const aScore = Number(a.discoveryScore || 0);
+          const bScore = Number(b.discoveryScore || 0);
+          if (aScore !== bScore) return bScore - aScore;
           const aDistance =
             typeof a.distanceMiles === "number"
               ? a.distanceMiles

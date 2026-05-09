@@ -64,6 +64,8 @@ type MenuItemSearchResult = {
   cuisineType?: string | null;
   distanceMiles?: number | null;
   dietaryTags?: string[] | null;
+  discoveryReasons?: string[] | null;
+  discoveryScore?: number | null;
 };
 
 const titleCaseSlug = (value: string) =>
@@ -1036,6 +1038,19 @@ export default function SearchPage() {
                           {item.restaurantCity && <span>{item.restaurantCity}</span>}
                           {distance && <span>{distance}</span>}
                         </div>
+                        {Array.isArray(item.discoveryReasons) &&
+                          item.discoveryReasons.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5 pt-1">
+                              {item.discoveryReasons.slice(0, 3).map((reason) => (
+                                <span
+                                  key={reason}
+                                  className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary"
+                                >
+                                  {reason}
+                                </span>
+                              ))}
+                            </div>
+                          )}
                       </CardContent>
                     </Card>
                   </Link>
