@@ -27,12 +27,6 @@ export default function Welcome() {
         />
 
         <section className="relative z-10 flex min-h-[100dvh] flex-col items-center justify-center px-6 py-10 text-center">
-          <img
-            src="/brand/mealscout-logo-pin.png"
-            alt="MealScout"
-            className="mb-8 h-auto w-40 max-w-[52vw] drop-shadow-[0_4px_22px_rgba(0,0,0,0.68)]"
-          />
-
           <div className="flex w-full max-w-[18rem] flex-col gap-3">
             <Link
               href="/customer-signup"
