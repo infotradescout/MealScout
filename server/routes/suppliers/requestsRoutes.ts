@@ -8,6 +8,7 @@ import { storage } from "../../storage";
 import { emailService } from "../../emailService";
 import { enqueueInProcessJob } from "../../jobs/jobQueue";
 import { parseTabularFile } from "../../utils/tabularImport";
+import { canEmailForTopic } from "../../utils/notificationPreferences";
 import {
   restaurants,
   supplierOrderItems,
@@ -290,7 +291,10 @@ export function registerSupplierRequestsRoutes(
         const to =
           String((supplier as any).contactEmail || "").trim() ||
           String((supplierUser as any)?.email || "").trim();
-        if (to) {
+        if (
+          to &&
+          canEmailForTopic((supplierUser as any)?.accountSettings, "businessMessages")
+        ) {
           const baseUrl = process.env.PUBLIC_BASE_URL || "http://localhost:5000";
           const manageUrl = `${baseUrl.replace(/\/+$/, "")}/supplier/dashboard`;
           const subject = `New supply request: ${buyerLabel}`;
@@ -817,7 +821,10 @@ export function registerSupplierRequestsRoutes(
               ? await storage.getUser(String(buyerRestaurant.ownerId))
               : null;
           const to = String((buyerUser as any)?.email || "").trim();
-          if (to) {
+          if (
+            to &&
+            canEmailForTopic((buyerUser as any)?.accountSettings, "orderUpdates")
+          ) {
             const baseUrl = process.env.PUBLIC_BASE_URL || "http://localhost:5000";
             const ordersUrl = `${baseUrl.replace(/\/+$/, "")}/suppliers`;
             const subject = "Supplier accepted your request";
@@ -930,7 +937,10 @@ export function registerSupplierRequestsRoutes(
                 ? await storage.getUser(String(buyerRestaurant.ownerId))
                 : null;
             const to = String((buyerUser as any)?.email || "").trim();
-            if (to) {
+            if (
+              to &&
+              canEmailForTopic((buyerUser as any)?.accountSettings, "orderUpdates")
+            ) {
               const baseUrl = process.env.PUBLIC_BASE_URL || "http://localhost:5000";
               const suppliersUrl = `${baseUrl.replace(/\/+$/, "")}/suppliers`;
               const subject = `Delivery update: ${nextStatus.replace(/_/g, " ")}`;

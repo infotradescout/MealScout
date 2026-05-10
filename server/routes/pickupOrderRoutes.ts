@@ -260,13 +260,14 @@ async function sendOrderReadyNotification(order: PickupOrder) {
           `Hi ${order.customerName}, your order #${order.id.slice(-6).toUpperCase()} is ready for pickup!`,
           "general",
         )
-        .then(() =>
+        .then((ok) =>
           db.insert(orderNotifications).values({
             orderId: order.id,
             channel: "email",
             type: "ready",
             recipient: order.customerEmail!,
-            status: "sent",
+            status: ok ? "sent" : "failed",
+            errorMessage: ok ? undefined : "Email provider skipped or failed",
           }),
         )
         .catch((err: any) =>
@@ -288,13 +289,14 @@ async function sendOrderReadyNotification(order: PickupOrder) {
         order.customerPhone,
         `Hi ${order.customerName}! Your MealScout order #${order.id.slice(-6).toUpperCase()} is ready for pickup.`,
       )
-        .then(() =>
+        .then((ok) =>
           db.insert(orderNotifications).values({
             orderId: order.id,
             channel: "sms",
             type: "ready",
             recipient: order.customerPhone!,
-            status: "sent",
+            status: ok ? "sent" : "failed",
+            errorMessage: ok ? undefined : "SMS provider skipped or failed",
           }),
         )
         .catch((err: any) =>

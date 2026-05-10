@@ -18,6 +18,7 @@ import {
   telemetryEvents,
   userAddresses,
 } from "@shared/schema";
+import { parseAdminBroadcastMaxRecipients } from "../../utils/notificationPreferences";
 
 const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
@@ -733,7 +734,10 @@ export function registerAdminCoreOpsRoutes(app: Express) {
         const { recipients, skippedOptOut } = await buildAdminMessageRecipients(
           req.body?.filters || {},
         );
-        const cappedRecipients = recipients.slice(0, 1000);
+        const maxRecipients = parseAdminBroadcastMaxRecipients(
+          process.env.ADMIN_BROADCAST_MAX_RECIPIENTS,
+        );
+        const cappedRecipients = recipients.slice(0, maxRecipients);
         const settingsUrl = `${String(
           process.env.PUBLIC_BASE_URL || "http://localhost:5000",
         ).replace(/\/+$/, "")}/profile/notifications`;
@@ -748,7 +752,7 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             subject,
             html,
             text,
-            "general",
+            "marketing",
           );
           if (ok) sent += 1;
           else failed += 1;
@@ -761,6 +765,7 @@ export function registerAdminCoreOpsRoutes(app: Express) {
           failed,
           skippedOptOut,
           capped: recipients.length > cappedRecipients.length,
+          maxRecipients,
         });
       } catch (error) {
         console.error("Error sending admin message:", error);

@@ -20,6 +20,7 @@ import { dateKeyInZone } from "../services/dateKeys";
 import { eq } from "drizzle-orm";
 import { isParkingPassPublicReady } from "../services/parkingPassQuality";
 import { notifyNearbyTrucksOfNewSeries } from "../truckEventMatchService";
+import { canEmailForTopic } from "../utils/notificationPreferences";
 
 const isEmailChannelEnabled = (accountSettings: unknown) => {
   const settings =
@@ -400,7 +401,11 @@ export function registerOpenCallSeriesRoutes(app: Express) {
               const truck = await storage.getRestaurant(truckId);
               if (truck) {
                 const owner = await storage.getUser(truck.ownerId);
-                if (owner && owner.email) {
+                if (
+                  owner &&
+                  owner.email &&
+                  canEmailForTopic((owner as any).accountSettings, "nearbyEvents")
+                ) {
                   await emailService.sendSeriesCancellationNotification(
                     owner.email,
                     truck.name,

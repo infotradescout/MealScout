@@ -30,6 +30,7 @@ import { emailService } from "../emailService";
 import { distributedRateLimit } from "../middleware/distributedRateLimit";
 import { requireIdempotencyKey } from "../middleware/idempotency";
 import { enqueueInProcessJob } from "../jobs/jobQueue";
+import { canEmailForTopic } from "../utils/notificationPreferences";
 import { registerSupplierAdminOrdersRoutes } from "./suppliers/adminOrdersRoutes";
 import { registerSupplierCatalogRoutes } from "./suppliers/catalogRoutes";
 import { registerSupplierOnboardingRoutes } from "./suppliers/onboardingRoutes";
@@ -426,6 +427,9 @@ async function recordDemandAndNotifyIfUnlisted(params: {
         String((supplier as any).contactEmail || "").trim() ||
         String((supplierUser as any)?.email || "").trim();
       if (!to) continue;
+      if (!canEmailForTopic((supplierUser as any)?.accountSettings, "businessMessages")) {
+        continue;
+      }
 
       const baseUrl = process.env.PUBLIC_BASE_URL || "http://localhost:5000";
       const manageUrl = `${baseUrl.replace(/\/+$/, "")}/supplier/dashboard`;
@@ -454,7 +458,7 @@ async function recordDemandAndNotifyIfUnlisted(params: {
           subject,
           html,
           undefined,
-          "general",
+          "marketing",
         );
       });
 

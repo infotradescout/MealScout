@@ -13,6 +13,7 @@ import { eq, and, or, desc, gte, inArray } from "drizzle-orm";
 import { isAuthenticated } from "../unifiedAuth";
 import { storage } from "../storage";
 import { emailService } from "../emailService";
+import { canEmailForTopic } from "../utils/notificationPreferences";
 import { resolveCityTimeZoneSync } from "../services/cityTimeZone";
 import {
   getPublicSlotGateConfigFromEnv,
@@ -1205,7 +1206,9 @@ export function registerBookingRoutes(
           ${parsed.notes ? `<p><strong>Notes:</strong> ${parsed.notes}</p>` : ""}
         `;
 
-      await emailService.sendBasicEmail(owner.email, subject, html);
+      if (canEmailForTopic((owner as any).accountSettings, "businessMessages")) {
+        await emailService.sendBasicEmail(owner.email, subject, html);
+      }
 
       if (!process.env.TWILIO_ACCOUNT_SID) {
         console.warn(

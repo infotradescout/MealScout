@@ -608,6 +608,7 @@ export interface IStorage {
     interestCount: number;
     minInterestedTrucks: number;
     thresholdReached: boolean;
+    thresholdJustReached: boolean;
   }>;
   getLocationDemandQueue(limit?: number): Promise<
     Array<
@@ -4677,6 +4678,7 @@ export class DatabaseStorage implements IStorage {
     interestCount: number;
     minInterestedTrucks: number;
     thresholdReached: boolean;
+    thresholdJustReached: boolean;
   }> {
     await this.expireStaleLocationRequests();
 
@@ -4712,6 +4714,10 @@ export class DatabaseStorage implements IStorage {
           Number(locationRequest.minInterestedTrucks ?? 3) || 3,
         );
         const thresholdReached = interestCount >= minInterestedTrucks;
+        const thresholdJustReached =
+          thresholdReached &&
+          !locationRequest.thresholdReachedAt &&
+          locationRequest.demandStatus !== "threshold_met";
 
         if (thresholdReached) {
           await tx
@@ -4740,6 +4746,7 @@ export class DatabaseStorage implements IStorage {
           interestCount,
           minInterestedTrucks,
           thresholdReached,
+          thresholdJustReached,
         };
       });
     } catch (error: any) {

@@ -3,6 +3,10 @@ import { emailService } from "../emailService";
 import { sendSms } from "../smsService";
 import { emailSequenceSends } from "@shared/schema";
 import { and, eq, sql } from "drizzle-orm";
+import {
+  canEmailForTopic,
+  canSmsForTopic,
+} from "../utils/notificationPreferences";
 
 const SEQUENCE_PREFIX = "location_demand_activation_v1";
 const MAX_SENDS_PER_RUN = 100;
@@ -18,6 +22,7 @@ type CandidateRow = {
   email: string | null;
   first_name: string | null;
   phone: string | null;
+  account_settings: unknown;
 };
 
 function baseUrl(): string {
@@ -132,7 +137,8 @@ export async function runLocationDemandActivationCron(opts?: { limit?: number })
       lr.created_at,
       u.email,
       u.first_name,
-      u.phone
+      u.phone,
+      u.account_settings
     from location_requests lr
     inner join users u on u.id = lr.posted_by_user_id
     where lr.status = 'open'
@@ -173,7 +179,7 @@ export async function runLocationDemandActivationCron(opts?: { limit?: number })
 
     const channels: string[] = [];
     const email = String(row.email || "").trim();
-    if (email) {
+    if (email && canEmailForTopic(row.account_settings, "businessMessages")) {
       const ok = await emailService.sendBasicEmail(
         email,
         subjectFor(stepToSend, row.business_name),
@@ -185,7 +191,7 @@ export async function runLocationDemandActivationCron(opts?: { limit?: number })
           minInterestedTrucks: Number(row.min_interested_trucks || 0),
         }),
         undefined,
-        "general",
+        "marketing",
       );
       if (ok) {
         channels.push("email");
@@ -197,7 +203,12 @@ export async function runLocationDemandActivationCron(opts?: { limit?: number })
       .trim()
       .toLowerCase() === "true";
     const phone = String(row.phone || "").trim();
-    if (smsEnabled && stepToSend >= 2 && phone) {
+    if (
+      smsEnabled &&
+      stepToSend >= 2 &&
+      phone &&
+      canSmsForTopic(row.account_settings, "businessMessages")
+    ) {
       const ok = await sendSms(
         phone,
         smsFor({ step: stepToSend, businessName: row.business_name }),

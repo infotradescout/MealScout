@@ -40,6 +40,7 @@ import {
 import { logAudit } from "../../auditLogger";
 import { dateKeyInZone } from "../../services/dateKeys";
 import { resolveCityTimeZoneSync } from "../../services/cityTimeZone";
+import { canEmailForTopic } from "../../utils/notificationPreferences";
 
 export function registerHostEventsRoutes(app: Express) {
   const createHostParkingPassListing = async (req: any, res: any) => {
@@ -1237,7 +1238,11 @@ export function registerHostEventsRoutes(app: Express) {
               // Note: getRestaurant doesn't return ownerId directly in all schemas, but let's check schema.ts
               // restaurants table has ownerId.
               const owner = await storage.getUser(truck.ownerId);
-              if (owner && owner.email) {
+              if (
+                owner &&
+                owner.email &&
+                canEmailForTopic((owner as any).accountSettings, "nearbyEvents")
+              ) {
                 await emailService.sendInterestStatusUpdate(
                   owner.email,
                   truck.name,

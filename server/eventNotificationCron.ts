@@ -3,6 +3,29 @@ import { events, hosts, restaurants, eventInterests, users } from '@shared/schem
 import { and, eq, gte, lte, isNull, sql } from 'drizzle-orm';
 import { emailService } from './emailService';
 import auditLogger from './auditLogger';
+import { canEmailForTopic } from './utils/notificationPreferences';
+
+const UNBOOKED_EVENT_RADIUS_KM = Number(
+  process.env.UNBOOKED_EVENT_NOTIFICATION_RADIUS_KM || 25,
+);
+
+function toNumber(value: unknown): number | null {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number) {
+  const earthRadiusKm = 6371;
+  const toRad = (degrees: number) => (degrees * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) *
+      Math.cos(toRad(lat2)) *
+      Math.sin(dLng / 2) ** 2;
+  return earthRadiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
 
 /**
  * Notify nearby food trucks about unbooked event slots.
@@ -68,6 +91,16 @@ export async function notifyUnbookedEvents(): Promise<{
           continue;
         }
 
+        const hostLat = toNumber(host.latitude);
+        const hostLng = toNumber(host.longitude);
+        if (hostLat == null || hostLng == null) {
+          auditLogger.info('Unbooked event notification skipped', {
+            eventId: event.id,
+            reason: 'missing_host_coordinates',
+          });
+          continue;
+        }
+
         const [claimed] = await db
           .update(events)
           .set({ unbookedNotificationSentAt: now })
@@ -95,8 +128,7 @@ export async function notifyUnbookedEvents(): Promise<{
 
         const excludedTruckIds = existingInterests.map((i: { truckId: string }) => i.truckId);
 
-        // Get all active food trucks (we'll use their home address as proxy since we don't have host lat/lng)
-        // In a real system, you'd geocode the host address or store lat/lng on hosts table
+        // Get active food trucks near the host, excluding email opt-outs.
         const allTrucks = await db
           .select({
             id: restaurants.id,
@@ -104,32 +136,47 @@ export async function notifyUnbookedEvents(): Promise<{
             ownerId: restaurants.ownerId,
             latitude: restaurants.latitude,
             longitude: restaurants.longitude,
+            ownerEmail: users.email,
+            ownerFirstName: users.firstName,
+            ownerAccountSettings: users.accountSettings,
           })
           .from(restaurants)
+          .innerJoin(users, eq(users.id, restaurants.ownerId))
           .where(
             and(
               eq(restaurants.isFoodTruck, true),
               eq(restaurants.isActive, true),
-              sql`${restaurants.latitude} IS NOT NULL`
+              sql`${restaurants.latitude} IS NOT NULL`,
+              sql`${restaurants.longitude} IS NOT NULL`,
+              sql`${users.email} IS NOT NULL`,
+              sql`coalesce(${users.isDisabled}, false) = false`
             )
           );
 
         // Filter out trucks that already expressed interest
-        const trucksToNotify = allTrucks.filter((t: { id: string }) => !excludedTruckIds.includes(t.id));
+        const trucksToNotify = allTrucks.filter((t: {
+          id: string;
+          latitude: unknown;
+          longitude: unknown;
+          ownerAccountSettings: unknown;
+        }) => {
+          if (excludedTruckIds.includes(t.id)) return false;
+          if (!canEmailForTopic(t.ownerAccountSettings, 'nearbyEvents')) {
+            return false;
+          }
+          const truckLat = toNumber(t.latitude);
+          const truckLng = toNumber(t.longitude);
+          if (truckLat == null || truckLng == null) return false;
+          return haversineKm(hostLat, hostLng, truckLat, truckLng) <= UNBOOKED_EVENT_RADIUS_KM;
+        });
           
           // Notify each truck owner
           for (const truck of trucksToNotify) {
             try {
-              const owner = await db
-                .select()
-                .from(users)
-                .where(eq(users.id, truck.ownerId))
-                .limit(1);
-
-              if (owner[0]?.email) {
+              if (truck.ownerEmail) {
                 await sendUnbookedEventNotification(
-                  owner[0].email,
-                  owner[0].firstName || 'Truck Owner',
+                  truck.ownerEmail,
+                  truck.ownerFirstName || 'Truck Owner',
                   {
                     eventName: event.name || 'Food Truck Opportunity',
                     hostName: host.businessName,

@@ -11,6 +11,7 @@ import { forwardGeocode } from "../utils/geocoding";
 import { sendTruckInterestNotification } from "../emailNotifications";
 import { notifyUser } from "../productNotifications";
 import { handleHostPartnerLeadRequest } from "../services/hostPartnerLeadMagnet";
+import { canEmailForTopic } from "../utils/notificationPreferences";
 import {
   insertHostLocationClaimSchema,
   insertHostPartnerLeadSchema,
@@ -345,8 +346,14 @@ export function registerLocationDemandRoutes(app: Express) {
           });
         }
 
-        if (result.thresholdReached) {
-          if (locationHostUser?.email) {
+        if (result.thresholdJustReached) {
+          if (
+            locationHostUser?.email &&
+            canEmailForTopic(
+              (locationHostUser as any).accountSettings,
+              "businessMessages",
+            )
+          ) {
             const thresholdSubject = `${result.locationRequest.businessName} is now demand-qualified`;
             const thresholdHtml = `
               <p>Your requested location reached its demand threshold.</p>
@@ -364,6 +371,7 @@ export function registerLocationDemandRoutes(app: Express) {
           const truckAudience = await db
             .selectDistinct({
               email: users.email,
+              accountSettings: users.accountSettings,
             })
             .from(truckInterests)
             .innerJoin(
@@ -373,6 +381,9 @@ export function registerLocationDemandRoutes(app: Express) {
             .innerJoin(users, eq(users.id, restaurants.ownerId))
             .where(eq(truckInterests.locationRequestId, locationRequestId));
           const truckEmails = truckAudience
+            .filter((row: { accountSettings: unknown }) =>
+              canEmailForTopic(row.accountSettings, "nearbyEvents"),
+            )
             .map((row: { email: string | null }) => String(row.email || "").trim())
             .filter(Boolean);
 

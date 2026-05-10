@@ -75,9 +75,11 @@
     "test:parking-pass-webhook-replay": "tsx scripts/testParkingPassWebhookReplay.ts",
     "check:parking-pass-readiness": "tsx scripts/runParkingPassReadinessSuite.ts",
     "audit:location-demand-activation": "tsx scripts/auditLocationDemandActivation.ts",
+    "test:email-policy": "tsx scripts/testEmailPolicy.ts",
+    "audit:email-triggers": "tsx scripts/auditEmailTriggers.ts",
     "smoke:supply-individual": "tsx scripts/smokeSupplierIndividualBuyerOrder.ts",
     "test:money-button": "tsx scripts/testMoneyButton.ts",
-    "test:all": "npm run check && npm run test:flows && npm run stress-test",
+    "test:all": "npm run check && npm run test:email-policy && npm run audit:email-triggers && npm run test:flows && npm run stress-test",
     "monitor": "tsx scripts/monitorPerformance.ts",
     "audit:theme": "node scripts/audit-theme-colors.mjs"
   },

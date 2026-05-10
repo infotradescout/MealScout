@@ -1,6 +1,7 @@
 import { LocationRequest } from '@shared/schema';
 import { emailService } from './emailService';
 import { storage } from './storage';
+import { canEmailForTopic } from './utils/notificationPreferences';
 
 /**
  * Send Golden Fork award notification email
@@ -294,6 +295,9 @@ export async function sendWelcomeEmail(userId: string) {
 export async function sendTruckInterestNotification(locationRequest: LocationRequest, restaurantId: string, message?: string) {
   const host = await storage.getUser(locationRequest.postedByUserId);
   if (!host?.email) return;
+  if (!canEmailForTopic((host as any).accountSettings, "businessMessages")) {
+    return;
+  }
 
   const restaurant = await storage.getRestaurant(restaurantId);
   if (!restaurant) return;

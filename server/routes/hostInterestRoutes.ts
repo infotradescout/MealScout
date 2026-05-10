@@ -3,6 +3,7 @@ import type { Express } from "express";
 import { emailService } from "../emailService";
 import { storage } from "../storage";
 import { isAuthenticated } from "../unifiedAuth";
+import { canEmailForTopic } from "../utils/notificationPreferences";
 
 type HostInterestRoutesDependencies = {
   getHostByUserId: (userId: string) => Promise<any>;
@@ -141,7 +142,11 @@ export function registerHostInterestRoutes(
             const truck = await storage.getRestaurant(interest.truckId);
             if (truck) {
               const owner = await storage.getUser(truck.ownerId);
-              if (owner && owner.email) {
+              if (
+                owner &&
+                owner.email &&
+                canEmailForTopic((owner as any).accountSettings, "nearbyEvents")
+              ) {
                 await emailService.sendInterestStatusUpdate(
                   owner.email,
                   truck.name,
