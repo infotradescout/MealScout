@@ -71,6 +71,8 @@ interface Deal {
   minOrderAmount?: string;
   imageUrl?: string;
   isFeatured: boolean;
+  startTime?: string;
+  endTime?: string;
   restaurant?: {
     name: string;
     cuisineType?: string;

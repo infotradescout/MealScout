@@ -1969,7 +1969,7 @@ export default function MapPage() {
   );
 
   const activeMapLocations: MapLocationsResponse = useMemo(() => {
-    if (hasViewportOverlayData) {
+    if (hasViewportOverlayData && viewportOverlaysData) {
       return {
         hostLocations: viewportOverlaysData.hostLocations,
         eventLocations: viewportOverlaysData.eventLocations,

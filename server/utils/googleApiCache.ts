@@ -92,8 +92,10 @@ export async function setCached(
           SET value      = EXCLUDED.value,
               created_at = NOW(),
               expires_at = EXCLUDED.expires_at`,
-  ).catch((err) => {
-    console.warn("[googleApiCache] DB write failed (non-fatal):", err?.message);
+  ).catch((err: unknown) => {
+    const message =
+      err instanceof Error ? err.message : String(err || "unknown error");
+    console.warn("[googleApiCache] DB write failed (non-fatal):", message);
   });
 }
 

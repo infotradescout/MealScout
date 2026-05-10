@@ -43,6 +43,7 @@ declare module "express-session" {
     fbAppContext?: "mealscout" | "tradescout";
     googleAppContext?: "mealscout" | "tradescout";
     oauthUserType?: User["userType"];
+    oauthRedirectPath?: string;
   }
 }
 

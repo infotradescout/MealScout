@@ -69,6 +69,9 @@ type InAppNotification = {
   priority: string;
   createdAt?: string;
   isRead: boolean;
+  sourceType?: string | null;
+  sourceId?: string | null;
+  metadata?: Record<string, unknown> | null;
 };
 
 type NotificationsResponse = {

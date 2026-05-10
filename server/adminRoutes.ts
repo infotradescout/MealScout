@@ -391,15 +391,15 @@ router.get("/vac-logs", isAdmin, async (req, res) => {
     // Filter by outcome if requested
     let result = enriched;
     if (outcome === "auto_verified") {
-      result = enriched.filter((e) => e.autoVerified);
+      result = enriched.filter((e: any) => e.autoVerified);
     } else if (outcome === "manual_review") {
-      result = enriched.filter((e) => !e.autoVerified);
+      result = enriched.filter((e: any) => !e.autoVerified);
     }
 
     res.json({
       total: result.length,
-      autoVerifiedCount: enriched.filter((e) => e.autoVerified).length,
-      manualReviewCount: enriched.filter((e) => !e.autoVerified).length,
+      autoVerifiedCount: enriched.filter((e: any) => e.autoVerified).length,
+      manualReviewCount: enriched.filter((e: any) => !e.autoVerified).length,
       logs: result.slice(0, 200),
     });
   } catch (error) {

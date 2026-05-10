@@ -181,7 +181,7 @@ async function buildOrderingReadiness(restaurantId: string) {
     .where(and(eq(menus.restaurantId, restaurantId), eq(menus.isActive, true)))
     .orderBy(asc(menus.serviceType));
 
-  const menuIds = restaurantMenus.map((menu) => menu.id);
+  const menuIds = restaurantMenus.map((menu: any) => menu.id);
   const items = menuIds.length
     ? await db
         .select({ id: menuItems.id })
@@ -189,7 +189,7 @@ async function buildOrderingReadiness(restaurantId: string) {
         .where(and(inArray(menuItems.menuId, menuIds), eq(menuItems.isAvailable, true)))
     : [];
 
-  const acceptsCash = restaurantMenus.some((menu) => menu.acceptsCash);
+  const acceptsCash = restaurantMenus.some((menu: any) => menu.acceptsCash);
   const stripeConfigured = Boolean(process.env.STRIPE_SECRET_KEY);
   const subscriptionReady = restaurantRow?.ownerId
     ? await getOrderingSubscriptionReady(restaurantRow.ownerId, restaurantId)
@@ -416,16 +416,16 @@ export function registerMenuRoutes(app: Express) {
               ),
           ]);
 
-        favoriteRows.forEach((row) =>
+        favoriteRows.forEach((row: any) =>
           viewerFavoriteRestaurantIds.add(String(row.restaurantId)),
         );
-        followRows.forEach((row) =>
+        followRows.forEach((row: any) =>
           viewerFollowRestaurantIds.add(String(row.restaurantId)),
         );
-        recommendationRows.forEach((row) =>
+        recommendationRows.forEach((row: any) =>
           viewerRecommendationRestaurantIds.add(String(row.restaurantId)),
         );
-        videoRows.forEach((row) => {
+        videoRows.forEach((row: any) => {
           if (row.restaurantId) {
             viewerVideoRecommendationRestaurantIds.add(String(row.restaurantId));
           }

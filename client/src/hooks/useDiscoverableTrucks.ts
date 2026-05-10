@@ -1,7 +1,25 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiUrl } from "@/lib/api";
 
-export type DiscoverableTruck = Record<string, unknown>;
+export type DiscoverableTruck = {
+  id: string;
+  name: string;
+  lat?: number | string | null;
+  lng?: number | string | null;
+  latitude?: number | string | null;
+  longitude?: number | string | null;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  cuisineType?: string | null;
+  businessType?: string | null;
+  status?: string | null;
+  isOpenNow?: boolean | null;
+  lastBroadcastAt?: string | null;
+  liveBroadcasting?: boolean | null;
+  locationSource?: string | null;
+  [key: string]: unknown;
+};
 
 type LatLng = { lat: number; lng: number } | null | undefined;
 

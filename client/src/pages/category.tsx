@@ -3,6 +3,7 @@ import { useParams, Link } from "wouter";
 import Navigation from "@/components/navigation";
 import DealCard from "@/components/deal-card";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { SEOHead } from "@/components/seo-head";
 import {
   ArrowLeft,

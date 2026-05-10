@@ -91,16 +91,29 @@ export async function registerSchedulers(app: Express): Promise<void> {
   scheduleCron("30 8 * * 1", async () => {
     console.log("⏰ Triggering Premium Weekly Summary Cron");
     try {
-      const { users, restaurantSubscriptions } = await import("@shared/schema");
-      const { eq, isNotNull, inArray } = await import("drizzle-orm");
+      const { users, restaurantSubscriptions, restaurants } = await import(
+        "@shared/schema",
+      );
+      const { and, eq, isNotNull, inArray } = await import("drizzle-orm");
       const { emailService } = await import("../emailService");
       const { telemetryEvents } = await import("@shared/schema");
-      // Find all users with an active restaurantSubscriptions row
+      // Find all restaurant owners with an active restaurant subscription row.
       const activeSubs = await db
-        .selectDistinct({ userId: restaurantSubscriptions.userId })
+        .selectDistinct({ userId: restaurants.ownerId })
         .from(restaurantSubscriptions)
-        .where(eq(restaurantSubscriptions.status, "active"));
-      const activeUserIds = activeSubs.map((r: { userId: string }) => r.userId);
+        .innerJoin(
+          restaurants,
+          eq(restaurantSubscriptions.restaurantId, restaurants.id),
+        )
+        .where(
+          and(
+            eq(restaurantSubscriptions.status, "active"),
+            isNotNull(restaurants.ownerId),
+          ),
+        );
+      const activeUserIds = activeSubs
+        .map((r: { userId: string | null }) => String(r.userId || "").trim())
+        .filter(Boolean);
       if (activeUserIds.length === 0) {
         console.log("[premium-weekly] No active subscribers — skipping");
         return;
@@ -633,15 +646,9 @@ export async function registerSchedulers(app: Express): Promise<void> {
           and(
             eq(securityAuditLog.resourceId, restaurants.id),
             eq(securityAuditLog.action, "vac:evaluate"),
-            eq(securityAuditLog.outcome, "manual_review"),
           ),
         )
-        .where(
-          and(
-            eq(restaurants.isVerified, false),
-            isNull(restaurants.deletedAt),
-          ),
-        )
+        .where(eq(restaurants.isVerified, false))
         .orderBy(restaurants.createdAt)
         .limit(100);
 
@@ -650,7 +657,7 @@ export async function registerSchedulers(app: Express): Promise<void> {
         return;
       }
 
-      const entries = pendingRows.map((row) => {
+      const entries = pendingRows.map((row: any) => {
         const meta = (row.vacScore as any) || {};
         const score = Number(meta.score ?? 0);
         const threshold = Number(meta.threshold ?? 60);

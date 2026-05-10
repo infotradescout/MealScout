@@ -1648,8 +1648,8 @@ export function registerPublicMapRoutes(app: Express) {
         .select({
           id: restaurants.id,
           rankingScore: restaurants.rankingScore,
-          googleRating: restaurants.googleRating,
-          googleReviewCount: restaurants.googleReviewCount,
+          googleRating: (restaurants as any).googleRating,
+          googleReviewCount: (restaurants as any).googleReviewCount,
         })
         .from(restaurants)
         .where(and(inTargetIds, eq(restaurants.isActive, true)))

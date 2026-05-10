@@ -414,13 +414,14 @@ export function registerAwardsRoutes(app: Express) {
       if (!restaurant) {
         return res.status(404).json({ message: "Restaurant not found" });
       }
+      const restaurantAny = restaurant as any;
 
       const rankingScore = await calculateRestaurantRankingScore(
         req.params.restaurantId,
       );
       const trustBonuses = evaluateTrustBonuses({
         communityBuilderEnabled:
-          Number(restaurant.communityBuilderBonusPoints || 0) > 0,
+          Number(restaurantAny.communityBuilderBonusPoints || 0) > 0,
         actions: {
           likes: 0,
           shares: 0,
@@ -436,14 +437,14 @@ export function registerAwardsRoutes(app: Express) {
         goldenPlateCount: restaurant.goldenPlateCount || 0,
         goldenPlateEarnedAt: restaurant.goldenPlateEarnedAt,
         communityBuilderBonusPoints: Number(
-          restaurant.communityBuilderBonusPoints || 0,
+          restaurantAny.communityBuilderBonusPoints || 0,
         ),
         communityBuilderBonusReason:
-          restaurant.communityBuilderBonusReason || null,
+          restaurantAny.communityBuilderBonusReason || null,
         communityBuilderBonusSetAt:
-          restaurant.communityBuilderBonusSetAt || null,
+          restaurantAny.communityBuilderBonusSetAt || null,
         communityBuilderBonusSetByUserId:
-          restaurant.communityBuilderBonusSetByUserId || null,
+          restaurantAny.communityBuilderBonusSetByUserId || null,
         trustBonusPolicy: TRUST_BONUS_POLICY,
         trustBonuses,
         rankingScore,
