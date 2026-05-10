@@ -35,7 +35,6 @@ import {
 } from "@/components/maps/google-map-surface";
 import { MapErrorBoundary } from "@/components/maps/map-error-boundary";
 import { GOOGLE_MAPS_WEB_API_KEY } from "@/lib/mapProvider";
-import { SVGStreetMap } from "@/components/maps/svg-street-map";
 import type {
   MapAdapterMarker,
   MapBoundsLike,
@@ -1250,7 +1249,6 @@ export default function ExplorePreview() {
   const dragLastY = useRef<number | null>(null);
   const mouseDragStartY = useRef<number | null>(null);
   const mouseDragLastY = useRef<number | null>(null);
-  const topPullStartY = useRef<number | null>(null);
 
   const handleSheetTouchStart = useCallback((e: React.TouchEvent) => {
     dragStartY.current = e.touches[0].clientY;
@@ -1267,10 +1265,8 @@ export default function ExplorePreview() {
     dragLastY.current = null;
     if (start === null || last === null) return;
     const delta = last - start;
-    // On the MAP hero: swipe DOWN (delta > 0) expands to fullMap.
-    // On the DRAG HANDLE: swipe UP (delta < 0) also expands to fullMap.
-    // Either direction works — we just check both thresholds.
-    if (Math.abs(delta) > 40 && sheetState === "default") {
+    // Keep interactions simple: pull down to expand, pull up to collapse.
+    if (delta > 40 && sheetState === "default") {
       openScoutMap();
       return;
     }
@@ -1296,7 +1292,7 @@ export default function ExplorePreview() {
     mouseDragLastY.current = null;
     if (start === null || last === null) return;
     const delta = last - start;
-    if (Math.abs(delta) > 24 && sheetState === "default") {
+    if (delta > 24 && sheetState === "default") {
       openScoutMap();
       return;
     }
@@ -1304,56 +1300,6 @@ export default function ExplorePreview() {
       collapseScoutMap();
     }
   }, [collapseScoutMap, openScoutMap, sheetState]);
-
-  useEffect(() => {
-    if (sheetState !== "default") return;
-
-    const html = document.documentElement;
-    const body = document.body;
-    const previousHtmlOverscroll = html.style.overscrollBehaviorY;
-    const previousBodyOverscroll = body.style.overscrollBehaviorY;
-
-    html.style.overscrollBehaviorY = "none";
-    body.style.overscrollBehaviorY = "none";
-
-    const handleTopPullStart = (e: TouchEvent) => {
-      if (e.touches.length !== 1 || window.scrollY > 0) {
-        topPullStartY.current = null;
-        return;
-      }
-      topPullStartY.current = e.touches[0].clientY;
-    };
-
-    const handleTopPullMove = (e: TouchEvent) => {
-      const start = topPullStartY.current;
-      if (start === null || e.touches.length !== 1 || window.scrollY > 0) return;
-      const delta = e.touches[0].clientY - start;
-      if (delta > 10 && e.cancelable) e.preventDefault();
-    };
-
-    const handleTopPullEnd = (e: TouchEvent) => {
-      const start = topPullStartY.current;
-      topPullStartY.current = null;
-      if (start === null || window.scrollY > 0 || e.changedTouches.length === 0) return;
-      const delta = e.changedTouches[0].clientY - start;
-      if (delta > 40) openScoutMap();
-    };
-
-    document.addEventListener("touchstart", handleTopPullStart, { passive: true });
-    document.addEventListener("touchmove", handleTopPullMove, { passive: false });
-    document.addEventListener("touchend", handleTopPullEnd, { passive: true });
-    document.addEventListener("touchcancel", handleTopPullEnd, { passive: true });
-
-    return () => {
-      document.removeEventListener("touchstart", handleTopPullStart);
-      document.removeEventListener("touchmove", handleTopPullMove);
-      document.removeEventListener("touchend", handleTopPullEnd);
-      document.removeEventListener("touchcancel", handleTopPullEnd);
-      html.style.overscrollBehaviorY = previousHtmlOverscroll;
-      body.style.overscrollBehaviorY = previousBodyOverscroll;
-      topPullStartY.current = null;
-    };
-  }, [openScoutMap, sheetState]);
 
   /* --------- greeting --------- */
 
@@ -2148,92 +2094,10 @@ function LocalFoodDashboard({
 }
 
 /* ============================================================
-   REAL-TILE MAP HERO
-   Uses Carto dark tiles loaded via <img> tags (no SDK) stitched
-   into a 3×3 grid centered on the user's lat/lng at zoom 15.
-   CSS perspective tilt gives the Google Earth 3D look.
-   Amber overlay + real projected pins sit on top.
+   SCOUT MAP PREVIEW (LIGHTWEIGHT)
+   No SDK and no network fetches. Just a subtle animated background
+   plus projected pins so default /scout loads instantly.
    ============================================================ */
-
-function TearDropPin({ delay = "0s", hasTruck = true }: { delay?: string; hasTruck?: boolean }) {
-  // Classic Google Maps teardrop shape — wide circle top, pointed bottom
-  // Rendered as SVG so it scales perfectly at any DPR
-  return (
-    <div
-      style={{
-        position: "relative",
-        width: 52,
-        height: 68,
-        filter: "drop-shadow(0 0 14px rgba(251,146,60,0.95)) drop-shadow(0 0 28px rgba(255,90,47,0.6)) drop-shadow(0 0 48px rgba(255,90,47,0.35))",
-      }}
-    >
-      {/* Outer pulse ring */}
-      <span
-        style={{
-          position: "absolute",
-          top: "50%",
-          left: "50%",
-          width: 64,
-          height: 64,
-          marginTop: -32,
-          marginLeft: -32,
-          borderRadius: "50%",
-          background: "rgba(255,90,47,0.18)",
-          animation: `hero-pin-pulse 3s ease-out ${delay} infinite`,
-          pointerEvents: "none",
-        }}
-      />
-      <svg
-        viewBox="0 0 52 68"
-        width="52"
-        height="68"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-        aria-hidden="true"
-      >
-        {/* Pin body — filled amber with bright inner highlight */}
-        <path
-          d="M26 2C14.954 2 6 10.954 6 22c0 15 20 44 20 44s20-29 20-44C46 10.954 37.046 2 26 2z"
-          fill="#f97316"
-          stroke="#fbbf24"
-          strokeWidth="1.5"
-        />
-        {/* Inner bright highlight to give the glowing-from-inside look */}
-        <path
-          d="M26 5C16.611 5 9 12.611 9 22c0 12.5 17 38 17 38s17-25.5 17-38C43 12.611 35.389 5 26 5z"
-          fill="url(#pinGrad)"
-          opacity="0.55"
-        />
-        <defs>
-          <radialGradient id="pinGrad" cx="40%" cy="35%" r="55%">
-            <stop offset="0%" stopColor="#fff7ed" stopOpacity="0.9" />
-            <stop offset="100%" stopColor="#f97316" stopOpacity="0" />
-          </radialGradient>
-        </defs>
-        {/* Food truck icon centered in the pin circle (circle center ≈ 26,22) */}
-        {hasTruck && (
-          <g transform="translate(13, 12)">
-            {/* Truck body */}
-            <rect x="0" y="5" width="18" height="9" rx="1.5" fill="#fff" opacity="0.95" />
-            {/* Cab */}
-            <rect x="13" y="3" width="5" height="7" rx="1" fill="#fff" opacity="0.95" />
-            {/* Window */}
-            <rect x="14" y="4" width="3" height="3" rx="0.5" fill="#f97316" opacity="0.8" />
-            {/* Wheels */}
-            <circle cx="4" cy="14.5" r="2" fill="#fff" opacity="0.95" />
-            <circle cx="14" cy="14.5" r="2" fill="#fff" opacity="0.95" />
-            {/* Serving window */}
-            <rect x="4" y="6.5" width="6" height="4" rx="0.5" fill="#f97316" opacity="0.7" />
-          </g>
-        )}
-        {/* Plain dot for non-truck pins */}
-        {!hasTruck && (
-          <circle cx="26" cy="22" r="7" fill="#fff" opacity="0.95" />
-        )}
-      </svg>
-    </div>
-  );
-}
 
 function ScoutMapPreview({
   markers,
@@ -2242,49 +2106,65 @@ function ScoutMapPreview({
   markers: MapAdapterMarker[];
   userLocation: { lat: number; lng: number };
 }) {
+  const previewMarkers = useMemo(() => {
+    const LAT_SPAN = 0.016;
+    const LNG_SPAN = LAT_SPAN * 1.35;
+    return markers
+      .filter((marker) => Number.isFinite(marker.lat) && Number.isFinite(marker.lng))
+      .slice(0, 10)
+      .map((marker) => {
+        const dx = (marker.lng - userLocation.lng) / LNG_SPAN;
+        const dy = (marker.lat - userLocation.lat) / LAT_SPAN;
+        return {
+          marker,
+          x: 0.68 + dx,
+          y: 0.56 - dy,
+        };
+      })
+      .filter(({ x, y }) => x >= -0.08 && x <= 1.08 && y >= -0.08 && y <= 1.08);
+  }, [markers, userLocation.lat, userLocation.lng]);
 
   return (
-    <div className="absolute inset-0 overflow-hidden">
+    <div className="absolute inset-0 overflow-hidden bg-[#080b12]">
       <style>{`
-        @keyframes hero-svg-drift {
-          0%   { transform: perspective(900px) rotateX(52deg) rotateZ(-8deg) scale(1.15); }
-          50%  { transform: perspective(900px) rotateX(53.5deg) rotateZ(-8deg) scale(1.15); }
-          100% { transform: perspective(900px) rotateX(52deg) rotateZ(-8deg) scale(1.15); }
+        @keyframes scout-preview-pan {
+          0% { transform: translate3d(0, 0, 0) scale(1); }
+          50% { transform: translate3d(-8px, -10px, 0) scale(1.015); }
+          100% { transform: translate3d(0, 0, 0) scale(1); }
         }
-        @keyframes hero-pin-pulse {
-          0%   { transform: scale(0.6); opacity: 0.7; }
-          70%  { transform: scale(2.8); opacity: 0; }
-          100% { transform: scale(2.8); opacity: 0; }
+        @keyframes scout-user-pulse {
+          0% { transform: translate(-50%, -50%) scale(0.85); opacity: 0.5; }
+          70% { transform: translate(-50%, -50%) scale(2.25); opacity: 0; }
+          100% { transform: translate(-50%, -50%) scale(2.25); opacity: 0; }
         }
-        @keyframes hero-pin-float {
-          0%   { transform: translate(-50%, -100%) translateY(0px); }
-          50%  { transform: translate(-50%, -100%) translateY(-6px); }
-          100% { transform: translate(-50%, -100%) translateY(0px); }
+        @keyframes scout-pin-float {
+          0% { transform: translate(-50%, -50%) translateY(0px); }
+          50% { transform: translate(-50%, -50%) translateY(-4px); }
+          100% { transform: translate(-50%, -50%) translateY(0px); }
         }
       `}</style>
 
-      {/* SVG street map — real OSM geometry with amber neon glow, perspective tilted */}
+      {/* Faux-street texture for a fast "map-like" preview */}
       <div
         aria-hidden="true"
         className="absolute inset-0"
         style={{
-          transformOrigin: "50% 65%",
-          animation: "hero-svg-drift 22s ease-in-out infinite",
+          backgroundImage: `
+            radial-gradient(140% 90% at 75% 58%, rgba(249,115,22,0.22) 0%, rgba(249,115,22,0.06) 34%, transparent 66%),
+            repeating-linear-gradient(115deg, rgba(255,255,255,0.06) 0px, rgba(255,255,255,0.06) 1px, transparent 1px, transparent 24px),
+            repeating-linear-gradient(25deg, rgba(255,255,255,0.03) 0px, rgba(255,255,255,0.03) 1px, transparent 1px, transparent 20px),
+            linear-gradient(160deg, #080b12 0%, #0b1018 52%, #080b12 100%)
+          `,
+          animation: "scout-preview-pan 14s ease-in-out infinite",
         }}
-      >
-        <SVGStreetMap
-          lat={userLocation.lat}
-          lng={userLocation.lng}
-          className="absolute inset-0"
-        />
-      </div>
+      />
 
       {/* Atmospheric amber bloom — warm glow radiating from map center */}
       <div
         aria-hidden="true"
         className="absolute inset-0 pointer-events-none"
         style={{
-          background: "radial-gradient(ellipse 70% 55% at 52% 48%, rgba(255,90,47,0.13) 0%, rgba(249,115,22,0.07) 40%, transparent 72%)",
+          background: "radial-gradient(ellipse 72% 56% at 66% 56%, rgba(255,90,47,0.16) 0%, rgba(249,115,22,0.07) 42%, transparent 76%)",
           mixBlendMode: "screen",
         }}
       />
@@ -2301,40 +2181,60 @@ function ScoutMapPreview({
         }}
       />
 
-      {/* Truck marker pins — large glowing teardrop pins floating above the grid.
-          Mercator projection centered on userLocation.
-          BOX_DEG matches the viewport span used inside SVGStreetMap (0.011 lat, 0.0154 lng).
-          SVGStreetMap renders the user pin internally, so no user pin here. */}
+      {/* User pin anchored to right-third */}
       <div aria-hidden="true" className="absolute inset-0 pointer-events-none">
-        {markers
-          .filter((m) => m.lat != null && m.lng != null)
-          .slice(0, 8) // cap at 8 pins to avoid clutter
-          .map((marker, i) => {
-            const LAT_SPAN = 0.011;
-            const LNG_SPAN = 0.011 * 1.4;
-            const dx = (marker.lng - userLocation.lng) / LNG_SPAN;
-            const dy = (marker.lat - userLocation.lat) / LAT_SPAN;
-            const px = 0.5 + dx;
-            const py = 0.5 - dy;
-            if (px < -0.08 || px > 1.08 || py < -0.08 || py > 1.08) return null;
-            const delay = `${(i * 0.55) % 3.3}s`;
-            const floatDelay = `${(i * 0.7) % 4}s`;
-            return (
-              <div
-                key={marker.id}
-                className="absolute"
-                style={{
-                  left: `${px * 100}%`,
-                  top: `${py * 100}%`,
-                  // translate(-50%, -100%) so the pin tip sits exactly on the location
-                  animation: `hero-pin-float 4s ease-in-out ${floatDelay} infinite`,
-                  transform: "translate(-50%, -100%)",
-                }}
-              >
-                <TearDropPin delay={delay} hasTruck={marker.kind === "truck"} />
-              </div>
-            );
-          })}
+        <span
+          style={{
+            position: "absolute",
+            left: "68%",
+            top: "56%",
+            width: 18,
+            height: 18,
+            borderRadius: "9999px",
+            background: "#fbbf24",
+            transform: "translate(-50%, -50%)",
+            boxShadow:
+              "0 0 0 3px rgba(251,191,36,0.28), 0 0 16px rgba(249,115,22,0.6)",
+          }}
+        />
+        <span
+          style={{
+            position: "absolute",
+            left: "68%",
+            top: "56%",
+            width: 22,
+            height: 22,
+            borderRadius: "9999px",
+            background: "rgba(251,191,36,0.35)",
+            animation: "scout-user-pulse 2.4s ease-out infinite",
+          }}
+        />
+      </div>
+
+      {/* Nearby pins */}
+      <div aria-hidden="true" className="absolute inset-0 pointer-events-none">
+        {previewMarkers.map(({ marker, x, y }, i) => (
+          <span
+            key={marker.id}
+            style={{
+              position: "absolute",
+              left: `${x * 100}%`,
+              top: `${y * 100}%`,
+              width: marker.kind === "truck" ? 12 : 9,
+              height: marker.kind === "truck" ? 12 : 9,
+              borderRadius: "9999px",
+              background:
+                marker.kind === "truck"
+                  ? "rgba(251,191,36,0.95)"
+                  : "rgba(255,255,255,0.88)",
+              boxShadow:
+                marker.kind === "truck"
+                  ? "0 0 0 2px rgba(15,23,42,0.85), 0 0 12px rgba(249,115,22,0.65)"
+                  : "0 0 0 2px rgba(15,23,42,0.78), 0 0 9px rgba(255,255,255,0.32)",
+              animation: `scout-pin-float 4.2s ease-in-out ${(i * 0.35) % 2.2}s infinite`,
+            }}
+          />
+        ))}
       </div>
     </div>
   );
