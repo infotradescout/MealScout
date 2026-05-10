@@ -152,6 +152,8 @@ export async function runHostPartnerLeadDripCron() {
         String(lead.email),
         subjectForStep(step),
         htmlForStep(step, lead),
+        undefined,
+        "marketing",
       );
       await markSent(String(lead.id), step, { kind: "lead", leadId: lead.id });
       sent += 1;

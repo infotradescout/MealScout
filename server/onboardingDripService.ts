@@ -178,6 +178,7 @@ export class OnboardingDripService {
       "🍽️ Fresh MealScout deals this week",
       html,
       text,
+      "marketing",
     );
   }
 
@@ -240,6 +241,7 @@ export class OnboardingDripService {
       `🔥 New deals in ${cityLabel} this week`,
       html,
       text,
+      "marketing",
     );
   }
 }

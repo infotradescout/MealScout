@@ -299,6 +299,7 @@ export class DinerDigestService {
       `🍽️ This Week's Deals Near You in ${cityLabel}`,
       html,
       text,
+      "marketing",
     );
   }
 }

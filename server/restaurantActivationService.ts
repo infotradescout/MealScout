@@ -211,7 +211,7 @@ export class RestaurantActivationService {
 </html>`;
 
     const text = `Hey ${name}! Your MealScout profile is live. Add your first deal in 2 minutes: https://www.mealscout.us/restaurant-owner-dashboard`;
-    return emailService.sendBasicEmail(to, subject, html, text);
+    return emailService.sendBasicEmail(to, subject, html, text, "marketing");
   }
 }
 

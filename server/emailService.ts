@@ -4,6 +4,10 @@ import {
 } from "@getbrevo/brevo";
 import crypto from "crypto";
 import type { User, Restaurant } from "@shared/schema";
+import {
+  describeMarketingEmailWindow,
+  isWithinMarketingEmailWindow,
+} from "./utils/marketingEmailWindow";
 
 // Initialize Brevo with API key validation
 const transactionalEmailsApi = new TransactionalEmailsApi();
@@ -14,9 +18,13 @@ type EmailAttempt = {
   createdAt: string;
   to: string;
   subject: string;
-  category: "account" | "general";
+  category: "account" | "general" | "marketing";
   status: EmailAttemptStatus;
-  skipReason?: "mode_filtered" | "mode_disabled" | "provider_not_configured";
+  skipReason?:
+    | "mode_filtered"
+    | "mode_disabled"
+    | "provider_not_configured"
+    | "outside_marketing_window";
   error?: string;
   providerStatusCode?: number;
   providerErrorCode?: string;
@@ -113,7 +121,7 @@ interface BaseEmailParams {
   subject: string;
   html: string;
   text?: string;
-  category?: "account" | "general";
+  category?: "account" | "general" | "marketing";
   attachments?: Array<{
     content: string;
     name: string;
@@ -1178,6 +1186,27 @@ export class EmailService {
       });
       return false;
     }
+    if (
+      (params.category || "general") === "marketing" &&
+      !isWithinMarketingEmailWindow()
+    ) {
+      console.log(
+        `Email skipped for ${params.to}: ${params.subject} (outside marketing window ${describeMarketingEmailWindow()})`,
+      );
+      emailDeliveryAudit.add({
+        id: crypto.randomUUID(),
+        createdAt: new Date().toISOString(),
+        to: params.to,
+        subject: params.subject,
+        category: "marketing",
+        status: "skipped",
+        skipReason: "outside_marketing_window",
+        provider: "brevo",
+        fromEmail: EMAIL_CONFIG.fromEmail,
+        mode: notificationMode,
+      });
+      return false;
+    }
 
     // If env vars were updated after boot, re-check config on demand.
     if (!this.isConfigured) {
@@ -1290,7 +1319,7 @@ export class EmailService {
     subject: string,
     html: string,
     text?: string,
-    category?: "account" | "general",
+    category?: "account" | "general" | "marketing",
   ): Promise<boolean> {
     return this.sendEmail({ to, subject, html, text, category });
   }

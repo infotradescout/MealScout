@@ -55,6 +55,10 @@ import {
   getSocialQueueStatus,
   runSocialQueueProcessor,
 } from "../services/socialQueueProcessor";
+import {
+  describeMarketingEmailWindow,
+  isWithinMarketingEmailWindow,
+} from "../utils/marketingEmailWindow";
 import { isAdminUserType } from "../roleAccess";
 
 function bucketScore(
@@ -78,6 +82,15 @@ function bucketScore2(count: number, t1: number, t2: number): number {
 function isAdmin(req: Request): boolean {
   const user = (req as any).user;
   return user && isAdminUserType(user.userType);
+}
+
+function requireMarketingWindow(res: Response): boolean {
+  if (isWithinMarketingEmailWindow()) return true;
+  res.status(429).json({
+    message: `Marketing email jobs are allowed only during ${describeMarketingEmailWindow()}.`,
+    code: "marketing_window_closed",
+  });
+  return false;
 }
 
 export function registerGrowthRoutes(app: Express): void {
@@ -268,6 +281,7 @@ export function registerGrowthRoutes(app: Express): void {
       if (!isAdmin(req)) {
         return res.status(403).json({ message: "Forbidden" });
       }
+      if (!requireMarketingWindow(res)) return;
 
       try {
         const stats = await DinerDigestService.getInstance().sendDinerDigests();
@@ -286,6 +300,7 @@ export function registerGrowthRoutes(app: Express): void {
       if (!isAdmin(req)) {
         return res.status(403).json({ message: "Forbidden" });
       }
+      if (!requireMarketingWindow(res)) return;
       try {
         const stats = await OnboardingDripService.getInstance().run();
         res.json({ ok: true, stats });
@@ -303,6 +318,7 @@ export function registerGrowthRoutes(app: Express): void {
       if (!isAdmin(req)) {
         return res.status(403).json({ message: "Forbidden" });
       }
+      if (!requireMarketingWindow(res)) return;
       try {
         const stats = await RestaurantActivationService.getInstance().run();
         res.json({ ok: true, stats });
@@ -320,6 +336,7 @@ export function registerGrowthRoutes(app: Express): void {
       if (!isAdmin(req)) {
         return res.status(403).json({ message: "Forbidden" });
       }
+      if (!requireMarketingWindow(res)) return;
       try {
         const stats = await runHostPartnerLeadDripCron();
         res.json({ ok: true, stats });
@@ -520,6 +537,7 @@ export function registerGrowthRoutes(app: Express): void {
       if (!isAdmin(req)) {
         return res.status(403).json({ message: "Forbidden" });
       }
+      if (!requireMarketingWindow(res)) return;
       try {
         const stats = await runPensacolaReportLeadDripCron();
         return res.json({ ok: true, stats });
@@ -538,6 +556,7 @@ export function registerGrowthRoutes(app: Express): void {
       if (!isAdmin(req)) {
         return res.status(403).json({ message: "Forbidden" });
       }
+      if (!requireMarketingWindow(res)) return;
       try {
         const stats = await runPensacolaFoodTruckDripCron();
         return res.json({ ok: true, stats });

@@ -23,6 +23,12 @@ import { runSocialQueueProcessor } from "../services/socialQueueProcessor";
 import { submitIndexNowUrls, getIndexNowConfig } from "../services/indexNow";
 import { registerStoryCronJobs } from "../storiesCronJobs";
 import { registerFeaturedVideoCronJobs } from "../featuredVideoCron";
+import {
+  MARKETING_EMAIL_TIMEZONE,
+  MARKETING_EMAIL_WINDOW_END_HOUR,
+  MARKETING_EMAIL_WINDOW_START_HOUR,
+  isWithinMarketingEmailWindow,
+} from "../utils/marketingEmailWindow";
 import { db } from "../db";
 import { requestLogs, adminDailyReports, cities } from "@shared/schema";
 import { and, gte, lt, desc, sql } from "drizzle-orm";
@@ -45,66 +51,14 @@ const getParkingPassHoldTtlMs = () => {
   return minutes * 60 * 1000;
 };
 
-const SCHEDULER_TIMEZONE =
-  String(
-    process.env.SCHEDULER_TIMEZONE ||
-      process.env.CRON_TIMEZONE ||
-      "America/Chicago",
-  ).trim() || "America/Chicago";
-
-function readHourEnv(name: string, fallback: number): number {
-  const raw = Number(process.env[name]);
-  if (!Number.isFinite(raw)) return fallback;
-  return Math.max(0, Math.min(23, Math.floor(raw)));
-}
-
-const MARKETING_EMAIL_WINDOW_START_HOUR = readHourEnv(
-  "MARKETING_EMAIL_WINDOW_START_HOUR",
-  8,
-);
-const MARKETING_EMAIL_WINDOW_END_HOUR = readHourEnv(
-  "MARKETING_EMAIL_WINDOW_END_HOUR",
-  20,
-);
+const SCHEDULER_TIMEZONE = MARKETING_EMAIL_TIMEZONE;
 
 function scheduleCron(expression: string, task: () => void | Promise<void>) {
   return cron.schedule(expression, task, { timezone: SCHEDULER_TIMEZONE });
 }
 
-function getHourInTimezone(timeZone: string, date = new Date()): number {
-  try {
-    const hour = Number(
-      new Intl.DateTimeFormat("en-US", {
-        hour: "2-digit",
-        hour12: false,
-        timeZone,
-      }).format(date),
-    );
-    return Number.isFinite(hour) ? ((hour % 24) + 24) % 24 : date.getHours();
-  } catch {
-    return date.getHours();
-  }
-}
-
-function isHourWithinWindow(
-  hour: number,
-  startHour: number,
-  endHour: number,
-): boolean {
-  if (startHour === endHour) return true;
-  if (startHour < endHour) {
-    return hour >= startHour && hour < endHour;
-  }
-  return hour >= startHour || hour < endHour;
-}
-
 function shouldRunMarketingEmailJobs(now = new Date()): boolean {
-  const localHour = getHourInTimezone(SCHEDULER_TIMEZONE, now);
-  return isHourWithinWindow(
-    localHour,
-    MARKETING_EMAIL_WINDOW_START_HOUR,
-    MARKETING_EMAIL_WINDOW_END_HOUR,
-  );
+  return isWithinMarketingEmailWindow(now);
 }
 
 // ---------------------------------------------------------------------------

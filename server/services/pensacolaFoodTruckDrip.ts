@@ -182,6 +182,8 @@ async function sendStepToUser(user: any, step: number) {
     user.email,
     subjectForStep(step),
     htmlForStep({ step, firstName: user.firstName }),
+    undefined,
+    "marketing",
   );
 
   await markSent(user.id, step, { sentBy: "drip", step });

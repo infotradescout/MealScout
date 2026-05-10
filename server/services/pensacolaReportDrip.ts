@@ -161,6 +161,8 @@ export async function runPensacolaReportLeadDripCron() {
         String(lead.email),
         subjectForStep(step),
         htmlForStep({ step, lead }),
+        undefined,
+        "marketing",
       );
       await markSent(lead.id, step, { kind: "lead", leadId: lead.id });
       sent += 1;
