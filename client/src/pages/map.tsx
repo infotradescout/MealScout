@@ -1232,8 +1232,7 @@ export default function MapPage() {
       return false;
     }
   }, []);
-  const [deferSecondaryQueries, setDeferSecondaryQueries] =
-    useState(isScoutFastEntry);
+  const [deferSecondaryQueries, setDeferSecondaryQueries] = useState(true);
   const [hoverPreview, setHoverPreview] = useState<{
     marker: MapAdapterMarker;
     x: number;
@@ -1253,10 +1252,10 @@ export default function MapPage() {
   } | null>(null);
 
   useEffect(() => {
-    if (!isScoutFastEntry) return;
+    const delayMs = isScoutFastEntry ? 1400 : 700;
     const timer = window.setTimeout(() => {
       setDeferSecondaryQueries(false);
-    }, 1400);
+    }, delayMs);
     return () => window.clearTimeout(timer);
   }, [isScoutFastEntry]);
 
@@ -1575,8 +1574,8 @@ export default function MapPage() {
 
   const { data: liveTrucksData } = useDiscoverableTrucks(userLocation, {
     radiusKm: 12,
-    limit: 500,
-    enabled: true,
+    limit: 250,
+    enabled: !deferSecondaryQueries,
     staleTime: 15 * 1000,
     refetchInterval: 15 * 1000,
     refetchIntervalInBackground: false,

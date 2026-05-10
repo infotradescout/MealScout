@@ -8,9 +8,12 @@ import type {
 import mealScoutIcon from "@assets/meal-scout-icon.png";
 
 type GeoPoint = { lat: number; lng: number };
+type ScreenPoint = { x: number; y: number };
+type AreaBounds = { north: number; south: number; east: number; west: number };
 
 type GoogleMapSurfaceProps = {
   apiKey: string;
+  mapId?: string;
   center: GeoPoint;
   zoom: number;
   markers: MapAdapterMarker[];
@@ -21,6 +24,14 @@ type GoogleMapSurfaceProps = {
   onBoundsChanged: (bounds: MapBoundsLike) => void;
   onZoomChanged: (zoom: number) => void;
   onCenterChanged?: (center: GeoPoint) => void;
+  onMarkerHover?: (
+    marker: MapAdapterMarker | null,
+    position: ScreenPoint | null,
+  ) => void;
+  popupAnchor?: GeoPoint | null;
+  onPopupAnchorPosition?: (position: ScreenPoint | null) => void;
+  drawingActive?: boolean;
+  onAreaSelected?: (bounds: AreaBounds | null) => void;
   onMarkerTap: (marker: MapAdapterMarker) => void;
   onFatalError?: (message: string) => void;
 };
@@ -30,7 +41,6 @@ type GoogleMapsWindow = Window & {
   __mealScoutGoogleMapsPromise?: Promise<void>;
   gm_authFailure?: () => void;
 };
-const GOOGLE_MAP_ID = String(import.meta.env.VITE_GOOGLE_MAPS_MAP_ID || "").trim();
 
 const createBoundsLike = (
   north: number,
@@ -51,6 +61,32 @@ const createBoundsLike = (
     return withinLat && withinLng;
   },
 });
+
+const latLngToContainerPixel = (
+  googleMaps: any,
+  map: any,
+  point: GeoPoint,
+): ScreenPoint | null => {
+  const projection = map?.getProjection?.();
+  const bounds = map?.getBounds?.();
+  const zoom = Number(map?.getZoom?.() || 0);
+  if (!projection || !bounds || !Number.isFinite(zoom)) return null;
+
+  const latLng = new googleMaps.LatLng(point.lat, point.lng);
+  const worldPoint = projection.fromLatLngToPoint(latLng);
+  const ne = projection.fromLatLngToPoint(bounds.getNorthEast());
+  const sw = projection.fromLatLngToPoint(bounds.getSouthWest());
+  if (!worldPoint || !ne || !sw) return null;
+
+  const scale = Math.pow(2, zoom);
+  const x = (worldPoint.x - sw.x) * scale;
+  const y = (worldPoint.y - ne.y) * scale;
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+  return { x, y };
+};
+
+const hasMeaningfulCenterDelta = (a: GeoPoint, b: GeoPoint) =>
+  Math.abs(a.lat - b.lat) > 0.00001 || Math.abs(a.lng - b.lng) > 0.00001;
 
 /* ─── Google Maps style — MealScout Neon Night ──────────────────────────────
    Goals:
@@ -344,7 +380,7 @@ export const loadGoogleMaps = async (apiKey: string) => {
       return;
     }
     const script = document.createElement("script");
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&v=weekly&loading=async&libraries=marker`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&v=weekly&loading=async`;
     script.async = true;
     script.defer = true;
     script.dataset.mealscoutGoogleMaps = "1";
@@ -375,6 +411,7 @@ export const preloadGoogleMapsScript = (apiKey: string) => {
 /* ─── Component ─────────────────────────────────────────────────────────── */
 export function GoogleMapSurface({
   apiKey,
+  mapId,
   center,
   zoom,
   markers,
@@ -385,11 +422,15 @@ export function GoogleMapSurface({
   onBoundsChanged,
   onZoomChanged,
   onCenterChanged,
+  onMarkerHover,
+  popupAnchor,
+  onPopupAnchorPosition,
   onMarkerTap,
   onFatalError,
 }: GoogleMapSurfaceProps) {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
+  const resizeObserverRef = useRef<ResizeObserver | null>(null);
   const markerRefs = useRef<Map<string, any>>(new Map());
   const markerSignatureRefs = useRef<Map<string, string>>(new Map());
   const trafficCircleRefs = useRef<Map<string, any>>(new Map());
@@ -398,6 +439,16 @@ export function GoogleMapSurface({
   const [mapReadyVersion, setMapReadyVersion] = useState(0);
   const hasReportedFatalErrorRef = useRef(false);
   const onWindowResizeRef = useRef<(() => void) | null>(null);
+  const onBoundsChangedRef = useRef(onBoundsChanged);
+  const onZoomChangedRef = useRef(onZoomChanged);
+  const onCenterChangedRef = useRef(onCenterChanged);
+  const onMarkerTapRef = useRef(onMarkerTap);
+  const onMarkerHoverRef = useRef(onMarkerHover);
+  const onPopupAnchorPositionRef = useRef(onPopupAnchorPosition);
+  const onFatalErrorRef = useRef(onFatalError);
+  const popupAnchorRef = useRef<GeoPoint | null>(popupAnchor || null);
+  const centerRef = useRef(center);
+  const zoomRef = useRef(zoom);
 
   const renderedMarkers = useMemo<MapAdapterMarker[]>(() => {
     if (!userLocation) return markers;
@@ -420,6 +471,30 @@ export function GoogleMapSurface({
     [renderedMarkers],
   );
 
+  useEffect(() => {
+    onBoundsChangedRef.current = onBoundsChanged;
+    onZoomChangedRef.current = onZoomChanged;
+    onCenterChangedRef.current = onCenterChanged;
+    onMarkerTapRef.current = onMarkerTap;
+    onMarkerHoverRef.current = onMarkerHover;
+    onPopupAnchorPositionRef.current = onPopupAnchorPosition;
+    onFatalErrorRef.current = onFatalError;
+    popupAnchorRef.current = popupAnchor || null;
+    centerRef.current = center;
+    zoomRef.current = zoom;
+  }, [
+    onBoundsChanged,
+    onZoomChanged,
+    onCenterChanged,
+    onMarkerTap,
+    onMarkerHover,
+    onPopupAnchorPosition,
+    onFatalError,
+    popupAnchor,
+    center,
+    zoom,
+  ]);
+
   useEffect(() => { hasReportedFatalErrorRef.current = false; }, [apiKey]);
 
   // Auth failure handler
@@ -432,12 +507,12 @@ export function GoogleMapSurface({
       setLoadError(msg);
       if (!hasReportedFatalErrorRef.current) {
         hasReportedFatalErrorRef.current = true;
-        onFatalError?.(msg);
+        onFatalErrorRef.current?.(msg);
       }
     };
     w.gm_authFailure = handler;
     return () => { if (w.gm_authFailure === handler) w.gm_authFailure = prev; };
-  }, [onFatalError]);
+  }, []);
 
   // Map init
   useEffect(() => {
@@ -455,64 +530,98 @@ export function GoogleMapSurface({
             typeof window.matchMedia === "function" &&
             window.matchMedia("(pointer: fine)").matches;
 
-          // NOTE: Google Maps ignores `styles` when a `mapId` is present.
-          // For the Scout neon theme we intentionally omit mapId so the
-          // custom style JSON takes full effect. Advanced Markers are not
-          // needed on this surface — glowing SVG dots via classic Markers
-          // are used instead.
-          mapRef.current = new googleMaps.Map(mapContainerRef.current, {
-            center,
-            zoom,
+          const mapOptions: any = {
+            center: centerRef.current,
+            zoom: zoomRef.current,
             disableDefaultUI: true,
             zoomControl: false,
             clickableIcons: false,
             tilt: 0,
             heading: 0,
             gestureHandling: prefersFinePointer ? "greedy" : "cooperative",
-            styles: mapStyleNeon,
-          });
+          };
+          const runtimeMapId = String(mapId || "").trim();
+          if (runtimeMapId && !isNightTheme) {
+            mapOptions.mapId = runtimeMapId;
+          } else {
+            mapOptions.styles = mapStyleNeon;
+          }
 
-          mapRef.current.addListener("idle", () => {
-            const b = mapRef.current?.getBounds?.();
-            const z = Number(mapRef.current?.getZoom?.() || 0);
-            if (Number.isFinite(z) && z > 0) onZoomChanged(z);
-            if (!b) return;
-            const ne = b.getNorthEast();
-            const sw = b.getSouthWest();
-            onBoundsChanged(createBoundsLike(Number(ne.lat()), Number(sw.lat()), Number(ne.lng()), Number(sw.lng())));
-          });
+          mapRef.current = new googleMaps.Map(mapContainerRef.current, mapOptions);
 
-          mapRef.current.addListener("center_changed", () => {
-            const c = mapRef.current?.getCenter?.();
-            if (c && onCenterChanged) onCenterChanged({ lat: Number(c.lat()), lng: Number(c.lng()) });
-          });
+          const emitViewportState = () => {
+            const map = mapRef.current;
+            if (!map) return;
+            const bounds = map.getBounds?.();
+            const z = Number(map.getZoom?.() || 0);
+            if (Number.isFinite(z) && z > 0) {
+              onZoomChangedRef.current?.(z);
+            }
+            const c = map.getCenter?.();
+            if (c && onCenterChangedRef.current) {
+              onCenterChangedRef.current({
+                lat: Number(c.lat()),
+                lng: Number(c.lng()),
+              });
+            }
+            if (bounds && onBoundsChangedRef.current) {
+              const ne = bounds.getNorthEast();
+              const sw = bounds.getSouthWest();
+              onBoundsChangedRef.current(
+                createBoundsLike(
+                  Number(ne.lat()),
+                  Number(sw.lat()),
+                  Number(ne.lng()),
+                  Number(sw.lng()),
+                ),
+              );
+            }
+            if (popupAnchorRef.current && onPopupAnchorPositionRef.current) {
+              onPopupAnchorPositionRef.current(
+                latLngToContainerPixel(googleMaps, map, popupAnchorRef.current),
+              );
+            } else if (onPopupAnchorPositionRef.current) {
+              onPopupAnchorPositionRef.current(null);
+            }
+          };
+
+          mapRef.current.addListener("idle", emitViewportState);
 
           // Trigger resize whenever the container changes size (e.g. on
           // first pull-down expand). Without this the map renders blank
           // until the user interacts because it was initialized in a
           // zero-height or hidden container.
-          const ro = new ResizeObserver(() => {
-            if (mapRef.current) {
-              googleMaps.event.trigger(mapRef.current, "resize");
-              mapRef.current.setCenter(center);
-            }
+          if (resizeObserverRef.current) {
+            resizeObserverRef.current.disconnect();
+          }
+          resizeObserverRef.current = new ResizeObserver(() => {
+            const map = mapRef.current;
+            if (!map) return;
+            googleMaps.event.trigger(map, "resize");
           });
-          if (mapContainerRef.current) ro.observe(mapContainerRef.current);
+          if (mapContainerRef.current) {
+            resizeObserverRef.current.observe(mapContainerRef.current);
+          }
 
           // Also listen to window resize so the post-transition dispatch
           // from Scout (fired 340ms after pull-down) triggers a
           // full re-tile at the correct 100dvh dimensions.
           onWindowResizeRef.current = () => {
-            if (mapRef.current) {
-              googleMaps.event.trigger(mapRef.current, "resize");
-              mapRef.current.setCenter(center);
+            const map = mapRef.current;
+            if (map) {
+              googleMaps.event.trigger(map, "resize");
             }
           };
           window.addEventListener("resize", onWindowResizeRef.current);
 
           setMapReadyVersion((v) => v + 1);
         } else {
-          mapRef.current.setOptions({ styles: mapStyleNeon });
+          const runtimeMapId = String(mapId || "").trim();
+          if (runtimeMapId && !isNightTheme) {
+            mapRef.current.setOptions({ mapId: runtimeMapId });
+          } else {
+            mapRef.current.setOptions({ mapId: undefined, styles: mapStyleNeon });
+          }
         }
 
         setLoadError(null);
@@ -522,17 +631,32 @@ export function GoogleMapSurface({
         setLoadError(msg);
         if (!hasReportedFatalErrorRef.current) {
           hasReportedFatalErrorRef.current = true;
-          onFatalError?.(msg);
+          onFatalErrorRef.current?.(msg);
         }
       }
     };
     init();
-    return () => { mounted = false; };
-  }, [apiKey, center, zoom, isNightTheme, onBoundsChanged, onZoomChanged, onCenterChanged, onFatalError]);
+    return () => {
+      mounted = false;
+    };
+  }, [apiKey, mapId, isNightTheme]);
 
   useEffect(() => {
     if (!mapRef.current) return;
-    mapRef.current.setCenter(center);
+    const current = mapRef.current.getCenter?.();
+    if (!current) {
+      mapRef.current.setCenter(center);
+      return;
+    }
+    const currentLat = Number(current.lat?.() ?? current.lat);
+    const currentLng = Number(current.lng?.() ?? current.lng);
+    if (!Number.isFinite(currentLat) || !Number.isFinite(currentLng)) {
+      mapRef.current.setCenter(center);
+      return;
+    }
+    if (hasMeaningfulCenterDelta({ lat: currentLat, lng: currentLng }, center)) {
+      mapRef.current.setCenter(center);
+    }
   }, [center.lat, center.lng]);
 
   useEffect(() => {
@@ -540,6 +664,17 @@ export function GoogleMapSurface({
     const cur = Number(mapRef.current.getZoom?.() || 0);
     if (!Number.isFinite(cur) || cur !== zoom) mapRef.current.setZoom(zoom);
   }, [zoom]);
+
+  useEffect(() => {
+    const googleMaps = (window as GoogleMapsWindow).google?.maps;
+    if (!googleMaps || !mapRef.current || !popupAnchor || !onPopupAnchorPositionRef.current) {
+      if (!popupAnchor) onPopupAnchorPositionRef.current?.(null);
+      return;
+    }
+    onPopupAnchorPositionRef.current(
+      latLngToContainerPixel(googleMaps, mapRef.current, popupAnchor),
+    );
+  }, [popupAnchor?.lat, popupAnchor?.lng, mapReadyVersion]);
 
   // Marker sync
   useEffect(() => {
@@ -602,13 +737,27 @@ export function GoogleMapSurface({
         instance.addEventListener("gmp-click", () => {
           if (marker.id === "__user-location") return;
           const tapped = markerIndex.get(marker.id);
-          if (tapped) onMarkerTap(tapped);
+          if (tapped) onMarkerTapRef.current?.(tapped);
         });
       } else {
         instance.addListener("click", () => {
           if (marker.id === "__user-location") return;
           const tapped = markerIndex.get(marker.id);
-          if (tapped) onMarkerTap(tapped);
+          if (tapped) onMarkerTapRef.current?.(tapped);
+        });
+        instance.addListener("mouseover", (event: any) => {
+          const hovered = markerIndex.get(marker.id);
+          if (!hovered || !onMarkerHoverRef.current) return;
+          const latLng = event?.latLng;
+          if (!latLng) return;
+          const position = latLngToContainerPixel(googleMaps, mapRef.current, {
+            lat: Number(latLng.lat()),
+            lng: Number(latLng.lng()),
+          });
+          onMarkerHoverRef.current(hovered, position);
+        });
+        instance.addListener("mouseout", () => {
+          onMarkerHoverRef.current?.(null, null);
         });
       }
       markerRefs.current.set(marker.id, instance);
@@ -621,7 +770,7 @@ export function GoogleMapSurface({
       markerRefs.current.delete(id);
       markerSignatureRefs.current.delete(id);
     });
-  }, [renderedMarkers, markerIndex, onMarkerTap, mapReadyVersion]);
+  }, [renderedMarkers, markerIndex, mapReadyVersion]);
 
   // Traffic cells
   useEffect(() => {
@@ -676,10 +825,20 @@ export function GoogleMapSurface({
   // Cleanup
   useEffect(() => {
     return () => {
+      Array.from(markerRefs.current.values()).forEach((instance) =>
+        removeMarkerFromMap(instance),
+      );
+      markerRefs.current.clear();
       Array.from(trafficCircleRefs.current.values()).forEach((i) => i.setMap(null));
       trafficCircleRefs.current.clear();
       markerSignatureRefs.current.clear();
+      onMarkerHoverRef.current?.(null, null);
+      onPopupAnchorPositionRef.current?.(null);
       if (roadTrafficLayerRef.current) { roadTrafficLayerRef.current.setMap(null); roadTrafficLayerRef.current = null; }
+      if (resizeObserverRef.current) {
+        resizeObserverRef.current.disconnect();
+        resizeObserverRef.current = null;
+      }
       if (onWindowResizeRef.current) {
         window.removeEventListener("resize", onWindowResizeRef.current);
         onWindowResizeRef.current = null;
