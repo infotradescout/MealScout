@@ -3,14 +3,14 @@
  * Online ordering for pickup and dine-in.
  *
  * Payment model:
- *   - MealScout collects the full order amount (subtotal + $1 platform fee) via
+ *   - MealScout collects the full order amount (subtotal + customer fees) via
  *     MealScout's own Stripe account.
  *   - After payment confirms (Stripe webhook), MealScout transfers subtotal to
  *     the business's Stripe Connect account.
- *   - MealScout keeps $1 per order.
+ *   - By default customers pay Stripe processing plus the $1 MealScout fee.
  *   - If the business toggles `hidePlatformFee`, the fee is presented as $0 to
- *     the customer (absorbed by the business). The $1 transfer reduction is
- *     reflected internally.
+ *     the customer (absorbed by the business). The combined fee transfer
+ *     reduction is reflected internally.
  *   - Cash orders skip Stripe entirely; MealScout earns nothing (no platform fee
  *     is collected – the fee is simply omitted).
  *
@@ -60,6 +60,75 @@ import { getWebSocketServer } from "../websocket";
 const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
   : null;
+
+const PICKUP_ORDER_MEALSCOUT_FEE_CENTS = Math.max(
+  0,
+  Number(process.env.PICKUP_ORDER_MEALSCOUT_FEE_CENTS || 100) || 100,
+);
+const PICKUP_ORDER_STRIPE_FEE_BPS = Math.max(
+  0,
+  Number(process.env.PICKUP_ORDER_STRIPE_FEE_BPS || 290) || 290,
+);
+const PICKUP_ORDER_STRIPE_FEE_FIXED_CENTS = Math.max(
+  0,
+  Number(process.env.PICKUP_ORDER_STRIPE_FEE_FIXED_CENTS || 30) || 30,
+);
+
+function estimateStripeFeeCents(chargeAmountCents: number): number {
+  if (!Number.isFinite(chargeAmountCents) || chargeAmountCents <= 0) return 0;
+  return Math.max(
+    0,
+    Math.ceil(
+      (chargeAmountCents * PICKUP_ORDER_STRIPE_FEE_BPS) / 10_000 +
+        PICKUP_ORDER_STRIPE_FEE_FIXED_CENTS,
+    ),
+  );
+}
+
+function grossUpStripeProcessingFeeCents(baseBeforeProcessingCents: number): number {
+  if (
+    !Number.isFinite(baseBeforeProcessingCents) ||
+    baseBeforeProcessingCents <= 0
+  ) {
+    return 0;
+  }
+  const denominator = 10_000 - PICKUP_ORDER_STRIPE_FEE_BPS;
+  if (denominator <= 0) {
+    return estimateStripeFeeCents(baseBeforeProcessingCents);
+  }
+  const grossChargeCents = Math.ceil(
+    ((baseBeforeProcessingCents + PICKUP_ORDER_STRIPE_FEE_FIXED_CENTS) *
+      10_000) /
+      denominator,
+  );
+  return Math.max(0, grossChargeCents - baseBeforeProcessingCents);
+}
+
+function computePickupOrderFees(
+  subtotalCents: number,
+  paymentMethod: "card" | "cash",
+  feePaidByBusiness: boolean,
+) {
+  const cleanSubtotal = Math.max(0, Math.round(Number(subtotalCents || 0)));
+  const mealscoutFeeCents = PICKUP_ORDER_MEALSCOUT_FEE_CENTS;
+  const processingFeeCents =
+    paymentMethod === "card"
+      ? feePaidByBusiness
+        ? estimateStripeFeeCents(cleanSubtotal)
+        : grossUpStripeProcessingFeeCents(cleanSubtotal + mealscoutFeeCents)
+      : 0;
+  const platformFeeCents = mealscoutFeeCents + processingFeeCents;
+  const totalCents = feePaidByBusiness
+    ? cleanSubtotal
+    : cleanSubtotal + platformFeeCents;
+
+  return {
+    mealscoutFeeCents,
+    processingFeeCents,
+    platformFeeCents,
+    totalCents,
+  };
+}
 
 // ── Rate limiting ──────────────────────────────────────────────────────────────
 const createOrderLimiter = distributedRateLimit({
@@ -453,11 +522,16 @@ export function registerPickupOrderRoutes(app: Express) {
       }
 
       const feePaidByBusiness = menu.hidePlatformFee;
-      const platformFeeCents = 100; // $1.00
-      // Customer always pays subtotal + $1 UNLESS business absorbs fee
-      const totalCents = feePaidByBusiness
-        ? subtotalCents
-        : subtotalCents + platformFeeCents;
+      const {
+        mealscoutFeeCents,
+        processingFeeCents,
+        platformFeeCents,
+        totalCents,
+      } = computePickupOrderFees(
+        subtotalCents,
+        body.paymentMethod,
+        feePaidByBusiness,
+      );
 
       // Determine prep time from menu's restaurant
       const [restaurant] = await db
@@ -582,10 +656,13 @@ export function registerPickupOrderRoutes(app: Express) {
           automatic_payment_methods: { enabled: true },
           transfer_group: transferGroup,
           metadata: {
+            pickupOrderId: order.id,
             orderId: order.id,
             restaurantId: body.restaurantId,
             subtotalCents: subtotalCents.toString(),
             platformFeeCents: platformFeeCents.toString(),
+            mealscoutFeeCents: mealscoutFeeCents.toString(),
+            processingFeeCents: processingFeeCents.toString(),
             feePaidByBusiness: String(feePaidByBusiness),
           },
           description: `MealScout order at ${restaurant.name}`,

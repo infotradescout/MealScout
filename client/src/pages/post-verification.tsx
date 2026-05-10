@@ -43,7 +43,13 @@ function getLoginHref(redirectPath: string) {
 }
 
 function getSetupBrief(redirectPath: string) {
-  if (redirectPath.startsWith("/truck-onboarding")) {
+  const lowerRedirectPath = redirectPath.toLowerCase();
+  const isFoodTruckSetup =
+    redirectPath.startsWith("/truck-onboarding") ||
+    (redirectPath.startsWith("/restaurant-signup") &&
+      lowerRedirectPath.includes("businesstype=food_truck"));
+
+  if (isFoodTruckSetup) {
     return {
       label: "Food truck setup",
       description:
@@ -67,7 +73,10 @@ function getSetupBrief(redirectPath: string) {
       steps: ["Personal login", "Host location", "Availability", "Publish"],
     };
   }
-  if (redirectPath.startsWith("/event-signup")) {
+  if (
+    redirectPath.startsWith("/event-signup") ||
+    redirectPath.startsWith("/event-coordinator/dashboard")
+  ) {
     return {
       label: "Event organizer setup",
       description:

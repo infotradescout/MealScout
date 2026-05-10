@@ -44,7 +44,7 @@ import {
   type MenuItemModifier,
 } from "@shared/schema";
 import { eq, and, asc, inArray, isNotNull, isNull } from "drizzle-orm";
-import { isAuthenticated, isRestaurantOwner } from "../unifiedAuth";
+import { isAuthenticated, isRestaurantOwner, isStaffOrAdmin } from "../unifiedAuth";
 import { storage } from "../storage";
 import { parseMenuCsv } from "../utils/menuCsvParser";
 import { parsePdfMenuWithAi } from "../utils/menuPdfParser";
@@ -98,6 +98,180 @@ function wrap(handler: (req: any, res: any) => Promise<void>) {
       if (status === 500) console.error("[menuRoutes]", err);
       res.status(status).json({ message });
     }
+  };
+}
+
+const dayKeys = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+
+function minutesFromTime(value: unknown): number | null {
+  const match = String(value || "").match(/^(\d{1,2}):(\d{2})/);
+  if (!match) return null;
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return null;
+  return hour * 60 + minute;
+}
+
+function isRestaurantOpenNow(operatingHours: unknown): boolean | null {
+  if (!operatingHours || typeof operatingHours !== "object") return null;
+  const todayKey = dayKeys[new Date().getDay()];
+  const windows = (operatingHours as Record<string, unknown>)[todayKey];
+  if (!Array.isArray(windows)) return null;
+  if (windows.length === 0) return false;
+  const now = new Date();
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  return windows.some((window: any) => {
+    const open = minutesFromTime(window?.open ?? window?.start);
+    const close = minutesFromTime(window?.close ?? window?.end);
+    if (open === null || close === null) return false;
+    if (close < open) {
+      return nowMinutes >= open || nowMinutes <= close;
+    }
+    return nowMinutes >= open && nowMinutes <= close;
+  });
+}
+
+async function getOrderingSubscriptionReady(ownerId: string, restaurantId: string) {
+  const [activeSub] = await db
+    .select({ id: restaurantSubscriptions.id })
+    .from(restaurantSubscriptions)
+    .where(
+      and(
+        eq(restaurantSubscriptions.restaurantId, restaurantId),
+        eq(restaurantSubscriptions.status, "active"),
+      ),
+    )
+    .limit(1);
+  if (activeSub) return true;
+
+  const [ownerRow] = await db
+    .select({
+      trialEndsAt: users.trialEndsAt,
+      stripeSubscriptionId: users.stripeSubscriptionId,
+    })
+    .from(users)
+    .where(eq(users.id, ownerId))
+    .limit(1);
+
+  if (ownerRow?.trialEndsAt && new Date(ownerRow.trialEndsAt) > new Date()) {
+    return true;
+  }
+  return Boolean(ownerRow?.stripeSubscriptionId);
+}
+
+async function buildOrderingReadiness(restaurantId: string) {
+  const [restaurantRow] = await db
+    .select({
+      id: restaurants.id,
+      ownerId: restaurants.ownerId,
+      name: restaurants.name,
+      city: restaurants.city,
+      isFoodTruck: restaurants.isFoodTruck,
+      cuisineType: restaurants.cuisineType,
+      isActive: restaurants.isActive,
+      operatingHours: restaurants.operatingHours,
+    })
+    .from(restaurants)
+    .where(eq(restaurants.id, restaurantId))
+    .limit(1);
+
+  const restaurantMenus = await db
+    .select()
+    .from(menus)
+    .where(and(eq(menus.restaurantId, restaurantId), eq(menus.isActive, true)))
+    .orderBy(asc(menus.serviceType));
+
+  const menuIds = restaurantMenus.map((menu) => menu.id);
+  const items = menuIds.length
+    ? await db
+        .select({ id: menuItems.id })
+        .from(menuItems)
+        .where(and(inArray(menuItems.menuId, menuIds), eq(menuItems.isAvailable, true)))
+    : [];
+
+  const acceptsCash = restaurantMenus.some((menu) => menu.acceptsCash);
+  const stripeConfigured = Boolean(process.env.STRIPE_SECRET_KEY);
+  const subscriptionReady = restaurantRow?.ownerId
+    ? await getOrderingSubscriptionReady(restaurantRow.ownerId, restaurantId)
+    : false;
+  const openNow = isRestaurantOpenNow(restaurantRow?.operatingHours);
+
+  const checks = [
+    {
+      id: "business_active",
+      label: "Business profile is active",
+      ok: Boolean(restaurantRow?.isActive),
+      blocking: true,
+      action: "Reactivate the business profile.",
+    },
+    {
+      id: "active_menu",
+      label: "At least one active menu is published",
+      ok: restaurantMenus.length > 0,
+      blocking: true,
+      action: "Publish an active menu.",
+    },
+    {
+      id: "menu_items",
+      label: "Menu has available items",
+      ok: items.length > 0,
+      blocking: true,
+      action: "Add or enable menu items.",
+    },
+    {
+      id: "subscription",
+      label: "Online ordering access is active",
+      ok: subscriptionReady,
+      blocking: true,
+      action: "Start or restore the MealScout business plan.",
+    },
+    {
+      id: "stripe",
+      label: "Card payment processing is configured",
+      ok: stripeConfigured,
+      blocking: !acceptsCash,
+      action: acceptsCash
+        ? "Card payments are unavailable; cash ordering can still work."
+        : "Configure Stripe before taking online orders.",
+    },
+    {
+      id: "hours",
+      label: openNow === null ? "Operating hours are not set" : "Business is open now",
+      ok: openNow === true,
+      blocking: openNow === false,
+      action:
+        openNow === false
+          ? "Update hours or reopen ordering when service starts."
+          : "Set hours so customers know when ordering is available.",
+    },
+  ];
+
+  const blockingReasons = checks
+    .filter((check) => check.blocking && !check.ok)
+    .map((check) => check.label);
+
+  return {
+    restaurantName: restaurantRow?.name ?? null,
+    restaurantCity: restaurantRow?.city ?? null,
+    isFoodTruck: restaurantRow?.isFoodTruck ?? false,
+    cuisineType: restaurantRow?.cuisineType ?? null,
+    orderingEnabled: blockingReasons.length === 0,
+    acceptsCash,
+    stripeConfigured,
+    activeMenuCount: restaurantMenus.length,
+    availableItemCount: items.length,
+    openNow,
+    checks,
+    blockingReasons,
+    payout: {
+      connected: false,
+      chargesEnabled: stripeConfigured,
+      payoutsEnabled: false,
+      status: stripeConfigured ? "platform_collected" : "not_configured",
+      message: stripeConfigured
+        ? "Customer payments are collected by MealScout. Direct restaurant payouts still need a dedicated Connect setup path."
+        : "Stripe is not configured, so card payments cannot be collected.",
+    },
   };
 }
 
@@ -512,6 +686,7 @@ export function registerMenuRoutes(app: Express) {
     "/api/menus/:restaurantId",
     wrap(async (req, res) => {
       const { restaurantId } = req.params;
+      const readiness = await buildOrderingReadiness(restaurantId);
 
       const restaurantMenus: Menu[] = await db
         .select()
@@ -522,7 +697,15 @@ export function registerMenuRoutes(app: Express) {
         .orderBy(asc(menus.serviceType));
 
       if (restaurantMenus.length === 0) {
-        return res.json({ menus: [], orderingEnabled: false });
+        return res.json({
+          menus: [],
+          orderingEnabled: false,
+          readiness,
+          restaurantName: readiness.restaurantName,
+          restaurantCity: readiness.restaurantCity,
+          isFoodTruck: readiness.isFoodTruck,
+          cuisineType: readiness.cuisineType,
+        });
       }
 
       const menuIds = restaurantMenus.map((m) => m.id);
@@ -592,58 +775,42 @@ export function registerMenuRoutes(app: Express) {
         };
       });
 
-      // Determine if online ordering is enabled for this restaurant.
-      // Ordering is part of the $25/month subscription (or lifetime access).
-      // We also check trial status via users.trialEndsAt.
-      let orderingEnabled = false;
       const [restaurantRow] = await db
         .select({ ownerId: restaurants.ownerId, name: restaurants.name, city: restaurants.city, isFoodTruck: restaurants.isFoodTruck, cuisineType: restaurants.cuisineType })
         .from(restaurants)
         .where(eq(restaurants.id, restaurantId))
         .limit(1);
 
-      if (restaurantRow?.ownerId) {
-        const restaurantIds = restaurantMenus.map((m) => m.restaurantId);
-        // Check for active subscription (includes lifetime isLifetimeFree=true rows)
-        const [activeSub] = await db
-          .select({ id: restaurantSubscriptions.id })
-          .from(restaurantSubscriptions)
-          .where(
-            and(
-              inArray(restaurantSubscriptions.restaurantId, restaurantIds),
-              eq(restaurantSubscriptions.status, "active"),
-            ),
-          )
-          .limit(1);
-        if (activeSub) {
-          orderingEnabled = true;
-        } else {
-          // Check trial access
-          const [ownerRow] = await db
-            .select({ trialEndsAt: users.trialEndsAt, stripeSubscriptionId: users.stripeSubscriptionId })
-            .from(users)
-            .where(eq(users.id, restaurantRow.ownerId))
-            .limit(1);
-          if (
-            ownerRow?.trialEndsAt &&
-            new Date(ownerRow.trialEndsAt) > new Date()
-          ) {
-            orderingEnabled = true;
-          } else if (ownerRow?.stripeSubscriptionId) {
-            // Stripe subscription as final fallback (active check deferred to server-side gate)
-            orderingEnabled = true;
-          }
-        }
-      }
-
       res.json({
         menus: result,
-        orderingEnabled,
+        orderingEnabled: readiness.orderingEnabled,
+        readiness,
         restaurantName: restaurantRow?.name ?? null,
         restaurantCity: restaurantRow?.city ?? null,
         isFoodTruck: restaurantRow?.isFoodTruck ?? false,
         cuisineType: restaurantRow?.cuisineType ?? null,
       });
+    }),
+  );
+
+  app.get(
+    "/api/owner/restaurants/:restaurantId/ordering-readiness",
+    isAuthenticated,
+    isRestaurantOwner,
+    wrap(async (req, res) => {
+      const { restaurantId } = req.params;
+      await assertOwnsRestaurant(req.user.id, restaurantId);
+      res.json(await buildOrderingReadiness(restaurantId));
+    }),
+  );
+
+  app.get(
+    "/api/admin/restaurants/:restaurantId/ordering-readiness",
+    isAuthenticated,
+    isStaffOrAdmin,
+    wrap(async (req, res) => {
+      const { restaurantId } = req.params;
+      res.json(await buildOrderingReadiness(restaurantId));
     }),
   );
 
@@ -1161,6 +1328,74 @@ export function registerMenuRoutes(app: Express) {
         .where(eq(menus.id, menuId));
 
       res.json({ imported: imported.length, skipped, errors });
+    }),
+  );
+
+  /**
+   * POST /api/owner/menus/:menuId/pos-connection-request
+   * Capture a POS/menu-source connection request so operators can keep moving
+   * even before full OAuth/API sync is available for every provider.
+   */
+  app.post(
+    "/api/owner/menus/:menuId/pos-connection-request",
+    isAuthenticated,
+    isRestaurantOwner,
+    wrap(async (req, res) => {
+      const { menuId } = req.params;
+      const menu = await assertOwnsMenu(req.user.id, menuId);
+
+      const bodySchema = z.object({
+        source: z.enum([
+          "toast",
+          "square",
+          "clover",
+          "website",
+          "ubereats",
+          "doordash",
+          "gmb",
+          "other",
+        ]),
+        sourceUrl: z.string().url().optional().nullable().or(z.literal("")),
+        notes: z.string().max(1000).optional().nullable(),
+      });
+
+      const body = bodySchema.parse(req.body || {});
+      const sourceUrl = String(body.sourceUrl || "").trim();
+      const notes = String(body.notes || "").trim();
+
+      await db.insert(menuImportLogs).values({
+        restaurantId: menu.restaurantId,
+        importedByUserId: req.user.id,
+        source: body.source,
+        fileName: sourceUrl || null,
+        itemsImported: 0,
+        itemsSkipped: 0,
+        errors: [
+          {
+            type: "pos_connection_request",
+            source: body.source,
+            sourceUrl: sourceUrl || null,
+            notes: notes || null,
+            requestedAt: new Date().toISOString(),
+          },
+        ] as any,
+        status: "pending",
+      });
+
+      await db
+        .update(menus)
+        .set({
+          importSource: body.source,
+          updatedAt: new Date(),
+        })
+        .where(eq(menus.id, menuId));
+
+      res.status(202).json({
+        ok: true,
+        status: "pending",
+        message:
+          "Connection request saved. MealScout can use this source while the direct sync is being connected.",
+      });
     }),
   );
 

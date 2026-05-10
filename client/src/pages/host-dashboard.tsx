@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
-import { AlertCircle, Loader2 } from "lucide-react";
+import { AlertCircle, Calendar, CreditCard, Loader2, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -591,9 +591,104 @@ function HostDashboard() {
       : host.stripeOnboardingCompleted
         ? "Waiting on Stripe checks"
         : "Onboarding in progress";
+  const hasHostLocation = Boolean(host.businessName && host.address);
+  const hasAvailability = seriesList.length > 0;
+  const hostSetupItems = [
+    {
+      label: "Location",
+      description: hasHostLocation
+        ? "Host location is ready."
+        : "Add the place trucks can park or serve.",
+      done: hasHostLocation,
+      action: "Edit location",
+      href: "/parking-pass?setup=location",
+      icon: MapPin,
+    },
+    {
+      label: "Availability",
+      description: hasAvailability
+        ? `${seriesList.length} open call ${seriesList.length === 1 ? "series" : "series"} created.`
+        : "Create recurring or one-time food truck availability.",
+      done: hasAvailability,
+      action: "Create slots",
+      href: "#host-event-series",
+      icon: Calendar,
+    },
+    {
+      label: "Bookings",
+      description: "Review truck interest, bookings, and demand.",
+      done: demandQueue.length > 0 || seriesList.length > 0,
+      action: "Review demand",
+      href: "#host-demand",
+      icon: AlertCircle,
+    },
+    {
+      label: "Payouts",
+      description: hostStripePayoutReady
+        ? "Stripe payouts are enabled."
+        : "Connect Stripe so paid bookings can pay out.",
+      done: hostStripePayoutReady,
+      action: host.stripeConnectAccountId ? "Resume Stripe" : "Enable payouts",
+      href: "#host-payouts",
+      icon: CreditCard,
+    },
+  ];
+  const hostSetupComplete = hostSetupItems.filter((item) => item.done).length;
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-12 bg-[var(--bg-layered)] min-h-screen">
+      <div className="mb-6 rounded-2xl border border-orange-200 bg-orange-50 p-4 shadow-clean">
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-orange-700">
+              Host onboarding
+            </p>
+            <h1 className="mt-1 text-xl font-black text-orange-950">
+              Finish your parking host setup
+            </h1>
+            <p className="mt-1 text-sm text-orange-900/75">
+              Hosts are places where food trucks park or serve. Complete the
+              location, availability, bookings, and payout pieces so trucks know
+              when they can show up.
+            </p>
+          </div>
+          <span className="w-fit rounded-full bg-orange-600 px-3 py-1 text-xs font-bold text-white">
+            {hostSetupComplete}/{hostSetupItems.length} complete
+          </span>
+        </div>
+        <div className="grid gap-2 md:grid-cols-4">
+          {hostSetupItems.map((item) => {
+            const Icon = item.icon;
+            const content = (
+              <div className="h-full rounded-xl border border-orange-200 bg-white p-3 text-left transition hover:border-orange-400">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <Icon className="h-4 w-4 text-orange-700" />
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                    item.done
+                      ? "bg-emerald-100 text-emerald-700"
+                      : "bg-orange-100 text-orange-700"
+                  }`}>
+                    {item.done ? "Done" : "Next"}
+                  </span>
+                </div>
+                <p className="text-sm font-black text-orange-950">{item.label}</p>
+                <p className="mt-1 min-h-[2.5rem] text-xs text-orange-900/70">
+                  {item.description}
+                </p>
+                <p className="mt-2 text-xs font-bold text-orange-700">
+                  {item.action}
+                </p>
+              </div>
+            );
+            return item.href.startsWith("#") ? (
+              <a key={item.label} href={item.href}>{content}</a>
+            ) : (
+              <Link key={item.label} href={item.href}>{content}</Link>
+            );
+          })}
+        </div>
+      </div>
+
       {!hostStripePayoutReady && (
         <Alert className="mb-6 border-[color:var(--status-warning)]/30 bg-[color:var(--status-warning)]/10">
           <AlertCircle className="h-4 w-4 text-[color:var(--status-warning)]" />
@@ -637,7 +732,7 @@ function HostDashboard() {
         </Alert>
       )}
 
-      <div className="mb-6 rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-4">
+      <div id="host-payouts" className="mb-6 rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-4">
         <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 className="text-lg font-semibold text-[color:var(--text-primary)]">
@@ -704,7 +799,7 @@ function HostDashboard() {
         </div>
       </div>
 
-      <div className="mb-6 rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-4">
+      <div id="host-demand" className="mb-6 rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-4">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-lg font-semibold text-[color:var(--text-primary)]">
             Host Earnings
@@ -951,7 +1046,7 @@ function HostDashboard() {
         )}
       </div>
 
-      <section className="mb-12">
+      <section id="host-event-series" className="mb-12">
         <div className="mb-4">
           <h2 className="text-xl font-semibold text-[color:var(--text-primary)]">
             Event Series (Open Calls)

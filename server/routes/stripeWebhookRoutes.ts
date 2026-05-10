@@ -197,6 +197,21 @@ export function registerStripeWebhookRoutes(
                     syncError,
                   );
                 }
+
+                try {
+                  const amountPaidCents = Number((invoice as any).amount_paid || 0) || 0;
+                  await emailService.sendPaymentConfirmation(
+                    user,
+                    amountPaidCents,
+                    "standard-month",
+                    subscription.id,
+                  );
+                } catch (emailError) {
+                  console.error(
+                    "[WEBHOOK] Failed to send subscription payment confirmation:",
+                    emailError,
+                  );
+                }
               } else {
                 console.log(
                   `[WEBHOOK] Warning: No user found for subscription ${subscription.id}`,
@@ -214,8 +229,9 @@ export function registerStripeWebhookRoutes(
               await import("@shared/schema");
             const metadata = paymentIntent.metadata || {};
 
-            // Pickup order payment (menuOrderId metadata)
-            const pickupOrderId = metadata.pickupOrderId;
+            // Pickup order payment. Older intents used orderId; newer callers may
+            // send pickupOrderId. Accept both so paid orders do not stay pending.
+            const pickupOrderId = metadata.pickupOrderId || metadata.orderId;
             if (pickupOrderId) {
               try {
                 const { pickupOrders } = await import("@shared/schema");
@@ -238,7 +254,9 @@ export function registerStripeWebhookRoutes(
                     .where(eq(pickupOrders.id, order.id))
                     .returning();
 
-                  // Transfer subtotal (minus platform fee) to business Stripe Connect account
+                  // Transfer subtotal to the business when the customer paid fees.
+                  // If the merchant absorbs customer fees, reduce the transfer by
+                  // the combined MealScout + processing fee stored on the order.
                   if (order.stripeTransferGroupId && stripe) {
                     try {
                       const [restaurant] = await db
@@ -250,7 +268,8 @@ export function registerStripeWebhookRoutes(
                         ?.stripeConnectAccountId;
                       if (connectAccountId) {
                         const transferAmount = order.feePaidByBusiness
-                          ? order.subtotalCents - 100
+                          ? order.subtotalCents -
+                            Math.max(0, Number(order.platformFeeCents || 0) || 0)
                           : order.subtotalCents;
                         if (transferAmount > 0) {
                           await stripe.transfers.create({
@@ -307,16 +326,30 @@ export function registerStripeWebhookRoutes(
                   .where(eq(supplierOrders.id, String(supplierOrderId)))
                   .limit(1);
                 if (order) {
+                  const storedIntentId = String(
+                    (order as any).stripePaymentIntentId || "",
+                  ).trim();
+                  if (storedIntentId && storedIntentId !== paymentIntent.id) {
+                    console.warn(
+                      `[WEBHOOK] Supplier order ${supplierOrderId} ignored PaymentIntent ${paymentIntent.id}; expected ${storedIntentId}`,
+                    );
+                    break;
+                  }
                   // Idempotent: only mark paid if not already.
                   if (String((order as any).paymentStatus || "") !== "paid") {
                     await db
                       .update(supplierOrders)
                       .set({
                         paymentStatus: "paid",
+                        stripePaymentIntentId: storedIntentId || paymentIntent.id,
                         updatedAt: new Date(),
                       } as any)
                       .where(eq(supplierOrders.id, String(supplierOrderId)));
                   }
+                } else {
+                  console.warn(
+                    `[WEBHOOK] Supplier order ${supplierOrderId} not found for PaymentIntent ${paymentIntent.id}`,
+                  );
                 }
               } catch (supplierError) {
                 console.error(
@@ -1285,13 +1318,34 @@ export function registerStripeWebhookRoutes(
             if (supplierOrderId) {
               try {
                 const { supplierOrders } = await import("@shared/schema");
-                await db
-                  .update(supplierOrders)
-                  .set({
-                    paymentStatus: "unpaid",
-                    updatedAt: new Date(),
-                  } as any)
-                  .where(eq(supplierOrders.id, String(supplierOrderId)));
+                const [order] = await db
+                  .select()
+                  .from(supplierOrders)
+                  .where(eq(supplierOrders.id, String(supplierOrderId)))
+                  .limit(1);
+                if (order) {
+                  const storedIntentId = String(
+                    (order as any).stripePaymentIntentId || "",
+                  ).trim();
+                  if (storedIntentId && storedIntentId !== failedIntent.id) {
+                    console.warn(
+                      `[WEBHOOK] Supplier order ${supplierOrderId} ignored failed PaymentIntent ${failedIntent.id}; expected ${storedIntentId}`,
+                    );
+                    break;
+                  }
+                  await db
+                    .update(supplierOrders)
+                    .set({
+                      paymentStatus: "unpaid",
+                      stripePaymentIntentId: storedIntentId || failedIntent.id,
+                      updatedAt: new Date(),
+                    } as any)
+                    .where(eq(supplierOrders.id, String(supplierOrderId)));
+                } else {
+                  console.warn(
+                    `[WEBHOOK] Supplier order ${supplierOrderId} not found for failed PaymentIntent ${failedIntent.id}`,
+                  );
+                }
               } catch (supplierError) {
                 console.error(
                   "[WEBHOOK] Supplier order failure update failed:",

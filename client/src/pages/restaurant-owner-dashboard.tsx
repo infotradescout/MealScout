@@ -140,6 +140,12 @@ export default function RestaurantOwnerDashboard() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [selectedRestaurant, setSelectedRestaurant] = useState<string>("");
+  const dashboardParams =
+    typeof window !== "undefined"
+      ? new URLSearchParams(window.location.search)
+      : new URLSearchParams();
+  const requestedRestaurantId = dashboardParams.get("restaurantId");
+  const setupMode = dashboardParams.get("setup");
   const [analyticsDateRange, setAnalyticsDateRange] = useState({
     start: format(subDays(new Date(), 30), "yyyy-MM-dd"),
     end: format(new Date(), "yyyy-MM-dd"),
@@ -526,10 +532,17 @@ export default function RestaurantOwnerDashboard() {
 
   // Set default restaurant
   useEffect(() => {
+    if (
+      requestedRestaurantId &&
+      restaurants.some((restaurant) => restaurant.id === requestedRestaurantId)
+    ) {
+      setSelectedRestaurant(requestedRestaurantId);
+      return;
+    }
     if (restaurants.length > 0 && !selectedRestaurant) {
       setSelectedRestaurant(restaurants[0].id);
     }
-  }, [restaurants, selectedRestaurant]);
+  }, [requestedRestaurantId, restaurants, selectedRestaurant]);
 
   // Get current restaurant data
   const currentRestaurant = restaurants.find(
@@ -1255,7 +1268,18 @@ export default function RestaurantOwnerDashboard() {
     ...(canManageBilling ? (["credits"] as const) : []),
     ...(canManageParkingPass ? (["bookings", "foodtruck"] as const) : []),
   ];
-  const defaultTab = availableTabs[0] ?? "analytics";
+  const requestedDefaultTab =
+    setupMode === "schedule" || dashboardParams.get("truck") === "1"
+      ? "foodtruck"
+      : setupMode === "bookings"
+        ? "bookings"
+        : setupMode === "analytics"
+          ? "analytics"
+          : null;
+  const defaultTab =
+    requestedDefaultTab && availableTabs.includes(requestedDefaultTab as any)
+      ? requestedDefaultTab
+      : availableTabs[0] ?? "analytics";
 
   if (loadingRestaurants) {
     return (
@@ -1363,6 +1387,72 @@ export default function RestaurantOwnerDashboard() {
         </div>
       )}
 
+      {currentRestaurant && setupMode && (
+        <div className="mb-6 rounded-2xl border border-orange-200 bg-orange-50 p-4 shadow-clean">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-orange-700">
+                Business onboarding
+              </p>
+              <h2 className="mt-1 text-lg font-black text-orange-950">
+                Finish {currentRestaurant.name || "your business"} setup
+              </h2>
+              <p className="mt-1 text-sm text-orange-900/75">
+                Your personal account is active. Now complete the business pieces
+                customers actually use: profile, menu, schedule/live status, and
+                bookings.
+              </p>
+            </div>
+            <Badge className="w-fit bg-orange-600 text-white">
+              {isFoodTruck ? "Truck profile" : "Business profile"}
+            </Badge>
+          </div>
+
+          <div className="mt-4 grid gap-2 sm:grid-cols-4">
+            <Link
+              href={`/restaurant-owner-dashboard?setup=profile&restaurantId=${encodeURIComponent(
+                String(selectedRestaurant),
+              )}`}
+            >
+              <Button variant="outline" className="w-full justify-start bg-white">
+                <Store className="mr-2 h-4 w-4" />
+                Profile
+              </Button>
+            </Link>
+            <Link
+              href={`/menu-builder?src=onboarding&restaurantId=${encodeURIComponent(
+                String(selectedRestaurant),
+              )}`}
+            >
+              <Button variant="outline" className="w-full justify-start bg-white">
+                <ShoppingCart className="mr-2 h-4 w-4" />
+                Menu
+              </Button>
+            </Link>
+            <Link
+              href={`/restaurant-owner-dashboard?setup=schedule&restaurantId=${encodeURIComponent(
+                String(selectedRestaurant),
+              )}${isFoodTruck ? "&truck=1" : ""}`}
+            >
+              <Button variant="outline" className="w-full justify-start bg-white">
+                <Clock className="mr-2 h-4 w-4" />
+                Schedule
+              </Button>
+            </Link>
+            <Link
+              href={`/restaurant-owner-dashboard?setup=bookings&restaurantId=${encodeURIComponent(
+                String(selectedRestaurant),
+              )}`}
+            >
+              <Button variant="outline" className="w-full justify-start bg-white">
+                <Calendar className="mr-2 h-4 w-4" />
+                Bookings
+              </Button>
+            </Link>
+          </div>
+        </div>
+      )}
+
       {/* Post-Upgrade Onboarding Checklist — shown to subscribed users until all items are complete */}
       {subscription?.hasAccess &&
         currentRestaurant &&
@@ -1390,26 +1480,31 @@ export default function RestaurantOwnerDashboard() {
             (currentRestaurant as any).schedulePublished,
           );
           const hasDeal = (stats?.activeDeals || 0) > 0;
+          const profileSetupHref = `/restaurant-owner-dashboard?setup=profile&restaurantId=${encodeURIComponent(
+            String(selectedRestaurant),
+          )}`;
           const checklistItems = [
             {
               label: "Profile photo or logo uploaded",
               done: hasPhoto,
-              href: `/edit-restaurant/${selectedRestaurant}`,
+              href: profileSetupHref,
             },
             {
               label: "Address or service area set",
               done: hasAddress,
-              href: `/edit-restaurant/${selectedRestaurant}`,
+              href: profileSetupHref,
             },
             {
               label: "Phone number added",
               done: hasPhone,
-              href: `/edit-restaurant/${selectedRestaurant}`,
+              href: profileSetupHref,
             },
             {
               label: "Online menu linked or built",
               done: hasMenu,
-              href: `/menu-builder/${selectedRestaurant}`,
+              href: `/menu-builder?restaurantId=${encodeURIComponent(
+                String(selectedRestaurant),
+              )}`,
             },
             {
               label: "Schedule or operating hours published",

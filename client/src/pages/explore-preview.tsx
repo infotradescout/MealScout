@@ -396,9 +396,22 @@ function getGreetingTime(): "morning" | "afternoon" | "evening" {
   return "evening";
 }
 
-const SCOUT_TRUCK_RADIUS_KM = 8; // about 5 miles
-const SCOUT_LOCAL_RADIUS_KM = 12; // about 7.5 miles
-const SCOUT_EVENT_RADIUS_KM = 24; // events can justify a slightly wider local lane
+const DISCOVERY_RADIUS_STORAGE_KEY = "mealscout:discovery-radius-km";
+const DEFAULT_DISCOVERY_RADIUS_KM = 12; // about 7.5 miles
+const MIN_DISCOVERY_RADIUS_KM = 3;
+const MAX_DISCOVERY_RADIUS_KM = 40;
+
+function clampDiscoveryRadiusKm(value: number): number {
+  if (!Number.isFinite(value)) return DEFAULT_DISCOVERY_RADIUS_KM;
+  return Math.max(MIN_DISCOVERY_RADIUS_KM, Math.min(MAX_DISCOVERY_RADIUS_KM, value));
+}
+
+function readDiscoveryRadiusKm(): number {
+  if (typeof window === "undefined") return DEFAULT_DISCOVERY_RADIUS_KM;
+  const stored = Number(window.localStorage.getItem(DISCOVERY_RADIUS_STORAGE_KEY));
+  if (!Number.isFinite(stored)) return DEFAULT_DISCOVERY_RADIUS_KM;
+  return clampDiscoveryRadiusKm(stored);
+}
 
 type ScoutCoords = { lat: number; lng: number };
 
@@ -591,6 +604,9 @@ export default function ExplorePreview() {
   /* --------- location --------- */
 
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [discoveryRadiusKm, setDiscoveryRadiusKm] = useState<number>(() =>
+    readDiscoveryRadiusKm(),
+  );
   const [locationName, setLocationName] = useState<string>("Your area");
   const [locationStatus, setLocationStatus] = useState<
     "idle" | "requesting" | "ready" | "denied"
@@ -623,6 +639,14 @@ export default function ExplorePreview() {
     requestLocation();
   }, [requestLocation]);
 
+  const updateDiscoveryRadiusKm = useCallback((value: number) => {
+    const nextRadius = clampDiscoveryRadiusKm(value);
+    setDiscoveryRadiusKm(nextRadius);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(DISCOVERY_RADIUS_STORAGE_KEY, String(nextRadius));
+    }
+  }, []);
+
   const shortLocation = useMemo(() => {
     if (!locationName) return "Your area";
     return locationName.split(",")[0] || locationName;
@@ -636,13 +660,13 @@ export default function ExplorePreview() {
     isError: liveTrucksError,
   } = useQuery<LiveTrucksResponse>({
     queryKey: coords
-      ? ["/api/trucks/live", coords.lat, coords.lng]
+      ? ["/api/trucks/live", coords.lat, coords.lng, discoveryRadiusKm]
       : ["/api/trucks/live", "no-location"],
     enabled: !!coords,
     queryFn: async () => {
       if (!coords) return { trucks: [] };
       const response = await fetch(
-        `/api/trucks/live?lat=${coords.lat}&lng=${coords.lng}&radiusKm=${SCOUT_TRUCK_RADIUS_KM}`,
+        `/api/trucks/live?lat=${coords.lat}&lng=${coords.lng}&radiusKm=${discoveryRadiusKm}`,
         { credentials: "include" },
       );
       if (!response.ok) throw new Error("Failed to load live trucks");
@@ -670,11 +694,11 @@ export default function ExplorePreview() {
         coords,
         truck.latitude ?? truck.lat,
         truck.longitude ?? truck.lng,
-        SCOUT_TRUCK_RADIUS_KM,
+        discoveryRadiusKm,
         fallbackKm,
       );
     });
-  }, [coords, liveTrucksData]);
+  }, [coords, discoveryRadiusKm, liveTrucksData]);
 
   /* --------- featured deals --------- */
 
@@ -725,22 +749,22 @@ export default function ExplorePreview() {
         coords,
         event.latitude ?? event.lat ?? event.venueLat,
         event.longitude ?? event.lng ?? event.venueLng,
-        SCOUT_EVENT_RADIUS_KM,
+        discoveryRadiusKm,
       ),
     );
-  }, [coords, events]);
+  }, [coords, discoveryRadiusKm, events]);
 
   /* --------- nearby restaurants --------- */
 
   const { data: nearbyRestaurantsData, isLoading: nearbyRestaurantsLoading } = useQuery<RestaurantSummary[]>({
     queryKey: coords
-      ? ["/api/restaurants/subscribed", coords.lat, coords.lng]
+      ? ["/api/restaurants/subscribed", coords.lat, coords.lng, discoveryRadiusKm]
       : ["/api/restaurants/subscribed", "no-location"],
     enabled: !!coords,
     queryFn: async () => {
       if (!coords) return [];
       const response = await fetch(
-        `/api/restaurants/subscribed/${coords.lat}/${coords.lng}?radius=${SCOUT_LOCAL_RADIUS_KM}`,
+        `/api/restaurants/subscribed/${coords.lat}/${coords.lng}?radius=${discoveryRadiusKm}`,
         { credentials: "include" },
       );
       if (!response.ok) return [];
@@ -763,11 +787,11 @@ export default function ExplorePreview() {
         coords,
         restaurant.latitude ?? restaurant.lat,
         restaurant.longitude ?? restaurant.lng,
-        SCOUT_LOCAL_RADIUS_KM,
+        discoveryRadiusKm,
         fallbackKm,
       );
     });
-  }, [coords, nearbyRestaurantsData]);
+  }, [coords, discoveryRadiusKm, nearbyRestaurantsData]);
 
   const restaurantMenuPreviewQueries = useQueries({
     queries: nearbyRestaurants.slice(0, 8).map((restaurant) => ({
@@ -800,13 +824,13 @@ export default function ExplorePreview() {
 
   const { data: localMenuItemsData = [] } = useQuery<LocalMenuItemFeedItem[]>({
     queryKey: coords
-      ? ["/api/menus/local-items", coords.lat, coords.lng]
+      ? ["/api/menus/local-items", coords.lat, coords.lng, discoveryRadiusKm]
       : ["/api/menus/local-items", "no-location"],
     enabled: !!coords,
     queryFn: async () => {
       if (!coords) return [];
       const response = await fetch(
-        `/api/menus/local-items?lat=${coords.lat}&lng=${coords.lng}&radiusKm=${SCOUT_LOCAL_RADIUS_KM}&limit=24`,
+        `/api/menus/local-items?lat=${coords.lat}&lng=${coords.lng}&radiusKm=${discoveryRadiusKm}&limit=24`,
         { credentials: "include" },
       );
       if (!response.ok) return [];
@@ -921,22 +945,22 @@ export default function ExplorePreview() {
         coords,
         listing.latitude ?? listing.host?.latitude,
         listing.longitude ?? listing.host?.longitude,
-        SCOUT_LOCAL_RADIUS_KM,
+        discoveryRadiusKm,
       );
     });
-  }, [coords, parkingPassHosts]);
+  }, [coords, discoveryRadiusKm, parkingPassHosts]);
 
   /* --------- nearby deals (location-aware) --------- */
 
   const { data: nearbyDealsData } = useQuery<DealSummary[]>({
     queryKey: coords
-      ? ["/api/deals/nearby", coords.lat, coords.lng]
+      ? ["/api/deals/nearby", coords.lat, coords.lng, discoveryRadiusKm]
       : ["/api/deals/nearby", "no-location"],
     enabled: !!coords,
     queryFn: async () => {
       if (!coords) return [];
       const response = await fetch(
-        `/api/deals/nearby/${coords.lat}/${coords.lng}?radius=${SCOUT_LOCAL_RADIUS_KM}`,
+        `/api/deals/nearby/${coords.lat}/${coords.lng}?radius=${discoveryRadiusKm}`,
         { credentials: "include" },
       );
       if (!response.ok) return [];
@@ -1081,6 +1105,8 @@ export default function ExplorePreview() {
   const userPushedMapRef = useRef(false);
   const [sheetState, setSheetState] = useState<"default" | "fullMap">("default");
   const [selectedLiveTruck, setSelectedLiveTruck] = useState<LiveTruckSummary | null>(null);
+  const [selectedMapMarker, setSelectedMapMarker] = useState<MapAdapterMarker | null>(null);
+  const [mapBounds, setMapBounds] = useState<MapBoundsLike | null>(null);
   // Once the full map has been opened once, keep GoogleMapSurface mounted
   // (just hidden) so it doesn't re-initialize on every collapse/expand.
   // Using state (not ref) so React re-renders when the map should first mount.
@@ -1097,6 +1123,12 @@ export default function ExplorePreview() {
     setGoogleMapFailed(false);
     setSheetState("fullMap");
   }, [coords]);
+
+  const collapseScoutMap = useCallback(() => {
+    setSheetState("default");
+    setSelectedLiveTruck(null);
+    setSelectedMapMarker(null);
+  }, []);
 
   useEffect(() => {
     if (!hasMapKey) return;
@@ -1140,8 +1172,8 @@ export default function ExplorePreview() {
     setMapCenter(shiftCenterForRightQuadrant(coords.lat, coords.lng, HERO_ZOOM));
   }, [coords]);
 
-  const handleMapBoundsChanged = useCallback((_b: MapBoundsLike) => {
-    /* no-op for preview */
+  const handleMapBoundsChanged = useCallback((bounds: MapBoundsLike) => {
+    setMapBounds(bounds);
   }, []);
   const handleMapZoomChanged = useCallback((z: number) => {
     setMapZoom(z);
@@ -1173,15 +1205,19 @@ export default function ExplorePreview() {
         const truck = liveTruckById.get(String(marker.sourceId));
         if (truck) {
           selectLiveTruck(truck);
+          setSelectedMapMarker(null);
           return;
         }
         navigate(`/truck/${marker.sourceId}`);
       }
-      else if (marker.kind === "restaurant") navigate(`/restaurant/${marker.sourceId}`);
-      else if (marker.kind === "parking") navigate(`/parking-pass`);
-      else if (marker.kind === "event") navigate(`/events`);
+      else if (marker.kind === "restaurant" || marker.kind === "parking" || marker.kind === "event") {
+        setSelectedLiveTruck(null);
+        setSelectedMapMarker(marker);
+        setMapCenter({ lat: marker.lat, lng: marker.lng });
+        setMapZoom(Math.max(mapZoom, 15));
+      }
     },
-    [liveTruckById, navigate, selectLiveTruck],
+    [liveTruckById, mapZoom, navigate, selectLiveTruck],
   );
 
   /* --------- pull-down-to-fullscreen sheet --------- */
@@ -1200,6 +1236,14 @@ export default function ExplorePreview() {
       }, 340); // slightly after the 320ms CSS transition
       return () => clearTimeout(timer);
     }
+  }, [sheetState]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    document.body.classList.toggle("mealscout-map-fullscreen", sheetState === "fullMap");
+    return () => {
+      document.body.classList.remove("mealscout-map-fullscreen");
+    };
   }, [sheetState]);
 
   const dragStartY = useRef<number | null>(null);
@@ -1231,9 +1275,9 @@ export default function ExplorePreview() {
       return;
     }
     if (delta < -40 && sheetState === "fullMap") {
-      setSheetState("default");
+      collapseScoutMap();
     }
-  }, [openScoutMap, sheetState]);
+  }, [collapseScoutMap, openScoutMap, sheetState]);
 
   const handleSheetMouseDown = useCallback((e: React.MouseEvent) => {
     mouseDragStartY.current = e.clientY;
@@ -1257,9 +1301,9 @@ export default function ExplorePreview() {
       return;
     }
     if (delta < -24 && sheetState === "fullMap") {
-      setSheetState("default");
+      collapseScoutMap();
     }
-  }, [openScoutMap, sheetState]);
+  }, [collapseScoutMap, openScoutMap, sheetState]);
 
   useEffect(() => {
     if (sheetState !== "default") return;
@@ -1541,7 +1585,7 @@ export default function ExplorePreview() {
           {sheetState === "fullMap" && (
             <button
               type="button"
-              onClick={() => setSheetState("default")}
+              onClick={collapseScoutMap}
               aria-label="Collapse map and return to discover"
               className="absolute z-30 right-4 top-[calc(env(safe-area-inset-top)+0.75rem)] inline-flex items-center gap-2 h-12 px-4 rounded-full bg-[#120805]/75 backdrop-blur-md ring-1 ring-orange-300/60 text-orange-100 font-semibold"
               style={{
@@ -1561,6 +1605,8 @@ export default function ExplorePreview() {
               parkingHostCount={localParkingPassHosts.length}
               eventCount={visibleEvents.length}
               localSignalCount={localSignalCount}
+              discoveryRadiusKm={discoveryRadiusKm}
+              onRadiusChange={updateDiscoveryRadiusKm}
               onRecenter={() => {
                 if (coords) {
                   setMapCenter(coords);
@@ -1575,6 +1621,34 @@ export default function ExplorePreview() {
               truck={selectedLiveTruck}
               userLocation={coords}
               onClose={() => setSelectedLiveTruck(null)}
+            />
+          )}
+
+          {sheetState === "fullMap" && selectedMapMarker && (
+            <MapPlaceCard
+              marker={selectedMapMarker}
+              userLocation={coords}
+              onClose={() => setSelectedMapMarker(null)}
+            />
+          )}
+
+          {sheetState === "fullMap" && mapBounds && (
+            <MapEdgeIndicators
+              markers={allMapMarkers}
+              bounds={mapBounds}
+              center={mapCenter || coords}
+              selectedId={selectedLiveTruck ? String(selectedLiveTruck.id) : selectedMapMarker?.id || null}
+              onSelect={(marker) => {
+                setMapCenter({ lat: marker.lat, lng: marker.lng });
+                setMapZoom(Math.max(mapZoom, 15));
+                if (marker.kind === "truck") {
+                  const truck = liveTruckById.get(String(marker.sourceId));
+                  if (truck) setSelectedLiveTruck(truck);
+                } else {
+                  setSelectedLiveTruck(null);
+                  setSelectedMapMarker(marker);
+                }
+              }}
             />
           )}
 
@@ -1639,8 +1713,9 @@ export default function ExplorePreview() {
               dealCount={allDeals.length}
               eventCount={visibleEvents.length}
               localSignalCount={localSignalCount}
+              discoveryRadiusKm={discoveryRadiusKm}
+              onRadiusChange={updateDiscoveryRadiusKm}
               onRefreshLocation={requestLocation}
-              onOpenMap={openScoutMap}
             />
 
             {/* ── EXPLORE BY CRAVING ── */}
@@ -1919,8 +1994,9 @@ function LocalFoodDashboard({
   dealCount,
   eventCount,
   localSignalCount,
+  discoveryRadiusKm,
+  onRadiusChange,
   onRefreshLocation,
-  onOpenMap,
 }: {
   locationLabel: string;
   locationStatus: "idle" | "requesting" | "ready" | "denied";
@@ -1931,8 +2007,9 @@ function LocalFoodDashboard({
   dealCount: number;
   eventCount: number;
   localSignalCount: number;
+  discoveryRadiusKm: number;
+  onRadiusChange: (value: number) => void;
   onRefreshLocation: () => void;
-  onOpenMap: () => void;
 }) {
   const hasLocation = locationStatus === "ready";
   const signalLabel =
@@ -1943,90 +2020,45 @@ function LocalFoodDashboard({
         : "Location needed";
 
   const stats = [
-    {
-      label: "Trucks",
-      value: liveTruckCount,
-      detail: liveTruckCount > 0 ? "live now" : "watching",
-      href: "/truck-discovery",
-      icon: <Flame className="h-4 w-4" aria-hidden="true" />,
-    },
-    {
-      label: "Local spots",
-      value: restaurantCount,
-      detail: restaurantCount > 0 ? "nearby" : "scouting",
-      href: "/find-food",
-      icon: <MapPin className="h-4 w-4" aria-hidden="true" />,
-    },
-    {
-      label: "Menu items",
-      value: menuItemCount,
-      detail: menuItemCount > 0 ? "available" : "scanning",
-      href: DISCOVERY_LAYERS.menuItems.href,
-      icon: <Utensils className="h-4 w-4" aria-hidden="true" />,
-    },
-    {
-      label: "Trending",
-      value: "Live",
-      detail: "local heat",
-      href: DISCOVERY_LAYERS.trending.href,
-      icon: <TrendingUp className="h-4 w-4" aria-hidden="true" />,
-    },
-    {
-      label: "Deals",
-      value: dealCount,
-      detail: dealCount > 0 ? "active" : "none posted",
-      href: "/deals",
-      icon: <Tag className="h-4 w-4" aria-hidden="true" />,
-    },
-    {
-      label: "Events",
-      value: eventCount,
-      detail: eventCount > 0 ? "coming up" : "quiet",
-      href: "/events",
-      icon: <CalendarDays className="h-4 w-4" aria-hidden="true" />,
-    },
-    {
-      label: "Truck hosts",
-      value: parkingHostCount,
-      detail: parkingHostCount > 0 ? "places to park" : "none nearby",
-      href: "/parking-pass",
-      icon: <MapPin className="h-4 w-4" aria-hidden="true" />,
-    },
+    { label: "Trucks", value: liveTruckCount, href: "/truck-discovery" },
+    { label: "Menu", value: menuItemCount, href: DISCOVERY_LAYERS.menuItems.href },
+    { label: "Food", value: restaurantCount, href: "/find-food" },
+    { label: "Deals", value: dealCount, href: "/deals" },
+    { label: "Events", value: eventCount, href: "/events" },
+    { label: "Hosts", value: parkingHostCount, href: "/parking-pass" },
   ];
 
   const lanes = [
     { label: "All trucks", href: "/truck-discovery" },
     { label: "Trending", href: DISCOVERY_LAYERS.trending.href },
-    { label: "Find dinner", href: "/find-food" },
     { label: "Menus", href: DISCOVERY_LAYERS.menuItems.href },
+    { label: "Find dinner", href: "/find-food" },
     { label: "Deals", href: "/deals" },
-    { label: "Events", href: "/events" },
-    { label: "Host spots", href: "/parking-pass" },
-    { label: "Saved", href: "/favorites" },
   ];
+  const radiusOptions = [5, 12, 25, 40];
+  const radiusMiles = Math.max(1, Math.round(discoveryRadiusKm * 0.621371));
 
   return (
-    <section className="px-5 pt-1 pb-10">
-      <div className="rounded-[2rem] overflow-hidden bg-white/[0.045] ring-1 ring-white/10 backdrop-blur-md">
+    <section className="px-5 pt-1 pb-6">
+      <div className="rounded-[1.65rem] overflow-hidden bg-white/[0.045] ring-1 ring-white/10 backdrop-blur-md">
         <div
-          className="px-5 pt-5 pb-4"
+          className="px-4 py-4"
           style={{
             backgroundImage:
               "radial-gradient(circle at 16% 0%, rgba(255,90,47,0.22), transparent 34%), radial-gradient(circle at 84% 8%, rgba(34,197,94,0.10), transparent 30%)",
           }}
         >
-          <div className="flex items-start justify-between gap-4">
+          <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-[11px] uppercase tracking-[0.22em] text-orange-200/75 font-bold">
+              <p className="text-[10px] uppercase tracking-[0.2em] text-orange-200/75 font-bold">
                 Today's Food Board
               </p>
-              <h2 className="mt-1 text-white text-2xl font-bold leading-tight">
+              <h2 className="mt-1 text-white text-xl font-bold leading-tight">
                 {locationLabel}
               </h2>
-              <p className="mt-2 text-white/66 text-sm leading-relaxed max-w-[36rem]">
-                Your local dashboard for food trucks, independent restaurants,
-                bars, deals, events, host spots, and saved places. Built for
-                local food discovery, not generic fast-food noise.
+              <p className="mt-1.5 text-white/62 text-xs leading-relaxed max-w-[32rem]">
+                Local food signal from trucks, menus, independent spots, deals,
+                events, and host locations near you.
               </p>
             </div>
             <span className="shrink-0 rounded-full bg-[#120805]/35 ring-1 ring-orange-300/25 px-3 py-1 text-[11px] font-semibold text-orange-100">
@@ -2034,62 +2066,79 @@ function LocalFoodDashboard({
             </span>
           </div>
 
-          <div className="mt-4 flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={onOpenMap}
-              className="inline-flex items-center gap-2 rounded-full bg-orange-300 text-[#1a0d08] px-3.5 py-2 text-sm font-bold active:scale-[0.98]"
-            >
-              <MapPin className="h-4 w-4" aria-hidden="true" />
-              Open map
-            </button>
-            <button
-              type="button"
-              onClick={onRefreshLocation}
-              className="inline-flex items-center gap-2 rounded-full bg-[#120805]/35 ring-1 ring-white/12 text-white px-3.5 py-2 text-sm font-semibold active:scale-[0.98]"
-            >
-              <Search className="h-4 w-4 text-orange-200" aria-hidden="true" />
-              Refresh local signal
-            </button>
-          </div>
-        </div>
-
-        <div className="px-4 pb-4">
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+          <div className="mt-3 grid grid-cols-3 gap-2">
             {stats.map((item) => (
               <Link
                 key={item.label}
                 href={item.href}
-                className="rounded-2xl bg-[#120805]/30 ring-1 ring-white/8 px-3 py-3 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
+                className="rounded-2xl bg-[#120805]/30 ring-1 ring-white/8 px-3 py-2.5 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
               >
-                <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-orange-300/12 text-orange-200 ring-1 ring-orange-300/20">
-                  {item.icon}
-                </span>
-                <p className="mt-2 text-white text-lg font-bold leading-none">
+                <p className="text-white text-lg font-bold leading-none">
                   {item.value}
                 </p>
-                <p className="mt-1 text-white/82 text-xs font-semibold">
+                <p className="mt-1 text-white/62 text-[11px] font-semibold">
                   {item.label}
-                </p>
-                <p className="mt-0.5 text-white/45 text-[11px]">
-                  {item.detail}
                 </p>
               </Link>
             ))}
           </div>
 
-          <div className="mt-4 overflow-x-auto atmo-hide-scrollbar -mr-4">
-            <div className="flex gap-2 pr-4">
+          <div className="mt-3 rounded-2xl bg-[#120805]/30 ring-1 ring-white/8 p-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.18em] text-orange-200/70 font-bold">
+                  Discovery radius
+                </p>
+                <p className="mt-0.5 text-white text-sm font-semibold">
+                  {radiusMiles} mi around you
+                </p>
+              </div>
+              <div className="flex rounded-full bg-black/25 p-1 ring-1 ring-white/10">
+                {radiusOptions.map((radius) => {
+                  const isActive = discoveryRadiusKm === radius;
+                  return (
+                    <button
+                      key={radius}
+                      type="button"
+                      onClick={() => onRadiusChange(radius)}
+                      className={[
+                        "rounded-full px-2.5 py-1 text-[11px] font-bold transition-colors",
+                        isActive
+                          ? "bg-orange-400 text-[#1b0b02]"
+                          : "text-white/62 hover:text-white",
+                      ].join(" ")}
+                      aria-pressed={isActive}
+                    >
+                      {Math.round(radius * 0.621371)} mi
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-3 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onRefreshLocation}
+              className="shrink-0 inline-flex items-center gap-2 rounded-full bg-[#120805]/35 ring-1 ring-white/12 text-white px-3 py-2 text-xs font-semibold active:scale-[0.98]"
+            >
+              <Search className="h-3.5 w-3.5 text-orange-200" aria-hidden="true" />
+              Refresh
+            </button>
+            <div className="min-w-0 flex-1 overflow-x-auto atmo-hide-scrollbar">
+              <div className="flex gap-2 pr-1">
               {lanes.map((lane) => (
                 <Link
                   key={lane.href}
                   href={lane.href}
-                  className="shrink-0 inline-flex items-center gap-1.5 rounded-full bg-white/[0.06] ring-1 ring-white/10 px-3 py-2 text-sm font-semibold text-white/82 active:scale-[0.98]"
+                  className="shrink-0 inline-flex items-center gap-1.5 rounded-full bg-white/[0.06] ring-1 ring-white/10 px-3 py-2 text-xs font-semibold text-white/82 active:scale-[0.98]"
                 >
                   {lane.label}
-                  <ChevronRight className="h-4 w-4 text-orange-200" aria-hidden="true" />
+                  <ChevronRight className="h-3.5 w-3.5 text-orange-200" aria-hidden="true" />
                 </Link>
               ))}
+              </div>
             </div>
           </div>
         </div>
@@ -3357,6 +3406,83 @@ function LiveTruckMapCard({
   );
 }
 
+function MapPlaceCard({
+  marker,
+  userLocation,
+  onClose,
+}: {
+  marker: MapAdapterMarker;
+  userLocation?: { lat: number; lng: number } | null;
+  onClose: () => void;
+}) {
+  const destination =
+    marker.kind === "restaurant"
+      ? `/restaurant/${marker.sourceId}`
+      : marker.kind === "parking"
+        ? "/parking-pass"
+        : "/events";
+  const label =
+    marker.kind === "restaurant"
+      ? "Food spot"
+      : marker.kind === "parking"
+        ? "Truck host"
+        : "Local event";
+  const action =
+    marker.kind === "restaurant"
+      ? "Open profile"
+      : marker.kind === "parking"
+        ? "See host spots"
+        : "See events";
+  const originParam = userLocation ? `&origin=${userLocation.lat},${userLocation.lng}` : "";
+  const directionsUrl = `https://www.google.com/maps/dir/?api=1${originParam}&destination=${marker.lat},${marker.lng}&travelmode=driving`;
+
+  return (
+    <div
+      className="absolute left-4 right-4 bottom-[calc(env(safe-area-inset-bottom)+7.25rem)] z-30 rounded-3xl bg-[#120805]/88 p-4 text-white ring-1 ring-orange-300/35 backdrop-blur-xl"
+      style={{ boxShadow: "0 22px 70px rgba(0,0,0,0.62), 0 0 24px rgba(255,90,47,0.18)" }}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="inline-flex items-center gap-1.5 rounded-full bg-orange-500/18 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-orange-200 ring-1 ring-orange-300/25">
+            {label}
+          </div>
+          <h3 className="mt-2 truncate text-lg font-black">
+            {marker.title || label}
+          </h3>
+          {marker.subtitle ? (
+            <p className="mt-1 text-sm text-orange-100/75">{marker.subtitle}</p>
+          ) : null}
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-full px-3 py-1 text-xs font-bold text-white/60 ring-1 ring-white/10"
+        >
+          Close
+        </button>
+      </div>
+      <div className="mt-4 grid grid-cols-2 gap-2">
+        <Link
+          href={destination}
+          className="inline-flex items-center justify-center gap-2 rounded-2xl bg-orange-500 px-3 py-3 text-center text-xs font-black text-[#160904]"
+        >
+          {action}
+          <ChevronRight className="h-4 w-4" aria-hidden="true" />
+        </Link>
+        <a
+          href={directionsUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white/8 px-3 py-3 text-center text-xs font-black text-white ring-1 ring-white/10"
+        >
+          Directions
+          <Navigation2 className="h-4 w-4 text-orange-300" aria-hidden="true" />
+        </a>
+      </div>
+    </div>
+  );
+}
+
 function ScoutMapHud({
   locationLabel,
   liveTruckCount,
@@ -3364,6 +3490,8 @@ function ScoutMapHud({
   parkingHostCount,
   eventCount,
   localSignalCount,
+  discoveryRadiusKm,
+  onRadiusChange,
   onRecenter,
 }: {
   locationLabel: string;
@@ -3372,8 +3500,12 @@ function ScoutMapHud({
   parkingHostCount: number;
   eventCount: number;
   localSignalCount: number;
+  discoveryRadiusKm: number;
+  onRadiusChange: (value: number) => void;
   onRecenter: () => void;
 }) {
+  const radiusOptions = [5, 12, 25, 40];
+
   return (
     <div className="pointer-events-none absolute left-4 right-4 top-[calc(env(safe-area-inset-top)+4.5rem)] z-20">
       <div
@@ -3409,6 +3541,33 @@ function ScoutMapHud({
           <MapHudCount label="Events" value={eventCount} />
         </div>
 
+        <div className="mt-3 flex items-center justify-between gap-3 rounded-2xl bg-white/7 px-3 py-2 ring-1 ring-white/10">
+          <span className="text-xs font-bold text-white/72">
+            Radius
+          </span>
+          <div className="flex rounded-full bg-black/25 p-1">
+            {radiusOptions.map((radius) => {
+              const isActive = discoveryRadiusKm === radius;
+              return (
+                <button
+                  key={radius}
+                  type="button"
+                  onClick={() => onRadiusChange(radius)}
+                  className={[
+                    "rounded-full px-2 py-1 text-[10px] font-black transition-colors",
+                    isActive
+                      ? "bg-orange-400 text-[#1b0b02]"
+                      : "text-white/58 hover:text-white",
+                  ].join(" ")}
+                  aria-pressed={isActive}
+                >
+                  {Math.round(radius * 0.621371)} mi
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         {localSignalCount === 0 ? (
           <div className="mt-3 rounded-2xl bg-white/7 px-3 py-2 text-xs text-white/72 ring-1 ring-white/10">
             No live local pins right here yet. Move the map or widen discovery from the feed below.
@@ -3425,6 +3584,81 @@ function MapHudCount({ label, value }: { label: string; value: number }) {
       <p className="text-base font-black text-orange-200">{value}</p>
       <p className="text-[10px] font-bold uppercase tracking-wide text-white/48">{label}</p>
     </div>
+  );
+}
+
+function MapEdgeIndicators({
+  markers,
+  bounds,
+  center,
+  selectedId,
+  onSelect,
+}: {
+  markers: MapAdapterMarker[];
+  bounds: MapBoundsLike;
+  center?: { lat: number; lng: number } | null;
+  selectedId?: string | null;
+  onSelect: (marker: MapAdapterMarker) => void;
+}) {
+  if (!center) return null;
+  const offscreen = markers
+    .filter((marker) => marker.kind !== "user")
+    .filter((marker) => marker.id !== selectedId && marker.sourceId !== selectedId)
+    .filter((marker) => !bounds.contains([marker.lat, marker.lng]))
+    .map((marker) => {
+      const dx = marker.lng - center.lng;
+      const dy = marker.lat - center.lat;
+      const horizontal = Math.abs(dx) > Math.abs(dy);
+      const edge = horizontal ? (dx > 0 ? "right" : "left") : dy > 0 ? "top" : "bottom";
+      const distanceScore = Math.sqrt(dx * dx + dy * dy);
+      return { marker, edge, distanceScore };
+    })
+    .sort((a, b) => a.distanceScore - b.distanceScore)
+    .slice(0, 8);
+
+  if (offscreen.length === 0) return null;
+
+  const byEdge = offscreen.reduce<Record<string, typeof offscreen>>(
+    (acc, item) => {
+      acc[item.edge] = acc[item.edge] || [];
+      acc[item.edge].push(item);
+      return acc;
+    },
+    {},
+  );
+
+  const edgeClass: Record<string, string> = {
+    top: "left-1/2 top-[calc(env(safe-area-inset-top)+15.5rem)] -translate-x-1/2 flex-row",
+    right: "right-3 top-1/2 -translate-y-1/2 flex-col",
+    bottom: "left-1/2 bottom-[calc(env(safe-area-inset-bottom)+12rem)] -translate-x-1/2 flex-row",
+    left: "left-3 top-1/2 -translate-y-1/2 flex-col",
+  };
+
+  return (
+    <>
+      {Object.entries(byEdge).map(([edge, items]) => (
+        <div
+          key={edge}
+          className={`pointer-events-none absolute z-25 flex gap-2 ${edgeClass[edge]}`}
+        >
+          {items.slice(0, 3).map(({ marker }) => (
+            <button
+              key={marker.id}
+              type="button"
+              onClick={() => onSelect(marker)}
+              className="pointer-events-auto inline-flex items-center gap-1.5 rounded-full bg-[#1b0d05]/88 px-3 py-2 text-xs font-black text-orange-100 ring-1 ring-orange-300/35 backdrop-blur-xl"
+              style={{ boxShadow: "0 12px 36px rgba(0,0,0,0.42), 0 0 18px rgba(255,90,47,0.16)" }}
+              aria-label={`Move map to ${marker.title || marker.kind}`}
+            >
+              <span className="text-orange-300">
+                {edge === "left" ? "‹" : edge === "right" ? "›" : edge === "top" ? "⌃" : "⌄"}
+              </span>
+              <span>{marker.kind === "truck" ? "Truck" : marker.kind === "restaurant" ? "Food" : marker.kind === "parking" ? "Host" : "Event"}</span>
+            </button>
+          ))}
+        </div>
+      ))}
+    </>
   );
 }
 

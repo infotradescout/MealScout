@@ -44,6 +44,11 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const redirectPath = getSafeRedirectPath();
+  const buildAuthPath = (basePath: string) => {
+    if (!redirectPath) return basePath;
+    const separator = basePath.includes("?") ? "&" : "?";
+    return `${basePath}${separator}redirect=${encodeURIComponent(redirectPath)}`;
+  };
 
   const attemptLoginWithRetry = async () =>
     fetchJsonWithRetry<Record<string, any>>("/api/auth/login", {
@@ -75,7 +80,7 @@ export default function Login() {
   }, [email]);
 
   const handleGoogleLogin = () => {
-    const googleLoginUrl = authUrl("/api/auth/google/customer");
+    const googleLoginUrl = authUrl(buildAuthPath("/api/auth/google/customer"));
     trackFunnelEvent(FUNNEL_EVENTS.primaryCtaClick, {
       page: "login",
       cta: "google_login",
@@ -85,7 +90,9 @@ export default function Login() {
   };
 
   const handleFacebookLogin = () => {
-    const facebookLoginUrl = authUrl("/api/auth/facebook?userType=customer");
+    const facebookLoginUrl = authUrl(
+      buildAuthPath("/api/auth/facebook?userType=customer"),
+    );
     trackFunnelEvent(FUNNEL_EVENTS.primaryCtaClick, {
       page: "login",
       cta: "facebook_login",
@@ -208,6 +215,9 @@ export default function Login() {
   // Redirect to home if already authenticated
   useEffect(() => {
     if (isAuthenticated) {
+      try {
+        window.sessionStorage.removeItem("mealscout:post-verification-redirect");
+      } catch {}
       window.location.href = redirectPath || "/";
     }
   }, [isAuthenticated, redirectPath]);

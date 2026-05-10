@@ -92,6 +92,18 @@ interface Menu {
   categories: MenuCategory[];
 }
 
+interface OrderingReadiness {
+  orderingEnabled: boolean;
+  blockingReasons: string[];
+  checks: Array<{
+    id: string;
+    label: string;
+    ok: boolean;
+    blocking: boolean;
+    action: string;
+  }>;
+}
+
 export interface CartItem {
   menuId: string;
   restaurantId: string;
@@ -137,7 +149,7 @@ export default function MenuPage() {
     setCart(getCart());
   }, []);
 
-  const menusQuery = useQuery<{ menus: Menu[]; orderingEnabled: boolean; restaurantName?: string | null; restaurantCity?: string | null; isFoodTruck?: boolean; cuisineType?: string | null }>({
+  const menusQuery = useQuery<{ menus: Menu[]; orderingEnabled: boolean; readiness?: OrderingReadiness; restaurantName?: string | null; restaurantCity?: string | null; isFoodTruck?: boolean; cuisineType?: string | null }>({
     queryKey: ["/api/menus", restaurantId],
     queryFn: async () => {
       const res = await fetch(
@@ -151,6 +163,7 @@ export default function MenuPage() {
 
   const menus = menusQuery.data?.menus ?? [];
   const orderingEnabled = menusQuery.data?.orderingEnabled ?? false;
+  const readiness = menusQuery.data?.readiness ?? null;
   const activeMenus = menus.filter((m) => m.isActive);
   const restaurantName = menusQuery.data?.restaurantName ?? null;
   const restaurantCity = menusQuery.data?.restaurantCity ?? null;
@@ -274,16 +287,25 @@ export default function MenuPage() {
             {!orderingEnabled && (
               <div className="mb-4 flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
                 <AlertCircle className="w-4 h-4 shrink-0" />
-                <span>
-                  Menu browsing is always free. Online ordering is not yet
-                  active for this restaurant — browse the menu and place your
-                  order in person.
-                </span>
+                <div>
+                  <p>
+                    Menu browsing is always free. Online ordering is not ready yet.
+                  </p>
+                  {readiness?.blockingReasons?.length ? (
+                    <p className="mt-1 text-xs">
+                      Waiting on: {readiness.blockingReasons.join(", ")}.
+                    </p>
+                  ) : (
+                    <p className="mt-1 text-xs">
+                      You can still browse the menu and order in person.
+                    </p>
+                  )}
+                </div>
               </div>
             )}
             {!selectedMenu.hidePlatformFee && orderingEnabled && (
               <p className="text-xs text-muted-foreground mb-4 text-center">
-                A $1.00 MealScout service fee is added at checkout.
+                Processing plus a $1.00 MealScout fee is added at checkout.
                 {selectedMenu.acceptsCash && " Cash payments accepted."}
               </p>
             )}

@@ -560,6 +560,10 @@ export default function EventCoordinatorDashboard() {
   const { user, isAuthenticated, isLoading } = useAuth();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
+  const dashboardParams =
+    typeof window !== "undefined"
+      ? new URLSearchParams(window.location.search)
+      : new URLSearchParams();
   const { data: subscription } = useQuery<{
     status: string;
     hasAccess: boolean;
@@ -592,6 +596,12 @@ export default function EventCoordinatorDashboard() {
     maxTrucks: 1,
     hardCapEnabled: false,
   });
+
+  useEffect(() => {
+    if (dashboardParams.get("setup") === "onboarding") {
+      setIsCreating(true);
+    }
+  }, []);
 
   useEffect(() => {
     if (isLoading) return;
@@ -695,6 +705,50 @@ export default function EventCoordinatorDashboard() {
 
   const upcoming = events.filter((e) => !hasEventEnded(e));
   const past = events.filter((e) => hasEventEnded(e));
+  const hasUpcomingEvent = upcoming.length > 0;
+  const hasEventHistory = events.length > 0;
+  const pendingInterestCount = events.reduce(
+    (sum, event) => sum + Number(event.interestSummary?.pending || 0),
+    0,
+  );
+  const eventSetupItems = [
+    {
+      label: "Organizer",
+      description: "Your personal login owns this event coordinator workspace.",
+      done: true,
+      action: "Active",
+      icon: Users,
+    },
+    {
+      label: "First event",
+      description: hasEventHistory
+        ? `${events.length} event${events.length === 1 ? "" : "s"} created.`
+        : "Create the first event so trucks know where to apply.",
+      done: hasEventHistory,
+      action: "Create event",
+      icon: Calendar,
+    },
+    {
+      label: "Vendor needs",
+      description: hasUpcomingEvent
+        ? `${upcoming.length} upcoming event${upcoming.length === 1 ? "" : "s"} visible to trucks.`
+        : "Set date, time, address, truck capacity, and strict cap rules.",
+      done: hasUpcomingEvent,
+      action: "Publish details",
+      icon: Truck,
+    },
+    {
+      label: "Truck decisions",
+      description:
+        pendingInterestCount > 0
+          ? `${pendingInterestCount} pending truck ${pendingInterestCount === 1 ? "request" : "requests"}.`
+          : "Accept or decline interested trucks when they come in.",
+      done: pendingInterestCount === 0 && hasEventHistory,
+      action: "Review interest",
+      icon: CheckCircle,
+    },
+  ];
+  const eventSetupComplete = eventSetupItems.filter((item) => item.done).length;
 
   if (isLoading || isLoadingPage) {
     return (
@@ -752,6 +806,61 @@ export default function EventCoordinatorDashboard() {
             </>
           )}
         </Button>
+      </div>
+
+      <div className="mb-8 rounded-2xl border border-orange-200 bg-orange-50 p-4 shadow-clean">
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-orange-700">
+              Event onboarding
+            </p>
+            <h2 className="mt-1 text-xl font-black text-orange-950">
+              Build an event trucks can act on
+            </h2>
+            <p className="mt-1 text-sm text-orange-900/75">
+              Events should move from intent to truck decisions fast: publish the
+              location, capacity, schedule, then accept or decline requests.
+            </p>
+          </div>
+          <span className="w-fit rounded-full bg-orange-600 px-3 py-1 text-xs font-bold text-white">
+            {eventSetupComplete}/{eventSetupItems.length} complete
+          </span>
+        </div>
+        <div className="grid gap-2 md:grid-cols-4">
+          {eventSetupItems.map((item) => {
+            const Icon = item.icon;
+            return (
+              <button
+                key={item.label}
+                type="button"
+                onClick={() => {
+                  if (item.label === "First event" || item.label === "Vendor needs") {
+                    setIsCreating(true);
+                  }
+                }}
+                className="rounded-xl border border-orange-200 bg-white p-3 text-left transition hover:border-orange-400"
+              >
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <Icon className="h-4 w-4 text-orange-700" />
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                    item.done
+                      ? "bg-emerald-100 text-emerald-700"
+                      : "bg-orange-100 text-orange-700"
+                  }`}>
+                    {item.done ? "Done" : "Next"}
+                  </span>
+                </div>
+                <p className="text-sm font-black text-orange-950">{item.label}</p>
+                <p className="mt-1 min-h-[2.5rem] text-xs text-orange-900/70">
+                  {item.description}
+                </p>
+                <p className="mt-2 text-xs font-bold text-orange-700">
+                  {item.action}
+                </p>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* Create form */}

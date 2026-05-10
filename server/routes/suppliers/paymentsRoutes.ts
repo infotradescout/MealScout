@@ -275,7 +275,22 @@ export function registerSupplierPaymentRoutes(
           (order as any).stripePaymentIntentId || "",
         ).trim();
         if (existingIntentId) {
-          const intent = await stripe.paymentIntents.retrieve(existingIntentId);
+          let intent: Stripe.PaymentIntent | null = null;
+          try {
+            intent = await stripe.paymentIntents.retrieve(existingIntentId);
+          } catch (retrieveError: any) {
+            if (String(retrieveError?.code || "") !== "resource_missing") {
+              throw retrieveError;
+            }
+            await db
+              .update(supplierOrders)
+              .set({
+                stripePaymentIntentId: null,
+                updatedAt: new Date(),
+              } as any)
+              .where(eq(supplierOrders.id, String((order as any).id)));
+          }
+          if (intent) {
           const decision = decideSupplierIntentHandling({
             intent: {
               status: intent?.status,
@@ -314,6 +329,7 @@ export function registerSupplierPaymentRoutes(
               message:
                 "Existing payment is processing. Try again after it completes or fails.",
             });
+          }
           }
         }
 

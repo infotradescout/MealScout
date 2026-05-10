@@ -198,6 +198,18 @@ export async function setupUnifiedAuth(app: Express) {
     return path;
   };
 
+  const getOAuthRedirectPath = (req: any): string | null =>
+    getSafeRedirectPath(req.session?.oauthRedirectPath);
+
+  const buildOAuthSuccessRedirect = (
+    redirectBase: string,
+    redirectPath: string | null,
+  ): string => {
+    const safePath = getSafeRedirectPath(redirectPath) || "/";
+    const separator = safePath.includes("?") ? "&" : "?";
+    return `${redirectBase}${safePath}${separator}auth=success&t=${Date.now()}`;
+  };
+
   const getDefaultPostVerificationRedirect = (
     user: Pick<User, "userType">,
   ): string => {
@@ -205,15 +217,15 @@ export async function setupUnifiedAuth(app: Express) {
       case "host":
         return "/host-signup";
       case "event_coordinator":
-        return "/event-signup";
+        return "/event-coordinator/dashboard?setup=onboarding";
       case "restaurant_owner":
-        return "/restaurant-signup";
+        return "/restaurant-signup?businessType=restaurant&source=post-verification";
       case "food_truck":
-        return "/restaurant-signup?businessType=food_truck&claim=1";
+        return "/restaurant-signup?businessType=food_truck&source=post-verification&claim=1";
       case "caterer":
-        return "/restaurant-signup?businessType=caterer";
+        return "/restaurant-signup?businessType=caterer&source=post-verification";
       case "private_chef":
-        return "/restaurant-signup?businessType=private_chef";
+        return "/restaurant-signup?businessType=private_chef&source=post-verification";
       case "supplier":
         return "/supplier/dashboard";
       case "staff":
@@ -606,6 +618,7 @@ export async function setupUnifiedAuth(app: Express) {
     app.get("/api/auth/google/customer", (req, res, next) => {
       req.session.googleAppContext = getOAuthAppContext(req);
       req.session.oauthUserType = "customer";
+      req.session.oauthRedirectPath = getSafeRedirectPath(req.query.redirect) || undefined;
       passport.authenticate("google-customer", {
         scope: ["profile", "email"],
       })(req, res, next);
@@ -637,7 +650,9 @@ export async function setupUnifiedAuth(app: Express) {
           console.log(
             "✅ Google customer OAuth success, session saved, redirecting...",
           );
-          res.redirect(`${redirectBase}/?auth=success&t=${Date.now()}`);
+          const redirectPath = getOAuthRedirectPath(req);
+          req.session.oauthRedirectPath = undefined;
+          res.redirect(buildOAuthSuccessRedirect(redirectBase, redirectPath));
         });
       },
     );
@@ -654,6 +669,8 @@ export async function setupUnifiedAuth(app: Express) {
       )
         ? (desiredType as User["userType"])
         : "restaurant_owner";
+      req.session.oauthRedirectPath =
+        getSafeRedirectPath(req.query.redirect) || undefined;
       passport.authenticate("google-restaurant", {
         scope: ["profile", "email"],
       })(req, res, next);
@@ -685,9 +702,10 @@ export async function setupUnifiedAuth(app: Express) {
           console.log(
             "✅ Google restaurant OAuth success, session saved, redirecting...",
           );
-          res.redirect(
-            `${redirectBase}/restaurant-signup?auth=success&t=${Date.now()}`,
-          );
+          const redirectPath =
+            getOAuthRedirectPath(req) || "/restaurant-signup";
+          req.session.oauthRedirectPath = undefined;
+          res.redirect(buildOAuthSuccessRedirect(redirectBase, redirectPath));
         });
       },
     );
@@ -870,6 +888,8 @@ export async function setupUnifiedAuth(app: Express) {
         )
           ? (desiredUserType as User["userType"])
           : "customer";
+        req.session.oauthRedirectPath =
+          getSafeRedirectPath(req.query.redirect) || undefined;
         console.log(
           `🔵 Starting Facebook OAuth flow with app context: ${appContext}`,
         );
@@ -915,10 +935,14 @@ export async function setupUnifiedAuth(app: Express) {
           const frontendBase =
             process.env.PUBLIC_BASE_URL || "http://localhost:5000";
           const redirectUrls = {
-            mealscout: `${frontendBase}/?auth=success&t=` + Date.now(),
+            mealscout: buildOAuthSuccessRedirect(
+              frontendBase,
+              getOAuthRedirectPath(req),
+            ),
             tradescout:
               "https://www.thetradescout.com/?auth=success&t=" + Date.now(),
           };
+          req.session.oauthRedirectPath = undefined;
 
           const redirectUrl =
             redirectUrls[appContext as "mealscout" | "tradescout"];
@@ -1057,8 +1081,15 @@ export async function setupUnifiedAuth(app: Express) {
       const existingUser = await storage.getUserByEmail(email);
       if (existingUser) {
         return res
-          .status(400)
-          .json({ error: "User with this email already exists" });
+          .status(409)
+          .json({
+            code: existingUser.emailVerified
+              ? "email_already_verified"
+              : "email_already_registered",
+            error: existingUser.emailVerified
+              ? "This email already has a verified MealScout account. Log in to continue."
+              : "This email already has a MealScout account. Log in or resend verification to continue.",
+          });
       }
       const existingPhone = await storage.getUserByPhone(normalizedPhone);
       if (existingPhone) {
@@ -1155,8 +1186,15 @@ export async function setupUnifiedAuth(app: Express) {
       const existingUser = await storage.getUserByEmail(email);
       if (existingUser) {
         return res
-          .status(400)
-          .json({ error: "User with this email already exists" });
+          .status(409)
+          .json({
+            code: existingUser.emailVerified
+              ? "email_already_verified"
+              : "email_already_registered",
+            error: existingUser.emailVerified
+              ? "This email already has a verified MealScout account. Log in to continue."
+              : "This email already has a MealScout account. Log in or resend verification to continue.",
+          });
       }
       const existingPhone = await storage.getUserByPhone(normalizedPhone);
       if (existingPhone) {
@@ -1261,8 +1299,15 @@ export async function setupUnifiedAuth(app: Express) {
       const existingUser = await storage.getUserByEmail(email);
       if (existingUser) {
         return res
-          .status(400)
-          .json({ error: "User with this email already exists" });
+          .status(409)
+          .json({
+            code: existingUser.emailVerified
+              ? "email_already_verified"
+              : "email_already_registered",
+            error: existingUser.emailVerified
+              ? "This email already has a verified MealScout account. Log in to continue."
+              : "This email already has a MealScout account. Log in or resend verification to continue.",
+          });
       }
       const existingPhone = await storage.getUserByPhone(normalizedPhone);
       if (existingPhone) {

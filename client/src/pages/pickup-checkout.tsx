@@ -31,8 +31,29 @@ const stripePublicKey = import.meta.env.VITE_STRIPE_PUBLIC_KEY || "";
 const stripePromise = stripePublicKey ? loadStripe(stripePublicKey) : null;
 
 const CART_KEY = "mealscout_cart";
+const MEALSCOUT_ORDER_FEE_CENTS = 100;
+const STRIPE_FEE_BPS = 290;
+const STRIPE_FEE_FIXED_CENTS = 30;
 const formatMoney = (cents: number) =>
   `$${(Number(cents || 0) / 100).toFixed(2)}`;
+
+function estimateProcessingFeeCents(baseBeforeProcessingCents: number) {
+  if (!Number.isFinite(baseBeforeProcessingCents) || baseBeforeProcessingCents <= 0) {
+    return 0;
+  }
+  const denominator = 10_000 - STRIPE_FEE_BPS;
+  if (denominator <= 0) {
+    return Math.ceil(
+      (baseBeforeProcessingCents * STRIPE_FEE_BPS) / 10_000 +
+        STRIPE_FEE_FIXED_CENTS,
+    );
+  }
+  const gross = Math.ceil(
+    ((baseBeforeProcessingCents + STRIPE_FEE_FIXED_CENTS) * 10_000) /
+      denominator,
+  );
+  return Math.max(0, gross - baseBeforeProcessingCents);
+}
 
 function getCart(): CartItem[] {
   try {
@@ -57,11 +78,22 @@ interface MenuInfo {
   hidePlatformFee: boolean;
 }
 
+interface OrderingReadiness {
+  blockingReasons: string[];
+  checks: Array<{
+    id: string;
+    label: string;
+    ok: boolean;
+    action: string;
+  }>;
+}
+
 export default function CheckoutPage() {
   const { restaurantId } = useParams<{ restaurantId: string }>();
   const [, navigate] = useLocation();
   const [cart, setCart] = useState<CartItem[]>([]);
   const [menuInfo, setMenuInfo] = useState<MenuInfo | null>(null);
+  const [readiness, setReadiness] = useState<OrderingReadiness | null>(null);
   const [orderingEnabled, setOrderingEnabled] = useState(true);
   const [paymentMethod, setPaymentMethod] = useState<"card" | "cash">("card");
   const [orderType, setOrderType] = useState<"pickup" | "dine_in">("pickup");
@@ -74,6 +106,12 @@ export default function CheckoutPage() {
   const [isCreating, setIsCreating] = useState(false);
   const [orderId, setOrderId] = useState<string | null>(null);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [serverTotals, setServerTotals] = useState<{
+    subtotalCents: number;
+    platformFeeCents: number;
+    totalCents: number;
+    feePaidByBusiness: boolean;
+  } | null>(null);
 
   useEffect(() => {
     const restaurantCart = getCart().filter(
@@ -87,6 +125,7 @@ export default function CheckoutPage() {
         .then((r) => r.json())
         .then((payload: any) => {
           setOrderingEnabled(Boolean(payload?.orderingEnabled));
+          setReadiness(payload?.readiness || null);
           const menus = Array.isArray(payload?.menus) ? payload.menus : [];
           const activeMenu = menus.find((m: any) => m.isActive);
           if (activeMenu) {
@@ -119,8 +158,18 @@ export default function CheckoutPage() {
   }
 
   const subtotal = cart.reduce((sum, i) => sum + i.lineTotalCents, 0);
-  const platformFee = menuInfo?.hidePlatformFee ? 0 : 100;
+  const platformFee = menuInfo?.hidePlatformFee
+    ? 0
+    : MEALSCOUT_ORDER_FEE_CENTS +
+      (paymentMethod === "card"
+        ? estimateProcessingFeeCents(subtotal + MEALSCOUT_ORDER_FEE_CENTS)
+        : 0);
   const total = subtotal + platformFee;
+  const displayedSubtotal = serverTotals?.subtotalCents ?? subtotal;
+  const displayedFee = serverTotals?.feePaidByBusiness
+    ? 0
+    : (serverTotals?.platformFeeCents ?? platformFee);
+  const displayedTotal = serverTotals?.totalCents ?? total;
   const menuId = cart[0].menuId;
 
   const createOrder = async () => {
@@ -157,6 +206,13 @@ export default function CheckoutPage() {
       if (!res.ok) throw new Error(data.message || "Failed to create order");
 
       setOrderId(data.order.id);
+      setServerTotals({
+        subtotalCents: Number(data.order.subtotalCents || subtotal) || subtotal,
+        platformFeeCents:
+          Number(data.order.platformFeeCents || platformFee) || platformFee,
+        totalCents: Number(data.order.totalCents || total) || total,
+        feePaidByBusiness: Boolean(data.order.feePaidByBusiness),
+      });
 
       if (paymentMethod === "cash") {
         // No payment needed — redirect immediately
@@ -191,17 +247,17 @@ export default function CheckoutPage() {
             <CardContent className="pt-4 pb-3">
               <div className="flex justify-between text-sm mb-1">
                 <span className="text-muted-foreground">Subtotal</span>
-                <span>{formatMoney(subtotal)}</span>
+                <span>{formatMoney(displayedSubtotal)}</span>
               </div>
-              {platformFee > 0 && (
+              {displayedFee > 0 && (
                 <div className="flex justify-between text-sm mb-1">
-                  <span className="text-muted-foreground">MealScout fee</span>
-                  <span>{formatMoney(platformFee)}</span>
+                  <span className="text-muted-foreground">Processing + MealScout fee</span>
+                  <span>{formatMoney(displayedFee)}</span>
                 </div>
               )}
               <div className="flex justify-between font-semibold border-t pt-2 mt-2">
                 <span>Total</span>
-                <span>{formatMoney(total)}</span>
+                <span>{formatMoney(displayedTotal)}</span>
               </div>
             </CardContent>
           </Card>
@@ -230,10 +286,22 @@ export default function CheckoutPage() {
         <h1 className="text-2xl font-bold mb-6">Checkout</h1>
 
         {!orderingEnabled && (
-          <div className="flex items-center gap-2 text-amber-800 text-sm bg-amber-50 px-4 py-3 rounded-lg mb-4 border border-amber-200">
+          <div className="flex items-start gap-2 text-amber-800 text-sm bg-amber-50 px-4 py-3 rounded-lg mb-4 border border-amber-200">
             <AlertCircle className="w-4 h-4 shrink-0" />
-            Menu browsing is always free. Online ordering is not yet active
-            for this restaurant — please order in person.
+            <div>
+              <p>
+                Menu browsing is always free. Online ordering is not ready yet.
+              </p>
+              {readiness?.blockingReasons?.length ? (
+                <p className="mt-1 text-xs">
+                  Waiting on: {readiness.blockingReasons.join(", ")}.
+                </p>
+              ) : (
+                <p className="mt-1 text-xs">
+                  Please order in person for now.
+                </p>
+              )}
+            </div>
           </div>
         )}
 
@@ -264,7 +332,7 @@ export default function CheckoutPage() {
               </div>
               {platformFee > 0 && (
                 <div className="flex justify-between text-sm text-muted-foreground">
-                  <span>MealScout fee</span>
+                  <span>Processing + MealScout fee</span>
                   <span>{formatMoney(platformFee)}</span>
                 </div>
               )}

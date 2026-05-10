@@ -198,13 +198,24 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
   // inside the wheel itself; the global nav must not overlay the wheel canvas.
   const isWheelPage = location.startsWith("/admin/giveaway-wheel");
   const [isDocFullscreen, setIsDocFullscreen] = useState(false);
+  const [isScoutMapFullscreen, setIsScoutMapFullscreen] = useState(false);
   useEffect(() => {
     const handler = () => setIsDocFullscreen(!!document.fullscreenElement);
     document.addEventListener("fullscreenchange", handler);
     return () => document.removeEventListener("fullscreenchange", handler);
   }, []);
+  useEffect(() => {
+    const update = () =>
+      setIsScoutMapFullscreen(
+        document.body.classList.contains("mealscout-map-fullscreen"),
+      );
+    update();
+    const observer = new MutationObserver(update);
+    observer.observe(document.body, { attributes: true, attributeFilter: ["class"] });
+    return () => observer.disconnect();
+  }, []);
   if (isGlobalScope && !user && currentPath === "/") return null;
-  if (isWheelPage || isDocFullscreen) return null;
+  if (isWheelPage || isDocFullscreen || isScoutMapFullscreen) return null;
 
   if (!isGlobalScope && !showLocalNav) return null;
 

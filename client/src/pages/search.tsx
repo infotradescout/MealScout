@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Link } from "wouter";
@@ -95,6 +95,23 @@ const titleCaseSlug = (value: string) =>
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
+
+const DISCOVERY_RADIUS_STORAGE_KEY = "mealscout:discovery-radius-km";
+const DEFAULT_DISCOVERY_RADIUS_KM = 12;
+const MIN_DISCOVERY_RADIUS_KM = 3;
+const MAX_DISCOVERY_RADIUS_KM = 40;
+
+function clampDiscoveryRadiusKm(value: number): number {
+  if (!Number.isFinite(value)) return DEFAULT_DISCOVERY_RADIUS_KM;
+  return Math.max(MIN_DISCOVERY_RADIUS_KM, Math.min(MAX_DISCOVERY_RADIUS_KM, value));
+}
+
+function readDiscoveryRadiusKm(): number {
+  if (typeof window === "undefined") return DEFAULT_DISCOVERY_RADIUS_KM;
+  const stored = Number(window.localStorage.getItem(DISCOVERY_RADIUS_STORAGE_KEY));
+  if (!Number.isFinite(stored)) return DEFAULT_DISCOVERY_RADIUS_KM;
+  return clampDiscoveryRadiusKm(stored);
+}
 
 // Category configuration mapping (from category.tsx)
 const categoryConfig = {
@@ -263,6 +280,9 @@ export default function SearchPage() {
   const [priceRange, setPriceRange] = useState([0, 50]);
   const [sortBy, setSortBy] = useState("relevance");
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
+  const [discoveryRadiusKm, setDiscoveryRadiusKm] = useState<number>(() =>
+    readDiscoveryRadiusKm(),
+  );
 
   // Location state management
   const [userLocation, setUserLocation] = useState<{
@@ -271,6 +291,14 @@ export default function SearchPage() {
   } | null>(null);
   const [isLocating, setIsLocating] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
+
+  const updateDiscoveryRadiusKm = useCallback((values: number[]) => {
+    const nextRadius = clampDiscoveryRadiusKm(Number(values[0]));
+    setDiscoveryRadiusKm(nextRadius);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(DISCOVERY_RADIUS_STORAGE_KEY, String(nextRadius));
+    }
+  }, []);
 
   // Parse URL query parameter
   useEffect(() => {
@@ -316,18 +344,18 @@ export default function SearchPage() {
   // Fetch nearby deals when location is available, otherwise featured deals
   const { data: nearbyDeals, isLoading: nearbyLoading } = useQuery({
     queryKey: userLocation
-      ? ["/api/deals/nearby", userLocation.lat, userLocation.lng]
+      ? ["/api/deals/nearby", userLocation.lat, userLocation.lng, discoveryRadiusKm]
       : ["/api/deals/featured"],
     queryFn: userLocation
       ? async () => {
           const response = await fetch(
-            `/api/deals/nearby/${userLocation.lat}/${userLocation.lng}`,
+            `/api/deals/nearby/${userLocation.lat}/${userLocation.lng}?radius=${discoveryRadiusKm}`,
           );
           if (!response.ok) throw new Error("Failed to fetch nearby deals");
           return response.json();
         }
       : undefined,
-    enabled: !searchQuery && (!!userLocation || !isLocating),
+    enabled: !searchQuery && !!userLocation,
   });
 
   const { data: featuredDeals, isLoading: featuredLoading } = useQuery({
@@ -353,13 +381,14 @@ export default function SearchPage() {
       debouncedSearchQuery,
       userLocation?.lat ?? null,
       userLocation?.lng ?? null,
+      discoveryRadiusKm,
     ],
     queryFn: async () => {
       const params = new URLSearchParams({ q: debouncedSearchQuery });
       if (userLocation) {
         params.set("lat", String(userLocation.lat));
         params.set("lng", String(userLocation.lng));
-        params.set("radius", "20");
+        params.set("radius", String(discoveryRadiusKm));
       }
       const res = await fetch(`/api/restaurants/search?${params.toString()}`);
       if (!res.ok) throw new Error("Failed to search restaurants");
@@ -376,12 +405,13 @@ export default function SearchPage() {
         debouncedSearchQuery,
         userLocation?.lat ?? null,
         userLocation?.lng ?? null,
+        discoveryRadiusKm,
       ],
       queryFn: async () => {
         const params = new URLSearchParams({
           q: debouncedSearchQuery,
           limit: "48",
-          radiusKm: "30",
+          radiusKm: String(discoveryRadiusKm),
         });
         if (userLocation) {
           params.set("lat", String(userLocation.lat));
@@ -849,6 +879,39 @@ export default function SearchPage() {
           >
             {locationError}
           </p>
+        )}
+
+        {userLocation && (
+          <Card className="mb-4 bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">
+            <CardContent className="p-4">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-foreground">
+                    Search radius
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Applies to map, Scout discovery, menus, deals, and local search.
+                  </p>
+                </div>
+                <span className="shrink-0 rounded-full bg-orange-500/10 px-3 py-1 text-xs font-bold text-orange-700 dark:text-orange-200">
+                  {Math.max(1, Math.round(discoveryRadiusKm * 0.621371))} mi
+                </span>
+              </div>
+              <Slider
+                value={[discoveryRadiusKm]}
+                onValueChange={updateDiscoveryRadiusKm}
+                min={MIN_DISCOVERY_RADIUS_KM}
+                max={MAX_DISCOVERY_RADIUS_KM}
+                step={1}
+                className="w-full"
+                aria-label="Search radius"
+              />
+              <div className="mt-2 flex justify-between text-[11px] text-muted-foreground">
+                <span>2 mi</span>
+                <span>25 mi</span>
+              </div>
+            </CardContent>
+          </Card>
         )}
 
         {!searchQuery && !userLocation && !isLocating && (

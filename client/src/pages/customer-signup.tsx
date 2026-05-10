@@ -218,20 +218,19 @@ export default function CustomerSignup() {
     accountType === "host"
       ? "/host-signup"
       : accountType === "event_organizer"
-          ? "/dashboard"
+          ? "/event-coordinator/dashboard?setup=onboarding"
         : accountType === "business"
           ? getBusinessRedirectPath()
           : "/scout";
 
   const getBusinessRedirectPath = () => {
-    if (businessSubType === "food_truck") {
-      return "/truck-onboarding?source=post-verification&claim=1";
-    }
-
     const params = new URLSearchParams({
       businessType: businessSubType,
       source: "post-verification",
     });
+    if (businessSubType === "food_truck") {
+      params.set("claim", "1");
+    }
     return `/restaurant-signup?${params.toString()}`;
   };
 
@@ -258,6 +257,39 @@ export default function CustomerSignup() {
     window.location.href = `/post-verification?status=check-email&redirect=${encodeURIComponent(
       redirectPath,
     )}`;
+  };
+
+  const redirectExistingAccountToLogin = () => {
+    const redirectPath = getCustomerRedirectPath();
+    try {
+      window.sessionStorage.setItem(
+        POST_VERIFICATION_REDIRECT_KEY,
+        redirectPath,
+      );
+      window.sessionStorage.setItem(
+        "mealscout:lastSignupEmail",
+        form.getValues("email") || "",
+      );
+    } catch {}
+    setLocation(`/login?redirect=${encodeURIComponent(redirectPath)}`);
+  };
+
+  const handleSignupError = (error: any, fallbackTitle = "Signup failed") => {
+    const message = String(error?.message || "");
+    if (/already exists|already has an account|email already/i.test(message)) {
+      toast({
+        title: "That email already has an account",
+        description: "Log in to continue. If the account still needs verification, resend it from login.",
+      });
+      redirectExistingAccountToLogin();
+      return;
+    }
+
+    toast({
+      title: fallbackTitle,
+      description: message || "Failed to create account",
+      variant: "destructive",
+    });
   };
 
   useEffect(() => {
@@ -437,13 +469,7 @@ export default function CustomerSignup() {
       });
       goToVerificationHandoff(redirectAfterLogin);
     },
-    onError: (error) => {
-      toast({
-        title: "Signup Failed",
-        description: error.message || "Failed to create account",
-        variant: "destructive",
-      });
-    },
+    onError: (error) => handleSignupError(error, "Signup failed"),
   });
 
   const businessSignupMutation = useMutation({
@@ -493,13 +519,7 @@ export default function CustomerSignup() {
       });
       goToVerificationHandoff(businessRedirect);
     },
-    onError: (error) => {
-      toast({
-        title: "Signup failed",
-        description: error.message || "Failed to create your account",
-        variant: "destructive",
-      });
-    },
+    onError: (error) => handleSignupError(error, "Signup failed"),
   });
 
   const supplierSignupMutation = useMutation({
@@ -541,13 +561,7 @@ export default function CustomerSignup() {
       });
       goToVerificationHandoff("/supplier/dashboard");
     },
-    onError: (error) => {
-      toast({
-        title: "Supplier signup failed",
-        description: error.message || "Failed to create supplier account",
-        variant: "destructive",
-      });
-    },
+    onError: (error) => handleSignupError(error, "Supplier signup failed"),
   });
 
   const activateSupplierProfileMutation = useMutation({
@@ -586,7 +600,7 @@ export default function CustomerSignup() {
       return;
     }
     if (accountType === "event_organizer") {
-      setLocation("/dashboard");
+      setLocation("/event-coordinator/dashboard?setup=onboarding");
       return;
     }
 

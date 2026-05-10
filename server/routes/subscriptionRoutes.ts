@@ -411,7 +411,6 @@ export function registerSubscriptionRoutes(
         }
 
         const { locked, priceId, label } = await getLockedPriceForUser(user.id);
-        const amount = 2500;
 
         if (!priceId.startsWith("price_")) {
           console.error(
@@ -442,13 +441,6 @@ export function registerSubscriptionRoutes(
           subscription.id,
           `standard-${interval}`,
         );
-
-        const planType = `standard-${interval}`;
-        emailService
-          .sendPaymentConfirmation(user, amount, planType, subscription.id)
-          .catch((err) =>
-            console.error("Failed to send payment confirmation email:", err),
-          );
 
         const latestInvoice = subscription.latest_invoice;
         const paymentIntent =

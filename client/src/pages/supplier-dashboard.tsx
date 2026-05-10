@@ -605,6 +605,56 @@ export default function SupplierDashboardPage() {
     () => products.filter((p) => p.isActive !== false).length,
     [products],
   );
+  const supplierProfileComplete = Boolean(
+    supplier?.businessName &&
+      ((supplier as any)?.address || (supplier as any)?.city) &&
+      (supplier.contactEmail || supplier.contactPhone),
+  );
+  const supplierPayoutReady = Boolean(
+    stripeStatus?.connected &&
+      stripeStatus.chargesEnabled &&
+      stripeStatus.payoutsEnabled,
+  );
+  const supplierSetupItems = [
+    {
+      label: "Profile",
+      description: supplierProfileComplete
+        ? "Supplier profile has contact and service-area details."
+        : "Add business name, contact, and local service area.",
+      done: supplierProfileComplete,
+      action: "Complete profile",
+      targetId: "supplier-profile",
+    },
+    {
+      label: "Products",
+      description:
+        activeCount > 0
+          ? `${activeCount} active product${activeCount === 1 ? "" : "s"} listed.`
+          : "Add or import products so businesses can order.",
+      done: activeCount > 0,
+      action: "Add products",
+      targetId: "supplier-products",
+    },
+    {
+      label: "Delivery",
+      description: supplier?.offersDelivery
+        ? "Delivery settings are enabled."
+        : "Set delivery radius, fees, and notes if you deliver.",
+      done: Boolean(supplier?.offersDelivery),
+      action: "Set delivery",
+      targetId: "supplier-delivery",
+    },
+    {
+      label: "Payments",
+      description: supplierPayoutReady
+        ? "Online payments and payouts are ready."
+        : "Connect Stripe before paid orders scale.",
+      done: supplierPayoutReady,
+      action: "Enable payouts",
+      targetId: "supplier-payments",
+    },
+  ];
+  const supplierSetupComplete = supplierSetupItems.filter((item) => item.done).length;
 
   const deliveryRequests = useMemo(
     () => requests.filter((r) => String(r.requestedFulfillment || "") === "delivery"),
@@ -733,7 +783,64 @@ export default function SupplierDashboardPage() {
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className="border-orange-200 bg-orange-50">
+              <CardContent className="p-4">
+                <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-[0.18em] text-orange-700">
+                      Supplier onboarding
+                    </p>
+                    <h2 className="mt-1 text-xl font-black text-orange-950">
+                      Finish your supply profile
+                    </h2>
+                    <p className="mt-1 text-sm text-orange-900/75">
+                      Suppliers need a clean profile, real products, delivery
+                      rules, and payment settings so restaurants and trucks can
+                      act without back-and-forth.
+                    </p>
+                  </div>
+                  <span className="w-fit rounded-full bg-orange-600 px-3 py-1 text-xs font-bold text-white">
+                    {supplierSetupComplete}/{supplierSetupItems.length} complete
+                  </span>
+                </div>
+                <div className="grid gap-2 md:grid-cols-4">
+                  {supplierSetupItems.map((item) => (
+                    <button
+                      key={item.label}
+                      type="button"
+                      onClick={() =>
+                        document
+                          .getElementById(item.targetId)
+                          ?.scrollIntoView({ behavior: "smooth", block: "start" })
+                      }
+                      className="rounded-xl border border-orange-200 bg-white p-3 text-left transition hover:border-orange-400"
+                    >
+                      <div className="mb-2 flex items-center justify-between gap-2">
+                        <span className="text-lg" aria-hidden="true">
+                          {item.done ? "✓" : "•"}
+                        </span>
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                          item.done
+                            ? "bg-emerald-100 text-emerald-700"
+                            : "bg-orange-100 text-orange-700"
+                        }`}>
+                          {item.done ? "Done" : "Next"}
+                        </span>
+                      </div>
+                      <p className="text-sm font-black text-orange-950">{item.label}</p>
+                      <p className="mt-1 min-h-[2.5rem] text-xs text-orange-900/70">
+                        {item.description}
+                      </p>
+                      <p className="mt-2 text-xs font-bold text-orange-700">
+                        {item.action}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card id="supplier-profile">
               <CardContent className="p-4 space-y-3">
                 <div className="text-sm font-semibold">Profile</div>
                 <Input
@@ -792,7 +899,7 @@ export default function SupplierDashboardPage() {
               </CardContent>
             </Card>
 
-            <Card>
+            <Card id="supplier-products">
               <CardContent className="p-4 space-y-3">
                 <div className="text-sm font-semibold">Add product</div>
                 <Input
@@ -830,7 +937,7 @@ export default function SupplierDashboardPage() {
               </CardContent>
             </Card>
 
-            <Card>
+            <Card id="supplier-delivery">
               <CardContent className="p-4 space-y-3">
                 <div className="text-sm font-semibold">Delivery settings</div>
                 <label className="flex items-center gap-2 text-sm">
@@ -906,7 +1013,7 @@ export default function SupplierDashboardPage() {
               </CardContent>
             </Card>
 
-            <Card>
+            <Card id="supplier-payments">
               <CardContent className="p-4 space-y-3">
                 <div className="text-sm font-semibold">Online payments (MealScout)</div>
                 <label className="flex items-center gap-2 text-sm">

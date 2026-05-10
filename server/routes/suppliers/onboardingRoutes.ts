@@ -87,6 +87,7 @@ export function registerSupplierOnboardingRoutes(
             country: "US",
             email: req.user.email,
             capabilities: {
+              card_payments: { requested: true },
               transfers: { requested: true },
             },
             metadata: {
@@ -98,8 +99,33 @@ export function registerSupplierOnboardingRoutes(
 
           await db
             .update(suppliers)
-            .set({ stripeConnectAccountId: accountId, updatedAt: new Date() } as any)
+            .set({
+              stripeConnectAccountId: accountId,
+              stripeConnectStatus: "pending",
+              stripeChargesEnabled: false,
+              stripePayoutsEnabled: false,
+              stripeOnboardingCompleted: false,
+              updatedAt: new Date(),
+            } as any)
             .where(eq(suppliers.id, String((supplier as any).id)));
+        } else {
+          try {
+            const account = await stripe.accounts.retrieve(accountId);
+            const capabilities = (account as any).capabilities || {};
+            if (capabilities.card_payments !== "active" || capabilities.transfers !== "active") {
+              await stripe.accounts.update(accountId, {
+                capabilities: {
+                  card_payments: { requested: true },
+                  transfers: { requested: true },
+                },
+              });
+            }
+          } catch (capabilityError) {
+            console.warn(
+              "Unable to refresh supplier Stripe capabilities before onboarding:",
+              capabilityError,
+            );
+          }
         }
 
         const baseUrl = process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get("host")}`;
@@ -138,7 +164,23 @@ export function registerSupplierOnboardingRoutes(
           });
         }
 
-        const account = await stripe.accounts.retrieve(accountId);
+        let account = await stripe.accounts.retrieve(accountId);
+        const capabilities = (account as any).capabilities || {};
+        if (capabilities.card_payments !== "active" || capabilities.transfers !== "active") {
+          try {
+            account = await stripe.accounts.update(accountId, {
+              capabilities: {
+                card_payments: { requested: true },
+                transfers: { requested: true },
+              },
+            });
+          } catch (capabilityError) {
+            console.warn(
+              "Unable to request missing supplier Stripe capabilities:",
+              capabilityError,
+            );
+          }
+        }
 
         await db
           .update(suppliers)

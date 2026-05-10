@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Navigation as NavigationIcon } from "lucide-react";
 import type {
   MapAdapterMarker,
   MapBoundsLike,
@@ -178,6 +177,21 @@ const markerColor = (marker: MapAdapterMarker): string => {
   }
 };
 
+const markerGlyph = (marker: MapAdapterMarker): string => {
+  switch (marker.kind) {
+    case "truck": return "T";
+    case "restaurant": return "F";
+    case "parking": return "P";
+    case "event": return "E";
+    case "deal": return "$";
+    case "user": return "";
+    default: return "•";
+  }
+};
+
+const svgDataUrl = (svg: string) =>
+  `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+
 /* ─── Glowing SVG dot marker (AdvancedMarker content) ───────────────────── */
 const buildGlowDotElement = (marker: MapAdapterMarker): HTMLElement => {
   if (marker.kind === "parking") {
@@ -265,21 +279,37 @@ const buildGlowDotElement = (marker: MapAdapterMarker): HTMLElement => {
 
 /* ─── Legacy Marker icon (fallback when no Map ID) ──────────────────────── */
 const buildLegacyIcon = (googleMaps: any, marker: MapAdapterMarker) => {
-  if (marker.kind === "parking") {
+  const color = markerColor(marker);
+  if (marker.kind !== "user") {
+    const glyph = markerGlyph(marker);
+    const svg = `
+      <svg width="54" height="66" viewBox="0 0 54 66" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="4" result="blur"/>
+            <feColorMatrix in="blur" type="matrix" values="1 0 0 0 1 0 0.38 0 0 0.32 0 0 0.08 0 0 0 0 0.75 0"/>
+            <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+        </defs>
+        <ellipse cx="27" cy="59" rx="12" ry="4" fill="#000" opacity="0.42"/>
+        <path filter="url(#glow)" d="M27 3C15.4 3 6 12.4 6 24c0 15.8 21 38 21 38s21-22.2 21-38C48 12.4 38.6 3 27 3z" fill="${color}" stroke="#ffd08a" stroke-width="2"/>
+        <circle cx="27" cy="24" r="13" fill="#1b0d05" opacity="0.9" stroke="#fff3d6" stroke-width="1.5"/>
+        <text x="27" y="29" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="900" fill="#fff3d6">${glyph}</text>
+      </svg>
+    `;
     return {
-      url: mealScoutIcon,
-      scaledSize: new googleMaps.Size(34, 34),
-      anchor: new googleMaps.Point(17, 34),
+      url: svgDataUrl(svg),
+      scaledSize: new googleMaps.Size(42, 52),
+      anchor: new googleMaps.Point(21, 52),
     };
   }
-  const color = markerColor(marker);
   return {
     path: googleMaps.SymbolPath.CIRCLE,
-    scale: marker.kind === "user" ? 9 : 7,
+    scale: 10,
     fillColor: color,
     fillOpacity: 0.95,
-    strokeColor: "#080b12",
-    strokeWeight: 1.5,
+    strokeColor: "#dbeafe",
+    strokeWeight: 3,
   };
 };
 
@@ -701,17 +731,6 @@ export function GoogleMapSurface({
           aria-label="Zoom out"
         >
           <span className="text-lg font-bold leading-none">−</span>
-        </Button>
-        <Button
-          variant="secondary"
-          size="sm"
-          className={btnClass}
-          disabled={!userLocation}
-          onClick={() => { if (!userLocation) return; mapRef.current?.setCenter?.(userLocation); }}
-          title="Center on my location"
-          aria-label="Center on my location"
-        >
-          <NavigationIcon className="w-4 h-4" />
         </Button>
       </div>
 

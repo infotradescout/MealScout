@@ -117,9 +117,33 @@ interface FullMenu extends Menu {
   categories: Array<MenuCategory & { items: MenuItem[] }>;
 }
 
+interface OrderingReadiness {
+  orderingEnabled: boolean;
+  blockingReasons: string[];
+  checks: Array<{
+    id: string;
+    label: string;
+    ok: boolean;
+    blocking: boolean;
+    action: string;
+  }>;
+  payout?: {
+    connected: boolean;
+    chargesEnabled: boolean;
+    payoutsEnabled: boolean;
+    status: string;
+    message: string;
+  };
+}
+
 // ──────────────────────────────── helpers ─────────────────────────────────────
 function useRestaurantId(): string | null {
   const { user } = useAuth();
+  if (typeof window !== "undefined") {
+    const params = new URLSearchParams(window.location.search);
+    const queryRestaurantId = String(params.get("restaurantId") || "").trim();
+    if (queryRestaurantId) return queryRestaurantId;
+  }
   return (user as any)?.restaurantId ?? null;
 }
 
@@ -150,9 +174,13 @@ export default function MenuBuilderPage() {
   const [newMenuName, setNewMenuName] = useState("");
   const [newMenuServiceType, setNewMenuServiceType] = useState("all_day");
   const [importFile, setImportFile] = useState<File | null>(null);
-  const [importType, setImportType] = useState<"csv" | "pdf">("csv");
+  const [importType, setImportType] = useState<"csv" | "pdf" | "pos_json">("csv");
   const [isImporting, setIsImporting] = useState(false);
   const [menuSourceUrl, setMenuSourceUrl] = useState(getInitialMenuSourceUrl);
+  const [posSource, setPosSource] = useState("toast");
+  const [posNotes, setPosNotes] = useState("");
+  const [externalJson, setExternalJson] = useState("");
+  const [isRequestingPosSync, setIsRequestingPosSync] = useState(false);
 
   useEffect(() => {
     if (!menuSourceUrl.trim()) return;
@@ -232,9 +260,45 @@ export default function MenuBuilderPage() {
 
   // import menu items
   const handleImport = async () => {
-    if (!importFile || !selectedMenuId) return;
+    if (!selectedMenuId) return;
     setIsImporting(true);
     try {
+      if (importType === "pos_json") {
+        const rawData = JSON.parse(externalJson.trim());
+        const rows = Array.isArray(rawData)
+          ? rawData
+          : Array.isArray(rawData?.items)
+            ? rawData.items
+            : Array.isArray(rawData?.menuItems)
+              ? rawData.menuItems
+              : [];
+        if (!rows.length) {
+          throw new Error("Paste a JSON array, or an object with items/menuItems.");
+        }
+        const res = await fetch(
+          `/api/owner/menus/${encodeURIComponent(selectedMenuId)}/import/external`,
+          {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ source: posSource, rawData: rows }),
+          },
+        );
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.message || "Import failed");
+        queryClient.invalidateQueries({
+          queryKey: ["/api/menus", selectedMenuId],
+        });
+        setShowImportDialog(false);
+        setExternalJson("");
+        toast({
+          title: "Import complete",
+          description: `${data.imported ?? 0} items imported from ${posSource}.`,
+        });
+        return;
+      }
+
+      if (!importFile) return;
       const form = new FormData();
       form.append("file", importFile);
       const res = await fetch(
@@ -250,7 +314,7 @@ export default function MenuBuilderPage() {
       setImportFile(null);
       toast({
         title: "Import complete",
-        description: `${data.inserted ?? 0} items imported.`,
+        description: `${data.imported ?? data.inserted ?? 0} items imported.`,
       });
     } catch (err: any) {
       toast({
@@ -260,6 +324,48 @@ export default function MenuBuilderPage() {
       });
     } finally {
       setIsImporting(false);
+    }
+  };
+
+  const requestPosConnection = async () => {
+    if (!selectedMenuId) {
+      setShowNewMenuDialog(true);
+      return;
+    }
+
+    setIsRequestingPosSync(true);
+    try {
+      const res = await fetch(
+        `/api/owner/menus/${encodeURIComponent(selectedMenuId)}/pos-connection-request`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            source: posSource,
+            sourceUrl: menuSourceUrl.trim() || undefined,
+            notes: posNotes.trim() || undefined,
+          }),
+        },
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.message || "Unable to save POS request");
+      queryClient.invalidateQueries({
+        queryKey: ["/api/owner/menus", restaurantId],
+      });
+      toast({
+        title: "POS source saved",
+        description:
+          "We saved this as a pending connection. You can still import CSV/PDF or build manually while sync is connected.",
+      });
+    } catch (err: any) {
+      toast({
+        title: "POS request failed",
+        description: err.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsRequestingPosSync(false);
     }
   };
 
@@ -368,6 +474,50 @@ export default function MenuBuilderPage() {
                   Schedule and hours
                 </Button>
               </Link>
+            </div>
+            <div className="rounded-xl border bg-background/70 p-3">
+              <div className="flex flex-col gap-3 md:flex-row md:items-end">
+                <div className="md:w-48">
+                  <Label>Existing POS/menu system</Label>
+                  <Select value={posSource} onValueChange={setPosSource}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="toast">Toast</SelectItem>
+                      <SelectItem value="square">Square</SelectItem>
+                      <SelectItem value="clover">Clover</SelectItem>
+                      <SelectItem value="website">Website menu</SelectItem>
+                      <SelectItem value="ubereats">Uber Eats</SelectItem>
+                      <SelectItem value="doordash">DoorDash</SelectItem>
+                      <SelectItem value="gmb">Google Business Profile</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex-1">
+                  <Label>Connection notes</Label>
+                  <Input
+                    value={posNotes}
+                    onChange={(event) => setPosNotes(event.target.value)}
+                    placeholder="Example: Toast location name, Square merchant nickname, or login owner to contact"
+                  />
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={requestPosConnection}
+                  disabled={isRequestingPosSync}
+                >
+                  {isRequestingPosSync && (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  )}
+                  Save POS source
+                </Button>
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                Direct sync starts as a connection request. For now, exports from Toast, Square, Clover, DoorDash, Uber Eats, or Google can be imported as CSV/PDF/JSON while we wire deeper API access.
+              </p>
             </div>
           </CardContent>
         </Card>
@@ -546,32 +696,65 @@ export default function MenuBuilderPage() {
             <div>
               <Label>Import Format</Label>
               <div className="flex gap-2 mt-2">
-                {(["csv", "pdf"] as const).map((t) => (
+                {(["csv", "pdf", "pos_json"] as const).map((t) => (
                   <Button
                     key={t}
                     variant={importType === t ? "default" : "outline"}
                     size="sm"
                     onClick={() => setImportType(t)}
                   >
-                    {t.toUpperCase()}
+                    {t === "pos_json" ? "POS JSON" : t.toUpperCase()}
                   </Button>
                 ))}
               </div>
               <p className="text-xs text-muted-foreground mt-2">
                 {importType === "csv"
                   ? "CSV with columns: Name, Description, Price, Category, Calories, etc."
-                  : "Upload a PDF menu — AI will extract items automatically."}
+                  : importType === "pdf"
+                    ? "Upload a PDF menu — AI will extract items automatically."
+                    : "Paste exported item JSON from Toast, Square, Clover, DoorDash, Uber Eats, or Google."}
               </p>
             </div>
-            <div>
-              <Label htmlFor="import-file">File</Label>
-              <Input
-                id="import-file"
-                type="file"
-                accept={importType === "csv" ? ".csv,.tsv,.xlsx,.xls" : ".pdf"}
-                onChange={(e) => setImportFile(e.target.files?.[0] ?? null)}
-              />
-            </div>
+            {importType === "pos_json" ? (
+              <div className="space-y-3">
+                <div>
+                  <Label>Source</Label>
+                  <Select value={posSource} onValueChange={setPosSource}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="toast">Toast</SelectItem>
+                      <SelectItem value="square">Square</SelectItem>
+                      <SelectItem value="clover">Clover</SelectItem>
+                      <SelectItem value="ubereats">Uber Eats</SelectItem>
+                      <SelectItem value="doordash">DoorDash</SelectItem>
+                      <SelectItem value="gmb">Google Business Profile</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="external-json">Exported JSON</Label>
+                  <Textarea
+                    id="external-json"
+                    value={externalJson}
+                    onChange={(event) => setExternalJson(event.target.value)}
+                    placeholder='[{"name":"Smash Burger","description":"...","price":"12.99"}]'
+                    rows={8}
+                  />
+                </div>
+              </div>
+            ) : (
+              <div>
+                <Label htmlFor="import-file">File</Label>
+                <Input
+                  id="import-file"
+                  type="file"
+                  accept={importType === "csv" ? ".csv,.tsv,.xlsx,.xls" : ".pdf"}
+                  onChange={(e) => setImportFile(e.target.files?.[0] ?? null)}
+                />
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button
@@ -582,7 +765,10 @@ export default function MenuBuilderPage() {
             </Button>
             <Button
               onClick={handleImport}
-              disabled={!importFile || isImporting}
+              disabled={
+                isImporting ||
+                (importType === "pos_json" ? !externalJson.trim() : !importFile)
+              }
             >
               {isImporting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
               Import
@@ -620,6 +806,22 @@ function MenuEditor({
     isActive: menu.isActive,
   });
   const [savingSettings, setSavingSettings] = useState(false);
+  const readinessQuery = useQuery<OrderingReadiness>({
+    queryKey: ["/api/owner/restaurants", restaurantId, "ordering-readiness"],
+    queryFn: async () => {
+      const res = await fetch(
+        `/api/owner/restaurants/${encodeURIComponent(restaurantId)}/ordering-readiness`,
+        { credentials: "include" },
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.message || "Failed to load ordering readiness");
+      }
+      return data;
+    },
+    enabled: !!restaurantId,
+  });
+  const readiness = readinessQuery.data;
 
   const saveCategory = async () => {
     try {
@@ -675,6 +877,9 @@ function MenuEditor({
     try {
       await apiRequest("PATCH", `/api/owner/menus/${menu.id}`, menuSettings);
       onRefresh();
+      queryClient.invalidateQueries({
+        queryKey: ["/api/owner/restaurants", restaurantId, "ordering-readiness"],
+      });
       toast({ title: "Settings saved" });
     } catch (err: any) {
       toast({
@@ -689,6 +894,54 @@ function MenuEditor({
 
   return (
     <div className="space-y-4">
+      {readiness && (
+        <Card className="border-orange-200 bg-orange-50/60">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <CardTitle className="text-base">Online ordering readiness</CardTitle>
+                <CardDescription>
+                  {readiness.orderingEnabled
+                    ? "Customers can place orders from this menu."
+                    : "Finish these items before customers can order online."}
+                </CardDescription>
+              </div>
+              <Badge variant={readiness.orderingEnabled ? "default" : "secondary"}>
+                {readiness.orderingEnabled ? "Ready" : "Needs attention"}
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid gap-2 sm:grid-cols-2">
+              {readiness.checks.map((check) => (
+                <div
+                  key={check.id}
+                  className="rounded-lg border bg-background/80 px-3 py-2 text-sm"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-medium">{check.label}</span>
+                    <Badge variant={check.ok ? "default" : check.blocking ? "destructive" : "secondary"}>
+                      {check.ok ? "OK" : check.blocking ? "Blocked" : "Warning"}
+                    </Badge>
+                  </div>
+                  {!check.ok && (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {check.action}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+            {readiness.payout?.message && (
+              <div className="rounded-lg border bg-background/80 px-3 py-2 text-xs text-muted-foreground">
+                <span className="font-semibold text-foreground">Payouts: </span>
+                {readiness.payout.message}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Menu header */}
       <Card>
         <CardHeader className="pb-3">
@@ -846,9 +1099,9 @@ function MenuEditor({
               </div>
               <div className="flex items-center justify-between">
                 <div>
-                  <Label>Absorb Platform Fee</Label>
+                  <Label>Absorb customer fees</Label>
                   <p className="text-xs text-muted-foreground">
-                    Hide the $1 MealScout fee from customers (you cover it)
+                    Hide processing plus the $1 MealScout fee from customers (you cover it)
                   </p>
                 </div>
                 <Switch
