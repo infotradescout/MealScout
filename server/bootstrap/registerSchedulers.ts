@@ -45,11 +45,77 @@ const getParkingPassHoldTtlMs = () => {
   return minutes * 60 * 1000;
 };
 
+const SCHEDULER_TIMEZONE =
+  String(
+    process.env.SCHEDULER_TIMEZONE ||
+      process.env.CRON_TIMEZONE ||
+      "America/Chicago",
+  ).trim() || "America/Chicago";
+
+function readHourEnv(name: string, fallback: number): number {
+  const raw = Number(process.env[name]);
+  if (!Number.isFinite(raw)) return fallback;
+  return Math.max(0, Math.min(23, Math.floor(raw)));
+}
+
+const MARKETING_EMAIL_WINDOW_START_HOUR = readHourEnv(
+  "MARKETING_EMAIL_WINDOW_START_HOUR",
+  8,
+);
+const MARKETING_EMAIL_WINDOW_END_HOUR = readHourEnv(
+  "MARKETING_EMAIL_WINDOW_END_HOUR",
+  20,
+);
+
+function scheduleCron(expression: string, task: () => void | Promise<void>) {
+  return cron.schedule(expression, task, { timezone: SCHEDULER_TIMEZONE });
+}
+
+function getHourInTimezone(timeZone: string, date = new Date()): number {
+  try {
+    const hour = Number(
+      new Intl.DateTimeFormat("en-US", {
+        hour: "2-digit",
+        hour12: false,
+        timeZone,
+      }).format(date),
+    );
+    return Number.isFinite(hour) ? ((hour % 24) + 24) % 24 : date.getHours();
+  } catch {
+    return date.getHours();
+  }
+}
+
+function isHourWithinWindow(
+  hour: number,
+  startHour: number,
+  endHour: number,
+): boolean {
+  if (startHour === endHour) return true;
+  if (startHour < endHour) {
+    return hour >= startHour && hour < endHour;
+  }
+  return hour >= startHour || hour < endHour;
+}
+
+function shouldRunMarketingEmailJobs(now = new Date()): boolean {
+  const localHour = getHourInTimezone(SCHEDULER_TIMEZONE, now);
+  return isHourWithinWindow(
+    localHour,
+    MARKETING_EMAIL_WINDOW_START_HOUR,
+    MARKETING_EMAIL_WINDOW_END_HOUR,
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Public registration entry point
 // ---------------------------------------------------------------------------
 
 export async function registerSchedulers(app: Express): Promise<void> {
+  console.log(
+    `[schedulers] timezone=${SCHEDULER_TIMEZONE} marketing_email_window=${MARKETING_EMAIL_WINDOW_START_HOUR}:00-${MARKETING_EMAIL_WINDOW_END_HOUR}:00`,
+  );
+
   // Story cleanup and level recalculation
   registerStoryCronJobs(app);
 
@@ -57,7 +123,7 @@ export async function registerSchedulers(app: Express): Promise<void> {
   await registerFeaturedVideoCronJobs(app);
 
   // Weekly Digest — Monday 8:00 AM
-  cron.schedule("0 8 * * 1", async () => {
+  scheduleCron("0 8 * * 1", async () => {
     console.log("⏰ Triggering Weekly Digest Cron Job");
     try {
       await DigestService.getInstance().sendWeeklyDigests();
@@ -68,7 +134,7 @@ export async function registerSchedulers(app: Express): Promise<void> {
   });
 
   // Premium Weekly Summary — Monday 8:30 AM (subscribed trucks)
-  cron.schedule("30 8 * * 1", async () => {
+  scheduleCron("30 8 * * 1", async () => {
     console.log("⏰ Triggering Premium Weekly Summary Cron");
     try {
       const { users, restaurantSubscriptions } = await import("@shared/schema");
@@ -167,7 +233,7 @@ export async function registerSchedulers(app: Express): Promise<void> {
   });
 
   // Diner Deals Digest — Wednesday 9:00 AM
-  cron.schedule("0 9 * * 3", async () => {
+  scheduleCron("0 9 * * 3", async () => {
     console.log("⏰ Triggering Diner Deals Digest");
     try {
       const stats = await DinerDigestService.getInstance().sendDinerDigests();
@@ -177,8 +243,9 @@ export async function registerSchedulers(app: Express): Promise<void> {
     }
   });
 
-  // Post-signup onboarding drip — daily 3:00 AM (Day 3 referral + Day 7 discovery)
-  cron.schedule("0 3 * * *", async () => {
+  // Post-signup onboarding drip — daily 10:00 AM local time
+  scheduleCron("0 10 * * *", async () => {
+    if (!shouldRunMarketingEmailJobs()) return;
     try {
       const stats = await OnboardingDripService.getInstance().run();
       if (stats.day3Sent + stats.day7Sent > 0) {
@@ -189,8 +256,9 @@ export async function registerSchedulers(app: Express): Promise<void> {
     }
   });
 
-  // Restaurant deal-creation nudge — daily 3:30 AM (Day 7 + Day 14 prompts)
-  cron.schedule("30 3 * * *", async () => {
+  // Restaurant deal-creation nudge — daily 10:30 AM local time
+  scheduleCron("30 10 * * *", async () => {
+    if (!shouldRunMarketingEmailJobs()) return;
     try {
       const stats = await RestaurantActivationService.getInstance().run();
       if (stats.nudge7Sent + stats.nudge14Sent > 0) {
@@ -207,7 +275,8 @@ export async function registerSchedulers(app: Express): Promise<void> {
       .trim()
       .toLowerCase() === "true"
   ) {
-    cron.schedule("*/30 * * * *", async () => {
+    scheduleCron("*/30 * * * *", async () => {
+      if (!shouldRunMarketingEmailJobs()) return;
       try {
         const { runPensacolaFoodTruckDripCron } =
           await import("../services/pensacolaFoodTruckDrip");
@@ -230,7 +299,7 @@ export async function registerSchedulers(app: Express): Promise<void> {
     const expression = String(
       process.env.LOCATION_DEMAND_ACTIVATION_CRON || "*/30 * * * *",
     );
-    cron.schedule(expression, async () => {
+    scheduleCron(expression, async () => {
       try {
         const stats = await runLocationDemandActivationCron();
         if (Number((stats as any)?.sent || 0) > 0) {
@@ -251,7 +320,7 @@ export async function registerSchedulers(app: Express): Promise<void> {
     const expression = String(
       process.env.SUPPLY_MARKET_INTEL_CRON || "*/20 * * * *",
     );
-    cron.schedule(expression, async () => {
+    scheduleCron(expression, async () => {
       try {
         const stats = await runSupplyMarketIntelCron();
         if (Number((stats as any)?.alertsCreated || 0) > 0) {
@@ -269,7 +338,8 @@ export async function registerSchedulers(app: Express): Promise<void> {
       .trim()
       .toLowerCase() === "true"
   ) {
-    cron.schedule("*/30 * * * *", async () => {
+    scheduleCron("*/30 * * * *", async () => {
+      if (!shouldRunMarketingEmailJobs()) return;
       try {
         const { runPensacolaReportLeadDripCron } =
           await import("../services/pensacolaReportDrip");
@@ -289,7 +359,8 @@ export async function registerSchedulers(app: Express): Promise<void> {
       .trim()
       .toLowerCase() !== "false"
   ) {
-    cron.schedule("*/30 * * * *", async () => {
+    scheduleCron("*/30 * * * *", async () => {
+      if (!shouldRunMarketingEmailJobs()) return;
       try {
         const result = await runHostPartnerLeadDripCron();
         if ((result as any)?.sent) {
@@ -302,7 +373,7 @@ export async function registerSchedulers(app: Express): Promise<void> {
   }
 
   // Parking Pass completion reminders — 1st of each month at 9:00 AM
-  cron.schedule("0 9 1 * *", async () => {
+  scheduleCron("0 9 1 * *", async () => {
     console.log("⏰ Triggering Parking Pass Completion Reminders");
     try {
       const stats = await remindIncompleteParkingPassHosts();
@@ -321,7 +392,7 @@ export async function registerSchedulers(app: Express): Promise<void> {
     const expression = String(
       process.env.SOCIAL_QUEUE_PROCESSOR_CRON || "*/10 * * * *",
     );
-    cron.schedule(expression, async () => {
+    scheduleCron(expression, async () => {
       try {
         const stats = await runSocialQueueProcessor(
           Number(process.env.SOCIAL_QUEUE_PROCESSOR_BATCH || 25),
@@ -336,7 +407,7 @@ export async function registerSchedulers(app: Express): Promise<void> {
   }
 
   // Notify unbooked events — hourly
-  cron.schedule("0 * * * *", async () => {
+  scheduleCron("0 * * * *", async () => {
     try {
       const stats = await notifyUnbookedEvents();
       if ((stats as any)?.sent > 0) {
@@ -348,7 +419,7 @@ export async function registerSchedulers(app: Express): Promise<void> {
   });
 
   // Daily request log summary — 6:05 AM
-  cron.schedule("5 6 * * *", async () => {
+  scheduleCron("5 6 * * *", async () => {
     try {
       const end = new Date();
       end.setMinutes(0, 0, 0);
@@ -485,7 +556,7 @@ export async function registerSchedulers(app: Express): Promise<void> {
   });
 
   // Request log cleanup — every 15 min, purge logs older than 48 h
-  cron.schedule("15 * * * *", async () => {
+  scheduleCron("15 * * * *", async () => {
     try {
       const cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000);
       await db.delete(requestLogs).where(lt(requestLogs.createdAt, cutoff));
@@ -495,7 +566,7 @@ export async function registerSchedulers(app: Express): Promise<void> {
   });
 
   // Parking Pass booking hold cleanup — every minute
-  cron.schedule("* * * * *", async () => {
+  scheduleCron("* * * * *", async () => {
     try {
       const { eventBookings } = await import("@shared/schema");
       const cutoff = new Date(Date.now() - getParkingPassHoldTtlMs());
@@ -551,7 +622,7 @@ export async function registerSchedulers(app: Express): Promise<void> {
       .trim()
       .toLowerCase() === "true"
   ) {
-    cron.schedule("0 4 * * *", async () => {
+    scheduleCron("0 4 * * *", async () => {
       try {
         const cfg = getIndexNowConfig();
         if (!cfg.enabled || !cfg.key) return;
@@ -585,7 +656,7 @@ export async function registerSchedulers(app: Express): Promise<void> {
   }
 
   // VAC Pending Review Digest — daily 9:00 AM (only when there are pending reviews)
-  cron.schedule("0 9 * * *", async () => {
+  scheduleCron("0 9 * * *", async () => {
     try {
       const { securityAuditLog, restaurants, users } = await import("@shared/schema");
       const { eq, and, isNull } = await import("drizzle-orm");
@@ -655,3 +726,4 @@ export async function registerSchedulers(app: Express): Promise<void> {
 
   console.log("✅ All schedulers registered");
 }
+

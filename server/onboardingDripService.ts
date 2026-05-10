@@ -3,7 +3,7 @@
  *
  * Automated post-signup email drip for new customer-type users.
  *
- * Day 3 email: "Share MealScout with friends" — referral nudge with affiliate link.
+ * Day 3 email: "Find your next deal" — discovery nudge.
  * Day 7 email: "Find deals near you this week" — content-discovery nudge.
  *
  * Runs via daily cron (3:00 AM). Idempotency via telemetryEvents per user per step.
@@ -80,7 +80,6 @@ export class OnboardingDripService {
         id: users.id,
         email: users.email,
         firstName: users.firstName,
-        affiliateTag: users.affiliateTag,
         accountSettings: users.accountSettings,
         createdAt: users.createdAt,
       })
@@ -107,7 +106,6 @@ export class OnboardingDripService {
             await this.sendDay3ReferralEmail(
               email,
               user.firstName,
-              user.affiliateTag,
             );
             await markSent(user.id, "day3_referral");
             day3Sent++;
@@ -142,14 +140,13 @@ export class OnboardingDripService {
   private async sendDay3ReferralEmail(
     to: string,
     firstName: string | null,
-    affiliateTag: string | null,
   ): Promise<boolean> {
     const name = firstName || "Food Explorer";
-    const refParam = affiliateTag ? `?ref=${affiliateTag}` : "";
-    const shareUrl = `https://www.mealscout.us${refParam}`;
+    const scoutUrl = "https://www.mealscout.us/scout";
+    const dealsUrl = "https://www.mealscout.us/search";
     const html = `<!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Share MealScout</title></head>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Find New Deals</title></head>
 <body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;background:#f8f9fa;color:#333;">
   <div style="max-width:600px;margin:0 auto;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,0.1);">
     <div style="background:linear-gradient(135deg,#ff6b35 0%,#f7931e 100%);color:#fff;padding:30px 40px;text-align:center;">
@@ -157,17 +154,16 @@ export class OnboardingDripService {
       <div style="margin:8px 0 0;font-size:16px;opacity:0.9;">Discover Amazing Food Deals</div>
     </div>
     <div style="padding:40px;">
-      <h2 style="color:#ff6b35;font-size:24px;margin:0 0 16px;">Know someone who loves food? 🎉</h2>
+      <h2 style="color:#ff6b35;font-size:24px;margin:0 0 16px;">Fresh deals are waiting this week 🔥</h2>
       <p>Hey ${name}!</p>
-      <p>You've been with MealScout for a few days now — hope you've found some great deals!</p>
-      <p>Here's something worth sharing: <strong>when you invite a friend and they join, you earn referral credits</strong> toward future bookings and perks.</p>
-      <div style="background:#fff8f5;border-left:4px solid #ff6b35;padding:20px;margin:20px 0;border-radius:4px;">
-        <strong>Your personal share link:</strong><br>
-        <a href="${shareUrl}" style="color:#ff6b35;word-break:break-all;">${shareUrl}</a>
-      </div>
+      <p>You've been with MealScout for a few days now. New restaurants and food trucks post limited-time deals throughout the week.</p>
+      <p>Open Scout to see what is active near you right now, or jump straight into search to browse current offers.</p>
       <div style="text-align:center;margin:30px 0;">
-        <a href="${shareUrl}" style="background:linear-gradient(135deg,#ff6b35 0%,#f7931e 100%);color:white;padding:14px 32px;text-decoration:none;border-radius:6px;font-weight:600;">Share with Friends</a>
+        <a href="${scoutUrl}" style="background:linear-gradient(135deg,#ff6b35 0%,#f7931e 100%);color:white;padding:14px 32px;text-decoration:none;border-radius:6px;font-weight:600;">Open Scout</a>
       </div>
+      <p style="text-align:center;margin-top:0;">
+        <a href="${dealsUrl}" style="color:#ff6b35;text-decoration:underline;">Browse all current deals</a>
+      </p>
       <p style="font-size:13px;color:#999;">To unsubscribe, update your <a href="https://www.mealscout.us/profile" style="color:#ff6b35;">notification settings</a>.</p>
     </div>
     <div style="background:#f8f9fa;padding:20px 40px;text-align:center;border-top:1px solid #e9ecef;font-size:13px;color:#666;">
@@ -176,10 +172,10 @@ export class OnboardingDripService {
   </div>
 </body>
 </html>`;
-    const text = `Hey ${name}! Share MealScout with friends and earn referral credits. Your link: ${shareUrl}`;
+    const text = `Hey ${name}! Fresh deals are posted all week on MealScout. Open Scout: ${scoutUrl} or browse deals: ${dealsUrl}`;
     return emailService.sendBasicEmail(
       to,
-      "🍽️ Share MealScout with friends & earn credits",
+      "🍽️ Fresh MealScout deals this week",
       html,
       text,
     );
