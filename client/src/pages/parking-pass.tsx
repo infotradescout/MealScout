@@ -288,6 +288,18 @@ type SocialConnectionStatus = {
   lastError?: string | null;
 };
 
+type SocialPublishingConfig = {
+  platforms?: Record<
+    SocialConnectionStatus["platform"],
+    {
+      provider: "meta" | "x";
+      configured: boolean;
+      callbackUrl: string;
+    }
+  >;
+  missing?: string[];
+};
+
 const SOCIAL_PREOPEN_PROMPT_MINUTES = 90;
 
 const formatSlotLabel = (slot: string) =>
@@ -619,6 +631,7 @@ export default function ParkingPassPage() {
   } = useQuery<{
     restaurantId: string;
     connections: SocialConnectionStatus[];
+    publishingConfig?: SocialPublishingConfig;
   }>({
     queryKey: truckId
       ? [`/api/restaurants/${truckId}/social-connections/status`]
@@ -638,6 +651,7 @@ export default function ParkingPassPage() {
     });
     return map;
   }, [socialConnectionPayload]);
+  const socialPublishingConfig = socialConnectionPayload?.publishingConfig;
   const [hasHostProfile, setHasHostProfile] = useState(false);
   const [hosts, setHosts] = useState<Host[]>([]);
   const [selectedHostId, setSelectedHostId] = useState<string>("");
@@ -2116,6 +2130,18 @@ export default function ParkingPassPage() {
     platform: SocialConnectionStatus["platform"],
   ) => {
     if (!truckId) return;
+    const providerConfig = socialPublishingConfig?.platforms?.[platform];
+    if (providerConfig && !providerConfig.configured) {
+      toast({
+        title: "Publishing setup needed",
+        description:
+          platform === "x"
+            ? "Add X_CLIENT_ID before owners connect X."
+            : "Add FACEBOOK_APP_ID and FACEBOOK_APP_SECRET before owners connect Meta.",
+        variant: "destructive",
+      });
+      return;
+    }
     const provider = platform === "x" ? "x" : "meta";
     const redirect = encodeURIComponent("/parking-pass?tab=schedule");
     const platformParam = encodeURIComponent(platform);
@@ -5683,6 +5709,9 @@ export default function ParkingPassPage() {
                       const connection = socialConnectionByPlatform.get(
                         platform.key,
                       );
+                      const providerReady =
+                        socialPublishingConfig?.platforms?.[platform.key]
+                          ?.configured !== false;
                       return (
                         <div
                           key={platform.key}
@@ -5693,11 +5722,17 @@ export default function ParkingPassPage() {
                             <Badge
                               variant={connection?.connected ? "default" : "outline"}
                             >
-                              {connection?.connected ? "Connected" : "Manual"}
+                              {!providerReady
+                                ? "Setup"
+                                : connection?.connected
+                                  ? "Connected"
+                                  : "Manual"}
                             </Badge>
                           </div>
                           <p className="mt-1 truncate text-[color:var(--text-muted)]">
-                            {connection?.connected
+                            {!providerReady
+                              ? "Setup needed"
+                              : connection?.connected
                               ? connection.displayName ||
                                 connection.externalAccountUrl ||
                                 "Ready to publish"
@@ -5715,7 +5750,9 @@ export default function ParkingPassPage() {
                               variant="outline"
                               className="h-7 px-2 text-xs"
                               disabled={
-                                !hasPremiumTruckTools || !canManageTruckProfile
+                                !hasPremiumTruckTools ||
+                                !canManageTruckProfile ||
+                                !providerReady
                               }
                               onClick={() =>
                                 handleConnectSocialPlatform(platform.key)
@@ -5723,7 +5760,9 @@ export default function ParkingPassPage() {
                             >
                               {connection?.connected
                                 ? "Reconnect"
-                                : "Connect"}
+                                : providerReady
+                                  ? "Connect"
+                                  : "Setup"}
                             </Button>
                             {connection?.connected && (
                               <Button

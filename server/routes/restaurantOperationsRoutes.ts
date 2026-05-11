@@ -62,6 +62,45 @@ function getPublicBaseUrl(req: any) {
   ).replace(/\/$/, "");
 }
 
+function getSocialPublishingConfig(req: any) {
+  const baseUrl = getPublicBaseUrl(req);
+  const metaConfigured = Boolean(
+    process.env.FACEBOOK_APP_ID && process.env.FACEBOOK_APP_SECRET,
+  );
+  const xConfigured = Boolean(
+    process.env.X_CLIENT_ID || process.env.TWITTER_CLIENT_ID,
+  );
+
+  return {
+    baseUrl,
+    platforms: {
+      facebook: {
+        provider: "meta",
+        configured: metaConfigured,
+        callbackUrl: `${baseUrl}/api/social-connections/meta/callback`,
+      },
+      instagram: {
+        provider: "meta",
+        configured: metaConfigured,
+        callbackUrl: `${baseUrl}/api/social-connections/meta/callback`,
+      },
+      x: {
+        provider: "x",
+        configured: xConfigured,
+        callbackUrl: `${baseUrl}/api/social-connections/x/callback`,
+      },
+    },
+    missing: [
+      !process.env.PUBLIC_BASE_URL && !process.env.APP_BASE_URL
+        ? "PUBLIC_BASE_URL"
+        : null,
+      !process.env.FACEBOOK_APP_ID ? "FACEBOOK_APP_ID" : null,
+      !process.env.FACEBOOK_APP_SECRET ? "FACEBOOK_APP_SECRET" : null,
+      !xConfigured ? "X_CLIENT_ID" : null,
+    ].filter(Boolean),
+  };
+}
+
 function getSafeRedirectPath(value: unknown, fallback = "/parking-pass?tab=schedule") {
   if (typeof value !== "string") return fallback;
   const trimmed = value.trim();
@@ -635,7 +674,11 @@ export function registerRestaurantOperationsRoutes(
         }
 
         const connections = await listSocialConnectionStatus(restaurantId);
-        res.json({ restaurantId, connections });
+        res.json({
+          restaurantId,
+          connections,
+          publishingConfig: getSocialPublishingConfig(req),
+        });
       } catch (error) {
         console.error("Error loading social connections:", error);
         res.status(500).json({ message: "Failed to load social connections" });
