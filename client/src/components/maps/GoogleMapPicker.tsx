@@ -25,6 +25,7 @@ import {
 import L from "leaflet";
 import { useQuery } from "@tanstack/react-query";
 import mealScoutIcon from "@assets/meal-scout-icon.png";
+import type { MapBoundsLike, MapTrafficCell } from "./map-adapter.types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -52,6 +53,10 @@ export interface GoogleMapPickerProps {
   onPinClick?: (key: string) => void;
   /** Pins to render on the map */
   pins?: MapPickerPin[];
+  /** Optional owner planning heat cells rendered above the map */
+  trafficCells?: MapTrafficCell[];
+  /** Called after viewport changes so callers can fetch viewport-scoped overlays */
+  onBoundsChanged?: (bounds: MapBoundsLike) => void;
   /** If set, draws a circle around `center` with this radius in metres */
   circleRadiusMetres?: number;
   /** Extra CSS classes applied to the outer wrapper div */
@@ -105,6 +110,43 @@ function LeafletClickHandler({
   useMapEvents({
     click: (e) => onMapClick({ lat: e.latlng.lat, lng: e.latlng.lng }),
   });
+  return null;
+}
+
+function LeafletBoundsWatcher({
+  onBoundsChanged,
+}: {
+  onBoundsChanged: (bounds: MapBoundsLike) => void;
+}) {
+  const map = useMap();
+  useEffect(() => {
+    const emitBounds = () => {
+      const bounds = map.getBounds();
+      const north = bounds.getNorth();
+      const south = bounds.getSouth();
+      const east = bounds.getEast();
+      const west = bounds.getWest();
+      onBoundsChanged({
+        north,
+        south,
+        east,
+        west,
+        contains: ([lat, lng]) => {
+          const withinLat = lat <= north && lat >= south;
+          const crossesDateLine = west > east;
+          const withinLng = crossesDateLine
+            ? lng >= west || lng <= east
+            : lng >= west && lng <= east;
+          return withinLat && withinLng;
+        },
+      });
+    };
+    emitBounds();
+    map.on("moveend zoomend", emitBounds);
+    return () => {
+      map.off("moveend zoomend", emitBounds);
+    };
+  }, [map, onBoundsChanged]);
   return null;
 }
 
@@ -183,10 +225,12 @@ function GoogleMapRenderer({
   center,
   zoom = 13,
   pins = [],
+  trafficCells = [],
   circleRadiusMetres,
   onMapClick,
   onPinDrag,
   onPinClick,
+  onBoundsChanged,
   interactionsEnabled = true,
 }: {
   apiKey: string;
@@ -194,15 +238,18 @@ function GoogleMapRenderer({
   center: GeoPoint;
   zoom?: number;
   pins?: MapPickerPin[];
+  trafficCells?: MapTrafficCell[];
   circleRadiusMetres?: number;
   onMapClick?: (p: GeoPoint) => void;
   onPinDrag?: (key: string, p: GeoPoint) => void;
   onPinClick?: (key: string) => void;
+  onBoundsChanged?: (bounds: MapBoundsLike) => void;
   interactionsEnabled?: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
   const markersRef = useRef<Map<string, any>>(new Map());
+  const trafficCircleRefs = useRef<Map<string, any>>(new Map());
   const circleRef = useRef<any>(null);
   const infoWindowRef = useRef<any>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -243,12 +290,53 @@ function GoogleMapRenderer({
             onMapClick({ lat, lng });
           });
         }
+        if (onBoundsChanged) {
+          const emitBounds = () => {
+            const bounds = map.getBounds?.();
+            if (!bounds) return;
+            const ne = bounds.getNorthEast();
+            const sw = bounds.getSouthWest();
+            const north = Number(ne.lat());
+            const east = Number(ne.lng());
+            const south = Number(sw.lat());
+            const west = Number(sw.lng());
+            onBoundsChanged({
+              north,
+              south,
+              east,
+              west,
+              contains: ([lat, lng]) => {
+                const withinLat = lat <= north && lat >= south;
+                const crossesDateLine = west > east;
+                const withinLng = crossesDateLine
+                  ? lng >= west || lng <= east
+                  : lng >= west && lng <= east;
+                return withinLat && withinLng;
+              },
+            });
+          };
+          map.addListener("idle", emitBounds);
+          window.setTimeout(emitBounds, 0);
+        }
       })
       .catch((err) => {
         if (!cancelled) setLoadError(String(err?.message || "Map failed to load"));
       });
     return () => {
       cancelled = true;
+      Array.from(markersRef.current.values()).forEach((marker) => {
+        marker.setMap?.(null);
+      });
+      markersRef.current.clear();
+      Array.from(trafficCircleRefs.current.values()).forEach((circle) => {
+        circle.setMap?.(null);
+      });
+      trafficCircleRefs.current.clear();
+      if (circleRef.current) {
+        circleRef.current.setMap?.(null);
+        circleRef.current = null;
+      }
+      infoWindowRef.current?.close?.();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiKey]);
@@ -360,6 +448,56 @@ function GoogleMapRenderer({
     }
   }, [center.lat, center.lng, circleRadiusMetres]);
 
+  useEffect(() => {
+    const g = (window as GoogleMapsWindow).google;
+    if (!g?.maps || !mapRef.current) return;
+
+    const trafficCellColor = (source: MapTrafficCell["source"]) =>
+      source === "google_places"
+        ? "#60a5fa"
+        : source === "supply_signal"
+          ? "#ef4444"
+          : "#f97316";
+
+    const usedIds = new Set<string>();
+    trafficCells.forEach((cell) => {
+      usedIds.add(cell.id);
+      const existing = trafficCircleRefs.current.get(cell.id);
+      const radius = Math.max(140, Math.min(1800, (cell.weight || 1) * 15));
+      const style = {
+        clickable: false,
+        strokeOpacity: 0,
+        strokeWeight: 0,
+        fillColor: trafficCellColor(cell.source),
+        fillOpacity:
+          cell.source === "google_places"
+            ? 0.14
+            : cell.source === "supply_signal"
+              ? 0.22
+              : 0.18,
+      };
+      if (existing) {
+        existing.setCenter({ lat: cell.lat, lng: cell.lng });
+        existing.setRadius(radius);
+        existing.setOptions(style);
+        return;
+      }
+      const circle = new g.maps.Circle({
+        map: mapRef.current,
+        center: { lat: cell.lat, lng: cell.lng },
+        radius,
+        ...style,
+      });
+      trafficCircleRefs.current.set(cell.id, circle);
+    });
+
+    Array.from(trafficCircleRefs.current.entries()).forEach(([id, instance]) => {
+      if (usedIds.has(id)) return;
+      instance.setMap(null);
+      trafficCircleRefs.current.delete(id);
+    });
+  }, [trafficCells]);
+
   if (loadError) return null; // caller falls back to Leaflet
 
   return (
@@ -379,19 +517,23 @@ function LeafletRenderer({
   center,
   zoom = 13,
   pins = [],
+  trafficCells = [],
   circleRadiusMetres,
   onMapClick,
   onPinDrag,
   onPinClick,
+  onBoundsChanged,
   interactionsEnabled = true,
 }: {
   center: GeoPoint;
   zoom?: number;
   pins?: MapPickerPin[];
+  trafficCells?: MapTrafficCell[];
   circleRadiusMetres?: number;
   onMapClick?: (p: GeoPoint) => void;
   onPinDrag?: (key: string, p: GeoPoint) => void;
   onPinClick?: (key: string) => void;
+  onBoundsChanged?: (bounds: MapBoundsLike) => void;
   interactionsEnabled?: boolean;
 }) {
   const isNightTheme =
@@ -419,6 +561,32 @@ function LeafletRenderer({
       <TileLayer attribution={attribution} url={tileUrl} />
       <LeafletCenterer center={center} zoom={zoom} />
       {onMapClick && <LeafletClickHandler onMapClick={onMapClick} />}
+      {onBoundsChanged && (
+        <LeafletBoundsWatcher onBoundsChanged={onBoundsChanged} />
+      )}
+      {trafficCells.map((cell) => (
+        <Circle
+          key={cell.id}
+          center={[cell.lat, cell.lng]}
+          radius={Math.max(140, Math.min(1800, (cell.weight || 1) * 15))}
+          interactive={false}
+          pathOptions={{
+            stroke: false,
+            fillColor:
+              cell.source === "google_places"
+                ? "#60a5fa"
+                : cell.source === "supply_signal"
+                  ? "#ef4444"
+                  : "#f97316",
+            fillOpacity:
+              cell.source === "google_places"
+                ? 0.14
+                : cell.source === "supply_signal"
+                  ? 0.22
+                  : 0.18,
+          }}
+        />
+      ))}
       {pins.map((pin) => (
         <Marker
           key={pin.key}
@@ -467,6 +635,8 @@ export function GoogleMapPicker({
   onPinDrag,
   onPinClick,
   pins = [],
+  trafficCells = [],
+  onBoundsChanged,
   circleRadiusMetres,
   className = "",
   interactionsEnabled = true,
@@ -508,10 +678,12 @@ export function GoogleMapPicker({
           center={center}
           zoom={zoom}
           pins={pins}
+          trafficCells={trafficCells}
           circleRadiusMetres={circleRadiusMetres}
           onMapClick={onMapClick}
           onPinDrag={onPinDrag}
           onPinClick={onPinClick}
+          onBoundsChanged={onBoundsChanged}
           interactionsEnabled={interactionsEnabled}
         />
       ) : (
@@ -519,10 +691,12 @@ export function GoogleMapPicker({
           center={center}
           zoom={zoom}
           pins={pins}
+          trafficCells={trafficCells}
           circleRadiusMetres={circleRadiusMetres}
           onMapClick={onMapClick}
           onPinDrag={onPinDrag}
           onPinClick={onPinClick}
+          onBoundsChanged={onBoundsChanged}
           interactionsEnabled={interactionsEnabled}
         />
       )}

@@ -22,6 +22,10 @@ import {
 import { Calendar as DatePickerCalendar } from "@/components/ui/calendar";
 import { GoogleMapPicker } from "@/components/maps/GoogleMapPicker";
 import type { MapPickerPin } from "@/components/maps/GoogleMapPicker";
+import type {
+  MapBoundsLike,
+  MapTrafficCell,
+} from "@/components/maps/map-adapter.types";
 import { BookingPaymentModal } from "@/components/booking-payment-modal";
 import { EditOccurrenceDialog } from "@/components/edit-occurrence-dialog";
 import { Button } from "@/components/ui/button";
@@ -139,6 +143,24 @@ type PublicMapLocation = {
 
 type MapLocationsResponse = {
   hostLocations: PublicMapLocation[];
+};
+
+type MapFootTrafficResponse = {
+  generatedAt: string;
+  windowMinutes: number;
+  requestedWindowMinutes: number;
+  mode: "avg" | "live";
+  signalQuality?: {
+    tier: "sparse" | "emerging" | "solid";
+    isLowDensity: boolean;
+  };
+  googlePlaces?: {
+    enabled: boolean;
+    used: boolean;
+    error: string | null;
+    cells: MapTrafficCell[];
+  };
+  cells: MapTrafficCell[];
 };
 
 type ParkingPassLocationGroup = {
@@ -697,6 +719,11 @@ export default function ParkingPassPage() {
     Array<{ listing: ParkingPassListing; slotTypes: string[] }>
   >([]);
   const [viewMode, setViewMode] = useState<"map" | "list">("map");
+  const [showParkingScoutHeat, setShowParkingScoutHeat] = useState(false);
+  const [parkingMapBounds, setParkingMapBounds] =
+    useState<MapBoundsLike | null>(null);
+  const [debouncedParkingMapBounds, setDebouncedParkingMapBounds] =
+    useState<MapBoundsLike | null>(null);
   const [activeLocationKey, setActiveLocationKey] = useState<string | null>(
     null,
   );
@@ -721,6 +748,73 @@ export default function ParkingPassPage() {
   }, [viewMode]);
 
   const mapInteractionsEnabled = !mapPopupOpen;
+  useEffect(() => {
+    if (!parkingMapBounds) {
+      setDebouncedParkingMapBounds(null);
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      setDebouncedParkingMapBounds(parkingMapBounds);
+    }, 320);
+    return () => window.clearTimeout(timer);
+  }, [parkingMapBounds]);
+
+  const { data: parkingScoutHeatData, isFetching: isParkingScoutHeatFetching } =
+    useQuery<MapFootTrafficResponse>({
+      queryKey: [
+        "/api/map/foot-traffic",
+        "parking-pass",
+        showParkingScoutHeat,
+        debouncedParkingMapBounds
+          ? [
+              Number(debouncedParkingMapBounds.north.toFixed(4)),
+              Number(debouncedParkingMapBounds.south.toFixed(4)),
+              Number(debouncedParkingMapBounds.east.toFixed(4)),
+              Number(debouncedParkingMapBounds.west.toFixed(4)),
+            ]
+          : null,
+      ],
+      enabled:
+        showParkingScoutHeat &&
+        viewMode === "map" &&
+        Boolean(debouncedParkingMapBounds) &&
+        canManageParkingPass,
+      queryFn: async () => {
+        const bounds = debouncedParkingMapBounds;
+        if (!bounds) {
+          return {
+            generatedAt: new Date().toISOString(),
+            windowMinutes: 0,
+            requestedWindowMinutes: 0,
+            mode: "avg",
+            cells: [],
+          };
+        }
+        const params = new URLSearchParams({
+          north: String(bounds.north),
+          south: String(bounds.south),
+          east: String(bounds.east),
+          west: String(bounds.west),
+          mode: "avg",
+          windowMinutes: "720",
+          includeGoogle: "true",
+        });
+        const res = await fetch(`/api/map/foot-traffic?${params.toString()}`);
+        if (!res.ok) throw new Error("Failed to load foot traffic");
+        return res.json();
+      },
+      staleTime: 5 * 60 * 1000,
+      refetchOnWindowFocus: false,
+    });
+
+  const parkingScoutHeatCells = useMemo<MapTrafficCell[]>(() => {
+    if (!showParkingScoutHeat || !canManageParkingPass) return [];
+    return (parkingScoutHeatData?.cells || []).slice(0, 260);
+  }, [canManageParkingPass, parkingScoutHeatData?.cells, showParkingScoutHeat]);
+
+  const parkingScoutHeatCellCount = parkingScoutHeatCells.length;
+  const parkingScoutHeatSignalLabel =
+    parkingScoutHeatData?.signalQuality?.tier || null;
   const { data: mapLocationsData } = useQuery<MapLocationsResponse>({
     queryKey: ["/api/map/locations"],
     queryFn: async () => {
@@ -5954,6 +6048,16 @@ export default function ParkingPassPage() {
                         >
                           List
                         </Button>
+                        <Button
+                          size="sm"
+                          variant={showParkingScoutHeat ? "default" : "outline"}
+                          onClick={() =>
+                            setShowParkingScoutHeat((value) => !value)
+                          }
+                          disabled={viewMode !== "map"}
+                        >
+                          Scout heat
+                        </Button>
                       </div>
                     </div>
                     <div className="space-y-1">
@@ -5986,6 +6090,17 @@ export default function ParkingPassPage() {
                         List view
                       </Button>
                     </div>
+                    <Button
+                      size="sm"
+                      variant={showParkingScoutHeat ? "default" : "outline"}
+                      onClick={() =>
+                        setShowParkingScoutHeat((value) => !value)
+                      }
+                      disabled={viewMode !== "map"}
+                      className="w-full sm:hidden"
+                    >
+                      Scout heat
+                    </Button>
                   </div>
 
                   {isLoading ? (
@@ -6004,6 +6119,8 @@ export default function ParkingPassPage() {
                               center={fallbackMapCenter}
                               zoom={13}
                               interactionsEnabled={mapInteractionsEnabled}
+                              trafficCells={parkingScoutHeatCells}
+                              onBoundsChanged={setParkingMapBounds}
                               pins={fallbackHostPins.map(
                                 ({
                                   key,
@@ -6042,6 +6159,25 @@ export default function ParkingPassPage() {
                               )}
                               className="h-full w-full"
                             />
+                            {showParkingScoutHeat && (
+                              <div className="pointer-events-none absolute bottom-3 left-3 max-w-[min(270px,calc(100%-1.5rem))] rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)]/95 px-3 py-2 text-xs text-[color:var(--text-primary)] shadow-clean backdrop-blur">
+                                <p className="font-semibold">
+                                  {isParkingScoutHeatFetching
+                                    ? "Loading scout heat"
+                                    : parkingScoutHeatCellCount > 0
+                                      ? "Area foot traffic"
+                                      : "No heat signals here yet"}
+                                </p>
+                                <p className="mt-1 text-[color:var(--text-muted)]">
+                                  {parkingScoutHeatCellCount > 0
+                                    ? `${parkingScoutHeatCellCount} cells - ${parkingScoutHeatSignalLabel || "sparse"} signal - ${Math.round(
+                                        (parkingScoutHeatData?.windowMinutes ||
+                                          720) / 60,
+                                      )}h area avg`
+                                    : "Pan around your market to compare areas."}
+                                </p>
+                              </div>
+                            )}
                           </div>
                           <div className="border-t border-[color:var(--border-subtle)] px-4 py-2 text-xs text-[color:var(--text-muted)]">
                             {requestedHostId
@@ -6066,6 +6202,8 @@ export default function ParkingPassPage() {
                             center={mapCenter}
                             zoom={13}
                             interactionsEnabled={mapInteractionsEnabled}
+                            trafficCells={parkingScoutHeatCells}
+                            onBoundsChanged={setParkingMapBounds}
                             onPinClick={(pinKey) => {
                               const hit = mapPins.find((p) => p.key === pinKey);
                               if (hit) setActiveLocationKey(hit.group.key);
@@ -6319,6 +6457,25 @@ export default function ParkingPassPage() {
                             )}
                             className="h-full w-full"
                           />
+                          {showParkingScoutHeat && (
+                            <div className="pointer-events-none absolute bottom-3 left-3 max-w-[min(270px,calc(100%-1.5rem))] rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)]/95 px-3 py-2 text-xs text-[color:var(--text-primary)] shadow-clean backdrop-blur">
+                              <p className="font-semibold">
+                                {isParkingScoutHeatFetching
+                                  ? "Loading scout heat"
+                                  : parkingScoutHeatCellCount > 0
+                                    ? "Area foot traffic"
+                                    : "No heat signals here yet"}
+                              </p>
+                              <p className="mt-1 text-[color:var(--text-muted)]">
+                                {parkingScoutHeatCellCount > 0
+                                  ? `${parkingScoutHeatCellCount} cells - ${parkingScoutHeatSignalLabel || "sparse"} signal - ${Math.round(
+                                      (parkingScoutHeatData?.windowMinutes ||
+                                        720) / 60,
+                                    )}h area avg`
+                                  : "Pan around your market to compare areas."}
+                              </p>
+                            </div>
+                          )}
                           {mapPins.length === 0 && (
                             <div className="absolute inset-0 flex items-center justify-center text-sm text-[color:var(--text-muted)] pointer-events-none">
                               No mappable locations yet.

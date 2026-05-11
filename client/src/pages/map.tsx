@@ -1461,6 +1461,8 @@ export default function MapPage() {
     user?.userType === "admin" ||
     user?.userType === "duper_admin" ||
     user?.userType === "super_admin";
+  const showParkingPassMapHandoff =
+    isStaffOrAdmin || user?.userType === "food_truck";
   const showMapDiagnostics = isStaffOrAdmin;
 
   const getLocalDateKey = () => {
@@ -3912,6 +3914,16 @@ export default function MapPage() {
                 </ul>
               )}
             </div>
+            {showParkingPassMapHandoff && (
+              <Link
+                href="/parking-pass?setup=book&view=map"
+                className="flex h-9 items-center gap-1.5 rounded-xl border border-orange-200 bg-orange-50/95 px-2.5 text-xs font-semibold text-orange-900 shadow-clean backdrop-blur hover:bg-orange-100"
+                aria-label="Open Parking Pass planning map"
+                data-testid="link-parking-pass-planning-map"
+              >
+                Parking map
+              </Link>
+            )}
             <button
               type="button"
               onClick={async () => {

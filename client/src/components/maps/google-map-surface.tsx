@@ -788,6 +788,7 @@ export function GoogleMapSurface({
       const existing = trafficCircleRefs.current.get(cell.id);
       const radius = Math.max(140, Math.min(1800, (cell.weight || 1) * 15));
       const style = {
+        clickable: false,
         strokeOpacity: 0,
         strokeWeight: 0,
         fillColor: trafficCellColor(cell.source),
