@@ -278,6 +278,15 @@ const defaultSocialAutopostSettings: SocialAutopostSettings = {
   promptBeforePost: true,
 };
 
+type SocialConnectionStatus = {
+  platform: "facebook" | "instagram" | "x";
+  connected: boolean;
+  displayName?: string | null;
+  externalAccountUrl?: string | null;
+  lastPublishAt?: string | null;
+  lastError?: string | null;
+};
+
 const SOCIAL_PREOPEN_PROMPT_MINUTES = 90;
 
 const formatSlotLabel = (slot: string) =>
@@ -603,6 +612,28 @@ export default function ParkingPassPage() {
     };
   } | null>(null);
   const [isPostingSocial, setIsPostingSocial] = useState(false);
+  const { data: socialConnectionPayload } = useQuery<{
+    restaurantId: string;
+    connections: SocialConnectionStatus[];
+  }>({
+    queryKey: truckId
+      ? [`/api/restaurants/${truckId}/social-connections/status`]
+      : ["social-connections-none"],
+    enabled:
+      Boolean(truckId) &&
+      isAuthenticated &&
+      hasPremiumTruckTools &&
+      canManageTruckProfile,
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+  const socialConnectionByPlatform = useMemo(() => {
+    const map = new Map<string, SocialConnectionStatus>();
+    (socialConnectionPayload?.connections || []).forEach((connection) => {
+      map.set(connection.platform, connection);
+    });
+    return map;
+  }, [socialConnectionPayload]);
   const [hasHostProfile, setHasHostProfile] = useState(false);
   const [hosts, setHosts] = useState<Host[]>([]);
   const [selectedHostId, setSelectedHostId] = useState<string>("");
@@ -2065,6 +2096,7 @@ export default function ParkingPassPage() {
     try {
       const shouldClear = !payload;
       let queuedCount = 0;
+      let manualRequiredCount = 0;
       if (truckId) {
         try {
           const queueRes = await fetch(`/api/restaurants/${truckId}/social-posts`, {
@@ -2081,9 +2113,8 @@ export default function ParkingPassPage() {
           });
           if (queueRes.ok) {
             const queueData = await queueRes.json().catch(() => ({}));
-            queuedCount = Array.isArray(queueData?.posts)
-              ? queueData.posts.length
-              : 0;
+            queuedCount = Number(queueData?.queuedForPublishing || 0);
+            manualRequiredCount = Number(queueData?.manualRequiredCount || 0);
           } else {
             const queueData = await queueRes.json().catch(() => ({}));
             console.warn(
@@ -2128,11 +2159,18 @@ export default function ParkingPassPage() {
       }
       if (shared) {
         toast({
-          title: queuedCount > 0 ? "Post queued" : "Share opened",
+          title:
+            queuedCount > 0
+              ? "Publishing queued"
+              : manualRequiredCount > 0
+                ? "Manual share opened"
+                : "Share opened",
           description: activePrompt.imageUrl
-            ? "Caption copied with photo link. Finish the post."
+            ? queuedCount > 0
+              ? "Connected platforms will publish. Finish any manual shares opened."
+              : "Caption copied with photo link. Finish the post."
             : queuedCount > 0
-              ? "Queued for tracking. Finish the post in the new window."
+              ? "Connected platforms will publish. Finish any manual shares opened."
               : "Finish the post in the new window.",
         });
       }
@@ -5561,6 +5599,51 @@ export default function ParkingPassPage() {
                         />
                       </div>
                     ))}
+                  </div>
+                </div>
+                <div className="rounded-xl pp-glass-muted p-4 space-y-2">
+                  <p className="text-xs font-semibold text-slate-700">
+                    Publishing connections
+                  </p>
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    {(
+                      [
+                        { key: "facebook", label: "Facebook" },
+                        { key: "instagram", label: "Instagram" },
+                        { key: "x", label: "X" },
+                      ] as const
+                    ).map((platform) => {
+                      const connection = socialConnectionByPlatform.get(
+                        platform.key,
+                      );
+                      return (
+                        <div
+                          key={platform.key}
+                          className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2 text-xs"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span>{platform.label}</span>
+                            <Badge
+                              variant={connection?.connected ? "default" : "outline"}
+                            >
+                              {connection?.connected ? "Connected" : "Manual"}
+                            </Badge>
+                          </div>
+                          <p className="mt-1 truncate text-[color:var(--text-muted)]">
+                            {connection?.connected
+                              ? connection.displayName ||
+                                connection.externalAccountUrl ||
+                                "Ready to publish"
+                              : "Opens share handoff"}
+                          </p>
+                          {connection?.lastError && (
+                            <p className="mt-1 line-clamp-2 text-red-700">
+                              {connection.lastError}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
                 <div className="flex items-center justify-between">

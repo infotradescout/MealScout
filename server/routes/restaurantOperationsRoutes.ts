@@ -11,10 +11,15 @@ import { reverseGeocode } from "../utils/geocoding";
 import { broadcastLocationUpdate, broadcastStatusUpdate } from "../websocket";
 import { getSuppressedLocationResourceIds } from "../services/truckLocationTrust";
 import {
+  getActiveSocialConnection,
+  listSocialConnectionStatus,
+} from "../services/socialPublishing";
+import {
   insertFoodTruckLocationSchema,
   moderationEvents,
   restaurants,
   socialPostQueue,
+  socialPublishingConnections,
   telemetryEvents,
   truckManualSchedules,
   truckParkingReports,
@@ -518,6 +523,137 @@ export function registerRestaurantOperationsRoutes(
   );
 
   app.get(
+    "/api/restaurants/:restaurantId/social-connections/status",
+    isAuthenticated,
+    async (req: any, res) => {
+      try {
+        const { restaurantId } = req.params;
+        const isAuthorized = await storage.verifyRestaurantOwnership(
+          restaurantId,
+          req.user.id,
+          "manageProfile",
+        );
+        if (!isAuthorized) {
+          return res.status(403).json({
+            message:
+              "Unauthorized: You can only view social connections for restaurants you own",
+          });
+        }
+
+        const connections = await listSocialConnectionStatus(restaurantId);
+        res.json({ restaurantId, connections });
+      } catch (error) {
+        console.error("Error loading social connections:", error);
+        res.status(500).json({ message: "Failed to load social connections" });
+      }
+    },
+  );
+
+  app.post(
+    "/api/restaurants/:restaurantId/social-connections",
+    isAuthenticated,
+    async (req: any, res) => {
+      try {
+        const { restaurantId } = req.params;
+        const isAuthorized = await storage.verifyRestaurantOwnership(
+          restaurantId,
+          req.user.id,
+          "manageProfile",
+        );
+        if (!isAuthorized) {
+          return res.status(403).json({
+            message:
+              "Unauthorized: You can only connect social accounts for restaurants you own",
+          });
+        }
+
+        const hasAccess = await hasBusinessDistributionAccess(req.user.id);
+        if (!hasAccess) {
+          return res.status(402).json({
+            message: "Premium subscription required to connect publishing.",
+          });
+        }
+
+        const schema = z.object({
+          platform: z.enum(["facebook", "instagram", "x"]),
+          displayName: z.string().trim().max(160).optional().nullable(),
+          externalAccountId: z.string().trim().max(200).optional().nullable(),
+          externalAccountUrl: z
+            .string()
+            .url()
+            .optional()
+            .nullable()
+            .or(z.literal("")),
+          accessToken: z.string().trim().min(1).max(10000),
+          refreshToken: z.string().trim().max(10000).optional().nullable(),
+          tokenExpiresAt: z.string().datetime().optional().nullable(),
+          scopes: z.array(z.string().trim()).optional().default([]),
+          metadata: z.record(z.any()).optional().default({}),
+        });
+        const parsed = schema.parse(req.body || {});
+        const tokenExpiresAt = parsed.tokenExpiresAt
+          ? new Date(parsed.tokenExpiresAt)
+          : null;
+
+        const [connection] = await db
+          .insert(socialPublishingConnections)
+          .values({
+            restaurantId,
+            createdByUserId: req.user.id,
+            platform: parsed.platform,
+            displayName: parsed.displayName || null,
+            externalAccountId: parsed.externalAccountId || null,
+            externalAccountUrl: parsed.externalAccountUrl || null,
+            accessToken: parsed.accessToken,
+            refreshToken: parsed.refreshToken || null,
+            tokenExpiresAt,
+            scopes: parsed.scopes,
+            metadata: parsed.metadata,
+            status: "active",
+            lastError: null,
+            updatedAt: new Date(),
+          })
+          .onConflictDoUpdate({
+            target: [
+              socialPublishingConnections.restaurantId,
+              socialPublishingConnections.platform,
+            ],
+            set: {
+              createdByUserId: req.user.id,
+              displayName: parsed.displayName || null,
+              externalAccountId: parsed.externalAccountId || null,
+              externalAccountUrl: parsed.externalAccountUrl || null,
+              accessToken: parsed.accessToken,
+              refreshToken: parsed.refreshToken || null,
+              tokenExpiresAt,
+              scopes: parsed.scopes,
+              metadata: parsed.metadata,
+              status: "active",
+              lastError: null,
+              updatedAt: new Date(),
+            },
+          })
+          .returning();
+
+        res.status(201).json({
+          ...connection,
+          accessToken: undefined,
+          refreshToken: undefined,
+        });
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          return res.status(400).json({
+            message: "Invalid social connection",
+            errors: error.errors,
+          });
+        }
+        console.error("Error saving social connection:", error);
+        res.status(500).json({ message: "Failed to save social connection" });
+      }
+    },
+  );
+
+  app.get(
     "/api/restaurants/:restaurantId/live-share-card",
     isAuthenticated,
     async (req: any, res) => {
@@ -677,28 +813,48 @@ export function registerRestaurantOperationsRoutes(
           x: restaurant.xUrl || null,
         };
 
-        const rows = selectedPlatforms.map((platform) => ({
-          platform,
-          target: targetByPlatform[platform] || null,
-          message: parsed.message,
-          link: parsed.link || null,
-          imageUrl: parsed.imageUrl || null,
-          restaurantId,
-          createdByUserId: req.user.id,
-          source: parsed.source || "owner_prompt",
-          status: "manual_required",
-          errorMessage:
-            "Owner social account publishing is not connected yet. Use the manual share handoff.",
-          metadata: {
-            restaurantName: restaurant.name,
-            intendedOwnerId: restaurant.ownerId || null,
-            queuedFrom: "parking_pass",
-            userAgent: req.headers["user-agent"] || null,
-          },
-          updatedAt: new Date(),
-        }));
+        const rows = [];
+        for (const platform of selectedPlatforms) {
+          const connection = await getActiveSocialConnection(restaurantId, platform);
+          const instagramNeedsImage = platform === "instagram" && !parsed.imageUrl;
+          rows.push({
+            platform,
+            target:
+              connection?.externalAccountUrl ||
+              connection?.externalAccountId ||
+              targetByPlatform[platform] ||
+              null,
+            message: parsed.message,
+            link: parsed.link || null,
+            imageUrl: parsed.imageUrl || null,
+            restaurantId,
+            createdByUserId: req.user.id,
+            source: parsed.source || "owner_prompt",
+            status: connection && !instagramNeedsImage ? "pending" : "manual_required",
+            errorMessage: connection
+              ? instagramNeedsImage
+                ? "Instagram publishing requires an image. Use the manual share handoff."
+                : null
+              : "Publishing is not connected for this platform. Use the manual share handoff.",
+            metadata: {
+              restaurantName: restaurant.name,
+              intendedOwnerId: restaurant.ownerId || null,
+              queuedFrom: "parking_pass",
+              hasPublishingConnection: Boolean(connection),
+              connectionId: connection?.id || null,
+              userAgent: req.headers["user-agent"] || null,
+            },
+            updatedAt: new Date(),
+          });
+        }
 
         const created = await db.insert(socialPostQueue).values(rows).returning();
+        const pendingCount = created.filter(
+          (post: { status: string }) => post.status === "pending",
+        ).length;
+        const manualCount = created.filter(
+          (post: { status: string }) => post.status === "manual_required",
+        ).length;
 
         try {
           await db.insert(telemetryEvents).values({
@@ -719,7 +875,9 @@ export function registerRestaurantOperationsRoutes(
         res.json({
           success: true,
           posts: created,
-          manualRequired: true,
+          queuedForPublishing: pendingCount,
+          manualRequired: manualCount > 0,
+          manualRequiredCount: manualCount,
         });
       } catch (error) {
         if (error instanceof z.ZodError) {

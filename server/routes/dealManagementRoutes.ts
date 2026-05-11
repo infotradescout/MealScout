@@ -50,6 +50,10 @@ type DealManagementRouteDependencies = {
     target?: string | null;
     message: string;
     link?: string | null;
+    imageUrl?: string | null;
+    restaurantId?: string | null;
+    createdByUserId?: string | null;
+    source?: string | null;
   }) => Promise<void>;
 };
 
@@ -364,6 +368,9 @@ export function registerDealManagementRoutes(
                 target: restaurant.facebookPageUrl || "mealscout_page",
                 message,
                 link,
+                restaurantId: deal.restaurantId,
+                createdByUserId: userId,
+                source: "deal_auto_publish",
               }),
             );
           }
@@ -374,6 +381,10 @@ export function registerDealManagementRoutes(
                 target: restaurant.instagramUrl || null,
                 message,
                 link,
+                imageUrl: (deal as any).imageUrl || null,
+                restaurantId: deal.restaurantId,
+                createdByUserId: userId,
+                source: "deal_auto_publish",
               }),
             );
           }
@@ -384,6 +395,9 @@ export function registerDealManagementRoutes(
                 target: restaurant.xUrl || null,
                 message,
                 link,
+                restaurantId: deal.restaurantId,
+                createdByUserId: userId,
+                source: "deal_auto_publish",
               }),
             );
           }

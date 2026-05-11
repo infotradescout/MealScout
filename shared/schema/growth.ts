@@ -55,6 +55,7 @@ export {
   reportDownloadTokens,
   reportLeadSequenceSends,
   socialPostQueue,
+  socialPublishingConnections,
   searchQueryEvents,
 } from "./legacy";
 
@@ -105,6 +106,8 @@ export type {
   InsertReportLeadSequenceSend,
   SocialPostQueueItem,
   InsertSocialPostQueueItem,
+  SocialPublishingConnection,
+  InsertSocialPublishingConnection,
   SearchQueryEvent,
   InsertSearchQueryEvent,
 } from "./legacy";

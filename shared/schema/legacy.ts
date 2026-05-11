@@ -5320,6 +5320,53 @@ export const socialPostQueue = pgTable(
 export type SocialPostQueueItem = typeof socialPostQueue.$inferSelect;
 export type InsertSocialPostQueueItem = typeof socialPostQueue.$inferInsert;
 
+export const socialPublishingConnections = pgTable(
+  "social_publishing_connections",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    restaurantId: varchar("restaurant_id")
+      .notNull()
+      .references(() => restaurants.id, { onDelete: "cascade" }),
+    createdByUserId: varchar("created_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    platform: varchar("platform").notNull(),
+    displayName: varchar("display_name"),
+    externalAccountId: varchar("external_account_id"),
+    externalAccountUrl: text("external_account_url"),
+    accessToken: text("access_token"),
+    refreshToken: text("refresh_token"),
+    tokenExpiresAt: timestamp("token_expires_at"),
+    scopes: jsonb("scopes")
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    metadata: jsonb("metadata")
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    status: varchar("status").notNull().default("active"),
+    lastPublishAt: timestamp("last_publish_at"),
+    lastError: text("last_error"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_social_publish_connections_restaurant").on(table.restaurantId),
+    index("idx_social_publish_connections_platform").on(table.platform),
+    index("idx_social_publish_connections_status").on(table.status),
+    unique("uq_social_publish_connection_restaurant_platform").on(
+      table.restaurantId,
+      table.platform,
+    ),
+  ],
+);
+
+export type SocialPublishingConnection =
+  typeof socialPublishingConnections.$inferSelect;
+export type InsertSocialPublishingConnection =
+  typeof socialPublishingConnections.$inferInsert;
+
 export const searchQueryEvents = pgTable(
   "search_query_events",
   {
