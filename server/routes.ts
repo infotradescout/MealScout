@@ -61,6 +61,7 @@ import { registerMenuRoutes } from "./routes/menuRoutes";
 import { registerPickupOrderRoutes } from "./routes/pickupOrderRoutes";
 import { registerNotificationRoutes } from "./routes/notificationRoutes";
 import { registerHiringRoutes } from "./routes/hiringRoutes";
+import { registerAdminMarketHeatmapRoutes } from "./routes/adminMarketHeatmapRoutes";
 import {
   notifyNearbyDealSubscribers,
   notifyRestaurantFollowersOfDeal,
@@ -188,6 +189,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Admin API endpoints
   registerAdminManagementRoutes(app);
+  registerAdminMarketHeatmapRoutes(app);
   registerGeoAdRoutes(app);
   registerHostPayoutAdminRoutes(app);
   registerGrowthRoutes(app);

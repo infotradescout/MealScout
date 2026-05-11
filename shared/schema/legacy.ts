@@ -4948,10 +4948,119 @@ export const adminDailyReports = pgTable(
   ],
 );
 
+// Admin market intelligence: stored county-level facts for ops heatmaps.
+export const marketCounties = pgTable(
+  "market_counties",
+  {
+    countyFips: varchar("county_fips").primaryKey(),
+    countyName: varchar("county_name").notNull(),
+    stateCode: varchar("state_code").notNull(),
+    stateName: varchar("state_name"),
+    centroidLat: decimal("centroid_lat", { precision: 10, scale: 8 }),
+    centroidLng: decimal("centroid_lng", { precision: 11, scale: 8 }),
+    metadata: jsonb("metadata")
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_market_counties_state").on(table.stateCode),
+    index("idx_market_counties_name_state").on(
+      table.countyName,
+      table.stateCode,
+    ),
+  ],
+);
+
+export const marketMetrics = pgTable(
+  "market_metrics",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    countyFips: varchar("county_fips")
+      .notNull()
+      .references(() => marketCounties.countyFips, { onDelete: "cascade" }),
+    metricKey: varchar("metric_key").notNull(),
+    metricValue: integer("metric_value").notNull().default(0),
+    timeframe: varchar("timeframe").notNull().default("30d"),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_market_metrics_county").on(table.countyFips),
+    index("idx_market_metrics_key").on(table.metricKey),
+    index("idx_market_metrics_timeframe").on(table.timeframe),
+    unique("uq_market_metrics_county_key_timeframe").on(
+      table.countyFips,
+      table.metricKey,
+      table.timeframe,
+    ),
+  ],
+);
+
+export const marketNotes = pgTable(
+  "market_notes",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    countyFips: varchar("county_fips")
+      .notNull()
+      .references(() => marketCounties.countyFips, { onDelete: "cascade" }),
+    authorUserId: varchar("author_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    category: varchar("category").notNull().default("general"),
+    content: text("content").notNull(),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_market_notes_county").on(table.countyFips),
+    index("idx_market_notes_category").on(table.category),
+    index("idx_market_notes_created").on(table.createdAt),
+  ],
+);
+
+export const marketEntities = pgTable(
+  "market_entities",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    countyFips: varchar("county_fips")
+      .notNull()
+      .references(() => marketCounties.countyFips, { onDelete: "cascade" }),
+    entityType: varchar("entity_type").notNull(),
+    entityId: varchar("entity_id"),
+    label: varchar("label").notNull(),
+    status: varchar("status").notNull().default("active"),
+    metadata: jsonb("metadata")
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_market_entities_county").on(table.countyFips),
+    index("idx_market_entities_type").on(table.entityType),
+    index("idx_market_entities_status").on(table.status),
+  ],
+);
+
 export type RequestLog = typeof requestLogs.$inferSelect;
 export type InsertRequestLog = typeof requestLogs.$inferInsert;
 export type AdminDailyReport = typeof adminDailyReports.$inferSelect;
 export type InsertAdminDailyReport = typeof adminDailyReports.$inferInsert;
+export type MarketCounty = typeof marketCounties.$inferSelect;
+export type InsertMarketCounty = typeof marketCounties.$inferInsert;
+export type MarketMetric = typeof marketMetrics.$inferSelect;
+export type InsertMarketMetric = typeof marketMetrics.$inferInsert;
+export type MarketNote = typeof marketNotes.$inferSelect;
+export type InsertMarketNote = typeof marketNotes.$inferInsert;
+export type MarketEntity = typeof marketEntities.$inferSelect;
+export type InsertMarketEntity = typeof marketEntities.$inferInsert;
 
 // Email sequences (drip campaigns): idempotent send tracking
 export const emailSequenceSends = pgTable(
