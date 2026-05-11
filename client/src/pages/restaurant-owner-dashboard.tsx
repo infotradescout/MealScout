@@ -1361,6 +1361,18 @@ export default function RestaurantOwnerDashboard() {
                 </Button>
               </Link>
             ) : null}
+            {canManageDeals ? (
+              <Link href="/hiring?tab=owner">
+                <Button
+                  variant="outline"
+                  data-testid="button-hiring-marketplace"
+                  className="w-full sm:w-auto"
+                >
+                  <Users className="mr-2 h-4 w-4" />
+                  Hiring
+                </Button>
+              </Link>
+            ) : null}
           </div>
         }
         className="bg-[var(--bg-card)] border-b border-border mb-8"

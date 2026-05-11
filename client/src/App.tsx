@@ -157,6 +157,7 @@ const PickupCheckoutPage = lazy(() => import("@/pages/pickup-checkout"));
 const OrderConfirmationPage = lazy(() => import("@/pages/order-confirmation"));
 const ScoutPage = lazy(() => import("@/pages/explore-preview"));
 const FoodTruckRush = lazy(() => import("@/pages/food-truck-rush"));
+const HiringPage = lazy(() => import("@/pages/hiring"));
 
 // Loading fallback component
 const PageLoader = () => (
@@ -230,6 +231,9 @@ const publicRoutePrefixes = [
   "/host-location-partner",
   "/for-events",
   "/find-food",
+  "/hiring",
+  "/jobs",
+  "/private-chefs",
   "/event-signup",
   "/events",
   "/food-trucks/",
@@ -408,6 +412,9 @@ function Router() {
             />
             <Route path="/for-events" component={ForEvents} />
             <Route path="/find-food" component={FindFood} />
+            <Route path="/hiring" component={HiringPage} />
+            <Route path="/jobs" component={HiringPage} />
+            <Route path="/private-chefs" component={HiringPage} />
             <Route
               path="/event-signup"
               component={RedirectToEventOnboarding}
@@ -505,6 +512,9 @@ function Router() {
             />
             <Route path="/for-events" component={ForEvents} />
             <Route path="/find-food" component={FindFood} />
+            <Route path="/hiring" component={HiringPage} />
+            <Route path="/jobs" component={HiringPage} />
+            <Route path="/private-chefs" component={HiringPage} />
             <Route path="/search" component={Search} />
             <Route path="/trending" component={Trending} />
             <Route path="/map" component={MapPage} />

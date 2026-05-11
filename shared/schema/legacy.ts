@@ -5859,6 +5859,162 @@ export const deliveryJobApplications = pgTable(
   ],
 );
 
+// ── HIRING MARKETPLACE + PRIVATE CHEF LEADS ─────────────────────────────────
+
+export const workerProfiles = pgTable(
+  "worker_profiles",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    userId: varchar("user_id")
+      .notNull()
+      .unique()
+      .references(() => users.id, { onDelete: "cascade" }),
+    displayName: varchar("display_name").notNull(),
+    headline: varchar("headline"),
+    bio: text("bio"),
+    roles: jsonb("roles")
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    experienceLevel: varchar("experience_level").default("experienced"),
+    serviceCities: jsonb("service_cities")
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    availability: jsonb("availability")
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    desiredRateCents: integer("desired_rate_cents"),
+    resumeUrl: varchar("resume_url"),
+    portfolioUrl: varchar("portfolio_url"),
+    phone: varchar("phone"),
+    email: varchar("email"),
+    isOpenToWork: boolean("is_open_to_work").notNull().default(true),
+    isPublic: boolean("is_public").notNull().default(true),
+    backgroundCheckStatus: varchar("background_check_status").default("none"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_worker_profiles_user").on(table.userId),
+    index("idx_worker_profiles_open_public").on(
+      table.isOpenToWork,
+      table.isPublic,
+    ),
+    index("idx_worker_profiles_created").on(table.createdAt),
+  ],
+);
+
+export const jobPosts = pgTable(
+  "job_posts",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    restaurantId: varchar("restaurant_id")
+      .notNull()
+      .references(() => restaurants.id, { onDelete: "cascade" }),
+    postedByUserId: varchar("posted_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    title: varchar("title").notNull(),
+    description: text("description"),
+    role: varchar("role").notNull(),
+    jobType: varchar("job_type").notNull().default("part_time"),
+    locationType: varchar("location_type").notNull().default("onsite"),
+    city: varchar("city"),
+    state: varchar("state"),
+    address: varchar("address"),
+    scheduleDescription: text("schedule_description"),
+    rateMinCents: integer("rate_min_cents"),
+    rateMaxCents: integer("rate_max_cents"),
+    status: varchar("status").notNull().default("open"),
+    positionsAvailable: integer("positions_available").notNull().default(1),
+    startsAt: timestamp("starts_at"),
+    expiresAt: timestamp("expires_at"),
+    metadata: jsonb("metadata")
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_job_posts_restaurant").on(table.restaurantId),
+    index("idx_job_posts_status_created").on(table.status, table.createdAt),
+    index("idx_job_posts_city_state").on(table.city, table.state),
+    index("idx_job_posts_role").on(table.role),
+  ],
+);
+
+export const jobApplications = pgTable(
+  "job_applications",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    jobId: varchar("job_id")
+      .notNull()
+      .references(() => jobPosts.id, { onDelete: "cascade" }),
+    workerProfileId: varchar("worker_profile_id")
+      .notNull()
+      .references(() => workerProfiles.id, { onDelete: "cascade" }),
+    applicantUserId: varchar("applicant_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    coverNote: text("cover_note"),
+    proposedRateCents: integer("proposed_rate_cents"),
+    status: varchar("status").notNull().default("pending"),
+    respondedAt: timestamp("responded_at"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_job_applications_job").on(table.jobId),
+    index("idx_job_applications_worker").on(table.workerProfileId),
+    index("idx_job_applications_applicant").on(table.applicantUserId),
+    index("idx_job_applications_status").on(table.status),
+    unique("uq_job_applications_job_worker").on(
+      table.jobId,
+      table.workerProfileId,
+    ),
+  ],
+);
+
+export const privateChefLeads = pgTable(
+  "private_chef_leads",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    chefRestaurantId: varchar("chef_restaurant_id")
+      .notNull()
+      .references(() => restaurants.id, { onDelete: "cascade" }),
+    customerUserId: varchar("customer_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    customerName: varchar("customer_name").notNull(),
+    customerEmail: varchar("customer_email"),
+    customerPhone: varchar("customer_phone"),
+    eventDate: timestamp("event_date"),
+    city: varchar("city"),
+    state: varchar("state"),
+    address: varchar("address"),
+    guestCount: integer("guest_count"),
+    budgetCents: integer("budget_cents"),
+    occasion: varchar("occasion"),
+    dietaryNeeds: text("dietary_needs"),
+    notes: text("notes"),
+    status: varchar("status").notNull().default("new"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_private_chef_leads_chef").on(table.chefRestaurantId),
+    index("idx_private_chef_leads_customer").on(table.customerUserId),
+    index("idx_private_chef_leads_status").on(table.status),
+    index("idx_private_chef_leads_created").on(table.createdAt),
+  ],
+);
+
 // ── RELATIONS ────────────────────────────────────────────────────────────────
 
 export const menusRelations = relations(menus, ({ one, many }) => ({
@@ -5990,6 +6146,61 @@ export const deliveryJobApplicationsRelations = relations(
   }),
 );
 
+export const workerProfilesRelations = relations(
+  workerProfiles,
+  ({ one, many }) => ({
+    user: one(users, {
+      fields: [workerProfiles.userId],
+      references: [users.id],
+    }),
+    applications: many(jobApplications),
+  }),
+);
+
+export const jobPostsRelations = relations(jobPosts, ({ one, many }) => ({
+  restaurant: one(restaurants, {
+    fields: [jobPosts.restaurantId],
+    references: [restaurants.id],
+  }),
+  postedBy: one(users, {
+    fields: [jobPosts.postedByUserId],
+    references: [users.id],
+  }),
+  applications: many(jobApplications),
+}));
+
+export const jobApplicationsRelations = relations(
+  jobApplications,
+  ({ one }) => ({
+    job: one(jobPosts, {
+      fields: [jobApplications.jobId],
+      references: [jobPosts.id],
+    }),
+    workerProfile: one(workerProfiles, {
+      fields: [jobApplications.workerProfileId],
+      references: [workerProfiles.id],
+    }),
+    applicant: one(users, {
+      fields: [jobApplications.applicantUserId],
+      references: [users.id],
+    }),
+  }),
+);
+
+export const privateChefLeadsRelations = relations(
+  privateChefLeads,
+  ({ one }) => ({
+    chef: one(restaurants, {
+      fields: [privateChefLeads.chefRestaurantId],
+      references: [restaurants.id],
+    }),
+    customer: one(users, {
+      fields: [privateChefLeads.customerUserId],
+      references: [users.id],
+    }),
+  }),
+);
+
 // ── ZOOD VALIDATION SCHEMAS ──────────────────────────────────────────────────
 
 export const insertMenuSchema = createInsertSchema(menus).omit({
@@ -6074,6 +6285,51 @@ export const insertDeliveryJobApplicationSchema = createInsertSchema(
   },
 ).omit({ id: true, respondedAt: true, createdAt: true });
 
+export const insertWorkerProfileSchema = createInsertSchema(workerProfiles, {
+  desiredRateCents: z.number().int().min(0).optional().nullable(),
+}).omit({
+  id: true,
+  userId: true,
+  backgroundCheckStatus: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertJobPostSchema = createInsertSchema(jobPosts, {
+  rateMinCents: z.number().int().min(0).optional().nullable(),
+  rateMaxCents: z.number().int().min(0).optional().nullable(),
+  positionsAvailable: z.number().int().min(1).optional(),
+}).omit({
+  id: true,
+  postedByUserId: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertJobApplicationSchema = createInsertSchema(jobApplications, {
+  proposedRateCents: z.number().int().min(0).optional().nullable(),
+}).omit({
+  id: true,
+  workerProfileId: true,
+  applicantUserId: true,
+  respondedAt: true,
+  createdAt: true,
+});
+
+export const insertPrivateChefLeadSchema = createInsertSchema(
+  privateChefLeads,
+  {
+    guestCount: z.number().int().min(1).optional().nullable(),
+    budgetCents: z.number().int().min(0).optional().nullable(),
+  },
+).omit({
+  id: true,
+  customerUserId: true,
+  status: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // ── MENU / ORDER TYPES ───────────────────────────────────────────────────────
 
 export type Menu = typeof menus.$inferSelect;
@@ -6102,6 +6358,16 @@ export type DeliveryJobApplication =
   typeof deliveryJobApplications.$inferSelect;
 export type InsertDeliveryJobApplication = z.infer<
   typeof insertDeliveryJobApplicationSchema
+>;
+export type WorkerProfile = typeof workerProfiles.$inferSelect;
+export type InsertWorkerProfile = z.infer<typeof insertWorkerProfileSchema>;
+export type JobPost = typeof jobPosts.$inferSelect;
+export type InsertJobPost = z.infer<typeof insertJobPostSchema>;
+export type JobApplication = typeof jobApplications.$inferSelect;
+export type InsertJobApplication = z.infer<typeof insertJobApplicationSchema>;
+export type PrivateChefLead = typeof privateChefLeads.$inferSelect;
+export type InsertPrivateChefLead = z.infer<
+  typeof insertPrivateChefLeadSchema
 >;
 
 // ── ORDER STATUS ENUM ────────────────────────────────────────────────────────

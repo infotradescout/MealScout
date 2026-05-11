@@ -8,6 +8,7 @@ export * from "./schema/parkingPass";
 export * from "./schema/admin";
 export * from "./schema/suppliers";
 export * from "./schema/ordering";
+export * from "./schema/hiring";
 export * from "./schema/growth";
 export * from "./schema/misc";
 export * from "./schema/moderation";

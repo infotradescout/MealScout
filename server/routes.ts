@@ -60,6 +60,7 @@ import { registerTruckClaimRoutes } from "./routes/truckClaimRoutes";
 import { registerMenuRoutes } from "./routes/menuRoutes";
 import { registerPickupOrderRoutes } from "./routes/pickupOrderRoutes";
 import { registerNotificationRoutes } from "./routes/notificationRoutes";
+import { registerHiringRoutes } from "./routes/hiringRoutes";
 import {
   notifyNearbyDealSubscribers,
   notifyRestaurantFollowersOfDeal,
@@ -183,6 +184,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Online menus + pickup ordering
   registerMenuRoutes(app);
   registerPickupOrderRoutes(app);
+  registerHiringRoutes(app, { hasBusinessDistributionAccess });
 
   // Admin API endpoints
   registerAdminManagementRoutes(app);
