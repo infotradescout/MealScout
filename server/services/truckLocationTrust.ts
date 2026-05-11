@@ -3,7 +3,7 @@ import { and, eq, gte, inArray } from "drizzle-orm";
 import { db } from "../db";
 import { moderationEvents } from "@shared/schema";
 
-type ReportTargetType = "live_location" | "manual_schedule";
+type ReportTargetType = "live_location" | "manual_schedule" | "event_schedule";
 
 type ReportRow = {
   reportedResourceId: string | null;

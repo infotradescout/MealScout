@@ -746,6 +746,34 @@ export function registerPublicMapRoutes(app: Express) {
           state: event.host?.state,
         });
       });
+      const suppressedEventScheduleIds = await getSuppressedLocationResourceIds({
+        resourceIds: publicEvents
+          .filter((event) => Boolean(event.bookedRestaurantId))
+          .map((event) => String(event.id || "").trim())
+          .filter(Boolean),
+        targetType: "event_schedule",
+        now,
+      });
+      const trustedPublicEvents = publicEvents.filter(
+        (event) => !suppressedEventScheduleIds.has(String(event.id || "")),
+      );
+      const bookedRestaurantIds = Array.from(
+        new Set(
+          trustedPublicEvents
+            .map((event) => String(event.bookedRestaurantId || "").trim())
+            .filter(Boolean),
+        ),
+      );
+      const bookedTruckNames = bookedRestaurantIds.length
+        ? new Map(
+            (
+              await db
+                .select({ id: restaurants.id, name: restaurants.name })
+                .from(restaurants)
+                .where(inArray(restaurants.id, bookedRestaurantIds))
+            ).map((row: { id: string; name: string }) => [row.id, row.name]),
+          )
+        : new Map<string, string>();
 
       const primaryHostLocations = hostProfiles.map((host) => ({
         id: host.id,
@@ -879,7 +907,7 @@ export function registerPublicMapRoutes(app: Express) {
         }));
 
       const eventLocations = [
-        ...publicEvents.map((event) => ({
+        ...trustedPublicEvents.map((event) => ({
           id: event.id,
           type: "event" as const,
           name: event.name || "Host Event",
@@ -899,6 +927,10 @@ export function registerPublicMapRoutes(app: Express) {
           hardCapEnabled: event.hardCapEnabled,
           seriesId: event.seriesId,
           bookedRestaurantId: event.bookedRestaurantId,
+          truckId: event.bookedRestaurantId,
+          truckName: event.bookedRestaurantId
+            ? bookedTruckNames.get(String(event.bookedRestaurantId)) || null
+            : null,
         })),
         ...manualScheduleLocations,
       ];

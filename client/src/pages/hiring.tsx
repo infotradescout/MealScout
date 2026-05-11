@@ -648,6 +648,9 @@ export default function HiringPage() {
                   <Input name="customerName" placeholder="Your name" required />
                   <Input name="customerEmail" placeholder="Email" type="email" />
                   <Input name="customerPhone" placeholder="Phone" />
+                  <p className="text-xs text-muted-foreground">
+                    Email or phone is required.
+                  </p>
                   <Input name="eventDate" type="datetime-local" />
                   <div className="grid grid-cols-2 gap-2">
                     <Input name="city" placeholder="City" />

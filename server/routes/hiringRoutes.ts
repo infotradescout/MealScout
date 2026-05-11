@@ -74,7 +74,15 @@ const leadPayloadSchema = insertPrivateChefLeadSchema.extend({
   eventDate: optionalDate,
   guestCount: z.number().int().min(1).nullable().optional(),
   budgetCents: z.number().int().min(0).nullable().optional(),
-});
+}).refine(
+  (payload) =>
+    Boolean(String(payload.customerEmail || "").trim()) ||
+    Boolean(String(payload.customerPhone || "").trim()),
+  {
+    message: "Email or phone is required.",
+    path: ["customerEmail"],
+  },
+);
 
 const applicationPayloadSchema = insertJobApplicationSchema.extend({
   jobId: z.string().trim().min(1),

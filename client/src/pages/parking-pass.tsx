@@ -5292,7 +5292,7 @@ export default function ParkingPassPage() {
                   <div className="rounded-xl border border-[color:var(--accent-text)]/25 bg-[color:var(--accent-text)]/8 p-4 text-sm text-[color:var(--text-secondary)]">
                     Parking pass bookings and your booking calendar are always
                     free. Upgrade to Premium to unlock off-platform schedule
-                    stops, one-tap live location sharing, and social auto-post
+                    stops, one-tap live location sharing, and social share
                     controls.
                   </div>
                 )}
@@ -5319,7 +5319,7 @@ export default function ParkingPassPage() {
                           onClick={handleShareUpcomingStop}
                           disabled={!truckId}
                         >
-                          Post stop
+                          Share stop
                         </Button>
                         <Button
                           size="sm"
@@ -5348,7 +5348,7 @@ export default function ParkingPassPage() {
                       Live share
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      Share your live location in one tap.
+                      Share your live location and open a social handoff.
                     </p>
                   </div>
                   {!isLive && (
@@ -5435,11 +5435,11 @@ export default function ParkingPassPage() {
               <CardContent className="p-5 space-y-6">
                 <div>
                   <p className="text-sm font-semibold text-[color:var(--text-primary)]">
-                    Social autopost
+                    Social share prompts
                   </p>
                   <p className="text-xs text-[color:var(--text-muted)]">
-                    Link your socials and choose which updates should prompt a
-                    post.
+                    Link your socials and choose which updates should open a
+                    share prompt.
                   </p>
                 </div>
                 <div className="grid gap-3 md:grid-cols-3">
@@ -5529,7 +5529,7 @@ export default function ParkingPassPage() {
                   </div>
                   <div className="rounded-xl pp-glass-muted p-4 space-y-3">
                     <p className="text-xs font-semibold text-slate-700">
-                      Post prompts
+                      Share prompts
                     </p>
                     {(
                       [
@@ -5575,7 +5575,7 @@ export default function ParkingPassPage() {
                         }))
                       }
                     />
-                    <span>Always prompt before posting</span>
+                    <span>Always prompt before sharing</span>
                   </div>
                   <Button
                     size="sm"
@@ -5906,8 +5906,8 @@ export default function ParkingPassPage() {
                         {postPrompt?.title || "Share update"}
                       </DialogTitle>
                       <DialogDescription>
-                        Choose where to post this update. You can edit the
-                        message before sharing.
+                        Choose where to share this update. You can edit the
+                        message first.
                       </DialogDescription>
                     </DialogHeader>
                     {postPrompt && (
@@ -5932,7 +5932,7 @@ export default function ParkingPassPage() {
                           </p>
                         </div>
                         <div className="space-y-2">
-                          <Label>Post to</Label>
+                          <Label>Share to</Label>
                           <div className="grid gap-2 sm:grid-cols-3">
                             {(
                               [
@@ -5978,7 +5978,7 @@ export default function ParkingPassPage() {
                         onClick={() => void handlePostPromptShare()}
                         disabled={isPostingSocial}
                       >
-                        {isPostingSocial ? "Sharing..." : "Post update"}
+                        {isPostingSocial ? "Sharing..." : "Share update"}
                       </Button>
                     </DialogFooter>
                   </DialogContent>

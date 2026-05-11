@@ -510,6 +510,7 @@ type EventLocation = {
   hostState?: string | null;
   hostLatitude?: number | string | null;
   hostLongitude?: number | string | null;
+  bookedRestaurantId?: string | null;
   truckId?: string | null;
   truckName?: string | null;
   manualScheduleId?: string | null;
@@ -3161,6 +3162,22 @@ export default function MapPage() {
             expectedCoords: { lat, lng },
             sourceLabel: event.name,
             manualScheduleId: event.manualScheduleId || undefined,
+          });
+          return;
+        }
+        if (event?.bookedRestaurantId && coords) {
+          setSelectedDeal(null);
+          setSelectedSighting(null);
+          setSelectedParkingPreview(null);
+          setSelectedHostCluster(null);
+          setSelectedTruckPreview(null);
+          setSelectedSchedulePreview({
+            truckId: event.bookedRestaurantId,
+            truckName: event.truckName || event.name || "Booked truck",
+            targetType: "event_schedule",
+            expectedCoords: { lat, lng },
+            sourceLabel: event.hostName || event.name,
+            eventId: event.id,
           });
           return;
         }
