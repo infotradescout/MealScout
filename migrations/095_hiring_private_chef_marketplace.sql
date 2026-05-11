@@ -80,6 +80,58 @@ CREATE TABLE IF NOT EXISTS job_applications (
   CONSTRAINT uq_job_applications_job_worker UNIQUE(job_id, worker_profile_id)
 );
 
+-- Drift guard: an earlier dormant jobs experiment may have created
+-- job_applications with applicant/resume columns but without worker profiles.
+ALTER TABLE job_applications
+  ADD COLUMN IF NOT EXISTS worker_profile_id varchar REFERENCES worker_profiles(id) ON DELETE CASCADE,
+  ADD COLUMN IF NOT EXISTS proposed_rate_cents integer,
+  ADD COLUMN IF NOT EXISTS responded_at timestamp;
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'job_applications'
+      AND column_name = 'applicant_name'
+  ) THEN
+    ALTER TABLE job_applications ALTER COLUMN applicant_name DROP NOT NULL;
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'job_applications'
+      AND column_name = 'applicant_email'
+  ) THEN
+    ALTER TABLE job_applications ALTER COLUMN applicant_email DROP NOT NULL;
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'job_applications'
+      AND column_name = 'applicant_user_id'
+  ) THEN
+    ALTER TABLE job_applications ALTER COLUMN applicant_user_id DROP NOT NULL;
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'uq_job_applications_job_worker'
+  ) THEN
+    ALTER TABLE job_applications
+      ADD CONSTRAINT uq_job_applications_job_worker UNIQUE(job_id, worker_profile_id);
+  END IF;
+END $$;
+
 CREATE INDEX IF NOT EXISTS idx_job_applications_job
   ON job_applications(job_id);
 
