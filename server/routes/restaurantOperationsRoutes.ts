@@ -1,4 +1,5 @@
 import type { Express } from "express";
+import { createHash, randomBytes } from "crypto";
 import { and, eq, gte, inArray } from "drizzle-orm";
 import { z } from "zod";
 
@@ -39,6 +40,99 @@ type RestaurantOperationsRouteDependencies = {
   validateAnalyticsAccess: (userId: string) => Promise<AnalyticsAccessResult>;
   hasBusinessDistributionAccess: (userId: string) => Promise<boolean>;
 };
+
+type SocialPublishPlatform = "facebook" | "instagram" | "x";
+type SocialOAuthSession = {
+  provider: "meta" | "x";
+  restaurantId: string;
+  platform: SocialPublishPlatform;
+  redirectPath: string;
+  state: string;
+  codeVerifier?: string;
+  createdAt: string;
+};
+
+const META_API_VERSION = "v24.0";
+
+function getPublicBaseUrl(req: any) {
+  return (
+    process.env.PUBLIC_BASE_URL ||
+    process.env.APP_BASE_URL ||
+    `${req.protocol}://${req.get("host")}`
+  ).replace(/\/$/, "");
+}
+
+function getSafeRedirectPath(value: unknown, fallback = "/parking-pass?tab=schedule") {
+  if (typeof value !== "string") return fallback;
+  const trimmed = value.trim();
+  if (!trimmed || !trimmed.startsWith("/") || trimmed.startsWith("//")) {
+    return fallback;
+  }
+  return trimmed;
+}
+
+function appendSocialStatus(
+  redirectPath: string,
+  status: "connected" | "error",
+  message?: string,
+) {
+  const url = new URL(redirectPath, "https://mealscout.local");
+  url.searchParams.set("social", status);
+  if (message) {
+    url.searchParams.set("socialMessage", message.slice(0, 240));
+  }
+  return `${url.pathname}${url.search}${url.hash}`;
+}
+
+function saveSession(req: any) {
+  return new Promise<void>((resolve, reject) => {
+    req.session.save((error: unknown) => {
+      if (error) reject(error);
+      else resolve();
+    });
+  });
+}
+
+function base64Url(input: Buffer) {
+  return input
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+}
+
+function createOAuthState() {
+  return base64Url(randomBytes(32));
+}
+
+function createPkceChallenge(verifier: string) {
+  return base64Url(createHash("sha256").update(verifier).digest());
+}
+
+function getSocialOAuthSession(req: any): SocialOAuthSession | null {
+  return (req.session?.socialPublishOAuth || null) as SocialOAuthSession | null;
+}
+
+async function setSocialOAuthSession(req: any, value: SocialOAuthSession | null) {
+  req.session.socialPublishOAuth = value;
+  await saveSession(req);
+}
+
+async function fetchJson(url: string, init?: RequestInit) {
+  const response = await fetch(url, init);
+  const text = await response.text();
+  const body = text ? JSON.parse(text) : {};
+  if (!response.ok) {
+    const message =
+      body?.error?.message ||
+      body?.error_description ||
+      body?.message ||
+      response.statusText ||
+      "Provider request failed";
+    throw new Error(message);
+  }
+  return body;
+}
 
 export function registerRestaurantOperationsRoutes(
   app: Express,
@@ -649,6 +743,536 @@ export function registerRestaurantOperationsRoutes(
         }
         console.error("Error saving social connection:", error);
         res.status(500).json({ message: "Failed to save social connection" });
+      }
+    },
+  );
+
+  app.delete(
+    "/api/restaurants/:restaurantId/social-connections/:platform",
+    isAuthenticated,
+    async (req: any, res) => {
+      try {
+        const { restaurantId, platform } = req.params;
+        if (!["facebook", "instagram", "x"].includes(platform)) {
+          return res.status(400).json({ message: "Invalid platform" });
+        }
+
+        const isAuthorized = await storage.verifyRestaurantOwnership(
+          restaurantId,
+          req.user.id,
+          "manageProfile",
+        );
+        if (!isAuthorized) {
+          return res.status(403).json({
+            message:
+              "Unauthorized: You can only disconnect social accounts for restaurants you own",
+          });
+        }
+
+        await db
+          .update(socialPublishingConnections)
+          .set({
+            accessToken: null,
+            refreshToken: null,
+            tokenExpiresAt: null,
+            status: "disconnected",
+            lastError: null,
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(socialPublishingConnections.restaurantId, restaurantId),
+              eq(socialPublishingConnections.platform, platform),
+            ),
+          );
+
+        res.json({ success: true });
+      } catch (error) {
+        console.error("Error disconnecting social connection:", error);
+        res
+          .status(500)
+          .json({ message: "Failed to disconnect social connection" });
+      }
+    },
+  );
+
+  app.get(
+    "/api/restaurants/:restaurantId/social-connections/meta/start",
+    isAuthenticated,
+    async (req: any, res) => {
+      try {
+        const { restaurantId } = req.params;
+        const platform = String(req.query.platform || "facebook").toLowerCase();
+        if (platform !== "facebook" && platform !== "instagram") {
+          return res.status(400).json({ message: "Invalid Meta platform" });
+        }
+
+        const isAuthorized = await storage.verifyRestaurantOwnership(
+          restaurantId,
+          req.user.id,
+          "manageProfile",
+        );
+        if (!isAuthorized) {
+          return res.status(403).json({
+            message:
+              "Unauthorized: You can only connect social accounts for restaurants you own",
+          });
+        }
+
+        const hasAccess = await hasBusinessDistributionAccess(req.user.id);
+        if (!hasAccess) {
+          return res.status(402).json({
+            message: "Premium subscription required to connect publishing.",
+          });
+        }
+
+        const clientId = process.env.FACEBOOK_APP_ID;
+        const clientSecret = process.env.FACEBOOK_APP_SECRET;
+        if (!clientId || !clientSecret) {
+          return res.status(503).json({
+            message: "Meta publishing is not configured on this environment.",
+          });
+        }
+
+        const state = createOAuthState();
+        const redirectUri = `${getPublicBaseUrl(req)}/api/social-connections/meta/callback`;
+        await setSocialOAuthSession(req, {
+          provider: "meta",
+          restaurantId,
+          platform,
+          redirectPath: getSafeRedirectPath(req.query.redirect),
+          state,
+          createdAt: new Date().toISOString(),
+        });
+
+        const params = new URLSearchParams({
+          client_id: clientId,
+          redirect_uri: redirectUri,
+          state,
+          response_type: "code",
+          scope: [
+            "pages_show_list",
+            "pages_read_engagement",
+            "pages_manage_posts",
+            "instagram_basic",
+            "instagram_content_publish",
+          ].join(","),
+        });
+
+        res.redirect(
+          `https://www.facebook.com/${META_API_VERSION}/dialog/oauth?${params.toString()}`,
+        );
+      } catch (error) {
+        console.error("Error starting Meta social connection:", error);
+        res
+          .status(500)
+          .json({ message: "Failed to start Meta publishing connection" });
+      }
+    },
+  );
+
+  app.get(
+    "/api/social-connections/meta/callback",
+    isAuthenticated,
+    async (req: any, res) => {
+      const oauth = getSocialOAuthSession(req);
+      const redirectPath = oauth?.redirectPath || "/parking-pass?tab=schedule";
+      try {
+        const code = String(req.query.code || "");
+        const state = String(req.query.state || "");
+        if (!oauth || oauth.provider !== "meta" || oauth.state !== state) {
+          return res.redirect(
+            appendSocialStatus(redirectPath, "error", "Connection expired"),
+          );
+        }
+        if (!code) {
+          return res.redirect(
+            appendSocialStatus(redirectPath, "error", "Meta did not approve"),
+          );
+        }
+
+        const clientId = process.env.FACEBOOK_APP_ID;
+        const clientSecret = process.env.FACEBOOK_APP_SECRET;
+        if (!clientId || !clientSecret) {
+          return res.redirect(
+            appendSocialStatus(redirectPath, "error", "Meta is not configured"),
+          );
+        }
+
+        const redirectUri = `${getPublicBaseUrl(req)}/api/social-connections/meta/callback`;
+        const tokenParams = new URLSearchParams({
+          client_id: clientId,
+          client_secret: clientSecret,
+          redirect_uri: redirectUri,
+          code,
+        });
+        const token = await fetchJson(
+          `https://graph.facebook.com/${META_API_VERSION}/oauth/access_token?${tokenParams.toString()}`,
+        );
+
+        const exchangeParams = new URLSearchParams({
+          grant_type: "fb_exchange_token",
+          client_id: clientId,
+          client_secret: clientSecret,
+          fb_exchange_token: token.access_token,
+        });
+        const longLived = await fetchJson(
+          `https://graph.facebook.com/${META_API_VERSION}/oauth/access_token?${exchangeParams.toString()}`,
+        );
+        const userAccessToken = longLived.access_token || token.access_token;
+
+        const pageParams = new URLSearchParams({
+          fields:
+            "id,name,link,access_token,instagram_business_account{id,username}",
+          access_token: userAccessToken,
+        });
+        const pagesPayload = await fetchJson(
+          `https://graph.facebook.com/${META_API_VERSION}/me/accounts?${pageParams.toString()}`,
+        );
+        const pages = Array.isArray(pagesPayload?.data)
+          ? pagesPayload.data
+          : [];
+        const selectedPage =
+          oauth.platform === "instagram"
+            ? pages.find((page: any) => page?.instagram_business_account?.id)
+            : pages[0];
+
+        if (!selectedPage?.id || !selectedPage?.access_token) {
+          return res.redirect(
+            appendSocialStatus(
+              redirectPath,
+              "error",
+              oauth.platform === "instagram"
+                ? "No Instagram Business account found"
+                : "No Facebook Page found",
+            ),
+          );
+        }
+
+        const instagramAccount = selectedPage.instagram_business_account || null;
+        const externalAccountUrl =
+          oauth.platform === "instagram" && instagramAccount?.username
+            ? `https://www.instagram.com/${instagramAccount.username}`
+            : selectedPage.link || null;
+        const displayName =
+          oauth.platform === "instagram"
+            ? instagramAccount?.username || selectedPage.name || "Instagram"
+            : selectedPage.name || "Facebook Page";
+
+        const [connection] = await db
+          .insert(socialPublishingConnections)
+          .values({
+            restaurantId: oauth.restaurantId,
+            createdByUserId: req.user.id,
+            platform: oauth.platform,
+            displayName,
+            externalAccountId:
+              oauth.platform === "instagram"
+                ? instagramAccount?.id
+                : selectedPage.id,
+            externalAccountUrl,
+            accessToken: selectedPage.access_token,
+            refreshToken: userAccessToken,
+            tokenExpiresAt: longLived.expires_in
+              ? new Date(Date.now() + Number(longLived.expires_in) * 1000)
+              : null,
+            scopes: [
+              "pages_show_list",
+              "pages_read_engagement",
+              "pages_manage_posts",
+              "instagram_basic",
+              "instagram_content_publish",
+            ],
+            metadata: {
+              provider: "meta",
+              pageId: selectedPage.id,
+              pageName: selectedPage.name || null,
+              instagramBusinessAccountId: instagramAccount?.id || null,
+              instagramUsername: instagramAccount?.username || null,
+            },
+            status: "active",
+            lastError: null,
+            updatedAt: new Date(),
+          })
+          .onConflictDoUpdate({
+            target: [
+              socialPublishingConnections.restaurantId,
+              socialPublishingConnections.platform,
+            ],
+            set: {
+              createdByUserId: req.user.id,
+              displayName,
+              externalAccountId:
+                oauth.platform === "instagram"
+                  ? instagramAccount?.id
+                  : selectedPage.id,
+              externalAccountUrl,
+              accessToken: selectedPage.access_token,
+              refreshToken: userAccessToken,
+              tokenExpiresAt: longLived.expires_in
+                ? new Date(Date.now() + Number(longLived.expires_in) * 1000)
+                : null,
+              scopes: [
+                "pages_show_list",
+                "pages_read_engagement",
+                "pages_manage_posts",
+                "instagram_basic",
+                "instagram_content_publish",
+              ],
+              metadata: {
+                provider: "meta",
+                pageId: selectedPage.id,
+                pageName: selectedPage.name || null,
+                instagramBusinessAccountId: instagramAccount?.id || null,
+                instagramUsername: instagramAccount?.username || null,
+              },
+              status: "active",
+              lastError: null,
+              updatedAt: new Date(),
+            },
+          })
+          .returning();
+
+        if (connection.externalAccountUrl) {
+          await db
+            .update(restaurants)
+            .set({
+              facebookPageUrl:
+                oauth.platform === "facebook"
+                  ? connection.externalAccountUrl
+                  : undefined,
+              instagramUrl:
+                oauth.platform === "instagram"
+                  ? connection.externalAccountUrl
+                  : undefined,
+              updatedAt: new Date(),
+            })
+            .where(eq(restaurants.id, oauth.restaurantId));
+        }
+
+        await setSocialOAuthSession(req, null);
+        res.redirect(appendSocialStatus(redirectPath, "connected"));
+      } catch (error) {
+        console.error("Error completing Meta social connection:", error);
+        await setSocialOAuthSession(req, null).catch(() => undefined);
+        res.redirect(
+          appendSocialStatus(
+            redirectPath,
+            "error",
+            error instanceof Error ? error.message : "Meta connection failed",
+          ),
+        );
+      }
+    },
+  );
+
+  app.get(
+    "/api/restaurants/:restaurantId/social-connections/x/start",
+    isAuthenticated,
+    async (req: any, res) => {
+      try {
+        const { restaurantId } = req.params;
+        const isAuthorized = await storage.verifyRestaurantOwnership(
+          restaurantId,
+          req.user.id,
+          "manageProfile",
+        );
+        if (!isAuthorized) {
+          return res.status(403).json({
+            message:
+              "Unauthorized: You can only connect social accounts for restaurants you own",
+          });
+        }
+
+        const hasAccess = await hasBusinessDistributionAccess(req.user.id);
+        if (!hasAccess) {
+          return res.status(402).json({
+            message: "Premium subscription required to connect publishing.",
+          });
+        }
+
+        const clientId = process.env.X_CLIENT_ID || process.env.TWITTER_CLIENT_ID;
+        if (!clientId) {
+          return res.status(503).json({
+            message: "X publishing is not configured on this environment.",
+          });
+        }
+
+        const state = createOAuthState();
+        const codeVerifier = base64Url(randomBytes(48));
+        await setSocialOAuthSession(req, {
+          provider: "x",
+          restaurantId,
+          platform: "x",
+          redirectPath: getSafeRedirectPath(req.query.redirect),
+          state,
+          codeVerifier,
+          createdAt: new Date().toISOString(),
+        });
+
+        const params = new URLSearchParams({
+          response_type: "code",
+          client_id: clientId,
+          redirect_uri: `${getPublicBaseUrl(req)}/api/social-connections/x/callback`,
+          scope: "tweet.read tweet.write users.read offline.access",
+          state,
+          code_challenge: createPkceChallenge(codeVerifier),
+          code_challenge_method: "S256",
+        });
+
+        res.redirect(`https://x.com/i/oauth2/authorize?${params.toString()}`);
+      } catch (error) {
+        console.error("Error starting X social connection:", error);
+        res
+          .status(500)
+          .json({ message: "Failed to start X publishing connection" });
+      }
+    },
+  );
+
+  app.get(
+    "/api/social-connections/x/callback",
+    isAuthenticated,
+    async (req: any, res) => {
+      const oauth = getSocialOAuthSession(req);
+      const redirectPath = oauth?.redirectPath || "/parking-pass?tab=schedule";
+      try {
+        const code = String(req.query.code || "");
+        const state = String(req.query.state || "");
+        if (
+          !oauth ||
+          oauth.provider !== "x" ||
+          oauth.platform !== "x" ||
+          oauth.state !== state ||
+          !oauth.codeVerifier
+        ) {
+          return res.redirect(
+            appendSocialStatus(redirectPath, "error", "Connection expired"),
+          );
+        }
+        if (!code) {
+          return res.redirect(
+            appendSocialStatus(redirectPath, "error", "X did not approve"),
+          );
+        }
+
+        const clientId = process.env.X_CLIENT_ID || process.env.TWITTER_CLIENT_ID;
+        const clientSecret =
+          process.env.X_CLIENT_SECRET || process.env.TWITTER_CLIENT_SECRET;
+        if (!clientId) {
+          return res.redirect(
+            appendSocialStatus(redirectPath, "error", "X is not configured"),
+          );
+        }
+
+        const tokenBody = new URLSearchParams({
+          grant_type: "authorization_code",
+          code,
+          redirect_uri: `${getPublicBaseUrl(req)}/api/social-connections/x/callback`,
+          code_verifier: oauth.codeVerifier,
+        });
+        const tokenHeaders: Record<string, string> = {
+          "Content-Type": "application/x-www-form-urlencoded",
+        };
+        if (clientSecret) {
+          tokenHeaders.Authorization = `Basic ${Buffer.from(
+            `${clientId}:${clientSecret}`,
+          ).toString("base64")}`;
+        } else {
+          tokenBody.set("client_id", clientId);
+        }
+        const token = await fetchJson("https://api.x.com/2/oauth2/token", {
+          method: "POST",
+          headers: tokenHeaders,
+          body: tokenBody.toString(),
+        });
+
+        const me = await fetchJson(
+          "https://api.x.com/2/users/me?user.fields=username,name",
+          {
+            headers: {
+              Authorization: `Bearer ${token.access_token}`,
+            },
+          },
+        );
+        const account = me?.data || {};
+        if (!account?.id) {
+          return res.redirect(
+            appendSocialStatus(redirectPath, "error", "No X account found"),
+          );
+        }
+
+        const username = account.username || account.name || "X account";
+        const externalAccountUrl = account.username
+          ? `https://x.com/${account.username}`
+          : null;
+        const [connection] = await db
+          .insert(socialPublishingConnections)
+          .values({
+            restaurantId: oauth.restaurantId,
+            createdByUserId: req.user.id,
+            platform: "x",
+            displayName: username,
+            externalAccountId: account.id,
+            externalAccountUrl,
+            accessToken: token.access_token,
+            refreshToken: token.refresh_token || null,
+            tokenExpiresAt: token.expires_in
+              ? new Date(Date.now() + Number(token.expires_in) * 1000)
+              : null,
+            scopes: String(token.scope || "")
+              .split(" ")
+              .filter(Boolean),
+            metadata: { provider: "x", username: account.username || null },
+            status: "active",
+            lastError: null,
+            updatedAt: new Date(),
+          })
+          .onConflictDoUpdate({
+            target: [
+              socialPublishingConnections.restaurantId,
+              socialPublishingConnections.platform,
+            ],
+            set: {
+              createdByUserId: req.user.id,
+              displayName: username,
+              externalAccountId: account.id,
+              externalAccountUrl,
+              accessToken: token.access_token,
+              refreshToken: token.refresh_token || null,
+              tokenExpiresAt: token.expires_in
+                ? new Date(Date.now() + Number(token.expires_in) * 1000)
+                : null,
+              scopes: String(token.scope || "")
+                .split(" ")
+                .filter(Boolean),
+              metadata: { provider: "x", username: account.username || null },
+              status: "active",
+              lastError: null,
+              updatedAt: new Date(),
+            },
+          })
+          .returning();
+
+        if (connection.externalAccountUrl) {
+          await db
+            .update(restaurants)
+            .set({ xUrl: connection.externalAccountUrl, updatedAt: new Date() })
+            .where(eq(restaurants.id, oauth.restaurantId));
+        }
+
+        await setSocialOAuthSession(req, null);
+        res.redirect(appendSocialStatus(redirectPath, "connected"));
+      } catch (error) {
+        console.error("Error completing X social connection:", error);
+        await setSocialOAuthSession(req, null).catch(() => undefined);
+        res.redirect(
+          appendSocialStatus(
+            redirectPath,
+            "error",
+            error instanceof Error ? error.message : "X connection failed",
+          ),
+        );
       }
     },
   );

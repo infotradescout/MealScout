@@ -53,6 +53,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import ShareButton from "@/components/share-button";
 import { initFacebookSDK, postToFacebook } from "@/lib/facebook";
+import { apiRequest } from "@/lib/queryClient";
 import { formatRelativeTime } from "@/lib/relative-time";
 import {
   ParkingScheduleCalendar,
@@ -612,7 +613,10 @@ export default function ParkingPassPage() {
     };
   } | null>(null);
   const [isPostingSocial, setIsPostingSocial] = useState(false);
-  const { data: socialConnectionPayload } = useQuery<{
+  const {
+    data: socialConnectionPayload,
+    refetch: refetchSocialConnections,
+  } = useQuery<{
     restaurantId: string;
     connections: SocialConnectionStatus[];
   }>({
@@ -1024,6 +1028,35 @@ export default function ParkingPassPage() {
       setHostToolsTab("payments");
     }
   }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const socialStatus = params.get("social");
+    if (socialStatus !== "connected" && socialStatus !== "error") return;
+
+    toast({
+      title:
+        socialStatus === "connected"
+          ? "Publishing connected"
+          : "Connection failed",
+      description:
+        params.get("socialMessage") ||
+        (socialStatus === "connected"
+          ? "That account can now publish from MealScout."
+          : "Try reconnecting from the publishing card."),
+      variant: socialStatus === "error" ? "destructive" : undefined,
+    });
+    void refetchSocialConnections();
+
+    params.delete("social");
+    params.delete("socialMessage");
+    const nextQuery = params.toString();
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ""}`,
+    );
+  }, [refetchSocialConnections, toast]);
 
   const reloadHostPassListings = async (hostId: string) => {
     if (!hostId) return;
@@ -2077,6 +2110,40 @@ export default function ParkingPassPage() {
 
   const handlePostPromptMessage = (message: string) => {
     setPostPrompt((current) => (current ? { ...current, message } : current));
+  };
+
+  const handleConnectSocialPlatform = (
+    platform: SocialConnectionStatus["platform"],
+  ) => {
+    if (!truckId) return;
+    const provider = platform === "x" ? "x" : "meta";
+    const redirect = encodeURIComponent("/parking-pass?tab=schedule");
+    const platformParam = encodeURIComponent(platform);
+    window.location.href = `/api/restaurants/${truckId}/social-connections/${provider}/start?platform=${platformParam}&redirect=${redirect}`;
+  };
+
+  const handleDisconnectSocialPlatform = async (
+    platform: SocialConnectionStatus["platform"],
+  ) => {
+    if (!truckId) return;
+    try {
+      await apiRequest(
+        "DELETE",
+        `/api/restaurants/${truckId}/social-connections/${platform}`,
+      );
+      await refetchSocialConnections();
+      toast({
+        title: "Publishing disconnected",
+        description: "MealScout will use manual share handoff for that account.",
+      });
+    } catch (error) {
+      toast({
+        title: "Disconnect failed",
+        description:
+          error instanceof Error ? error.message : "Unable to disconnect.",
+        variant: "destructive",
+      });
+    }
   };
 
   const handlePostPromptShare = async (payload?: {
@@ -5641,6 +5708,41 @@ export default function ParkingPassPage() {
                               {connection.lastError}
                             </p>
                           )}
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="h-7 px-2 text-xs"
+                              disabled={
+                                !hasPremiumTruckTools || !canManageTruckProfile
+                              }
+                              onClick={() =>
+                                handleConnectSocialPlatform(platform.key)
+                              }
+                            >
+                              {connection?.connected
+                                ? "Reconnect"
+                                : "Connect"}
+                            </Button>
+                            {connection?.connected && (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 px-2 text-xs text-red-700 hover:text-red-800"
+                                disabled={
+                                  !hasPremiumTruckTools ||
+                                  !canManageTruckProfile
+                                }
+                                onClick={() =>
+                                  handleDisconnectSocialPlatform(platform.key)
+                                }
+                              >
+                                Disconnect
+                              </Button>
+                            )}
+                          </div>
                         </div>
                       );
                     })}
