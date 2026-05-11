@@ -194,6 +194,7 @@ export const restaurants = pgTable("restaurants", {
   currentLatitude: decimal("current_latitude", { precision: 10, scale: 8 }),
   currentLongitude: decimal("current_longitude", { precision: 11, scale: 8 }),
   lastBroadcastAt: timestamp("last_broadcast_at"),
+  liveUntilAt: timestamp("live_until_at"),
   // Operating hours as JSONB: { mon: [{ open: "HH:MM", close: "HH:MM" }], tue: [...], ... }
   operatingHours: jsonb("operating_hours"),
   isActive: boolean("is_active").default(true),
@@ -5168,6 +5169,15 @@ export const socialPostQueue = pgTable(
     target: varchar("target"),
     message: text("message").notNull(),
     link: text("link"),
+    imageUrl: text("image_url"),
+    restaurantId: varchar("restaurant_id").references(() => restaurants.id, {
+      onDelete: "cascade",
+    }),
+    createdByUserId: varchar("created_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    source: varchar("source"),
+    metadata: jsonb("metadata"),
     status: varchar("status").notNull().default("pending"),
     errorMessage: text("error_message"),
     createdAt: timestamp("created_at").defaultNow(),

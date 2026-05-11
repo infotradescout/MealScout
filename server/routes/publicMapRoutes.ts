@@ -27,6 +27,9 @@ import {
 } from "../services/parkingPassQuality";
 import { computeExternalReviewAdjustment } from "../services/externalReviewScoring";
 import { isLaunchDegradedMode } from "../launchMode";
+import { resolveCityTimeZoneSync } from "../services/cityTimeZone";
+import { buildSlotDateTimes } from "../services/timeIntent";
+import { getSuppressedLocationResourceIds } from "../services/truckLocationTrust";
 import {
   dealClaims,
   deals,
@@ -38,6 +41,7 @@ import {
   restaurants,
   suppliers,
   supplierProducts,
+  truckManualSchedules,
   users,
 } from "@shared/schema";
 
@@ -575,16 +579,59 @@ export function registerPublicMapRoutes(app: Express) {
         });
       };
 
+      const now = new Date();
+      const todayStart = new Date(now);
+      todayStart.setHours(0, 0, 0, 0);
+      const manualScheduleWindowStart = new Date(
+        todayStart.getTime() - 24 * 60 * 60 * 1000,
+      );
+      const manualScheduleWindowEnd = new Date(
+        todayStart.getTime() + 24 * 60 * 60 * 1000,
+      );
+
       const [
         openLocations,
         upcomingEvents,
         allHosts,
+        publicManualSchedules,
         activeSuppliers,
         activeSupplierProducts,
       ] = await Promise.all([
         storage.getOpenLocationRequests(),
         storage.getAllUpcomingEvents(),
         storage.getAllHosts(),
+        db
+          .select({
+            id: truckManualSchedules.id,
+            truckId: truckManualSchedules.truckId,
+            date: truckManualSchedules.date,
+            startTime: truckManualSchedules.startTime,
+            endTime: truckManualSchedules.endTime,
+            locationName: truckManualSchedules.locationName,
+            address: truckManualSchedules.address,
+            city: truckManualSchedules.city,
+            state: truckManualSchedules.state,
+            notes: truckManualSchedules.notes,
+            lastConfirmedAt: truckManualSchedules.lastConfirmedAt,
+            truckName: restaurants.name,
+            truckOwnerId: restaurants.ownerId,
+            truckIsActive: restaurants.isActive,
+            truckIsFoodTruck: restaurants.isFoodTruck,
+            truckIsVerified: restaurants.isVerified,
+          })
+          .from(truckManualSchedules)
+          .innerJoin(restaurants, eq(truckManualSchedules.truckId, restaurants.id))
+          .where(
+            and(
+              eq(truckManualSchedules.isPublic, true),
+              gte(truckManualSchedules.date, manualScheduleWindowStart),
+              lte(truckManualSchedules.date, manualScheduleWindowEnd),
+              eq(restaurants.isActive, true),
+              eq(restaurants.isFoodTruck, true),
+            ),
+          )
+          .limit(300)
+          .catch(() => []),
         db
           .select({
             id: suppliers.id,
@@ -768,27 +815,93 @@ export function registerPublicMapRoutes(app: Express) {
         ...primaryHostLocations,
       ];
 
-      const eventLocations = publicEvents.map((event) => ({
-        id: event.id,
-        type: "event" as const,
-        name: event.name || "Host Event",
-        description: event.description,
-        date: event.date,
-        startTime: event.startTime,
-        endTime: event.endTime,
-        maxTrucks: event.maxTrucks,
-        status: event.status,
-        hostId: event.hostId,
-        hostName: event.host?.businessName,
-        hostAddress: event.host?.address,
-        hostCity: event.host?.city ?? null,
-        hostState: event.host?.state ?? null,
-        hostLatitude: event.host?.latitude,
-        hostLongitude: event.host?.longitude,
-        hardCapEnabled: event.hardCapEnabled,
-        seriesId: event.seriesId,
-        bookedRestaurantId: event.bookedRestaurantId,
-      }));
+      const manualScheduleIds = (publicManualSchedules as any[])
+        .map((schedule) => String(schedule.id || "").trim())
+        .filter(Boolean);
+      const suppressedManualScheduleIds =
+        await getSuppressedLocationResourceIds({
+          resourceIds: manualScheduleIds,
+          targetType: "manual_schedule",
+          now,
+        });
+
+      const manualScheduleLocations = (publicManualSchedules as any[])
+        .filter((schedule) => {
+          const address = String(schedule.address || "").trim();
+          const truckName = String(schedule.truckName || "").trim();
+          if (!address || !truckName) return false;
+          if (suppressedManualScheduleIds.has(String(schedule.id))) {
+            return false;
+          }
+
+          const timeZone = resolveCityTimeZoneSync({
+            city: schedule.city ?? null,
+            state: schedule.state ?? null,
+          });
+          const servingWindow = buildSlotDateTimes({
+            timeZone,
+            date: schedule.date,
+            startTime: String(schedule.startTime || ""),
+            endTime: String(schedule.endTime || ""),
+          });
+          if (!servingWindow) return false;
+          return (
+            servingWindow.startUtc.getTime() <= now.getTime() &&
+            servingWindow.endUtc.getTime() >= now.getTime()
+          );
+        })
+        .map((schedule) => ({
+          id: `manual:${schedule.id}`,
+          type: "truck_manual_schedule" as const,
+          name: schedule.locationName
+            ? `${schedule.truckName} at ${schedule.locationName}`
+            : `${schedule.truckName} scheduled stop`,
+          description: schedule.notes ?? null,
+          date: schedule.date,
+          startTime: schedule.startTime,
+          endTime: schedule.endTime,
+          maxTrucks: 1,
+          status: "scheduled",
+          hostId: null,
+          hostName: schedule.locationName || schedule.truckName,
+          hostAddress: schedule.address,
+          hostCity: schedule.city ?? null,
+          hostState: schedule.state ?? null,
+          hostLatitude: null,
+          hostLongitude: null,
+          hardCapEnabled: true,
+          seriesId: null,
+          bookedRestaurantId: schedule.truckId,
+          truckId: schedule.truckId,
+          truckName: schedule.truckName,
+          manualScheduleId: schedule.id,
+          lastConfirmedAt: schedule.lastConfirmedAt ?? null,
+        }));
+
+      const eventLocations = [
+        ...publicEvents.map((event) => ({
+          id: event.id,
+          type: "event" as const,
+          name: event.name || "Host Event",
+          description: event.description,
+          date: event.date,
+          startTime: event.startTime,
+          endTime: event.endTime,
+          maxTrucks: event.maxTrucks,
+          status: event.status,
+          hostId: event.hostId,
+          hostName: event.host?.businessName,
+          hostAddress: event.host?.address,
+          hostCity: event.host?.city ?? null,
+          hostState: event.host?.state ?? null,
+          hostLatitude: event.host?.latitude,
+          hostLongitude: event.host?.longitude,
+          hardCapEnabled: event.hardCapEnabled,
+          seriesId: event.seriesId,
+          bookedRestaurantId: event.bookedRestaurantId,
+        })),
+        ...manualScheduleLocations,
+      ];
 
       const supplierProductsById = new Map<string, string[]>();
       (activeSupplierProducts as any[]).forEach((product) => {
@@ -1184,7 +1297,9 @@ export function registerPublicMapRoutes(app: Express) {
         (event) => {
           const lat = parseCoord(event?.hostLatitude);
           const lng = parseCoord(event?.hostLongitude);
-          if (lat === null || lng === null) return false;
+          if (lat === null || lng === null) {
+            return Boolean(String(event?.hostAddress || "").trim());
+          }
           return pointInBounds(expandedBounds, lat, lng);
         },
       );

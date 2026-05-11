@@ -256,6 +256,8 @@ const defaultSocialAutopostSettings: SocialAutopostSettings = {
   promptBeforePost: true,
 };
 
+const SOCIAL_PREOPEN_PROMPT_MINUTES = 90;
+
 const formatSlotLabel = (slot: string) =>
   slot.charAt(0).toUpperCase() + slot.slice(1);
 
@@ -451,6 +453,16 @@ const getListingDateKey = (value: string) => {
   return format(parsed, "yyyy-MM-dd");
 };
 
+const buildDateTimeFromKey = (date: string | Date, time: string) => {
+  const dateKey =
+    typeof date === "string" ? getListingDateKey(date) : format(date, "yyyy-MM-dd");
+  const match = String(time || "").match(/^(\d{1,2}):(\d{2})/);
+  if (!dateKey || !match) return null;
+  const parsed = new Date(`${dateKey}T00:00:00`);
+  parsed.setHours(Number(match[1]), Number(match[2]), 0, 0);
+  return Number.isFinite(parsed.getTime()) ? parsed : null;
+};
+
 function isSlotBookableByTime(
   listing: ParkingPassListing,
   slotType: (typeof PARKING_PASS_SLOT_TYPES)[number],
@@ -561,6 +573,7 @@ export default function ParkingPassPage() {
     title: string;
     message: string;
     link: string;
+    imageUrl?: string | null;
     selectedPlatforms: {
       facebook: boolean;
       instagram: boolean;
@@ -853,6 +866,15 @@ export default function ParkingPassPage() {
   const [isSavingSchedule, setIsSavingSchedule] = useState(false);
   const [isSharingLocation, setIsSharingLocation] = useState(false);
   const [isLive, setIsLive] = useState(false);
+  const [dismissedPreOpenPromptKey, setDismissedPreOpenPromptKey] =
+    useState<string | null>(null);
+  const defaultLeaveTime = useMemo(() => {
+    const date = new Date(Date.now() + 4 * 60 * 60 * 1000);
+    return `${String(date.getHours()).padStart(2, "0")}:${String(
+      date.getMinutes(),
+    ).padStart(2, "0")}`;
+  }, []);
+  const [liveLeaveTime, setLiveLeaveTime] = useState(defaultLeaveTime);
   const [topTab, setTopTab] = useState<"book" | "schedule" | "host">("book");
   const [hostToolsTab, setHostToolsTab] = useState<
     "listings" | "location" | "payments"
@@ -1755,6 +1777,53 @@ export default function ParkingPassPage() {
     });
   }, [bookedSchedule, manualSchedules]);
 
+  const preOpenPrompt = useMemo(() => {
+    const now = new Date();
+    const upcoming = parkingScheduleItems
+      .map((item) => {
+        const startsAt = buildDateTimeFromKey(item.date, item.startTime || "");
+        if (!startsAt) return null;
+        const minutesUntil = Math.round(
+          (startsAt.getTime() - now.getTime()) / 60_000,
+        );
+        if (
+          minutesUntil < 0 ||
+          minutesUntil > SOCIAL_PREOPEN_PROMPT_MINUTES
+        ) {
+          return null;
+        }
+        return { item, startsAt, minutesUntil };
+      })
+      .filter(Boolean) as Array<{
+      item: ParkingScheduleItem;
+      startsAt: Date;
+      minutesUntil: number;
+    }>;
+
+    upcoming.sort(
+      (a, b) => a.startsAt.getTime() - b.startsAt.getTime(),
+    );
+    const next = upcoming[0];
+    if (!next) return null;
+    const key = `${next.item.type}:${next.item.bookingId || next.item.manualId || next.item.id}`;
+    if (key === dismissedPreOpenPromptKey) return null;
+    const locationName =
+      next.item.locationName || next.item.title || "today's stop";
+    const dateLabel = format(next.startsAt, "EEE, MMM d");
+    const timeLabel = `${next.item.startTime} - ${next.item.endTime}`;
+    return {
+      key,
+      item: next.item,
+      locationName,
+      dateLabel,
+      timeLabel,
+      minutesUntil: next.minutesUntil,
+      message: `${
+        truck?.name || "We"
+      } at ${locationName}. ${dateLabel}, ${timeLabel}. Live location + menu:`,
+    };
+  }, [dismissedPreOpenPromptKey, parkingScheduleItems, truck?.name]);
+
   const handleOpenReport = (item: ParkingScheduleItem) => {
     if (!item.reportKey) return;
     const existing = reportByKey.get(item.reportKey);
@@ -1886,8 +1955,10 @@ export default function ParkingPassPage() {
   };
 
   const handlePostPromptShare = async (payload?: {
+    title?: string;
     message: string;
     link: string;
+    imageUrl?: string | null;
     selectedPlatforms: {
       facebook: boolean;
       instagram: boolean;
@@ -1899,6 +1970,37 @@ export default function ParkingPassPage() {
     setIsPostingSocial(true);
     try {
       const shouldClear = !payload;
+      let queuedCount = 0;
+      if (truckId) {
+        try {
+          const queueRes = await fetch(`/api/restaurants/${truckId}/social-posts`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({
+              message: activePrompt.message,
+              link: activePrompt.link,
+              imageUrl: activePrompt.imageUrl || null,
+              source: activePrompt.title || "owner_prompt",
+              platforms: activePrompt.selectedPlatforms,
+            }),
+          });
+          if (queueRes.ok) {
+            const queueData = await queueRes.json().catch(() => ({}));
+            queuedCount = Array.isArray(queueData?.posts)
+              ? queueData.posts.length
+              : 0;
+          } else {
+            const queueData = await queueRes.json().catch(() => ({}));
+            console.warn(
+              "Social post queue failed:",
+              queueData?.message || queueRes.statusText,
+            );
+          }
+        } catch (queueError) {
+          console.warn("Social post queue failed:", queueError);
+        }
+      }
       let shared = false;
       if (activePrompt.selectedPlatforms.facebook) {
         await initFacebookSDK();
@@ -1916,7 +2018,14 @@ export default function ParkingPassPage() {
         shared = true;
       }
       if (activePrompt.selectedPlatforms.instagram) {
-        const copyText = `${activePrompt.message} ${activePrompt.link}`.trim();
+        const copyText = [
+          activePrompt.message,
+          activePrompt.link,
+          activePrompt.imageUrl ? `Photo: ${activePrompt.imageUrl}` : "",
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .trim();
         if (navigator.clipboard?.writeText) {
           await navigator.clipboard.writeText(copyText);
         }
@@ -1925,8 +2034,12 @@ export default function ParkingPassPage() {
       }
       if (shared) {
         toast({
-          title: "Share opened",
-          description: "Finish the post in the new window.",
+          title: queuedCount > 0 ? "Post queued" : "Share opened",
+          description: activePrompt.imageUrl
+            ? "Caption copied with photo link. Finish the post."
+            : queuedCount > 0
+              ? "Queued for tracking. Finish the post in the new window."
+              : "Finish the post in the new window.",
         });
       }
       if (shouldClear) {
@@ -2638,7 +2751,7 @@ export default function ParkingPassPage() {
 
   const maybePromptSocialPost = (
     trigger: keyof SocialAutopostSettings["triggers"],
-    options: { title: string; message: string; link: string },
+    options: { title: string; message: string; link: string; imageUrl?: string | null },
   ) => {
     if (!hasPremiumTruckTools) return;
     if (!socialSettings.triggers[trigger]) return;
@@ -2654,6 +2767,7 @@ export default function ParkingPassPage() {
       void handlePostPromptShare({
         message: options.message,
         link: options.link,
+        imageUrl: options.imageUrl,
         selectedPlatforms,
       });
       return;
@@ -2662,7 +2776,20 @@ export default function ParkingPassPage() {
       title: options.title,
       message: options.message,
       link: options.link,
+      imageUrl: options.imageUrl,
       selectedPlatforms,
+    });
+  };
+
+  const handleShareUpcomingStop = () => {
+    if (!preOpenPrompt) return;
+    const shareLink = buildTruckShareLink();
+    if (!shareLink) return;
+    maybePromptSocialPost(preOpenPrompt.item.type === "booking" ? "booking" : "schedule", {
+      title: "Post next stop",
+      message: preOpenPrompt.message,
+      link: shareLink,
+      imageUrl: truck?.coverImageUrl || truck?.logoUrl || null,
     });
   };
 
@@ -2808,6 +2935,17 @@ export default function ParkingPassPage() {
 
     setIsSharingLocation(true);
     try {
+      const computeLiveMinutes = () => {
+        const match = liveLeaveTime.match(/^(\d{2}):(\d{2})$/);
+        if (!match) return 240;
+        const leaveAt = new Date();
+        leaveAt.setHours(Number(match[1]), Number(match[2]), 0, 0);
+        if (leaveAt.getTime() <= Date.now()) {
+          leaveAt.setDate(leaveAt.getDate() + 1);
+        }
+        return Math.round((leaveAt.getTime() - Date.now()) / 60_000);
+      };
+      const safeLiveMinutes = Math.max(15, Math.min(240, computeLiveMinutes()));
       if (isLive) {
         await fetch(`/api/restaurants/${truckId}/mobile-settings`, {
           method: "PATCH",
@@ -2846,6 +2984,7 @@ export default function ParkingPassPage() {
           longitude: position.coords.longitude,
           accuracy: position.coords.accuracy,
           source: "manual",
+          liveForMinutes: safeLiveMinutes,
         }),
       });
 
@@ -2857,17 +2996,39 @@ export default function ParkingPassPage() {
       setIsLive(true);
       toast({
         title: "Live location shared",
-        description: "You are now visible on the map.",
+        description: `You are visible for up to ${Math.round(
+          safeLiveMinutes / 60,
+        )}h unless you go offline first.`,
       });
-      const shareMessage = `${
-        truck?.name || "We"
-      } are live right now. Find our location on MealScout.`;
-      const shareLink = buildTruckShareLink();
+      let shareCard: {
+        title?: string;
+        message?: string;
+        link?: string;
+        imageUrl?: string | null;
+      } | null = null;
+      try {
+        const cardRes = await fetch(
+          `/api/restaurants/${truckId}/live-share-card`,
+          { credentials: "include" },
+        );
+        if (cardRes.ok) {
+          shareCard = await cardRes.json();
+        }
+      } catch {
+        // Use the local fallback below.
+      }
+      const shareMessage =
+        shareCard?.message ||
+        `${truck?.name || "We"} is serving now. Live location + menu:`;
+      const shareLink = shareCard?.link || buildTruckShareLink();
+      const shareImage =
+        shareCard?.imageUrl || truck?.coverImageUrl || truck?.logoUrl || null;
       if (shareLink) {
         maybePromptSocialPost("live", {
-          title: "Share your live location",
+          title: shareCard?.title || "Share your live location",
           message: shareMessage,
           link: shareLink,
+          imageUrl: shareImage,
         });
       }
     } catch (error) {
@@ -5047,6 +5208,46 @@ export default function ParkingPassPage() {
                     location and social/profile settings require profile access.
                   </div>
                 )}
+                {preOpenPrompt && hasPremiumTruckTools && canManageTruckProfile && (
+                  <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p className="text-sm font-semibold text-emerald-950">
+                          {preOpenPrompt.locationName}
+                        </p>
+                        <p className="text-xs text-emerald-800">
+                          {preOpenPrompt.dateLabel} · {preOpenPrompt.timeLabel}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          size="sm"
+                          onClick={handleShareUpcomingStop}
+                          disabled={!truckId}
+                        >
+                          Post stop
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={handleShareLocation}
+                          disabled={isSharingLocation || isLive || !truckId}
+                        >
+                          Go live
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() =>
+                            setDismissedPreOpenPromptKey(preOpenPrompt.key)
+                          }
+                        >
+                          Later
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <p className="text-sm font-semibold text-foreground">
@@ -5056,6 +5257,25 @@ export default function ParkingPassPage() {
                       Share your live location in one tap.
                     </p>
                   </div>
+                  {!isLive && (
+                    <div className="flex items-center gap-2 rounded-full border border-[color:var(--border-subtle)] bg-[var(--bg-card)] px-3 py-1.5">
+                      <Label
+                        htmlFor="live-leave-time"
+                        className="text-xs text-muted-foreground"
+                      >
+                        Leaving
+                      </Label>
+                      <Input
+                        id="live-leave-time"
+                        type="time"
+                        value={liveLeaveTime}
+                        onChange={(event) =>
+                          setLiveLeaveTime(event.target.value)
+                        }
+                        className="h-7 w-[92px] rounded-full border-0 bg-transparent p-0 text-xs"
+                      />
+                    </div>
+                  )}
                   <Button
                     size="sm"
                     className="w-full sm:w-auto"
@@ -5598,6 +5818,13 @@ export default function ParkingPassPage() {
                     </DialogHeader>
                     {postPrompt && (
                       <div className="space-y-4">
+                        {postPrompt.imageUrl && (
+                          <img
+                            src={postPrompt.imageUrl}
+                            alt="Social post preview"
+                            className="h-28 w-full rounded-lg border border-[color:var(--border-subtle)] object-cover"
+                          />
+                        )}
                         <div className="space-y-2">
                           <Label>Message</Label>
                           <Textarea

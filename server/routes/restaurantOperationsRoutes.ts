@@ -9,9 +9,12 @@ import { checkRateLimit } from "../documentValidation";
 import { isAuthenticated } from "../unifiedAuth";
 import { reverseGeocode } from "../utils/geocoding";
 import { broadcastLocationUpdate, broadcastStatusUpdate } from "../websocket";
+import { getSuppressedLocationResourceIds } from "../services/truckLocationTrust";
 import {
   insertFoodTruckLocationSchema,
+  moderationEvents,
   restaurants,
+  socialPostQueue,
   telemetryEvents,
   truckManualSchedules,
   truckParkingReports,
@@ -514,6 +517,223 @@ export function registerRestaurantOperationsRoutes(
     },
   );
 
+  app.get(
+    "/api/restaurants/:restaurantId/live-share-card",
+    isAuthenticated,
+    async (req: any, res) => {
+      try {
+        const { restaurantId } = req.params;
+        const isAuthorized = await storage.verifyRestaurantOwnership(
+          restaurantId,
+          req.user.id,
+          "manageProfile",
+        );
+        if (!isAuthorized) {
+          return res.status(403).json({
+            message:
+              "Unauthorized: You can only share location for restaurants you own",
+          });
+        }
+
+        const [restaurant] = await db
+          .select({
+            id: restaurants.id,
+            name: restaurants.name,
+            description: restaurants.description,
+            cuisineType: restaurants.cuisineType,
+            city: restaurants.city,
+            state: restaurants.state,
+            logoUrl: restaurants.logoUrl,
+            coverImageUrl: restaurants.coverImageUrl,
+            facebookPageUrl: restaurants.facebookPageUrl,
+            instagramUrl: restaurants.instagramUrl,
+            xUrl: restaurants.xUrl,
+          })
+          .from(restaurants)
+          .where(eq(restaurants.id, restaurantId))
+          .limit(1);
+
+        if (!restaurant) {
+          return res.status(404).json({ message: "Restaurant not found" });
+        }
+
+        const baseUrl = (process.env.PUBLIC_BASE_URL || "https://www.mealscout.us")
+          .replace(/\/+$/, "");
+        const profileUrl = `${baseUrl}/restaurant/${restaurant.id}`;
+        const place = [restaurant.city, restaurant.state]
+          .filter(Boolean)
+          .join(", ");
+        const description = String(
+          restaurant.description ||
+            restaurant.cuisineType ||
+            "Food truck",
+        )
+          .replace(/\s+/g, " ")
+          .trim()
+          .slice(0, 180);
+        const message = [
+          `${restaurant.name} is serving now.`,
+          place ? `Find us in ${place}.` : "",
+          description,
+          "Live location + menu:",
+        ]
+          .filter(Boolean)
+          .join(" ");
+
+        res.json({
+          title: "Share live location",
+          message,
+          link: profileUrl,
+          imageUrl: restaurant.coverImageUrl || restaurant.logoUrl || null,
+          businessPageUrl: profileUrl,
+          socialUrls: {
+            facebook: restaurant.facebookPageUrl || null,
+            instagram: restaurant.instagramUrl || null,
+            x: restaurant.xUrl || null,
+          },
+        });
+      } catch (error) {
+        console.error("Error building live share card:", error);
+        res.status(500).json({ message: "Failed to build share card" });
+      }
+    },
+  );
+
+  app.post(
+    "/api/restaurants/:restaurantId/social-posts",
+    isAuthenticated,
+    async (req: any, res) => {
+      try {
+        const { restaurantId } = req.params;
+        const isAuthorized = await storage.verifyRestaurantOwnership(
+          restaurantId,
+          req.user.id,
+          "manageProfile",
+        );
+        if (!isAuthorized) {
+          return res.status(403).json({
+            message:
+              "Unauthorized: You can only queue social posts for restaurants you own",
+          });
+        }
+
+        const hasAccess = await hasBusinessDistributionAccess(req.user.id);
+        if (!hasAccess) {
+          return res.status(402).json({
+            message: "Premium subscription required to queue social posts.",
+          });
+        }
+
+        const rateLimitResult = checkRateLimit(
+          `social_post_${req.user.id}_${restaurantId}`,
+        );
+        if (!rateLimitResult.allowed) {
+          return res.status(429).json({
+            message: "Please wait before queuing another social post.",
+            nextAllowedTime: rateLimitResult.nextAllowedTime,
+          });
+        }
+
+        const schema = z.object({
+          message: z.string().trim().min(1).max(1200),
+          link: z.string().url().optional().nullable(),
+          imageUrl: z.string().url().optional().nullable(),
+          source: z.string().trim().max(80).optional().nullable(),
+          platforms: z.object({
+            facebook: z.boolean().optional(),
+            instagram: z.boolean().optional(),
+            x: z.boolean().optional(),
+          }),
+        });
+        const parsed = schema.parse(req.body || {});
+        const selectedPlatforms = Object.entries(parsed.platforms)
+          .filter(([, enabled]) => Boolean(enabled))
+          .map(([platform]) => platform);
+
+        if (selectedPlatforms.length === 0) {
+          return res.status(400).json({ message: "Select at least one platform" });
+        }
+
+        const [restaurant] = await db
+          .select({
+            id: restaurants.id,
+            name: restaurants.name,
+            ownerId: restaurants.ownerId,
+            facebookPageUrl: restaurants.facebookPageUrl,
+            instagramUrl: restaurants.instagramUrl,
+            xUrl: restaurants.xUrl,
+          })
+          .from(restaurants)
+          .where(eq(restaurants.id, restaurantId))
+          .limit(1);
+
+        if (!restaurant) {
+          return res.status(404).json({ message: "Restaurant not found" });
+        }
+
+        const targetByPlatform: Record<string, string | null> = {
+          facebook: restaurant.facebookPageUrl || null,
+          instagram: restaurant.instagramUrl || null,
+          x: restaurant.xUrl || null,
+        };
+
+        const rows = selectedPlatforms.map((platform) => ({
+          platform,
+          target: targetByPlatform[platform] || null,
+          message: parsed.message,
+          link: parsed.link || null,
+          imageUrl: parsed.imageUrl || null,
+          restaurantId,
+          createdByUserId: req.user.id,
+          source: parsed.source || "owner_prompt",
+          status: "manual_required",
+          errorMessage:
+            "Owner social account publishing is not connected yet. Use the manual share handoff.",
+          metadata: {
+            restaurantName: restaurant.name,
+            intendedOwnerId: restaurant.ownerId || null,
+            queuedFrom: "parking_pass",
+            userAgent: req.headers["user-agent"] || null,
+          },
+          updatedAt: new Date(),
+        }));
+
+        const created = await db.insert(socialPostQueue).values(rows).returning();
+
+        try {
+          await db.insert(telemetryEvents).values({
+            eventName: "owner_social_post_queued",
+            userId: req.user.id,
+            properties: {
+              restaurantId,
+              platforms: selectedPlatforms,
+              source: parsed.source || "owner_prompt",
+              hasImage: Boolean(parsed.imageUrl),
+              hasLink: Boolean(parsed.link),
+            },
+          });
+        } catch (trackingError) {
+          console.warn("Failed to track social post queue:", trackingError);
+        }
+
+        res.json({
+          success: true,
+          posts: created,
+          manualRequired: true,
+        });
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          return res.status(400).json({
+            message: "Invalid social post",
+            errors: error.errors,
+          });
+        }
+        console.error("Error queueing social post:", error);
+        res.status(500).json({ message: "Failed to queue social post" });
+      }
+    },
+  );
+
   app.get("/api/restaurants/:restaurantId/is-open", async (req: any, res) => {
     try {
       const isOpen = await storage.isRestaurantOpenNow(req.params.restaurantId);
@@ -558,10 +778,30 @@ export function registerRestaurantOperationsRoutes(
           deviceId,
           req.user.id,
         );
-        await storage.setRestaurantMobileSettings(restaurantId, {
-          mobileOnline: true,
-        });
-        res.json({ success: true, session });
+
+        const latitude = Number(req.body?.latitude);
+        const longitude = Number(req.body?.longitude);
+        const liveForMinutesRaw = Number(req.body?.liveForMinutes);
+        const liveForMinutes = Number.isFinite(liveForMinutesRaw)
+          ? Math.min(240, Math.max(15, liveForMinutesRaw))
+          : null;
+        const liveUntilAt = new Date(
+          Date.now() + (liveForMinutes || 240) * 60_000,
+        );
+        let location = null;
+        if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+          location = await storage.upsertLiveLocation(
+            insertFoodTruckLocationSchema.parse({
+              restaurantId,
+              latitude,
+              longitude,
+            }),
+            { liveUntilAt },
+          );
+          broadcastLocationUpdate(restaurantId, location);
+        }
+
+        res.json({ success: true, session, location });
       } catch (error) {
         console.error("Error starting truck session:", error);
         res.status(500).json({ message: "Failed to start truck session" });
@@ -636,11 +876,17 @@ export function registerRestaurantOperationsRoutes(
           });
         }
 
+        const liveForMinutesRaw = Number(req.body?.liveForMinutes);
+        const liveForMinutes = Number.isFinite(liveForMinutesRaw)
+          ? Math.min(240, Math.max(15, liveForMinutesRaw))
+          : 240;
+        const liveUntilAt = new Date(Date.now() + liveForMinutes * 60_000);
         const location = await storage.upsertLiveLocation(
           insertFoodTruckLocationSchema.parse({
             ...req.body,
             restaurantId,
           }),
+          { liveUntilAt },
         );
 
         broadcastLocationUpdate(restaurantId, location);
@@ -653,6 +899,8 @@ export function registerRestaurantOperationsRoutes(
               restaurantId,
               latitude: location.latitude,
               longitude: location.longitude,
+              liveForMinutes,
+              liveUntilAt: liveUntilAt.toISOString(),
             },
           });
         } catch (trackingError) {
@@ -722,10 +970,118 @@ export function registerRestaurantOperationsRoutes(
         res.setHeader("X-MealScout-Fallback", "unfiltered-live-trucks");
       }
 
-      res.json({ trucks: payloadTrucks });
+      const truckIds = payloadTrucks
+        .map((truck: any) => String(truck?.id || "").trim())
+        .filter(Boolean);
+      const suppressedTruckIds = await getSuppressedLocationResourceIds({
+        resourceIds: truckIds,
+        targetType: "live_location",
+      });
+
+      const trustedPayloadTrucks = payloadTrucks.filter(
+        (truck: any) => !suppressedTruckIds.has(String(truck?.id || "")),
+      );
+      if (suppressedTruckIds.size > 0) {
+        res.setHeader(
+          "X-MealScout-Suppressed-Live-Trucks",
+          String(suppressedTruckIds.size),
+        );
+      }
+
+      res.json({ trucks: trustedPayloadTrucks });
     } catch (error) {
       console.error("Error fetching live trucks:", error);
       res.status(500).json({ message: "Failed to fetch live trucks" });
+    }
+  });
+
+  app.post("/api/trucks/:truckId/location-reports", async (req: any, res) => {
+    try {
+      const { truckId } = req.params;
+      const rateLimitKey = `truck_missing_${truckId}_${req.user?.id || req.ip || "anon"}`;
+      const rateLimitResult = checkRateLimit(rateLimitKey);
+      if (!rateLimitResult.allowed) {
+        return res.status(429).json({
+          message: "Please wait before reporting this truck again.",
+          nextAllowedTime: rateLimitResult.nextAllowedTime,
+        });
+      }
+
+      const schema = z.object({
+        targetType: z
+          .enum(["live_location", "manual_schedule", "event_schedule"])
+          .default("live_location"),
+        manualScheduleId: z.string().optional(),
+        eventId: z.string().optional(),
+        expectedLatitude: z.coerce.number().min(-90).max(90).optional(),
+        expectedLongitude: z.coerce.number().min(-180).max(180).optional(),
+        reporterLatitude: z.coerce.number().min(-90).max(90).optional(),
+        reporterLongitude: z.coerce.number().min(-180).max(180).optional(),
+        sourceLabel: z.string().max(160).optional(),
+        notes: z.string().max(500).optional(),
+        observedAt: z.string().datetime().optional(),
+      });
+      const parsed = schema.parse(req.body || {});
+
+      const [truck] = await db
+        .select({
+          id: restaurants.id,
+          name: restaurants.name,
+          ownerId: restaurants.ownerId,
+          isFoodTruck: restaurants.isFoodTruck,
+          isActive: restaurants.isActive,
+        })
+        .from(restaurants)
+        .where(eq(restaurants.id, truckId))
+        .limit(1);
+
+      if (!truck || !truck.isFoodTruck || !truck.isActive) {
+        return res.status(404).json({ message: "Truck not found" });
+      }
+
+      const [created] = await db
+        .insert(moderationEvents)
+        .values({
+          eventType: "truck_location_missing_report",
+          severity: "medium",
+          reportedUserId: truck.ownerId || null,
+          reportedResourceType: parsed.targetType,
+          reportedResourceId:
+            parsed.manualScheduleId || parsed.eventId || truckId,
+          reporterUserId: req.user?.id || null,
+          reason: "truck_not_at_expected_location",
+          description:
+            parsed.notes ||
+            `${truck.name} was reported missing from its expected map location.`,
+          metadata: {
+            truckId,
+            truckName: truck.name,
+            targetType: parsed.targetType,
+            manualScheduleId: parsed.manualScheduleId || null,
+            eventId: parsed.eventId || null,
+            expectedLatitude: parsed.expectedLatitude ?? null,
+            expectedLongitude: parsed.expectedLongitude ?? null,
+            reporterLatitude: parsed.reporterLatitude ?? null,
+            reporterLongitude: parsed.reporterLongitude ?? null,
+            sourceLabel: parsed.sourceLabel || null,
+            observedAt: parsed.observedAt || new Date().toISOString(),
+            userAgent: req.headers["user-agent"] || null,
+            ip: req.ip || null,
+          },
+          status: "open",
+        })
+        .returning();
+
+      res.json({ success: true, report: created });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({
+          message: "Invalid location report",
+          errors: error.errors,
+        });
+      }
+      console.error("Error creating truck location report:", error);
+      res.status(500).json({ message: "Failed to submit location report" });
     }
   });
 
