@@ -1,15 +1,16 @@
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { geoAlbersUsa, geoPath } from "d3-geo";
 import { feature } from "topojson-client";
 import countiesAtlas from "us-atlas/counties-10m.json";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
+  BarChart3,
+  BriefcaseBusiness,
   Map as MapIcon,
   MessageSquarePlus,
   RefreshCw,
   RotateCcw,
   Search,
-  Users,
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
@@ -33,12 +34,20 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 
 type Timeframe = "7d" | "30d" | "90d";
 type Lens = "coverage" | "metrics";
+type MarketTrend = {
+  current: number;
+  baseline: number;
+  delta: number;
+  percent: number | null;
+  comparisonTimeframe: Timeframe;
+};
 
 type MarketCounty = {
   countyFips: string;
   countyName: string;
   stateCode: string;
   metrics: Record<string, number>;
+  trends?: Record<string, MarketTrend>;
   updatedAt?: string | null;
 };
 
@@ -54,6 +63,7 @@ type MarketEntity = {
   entityType: string;
   label: string;
   status: string;
+  metadata?: Record<string, any> | null;
 };
 
 type FormMutation = {
@@ -61,21 +71,54 @@ type FormMutation = {
   isPending: boolean;
 };
 
-const metricOptions = [
+const staticMetricOptions = [
   "users_total",
   "diners_total",
+  "businesses_total",
+  "platform_businesses_total",
+  "active_businesses_total",
   "restaurants_total",
   "restaurants_verified",
   "restaurants_claimed",
+  "food_trucks_total",
+  "imported_trucks_total",
+  "unclaimed_imported_trucks_total",
+  "private_chefs_total",
+  "bars_total",
+  "caterers_total",
   "vendors_total",
-  "orders_30d",
-  "searches_30d",
-  "menu_views_30d",
-  "reviews_30d",
+  "supply_locations_total",
+  "market_entities_total",
+  "relationship_pipeline_total",
+  "restaurant_partner_total",
+  "delivery_partner_total",
+  "vendor_total",
+  "affiliate_total",
+  "local_operator_total",
+  "market_manager_total",
   "unmet_demand_score",
   "delivery_coverage_score",
+  "operator_coverage_score",
   "market_coverage_status",
 ];
+
+const windowMetricBases = [
+  "orders",
+  "new_users",
+  "order_revenue_cents",
+  "searches",
+  "menu_views",
+  "reviews",
+  "claims",
+  "private_chef_leads",
+  "engagement",
+];
+
+const metricLabel = (key: string) =>
+  key
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase())
+    .replace(/\bD\b/g, "d");
 
 const coverageLabel = (score: number) =>
   score >= 2 ? "ready" : score >= 1 ? "partial" : "empty";
@@ -101,6 +144,23 @@ export default function AdminMarketHeatmap() {
   const [hoveredFips, setHoveredFips] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
+  const timeframeDays = Number(timeframe.replace("d", ""));
+  const metricOptions = useMemo(
+    () => [
+      ...staticMetricOptions,
+      ...windowMetricBases.map((base) => `${base}_${timeframeDays}d`),
+    ],
+    [timeframeDays],
+  );
+
+  useEffect(() => {
+    const matchedWindowBase = windowMetricBases.find((base) =>
+      new RegExp(`^${base}_\\d+d$`).test(metric),
+    );
+    if (matchedWindowBase) {
+      setMetric(`${matchedWindowBase}_${timeframeDays}d`);
+    }
+  }, [metric, timeframeDays]);
 
   const { data, isLoading } = useQuery<{
     timeframe: Timeframe;
@@ -123,6 +183,11 @@ export default function AdminMarketHeatmap() {
     1,
     ...counties.map((county) => Number(county.metrics?.[metric] || 0)),
   );
+  const totalMetric = (metricKey: string) =>
+    counties.reduce(
+      (sum, county) => sum + Number(county.metrics?.[metricKey] || 0),
+      0,
+    );
 
   const filteredCounties = counties.filter((county) => {
     const needle = query.trim().toLowerCase();
@@ -163,11 +228,30 @@ export default function AdminMarketHeatmap() {
     mutationFn: async () =>
       apiRequest("POST", "/api/admin/geo/metrics/refresh", { timeframe }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/heatmap"] });
+      queryClient.invalidateQueries({
+        predicate: (query) =>
+          String(query.queryKey[0] || "").startsWith("/api/admin/heatmap"),
+      });
       toast({ title: "Market metrics refreshed" });
     },
     onError: (error: Error) =>
       toast({ title: "Refresh failed", description: error.message }),
+  });
+
+  const enrich = useMutation({
+    mutationFn: async () =>
+      apiRequest("POST", "/api/admin/geo/counties/enrich", {
+        limitPerTable: 100,
+    }),
+    onSuccess: () => {
+      toast({ title: "County enrichment queued" });
+      queryClient.invalidateQueries({
+        predicate: (query) =>
+          String(query.queryKey[0] || "").startsWith("/api/admin/heatmap"),
+      });
+    },
+    onError: (error: Error) =>
+      toast({ title: "Enrichment failed", description: error.message }),
   });
 
   const addNote = useMutation({
@@ -210,6 +294,15 @@ export default function AdminMarketHeatmap() {
           entityType: String(form.get("entityType") || "local_operator"),
           label: String(form.get("label") || "").trim(),
           status: String(form.get("status") || "active"),
+          entityId: String(form.get("entityId") || "").trim() || null,
+          metadata: {
+            contactName: String(form.get("contactName") || "").trim(),
+            email: String(form.get("email") || "").trim(),
+            phone: String(form.get("phone") || "").trim(),
+            source: String(form.get("source") || "").trim(),
+            nextStep: String(form.get("nextStep") || "").trim(),
+            notes: String(form.get("notes") || "").trim(),
+          },
         },
       );
       event.currentTarget.reset();
@@ -263,6 +356,15 @@ export default function AdminMarketHeatmap() {
             <Button
               variant="outline"
               size="sm"
+              onClick={() => enrich.mutate()}
+              disabled={enrich.isPending}
+            >
+              <RefreshCw className="h-4 w-4" />
+              Enrich FIPS
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => refresh.mutate()}
               disabled={refresh.isPending}
             >
@@ -272,7 +374,7 @@ export default function AdminMarketHeatmap() {
           </div>
         </section>
 
-        <div className="grid gap-4 md:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-5">
           <Card>
             <CardHeader className="pb-2">
               <CardDescription>Tracked markets</CardDescription>
@@ -307,12 +409,15 @@ export default function AdminMarketHeatmap() {
           </Card>
           <Card>
             <CardHeader className="pb-2">
-              <CardDescription>Restaurants</CardDescription>
+              <CardDescription>Businesses</CardDescription>
+              <CardTitle className="text-3xl">{totalMetric("businesses_total")}</CardTitle>
+            </CardHeader>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardDescription>Relationships</CardDescription>
               <CardTitle className="text-3xl">
-                {counties.reduce(
-                  (sum, county) => sum + Number(county.metrics.restaurants_total || 0),
-                  0,
-                )}
+                {totalMetric("market_entities_total")}
               </CardTitle>
             </CardHeader>
           </Card>
@@ -340,7 +445,7 @@ export default function AdminMarketHeatmap() {
               >
                 {metricOptions.map((option) => (
                   <option key={option} value={option}>
-                    {option}
+                    {metricLabel(option)}
                   </option>
                 ))}
               </select>
@@ -506,17 +611,21 @@ export default function AdminMarketHeatmap() {
                           </Badge>
                         </div>
                         <div className="mt-3 grid grid-cols-2 gap-2 text-sm md:grid-cols-4">
-                          <Metric label={metric} value={county.metrics[metric]} />
                           <Metric
-                            label="restaurants"
+                            label={metricLabel(metric)}
+                            value={county.metrics[metric]}
+                            trend={county.trends?.[metric]}
+                          />
+                          <Metric
+                            label="Restaurants"
                             value={county.metrics.restaurants_total}
                           />
                           <Metric
-                            label="verified"
+                            label="Verified"
                             value={county.metrics.restaurants_verified}
                           />
                           <Metric
-                            label="diners"
+                            label="Diners"
                             value={county.metrics.diners_total}
                           />
                         </div>
@@ -545,11 +654,30 @@ export default function AdminMarketHeatmap() {
   );
 }
 
-function Metric({ label, value }: { label: string; value?: number }) {
+function Metric({
+  label,
+  value,
+  trend,
+}: {
+  label: string;
+  value?: number;
+  trend?: MarketTrend;
+}) {
+  const hasTrend = trend && trend.percent !== null;
   return (
     <div className="rounded-md bg-[color:var(--bg-surface-muted)] p-2">
       <div className="text-xs text-muted-foreground">{label}</div>
       <div className="font-semibold">{Number(value || 0)}</div>
+      {hasTrend ? (
+        <div
+          className={`text-xs ${
+            Number(trend.delta || 0) >= 0 ? "text-emerald-700" : "text-red-700"
+          }`}
+        >
+          {Number(trend.delta || 0) >= 0 ? "+" : ""}
+          {trend.percent}% vs {trend.comparisonTimeframe}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -598,19 +726,42 @@ function CountyPanel({
       </CardHeader>
       <CardContent className="space-y-5">
         <div className="grid grid-cols-2 gap-2">
-          <Metric label={metric} value={selectedCounty.metrics[metric]} />
           <Metric
-            label="restaurants"
+            label={metricLabel(metric)}
+            value={selectedCounty.metrics[metric]}
+            trend={selectedCounty.trends?.[metric]}
+          />
+          <Metric
+            label="Businesses"
+            value={selectedCounty.metrics.businesses_total}
+          />
+          <Metric
+            label="Restaurants"
             value={selectedCounty.metrics.restaurants_total}
           />
-          <Metric label="verified" value={selectedCounty.metrics.restaurants_verified} />
-          <Metric label="vendors" value={selectedCounty.metrics.vendors_total} />
+          <Metric
+            label="Relationships"
+            value={selectedCounty.metrics.market_entities_total}
+          />
         </div>
 
         <section className="space-y-2">
           <h3 className="flex items-center gap-2 text-sm font-semibold">
-            <Users className="h-4 w-4" />
-            Assignments
+            <BarChart3 className="h-4 w-4" />
+            Market facts
+          </h3>
+          <div className="grid grid-cols-2 gap-2">
+            <Metric label="Verified" value={selectedCounty.metrics.restaurants_verified} />
+            <Metric label="Food trucks" value={selectedCounty.metrics.food_trucks_total} />
+            <Metric label="Private chefs" value={selectedCounty.metrics.private_chefs_total} />
+            <Metric label="Vendors" value={selectedCounty.metrics.vendors_total} />
+          </div>
+        </section>
+
+        <section className="space-y-2">
+          <h3 className="flex items-center gap-2 text-sm font-semibold">
+            <BriefcaseBusiness className="h-4 w-4" />
+            Relationships
           </h3>
           {entities.length ? (
             <div className="space-y-2">
@@ -620,11 +771,30 @@ function CountyPanel({
                   <div className="text-xs text-muted-foreground">
                     {entity.entityType} · {entity.status}
                   </div>
+                  {entity.metadata?.contactName ||
+                  entity.metadata?.email ||
+                  entity.metadata?.phone ? (
+                    <div className="mt-2 text-xs text-muted-foreground">
+                      {[entity.metadata?.contactName, entity.metadata?.email, entity.metadata?.phone]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </div>
+                  ) : null}
+                  {entity.metadata?.nextStep ? (
+                    <div className="mt-2 text-xs">
+                      Next: {String(entity.metadata.nextStep)}
+                    </div>
+                  ) : null}
+                  {entity.metadata?.notes ? (
+                    <p className="mt-2 whitespace-pre-wrap text-xs text-muted-foreground">
+                      {String(entity.metadata.notes)}
+                    </p>
+                  ) : null}
                 </div>
               ))}
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">No assignments yet.</p>
+            <p className="text-sm text-muted-foreground">No relationships yet.</p>
           )}
           <form className="space-y-2" onSubmit={(event) => addEntity.mutate(event)}>
             <select
@@ -639,9 +809,17 @@ function CountyPanel({
               <option value="local_operator">Local operator</option>
             </select>
             <Input name="label" placeholder="Name or assignment label" required />
+            <Input name="contactName" placeholder="Contact name" />
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <Input name="email" placeholder="Email" />
+              <Input name="phone" placeholder="Phone" />
+            </div>
+            <Input name="source" placeholder="Source: call, event, referral" />
+            <Input name="nextStep" placeholder="Next step" />
             <Input name="status" placeholder="active, prospect, blocked" />
+            <Textarea name="notes" placeholder="Relationship notes" />
             <Button size="sm" disabled={addEntity.isPending}>
-              Assign
+              Add relationship
             </Button>
           </form>
         </section>

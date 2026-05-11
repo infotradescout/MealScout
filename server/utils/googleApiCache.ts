@@ -10,6 +10,7 @@
  * Cache types:
  *   - "forward_geocode"      address string → { lat, lng }
  *   - "reverse_geocode"      "lat:lng" key  → { city, state }
+ *   - "county_lookup"        lat/lng or address key → { countyFips, countyName, stateCode }
  *   - "address_validation"   address string → AddressValidationResult
  */
 
@@ -19,6 +20,7 @@ import { sql } from "drizzle-orm";
 export type CacheType =
   | "forward_geocode"
   | "reverse_geocode"
+  | "county_lookup"
   | "address_validation";
 
 // In-process L1 cache to avoid hitting Postgres on every hot path

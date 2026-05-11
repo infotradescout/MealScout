@@ -15,6 +15,7 @@ import {
   refreshMarketMetrics,
   type MarketHeatmapTimeframe,
 } from "../services/adminMarketMetrics";
+import { backfillCountyFips } from "../services/countyFipsEnrichment";
 
 const timeframes = ["7d", "30d", "90d"] as const;
 const noteCategories = [
@@ -153,6 +154,27 @@ export function registerAdminMarketHeatmapRoutes(app: Express) {
       } catch (error) {
         console.error("Admin users-by-county load failed:", error);
         res.status(500).json({ message: "Failed to load county activity" });
+      }
+    },
+  );
+
+  app.post(
+    "/api/admin/geo/counties/enrich",
+    isAuthenticated,
+    isStaffOrAdmin,
+    heatmapEnabled,
+    requireSuperAdminEquivalent,
+    async (req, res) => {
+      try {
+        const limitPerTable = Math.max(
+          1,
+          Math.min(1000, Number(req.body?.limitPerTable || 100) || 100),
+        );
+        const results = await backfillCountyFips(limitPerTable);
+        res.json({ results });
+      } catch (error) {
+        console.error("County FIPS enrichment failed:", error);
+        res.status(500).json({ message: "Failed to enrich county FIPS" });
       }
     },
   );
