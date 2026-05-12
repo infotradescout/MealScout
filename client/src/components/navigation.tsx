@@ -329,6 +329,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
         { path: "/subscription", icon: BarChart3, label: "Subscription" },
         { path: "/events", icon: Calendar, label: "Events" },
         { path: "/suppliers", icon: Truck, label: "Supplies" },
+        { path: "/share-hub", icon: Share2, label: "Share" },
         { path: "/profile", icon: User, label: "Profile" },
       );
     } else if (isHost) {
@@ -338,6 +339,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
         { path: "/favorites", icon: Heart, label: "Saved" },
         { path: "/host/dashboard", icon: Users, label: "Host" },
         { path: "/parking-pass", icon: ParkingSquare, label: "Parking" },
+        { path: "/share-hub", icon: Share2, label: "Share" },
         { path: "/profile", icon: User, label: "Profile" },
       );
     } else {
@@ -348,6 +350,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
         { path: "/favorites", icon: Heart, label: "Saved" },
         { path: "/alerts", icon: Bell, label: "Alerts" },
         { path: "/deals/featured", icon: Receipt, label: "Deals" },
+        { path: "/share-hub", icon: Share2, label: "Share" },
         { path: "/profile", icon: User, label: "Profile" },
       );
     }
@@ -512,19 +515,19 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
               </Link>
             ) : null}
 
-            {/* 4 — Share */}
+            {/* 4 — Profile */}
             <Link
-              href="/share-hub"
-              aria-label="Share"
-              aria-current={isActive("/share-hub") ? "page" : undefined}
+              href="/profile"
+              aria-label="Profile"
+              aria-current={isActive("/profile") ? "page" : undefined}
               className={`flex flex-col items-center justify-end gap-0.5 flex-1 min-w-0 h-full pb-2 transition-colors ${
-                isActive("/share-hub")
+                isActive("/profile")
                   ? "text-orange-300"
                   : "text-white/70 hover:text-white"
               }`}
             >
-              <Share2 className="h-5 w-5" aria-hidden="true" />
-              <span className="text-[11px] font-medium">Share</span>
+              <User className="h-5 w-5" aria-hidden="true" />
+              <span className="text-[11px] font-medium">Profile</span>
             </Link>
 
             {/* 5 — More */}
