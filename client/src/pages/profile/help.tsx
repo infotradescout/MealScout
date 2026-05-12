@@ -1,9 +1,18 @@
 import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Navigation from "@/components/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   HelpCircle,
   Mail,
@@ -11,8 +20,13 @@ import {
   Search,
   BookOpen,
   Link as LinkIcon,
+  MessageSquare,
+  Send,
+  Ticket,
 } from "lucide-react";
 import { BackHeader } from "@/components/back-header";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 
 type HelpDocSection = {
   id: string;
@@ -22,6 +36,18 @@ type HelpDocSection = {
   steps: string[];
   links: Array<{ label: string; href: string }>;
   status?: "active" | "planned";
+};
+
+type SupportTicket = {
+  id: string;
+  subject: string;
+  description: string;
+  category: string;
+  priority: string;
+  status: string;
+  adminNotes?: string | null;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export default function HelpSupportPage() {
@@ -192,7 +218,72 @@ export default function HelpSupportPage() {
   ];
 
   const [query, setQuery] = useState("");
+  const [ticketDraft, setTicketDraft] = useState({
+    subject: "",
+    category: "other",
+    priority: "normal",
+    description: "",
+  });
+  const [directMessage, setDirectMessage] = useState("");
   const supportEmail = "info.mealscout@gmail.com";
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const { data: ticketPayload } = useQuery<{ tickets: SupportTicket[] }>({
+    queryKey: ["/api/support/tickets"],
+    retry: false,
+  });
+  const tickets = ticketPayload?.tickets || [];
+
+  const createTicketMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/support/tickets", ticketDraft);
+      return res.json();
+    },
+    onSuccess: () => {
+      setTicketDraft({
+        subject: "",
+        category: "other",
+        priority: "normal",
+        description: "",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/support/tickets"] });
+      toast({ title: "Ticket sent", description: "Support can now review it." });
+    },
+    onError: (error) => {
+      toast({
+        title: "Ticket failed",
+        description:
+          error instanceof Error ? error.message : "Unable to create ticket.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const directAdminMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/support/message-super-admin", {
+        message: directMessage,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      setDirectMessage("");
+      queryClient.invalidateQueries({ queryKey: ["/api/support/tickets"] });
+      toast({
+        title: "Message sent",
+        description: "It was sent directly to super admin.",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Message failed",
+        description:
+          error instanceof Error ? error.message : "Unable to message admin.",
+        variant: "destructive",
+      });
+    },
+  });
 
   const normalizedQuery = query.trim().toLowerCase();
   const visibleSections = docSections.filter((section) => {
@@ -267,6 +358,169 @@ export default function HelpSupportPage() {
                 </a>
               ))}
             </div>
+          </CardContent>
+        </Card>
+
+        <div className="grid gap-4 lg:grid-cols-[1.35fr_1fr]">
+          <Card className="border-0 shadow-clean-lg">
+            <CardContent className="p-4 sm:p-5 space-y-4">
+              <div className="flex items-center gap-3">
+                <Ticket className="w-5 h-5 text-primary" />
+                <div>
+                  <h2 className="text-base font-semibold text-foreground">
+                    Open a Support Ticket
+                  </h2>
+                  <p className="text-xs text-muted-foreground">
+                    Account, booking, payment, map, hiring, private chef, or bug help.
+                  </p>
+                </div>
+              </div>
+              <Input
+                value={ticketDraft.subject}
+                onChange={(event) =>
+                  setTicketDraft((current) => ({
+                    ...current,
+                    subject: event.target.value,
+                  }))
+                }
+                placeholder="Short subject"
+                data-testid="input-support-subject"
+              />
+              <div className="grid gap-2 sm:grid-cols-2">
+                <Select
+                  value={ticketDraft.category}
+                  onValueChange={(value) =>
+                    setTicketDraft((current) => ({ ...current, category: value }))
+                  }
+                >
+                  <SelectTrigger data-testid="select-support-category">
+                    <SelectValue placeholder="Category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="account">Account</SelectItem>
+                    <SelectItem value="booking">Booking</SelectItem>
+                    <SelectItem value="live_location">Live location</SelectItem>
+                    <SelectItem value="payment">Payment</SelectItem>
+                    <SelectItem value="business_profile">Business profile</SelectItem>
+                    <SelectItem value="hiring">Hiring/jobs</SelectItem>
+                    <SelectItem value="private_chef">Private chef</SelectItem>
+                    <SelectItem value="bug">Bug</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select
+                  value={ticketDraft.priority}
+                  onValueChange={(value) =>
+                    setTicketDraft((current) => ({ ...current, priority: value }))
+                  }
+                >
+                  <SelectTrigger data-testid="select-support-priority">
+                    <SelectValue placeholder="Priority" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="low">Low</SelectItem>
+                    <SelectItem value="normal">Normal</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                    <SelectItem value="critical">Critical</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <Textarea
+                value={ticketDraft.description}
+                onChange={(event) =>
+                  setTicketDraft((current) => ({
+                    ...current,
+                    description: event.target.value,
+                  }))
+                }
+                placeholder="What happened? Include the page, truck/business, booking, or order if relevant."
+                rows={5}
+                data-testid="textarea-support-description"
+              />
+              <Button
+                className="w-full sm:w-auto"
+                disabled={createTicketMutation.isPending}
+                onClick={() => createTicketMutation.mutate()}
+                data-testid="button-create-support-ticket"
+              >
+                <Send className="w-4 h-4 mr-2" />
+                {createTicketMutation.isPending ? "Sending..." : "Send Ticket"}
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card className="border-0 shadow-clean-lg">
+            <CardContent className="p-4 sm:p-5 space-y-4">
+              <div className="flex items-center gap-3">
+                <MessageSquare className="w-5 h-5 text-primary" />
+                <div>
+                  <h2 className="text-base font-semibold text-foreground">
+                    Message Super Admin
+                  </h2>
+                  <p className="text-xs text-muted-foreground">
+                    Direct escalation for anything sensitive or urgent.
+                  </p>
+                </div>
+              </div>
+              <Textarea
+                value={directMessage}
+                onChange={(event) => setDirectMessage(event.target.value)}
+                placeholder="Write directly to super admin"
+                rows={6}
+                data-testid="textarea-super-admin-message"
+              />
+              <Button
+                variant="outline"
+                className="w-full sm:w-auto"
+                disabled={directAdminMutation.isPending}
+                onClick={() => directAdminMutation.mutate()}
+                data-testid="button-message-super-admin"
+              >
+                <Send className="w-4 h-4 mr-2" />
+                {directAdminMutation.isPending ? "Sending..." : "Send Direct"}
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+
+        <Card className="border-0 shadow-clean-lg">
+          <CardContent className="p-4 sm:p-5 space-y-3">
+            <h2 className="text-base font-semibold text-foreground">
+              Your Support History
+            </h2>
+            {tickets.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No tickets yet.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {tickets.slice(0, 6).map((ticket) => (
+                  <div
+                    key={ticket.id}
+                    className="rounded-lg border border-border p-3 text-sm"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="font-medium text-foreground">
+                        {ticket.subject}
+                      </p>
+                      <div className="flex gap-2">
+                        <Badge variant="outline">{ticket.status}</Badge>
+                        <Badge variant="secondary">{ticket.priority}</Badge>
+                      </div>
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {ticket.category.replace(/_/g, " ")} ·{" "}
+                      {new Date(ticket.createdAt).toLocaleDateString()}
+                    </p>
+                    {ticket.adminNotes && (
+                      <p className="mt-2 rounded-md bg-muted p-2 text-xs text-foreground">
+                        {ticket.adminNotes}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
 

@@ -62,6 +62,7 @@ import { registerPickupOrderRoutes } from "./routes/pickupOrderRoutes";
 import { registerNotificationRoutes } from "./routes/notificationRoutes";
 import { registerHiringRoutes } from "./routes/hiringRoutes";
 import { registerAdminMarketHeatmapRoutes } from "./routes/adminMarketHeatmapRoutes";
+import { registerSupportRoutes } from "./routes/supportRoutes";
 import {
   notifyNearbyDealSubscribers,
   notifyRestaurantFollowersOfDeal,
@@ -91,6 +92,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   registerAuthAccountRoutes(app);
   registerNotificationRoutes(app);
+  registerSupportRoutes(app);
 
   registerLocationDemandRoutes(app);
   registerLocationUtilityRoutes(app, { hasBusinessDistributionAccess });
