@@ -400,63 +400,33 @@ export default function ProfilePage() {
       {/* Profile Home */}
       <div className="px-4 sm:px-6 py-6">
         <div className="mb-6">
-          <h2 className="text-lg font-semibold text-foreground mb-3">
-            Profile Home
-          </h2>
-          <div className="grid gap-3 lg:grid-cols-3">
-            {dashboardShortcuts.map((shortcut) => (
-              <Link key={shortcut.href} href={shortcut.href}>
-                <Card className="h-full border border-[color:var(--border-subtle)] bg-[var(--bg-card)] hover:bg-[var(--bg-surface-muted)] transition-colors shadow-clean">
-                  <CardContent className="p-4">
-                    <div className="flex items-start gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-[var(--bg-surface-muted)] flex items-center justify-center">
-                        <shortcut.Icon className="w-5 h-5 text-[color:var(--accent-text)]" />
-                      </div>
-                      <div className="flex-1">
-                        <p className="font-semibold text-foreground">
-                          {shortcut.title}
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {shortcut.description}
-                        </p>
-                      </div>
-                      <ChevronRight className="w-4 h-4 text-muted-foreground mt-1" />
+          <Link href="/profile/settings">
+            <Card className="border border-[color:var(--border-subtle)] bg-[var(--bg-card)] hover:bg-[var(--bg-surface-muted)] transition-colors shadow-clean-lg">
+              <CardContent className="p-5">
+                <div className="flex items-start gap-4">
+                  <div className="w-12 h-12 rounded-2xl action-primary flex items-center justify-center">
+                    <Settings className="w-6 h-6 text-[color:var(--action-primary-text)]" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-lg font-bold text-foreground">
+                      Profile Settings
+                    </p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Edit your profile, privacy, public profile studio, notifications,
+                      language, and local preferences.
+                    </p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Badge variant="secondary">Profile</Badge>
+                      <Badge variant="secondary">Privacy</Badge>
+                      <Badge variant="secondary">Notifications</Badge>
+                      <Badge variant="secondary">Public page</Badge>
                     </div>
-                  </CardContent>
-                </Card>
-              </Link>
-            ))}
-          </div>
-        </div>
-
-        <div className="mb-6">
-          <h2 className="text-lg font-semibold text-foreground mb-3">
-            Account
-          </h2>
-          <div className="grid gap-3 lg:grid-cols-3">
-            {accountShortcuts.map((shortcut) => (
-              <Link key={shortcut.href} href={shortcut.href}>
-                <Card className="h-full border border-[color:var(--border-subtle)] bg-[var(--bg-card)] hover:bg-[var(--bg-surface-muted)] transition-colors shadow-clean">
-                  <CardContent className="p-4">
-                    <div className="flex items-start gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-[var(--bg-surface-muted)] flex items-center justify-center">
-                        <shortcut.Icon className="w-5 h-5 text-[color:var(--accent-text)]" />
-                      </div>
-                      <div className="flex-1">
-                        <p className="font-semibold text-foreground">
-                          {shortcut.title}
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {shortcut.description}
-                        </p>
-                      </div>
-                      <ChevronRight className="w-4 h-4 text-muted-foreground mt-1" />
-                    </div>
-                  </CardContent>
-                </Card>
-              </Link>
-            ))}
-          </div>
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-muted-foreground mt-1" />
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
         </div>
 
         <Card className="border border-[color:var(--border-subtle)]">
@@ -475,6 +445,36 @@ export default function ProfilePage() {
             </div>
           </CardContent>
         </Card>
+
+        <div className="mt-4 mb-6">
+          <h2 className="text-sm font-semibold text-[color:var(--text-muted)] uppercase tracking-wide mb-3">
+            Quick Actions
+          </h2>
+          <div className="grid gap-3 lg:grid-cols-3">
+            {[...accountShortcuts.filter((item) => item.href !== "/profile/settings"), ...dashboardShortcuts].map((shortcut) => (
+              <Link key={shortcut.href} href={shortcut.href}>
+                <Card className="h-full border border-[color:var(--border-subtle)] bg-[var(--bg-card)] hover:bg-[var(--bg-surface-muted)] transition-colors shadow-clean">
+                  <CardContent className="p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-[var(--bg-surface-muted)] flex items-center justify-center">
+                        <shortcut.Icon className="w-5 h-5 text-[color:var(--accent-text)]" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-semibold text-foreground">
+                          {shortcut.title}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {shortcut.description}
+                        </p>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-muted-foreground mt-1" />
+                    </div>
+                  </CardContent>
+                </Card>
+              </Link>
+            ))}
+          </div>
+        </div>
 
         <Card className="mt-4 border border-[color:var(--border-subtle)] bg-[var(--bg-card)] shadow-clean">
           <CardContent className="p-4">

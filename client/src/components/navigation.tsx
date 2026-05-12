@@ -515,19 +515,19 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
               </Link>
             ) : null}
 
-            {/* 4 — Profile */}
+            {/* 4 — Share */}
             <Link
-              href="/profile"
-              aria-label="Profile"
-              aria-current={isActive("/profile") ? "page" : undefined}
+              href="/share-hub"
+              aria-label="Share"
+              aria-current={isActive("/share-hub") ? "page" : undefined}
               className={`flex flex-col items-center justify-end gap-0.5 flex-1 min-w-0 h-full pb-2 transition-colors ${
-                isActive("/profile")
+                isActive("/share-hub")
                   ? "text-orange-300"
                   : "text-white/70 hover:text-white"
               }`}
             >
-              <User className="h-5 w-5" aria-hidden="true" />
-              <span className="text-[11px] font-medium">Profile</span>
+              <Share2 className="h-5 w-5" aria-hidden="true" />
+              <span className="text-[11px] font-medium">Share</span>
             </Link>
 
             {/* 5 — More */}
