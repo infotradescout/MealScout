@@ -51,6 +51,91 @@ export default function ProfilePage() {
   });
   const isEventCoordinator = user?.userType === "event_coordinator";
   const showEventCta = user?.userType === "customer" || isEventCoordinator;
+  const isAdminUser = ["admin", "duper_admin", "super_admin"].includes(
+    user?.userType || "",
+  );
+  const primaryDashboard =
+    isAdminUser
+      ? {
+          href: "/admin/dashboard",
+          title: "Admin Dashboard",
+          description: "Platform controls, tickets, users, markets, and ops.",
+          Icon: Building2,
+        }
+      : user?.userType === "staff"
+        ? {
+            href: "/staff",
+            title: "Staff Dashboard",
+            description: "Staff tools, assignments, and admin support.",
+            Icon: Building2,
+          }
+        : isEventCoordinator
+          ? {
+              href: "/event-coordinator/dashboard",
+              title: "Event Dashboard",
+              description: "Manage event requests and truck outreach.",
+              Icon: Calendar,
+            }
+          : user?.userType === "supplier"
+            ? {
+                href: "/supplier/dashboard",
+                title: "Supplier Dashboard",
+                description: "Manage supplier profile, orders, and demand.",
+                Icon: Store,
+              }
+            : user?.userType === "restaurant_owner" ||
+                user?.userType === "food_truck"
+              ? {
+                  href: "/restaurant-owner-dashboard",
+                  title:
+                    user?.userType === "food_truck"
+                      ? "Food Truck Dashboard"
+                      : "Business Dashboard",
+                  description:
+                    "Manage profile, deals, menu, bookings, and publishing.",
+                  Icon: Store,
+                }
+              : {
+                  href: "/user-dashboard",
+                  title: "My Dashboard",
+                  description: "Saved places, recommendations, deals, and activity.",
+                  Icon: User,
+                };
+  const dashboardShortcuts = [
+    primaryDashboard,
+    ...(user?.userType === "restaurant_owner" || user?.userType === "food_truck"
+      ? [
+          {
+            href: "/parking-pass?tab=schedule",
+            title: "Parking Pass",
+            description: "Schedules, bookings, live map, and one-tap publishing.",
+            Icon: MapPin,
+          },
+          {
+            href: "/menu-builder",
+            title: "Menu Builder",
+            description: "Update menu, photos, and customer-facing items.",
+            Icon: Store,
+          },
+        ]
+      : []),
+    ...(isAdminUser
+      ? [
+          {
+            href: "/admin/tickets",
+            title: "Support Tickets",
+            description: "Review user tickets and direct super-admin messages.",
+            Icon: HelpCircle,
+          },
+          {
+            href: "/admin/geo/heatmap",
+            title: "Market Heatmap",
+            description: "County metrics, coverage, relationships, and notes.",
+            Icon: MapPin,
+          },
+        ]
+      : []),
+  ];
   const eventCta = isEventCoordinator
     ? {
         href: "/event-coordinator/dashboard",
@@ -292,8 +377,38 @@ export default function ProfilePage() {
         </Card>
       </header>
 
-      {/* Stats Section - Removed mock data */}
+      {/* Profile Home */}
       <div className="px-4 sm:px-6 py-6">
+        <div className="mb-6">
+          <h2 className="text-lg font-semibold text-foreground mb-3">
+            Profile Home
+          </h2>
+          <div className="grid gap-3 lg:grid-cols-3">
+            {dashboardShortcuts.map((shortcut) => (
+              <Link key={shortcut.href} href={shortcut.href}>
+                <Card className="h-full border border-[color:var(--border-subtle)] bg-[var(--bg-card)] hover:bg-[var(--bg-surface-muted)] transition-colors shadow-clean">
+                  <CardContent className="p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-[var(--bg-surface-muted)] flex items-center justify-center">
+                        <shortcut.Icon className="w-5 h-5 text-[color:var(--accent-text)]" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-semibold text-foreground">
+                          {shortcut.title}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {shortcut.description}
+                        </p>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-muted-foreground mt-1" />
+                    </div>
+                  </CardContent>
+                </Card>
+              </Link>
+            ))}
+          </div>
+        </div>
+
         <Card className="border border-[color:var(--border-subtle)]">
           <CardContent className="p-6">
             <div className="space-y-3 text-sm text-[color:var(--text-secondary)]">
