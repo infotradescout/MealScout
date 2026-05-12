@@ -136,6 +136,26 @@ export default function ProfilePage() {
         ]
       : []),
   ];
+  const accountShortcuts = [
+    {
+      href: "/profile/settings",
+      title: "Profile Settings",
+      description: "Edit preferences, privacy, profile studio, and public profile.",
+      Icon: Settings,
+    },
+    {
+      href: "/profile/notifications",
+      title: "Notifications",
+      description: "Control email, in-app, and alert preferences.",
+      Icon: Bell,
+    },
+    {
+      href: "/profile/help",
+      title: "Help & Support",
+      description: "Open tickets, message super admin, and view support history.",
+      Icon: HelpCircle,
+    },
+  ];
   const eventCta = isEventCoordinator
     ? {
         href: "/event-coordinator/dashboard",
@@ -385,6 +405,36 @@ export default function ProfilePage() {
           </h2>
           <div className="grid gap-3 lg:grid-cols-3">
             {dashboardShortcuts.map((shortcut) => (
+              <Link key={shortcut.href} href={shortcut.href}>
+                <Card className="h-full border border-[color:var(--border-subtle)] bg-[var(--bg-card)] hover:bg-[var(--bg-surface-muted)] transition-colors shadow-clean">
+                  <CardContent className="p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-[var(--bg-surface-muted)] flex items-center justify-center">
+                        <shortcut.Icon className="w-5 h-5 text-[color:var(--accent-text)]" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-semibold text-foreground">
+                          {shortcut.title}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {shortcut.description}
+                        </p>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-muted-foreground mt-1" />
+                    </div>
+                  </CardContent>
+                </Card>
+              </Link>
+            ))}
+          </div>
+        </div>
+
+        <div className="mb-6">
+          <h2 className="text-lg font-semibold text-foreground mb-3">
+            Account
+          </h2>
+          <div className="grid gap-3 lg:grid-cols-3">
+            {accountShortcuts.map((shortcut) => (
               <Link key={shortcut.href} href={shortcut.href}>
                 <Card className="h-full border border-[color:var(--border-subtle)] bg-[var(--bg-card)] hover:bg-[var(--bg-surface-muted)] transition-colors shadow-clean">
                   <CardContent className="p-4">
