@@ -53,33 +53,6 @@ type PublicProfile = {
   };
 };
 
-type PublicCanonical = {
-  machineReadiness: string;
-  freshness: string;
-  freshnessHours: number | null;
-  updatedAt?: string | null;
-  verified?: boolean;
-  knowledgeGaps?: string[];
-  sourceTruthStatements?: string[];
-};
-
-type PublicEvidence = {
-  windowHours: number;
-  externalPressure?: {
-    crawlerHits?: number;
-    humanPageHits?: number;
-    topBots?: Array<{ label: string; count: number }>;
-  };
-  demand?: {
-    matchingSearchQueries?: number;
-    topQueries?: Array<{ query: string; count: number }>;
-  };
-  distribution?: {
-    affiliateShares?: number;
-    outboundSocialPosts?: number;
-  };
-};
-
 const labelByEntity: Record<string, string> = {
   restaurant: "Restaurant Profile",
   host: "Host Profile",
@@ -101,40 +74,6 @@ export default function PublicProfilePage() {
       );
       if (!res.ok) {
         throw new Error("Profile not found");
-      }
-      return res.json();
-    },
-  });
-
-  const { data: canonical } = useQuery<PublicCanonical>({
-    queryKey: ["/api/public/canonical", profileType, profileId],
-    enabled:
-      !!profileType &&
-      !!profileId &&
-      (profileType === "host" || profileType === "restaurant"),
-    queryFn: async () => {
-      const res = await fetch(
-        `/api/public/canonical/${encodeURIComponent(String(profileType || ""))}/${encodeURIComponent(String(profileId || ""))}`,
-      );
-      if (!res.ok) {
-        throw new Error("Canonical record not found");
-      }
-      return res.json();
-    },
-  });
-
-  const { data: evidence } = useQuery<PublicEvidence>({
-    queryKey: ["/api/public/evidence", profileType, profileId],
-    enabled:
-      !!profileType &&
-      !!profileId &&
-      (profileType === "host" || profileType === "restaurant"),
-    queryFn: async () => {
-      const res = await fetch(
-        `/api/public/evidence/${encodeURIComponent(String(profileType || ""))}/${encodeURIComponent(String(profileId || ""))}`,
-      );
-      if (!res.ok) {
-        throw new Error("Evidence not found");
       }
       return res.json();
     },

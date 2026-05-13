@@ -155,13 +155,7 @@ if (import.meta.env.PROD && "serviceWorker" in navigator) {
     if ("caches" in window) {
       caches
         .keys()
-        .then((keys) =>
-          Promise.all(
-            keys
-              .filter((key) => key.startsWith("mealscout-sw-"))
-              .map((key) => caches.delete(key)),
-          ),
-        )
+        .then((keys) => Promise.all(keys.map((key) => caches.delete(key))))
         .catch(() => {
           // ignore
         });
