@@ -269,7 +269,7 @@ router.get('/stats', isAuthenticated, async (req, res) => {
 
     const shareCountRows = await db
       .select({
-        count: sql<number>`count(distinct ${affiliateShareEvents.sourcePath})`.mapWith(Number),
+        count: sql<number>`count(distinct ${affiliateShareEvents.destinationUrl})`.mapWith(Number),
       })
       .from(affiliateShareEvents)
       .where(eq(affiliateShareEvents.affiliateUserId, userId));
@@ -278,7 +278,7 @@ router.get('/stats', isAuthenticated, async (req, res) => {
     const shareRows = await db
       .select({
         id: affiliateShareEvents.id,
-        sourcePath: affiliateShareEvents.sourcePath,
+        destinationUrl: affiliateShareEvents.destinationUrl,
         createdAt: affiliateShareEvents.createdAt,
       })
       .from(affiliateShareEvents)
@@ -286,14 +286,14 @@ router.get('/stats', isAuthenticated, async (req, res) => {
       .orderBy(desc(affiliateShareEvents.createdAt))
       .limit(5);
 
-    const shareLinks = shareRows.map((row: { id: string; sourcePath: string; createdAt: Date | null }) => {
-      const path = row.sourcePath.startsWith("/")
-        ? row.sourcePath
-        : `/${row.sourcePath}`;
+    const shareLinks = shareRows.map((row: { id: string; destinationUrl: string; createdAt: Date | null }) => {
+      const path = row.destinationUrl.startsWith("/")
+        ? row.destinationUrl
+        : `/${row.destinationUrl}`;
       const fullUrl = appendReferralParam(`${baseUrl}${path}`, affiliateTag);
       return {
         id: row.id,
-        code: row.sourcePath,
+        code: row.destinationUrl,
         resourceType: "page",
         resourceId: null,
         sourceUrl: path,

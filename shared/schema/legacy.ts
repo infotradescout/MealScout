@@ -3284,7 +3284,11 @@ export const affiliateShareEvents = pgTable(
     affiliateUserId: varchar("affiliate_user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    sourcePath: text("source_path").notNull(),
+    resourceType: varchar("resource_type").notNull(),
+    resourceId: varchar("resource_id"),
+    destinationUrl: text("destination_url").notNull(),
+    shareMethod: varchar("share_method"),
+    metadata: jsonb("metadata"),
     createdAt: timestamp("created_at").defaultNow(),
   },
   (table) => [
