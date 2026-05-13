@@ -791,6 +791,103 @@ const geoAdPinIcon = new L.Icon({
   popupAnchor: [0, -34],
 });
 
+const getAdapterLeafletIcon = (marker: MapAdapterMarker) => {
+  if (marker.kind === "parking") return hostPinIcon;
+  if (marker.kind === "truck") return getTruckPinIcon(marker.color);
+  if (marker.kind === "event") return eventPinIcon;
+  if (marker.kind === "geo_ad") return geoAdPinIcon;
+  return getDealPinIcon(marker.color);
+};
+
+function LegacyMapSurface({
+  center,
+  zoom,
+  markers,
+  userLocation,
+  isNightTheme,
+  onBoundsChanged,
+  onZoomChanged,
+  onCenterChanged,
+  onMarkerTap,
+}: {
+  center: GeoPoint;
+  zoom: number;
+  markers: MapAdapterMarker[];
+  userLocation: GeoPoint | null;
+  isNightTheme: boolean;
+  onBoundsChanged: (bounds: MapBoundsLike) => void;
+  onZoomChanged: (zoom: number) => void;
+  onCenterChanged: (center: GeoPoint) => void;
+  onMarkerTap: (marker: MapAdapterMarker) => void;
+}) {
+  const tileUrl = isNightTheme
+    ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+    : "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png";
+  const attribution =
+    '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
+
+  return (
+    <MapContainer
+      center={[center.lat, center.lng]}
+      zoom={zoom}
+      zoomControl={false}
+      className="h-full w-full"
+      scrollWheelZoom
+    >
+      <TileLayer attribution={attribution} url={tileUrl} />
+      <MapCenterer center={center} />
+      <MapViewportWatcher
+        onZoomChange={onZoomChanged}
+        onBoundsChange={onBoundsChanged}
+        onCenterChange={onCenterChanged}
+      />
+      <MapControls
+        onZoomIn={() => undefined}
+        onZoomOut={() => undefined}
+        onCenterUser={() => {
+          if (userLocation) onCenterChanged(userLocation);
+        }}
+        userLocation={userLocation}
+        zoomLevel={zoom}
+        isNightTheme={isNightTheme}
+      />
+      {userLocation && (
+        <Marker
+          position={[userLocation.lat, userLocation.lng]}
+          icon={userLocationIcon}
+        />
+      )}
+      {markers.map((marker) => (
+        <Marker
+          key={marker.id}
+          position={[marker.lat, marker.lng]}
+          icon={getAdapterLeafletIcon(marker)}
+          eventHandlers={{
+            click: () => onMarkerTap(marker),
+          }}
+        >
+          {(marker.title || marker.subtitle) && (
+            <Popup>
+              <div className="min-w-[160px] text-sm">
+                {marker.title && (
+                  <div className="font-semibold text-slate-950">
+                    {marker.title}
+                  </div>
+                )}
+                {marker.subtitle && (
+                  <div className="mt-1 text-xs text-slate-600">
+                    {marker.subtitle}
+                  </div>
+                )}
+              </div>
+            </Popup>
+          )}
+        </Marker>
+      ))}
+    </MapContainer>
+  );
+}
+
 const clusterIcon = (count: number) =>
   L.divIcon({
     className: "map-host-cluster",
@@ -4022,7 +4119,7 @@ export default function MapPage() {
                 </div>
               </div>
             )}
-          {mapCenter && isUsingGoogleMap ? (
+          {mapCenter && isUsingGoogleMap && !forceLegacyMap ? (
             <MapErrorBoundary>
               <GoogleMapSurface
                 key={`google-map-${googleMapRetryNonce}`}
@@ -4080,6 +4177,18 @@ export default function MapPage() {
                 </div>
               )}
             </MapErrorBoundary>
+          ) : mapCenter ? (
+            <LegacyMapSurface
+              center={mapCenter}
+              zoom={zoomLevel}
+              markers={mapMarkersForRender}
+              userLocation={userLocation}
+              isNightTheme={isNightTheme}
+              onBoundsChanged={setMapBounds}
+              onZoomChanged={setZoomLevel}
+              onCenterChanged={handleMapCenterChanged}
+              onMarkerTap={handleAdapterMarkerTap}
+            />
           ) : (
             <div className="absolute inset-0 z-10 flex items-center justify-center bg-[var(--bg-card)]/80 px-6">
               <div className="max-w-xs rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] px-4 py-3 text-center text-sm text-[color:var(--text-muted)] shadow-clean">
