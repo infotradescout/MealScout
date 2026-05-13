@@ -49,7 +49,7 @@ export default function LocationDiscoveryPage() {
   const city = String(data?.location?.city || "");
   const state = String(data?.location?.state || "");
   const title = timeKey === "tonight" ? `Food trucks tonight at ${locationName}` : `Food trucks now at ${locationName}`;
-  const description = `Live, freshness-gated schedule for ${locationName}${city ? ` in ${city}` : ""}.`;
+  const description = `Live food truck schedule for ${locationName}${city ? ` in ${city}` : ""}.`;
   const canonicalUrl = hostId && timeKey ? `https://www.mealscout.us/location/${encodeURIComponent(hostSlug)}/food-trucks-${timeKey}` : undefined;
 
   const baseLocationPath = `/location/${encodeURIComponent(hostSlug)}`;
@@ -182,7 +182,7 @@ export default function LocationDiscoveryPage() {
 
               {!isLoading && Array.isArray(data?.trucks) && data.trucks.length === 0 ? (
                 <div className="text-sm text-muted-foreground">
-                  No freshness-verified trucks found for this time window.
+                  No trucks are listed for this time window yet.
                 </div>
               ) : null}
             </CardContent>

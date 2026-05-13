@@ -497,6 +497,7 @@ const fuelPriceSummary = (fuelPrices?: HostLocation["fuelPrices"]) => {
 
 type EventLocation = {
   id: string;
+  type?: string | null;
   name: string;
   description?: string | null;
   date: string;
@@ -509,6 +510,10 @@ type EventLocation = {
   hostState?: string | null;
   hostLatitude?: number | string | null;
   hostLongitude?: number | string | null;
+  bookedRestaurantId?: string | null;
+  truckId?: string | null;
+  truckName?: string | null;
+  manualScheduleId?: string | null;
 };
 
 type MapLocationsResponse = {
@@ -586,6 +591,22 @@ const getTruckStatusLabel = (truck: LiveTruck) => {
   if (truck.locationSource === "manual_schedule") return "Scheduled";
   if (truck.locationSource === "home_base") return "Static location";
   return "Last known location";
+};
+
+type MissingTruckReportTarget = {
+  truckId: string;
+  truckName: string;
+  targetType: "live_location" | "manual_schedule" | "event_schedule";
+  expectedCoords: GeoPoint;
+  sourceLabel?: string | null;
+  manualScheduleId?: string | null;
+  eventId?: string | null;
+};
+
+const resolveTruckCoords = (truck: LiveTruck): GeoPoint | null => {
+  const lat = toNumberOrNull(truck.lat ?? truck.currentLatitude);
+  const lng = toNumberOrNull(truck.lng ?? truck.currentLongitude);
+  return lat !== null && lng !== null ? { lat, lng } : null;
 };
 
 const buildFullAddress = (
@@ -769,6 +790,103 @@ const geoAdPinIcon = new L.Icon({
   iconAnchor: [17, 40],
   popupAnchor: [0, -34],
 });
+
+const getAdapterLeafletIcon = (marker: MapAdapterMarker) => {
+  if (marker.kind === "parking") return hostPinIcon;
+  if (marker.kind === "truck") return getTruckPinIcon(marker.color);
+  if (marker.kind === "event") return eventPinIcon;
+  if (marker.kind === "geo_ad") return geoAdPinIcon;
+  return getDealPinIcon(marker.color);
+};
+
+function LegacyMapSurface({
+  center,
+  zoom,
+  markers,
+  userLocation,
+  isNightTheme,
+  onBoundsChanged,
+  onZoomChanged,
+  onCenterChanged,
+  onMarkerTap,
+}: {
+  center: GeoPoint;
+  zoom: number;
+  markers: MapAdapterMarker[];
+  userLocation: GeoPoint | null;
+  isNightTheme: boolean;
+  onBoundsChanged: (bounds: MapBoundsLike) => void;
+  onZoomChanged: (zoom: number) => void;
+  onCenterChanged: (center: GeoPoint) => void;
+  onMarkerTap: (marker: MapAdapterMarker) => void;
+}) {
+  const tileUrl = isNightTheme
+    ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+    : "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png";
+  const attribution =
+    '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
+
+  return (
+    <MapContainer
+      center={[center.lat, center.lng]}
+      zoom={zoom}
+      zoomControl={false}
+      className="h-full w-full"
+      scrollWheelZoom
+    >
+      <TileLayer attribution={attribution} url={tileUrl} />
+      <MapCenterer center={center} />
+      <MapViewportWatcher
+        onZoomChange={onZoomChanged}
+        onBoundsChange={onBoundsChanged}
+        onCenterChange={onCenterChanged}
+      />
+      <MapControls
+        onZoomIn={() => undefined}
+        onZoomOut={() => undefined}
+        onCenterUser={() => {
+          if (userLocation) onCenterChanged(userLocation);
+        }}
+        userLocation={userLocation}
+        zoomLevel={zoom}
+        isNightTheme={isNightTheme}
+      />
+      {userLocation && (
+        <Marker
+          position={[userLocation.lat, userLocation.lng]}
+          icon={userLocationIcon}
+        />
+      )}
+      {markers.map((marker) => (
+        <Marker
+          key={marker.id}
+          position={[marker.lat, marker.lng]}
+          icon={getAdapterLeafletIcon(marker)}
+          eventHandlers={{
+            click: () => onMarkerTap(marker),
+          }}
+        >
+          {(marker.title || marker.subtitle) && (
+            <Popup>
+              <div className="min-w-[160px] text-sm">
+                {marker.title && (
+                  <div className="font-semibold text-slate-950">
+                    {marker.title}
+                  </div>
+                )}
+                {marker.subtitle && (
+                  <div className="mt-1 text-xs text-slate-600">
+                    {marker.subtitle}
+                  </div>
+                )}
+              </div>
+            </Popup>
+          )}
+        </Marker>
+      ))}
+    </MapContainer>
+  );
+}
 
 const clusterIcon = (count: number) =>
   L.divIcon({
@@ -1170,6 +1288,15 @@ export default function MapPage() {
     useState<HostCluster | null>(null);
   const [selectedSighting, setSelectedSighting] =
     useState<CommunityTruckSighting | null>(null);
+  const [selectedTruckPreview, setSelectedTruckPreview] =
+    useState<MissingTruckReportTarget | null>(null);
+  const [selectedSchedulePreview, setSelectedSchedulePreview] =
+    useState<MissingTruckReportTarget | null>(null);
+  const [missingTruckReportTarget, setMissingTruckReportTarget] =
+    useState<MissingTruckReportTarget | null>(null);
+  const [missingTruckNotes, setMissingTruckNotes] = useState("");
+  const [isSubmittingMissingTruckReport, setIsSubmittingMissingTruckReport] =
+    useState(false);
   const [showReportTruckDialog, setShowReportTruckDialog] = useState(false);
   const [reportTruckName, setReportTruckName] = useState("");
   const [reportTruckPhotoDataUrl, setReportTruckPhotoDataUrl] = useState("");
@@ -1432,6 +1559,8 @@ export default function MapPage() {
     user?.userType === "admin" ||
     user?.userType === "duper_admin" ||
     user?.userType === "super_admin";
+  const showParkingPassMapHandoff =
+    isStaffOrAdmin || user?.userType === "food_truck";
   const showMapDiagnostics = isStaffOrAdmin;
 
   const getLocalDateKey = () => {
@@ -1648,10 +1777,9 @@ export default function MapPage() {
   const truckCoords = useMemo(() => {
     return liveTrucks
       .map((truck) => {
-        const lat = toNumberOrNull(truck.lat);
-        const lng = toNumberOrNull(truck.lng);
-        if (lat === null || lng === null) return null;
-        return { id: truck.id, lat, lng };
+        const coords = resolveTruckCoords(truck);
+        if (!coords) return null;
+        return { id: truck.id, ...coords };
       })
       .filter(Boolean) as Array<{ id: string; lat: number; lng: number }>;
   }, [liveTrucks]);
@@ -1679,10 +1807,9 @@ export default function MapPage() {
   const visibleLiveTrucks = useMemo(() => {
     if (!appliedMapBounds) return liveTrucks;
     return liveTrucks.filter((truck) => {
-      const lat = toNumberOrNull(truck.lat);
-      const lng = toNumberOrNull(truck.lng);
-      if (lat === null || lng === null) return false;
-      return appliedMapBounds.contains([lat, lng]);
+      const coords = resolveTruckCoords(truck);
+      if (!coords) return false;
+      return appliedMapBounds.contains([coords.lat, coords.lng]);
     });
   }, [liveTrucks, appliedMapBounds]);
 
@@ -2796,9 +2923,8 @@ export default function MapPage() {
     });
 
     visibleUnhostedTrucks.forEach((truck) => {
-      const lat = toNumberOrNull(truck.lat);
-      const lng = toNumberOrNull(truck.lng);
-      if (lat == null || lng == null) return;
+      const coords = resolveTruckCoords(truck);
+      if (!coords) return;
       const popularity = businessPopularityByRestaurant[String(truck.id || "")];
       const statusColor = truck.liveBroadcasting
         ? "#f97316"
@@ -2811,8 +2937,8 @@ export default function MapPage() {
         id: `truck:${truck.id}`,
         sourceId: truck.id,
         kind: "truck",
-        lat,
-        lng,
+        lat: coords.lat,
+        lng: coords.lng,
         title: truck.name,
         subtitle: getTruckStatusLabel(truck),
         color: popularity?.color || statusColor,
@@ -2915,7 +3041,12 @@ export default function MapPage() {
     includeMarker: (marker) => marker.kind === "parking",
     dedupeKey: (marker) => `${marker.kind}:${marker.sourceId}`,
     maxCards: 8,
-    hasBlockingSelection: Boolean(selectedDeal || selectedHostCluster),
+    hasBlockingSelection: Boolean(
+      selectedDeal ||
+        selectedHostCluster ||
+        selectedTruckPreview ||
+        selectedSchedulePreview,
+    ),
   });
 
   const preferredParkingZoomCard = useMemo(() => {
@@ -3030,6 +3161,9 @@ export default function MapPage() {
       source: ParkingPreviewSelection["source"] = "pin-tap",
     ) => {
       setSelectedDeal(null);
+      setSelectedSighting(null);
+      setSelectedTruckPreview(null);
+      setSelectedSchedulePreview(null);
       setSelectedHostCluster(null);
       setSelectedParkingPreview({
         hostId: host.id,
@@ -3069,15 +3203,30 @@ export default function MapPage() {
             setSelectedDeal(null);
             setSelectedParkingPreview(null);
             setSelectedHostCluster(null);
+            setSelectedTruckPreview(null);
+            setSelectedSchedulePreview(null);
             setSelectedSighting(sighting);
           }
           return;
         }
-        trackUxEvent("map_restaurant_nav_click", {
-          restaurantId: String(marker.sourceId),
-          source: "truck_pin",
-        });
-        window.location.href = `/restaurant/${marker.sourceId}`;
+        const truck = visibleLiveTrucks.find(
+          (item) => item.id === marker.sourceId,
+        );
+        const coords = truck ? resolveTruckCoords(truck) : null;
+        if (truck && coords) {
+          setSelectedDeal(null);
+          setSelectedSighting(null);
+          setSelectedParkingPreview(null);
+          setSelectedHostCluster(null);
+          setSelectedSchedulePreview(null);
+          setSelectedTruckPreview({
+            truckId: truck.id,
+            truckName: truck.name,
+            targetType: "live_location",
+            expectedCoords: coords,
+            sourceLabel: getTruckStatusLabel(truck),
+          });
+        }
         return;
       }
 
@@ -3097,6 +3246,38 @@ export default function MapPage() {
         const coords = event ? resolveEventCoords(event) : null;
         const lat = coords?.lat ?? marker.lat;
         const lng = coords?.lng ?? marker.lng;
+        if (event?.type === "truck_manual_schedule" && event.truckId) {
+          setSelectedDeal(null);
+          setSelectedSighting(null);
+          setSelectedParkingPreview(null);
+          setSelectedHostCluster(null);
+          setSelectedTruckPreview(null);
+          setSelectedSchedulePreview({
+            truckId: event.truckId,
+            truckName: event.truckName || event.name,
+            targetType: "manual_schedule",
+            expectedCoords: { lat, lng },
+            sourceLabel: event.name,
+            manualScheduleId: event.manualScheduleId || undefined,
+          });
+          return;
+        }
+        if (event?.bookedRestaurantId && coords) {
+          setSelectedDeal(null);
+          setSelectedSighting(null);
+          setSelectedParkingPreview(null);
+          setSelectedHostCluster(null);
+          setSelectedTruckPreview(null);
+          setSelectedSchedulePreview({
+            truckId: event.bookedRestaurantId,
+            truckName: event.truckName || event.name || "Booked truck",
+            targetType: "event_schedule",
+            expectedCoords: { lat, lng },
+            sourceLabel: event.hostName || event.name,
+            eventId: event.id,
+          });
+          return;
+        }
         window.open(`https://maps.google.com/?q=${lat},${lng}`, "_blank");
         return;
       }
@@ -3118,6 +3299,7 @@ export default function MapPage() {
       visibleDeals,
       visibleGeoAds,
       visibleUnhostedCommunitySightings,
+      visibleLiveTrucks,
       visibleHostLocations,
       visibleEventLocations,
       visibleSupplierLocations,
@@ -3478,6 +3660,12 @@ export default function MapPage() {
         lng: Number(selectedSighting.longitude),
       };
     }
+    if (!selectedDeal && !selectedSighting && selectedTruckPreview) {
+      return selectedTruckPreview.expectedCoords;
+    }
+    if (!selectedDeal && !selectedSighting && selectedSchedulePreview) {
+      return selectedSchedulePreview.expectedCoords;
+    }
     if (!selectedDeal && selectedParkingPreview) {
       return {
         lat: selectedParkingPreview.markerLat,
@@ -3491,6 +3679,8 @@ export default function MapPage() {
   }, [
     selectedDeal,
     selectedSighting,
+    selectedTruckPreview,
+    selectedSchedulePreview,
     selectedParkingPreview,
     selectedHostCluster,
   ]);
@@ -3697,14 +3887,9 @@ export default function MapPage() {
             </div>
             <div className="space-y-2">
               {visibleLiveTrucks.slice(0, 3).map((truck) => {
-                const coords = {
-                  lat: toNumberOrNull(truck.lat),
-                  lng: toNumberOrNull(truck.lng),
-                };
+                const coords = resolveTruckCoords(truck);
                 const distanceLabel =
-                  coords.lat !== null && coords.lng !== null
-                    ? formatDistance({ lat: coords.lat, lng: coords.lng })
-                    : null;
+                  coords ? formatDistance(coords) : null;
                 const locationLabel = [truck.address, truck.city, truck.state]
                   .filter(Boolean)
                   .join(", ");
@@ -3843,6 +4028,16 @@ export default function MapPage() {
                 </ul>
               )}
             </div>
+            {showParkingPassMapHandoff && (
+              <Link
+                href="/parking-pass?setup=book&view=map"
+                className="flex h-9 items-center gap-1.5 rounded-xl border border-orange-200 bg-orange-50/95 px-2.5 text-xs font-semibold text-orange-900 shadow-clean backdrop-blur hover:bg-orange-100"
+                aria-label="Open Parking Pass planning map"
+                data-testid="link-parking-pass-planning-map"
+              >
+                Parking map
+              </Link>
+            )}
             <button
               type="button"
               onClick={async () => {
@@ -3924,7 +4119,7 @@ export default function MapPage() {
                 </div>
               </div>
             )}
-          {mapCenter && isUsingGoogleMap ? (
+          {mapCenter && isUsingGoogleMap && !forceLegacyMap ? (
             <MapErrorBoundary>
               <GoogleMapSurface
                 key={`google-map-${googleMapRetryNonce}`}
@@ -3982,6 +4177,18 @@ export default function MapPage() {
                 </div>
               )}
             </MapErrorBoundary>
+          ) : mapCenter ? (
+            <LegacyMapSurface
+              center={mapCenter}
+              zoom={zoomLevel}
+              markers={mapMarkersForRender}
+              userLocation={userLocation}
+              isNightTheme={isNightTheme}
+              onBoundsChanged={setMapBounds}
+              onZoomChanged={setZoomLevel}
+              onCenterChanged={handleMapCenterChanged}
+              onMarkerTap={handleAdapterMarkerTap}
+            />
           ) : (
             <div className="absolute inset-0 z-10 flex items-center justify-center bg-[var(--bg-card)]/80 px-6">
               <div className="max-w-xs rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] px-4 py-3 text-center text-sm text-[color:var(--text-muted)] shadow-clean">
@@ -4194,6 +4401,94 @@ export default function MapPage() {
             <div className="map-callout-tail" />
           </div>
         )}
+
+        {!selectedDeal &&
+          !selectedSighting &&
+          (selectedTruckPreview || selectedSchedulePreview) &&
+          hasMapCalloutAnchor && (
+            <div
+              className={`${mapCalloutShellClassName} sm:w-[min(280px,calc(100%-1rem))]`}
+              style={mapCalloutShellStyle}
+            >
+              <Card className="map-callout-card w-full">
+                <CardContent className="p-3">
+                  {(() => {
+                    const target = selectedTruckPreview || selectedSchedulePreview!;
+                    return (
+                      <>
+                        <div className="mb-2 flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <h3 className="truncate text-sm font-semibold text-foreground">
+                              {target.truckName}
+                            </h3>
+                            <p className="truncate text-[11px] text-muted-foreground">
+                              {target.sourceLabel ||
+                                (target.targetType === "live_location"
+                                  ? "Live location"
+                                  : "Scheduled stop")}
+                            </p>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => {
+                              setSelectedTruckPreview(null);
+                              setSelectedSchedulePreview(null);
+                            }}
+                            className="h-8 w-8"
+                            aria-label="Close truck preview"
+                          >
+                            <X className="w-3 h-3" />
+                          </Button>
+                        </div>
+                        <div className="grid grid-cols-3 gap-1.5">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-8 rounded-full"
+                            onClick={() =>
+                              window.open(
+                                `https://maps.google.com/?q=${target.expectedCoords.lat},${target.expectedCoords.lng}`,
+                                "_blank",
+                              )
+                            }
+                          >
+                            Route
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-8 rounded-full"
+                            onClick={() => {
+                              trackUxEvent("map_restaurant_nav_click", {
+                                restaurantId: target.truckId,
+                                source: "truck_preview",
+                              });
+                              window.location.href = `/restaurant/${target.truckId}`;
+                            }}
+                          >
+                            Details
+                          </Button>
+                          <Button
+                            size="sm"
+                            className="h-8 rounded-full"
+                            onClick={() => {
+                              setMissingTruckReportTarget(target);
+                              setMissingTruckNotes("");
+                            }}
+                            data-testid="button-report-truck-missing"
+                          >
+                            Not here
+                          </Button>
+                        </div>
+                      </>
+                    );
+                  })()}
+                </CardContent>
+              </Card>
+              <div className="map-callout-tail" />
+            </div>
+          )}
 
         {!selectedDeal && selectedParkingHost && hasMapCalloutAnchor && (
           <div
@@ -4767,6 +5062,121 @@ export default function MapPage() {
               }}
             >
               {isSubmittingTruckSighting ? "Submitting..." : "Submit sighting"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(missingTruckReportTarget)}
+        onOpenChange={(open) => {
+          if (!open && !isSubmittingMissingTruckReport) {
+            setMissingTruckReportTarget(null);
+            setMissingTruckNotes("");
+          }
+        }}
+      >
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Report truck not here</DialogTitle>
+            <DialogDescription>
+              Tell us when a truck is missing from its live or scheduled map
+              spot. Reports are saved for review and help keep the map honest.
+            </DialogDescription>
+          </DialogHeader>
+          {missingTruckReportTarget && (
+            <div className="space-y-3">
+              <div className="rounded-md border border-border/60 bg-muted/30 px-3 py-2">
+                <div className="text-sm font-semibold text-foreground">
+                  {missingTruckReportTarget.truckName}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {missingTruckReportTarget.sourceLabel ||
+                    (missingTruckReportTarget.targetType === "live_location"
+                      ? "Live location"
+                      : "Scheduled stop")}
+                </div>
+              </div>
+              <Textarea
+                value={missingTruckNotes}
+                onChange={(e) => setMissingTruckNotes(e.target.value)}
+                placeholder="Optional: what did you see? Empty lot, wrong address, business closed..."
+                maxLength={500}
+              />
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              disabled={isSubmittingMissingTruckReport}
+              onClick={() => {
+                setMissingTruckReportTarget(null);
+                setMissingTruckNotes("");
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              disabled={
+                isSubmittingMissingTruckReport || !missingTruckReportTarget
+              }
+              onClick={async () => {
+                if (!missingTruckReportTarget) return;
+                try {
+                  setIsSubmittingMissingTruckReport(true);
+                  const res = await fetch(
+                    apiUrl(
+                      `/api/trucks/${encodeURIComponent(
+                        missingTruckReportTarget.truckId,
+                      )}/location-reports`,
+                    ),
+                    {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      credentials: "include",
+                      body: JSON.stringify({
+                        targetType: missingTruckReportTarget.targetType,
+                        manualScheduleId:
+                          missingTruckReportTarget.manualScheduleId,
+                        eventId: missingTruckReportTarget.eventId,
+                        expectedLatitude:
+                          missingTruckReportTarget.expectedCoords.lat,
+                        expectedLongitude:
+                          missingTruckReportTarget.expectedCoords.lng,
+                        reporterLatitude: userLocation?.lat,
+                        reporterLongitude: userLocation?.lng,
+                        sourceLabel: missingTruckReportTarget.sourceLabel,
+                        notes: missingTruckNotes.trim() || undefined,
+                        observedAt: new Date().toISOString(),
+                      }),
+                    },
+                  );
+                  if (!res.ok) {
+                    const payload = await res.json().catch(() => ({}));
+                    throw new Error(
+                      payload?.message || "Failed to submit report",
+                    );
+                  }
+                  setMissingTruckReportTarget(null);
+                  setMissingTruckNotes("");
+                  toast({
+                    title: "Report submitted",
+                    description:
+                      "Thanks. We saved this for review and map trust checks.",
+                  });
+                } catch (error: any) {
+                  toast({
+                    title: "Unable to submit report",
+                    description:
+                      error?.message || "Please try again in a moment.",
+                    variant: "destructive",
+                  });
+                } finally {
+                  setIsSubmittingMissingTruckReport(false);
+                }
+              }}
+            >
+              {isSubmittingMissingTruckReport ? "Submitting..." : "Submit"}
             </Button>
           </DialogFooter>
         </DialogContent>

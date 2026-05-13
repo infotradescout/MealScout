@@ -631,7 +631,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           .map((request: any) => botSignatureLabel(request.userAgent))
           .filter(Boolean) as string[];
         const matchingShares = recentShares.filter((share: any) =>
-          String(share.sourcePath || "").includes(row.id),
+          String(share.destinationUrl || "").includes(row.id),
         );
         const matchingPosts = recentPosts.filter((post: any) => {
           const haystack = normalizeLoose(
@@ -792,7 +792,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           .map((request: any) => botSignatureLabel(request.userAgent))
           .filter(Boolean) as string[];
         const matchingShares = recentShares.filter((share: any) =>
-          String(share.sourcePath || "").includes(row.id),
+          String(share.destinationUrl || "").includes(row.id),
         );
         const matchingPosts = recentPosts.filter((post: any) => {
           const haystack = normalizeLoose(
@@ -932,7 +932,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           .map((request: any) => botSignatureLabel(request.userAgent))
           .filter(Boolean) as string[];
         const matchingShares = recentShares.filter((share: any) =>
-          String(share.sourcePath || "").includes(row.id),
+          String(share.destinationUrl || "").includes(row.id),
         );
         const matchingPosts = recentPosts.filter((post: any) => {
           const haystack = normalizeLoose(
@@ -1045,7 +1045,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           .map((request: any) => botSignatureLabel(request.userAgent))
           .filter(Boolean) as string[];
         const matchingShares = recentShares.filter((share: any) =>
-          String(share.sourcePath || "").includes(row.id),
+          String(share.destinationUrl || "").includes(row.id),
         );
         const matchingPosts = recentPosts.filter((post: any) => {
           const haystack = normalizeLoose(

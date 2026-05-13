@@ -40,6 +40,13 @@ import type {
   MapBoundsLike,
 } from "@/components/maps/map-adapter.types";
 
+type MapRuntimeResponse = {
+  hasGoogleMapsKey: boolean;
+  googleMapsApiKey?: string | null;
+  hasGoogleMapsMapId?: boolean;
+  googleMapsMapId?: string | null;
+};
+
 /**
  * /scout — The canonical MealScout food discovery page.
  * Legacy explore routes redirect here from App.tsx.
@@ -1112,7 +1119,34 @@ export default function ExplorePreview() {
   const [hasOpenedFullMap, setHasOpenedFullMap] = useState(false);
   const googleMapContainerRef = useRef<HTMLDivElement | null>(null);
   const [googleMapFailed, setGoogleMapFailed] = useState(false);
-  const hasMapKey = GOOGLE_MAPS_WEB_API_KEY.length > 0;
+  const { data: mapRuntime } = useQuery<MapRuntimeResponse>({
+    queryKey: ["/api/map/runtime"],
+    queryFn: async () => {
+      const response = await fetch("/api/map/runtime");
+      if (!response.ok) {
+        return { hasGoogleMapsKey: false, googleMapsApiKey: null };
+      }
+      return response.json();
+    },
+    retry: 3,
+    retryDelay: 800,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
+  });
+  const runtimeGoogleMapsApiKey = String(
+    mapRuntime?.googleMapsApiKey || "",
+  ).trim();
+  const runtimeGoogleMapsMapId = String(
+    mapRuntime?.googleMapsMapId || "",
+  ).trim();
+  const buildGoogleMapsMapId = String(
+    (import.meta as any).env?.VITE_GOOGLE_MAPS_MAP_ID || "",
+  ).trim();
+  const effectiveGoogleMapsApiKey =
+    runtimeGoogleMapsApiKey || GOOGLE_MAPS_WEB_API_KEY;
+  const effectiveGoogleMapsMapId =
+    runtimeGoogleMapsMapId || buildGoogleMapsMapId;
+  const hasMapKey = effectiveGoogleMapsApiKey.length > 0;
 
   const openScoutMap = useCallback(() => {
     if (coords) {
@@ -1143,7 +1177,7 @@ export default function ExplorePreview() {
     const startPrefetch = () => {
       if (cancelled) return;
       if (window.location.pathname !== "/scout") return;
-      preloadGoogleMapsScript(GOOGLE_MAPS_WEB_API_KEY);
+      preloadGoogleMapsScript(effectiveGoogleMapsApiKey);
     };
 
     timeoutId = window.setTimeout(() => {
@@ -1163,7 +1197,7 @@ export default function ExplorePreview() {
         (window as any).cancelIdleCallback(idleId);
       }
     };
-  }, [hasMapKey, sheetState]);
+  }, [effectiveGoogleMapsApiKey, hasMapKey, sheetState]);
 
   // When we first get coords, set the map center to the right-quadrant offset.
   useEffect(() => {
@@ -1423,7 +1457,8 @@ export default function ExplorePreview() {
               >
                 <MapErrorBoundary>
                   <GoogleMapSurface
-                    apiKey={GOOGLE_MAPS_WEB_API_KEY}
+                    apiKey={effectiveGoogleMapsApiKey}
+                    mapId={effectiveGoogleMapsMapId || undefined}
                     center={mapCenter}
                     zoom={mapZoom}
                     markers={allMapMarkers}

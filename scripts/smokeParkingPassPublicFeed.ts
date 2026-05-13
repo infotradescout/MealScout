@@ -24,6 +24,7 @@ const parkingPassRow = (overrides: Record<string, unknown>) => ({
   spotCount: 2,
   bookedSpots: 0,
   availableSpotNumbers: [1, 2],
+  dailyPriceCents: 2500,
   host: {
     id: "host-row",
     businessName: "Parking Pass Host",
@@ -34,6 +35,7 @@ const parkingPassRow = (overrides: Record<string, unknown>) => ({
     longitude: "-87.2169",
     stripeConnectAccountId: "acct_test",
     stripeChargesEnabled: true,
+    parkingPassDailyPriceCents: 2500,
   },
   ...overrides,
 });

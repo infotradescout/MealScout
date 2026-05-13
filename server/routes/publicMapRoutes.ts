@@ -2,6 +2,7 @@ import type { Express } from "express";
 import {
   and,
   asc,
+  desc,
   eq,
   gte,
   inArray,
@@ -27,6 +28,9 @@ import {
 } from "../services/parkingPassQuality";
 import { computeExternalReviewAdjustment } from "../services/externalReviewScoring";
 import { isLaunchDegradedMode } from "../launchMode";
+import { resolveCityTimeZoneSync } from "../services/cityTimeZone";
+import { buildSlotDateTimes } from "../services/timeIntent";
+import { getSuppressedLocationResourceIds } from "../services/truckLocationTrust";
 import {
   dealClaims,
   deals,
@@ -35,9 +39,11 @@ import {
   geoLocationPings,
   hosts,
   locationRequests,
+  moderationEvents,
   restaurants,
   suppliers,
   supplierProducts,
+  truckManualSchedules,
   users,
 } from "@shared/schema";
 
@@ -49,6 +55,96 @@ let mapLocationsCache: {
 let mapLocationsLastGood: {
   payload: { hostLocations: any[]; eventLocations: any[]; supplierLocations: any[] };
 } | null = null;
+
+const truckSightingRateLimits = new Map<string, number[]>();
+const COMMUNITY_TRUCK_SIGHTING_EVENT = "truck_community_sighting";
+const COMMUNITY_TRUCK_SIGHTING_TTL_MS = 60 * 60 * 1000;
+// A 6MB uploaded image expands to roughly 8MB when sent as a data URL.
+const MAX_TRUCK_SIGHTING_PHOTO_DATA_URL_LENGTH = 9 * 1024 * 1024;
+const ALLOWED_TRUCK_SIGHTING_DATA_IMAGE =
+  /^data:image\/(?:jpeg|jpg|png|webp|gif);base64,/i;
+
+const distanceKmBetween = (
+  lat1: number,
+  lng1: number,
+  lat2: number,
+  lng2: number,
+) => {
+  const toRad = (value: number) => (value * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) *
+      Math.cos(toRad(lat2)) *
+      Math.sin(dLng / 2) *
+      Math.sin(dLng / 2);
+  return 2 * 6371 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+};
+
+const clampText = (value: unknown, maxLength: number) => {
+  const text = String(value || "").trim();
+  return text.length > maxLength ? text.slice(0, maxLength) : text;
+};
+
+const serializeCommunityTruckSighting = (params: {
+  id: string;
+  metadata: Record<string, unknown>;
+  description?: string | null;
+  createdAt: Date | string;
+  distanceKm?: number;
+}) => {
+  const createdAtDate =
+    params.createdAt instanceof Date
+      ? params.createdAt
+      : new Date(params.createdAt as any);
+  const createdAt = Number.isNaN(createdAtDate.getTime())
+    ? new Date().toISOString()
+    : createdAtDate.toISOString();
+  const seenAtRaw = String(params.metadata.seenAt || createdAt);
+  const seenAtDate = new Date(seenAtRaw);
+  const seenAt = Number.isNaN(seenAtDate.getTime())
+    ? createdAt
+    : seenAtDate.toISOString();
+  const expiresAt = new Date(
+    new Date(createdAt).getTime() + COMMUNITY_TRUCK_SIGHTING_TTL_MS,
+  ).toISOString();
+
+  return {
+    id: params.id,
+    truckName: String(params.metadata.truckName || "Food truck"),
+    photoUrl: String(params.metadata.photoUrl || ""),
+    latitude: Number(params.metadata.latitude),
+    longitude: Number(params.metadata.longitude),
+    notes: params.metadata.notes
+      ? String(params.metadata.notes)
+      : params.description || null,
+    locationLabel: params.metadata.locationLabel
+      ? String(params.metadata.locationLabel)
+      : null,
+    source: String(params.metadata.source || "map_user_ping"),
+    reportCount: Number(params.metadata.reportCount || 1),
+    lastReportedAt: createdAt,
+    seenAt,
+    expiresAt,
+    createdAt,
+    status: "open",
+    ...(typeof params.distanceKm === "number"
+      ? { distanceKm: Number(params.distanceKm.toFixed(2)) }
+      : {}),
+  };
+};
+
+const isAllowedTruckSightingPhotoUrl = (value: string) => {
+  if (value.length > MAX_TRUCK_SIGHTING_PHOTO_DATA_URL_LENGTH) return false;
+  if (ALLOWED_TRUCK_SIGHTING_DATA_IMAGE.test(value)) return true;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" || url.protocol === "http:";
+  } catch {
+    return false;
+  }
+};
 
 type FootTrafficPayload = {
   generatedAt: string;
@@ -575,16 +671,59 @@ export function registerPublicMapRoutes(app: Express) {
         });
       };
 
+      const now = new Date();
+      const todayStart = new Date(now);
+      todayStart.setHours(0, 0, 0, 0);
+      const manualScheduleWindowStart = new Date(
+        todayStart.getTime() - 24 * 60 * 60 * 1000,
+      );
+      const manualScheduleWindowEnd = new Date(
+        todayStart.getTime() + 24 * 60 * 60 * 1000,
+      );
+
       const [
         openLocations,
         upcomingEvents,
         allHosts,
+        publicManualSchedules,
         activeSuppliers,
         activeSupplierProducts,
       ] = await Promise.all([
         storage.getOpenLocationRequests(),
         storage.getAllUpcomingEvents(),
         storage.getAllHosts(),
+        db
+          .select({
+            id: truckManualSchedules.id,
+            truckId: truckManualSchedules.truckId,
+            date: truckManualSchedules.date,
+            startTime: truckManualSchedules.startTime,
+            endTime: truckManualSchedules.endTime,
+            locationName: truckManualSchedules.locationName,
+            address: truckManualSchedules.address,
+            city: truckManualSchedules.city,
+            state: truckManualSchedules.state,
+            notes: truckManualSchedules.notes,
+            lastConfirmedAt: truckManualSchedules.lastConfirmedAt,
+            truckName: restaurants.name,
+            truckOwnerId: restaurants.ownerId,
+            truckIsActive: restaurants.isActive,
+            truckIsFoodTruck: restaurants.isFoodTruck,
+            truckIsVerified: restaurants.isVerified,
+          })
+          .from(truckManualSchedules)
+          .innerJoin(restaurants, eq(truckManualSchedules.truckId, restaurants.id))
+          .where(
+            and(
+              eq(truckManualSchedules.isPublic, true),
+              gte(truckManualSchedules.date, manualScheduleWindowStart),
+              lte(truckManualSchedules.date, manualScheduleWindowEnd),
+              eq(restaurants.isActive, true),
+              eq(restaurants.isFoodTruck, true),
+            ),
+          )
+          .limit(300)
+          .catch(() => []),
         db
           .select({
             id: suppliers.id,
@@ -699,6 +838,34 @@ export function registerPublicMapRoutes(app: Express) {
           state: event.host?.state,
         });
       });
+      const suppressedEventScheduleIds = await getSuppressedLocationResourceIds({
+        resourceIds: publicEvents
+          .filter((event) => Boolean(event.bookedRestaurantId))
+          .map((event) => String(event.id || "").trim())
+          .filter(Boolean),
+        targetType: "event_schedule",
+        now,
+      });
+      const trustedPublicEvents = publicEvents.filter(
+        (event) => !suppressedEventScheduleIds.has(String(event.id || "")),
+      );
+      const bookedRestaurantIds = Array.from(
+        new Set(
+          trustedPublicEvents
+            .map((event) => String(event.bookedRestaurantId || "").trim())
+            .filter(Boolean),
+        ),
+      );
+      const bookedTruckNames = bookedRestaurantIds.length
+        ? new Map(
+            (
+              await db
+                .select({ id: restaurants.id, name: restaurants.name })
+                .from(restaurants)
+                .where(inArray(restaurants.id, bookedRestaurantIds))
+            ).map((row: { id: string; name: string }) => [row.id, row.name]),
+          )
+        : new Map<string, string>();
 
       const primaryHostLocations = hostProfiles.map((host) => ({
         id: host.id,
@@ -768,27 +935,97 @@ export function registerPublicMapRoutes(app: Express) {
         ...primaryHostLocations,
       ];
 
-      const eventLocations = publicEvents.map((event) => ({
-        id: event.id,
-        type: "event" as const,
-        name: event.name || "Host Event",
-        description: event.description,
-        date: event.date,
-        startTime: event.startTime,
-        endTime: event.endTime,
-        maxTrucks: event.maxTrucks,
-        status: event.status,
-        hostId: event.hostId,
-        hostName: event.host?.businessName,
-        hostAddress: event.host?.address,
-        hostCity: event.host?.city ?? null,
-        hostState: event.host?.state ?? null,
-        hostLatitude: event.host?.latitude,
-        hostLongitude: event.host?.longitude,
-        hardCapEnabled: event.hardCapEnabled,
-        seriesId: event.seriesId,
-        bookedRestaurantId: event.bookedRestaurantId,
-      }));
+      const manualScheduleIds = (publicManualSchedules as any[])
+        .map((schedule) => String(schedule.id || "").trim())
+        .filter(Boolean);
+      const suppressedManualScheduleIds =
+        await getSuppressedLocationResourceIds({
+          resourceIds: manualScheduleIds,
+          targetType: "manual_schedule",
+          now,
+        });
+
+      const manualScheduleLocations = (publicManualSchedules as any[])
+        .filter((schedule) => {
+          const address = String(schedule.address || "").trim();
+          const truckName = String(schedule.truckName || "").trim();
+          if (!address || !truckName) return false;
+          if (suppressedManualScheduleIds.has(String(schedule.id))) {
+            return false;
+          }
+
+          const timeZone = resolveCityTimeZoneSync({
+            city: schedule.city ?? null,
+            state: schedule.state ?? null,
+          });
+          const servingWindow = buildSlotDateTimes({
+            timeZone,
+            date: schedule.date,
+            startTime: String(schedule.startTime || ""),
+            endTime: String(schedule.endTime || ""),
+          });
+          if (!servingWindow) return false;
+          return (
+            servingWindow.startUtc.getTime() <= now.getTime() &&
+            servingWindow.endUtc.getTime() >= now.getTime()
+          );
+        })
+        .map((schedule) => ({
+          id: `manual:${schedule.id}`,
+          type: "truck_manual_schedule" as const,
+          name: schedule.locationName
+            ? `${schedule.truckName} at ${schedule.locationName}`
+            : `${schedule.truckName} scheduled stop`,
+          description: schedule.notes ?? null,
+          date: schedule.date,
+          startTime: schedule.startTime,
+          endTime: schedule.endTime,
+          maxTrucks: 1,
+          status: "scheduled",
+          hostId: null,
+          hostName: schedule.locationName || schedule.truckName,
+          hostAddress: schedule.address,
+          hostCity: schedule.city ?? null,
+          hostState: schedule.state ?? null,
+          hostLatitude: null,
+          hostLongitude: null,
+          hardCapEnabled: true,
+          seriesId: null,
+          bookedRestaurantId: schedule.truckId,
+          truckId: schedule.truckId,
+          truckName: schedule.truckName,
+          manualScheduleId: schedule.id,
+          lastConfirmedAt: schedule.lastConfirmedAt ?? null,
+        }));
+
+      const eventLocations = [
+        ...trustedPublicEvents.map((event) => ({
+          id: event.id,
+          type: "event" as const,
+          name: event.name || "Host Event",
+          description: event.description,
+          date: event.date,
+          startTime: event.startTime,
+          endTime: event.endTime,
+          maxTrucks: event.maxTrucks,
+          status: event.status,
+          hostId: event.hostId,
+          hostName: event.host?.businessName,
+          hostAddress: event.host?.address,
+          hostCity: event.host?.city ?? null,
+          hostState: event.host?.state ?? null,
+          hostLatitude: event.host?.latitude,
+          hostLongitude: event.host?.longitude,
+          hardCapEnabled: event.hardCapEnabled,
+          seriesId: event.seriesId,
+          bookedRestaurantId: event.bookedRestaurantId,
+          truckId: event.bookedRestaurantId,
+          truckName: event.bookedRestaurantId
+            ? bookedTruckNames.get(String(event.bookedRestaurantId)) || null
+            : null,
+        })),
+        ...manualScheduleLocations,
+      ];
 
       const supplierProductsById = new Map<string, string[]>();
       (activeSupplierProducts as any[]).forEach((product) => {
@@ -1126,6 +1363,179 @@ export function registerPublicMapRoutes(app: Express) {
     }
   });
 
+  app.post("/api/public/truck-sightings", async (req: any, res) => {
+    try {
+      const truckName = clampText(req.body?.truckName, 120);
+      const notes = clampText(req.body?.notes, 500);
+      const locationLabel = clampText(req.body?.locationLabel, 180);
+      const source = clampText(req.body?.source, 80) || "map_user_ping";
+      const photoUrl = String(req.body?.photoUrl || "").trim();
+      const latitude = Number(req.body?.latitude);
+      const longitude = Number(req.body?.longitude);
+      const seenAtRaw = String(req.body?.seenAt || "").trim();
+      const seenAt = seenAtRaw ? new Date(seenAtRaw) : new Date();
+
+      if (!truckName) {
+        return res.status(400).json({ message: "Truck name is required" });
+      }
+      if (!photoUrl) {
+        return res.status(400).json({ message: "Photo is required" });
+      }
+      if (!isAllowedTruckSightingPhotoUrl(photoUrl)) {
+        return res.status(400).json({
+          message: "Photo must be a supported image under 6MB.",
+        });
+      }
+      if (
+        !Number.isFinite(latitude) ||
+        !Number.isFinite(longitude) ||
+        latitude < -90 ||
+        latitude > 90 ||
+        longitude < -180 ||
+        longitude > 180
+      ) {
+        return res.status(400).json({ message: "Valid coordinates are required" });
+      }
+      if (Number.isNaN(seenAt.getTime())) {
+        return res.status(400).json({ message: "Valid sighting time is required" });
+      }
+
+      const rateLimitKey = String(req.user?.id || req.ip || "anonymous");
+      const now = Date.now();
+      const windowStart = now - 10 * 60 * 1000;
+      const attempts = (truckSightingRateLimits.get(rateLimitKey) || []).filter(
+        (timestamp) => timestamp > windowStart,
+      );
+      if (attempts.length >= 5) {
+        return res.status(429).json({
+          message: "Please wait before submitting another truck sighting.",
+        });
+      }
+      attempts.push(now);
+      truckSightingRateLimits.set(rateLimitKey, attempts);
+
+      const [created] = await db
+        .insert(moderationEvents)
+        .values({
+          eventType: COMMUNITY_TRUCK_SIGHTING_EVENT,
+          severity: "low",
+          reportedResourceType: "truck_sighting",
+          reporterUserId: req.user?.id || null,
+          reason: "Community food truck sighting",
+          description: notes || `Community sighting for ${truckName}`,
+          metadata: {
+            truckName,
+            photoUrl,
+            latitude,
+            longitude,
+            notes: notes || null,
+            locationLabel: locationLabel || null,
+            source,
+            seenAt: seenAt.toISOString(),
+          },
+          status: "open",
+        })
+        .returning({
+          id: moderationEvents.id,
+          createdAt: moderationEvents.createdAt,
+        });
+
+      return res.status(201).json({
+        ...serializeCommunityTruckSighting({
+          id: created?.id,
+          metadata: {
+            truckName,
+            photoUrl,
+            latitude,
+            longitude,
+            notes: notes || null,
+            locationLabel: locationLabel || null,
+            source,
+            seenAt: seenAt.toISOString(),
+          },
+          description: notes || `Community sighting for ${truckName}`,
+          createdAt: created?.createdAt || new Date(),
+        }),
+      });
+    } catch (error) {
+      console.error("Error submitting community truck sighting:", error);
+      return res.status(500).json({ message: "Failed to submit truck sighting" });
+    }
+  });
+
+  app.get("/api/trucks/community-sightings/live", async (req, res) => {
+    try {
+      const latitude = Number(req.query.lat);
+      const longitude = Number(req.query.lng);
+      const radiusKm = Math.min(Math.max(Number(req.query.radiusKm) || 6, 0.5), 25);
+      if (
+        !Number.isFinite(latitude) ||
+        !Number.isFinite(longitude) ||
+        latitude < -90 ||
+        latitude > 90 ||
+        longitude < -180 ||
+        longitude > 180
+      ) {
+        return res.status(400).json({ message: "lat and lng are required" });
+      }
+
+      const since = new Date(Date.now() - COMMUNITY_TRUCK_SIGHTING_TTL_MS);
+      const rows = await db
+        .select({
+          id: moderationEvents.id,
+          metadata: moderationEvents.metadata,
+          description: moderationEvents.description,
+          createdAt: moderationEvents.createdAt,
+        })
+        .from(moderationEvents)
+        .where(
+          and(
+            eq(moderationEvents.eventType, COMMUNITY_TRUCK_SIGHTING_EVENT),
+            eq(moderationEvents.status, "open"),
+            gte(moderationEvents.createdAt, since),
+          ),
+        )
+        .orderBy(desc(moderationEvents.createdAt))
+        .limit(250);
+
+      const sightings = rows
+        .map((row: {
+          id: string;
+          metadata: unknown;
+          description: string | null;
+          createdAt: Date | string;
+        }) => {
+          const metadata = (row.metadata || {}) as Record<string, unknown>;
+          const sightingLat = Number(metadata.latitude);
+          const sightingLng = Number(metadata.longitude);
+          if (!Number.isFinite(sightingLat) || !Number.isFinite(sightingLng)) {
+            return null;
+          }
+          const distanceKm = distanceKmBetween(
+            latitude,
+            longitude,
+            sightingLat,
+            sightingLng,
+          );
+          if (distanceKm > radiusKm) return null;
+          return serializeCommunityTruckSighting({
+            id: row.id,
+            metadata,
+            description: row.description,
+            createdAt: row.createdAt,
+            distanceKm,
+          });
+        })
+        .filter(Boolean);
+
+      res.setHeader("Cache-Control", "public, max-age=10");
+      return res.json(sightings);
+    } catch (error) {
+      console.error("Error loading community truck sightings:", error);
+      return res.status(500).json({ message: "Failed to load truck sightings" });
+    }
+  });
+
   app.get("/api/map/overlays", async (req, res) => {
     try {
       const bounds = parseBounds(req.query as Record<string, unknown>);
@@ -1184,7 +1594,9 @@ export function registerPublicMapRoutes(app: Express) {
         (event) => {
           const lat = parseCoord(event?.hostLatitude);
           const lng = parseCoord(event?.hostLongitude);
-          if (lat === null || lng === null) return false;
+          if (lat === null || lng === null) {
+            return Boolean(String(event?.hostAddress || "").trim());
+          }
           return pointInBounds(expandedBounds, lat, lng);
         },
       );

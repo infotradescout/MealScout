@@ -64,6 +64,7 @@ const AdminAffiliateManagement = lazy(
   () => import("@/pages/AdminAffiliateManagement"),
 );
 const AdminGeoAds = lazy(() => import("@/pages/admin-geo-ads"));
+const AdminMarketHeatmap = lazy(() => import("@/pages/admin-market-heatmap"));
 const AffiliateEarnings = lazy(() => import("@/pages/AffiliateEarnings"));
 const EmptyCountyExperience = lazy(
   () => import("@/pages/EmptyCountyExperience"),
@@ -157,6 +158,7 @@ const PickupCheckoutPage = lazy(() => import("@/pages/pickup-checkout"));
 const OrderConfirmationPage = lazy(() => import("@/pages/order-confirmation"));
 const ScoutPage = lazy(() => import("@/pages/explore-preview"));
 const FoodTruckRush = lazy(() => import("@/pages/food-truck-rush"));
+const HiringPage = lazy(() => import("@/pages/hiring"));
 
 // Loading fallback component
 const PageLoader = () => (
@@ -230,6 +232,9 @@ const publicRoutePrefixes = [
   "/host-location-partner",
   "/for-events",
   "/find-food",
+  "/hiring",
+  "/jobs",
+  "/private-chefs",
   "/event-signup",
   "/events",
   "/food-trucks/",
@@ -408,6 +413,9 @@ function Router() {
             />
             <Route path="/for-events" component={ForEvents} />
             <Route path="/find-food" component={FindFood} />
+            <Route path="/hiring" component={HiringPage} />
+            <Route path="/jobs" component={HiringPage} />
+            <Route path="/private-chefs" component={HiringPage} />
             <Route
               path="/event-signup"
               component={RedirectToEventOnboarding}
@@ -505,6 +513,9 @@ function Router() {
             />
             <Route path="/for-events" component={ForEvents} />
             <Route path="/find-food" component={FindFood} />
+            <Route path="/hiring" component={HiringPage} />
+            <Route path="/jobs" component={HiringPage} />
+            <Route path="/private-chefs" component={HiringPage} />
             <Route path="/search" component={Search} />
             <Route path="/trending" component={Trending} />
             <Route path="/map" component={MapPage} />
@@ -556,6 +567,7 @@ function Router() {
             <Route path="/admin/vac-logs" component={AdminVacLogs} />
             <Route path="/admin/telemetry" component={AdminTelemetry} />
             <Route path="/admin/geo-ads" component={AdminGeoAds} />
+            <Route path="/admin/geo/heatmap" component={AdminMarketHeatmap} />
             <Route
               path="/admin/affiliates"
               component={AdminAffiliateManagement}

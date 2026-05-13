@@ -34,6 +34,7 @@ import { useIsStandalone } from "@/hooks/useIsStandalone";
 export default function ProfilePage() {
   const { user, isAuthenticated } = useAuth();
   const isStandalone = useIsStandalone();
+  const [profileMode, setProfileMode] = useState<"user" | "business">("user");
   const [affiliateTag, setAffiliateTag] = useState<string>("");
   const [tagInput, setTagInput] = useState("");
   const [tagSaving, setTagSaving] = useState(false);
@@ -51,6 +52,182 @@ export default function ProfilePage() {
   });
   const isEventCoordinator = user?.userType === "event_coordinator";
   const showEventCta = user?.userType === "customer" || isEventCoordinator;
+  const isAdminUser = ["admin", "duper_admin", "super_admin"].includes(
+    user?.userType || "",
+  );
+  const hasBusinessProfile =
+    isAdminUser ||
+    [
+      "restaurant_owner",
+      "food_truck",
+      "supplier",
+      "host",
+      "event_coordinator",
+      "staff",
+    ].includes(user?.userType || "");
+  const primaryDashboard =
+    isAdminUser
+      ? {
+          href: "/admin/dashboard",
+          title: "Admin Dashboard",
+          description: "Platform controls, tickets, users, markets, and ops.",
+          Icon: Building2,
+        }
+      : user?.userType === "staff"
+        ? {
+            href: "/staff",
+            title: "Staff Dashboard",
+            description: "Staff tools, assignments, and admin support.",
+            Icon: Building2,
+          }
+        : isEventCoordinator
+          ? {
+              href: "/event-coordinator/dashboard",
+              title: "Event Dashboard",
+              description: "Manage event requests and truck outreach.",
+              Icon: Calendar,
+            }
+          : user?.userType === "supplier"
+            ? {
+                href: "/supplier/dashboard",
+                title: "Supplier Dashboard",
+                description: "Manage supplier profile, orders, and demand.",
+                Icon: Store,
+              }
+            : user?.userType === "restaurant_owner" ||
+                user?.userType === "food_truck"
+              ? {
+                  href: "/restaurant-owner-dashboard",
+                  title:
+                    user?.userType === "food_truck"
+                      ? "Food Truck Dashboard"
+                      : "Business Dashboard",
+                  description:
+                    "Manage profile, deals, menu, bookings, and publishing.",
+                  Icon: Store,
+                }
+              : {
+                  href: "/user-dashboard",
+                  title: "My Dashboard",
+                  description: "Saved places, recommendations, deals, and activity.",
+                  Icon: User,
+                };
+  const dashboardShortcuts = [
+    primaryDashboard,
+    ...(user?.userType === "restaurant_owner" || user?.userType === "food_truck"
+      ? [
+          {
+            href: "/parking-pass?tab=schedule",
+            title: "Parking Pass",
+            description: "Schedules, bookings, live map, and one-tap publishing.",
+            Icon: MapPin,
+          },
+          {
+            href: "/menu-builder",
+            title: "Menu Builder",
+            description: "Update menu, photos, and customer-facing items.",
+            Icon: Store,
+          },
+        ]
+      : []),
+    ...(isAdminUser
+      ? [
+          {
+            href: "/admin/tickets",
+            title: "Support Tickets",
+            description: "Review user tickets and direct super-admin messages.",
+            Icon: HelpCircle,
+          },
+          {
+            href: "/admin/geo/heatmap",
+            title: "Market Heatmap",
+            description: "County metrics, coverage, relationships, and notes.",
+            Icon: MapPin,
+          },
+        ]
+      : []),
+  ];
+  const businessProfileShortcuts = [
+    primaryDashboard,
+    ...(user?.userType === "restaurant_owner" || user?.userType === "food_truck"
+      ? [
+          {
+            href: "/restaurant-owner-dashboard?setup=profile",
+            title: "Business Profile",
+            description: "Edit public business details, claim status, and visibility.",
+            Icon: Store,
+          },
+          {
+            href: "/parking-pass?tab=schedule",
+            title: "Truck Schedule",
+            description: "Bookings, manual stops, live map, and social publishing.",
+            Icon: MapPin,
+          },
+          {
+            href: "/menu-builder",
+            title: "Menu and Photos",
+            description: "Keep menus, imports, and customer-facing items current.",
+            Icon: Store,
+          },
+        ]
+      : []),
+    ...(user?.userType === "supplier"
+      ? [
+          {
+            href: "/supplier/dashboard",
+            title: "Supplier Profile",
+            description: "Business info, delivery area, orders, and demand.",
+            Icon: Store,
+          },
+        ]
+      : []),
+    ...(user?.userType === "host"
+      ? [
+          {
+            href: "/host/dashboard",
+            title: "Host Profile",
+            description: "Location, parking inventory, pricing, and payouts.",
+            Icon: Building2,
+          },
+          {
+            href: "/parking-pass?setup=host",
+            title: "Parking Pass Host",
+            description: "Listings, availability, blackout dates, and bookings.",
+            Icon: MapPin,
+          },
+        ]
+      : []),
+    ...(isEventCoordinator
+      ? [
+          {
+            href: "/event-coordinator/dashboard",
+            title: "Event Profile",
+            description: "Event requests, organizer details, and vendor coordination.",
+            Icon: Calendar,
+          },
+        ]
+      : []),
+  ];
+  const accountShortcuts = [
+    {
+      href: "/profile/settings",
+      title: "Profile Settings",
+      description: "Edit preferences, privacy, profile studio, and public profile.",
+      Icon: Settings,
+    },
+    {
+      href: "/profile/notifications",
+      title: "Notifications",
+      description: "Control email, in-app, and alert preferences.",
+      Icon: Bell,
+    },
+    {
+      href: "/profile/help",
+      title: "Help & Support",
+      description: "Open tickets, message super admin, and view support history.",
+      Icon: HelpCircle,
+    },
+  ];
   const eventCta = isEventCoordinator
     ? {
         href: "/event-coordinator/dashboard",
@@ -292,8 +469,108 @@ export default function ProfilePage() {
         </Card>
       </header>
 
-      {/* Stats Section - Removed mock data */}
+      {/* Profile Home */}
       <div className="px-4 sm:px-6 py-6">
+        {hasBusinessProfile && (
+          <div className="mb-4 grid grid-cols-2 gap-2 rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-1 shadow-clean">
+            <Button
+              type="button"
+              variant={profileMode === "user" ? "default" : "ghost"}
+              onClick={() => setProfileMode("user")}
+              className="rounded-xl"
+              data-testid="button-profile-mode-user"
+            >
+              User Profile
+            </Button>
+            <Button
+              type="button"
+              variant={profileMode === "business" ? "default" : "ghost"}
+              onClick={() => setProfileMode("business")}
+              className="rounded-xl"
+              data-testid="button-profile-mode-business"
+            >
+              Business Profile
+            </Button>
+          </div>
+        )}
+
+        {profileMode === "user" || !hasBusinessProfile ? (
+          <div className="mb-6">
+            <Link href="/profile/settings">
+            <Card className="border border-[color:var(--border-subtle)] bg-[var(--bg-card)] hover:bg-[var(--bg-surface-muted)] transition-colors shadow-clean-lg">
+              <CardContent className="p-5">
+                <div className="flex items-start gap-4">
+                  <div className="w-12 h-12 rounded-2xl action-primary flex items-center justify-center">
+                    <Settings className="w-6 h-6 text-[color:var(--action-primary-text)]" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-lg font-bold text-foreground">
+                      Profile Settings
+                    </p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Edit your profile, privacy, public profile studio, notifications,
+                      language, and local preferences.
+                    </p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Badge variant="secondary">Profile</Badge>
+                      <Badge variant="secondary">Privacy</Badge>
+                      <Badge variant="secondary">Notifications</Badge>
+                      <Badge variant="secondary">Public page</Badge>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-muted-foreground mt-1" />
+                </div>
+              </CardContent>
+            </Card>
+            </Link>
+          </div>
+        ) : (
+          <div className="mb-6">
+            <Card className="border border-[color:var(--border-subtle)] bg-[var(--bg-card)] shadow-clean-lg">
+              <CardContent className="p-5 space-y-4">
+                <div className="flex items-start gap-4">
+                  <div className="w-12 h-12 rounded-2xl action-primary flex items-center justify-center">
+                    <Store className="w-6 h-6 text-[color:var(--action-primary-text)]" />
+                  </div>
+                  <div>
+                    <p className="text-lg font-bold text-foreground">
+                      Business Profile
+                    </p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Manage business-facing profile details, menus, schedules,
+                      live map presence, bookings, and public visibility.
+                    </p>
+                  </div>
+                </div>
+                <div className="grid gap-3 lg:grid-cols-3">
+                  {businessProfileShortcuts.map((shortcut) => (
+                    <Link key={shortcut.href} href={shortcut.href}>
+                      <Card className="h-full border border-[color:var(--border-subtle)] bg-[var(--bg-card)] hover:bg-[var(--bg-surface-muted)] transition-colors shadow-clean">
+                        <CardContent className="p-4">
+                          <div className="flex items-start gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-[var(--bg-surface-muted)] flex items-center justify-center">
+                              <shortcut.Icon className="w-5 h-5 text-[color:var(--accent-text)]" />
+                            </div>
+                            <div className="flex-1">
+                              <p className="font-semibold text-foreground">
+                                {shortcut.title}
+                              </p>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                {shortcut.description}
+                              </p>
+                            </div>
+                            <ChevronRight className="w-4 h-4 text-muted-foreground mt-1" />
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </Link>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
         <Card className="border border-[color:var(--border-subtle)]">
           <CardContent className="p-6">
             <div className="space-y-3 text-sm text-[color:var(--text-secondary)]">
@@ -310,6 +587,36 @@ export default function ProfilePage() {
             </div>
           </CardContent>
         </Card>
+
+        <div className="mt-4 mb-6">
+          <h2 className="text-sm font-semibold text-[color:var(--text-muted)] uppercase tracking-wide mb-3">
+            Quick Actions
+          </h2>
+          <div className="grid gap-3 lg:grid-cols-3">
+            {[...accountShortcuts.filter((item) => item.href !== "/profile/settings"), ...dashboardShortcuts].map((shortcut) => (
+              <Link key={shortcut.href} href={shortcut.href}>
+                <Card className="h-full border border-[color:var(--border-subtle)] bg-[var(--bg-card)] hover:bg-[var(--bg-surface-muted)] transition-colors shadow-clean">
+                  <CardContent className="p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-[var(--bg-surface-muted)] flex items-center justify-center">
+                        <shortcut.Icon className="w-5 h-5 text-[color:var(--accent-text)]" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-semibold text-foreground">
+                          {shortcut.title}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {shortcut.description}
+                        </p>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-muted-foreground mt-1" />
+                    </div>
+                  </CardContent>
+                </Card>
+              </Link>
+            ))}
+          </div>
+        </div>
 
         <Card className="mt-4 border border-[color:var(--border-subtle)] bg-[var(--bg-card)] shadow-clean">
           <CardContent className="p-4">

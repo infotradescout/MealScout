@@ -10,6 +10,18 @@ import { db } from "./db";
 import { affiliateShareEvents } from "@shared/schema";
 import { ensureAffiliateTag, resolveAffiliateUserId } from "./affiliateTagService";
 
+function inferShareResource(path: string): {
+  resourceType: string;
+  resourceId: string | null;
+} {
+  const parts = path.split("?")[0].split("/").filter(Boolean);
+  const resourceType = parts[0] || "page";
+  const resourceId = parts.find((part) =>
+    /^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(part),
+  ) || null;
+  return { resourceType, resourceId };
+}
+
 export default function setupShareRoutes(app: Express) {
   /**
    * POST /api/share/generate
@@ -44,9 +56,13 @@ export default function setupShareRoutes(app: Express) {
       const shareLink = generateShareableUrl(path, baseUrl, affiliateTag);
 
       if (affiliateUserId) {
+        const resource = inferShareResource(path);
         await db.insert(affiliateShareEvents).values({
           affiliateUserId,
-          sourcePath: path,
+          resourceType: resource.resourceType,
+          resourceId: resource.resourceId,
+          destinationUrl: path,
+          shareMethod: "link",
         });
       }
 

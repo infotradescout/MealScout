@@ -124,6 +124,10 @@ function normalizeEmail(value: unknown): string | null {
   return email || null;
 }
 
+function isUniqueViolation(error: unknown): boolean {
+  return Boolean((error as any)?.code === "23505");
+}
+
 function getSafePublicSignupUserType(userType: User["userType"]): User["userType"] {
   if (isAdminUserType(userType) || userType === "staff") return "customer";
   const allowed = new Set<string>([
@@ -805,6 +809,10 @@ export function createUsersRepository() {
       tempPassword: string;
     }): Promise<User> {
       const hashedPassword = await bcrypt.hash(userData.tempPassword, 10);
+      const normalizedEmail = normalizeEmail(userData.email);
+      if (!normalizedEmail) {
+        throw new Error("Email is required");
+      }
       const affiliatePercent =
         userData.userType === "staff"
           ? 25
@@ -812,20 +820,52 @@ export function createUsersRepository() {
             ? 0
             : undefined;
 
-      const [user] = await db
-        .insert(users)
-        .values({
-          email: userData.email,
-          firstName: userData.firstName,
-          lastName: userData.lastName,
-          phone: userData.phone,
-          userType: userData.userType,
-          passwordHash: hashedPassword,
-          mustResetPassword: true,
-          emailVerified: true,
-          ...(affiliatePercent !== undefined ? { affiliatePercent } : {}),
-        })
-        .returning();
+      let user: User;
+      try {
+        const [created] = await db
+          .insert(users)
+          .values({
+            email: normalizedEmail,
+            firstName: userData.firstName,
+            lastName: userData.lastName,
+            phone: userData.phone,
+            userType: userData.userType,
+            passwordHash: hashedPassword,
+            mustResetPassword: true,
+            emailVerified: true,
+            ...(affiliatePercent !== undefined ? { affiliatePercent } : {}),
+          })
+          .returning();
+        user = created;
+      } catch (error) {
+        if (!isUniqueViolation(error)) throw error;
+        const existing = await this.getUserByEmail(normalizedEmail);
+        if (!existing) throw error;
+        const [updated] = await db
+          .update(users)
+          .set({
+            firstName: userData.firstName || existing.firstName,
+            lastName: userData.lastName || existing.lastName,
+            phone: userData.phone || existing.phone,
+            userType: isAdminUserType(userData.userType)
+              ? existing.userType
+              : userData.userType,
+            passwordHash: hashedPassword,
+            mustResetPassword: true,
+            emailVerified: true,
+            ...(affiliatePercent !== undefined ? { affiliatePercent } : {}),
+            updatedAt: new Date(),
+          })
+          .where(eq(users.id, existing.id))
+          .returning();
+        user = updated;
+        void recordAuthLinkEvent({
+          userId: user.id,
+          provider: "manual",
+          matchedBy: "duplicate_key",
+          email: normalizedEmail,
+        });
+      }
 
       if (shouldAssignAffiliateTag(user.userType)) {
         ensureAffiliateTag(user.id).catch((error) =>
@@ -860,21 +900,55 @@ export function createUsersRepository() {
             ? 0
             : undefined;
       const shouldAutoVerify = isAdminUserType(data.userType);
+      const normalizedEmail = normalizeEmail(data.email);
+      if (!normalizedEmail) {
+        throw new Error("Email is required");
+      }
 
-      const [user] = await db
-        .insert(users)
-        .values({
-          email: data.email,
-          firstName: data.firstName,
-          lastName: data.lastName,
-          phone: data.phone,
-          userType: data.userType,
-          passwordHash: null,
-          mustResetPassword: false,
-          emailVerified: shouldAutoVerify,
-          ...(affiliatePercent !== undefined ? { affiliatePercent } : {}),
-        })
-        .returning();
+      let user: User;
+      try {
+        const [created] = await db
+          .insert(users)
+          .values({
+            email: normalizedEmail,
+            firstName: data.firstName,
+            lastName: data.lastName,
+            phone: data.phone,
+            userType: data.userType,
+            passwordHash: null,
+            mustResetPassword: false,
+            emailVerified: shouldAutoVerify,
+            ...(affiliatePercent !== undefined ? { affiliatePercent } : {}),
+          })
+          .returning();
+        user = created;
+      } catch (error) {
+        if (!isUniqueViolation(error)) throw error;
+        const existing = await this.getUserByEmail(normalizedEmail);
+        if (!existing) throw error;
+        const [updated] = await db
+          .update(users)
+          .set({
+            firstName: data.firstName || existing.firstName,
+            lastName: data.lastName || existing.lastName,
+            phone: data.phone || existing.phone,
+            userType: isAdminUserType(data.userType)
+              ? existing.userType
+              : data.userType,
+            emailVerified: shouldAutoVerify ? true : existing.emailVerified,
+            ...(affiliatePercent !== undefined ? { affiliatePercent } : {}),
+            updatedAt: new Date(),
+          })
+          .where(eq(users.id, existing.id))
+          .returning();
+        user = updated;
+        void recordAuthLinkEvent({
+          userId: user.id,
+          provider: "invite",
+          matchedBy: "duplicate_key",
+          email: normalizedEmail,
+        });
+      }
 
       if (shouldAssignAffiliateTag(user.userType)) {
         ensureAffiliateTag(user.id).catch((error) =>

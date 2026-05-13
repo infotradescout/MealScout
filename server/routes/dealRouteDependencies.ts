@@ -9,6 +9,10 @@ import {
   socialPostQueue,
 } from "@shared/schema";
 import { and, eq, isNull, isNotNull, or } from "drizzle-orm";
+import {
+  markSocialPostResult,
+  publishSocialQueueItem,
+} from "../services/socialPublishing";
 
 const haversineKm = (
   lat1: number,
@@ -118,30 +122,6 @@ const escapeHtml = (value: string) =>
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
-
-const postToFacebookPage = async (message: string, link?: string | null) => {
-  const pageId = process.env.MEALSCOUT_FB_PAGE_ID;
-  const pageToken = process.env.MEALSCOUT_FB_PAGE_TOKEN;
-  if (!pageId || !pageToken) {
-    return { ok: false, error: "Missing Facebook page credentials" };
-  }
-  const body = new URLSearchParams();
-  body.set("message", link ? `${message} ${link}` : message);
-  body.set("access_token", pageToken);
-
-  const res = await fetch(`https://graph.facebook.com/v19.0/${pageId}/feed`, {
-    method: "POST",
-    body,
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    return {
-      ok: false,
-      error: data?.error?.message || "Facebook post failed",
-    };
-  }
-  return { ok: true, postId: data?.id };
-};
 
 export async function notifyNearbyDealSubscribers(params: {
   creatorUserId: string;
@@ -327,25 +307,24 @@ export const queueSocialPost = async (payload: {
   target?: string | null;
   message: string;
   link?: string | null;
+  imageUrl?: string | null;
+  restaurantId?: string | null;
+  createdByUserId?: string | null;
+  source?: string | null;
 }) => {
-  let status = "pending";
-  let errorMessage: string | null = null;
-
-  if (payload.platform === "facebook") {
-    const result = await postToFacebookPage(payload.message, payload.link);
-    status = result.ok ? "posted" : "failed";
-    if (!result.ok) {
-      errorMessage = result.error || "Facebook post failed";
-    }
-  }
-
-  await db.insert(socialPostQueue).values({
+  const [row] = await db.insert(socialPostQueue).values({
     platform: payload.platform,
     target: payload.target || null,
     message: payload.message,
     link: payload.link || null,
-    status,
-    errorMessage,
+    imageUrl: payload.imageUrl || null,
+    restaurantId: payload.restaurantId || null,
+    createdByUserId: payload.createdByUserId || null,
+    source: payload.source || "deal_auto_publish",
+    status: "pending",
     updatedAt: new Date(),
-  });
+  }).returning();
+
+  const result = await publishSocialQueueItem(row);
+  await markSocialPostResult(row, result);
 };

@@ -24,8 +24,8 @@ import {
   PASSWORD_REQUIREMENTS,
 } from "./utils/passwordPolicy";
 import { db } from "./db";
-import { users } from "@shared/schema";
-import { eq } from "drizzle-orm";
+import { emailSequenceSends, users } from "@shared/schema";
+import { eq, or, sql } from "drizzle-orm";
 import {
   ensureAffiliateTag,
   resolveAffiliateUserId,
@@ -314,6 +314,97 @@ export async function setupUnifiedAuth(app: Express) {
     }
   };
 
+  const normalizeEmailForLookup = (value: unknown): string | null => {
+    const email = String(value || "")
+      .trim()
+      .toLowerCase();
+    return email.includes("@") ? email : null;
+  };
+
+  const findExistingOAuthUser = async (
+    provider: "google" | "facebook",
+    providerId: string | null | undefined,
+    email: string | null | undefined,
+  ): Promise<User | null> => {
+    const normalizedEmail = normalizeEmailForLookup(email);
+    const clauses = [];
+    if (provider === "google" && providerId) {
+      clauses.push(eq(users.googleId, providerId));
+    }
+    if (provider === "facebook" && providerId) {
+      clauses.push(eq(users.facebookId, providerId));
+    }
+    if (normalizedEmail) {
+      clauses.push(sql`lower(${users.email}) = ${normalizedEmail}`);
+    }
+    if (clauses.length === 0) return null;
+
+    const [existing] = await db
+      .select()
+      .from(users)
+      .where(clauses.length === 1 ? clauses[0] : or(...clauses))
+      .limit(1);
+    return existing || null;
+  };
+
+  const reserveAccountCreationEmail = async (
+    user: User,
+    metadata: Record<string, unknown>,
+  ): Promise<boolean> => {
+    const inserted = await db
+      .insert(emailSequenceSends)
+      .values({
+        userId: user.id,
+        sequence: "account_creation",
+        step: 1,
+        metadata,
+      } as any)
+      .onConflictDoNothing()
+      .returning({ id: emailSequenceSends.id });
+    return inserted.length > 0;
+  };
+
+  const sendAccountCreationEmails = async (
+    user: User,
+    req: any,
+    params: {
+      welcomeLabel: string;
+      signupMethod: string;
+      intendedNextPath?: string | null;
+    },
+  ) => {
+    try {
+      const reserved = await reserveAccountCreationEmail(user, {
+        signupMethod: params.signupMethod,
+        welcomeLabel: params.welcomeLabel,
+        source: "unified_auth",
+      });
+      if (!reserved) {
+        console.log("[auth] Account creation email already sent; skipping", {
+          userId: user.id,
+          signupMethod: params.signupMethod,
+        });
+        return;
+      }
+
+      void sendWelcomeOrVerification(
+        user,
+        req,
+        params.welcomeLabel,
+        params.intendedNextPath,
+      );
+      emailService
+        .sendAdminSignupNotification(user, {
+          signupMethod: params.signupMethod,
+        })
+        .catch((err) =>
+          console.error("Failed to send admin signup notification:", err),
+        );
+    } catch (error) {
+      console.error("[auth] Failed to queue account creation emails:", error);
+    }
+  };
+
   const oauthUserTypeAllowList = new Set<User["userType"]>([
     "customer",
     "restaurant_owner",
@@ -457,6 +548,11 @@ export async function setupUnifiedAuth(app: Express) {
               hasProfileImage: Boolean(userData.profileImageUrl),
             });
 
+            const existingOAuthUser = await findExistingOAuthUser(
+              "google",
+              userData.googleId,
+              userData.email,
+            );
             const user = await storage.upsertUserByAuth(
               "google",
               userData,
@@ -482,16 +578,12 @@ export async function setupUnifiedAuth(app: Express) {
               })
               .catch((err) => console.error("Failed to emit LISA claim:", err));
 
-            // Send welcome email with verification link (don't block auth flow)
-            void sendWelcomeOrVerification(user, req, "customer");
-            // Send admin signup notification with context asynchronously
-            emailService
-              .sendAdminSignupNotification(user, {
+            if (!existingOAuthUser) {
+              void sendAccountCreationEmails(user, req, {
+                welcomeLabel: "customer",
                 signupMethod: "google",
-              })
-              .catch((err) =>
-                console.error("Failed to send admin signup notification:", err),
-              );
+              });
+            }
             return done(null, user);
           } catch (error) {
             console.error("❌ Google customer authentication error:", error);
@@ -561,6 +653,11 @@ export async function setupUnifiedAuth(app: Express) {
             });
 
             const userType = getOauthUserType(req, "restaurant_owner");
+            const existingOAuthUser = await findExistingOAuthUser(
+              "google",
+              userData.googleId,
+              userData.email,
+            );
             const user = await storage.upsertUserByAuth(
               "google",
               userData,
@@ -590,16 +687,12 @@ export async function setupUnifiedAuth(app: Express) {
               })
               .catch((err) => console.error("Failed to emit LISA claim:", err));
 
-            // Send welcome email with verification link (don't block auth flow)
-            void sendWelcomeOrVerification(user, req, "restaurant owner");
-            // Send admin signup notification with context asynchronously
-            emailService
-              .sendAdminSignupNotification(user, {
+            if (!existingOAuthUser) {
+              void sendAccountCreationEmails(user, req, {
+                welcomeLabel: "restaurant owner",
                 signupMethod: "google",
-              })
-              .catch((err) =>
-                console.error("Failed to send admin signup notification:", err),
-              );
+              });
+            }
             return done(null, user);
           } catch (error) {
             console.error("❌ Google restaurant authentication error:", error);
@@ -812,6 +905,11 @@ export async function setupUnifiedAuth(app: Express) {
               | "mealscout"
               | "tradescout";
             const userType = getOauthUserType(req, "customer");
+            const existingOAuthUser = await findExistingOAuthUser(
+              "facebook",
+              userData.facebookId,
+              userData.email,
+            );
             const user = await storage.upsertUserByAuth(
               "facebook",
               userData,
@@ -839,16 +937,12 @@ export async function setupUnifiedAuth(app: Express) {
               })
               .catch((err) => console.error("Failed to emit LISA claim:", err));
 
-            // Send welcome email with verification link (don't block auth flow)
-            void sendWelcomeOrVerification(user, req, "customer");
-            // Send admin signup notification with context asynchronously
-            emailService
-              .sendAdminSignupNotification(user, {
+            if (!existingOAuthUser) {
+              void sendAccountCreationEmails(user, req, {
+                welcomeLabel: "customer",
                 signupMethod: "facebook",
-              })
-              .catch((err) =>
-                console.error("Failed to send admin signup notification:", err),
-              );
+              });
+            }
             return done(null, user);
           } catch (error) {
             console.error("❌ Facebook authentication error:", error);
@@ -1133,16 +1227,11 @@ export async function setupUnifiedAuth(app: Express) {
       const intendedNextPath =
         getSafeRedirectPath(req.body?.intendedNextPath) || "/scout";
 
-      // Send welcome email with verification link (don't block auth flow)
-      void sendWelcomeOrVerification(user, req, "customer", intendedNextPath);
-      // Send admin signup notification with context asynchronously
-      emailService
-        .sendAdminSignupNotification(user, {
-          signupMethod: "email",
-        })
-        .catch((err) =>
-          console.error("Failed to send admin signup notification:", err),
-        );
+      void sendAccountCreationEmails(user, req, {
+        welcomeLabel: "customer",
+        signupMethod: "email",
+        intendedNextPath,
+      });
 
       // Require email verification before first login/session.
       res.status(201).json({
@@ -1249,21 +1338,11 @@ export async function setupUnifiedAuth(app: Express) {
                 ? "bar"
                 : "restaurant owner";
 
-      // Send welcome email with verification link (don't block auth flow)
-      void sendWelcomeOrVerification(
-        user,
-        req,
-        verificationAccountLabel,
+      void sendAccountCreationEmails(user, req, {
+        welcomeLabel: verificationAccountLabel,
+        signupMethod: "email",
         intendedNextPath,
-      );
-      // Send admin signup notification with context asynchronously
-      emailService
-        .sendAdminSignupNotification(user, {
-          signupMethod: "email",
-        })
-        .catch((err) =>
-          console.error("Failed to send admin signup notification:", err),
-        );
+      });
 
       // Require email verification before first login/session.
       res.status(201).json({
@@ -1352,16 +1431,11 @@ export async function setupUnifiedAuth(app: Express) {
         getSafeRedirectPath(req.body?.intendedNextPath) ||
         "/supplier/dashboard";
 
-      // Send welcome email with verification link (don't block auth flow)
-      void sendWelcomeOrVerification(user, req, "supplier", intendedNextPath);
-      // Send admin signup notification with context asynchronously
-      emailService
-        .sendAdminSignupNotification(user, {
-          signupMethod: "email",
-        })
-        .catch((err) =>
-          console.error("Failed to send admin signup notification:", err),
-        );
+      void sendAccountCreationEmails(user, req, {
+        welcomeLabel: "supplier",
+        signupMethod: "email",
+        intendedNextPath,
+      });
 
       // Require email verification before first login/session.
       res.status(201).json({

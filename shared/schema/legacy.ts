@@ -188,12 +188,16 @@ export const restaurants = pgTable("restaurants", {
   claimedFromImportId: varchar("claimed_from_import_id"),
   latitude: decimal("latitude", { precision: 10, scale: 8 }),
   longitude: decimal("longitude", { precision: 11, scale: 8 }),
+  countyFips: varchar("county_fips"),
+  countyName: varchar("county_name"),
+  geoEnrichedAt: timestamp("geo_enriched_at"),
   // Food truck specific fields
   isFoodTruck: boolean("is_food_truck").default(false),
   mobileOnline: boolean("mobile_online").default(false),
   currentLatitude: decimal("current_latitude", { precision: 10, scale: 8 }),
   currentLongitude: decimal("current_longitude", { precision: 11, scale: 8 }),
   lastBroadcastAt: timestamp("last_broadcast_at"),
+  liveUntilAt: timestamp("live_until_at"),
   // Operating hours as JSONB: { mon: [{ open: "HH:MM", close: "HH:MM" }], tue: [...], ... }
   operatingHours: jsonb("operating_hours"),
   isActive: boolean("is_active").default(true),
@@ -338,6 +342,9 @@ export const truckImportListings = pgTable(
     facebookPageUrl: varchar("facebook_page_url"),
     latitude: decimal("latitude", { precision: 10, scale: 8 }),
     longitude: decimal("longitude", { precision: 11, scale: 8 }),
+    countyFips: varchar("county_fips"),
+    countyName: varchar("county_name"),
+    geoEnrichedAt: timestamp("geo_enriched_at"),
     confidenceScore: integer("confidence_score").default(0),
     status: varchar("status").notNull().default("unclaimed"), // 'unclaimed' | 'claim_requested' | 'claimed' | 'rejected' | 'duplicate'
     invitedUserId: varchar("invited_user_id").references(() => users.id, {
@@ -398,6 +405,9 @@ export const suppliers = pgTable(
     state: varchar("state"),
     latitude: decimal("latitude", { precision: 10, scale: 8 }),
     longitude: decimal("longitude", { precision: 11, scale: 8 }),
+    countyFips: varchar("county_fips"),
+    countyName: varchar("county_name"),
+    geoEnrichedAt: timestamp("geo_enriched_at"),
     contactPhone: varchar("contact_phone"),
     contactEmail: varchar("contact_email"),
     isActive: boolean("is_active").default(true),
@@ -769,6 +779,9 @@ export const supplyStoreLocations = pgTable(
     postalCode: varchar("postal_code"),
     latitude: decimal("latitude", { precision: 10, scale: 8 }),
     longitude: decimal("longitude", { precision: 11, scale: 8 }),
+    countyFips: varchar("county_fips"),
+    countyName: varchar("county_name"),
+    geoEnrichedAt: timestamp("geo_enriched_at"),
     isActive: boolean("is_active").default(true),
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at").defaultNow(),
@@ -1400,6 +1413,9 @@ export const userAddresses = pgTable(
     postalCode: varchar("postal_code"),
     latitude: decimal("latitude", { precision: 10, scale: 8 }),
     longitude: decimal("longitude", { precision: 11, scale: 8 }),
+    countyFips: varchar("county_fips"),
+    countyName: varchar("county_name"),
+    geoEnrichedAt: timestamp("geo_enriched_at"),
     spotImageUrl: text("spot_image_url"),
     isDefault: boolean("is_default").default(false),
     createdAt: timestamp("created_at").defaultNow(),
@@ -3268,7 +3284,11 @@ export const affiliateShareEvents = pgTable(
     affiliateUserId: varchar("affiliate_user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    sourcePath: text("source_path").notNull(),
+    resourceType: varchar("resource_type").notNull(),
+    resourceId: varchar("resource_id"),
+    destinationUrl: text("destination_url").notNull(),
+    shareMethod: varchar("share_method"),
+    metadata: jsonb("metadata"),
     createdAt: timestamp("created_at").defaultNow(),
   },
   (table) => [
@@ -3913,6 +3933,9 @@ export const restaurantSubmissions = pgTable(
     category: varchar("category"), // 'pizza' | 'burger' | 'chinese', etc
     county: varchar("county"),
     state: varchar("state"),
+    countyFips: varchar("county_fips"),
+    countyName: varchar("county_name"),
+    geoEnrichedAt: timestamp("geo_enriched_at"),
     latitude: decimal("latitude", { precision: 10, scale: 8 }),
     longitude: decimal("longitude", { precision: 11, scale: 8 }),
     description: text("description"), // Why they like it
@@ -4947,10 +4970,119 @@ export const adminDailyReports = pgTable(
   ],
 );
 
+// Admin market intelligence: stored county-level facts for ops heatmaps.
+export const marketCounties = pgTable(
+  "market_counties",
+  {
+    countyFips: varchar("county_fips").primaryKey(),
+    countyName: varchar("county_name").notNull(),
+    stateCode: varchar("state_code").notNull(),
+    stateName: varchar("state_name"),
+    centroidLat: decimal("centroid_lat", { precision: 10, scale: 8 }),
+    centroidLng: decimal("centroid_lng", { precision: 11, scale: 8 }),
+    metadata: jsonb("metadata")
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_market_counties_state").on(table.stateCode),
+    index("idx_market_counties_name_state").on(
+      table.countyName,
+      table.stateCode,
+    ),
+  ],
+);
+
+export const marketMetrics = pgTable(
+  "market_metrics",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    countyFips: varchar("county_fips")
+      .notNull()
+      .references(() => marketCounties.countyFips, { onDelete: "cascade" }),
+    metricKey: varchar("metric_key").notNull(),
+    metricValue: integer("metric_value").notNull().default(0),
+    timeframe: varchar("timeframe").notNull().default("30d"),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_market_metrics_county").on(table.countyFips),
+    index("idx_market_metrics_key").on(table.metricKey),
+    index("idx_market_metrics_timeframe").on(table.timeframe),
+    unique("uq_market_metrics_county_key_timeframe").on(
+      table.countyFips,
+      table.metricKey,
+      table.timeframe,
+    ),
+  ],
+);
+
+export const marketNotes = pgTable(
+  "market_notes",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    countyFips: varchar("county_fips")
+      .notNull()
+      .references(() => marketCounties.countyFips, { onDelete: "cascade" }),
+    authorUserId: varchar("author_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    category: varchar("category").notNull().default("general"),
+    content: text("content").notNull(),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_market_notes_county").on(table.countyFips),
+    index("idx_market_notes_category").on(table.category),
+    index("idx_market_notes_created").on(table.createdAt),
+  ],
+);
+
+export const marketEntities = pgTable(
+  "market_entities",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    countyFips: varchar("county_fips")
+      .notNull()
+      .references(() => marketCounties.countyFips, { onDelete: "cascade" }),
+    entityType: varchar("entity_type").notNull(),
+    entityId: varchar("entity_id"),
+    label: varchar("label").notNull(),
+    status: varchar("status").notNull().default("active"),
+    metadata: jsonb("metadata")
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_market_entities_county").on(table.countyFips),
+    index("idx_market_entities_type").on(table.entityType),
+    index("idx_market_entities_status").on(table.status),
+  ],
+);
+
 export type RequestLog = typeof requestLogs.$inferSelect;
 export type InsertRequestLog = typeof requestLogs.$inferInsert;
 export type AdminDailyReport = typeof adminDailyReports.$inferSelect;
 export type InsertAdminDailyReport = typeof adminDailyReports.$inferInsert;
+export type MarketCounty = typeof marketCounties.$inferSelect;
+export type InsertMarketCounty = typeof marketCounties.$inferInsert;
+export type MarketMetric = typeof marketMetrics.$inferSelect;
+export type InsertMarketMetric = typeof marketMetrics.$inferInsert;
+export type MarketNote = typeof marketNotes.$inferSelect;
+export type InsertMarketNote = typeof marketNotes.$inferInsert;
+export type MarketEntity = typeof marketEntities.$inferSelect;
+export type InsertMarketEntity = typeof marketEntities.$inferInsert;
 
 // Email sequences (drip campaigns): idempotent send tracking
 export const emailSequenceSends = pgTable(
@@ -5168,6 +5300,15 @@ export const socialPostQueue = pgTable(
     target: varchar("target"),
     message: text("message").notNull(),
     link: text("link"),
+    imageUrl: text("image_url"),
+    restaurantId: varchar("restaurant_id").references(() => restaurants.id, {
+      onDelete: "cascade",
+    }),
+    createdByUserId: varchar("created_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    source: varchar("source"),
+    metadata: jsonb("metadata"),
     status: varchar("status").notNull().default("pending"),
     errorMessage: text("error_message"),
     createdAt: timestamp("created_at").defaultNow(),
@@ -5182,6 +5323,53 @@ export const socialPostQueue = pgTable(
 
 export type SocialPostQueueItem = typeof socialPostQueue.$inferSelect;
 export type InsertSocialPostQueueItem = typeof socialPostQueue.$inferInsert;
+
+export const socialPublishingConnections = pgTable(
+  "social_publishing_connections",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    restaurantId: varchar("restaurant_id")
+      .notNull()
+      .references(() => restaurants.id, { onDelete: "cascade" }),
+    createdByUserId: varchar("created_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    platform: varchar("platform").notNull(),
+    displayName: varchar("display_name"),
+    externalAccountId: varchar("external_account_id"),
+    externalAccountUrl: text("external_account_url"),
+    accessToken: text("access_token"),
+    refreshToken: text("refresh_token"),
+    tokenExpiresAt: timestamp("token_expires_at"),
+    scopes: jsonb("scopes")
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    metadata: jsonb("metadata")
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    status: varchar("status").notNull().default("active"),
+    lastPublishAt: timestamp("last_publish_at"),
+    lastError: text("last_error"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_social_publish_connections_restaurant").on(table.restaurantId),
+    index("idx_social_publish_connections_platform").on(table.platform),
+    index("idx_social_publish_connections_status").on(table.status),
+    unique("uq_social_publish_connection_restaurant_platform").on(
+      table.restaurantId,
+      table.platform,
+    ),
+  ],
+);
+
+export type SocialPublishingConnection =
+  typeof socialPublishingConnections.$inferSelect;
+export type InsertSocialPublishingConnection =
+  typeof socialPublishingConnections.$inferInsert;
 
 export const searchQueryEvents = pgTable(
   "search_query_events",
@@ -5849,6 +6037,162 @@ export const deliveryJobApplications = pgTable(
   ],
 );
 
+// ── HIRING MARKETPLACE + PRIVATE CHEF LEADS ─────────────────────────────────
+
+export const workerProfiles = pgTable(
+  "worker_profiles",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    userId: varchar("user_id")
+      .notNull()
+      .unique()
+      .references(() => users.id, { onDelete: "cascade" }),
+    displayName: varchar("display_name").notNull(),
+    headline: varchar("headline"),
+    bio: text("bio"),
+    roles: jsonb("roles")
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    experienceLevel: varchar("experience_level").default("experienced"),
+    serviceCities: jsonb("service_cities")
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    availability: jsonb("availability")
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    desiredRateCents: integer("desired_rate_cents"),
+    resumeUrl: varchar("resume_url"),
+    portfolioUrl: varchar("portfolio_url"),
+    phone: varchar("phone"),
+    email: varchar("email"),
+    isOpenToWork: boolean("is_open_to_work").notNull().default(true),
+    isPublic: boolean("is_public").notNull().default(true),
+    backgroundCheckStatus: varchar("background_check_status").default("none"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_worker_profiles_user").on(table.userId),
+    index("idx_worker_profiles_open_public").on(
+      table.isOpenToWork,
+      table.isPublic,
+    ),
+    index("idx_worker_profiles_created").on(table.createdAt),
+  ],
+);
+
+export const jobPosts = pgTable(
+  "job_posts",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    restaurantId: varchar("restaurant_id")
+      .notNull()
+      .references(() => restaurants.id, { onDelete: "cascade" }),
+    postedByUserId: varchar("posted_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    title: varchar("title").notNull(),
+    description: text("description"),
+    role: varchar("role").notNull(),
+    jobType: varchar("job_type").notNull().default("part_time"),
+    locationType: varchar("location_type").notNull().default("onsite"),
+    city: varchar("city"),
+    state: varchar("state"),
+    address: varchar("address"),
+    scheduleDescription: text("schedule_description"),
+    rateMinCents: integer("rate_min_cents"),
+    rateMaxCents: integer("rate_max_cents"),
+    status: varchar("status").notNull().default("open"),
+    positionsAvailable: integer("positions_available").notNull().default(1),
+    startsAt: timestamp("starts_at"),
+    expiresAt: timestamp("expires_at"),
+    metadata: jsonb("metadata")
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_job_posts_restaurant").on(table.restaurantId),
+    index("idx_job_posts_status_created").on(table.status, table.createdAt),
+    index("idx_job_posts_city_state").on(table.city, table.state),
+    index("idx_job_posts_role").on(table.role),
+  ],
+);
+
+export const jobApplications = pgTable(
+  "job_applications",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    jobId: varchar("job_id")
+      .notNull()
+      .references(() => jobPosts.id, { onDelete: "cascade" }),
+    workerProfileId: varchar("worker_profile_id")
+      .notNull()
+      .references(() => workerProfiles.id, { onDelete: "cascade" }),
+    applicantUserId: varchar("applicant_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    coverNote: text("cover_note"),
+    proposedRateCents: integer("proposed_rate_cents"),
+    status: varchar("status").notNull().default("pending"),
+    respondedAt: timestamp("responded_at"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_job_applications_job").on(table.jobId),
+    index("idx_job_applications_worker").on(table.workerProfileId),
+    index("idx_job_applications_applicant").on(table.applicantUserId),
+    index("idx_job_applications_status").on(table.status),
+    unique("uq_job_applications_job_worker").on(
+      table.jobId,
+      table.workerProfileId,
+    ),
+  ],
+);
+
+export const privateChefLeads = pgTable(
+  "private_chef_leads",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    chefRestaurantId: varchar("chef_restaurant_id")
+      .notNull()
+      .references(() => restaurants.id, { onDelete: "cascade" }),
+    customerUserId: varchar("customer_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    customerName: varchar("customer_name").notNull(),
+    customerEmail: varchar("customer_email"),
+    customerPhone: varchar("customer_phone"),
+    eventDate: timestamp("event_date"),
+    city: varchar("city"),
+    state: varchar("state"),
+    address: varchar("address"),
+    guestCount: integer("guest_count"),
+    budgetCents: integer("budget_cents"),
+    occasion: varchar("occasion"),
+    dietaryNeeds: text("dietary_needs"),
+    notes: text("notes"),
+    status: varchar("status").notNull().default("new"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_private_chef_leads_chef").on(table.chefRestaurantId),
+    index("idx_private_chef_leads_customer").on(table.customerUserId),
+    index("idx_private_chef_leads_status").on(table.status),
+    index("idx_private_chef_leads_created").on(table.createdAt),
+  ],
+);
+
 // ── RELATIONS ────────────────────────────────────────────────────────────────
 
 export const menusRelations = relations(menus, ({ one, many }) => ({
@@ -5980,6 +6324,61 @@ export const deliveryJobApplicationsRelations = relations(
   }),
 );
 
+export const workerProfilesRelations = relations(
+  workerProfiles,
+  ({ one, many }) => ({
+    user: one(users, {
+      fields: [workerProfiles.userId],
+      references: [users.id],
+    }),
+    applications: many(jobApplications),
+  }),
+);
+
+export const jobPostsRelations = relations(jobPosts, ({ one, many }) => ({
+  restaurant: one(restaurants, {
+    fields: [jobPosts.restaurantId],
+    references: [restaurants.id],
+  }),
+  postedBy: one(users, {
+    fields: [jobPosts.postedByUserId],
+    references: [users.id],
+  }),
+  applications: many(jobApplications),
+}));
+
+export const jobApplicationsRelations = relations(
+  jobApplications,
+  ({ one }) => ({
+    job: one(jobPosts, {
+      fields: [jobApplications.jobId],
+      references: [jobPosts.id],
+    }),
+    workerProfile: one(workerProfiles, {
+      fields: [jobApplications.workerProfileId],
+      references: [workerProfiles.id],
+    }),
+    applicant: one(users, {
+      fields: [jobApplications.applicantUserId],
+      references: [users.id],
+    }),
+  }),
+);
+
+export const privateChefLeadsRelations = relations(
+  privateChefLeads,
+  ({ one }) => ({
+    chef: one(restaurants, {
+      fields: [privateChefLeads.chefRestaurantId],
+      references: [restaurants.id],
+    }),
+    customer: one(users, {
+      fields: [privateChefLeads.customerUserId],
+      references: [users.id],
+    }),
+  }),
+);
+
 // ── ZOOD VALIDATION SCHEMAS ──────────────────────────────────────────────────
 
 export const insertMenuSchema = createInsertSchema(menus).omit({
@@ -6064,6 +6463,51 @@ export const insertDeliveryJobApplicationSchema = createInsertSchema(
   },
 ).omit({ id: true, respondedAt: true, createdAt: true });
 
+export const insertWorkerProfileSchema = createInsertSchema(workerProfiles, {
+  desiredRateCents: z.number().int().min(0).optional().nullable(),
+}).omit({
+  id: true,
+  userId: true,
+  backgroundCheckStatus: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertJobPostSchema = createInsertSchema(jobPosts, {
+  rateMinCents: z.number().int().min(0).optional().nullable(),
+  rateMaxCents: z.number().int().min(0).optional().nullable(),
+  positionsAvailable: z.number().int().min(1).optional(),
+}).omit({
+  id: true,
+  postedByUserId: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertJobApplicationSchema = createInsertSchema(jobApplications, {
+  proposedRateCents: z.number().int().min(0).optional().nullable(),
+}).omit({
+  id: true,
+  workerProfileId: true,
+  applicantUserId: true,
+  respondedAt: true,
+  createdAt: true,
+});
+
+export const insertPrivateChefLeadSchema = createInsertSchema(
+  privateChefLeads,
+  {
+    guestCount: z.number().int().min(1).optional().nullable(),
+    budgetCents: z.number().int().min(0).optional().nullable(),
+  },
+).omit({
+  id: true,
+  customerUserId: true,
+  status: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // ── MENU / ORDER TYPES ───────────────────────────────────────────────────────
 
 export type Menu = typeof menus.$inferSelect;
@@ -6092,6 +6536,16 @@ export type DeliveryJobApplication =
   typeof deliveryJobApplications.$inferSelect;
 export type InsertDeliveryJobApplication = z.infer<
   typeof insertDeliveryJobApplicationSchema
+>;
+export type WorkerProfile = typeof workerProfiles.$inferSelect;
+export type InsertWorkerProfile = z.infer<typeof insertWorkerProfileSchema>;
+export type JobPost = typeof jobPosts.$inferSelect;
+export type InsertJobPost = z.infer<typeof insertJobPostSchema>;
+export type JobApplication = typeof jobApplications.$inferSelect;
+export type InsertJobApplication = z.infer<typeof insertJobApplicationSchema>;
+export type PrivateChefLead = typeof privateChefLeads.$inferSelect;
+export type InsertPrivateChefLead = z.infer<
+  typeof insertPrivateChefLeadSchema
 >;
 
 // ── ORDER STATUS ENUM ────────────────────────────────────────────────────────

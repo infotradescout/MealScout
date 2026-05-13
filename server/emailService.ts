@@ -1533,6 +1533,15 @@ export class EmailService {
     user: User,
     restaurant?: Restaurant,
   ): Promise<boolean> {
+    if (!this.isRecentSignupForAdminAlert(user)) {
+      console.log("[email] Skipping admin new-user notification for existing account", {
+        userId: user.id,
+        email: user.email,
+        createdAt: user.createdAt,
+      });
+      return false;
+    }
+
     const template = EmailTemplates.getAdminNotificationTemplate(
       user,
       restaurant,
@@ -1551,6 +1560,16 @@ export class EmailService {
     user: User,
     context?: { signupMethod?: string; restaurant?: Restaurant },
   ): Promise<boolean> {
+    if (!this.isRecentSignupForAdminAlert(user)) {
+      console.log("[email] Skipping admin signup notification for existing account", {
+        userId: user.id,
+        email: user.email,
+        signupMethod: context?.signupMethod,
+        createdAt: user.createdAt,
+      });
+      return false;
+    }
+
     const template = EmailTemplates.getAdminSignupNotificationTemplate(
       user,
       context,
@@ -1562,6 +1581,16 @@ export class EmailService {
       html: template.html,
       text: template.text,
     });
+  }
+
+  private isRecentSignupForAdminAlert(user: User): boolean {
+    const createdAt = user.createdAt ? new Date(user.createdAt) : null;
+    if (!createdAt || Number.isNaN(createdAt.getTime())) {
+      return false;
+    }
+
+    const accountAgeMs = Date.now() - createdAt.getTime();
+    return accountAgeMs >= 0 && accountAgeMs <= 20 * 60 * 1000;
   }
 
   // Send password reset email

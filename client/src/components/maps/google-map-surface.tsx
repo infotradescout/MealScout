@@ -380,7 +380,7 @@ export const loadGoogleMaps = async (apiKey: string) => {
       return;
     }
     const script = document.createElement("script");
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&v=weekly&loading=async`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&v=weekly&loading=async&libraries=marker`;
     script.async = true;
     script.defer = true;
     script.dataset.mealscoutGoogleMaps = "1";
@@ -788,6 +788,7 @@ export function GoogleMapSurface({
       const existing = trafficCircleRefs.current.get(cell.id);
       const radius = Math.max(140, Math.min(1800, (cell.weight || 1) * 15));
       const style = {
+        clickable: false,
         strokeOpacity: 0,
         strokeWeight: 0,
         fillColor: trafficCellColor(cell.source),

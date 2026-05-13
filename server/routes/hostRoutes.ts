@@ -70,6 +70,14 @@ const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
   : null;
 
+const getStripePublishableKey = () =>
+  String(
+    process.env.VITE_STRIPE_PUBLIC_KEY ||
+      process.env.STRIPE_PUBLIC_KEY ||
+      process.env.STRIPE_PUBLISHABLE_KEY ||
+      "",
+  ).trim();
+
 export function registerHostRoutes(app: Express) {
   const parkingPassBookingBurstLimiter = distributedRateLimit({
     scope: "parking-pass-booking:burst",
@@ -87,6 +95,14 @@ export function registerHostRoutes(app: Express) {
     user?.userType === "admin" ||
     user?.userType === "duper_admin" ||
     user?.userType === "super_admin";
+
+  app.get("/api/payments/stripe-config", (_req, res) => {
+    const publishableKey = getStripePublishableKey();
+    res.json({
+      paymentsReady: Boolean(stripe && publishableKey),
+      publishableKey,
+    });
+  });
 
   const normalizeLocationValue = (value?: string | null) =>
     (value ?? "").trim().toLowerCase();
@@ -1167,20 +1183,10 @@ export function registerHostRoutes(app: Express) {
           });
         }
         if (
-          !truck.isVerified &&
-          !["admin", "duper_admin", "super_admin", "staff"].includes(
-            req.user?.userType,
-          )
-        ) {
-          return res.status(403).json({
-            message:
-              "Your truck must be verified before booking parking pass slots.",
-          });
-        }
-        if (
           req.user?.userType &&
           ![
             "food_truck",
+            "restaurant_owner",
             "admin",
             "duper_admin",
             "super_admin",
@@ -1532,9 +1538,13 @@ export function registerHostRoutes(app: Express) {
         };
         const selectedPrices = selectedSlotTypes.map((slot) => ({
           slot,
-          price: slotPriceMap[slot] || 0,
+          price: Number(slotPriceMap[slot] ?? 0),
         }));
-        if (selectedPrices.some((item) => item.price <= 0)) {
+        if (
+          selectedPrices.some(
+            (item) => !Number.isFinite(item.price) || item.price < 0,
+          )
+        ) {
           return res.status(400).json({
             message: "One or more selected slots are not available.",
           });

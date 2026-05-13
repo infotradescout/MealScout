@@ -234,7 +234,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
               ? "/restaurant-owner-dashboard"
               : isHost
                 ? "/host/dashboard"
-                : "/scout";
+                : "/user-dashboard";
 
   // ── USER-SPECIFIC slot (3rd item in desktop bar) ─────────────────────────
   // This must be a DIFFERENT destination from dashboardPath to avoid duplicates.
@@ -329,6 +329,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
         { path: "/subscription", icon: BarChart3, label: "Subscription" },
         { path: "/events", icon: Calendar, label: "Events" },
         { path: "/suppliers", icon: Truck, label: "Supplies" },
+        { path: "/share-hub", icon: Share2, label: "Share" },
         { path: "/profile", icon: User, label: "Profile" },
       );
     } else if (isHost) {
@@ -338,6 +339,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
         { path: "/favorites", icon: Heart, label: "Saved" },
         { path: "/host/dashboard", icon: Users, label: "Host" },
         { path: "/parking-pass", icon: ParkingSquare, label: "Parking" },
+        { path: "/share-hub", icon: Share2, label: "Share" },
         { path: "/profile", icon: User, label: "Profile" },
       );
     } else {
@@ -348,6 +350,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
         { path: "/favorites", icon: Heart, label: "Saved" },
         { path: "/alerts", icon: Bell, label: "Alerts" },
         { path: "/deals/featured", icon: Receipt, label: "Deals" },
+        { path: "/share-hub", icon: Share2, label: "Share" },
         { path: "/profile", icon: User, label: "Profile" },
       );
     }
@@ -386,22 +389,21 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     { path: "/share-hub", icon: Share2, label: "Share" },
     { path: "/profile", icon: User, label: "Profile" },
   ];
-  const dashboardIsScout = dashboardPath === "/scout";
   const desktopItems =
-    isScoutExperience || dashboardIsScout
+    isScoutExperience
       ? scoutExperienceItems
       : defaultDesktopItems;
   const mobileSecondItem: NavItem =
-    isScoutExperience || dashboardIsScout
+    isScoutExperience
       ? { path: "/favorites", icon: Heart, label: "Saved" }
       : { path: dashboardPath, icon: LayoutDashboard, label: "Dashboard" };
   const mobileThirdItem: NavItem =
-    isScoutExperience || dashboardIsScout
+    isScoutExperience
       ? { path: "/deals/featured", icon: Receipt, label: "Deals" }
       : userSpecificItem;
   const showMobileThirdItem =
     Boolean(mobileThirdItem.path) &&
-    (isScoutExperience || dashboardIsScout || userSpecificIsUnique);
+    (isScoutExperience || userSpecificIsUnique);
 
   return (
     <>

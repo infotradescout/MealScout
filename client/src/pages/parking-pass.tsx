@@ -22,6 +22,10 @@ import {
 import { Calendar as DatePickerCalendar } from "@/components/ui/calendar";
 import { GoogleMapPicker } from "@/components/maps/GoogleMapPicker";
 import type { MapPickerPin } from "@/components/maps/GoogleMapPicker";
+import type {
+  MapBoundsLike,
+  MapTrafficCell,
+} from "@/components/maps/map-adapter.types";
 import { BookingPaymentModal } from "@/components/booking-payment-modal";
 import { EditOccurrenceDialog } from "@/components/edit-occurrence-dialog";
 import { Button } from "@/components/ui/button";
@@ -49,6 +53,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import ShareButton from "@/components/share-button";
 import { initFacebookSDK, postToFacebook } from "@/lib/facebook";
+import { apiRequest } from "@/lib/queryClient";
 import { formatRelativeTime } from "@/lib/relative-time";
 import {
   ParkingScheduleCalendar,
@@ -139,6 +144,24 @@ type PublicMapLocation = {
 
 type MapLocationsResponse = {
   hostLocations: PublicMapLocation[];
+};
+
+type MapFootTrafficResponse = {
+  generatedAt: string;
+  windowMinutes: number;
+  requestedWindowMinutes: number;
+  mode: "avg" | "live";
+  signalQuality?: {
+    tier: "sparse" | "emerging" | "solid";
+    isLowDensity: boolean;
+  };
+  googlePlaces?: {
+    enabled: boolean;
+    used: boolean;
+    error: string | null;
+    cells: MapTrafficCell[];
+  };
+  cells: MapTrafficCell[];
 };
 
 type ParkingPassLocationGroup = {
@@ -256,6 +279,29 @@ const defaultSocialAutopostSettings: SocialAutopostSettings = {
   promptBeforePost: true,
 };
 
+type SocialConnectionStatus = {
+  platform: "facebook" | "instagram" | "x";
+  connected: boolean;
+  displayName?: string | null;
+  externalAccountUrl?: string | null;
+  lastPublishAt?: string | null;
+  lastError?: string | null;
+};
+
+type SocialPublishingConfig = {
+  platforms?: Record<
+    SocialConnectionStatus["platform"],
+    {
+      provider: "meta" | "x";
+      configured: boolean;
+      callbackUrl: string;
+    }
+  >;
+  missing?: string[];
+};
+
+const SOCIAL_PREOPEN_PROMPT_MINUTES = 90;
+
 const formatSlotLabel = (slot: string) =>
   slot.charAt(0).toUpperCase() + slot.slice(1);
 
@@ -369,7 +415,10 @@ const buildSlotOptions = (listing: ParkingPassListing) =>
     },
   ].filter(
     (slot) =>
-      (slot.priceCents || 0) > 0 &&
+      slot.priceCents !== null &&
+      slot.priceCents !== undefined &&
+      Number.isFinite(Number(slot.priceCents)) &&
+      Number(slot.priceCents) >= 0 &&
       isSlotWithinHours(
         slot.type as (typeof PARKING_PASS_SLOT_TYPES)[number],
         listing.startTime,
@@ -449,6 +498,16 @@ const getListingDateKey = (value: string) => {
   const parsed = new Date(raw);
   if (Number.isNaN(parsed.getTime())) return "";
   return format(parsed, "yyyy-MM-dd");
+};
+
+const buildDateTimeFromKey = (date: string | Date, time: string) => {
+  const dateKey =
+    typeof date === "string" ? getListingDateKey(date) : format(date, "yyyy-MM-dd");
+  const match = String(time || "").match(/^(\d{1,2}):(\d{2})/);
+  if (!dateKey || !match) return null;
+  const parsed = new Date(`${dateKey}T00:00:00`);
+  parsed.setHours(Number(match[1]), Number(match[2]), 0, 0);
+  return Number.isFinite(parsed.getTime()) ? parsed : null;
 };
 
 function isSlotBookableByTime(
@@ -561,6 +620,7 @@ export default function ParkingPassPage() {
     title: string;
     message: string;
     link: string;
+    imageUrl?: string | null;
     selectedPlatforms: {
       facebook: boolean;
       instagram: boolean;
@@ -568,6 +628,42 @@ export default function ParkingPassPage() {
     };
   } | null>(null);
   const [isPostingSocial, setIsPostingSocial] = useState(false);
+  const {
+    data: socialConnectionPayload,
+    refetch: refetchSocialConnections,
+  } = useQuery<{
+    restaurantId: string;
+    connections: SocialConnectionStatus[];
+    publishingConfig?: SocialPublishingConfig;
+  }>({
+    queryKey: truckId
+      ? [`/api/restaurants/${truckId}/social-connections/status`]
+      : ["social-connections-none"],
+    enabled:
+      Boolean(truckId) &&
+      isAuthenticated &&
+      hasPremiumTruckTools &&
+      canManageTruckProfile,
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+  const { data: stripeConfig, isLoading: isStripeConfigLoading } = useQuery<{
+    paymentsReady: boolean;
+    publishableKey?: string;
+  }>({
+    queryKey: ["/api/payments/stripe-config"],
+    retry: false,
+    refetchOnWindowFocus: false,
+    staleTime: 5 * 60 * 1000,
+  });
+  const socialConnectionByPlatform = useMemo(() => {
+    const map = new Map<string, SocialConnectionStatus>();
+    (socialConnectionPayload?.connections || []).forEach((connection) => {
+      map.set(connection.platform, connection);
+    });
+    return map;
+  }, [socialConnectionPayload]);
+  const socialPublishingConfig = socialConnectionPayload?.publishingConfig;
   const [hasHostProfile, setHasHostProfile] = useState(false);
   const [hosts, setHosts] = useState<Host[]>([]);
   const [selectedHostId, setSelectedHostId] = useState<string>("");
@@ -684,6 +780,11 @@ export default function ParkingPassPage() {
     Array<{ listing: ParkingPassListing; slotTypes: string[] }>
   >([]);
   const [viewMode, setViewMode] = useState<"map" | "list">("map");
+  const [showParkingScoutHeat, setShowParkingScoutHeat] = useState(false);
+  const [parkingMapBounds, setParkingMapBounds] =
+    useState<MapBoundsLike | null>(null);
+  const [debouncedParkingMapBounds, setDebouncedParkingMapBounds] =
+    useState<MapBoundsLike | null>(null);
   const [activeLocationKey, setActiveLocationKey] = useState<string | null>(
     null,
   );
@@ -708,6 +809,73 @@ export default function ParkingPassPage() {
   }, [viewMode]);
 
   const mapInteractionsEnabled = !mapPopupOpen;
+  useEffect(() => {
+    if (!parkingMapBounds) {
+      setDebouncedParkingMapBounds(null);
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      setDebouncedParkingMapBounds(parkingMapBounds);
+    }, 320);
+    return () => window.clearTimeout(timer);
+  }, [parkingMapBounds]);
+
+  const { data: parkingScoutHeatData, isFetching: isParkingScoutHeatFetching } =
+    useQuery<MapFootTrafficResponse>({
+      queryKey: [
+        "/api/map/foot-traffic",
+        "parking-pass",
+        showParkingScoutHeat,
+        debouncedParkingMapBounds
+          ? [
+              Number(debouncedParkingMapBounds.north.toFixed(4)),
+              Number(debouncedParkingMapBounds.south.toFixed(4)),
+              Number(debouncedParkingMapBounds.east.toFixed(4)),
+              Number(debouncedParkingMapBounds.west.toFixed(4)),
+            ]
+          : null,
+      ],
+      enabled:
+        showParkingScoutHeat &&
+        viewMode === "map" &&
+        Boolean(debouncedParkingMapBounds) &&
+        canManageParkingPass,
+      queryFn: async () => {
+        const bounds = debouncedParkingMapBounds;
+        if (!bounds) {
+          return {
+            generatedAt: new Date().toISOString(),
+            windowMinutes: 0,
+            requestedWindowMinutes: 0,
+            mode: "avg",
+            cells: [],
+          };
+        }
+        const params = new URLSearchParams({
+          north: String(bounds.north),
+          south: String(bounds.south),
+          east: String(bounds.east),
+          west: String(bounds.west),
+          mode: "avg",
+          windowMinutes: "720",
+          includeGoogle: "true",
+        });
+        const res = await fetch(`/api/map/foot-traffic?${params.toString()}`);
+        if (!res.ok) throw new Error("Failed to load foot traffic");
+        return res.json();
+      },
+      staleTime: 5 * 60 * 1000,
+      refetchOnWindowFocus: false,
+    });
+
+  const parkingScoutHeatCells = useMemo<MapTrafficCell[]>(() => {
+    if (!showParkingScoutHeat || !canManageParkingPass) return [];
+    return (parkingScoutHeatData?.cells || []).slice(0, 260);
+  }, [canManageParkingPass, parkingScoutHeatData?.cells, showParkingScoutHeat]);
+
+  const parkingScoutHeatCellCount = parkingScoutHeatCells.length;
+  const parkingScoutHeatSignalLabel =
+    parkingScoutHeatData?.signalQuality?.tier || null;
   const { data: mapLocationsData } = useQuery<MapLocationsResponse>({
     queryKey: ["/api/map/locations"],
     queryFn: async () => {
@@ -853,6 +1021,15 @@ export default function ParkingPassPage() {
   const [isSavingSchedule, setIsSavingSchedule] = useState(false);
   const [isSharingLocation, setIsSharingLocation] = useState(false);
   const [isLive, setIsLive] = useState(false);
+  const [dismissedPreOpenPromptKey, setDismissedPreOpenPromptKey] =
+    useState<string | null>(null);
+  const defaultLeaveTime = useMemo(() => {
+    const date = new Date(Date.now() + 4 * 60 * 60 * 1000);
+    return `${String(date.getHours()).padStart(2, "0")}:${String(
+      date.getMinutes(),
+    ).padStart(2, "0")}`;
+  }, []);
+  const [liveLeaveTime, setLiveLeaveTime] = useState(defaultLeaveTime);
   const [topTab, setTopTab] = useState<"book" | "schedule" | "host">("book");
   const [hostToolsTab, setHostToolsTab] = useState<
     "listings" | "location" | "payments"
@@ -877,6 +1054,35 @@ export default function ParkingPassPage() {
       setHostToolsTab("payments");
     }
   }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const socialStatus = params.get("social");
+    if (socialStatus !== "connected" && socialStatus !== "error") return;
+
+    toast({
+      title:
+        socialStatus === "connected"
+          ? "Publishing connected"
+          : "Connection failed",
+      description:
+        params.get("socialMessage") ||
+        (socialStatus === "connected"
+          ? "That account can now publish from MealScout."
+          : "Try reconnecting from the publishing card."),
+      variant: socialStatus === "error" ? "destructive" : undefined,
+    });
+    void refetchSocialConnections();
+
+    params.delete("social");
+    params.delete("socialMessage");
+    const nextQuery = params.toString();
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ""}`,
+    );
+  }, [refetchSocialConnections, toast]);
 
   const reloadHostPassListings = async (hostId: string) => {
     if (!hostId) return;
@@ -1755,6 +1961,53 @@ export default function ParkingPassPage() {
     });
   }, [bookedSchedule, manualSchedules]);
 
+  const preOpenPrompt = useMemo(() => {
+    const now = new Date();
+    const upcoming = parkingScheduleItems
+      .map((item) => {
+        const startsAt = buildDateTimeFromKey(item.date, item.startTime || "");
+        if (!startsAt) return null;
+        const minutesUntil = Math.round(
+          (startsAt.getTime() - now.getTime()) / 60_000,
+        );
+        if (
+          minutesUntil < 0 ||
+          minutesUntil > SOCIAL_PREOPEN_PROMPT_MINUTES
+        ) {
+          return null;
+        }
+        return { item, startsAt, minutesUntil };
+      })
+      .filter(Boolean) as Array<{
+      item: ParkingScheduleItem;
+      startsAt: Date;
+      minutesUntil: number;
+    }>;
+
+    upcoming.sort(
+      (a, b) => a.startsAt.getTime() - b.startsAt.getTime(),
+    );
+    const next = upcoming[0];
+    if (!next) return null;
+    const key = `${next.item.type}:${next.item.bookingId || next.item.manualId || next.item.id}`;
+    if (key === dismissedPreOpenPromptKey) return null;
+    const locationName =
+      next.item.locationName || next.item.title || "today's stop";
+    const dateLabel = format(next.startsAt, "EEE, MMM d");
+    const timeLabel = `${next.item.startTime} - ${next.item.endTime}`;
+    return {
+      key,
+      item: next.item,
+      locationName,
+      dateLabel,
+      timeLabel,
+      minutesUntil: next.minutesUntil,
+      message: `${
+        truck?.name || "We"
+      } at ${locationName}. ${dateLabel}, ${timeLabel}. Live location + menu:`,
+    };
+  }, [dismissedPreOpenPromptKey, parkingScheduleItems, truck?.name]);
+
   const handleOpenReport = (item: ParkingScheduleItem) => {
     if (!item.reportKey) return;
     const existing = reportByKey.get(item.reportKey);
@@ -1885,9 +2138,57 @@ export default function ParkingPassPage() {
     setPostPrompt((current) => (current ? { ...current, message } : current));
   };
 
+  const handleConnectSocialPlatform = (
+    platform: SocialConnectionStatus["platform"],
+  ) => {
+    if (!truckId) return;
+    const providerConfig = socialPublishingConfig?.platforms?.[platform];
+    if (providerConfig && !providerConfig.configured) {
+      toast({
+        title: "Publishing setup needed",
+        description:
+          platform === "x"
+            ? "Add X_CLIENT_ID before owners connect X."
+            : "Add FACEBOOK_APP_ID and FACEBOOK_APP_SECRET before owners connect Meta.",
+        variant: "destructive",
+      });
+      return;
+    }
+    const provider = platform === "x" ? "x" : "meta";
+    const redirect = encodeURIComponent("/parking-pass?tab=schedule");
+    const platformParam = encodeURIComponent(platform);
+    window.location.href = `/api/restaurants/${truckId}/social-connections/${provider}/start?platform=${platformParam}&redirect=${redirect}`;
+  };
+
+  const handleDisconnectSocialPlatform = async (
+    platform: SocialConnectionStatus["platform"],
+  ) => {
+    if (!truckId) return;
+    try {
+      await apiRequest(
+        "DELETE",
+        `/api/restaurants/${truckId}/social-connections/${platform}`,
+      );
+      await refetchSocialConnections();
+      toast({
+        title: "Publishing disconnected",
+        description: "MealScout will use manual share handoff for that account.",
+      });
+    } catch (error) {
+      toast({
+        title: "Disconnect failed",
+        description:
+          error instanceof Error ? error.message : "Unable to disconnect.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handlePostPromptShare = async (payload?: {
+    title?: string;
     message: string;
     link: string;
+    imageUrl?: string | null;
     selectedPlatforms: {
       facebook: boolean;
       instagram: boolean;
@@ -1899,6 +2200,37 @@ export default function ParkingPassPage() {
     setIsPostingSocial(true);
     try {
       const shouldClear = !payload;
+      let queuedCount = 0;
+      let manualRequiredCount = 0;
+      if (truckId) {
+        try {
+          const queueRes = await fetch(`/api/restaurants/${truckId}/social-posts`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({
+              message: activePrompt.message,
+              link: activePrompt.link,
+              imageUrl: activePrompt.imageUrl || null,
+              source: activePrompt.title || "owner_prompt",
+              platforms: activePrompt.selectedPlatforms,
+            }),
+          });
+          if (queueRes.ok) {
+            const queueData = await queueRes.json().catch(() => ({}));
+            queuedCount = Number(queueData?.queuedForPublishing || 0);
+            manualRequiredCount = Number(queueData?.manualRequiredCount || 0);
+          } else {
+            const queueData = await queueRes.json().catch(() => ({}));
+            console.warn(
+              "Social post queue failed:",
+              queueData?.message || queueRes.statusText,
+            );
+          }
+        } catch (queueError) {
+          console.warn("Social post queue failed:", queueError);
+        }
+      }
       let shared = false;
       if (activePrompt.selectedPlatforms.facebook) {
         await initFacebookSDK();
@@ -1916,7 +2248,14 @@ export default function ParkingPassPage() {
         shared = true;
       }
       if (activePrompt.selectedPlatforms.instagram) {
-        const copyText = `${activePrompt.message} ${activePrompt.link}`.trim();
+        const copyText = [
+          activePrompt.message,
+          activePrompt.link,
+          activePrompt.imageUrl ? `Photo: ${activePrompt.imageUrl}` : "",
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .trim();
         if (navigator.clipboard?.writeText) {
           await navigator.clipboard.writeText(copyText);
         }
@@ -1925,8 +2264,19 @@ export default function ParkingPassPage() {
       }
       if (shared) {
         toast({
-          title: "Share opened",
-          description: "Finish the post in the new window.",
+          title:
+            queuedCount > 0
+              ? "Publishing queued"
+              : manualRequiredCount > 0
+                ? "Manual share opened"
+                : "Share opened",
+          description: activePrompt.imageUrl
+            ? queuedCount > 0
+              ? "Connected platforms will publish. Finish any manual shares opened."
+              : "Caption copied with photo link. Finish the post."
+            : queuedCount > 0
+              ? "Connected platforms will publish. Finish any manual shares opened."
+              : "Finish the post in the new window.",
         });
       }
       if (shouldClear) {
@@ -2638,7 +2988,7 @@ export default function ParkingPassPage() {
 
   const maybePromptSocialPost = (
     trigger: keyof SocialAutopostSettings["triggers"],
-    options: { title: string; message: string; link: string },
+    options: { title: string; message: string; link: string; imageUrl?: string | null },
   ) => {
     if (!hasPremiumTruckTools) return;
     if (!socialSettings.triggers[trigger]) return;
@@ -2654,6 +3004,7 @@ export default function ParkingPassPage() {
       void handlePostPromptShare({
         message: options.message,
         link: options.link,
+        imageUrl: options.imageUrl,
         selectedPlatforms,
       });
       return;
@@ -2662,7 +3013,20 @@ export default function ParkingPassPage() {
       title: options.title,
       message: options.message,
       link: options.link,
+      imageUrl: options.imageUrl,
       selectedPlatforms,
+    });
+  };
+
+  const handleShareUpcomingStop = () => {
+    if (!preOpenPrompt) return;
+    const shareLink = buildTruckShareLink();
+    if (!shareLink) return;
+    maybePromptSocialPost(preOpenPrompt.item.type === "booking" ? "booking" : "schedule", {
+      title: "Post next stop",
+      message: preOpenPrompt.message,
+      link: shareLink,
+      imageUrl: truck?.coverImageUrl || truck?.logoUrl || null,
     });
   };
 
@@ -2808,6 +3172,17 @@ export default function ParkingPassPage() {
 
     setIsSharingLocation(true);
     try {
+      const computeLiveMinutes = () => {
+        const match = liveLeaveTime.match(/^(\d{2}):(\d{2})$/);
+        if (!match) return 240;
+        const leaveAt = new Date();
+        leaveAt.setHours(Number(match[1]), Number(match[2]), 0, 0);
+        if (leaveAt.getTime() <= Date.now()) {
+          leaveAt.setDate(leaveAt.getDate() + 1);
+        }
+        return Math.round((leaveAt.getTime() - Date.now()) / 60_000);
+      };
+      const safeLiveMinutes = Math.max(15, Math.min(240, computeLiveMinutes()));
       if (isLive) {
         await fetch(`/api/restaurants/${truckId}/mobile-settings`, {
           method: "PATCH",
@@ -2846,6 +3221,7 @@ export default function ParkingPassPage() {
           longitude: position.coords.longitude,
           accuracy: position.coords.accuracy,
           source: "manual",
+          liveForMinutes: safeLiveMinutes,
         }),
       });
 
@@ -2857,17 +3233,39 @@ export default function ParkingPassPage() {
       setIsLive(true);
       toast({
         title: "Live location shared",
-        description: "You are now visible on the map.",
+        description: `You are visible for up to ${Math.round(
+          safeLiveMinutes / 60,
+        )}h unless you go offline first.`,
       });
-      const shareMessage = `${
-        truck?.name || "We"
-      } are live right now. Find our location on MealScout.`;
-      const shareLink = buildTruckShareLink();
+      let shareCard: {
+        title?: string;
+        message?: string;
+        link?: string;
+        imageUrl?: string | null;
+      } | null = null;
+      try {
+        const cardRes = await fetch(
+          `/api/restaurants/${truckId}/live-share-card`,
+          { credentials: "include" },
+        );
+        if (cardRes.ok) {
+          shareCard = await cardRes.json();
+        }
+      } catch {
+        // Use the local fallback below.
+      }
+      const shareMessage =
+        shareCard?.message ||
+        `${truck?.name || "We"} is serving now. Live location + menu:`;
+      const shareLink = shareCard?.link || buildTruckShareLink();
+      const shareImage =
+        shareCard?.imageUrl || truck?.coverImageUrl || truck?.logoUrl || null;
       if (shareLink) {
         maybePromptSocialPost("live", {
-          title: "Share your live location",
+          title: shareCard?.title || "Share your live location",
           message: shareMessage,
           link: shareLink,
+          imageUrl: shareImage,
         });
       }
     } catch (error) {
@@ -3284,7 +3682,9 @@ export default function ParkingPassPage() {
 
   // Trucks pay MealScout (platform payments). Hosts can optionally enable Stripe Connect payouts (cashout).
   // If host payouts aren't configured, host earnings are held as credit.
-  const platformPaymentsReady = Boolean(import.meta.env.VITE_STRIPE_PUBLIC_KEY);
+  const platformPaymentsReady =
+    stripeConfig?.paymentsReady ??
+    (isStripeConfigLoading ? true : Boolean(import.meta.env.VITE_STRIPE_PUBLIC_KEY));
 
   const listingHasAvailability = (
     listing: ParkingPassListing | null | undefined,
@@ -3391,7 +3791,7 @@ export default function ParkingPassPage() {
 
   return (
     <div className="min-h-screen bg-transparent parking-pass-page">
-      <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
+      <div className="mx-auto max-w-[1520px] px-4 py-6 sm:px-6 xl:px-8 space-y-6">
         <div>
           <h1 className="text-2xl font-bold text-[color:var(--text-primary)]">
             Parking Pass
@@ -5037,7 +5437,7 @@ export default function ParkingPassPage() {
                   <div className="rounded-xl border border-[color:var(--accent-text)]/25 bg-[color:var(--accent-text)]/8 p-4 text-sm text-[color:var(--text-secondary)]">
                     Parking pass bookings and your booking calendar are always
                     free. Upgrade to Premium to unlock off-platform schedule
-                    stops, one-tap live location sharing, and social auto-post
+                    stops, one-tap live location sharing, and social share
                     controls.
                   </div>
                 )}
@@ -5047,15 +5447,74 @@ export default function ParkingPassPage() {
                     location and social/profile settings require profile access.
                   </div>
                 )}
+                {preOpenPrompt && hasPremiumTruckTools && canManageTruckProfile && (
+                  <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p className="text-sm font-semibold text-emerald-950">
+                          {preOpenPrompt.locationName}
+                        </p>
+                        <p className="text-xs text-emerald-800">
+                          {preOpenPrompt.dateLabel} · {preOpenPrompt.timeLabel}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          size="sm"
+                          onClick={handleShareUpcomingStop}
+                          disabled={!truckId}
+                        >
+                          Share stop
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={handleShareLocation}
+                          disabled={isSharingLocation || isLive || !truckId}
+                        >
+                          Go live
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() =>
+                            setDismissedPreOpenPromptKey(preOpenPrompt.key)
+                          }
+                        >
+                          Later
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <p className="text-sm font-semibold text-foreground">
                       Live share
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      Share your live location in one tap.
+                      Share your live location and open a social handoff.
                     </p>
                   </div>
+                  {!isLive && (
+                    <div className="flex items-center gap-2 rounded-full border border-[color:var(--border-subtle)] bg-[var(--bg-card)] px-3 py-1.5">
+                      <Label
+                        htmlFor="live-leave-time"
+                        className="text-xs text-muted-foreground"
+                      >
+                        Leaving
+                      </Label>
+                      <Input
+                        id="live-leave-time"
+                        type="time"
+                        value={liveLeaveTime}
+                        onChange={(event) =>
+                          setLiveLeaveTime(event.target.value)
+                        }
+                        className="h-7 w-[92px] rounded-full border-0 bg-transparent p-0 text-xs"
+                      />
+                    </div>
+                  )}
                   <Button
                     size="sm"
                     className="w-full sm:w-auto"
@@ -5121,11 +5580,11 @@ export default function ParkingPassPage() {
               <CardContent className="p-5 space-y-6">
                 <div>
                   <p className="text-sm font-semibold text-[color:var(--text-primary)]">
-                    Social autopost
+                    Social share prompts
                   </p>
                   <p className="text-xs text-[color:var(--text-muted)]">
-                    Link your socials and choose which updates should prompt a
-                    post.
+                    Link your socials and choose which updates should open a
+                    share prompt.
                   </p>
                 </div>
                 <div className="grid gap-3 md:grid-cols-3">
@@ -5215,7 +5674,7 @@ export default function ParkingPassPage() {
                   </div>
                   <div className="rounded-xl pp-glass-muted p-4 space-y-3">
                     <p className="text-xs font-semibold text-slate-700">
-                      Post prompts
+                      Share prompts
                     </p>
                     {(
                       [
@@ -5249,6 +5708,99 @@ export default function ParkingPassPage() {
                     ))}
                   </div>
                 </div>
+                <div className="rounded-xl pp-glass-muted p-4 space-y-2">
+                  <p className="text-xs font-semibold text-slate-700">
+                    Publishing connections
+                  </p>
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    {(
+                      [
+                        { key: "facebook", label: "Facebook" },
+                        { key: "instagram", label: "Instagram" },
+                        { key: "x", label: "X" },
+                      ] as const
+                    ).map((platform) => {
+                      const connection = socialConnectionByPlatform.get(
+                        platform.key,
+                      );
+                      const providerReady =
+                        socialPublishingConfig?.platforms?.[platform.key]
+                          ?.configured !== false;
+                      return (
+                        <div
+                          key={platform.key}
+                          className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2 text-xs"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span>{platform.label}</span>
+                            <Badge
+                              variant={connection?.connected ? "default" : "outline"}
+                            >
+                              {!providerReady
+                                ? "Setup"
+                                : connection?.connected
+                                  ? "Connected"
+                                  : "Manual"}
+                            </Badge>
+                          </div>
+                          <p className="mt-1 truncate text-[color:var(--text-muted)]">
+                            {!providerReady
+                              ? "Setup needed"
+                              : connection?.connected
+                              ? connection.displayName ||
+                                connection.externalAccountUrl ||
+                                "Ready to publish"
+                              : "Opens share handoff"}
+                          </p>
+                          {connection?.lastError && (
+                            <p className="mt-1 line-clamp-2 text-red-700">
+                              {connection.lastError}
+                            </p>
+                          )}
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="h-7 px-2 text-xs"
+                              disabled={
+                                !hasPremiumTruckTools ||
+                                !canManageTruckProfile ||
+                                !providerReady
+                              }
+                              onClick={() =>
+                                handleConnectSocialPlatform(platform.key)
+                              }
+                            >
+                              {connection?.connected
+                                ? "Reconnect"
+                                : providerReady
+                                  ? "Connect"
+                                  : "Setup"}
+                            </Button>
+                            {connection?.connected && (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 px-2 text-xs text-red-700 hover:text-red-800"
+                                disabled={
+                                  !hasPremiumTruckTools ||
+                                  !canManageTruckProfile
+                                }
+                                onClick={() =>
+                                  handleDisconnectSocialPlatform(platform.key)
+                                }
+                              >
+                                Disconnect
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 text-xs text-slate-700">
                     <Switch
@@ -5261,7 +5813,7 @@ export default function ParkingPassPage() {
                         }))
                       }
                     />
-                    <span>Always prompt before posting</span>
+                    <span>Always prompt before sharing</span>
                   </div>
                   <Button
                     size="sm"
@@ -5592,12 +6144,19 @@ export default function ParkingPassPage() {
                         {postPrompt?.title || "Share update"}
                       </DialogTitle>
                       <DialogDescription>
-                        Choose where to post this update. You can edit the
-                        message before sharing.
+                        Choose where to share this update. You can edit the
+                        message first.
                       </DialogDescription>
                     </DialogHeader>
                     {postPrompt && (
                       <div className="space-y-4">
+                        {postPrompt.imageUrl && (
+                          <img
+                            src={postPrompt.imageUrl}
+                            alt="Social post preview"
+                            className="h-28 w-full rounded-lg border border-[color:var(--border-subtle)] object-cover"
+                          />
+                        )}
                         <div className="space-y-2">
                           <Label>Message</Label>
                           <Textarea
@@ -5611,7 +6170,7 @@ export default function ParkingPassPage() {
                           </p>
                         </div>
                         <div className="space-y-2">
-                          <Label>Post to</Label>
+                          <Label>Share to</Label>
                           <div className="grid gap-2 sm:grid-cols-3">
                             {(
                               [
@@ -5657,7 +6216,7 @@ export default function ParkingPassPage() {
                         onClick={() => void handlePostPromptShare()}
                         disabled={isPostingSocial}
                       >
-                        {isPostingSocial ? "Sharing..." : "Post update"}
+                        {isPostingSocial ? "Sharing..." : "Share update"}
                       </Button>
                     </DialogFooter>
                   </DialogContent>
@@ -5668,18 +6227,17 @@ export default function ParkingPassPage() {
 
           {topTab === "book" && (
             <div
-              className={`space-y-4 pb-24${isTruckViewUser ? " order-first" : ""}`}
+              className={`space-y-5 pb-24 lg:pb-10${isTruckViewUser ? " order-first" : ""}`}
             >
               {isTruckViewUser && truck && truck.isVerified === false && (
                 <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 space-y-2">
                   <p className="font-semibold">
-                    ⚠️ Verification required to book parking passes
+                    Verification pending
                   </p>
                   <p className="text-xs">
-                    Your business is pending verification. Booking is locked
-                    until your account is approved — most reviews complete
-                    within 1 business day. You can still browse available spots
-                    below.
+                    Your business is pending verification. You can still book
+                    available Parking Pass spots while review is in progress.
+                    Most reviews complete within 1 business day.
                   </p>
                   <a
                     href="/restaurant-signup"
@@ -5689,20 +6247,46 @@ export default function ParkingPassPage() {
                   </a>
                 </div>
               )}
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                 <div>
-                  <p className="text-sm font-semibold text-[color:var(--text-primary)]">
+                  <p className="text-lg font-semibold text-[color:var(--text-primary)] font-display">
                     Find parking pass spots
                   </p>
-                  <p className="text-xs text-[color:var(--text-muted)]">
+                  <p className="max-w-2xl text-sm text-[color:var(--text-muted)]">
                     Search by city or address. Pick a spot first, then choose
                     from its open dates.
                   </p>
                 </div>
+                <div className="hidden rounded-2xl pp-glass-muted px-4 py-3 text-xs text-[color:var(--text-muted)] shadow-clean lg:grid lg:grid-cols-3 lg:gap-5">
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wide">
+                      Locations
+                    </p>
+                    <p className="mt-1 text-lg font-semibold text-[color:var(--text-primary)]">
+                      {filteredLocations.length}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wide">
+                      Map pins
+                    </p>
+                    <p className="mt-1 text-lg font-semibold text-[color:var(--text-primary)]">
+                      {viewMode === "map" ? mapPins.length : filteredLocations.length}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wide">
+                      Cart
+                    </p>
+                    <p className="mt-1 text-lg font-semibold text-[color:var(--text-primary)]">
+                      {cartItems.length}
+                    </p>
+                  </div>
+                </div>
               </div>
-              <div className="grid gap-4 lg:grid-cols-[1.35fr_0.9fr]">
-                <div className="space-y-4 order-1 lg:order-none">
-                  <div className="rounded-2xl pp-glass p-4 shadow-clean space-y-3">
+              <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_380px] xl:grid-cols-[minmax(0,1fr)_430px]">
+                <div className="min-w-0 space-y-4 order-1 lg:order-none">
+                  <div className="rounded-2xl pp-glass p-4 shadow-clean space-y-3 lg:p-5">
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <p className="text-xs font-semibold text-slate-800">
@@ -5727,9 +6311,19 @@ export default function ParkingPassPage() {
                         >
                           List
                         </Button>
+                        <Button
+                          size="sm"
+                          variant={showParkingScoutHeat ? "default" : "outline"}
+                          onClick={() =>
+                            setShowParkingScoutHeat((value) => !value)
+                          }
+                          disabled={viewMode !== "map"}
+                        >
+                          Scout heat
+                        </Button>
                       </div>
                     </div>
-                    <div className="space-y-1">
+                    <div className="space-y-1 lg:max-w-2xl">
                       <p className="text-[11px] font-semibold text-[color:var(--text-muted)]">
                         City or address
                       </p>
@@ -5759,6 +6353,17 @@ export default function ParkingPassPage() {
                         List view
                       </Button>
                     </div>
+                    <Button
+                      size="sm"
+                      variant={showParkingScoutHeat ? "default" : "outline"}
+                      onClick={() =>
+                        setShowParkingScoutHeat((value) => !value)
+                      }
+                      disabled={viewMode !== "map"}
+                      className="w-full sm:hidden"
+                    >
+                      Scout heat
+                    </Button>
                   </div>
 
                   {isLoading ? (
@@ -5772,11 +6377,13 @@ export default function ParkingPassPage() {
                     viewMode === "map" && fallbackHostPins.length > 0 ? (
                       <div className="space-y-3">
                         <div className="rounded-2xl pp-glass shadow-clean overflow-hidden">
-                          <div className="relative h-72 w-full bg-slate-100/60">
+                          <div className="relative h-[360px] w-full bg-slate-100/60 lg:h-[min(68vh,640px)] xl:h-[min(72vh,720px)]">
                             <GoogleMapPicker
                               center={fallbackMapCenter}
                               zoom={13}
                               interactionsEnabled={mapInteractionsEnabled}
+                              trafficCells={parkingScoutHeatCells}
+                              onBoundsChanged={setParkingMapBounds}
                               pins={fallbackHostPins.map(
                                 ({
                                   key,
@@ -5815,6 +6422,25 @@ export default function ParkingPassPage() {
                               )}
                               className="h-full w-full"
                             />
+                            {showParkingScoutHeat && (
+                              <div className="pointer-events-none absolute bottom-3 left-3 max-w-[min(270px,calc(100%-1.5rem))] rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)]/95 px-3 py-2 text-xs text-[color:var(--text-primary)] shadow-clean backdrop-blur">
+                                <p className="font-semibold">
+                                  {isParkingScoutHeatFetching
+                                    ? "Loading scout heat"
+                                    : parkingScoutHeatCellCount > 0
+                                      ? "Area foot traffic"
+                                      : "No heat signals here yet"}
+                                </p>
+                                <p className="mt-1 text-[color:var(--text-muted)]">
+                                  {parkingScoutHeatCellCount > 0
+                                    ? `${parkingScoutHeatCellCount} cells - ${parkingScoutHeatSignalLabel || "sparse"} signal - ${Math.round(
+                                        (parkingScoutHeatData?.windowMinutes ||
+                                          720) / 60,
+                                      )}h area avg`
+                                    : "Pan around your market to compare areas."}
+                                </p>
+                              </div>
+                            )}
                           </div>
                           <div className="border-t border-[color:var(--border-subtle)] px-4 py-2 text-xs text-[color:var(--text-muted)]">
                             {requestedHostId
@@ -5834,11 +6460,13 @@ export default function ParkingPassPage() {
                   ) : viewMode === "map" ? (
                     <div className="space-y-3">
                       <div className="rounded-2xl pp-glass shadow-clean overflow-hidden">
-                        <div className="relative h-72 w-full bg-slate-100/60">
+                        <div className="relative h-[360px] w-full bg-slate-100/60 lg:h-[min(68vh,640px)] xl:h-[min(72vh,720px)]">
                           <GoogleMapPicker
                             center={mapCenter}
                             zoom={13}
                             interactionsEnabled={mapInteractionsEnabled}
+                            trafficCells={parkingScoutHeatCells}
+                            onBoundsChanged={setParkingMapBounds}
                             onPinClick={(pinKey) => {
                               const hit = mapPins.find((p) => p.key === pinKey);
                               if (hit) setActiveLocationKey(hit.group.key);
@@ -6052,7 +6680,8 @@ export default function ParkingPassPage() {
                                         Choose a day with availability.
                                       </p>
                                     )}
-                                    {!platformPaymentsReady && (
+                                    {!isStripeConfigLoading &&
+                                      !platformPaymentsReady && (
                                       <p className="pt-1 text-[11px] text-[color:var(--status-error)]">
                                         Payments are temporarily unavailable.
                                       </p>
@@ -6092,6 +6721,25 @@ export default function ParkingPassPage() {
                             )}
                             className="h-full w-full"
                           />
+                          {showParkingScoutHeat && (
+                            <div className="pointer-events-none absolute bottom-3 left-3 max-w-[min(270px,calc(100%-1.5rem))] rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)]/95 px-3 py-2 text-xs text-[color:var(--text-primary)] shadow-clean backdrop-blur">
+                              <p className="font-semibold">
+                                {isParkingScoutHeatFetching
+                                  ? "Loading scout heat"
+                                  : parkingScoutHeatCellCount > 0
+                                    ? "Area foot traffic"
+                                    : "No heat signals here yet"}
+                              </p>
+                              <p className="mt-1 text-[color:var(--text-muted)]">
+                                {parkingScoutHeatCellCount > 0
+                                  ? `${parkingScoutHeatCellCount} cells - ${parkingScoutHeatSignalLabel || "sparse"} signal - ${Math.round(
+                                      (parkingScoutHeatData?.windowMinutes ||
+                                        720) / 60,
+                                    )}h area avg`
+                                  : "Pan around your market to compare areas."}
+                              </p>
+                            </div>
+                          )}
                           {mapPins.length === 0 && (
                             <div className="absolute inset-0 flex items-center justify-center text-sm text-[color:var(--text-muted)] pointer-events-none">
                               No mappable locations yet.
@@ -6099,10 +6747,10 @@ export default function ParkingPassPage() {
                           )}
                         </div>
                         <div className="border-t border-[color:var(--border-subtle)] px-4 py-2 text-xs text-[color:var(--text-muted)]">
-                          Tap a location below to update the map.
+                          Select a location below to update the map and the details panel.
                         </div>
                       </div>
-                      <div className="space-y-2">
+                      <div className="grid gap-3 xl:grid-cols-2">
                         {filteredLocations.map((group) => {
                           const effectiveDateKey =
                             group.key === activeLocationKey
@@ -6401,7 +7049,7 @@ export default function ParkingPassPage() {
                       </div>
                     </div>
                   ) : (
-                    <div className="space-y-3">
+                    <div className="grid gap-3 xl:grid-cols-2">
                       {filteredLocations.map((group) => {
                         const effectiveDateKey =
                           group.key === activeLocationKey
@@ -6688,7 +7336,7 @@ export default function ParkingPassPage() {
                   )}
                 </div>
 
-                <div className="space-y-4 order-2 lg:order-none">
+                <div className="space-y-4 order-2 lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)] lg:overflow-y-auto lg:pr-1 lg:order-none">
                   {cartItems.length > 0 && (
                     <div className="rounded-2xl pp-glass p-4 shadow-clean space-y-3">
                       <div className="flex items-center justify-between">

@@ -98,7 +98,9 @@ export function createRouteAccessPolicyDependencies(
   function hasAccountAgeTrialAccess(user: User | null): boolean {
     if (!user?.createdAt) return false;
     if (
-      !["restaurant_owner", "food_truck"].includes(String(user.userType || ""))
+      !["restaurant_owner", "food_truck", "caterer", "private_chef"].includes(
+        String(user.userType || ""),
+      )
     ) {
       return false;
     }

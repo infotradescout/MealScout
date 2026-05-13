@@ -17,8 +17,18 @@ import {
 import { Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
-const stripePublicKey = import.meta.env.VITE_STRIPE_PUBLIC_KEY || "";
-const stripePromise = stripePublicKey ? loadStripe(stripePublicKey) : null;
+const buildTimeStripePublicKey = import.meta.env.VITE_STRIPE_PUBLIC_KEY || "";
+const stripePromiseCache = new Map<string, ReturnType<typeof loadStripe>>();
+
+function getStripePromise(publicKey: string) {
+  const normalizedKey = publicKey.trim();
+  if (!normalizedKey) return null;
+  const cached = stripePromiseCache.get(normalizedKey);
+  if (cached) return cached;
+  const promise = loadStripe(normalizedKey);
+  stripePromiseCache.set(normalizedKey, promise);
+  return promise;
+}
 
 interface BookingPaymentModalProps {
   open: boolean;
@@ -244,27 +254,61 @@ export function BookingPaymentModal({
   const [creditBalance, setCreditBalance] = useState<number | null>(null);
   const [creditsToApply, setCreditsToApply] = useState("");
   const [promoCode, setPromoCode] = useState("");
+  const [stripePublishableKey, setStripePublishableKey] = useState(
+    buildTimeStripePublicKey,
+  );
+  const [isStripeConfigLoading, setIsStripeConfigLoading] = useState(false);
   // true = host has Stripe Connect ready; false = payment held on platform, host payout deferred
   const [hostPaymentsReady, setHostPaymentsReady] = useState<boolean | null>(null);
   const cancelOnInitiateRef = useRef(false);
   const idempotencyKeyRef = useRef<string | null>(null);
   const stage: "review" | "pay" = clientSecret ? "pay" : "review";
+  const stripePromise = getStripePromise(stripePublishableKey);
 
   useEffect(() => {
+    let cancelled = false;
     if (open) {
       cancelOnInitiateRef.current = false;
-      if (!stripePromise) {
-        toast({
-          title: "Payments Unavailable",
-          description: "Stripe is not configured for this environment.",
-          variant: "destructive",
-        });
-        onOpenChange(false);
-        return;
+      if (!stripePublishableKey) {
+        setIsStripeConfigLoading(true);
+        fetch("/api/payments/stripe-config")
+          .then(async (res) => {
+            if (!res.ok) return null;
+            return res.json();
+          })
+          .then((data) => {
+            if (cancelled) return;
+            const runtimeKey = String(data?.publishableKey || "").trim();
+            if (runtimeKey) {
+              setStripePublishableKey(runtimeKey);
+            } else {
+              toast({
+                title: "Payments Unavailable",
+                description: "Stripe is not configured for this environment.",
+                variant: "destructive",
+              });
+              onOpenChange(false);
+            }
+          })
+          .catch(() => {
+            if (cancelled) return;
+            toast({
+              title: "Payments Unavailable",
+              description: "Stripe configuration could not be loaded.",
+              variant: "destructive",
+            });
+            onOpenChange(false);
+          })
+          .finally(() => {
+            if (!cancelled) setIsStripeConfigLoading(false);
+          });
       }
       loadCreditBalance();
     }
-  }, [open]);
+    return () => {
+      cancelled = true;
+    };
+  }, [open, stripePublishableKey, toast, onOpenChange]);
 
   const cancelCheckout = async (intentId: string) => {
     try {
@@ -291,6 +335,14 @@ export function BookingPaymentModal({
   };
 
   const initiateBooking = async () => {
+    if (!stripePromise) {
+      toast({
+        title: "Payments Unavailable",
+        description: "Stripe is not configured for this environment.",
+        variant: "destructive",
+      });
+      return;
+    }
     setIsLoading(true);
     try {
       const requestIdempotencyKey =
@@ -532,14 +584,21 @@ export function BookingPaymentModal({
           </div>
         ) : null}
 
-        {isLoading && (
+        {(isLoading || isStripeConfigLoading) && (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="h-8 w-8 animate-spin text-orange-600" />
-            <span className="ml-3 text-[color:var(--text-muted)]">Preparing payment...</span>
+            <span className="ml-3 text-[color:var(--text-muted)]">
+              Preparing payment...
+            </span>
           </div>
         )}
 
-        {!isLoading && clientSecret && paymentIntentId && bookingData && (
+        {!isLoading &&
+          !isStripeConfigLoading &&
+          stripePromise &&
+          clientSecret &&
+          paymentIntentId &&
+          bookingData && (
           <Elements
             stripe={stripePromise}
             options={{

@@ -311,6 +311,7 @@ export function isParkingPassPublicReady(
   const nonBlocking = new Set<ParkingPassQualityFlag>([
     "missing_coords",
     "invalid_coords",
+    "payments_disabled",
     "invalid_state",
     "bad_address_format",
     "invalid_time_window",

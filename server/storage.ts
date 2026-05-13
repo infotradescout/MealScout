@@ -523,12 +523,25 @@ export interface IStorage {
   ): Promise<FoodTruckSession | undefined>;
   upsertLiveLocation(
     location: InsertFoodTruckLocation,
+    options?: { liveUntilAt?: Date | null },
   ): Promise<FoodTruckLocation>;
   getLiveTrucksNearby(
     lat: number,
     lng: number,
     radiusKm: number,
-  ): Promise<Array<Restaurant & { distance: number; sessionId?: string }>>;
+  ): Promise<
+    Array<
+      Restaurant & {
+        distance: number;
+        distanceMiles: number;
+        lat: number | null;
+        lng: number | null;
+        liveBroadcasting: boolean;
+        locationSource: "live";
+        sessionId?: string;
+      }
+    >
+  >;
   getTruckLocationHistory(
     restaurantId: string,
     dateRange?: { start: Date; end: Date },
@@ -3979,12 +3992,19 @@ export class DatabaseStorage implements IStorage {
     restaurantId: string,
     settings: UpdateRestaurantMobileSettings,
   ): Promise<Restaurant> {
+    const updateData: any = {
+      ...settings,
+      updatedAt: new Date(),
+    };
+    if (settings.mobileOnline === false) {
+      updateData.liveUntilAt = null;
+    } else if (settings.mobileOnline === true) {
+      updateData.liveUntilAt = new Date(Date.now() + 240 * 60_000);
+    }
+
     const [restaurant] = await db
       .update(restaurants)
-      .set({
-        ...settings,
-        updatedAt: new Date(),
-      })
+      .set(updateData)
       .where(eq(restaurants.id, restaurantId))
       .returning();
     return restaurant;
@@ -4003,6 +4023,11 @@ export class DatabaseStorage implements IStorage {
 
     if (location.mobileOnline !== undefined) {
       updateData.mobileOnline = location.mobileOnline;
+      if (location.mobileOnline === false) {
+        updateData.liveUntilAt = null;
+      } else {
+        updateData.liveUntilAt = new Date(Date.now() + 240 * 60_000);
+      }
     }
     if (location.city) {
       updateData.city = location.city;
@@ -4184,6 +4209,7 @@ export class DatabaseStorage implements IStorage {
       .set({
         mobileOnline: true,
         lastBroadcastAt: new Date(),
+        liveUntilAt: new Date(Date.now() + 240 * 60_000),
         updatedAt: new Date(),
       })
       .where(eq(restaurants.id, restaurantId));
@@ -4211,6 +4237,7 @@ export class DatabaseStorage implements IStorage {
       .update(restaurants)
       .set({
         mobileOnline: false,
+        liveUntilAt: null,
         updatedAt: new Date(),
       })
       .where(eq(restaurants.id, restaurantId));
@@ -4269,6 +4296,7 @@ export class DatabaseStorage implements IStorage {
 
   async upsertLiveLocation(
     location: InsertFoodTruckLocation,
+    options?: { liveUntilAt?: Date | null },
   ): Promise<FoodTruckLocation> {
     // Check for recent duplicate location
     const hasRecent = await this.hasRecentLocationUpdate(
@@ -4310,7 +4338,12 @@ export class DatabaseStorage implements IStorage {
       .set({
         currentLatitude: location.latitude.toString(),
         currentLongitude: location.longitude.toString(),
+        mobileOnline: true,
         lastBroadcastAt: new Date(),
+        liveUntilAt:
+          options?.liveUntilAt !== undefined
+            ? options.liveUntilAt
+            : new Date(Date.now() + 240 * 60_000),
         updatedAt: new Date(),
       })
       .where(eq(restaurants.id, location.restaurantId));
@@ -4322,11 +4355,23 @@ export class DatabaseStorage implements IStorage {
     lat: number,
     lng: number,
     radiusKm: number,
-  ): Promise<Array<Restaurant & { distance: number; sessionId?: string }>> {
-    const staleMinutesRaw = Number(process.env.LIVE_TRUCK_STALE_MINUTES || 120);
+  ): Promise<
+    Array<
+      Restaurant & {
+        distance: number;
+        distanceMiles: number;
+        lat: number | null;
+        lng: number | null;
+        liveBroadcasting: boolean;
+        locationSource: "live";
+        sessionId?: string;
+      }
+    >
+  > {
+    const staleMinutesRaw = Number(process.env.LIVE_TRUCK_STALE_MINUTES || 240);
     const staleMinutes = Number.isFinite(staleMinutesRaw)
-      ? Math.max(5, staleMinutesRaw)
-      : 120;
+      ? Math.min(240, Math.max(5, staleMinutesRaw))
+      : 240;
     const freshnessCutoffMs = Date.now() - staleMinutes * 60_000;
 
     // Simple query first - just return food trucks with valid locations
@@ -4347,6 +4392,7 @@ export class DatabaseStorage implements IStorage {
         currentLatitude: restaurants.currentLatitude,
         currentLongitude: restaurants.currentLongitude,
         lastBroadcastAt: restaurants.lastBroadcastAt,
+        liveUntilAt: restaurants.liveUntilAt,
         operatingHours: restaurants.operatingHours,
         isActive: restaurants.isActive,
         isVerified: restaurants.isVerified,
@@ -4383,8 +4429,13 @@ export class DatabaseStorage implements IStorage {
       const lastBroadcastMs = truck?.lastBroadcastAt
         ? new Date(truck.lastBroadcastAt).getTime()
         : Number.NaN;
+      const liveUntilMs = truck?.liveUntilAt
+        ? new Date(truck.liveUntilAt).getTime()
+        : Number.NaN;
       return (
-        Number.isFinite(lastBroadcastMs) && lastBroadcastMs >= freshnessCutoffMs
+        Number.isFinite(lastBroadcastMs) &&
+        lastBroadcastMs >= freshnessCutoffMs &&
+        (!Number.isFinite(liveUntilMs) || liveUntilMs >= Date.now())
       );
     });
 
@@ -4394,6 +4445,11 @@ export class DatabaseStorage implements IStorage {
         return {
           ...truck,
           distance: 999999,
+          distanceMiles: 999999 * 0.621371,
+          lat: null,
+          lng: null,
+          liveBroadcasting: false,
+          locationSource: "live" as const,
           sessionId: truck.sessionId || undefined,
         };
       }
@@ -4417,6 +4473,11 @@ export class DatabaseStorage implements IStorage {
       return {
         ...truck,
         distance,
+        distanceMiles: distance * 0.621371,
+        lat: truckLat,
+        lng: truckLng,
+        liveBroadcasting: true,
+        locationSource: "live" as const,
         sessionId: truck.sessionId || undefined,
       };
     });

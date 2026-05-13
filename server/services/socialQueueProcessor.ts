@@ -1,41 +1,16 @@
 import { and, asc, eq, sql } from "drizzle-orm";
 import { db, pool } from "../db";
 import { socialPostQueue } from "@shared/schema";
+import {
+  markSocialPostResult,
+  publishSocialQueueItem,
+} from "./socialPublishing";
 
 type QueueStatus = "pending" | "posted" | "failed" | "manual_required";
 
 type QueueCounts = Record<QueueStatus, number>;
 
 const SOCIAL_QUEUE_LOCK_KEY = 20260412;
-
-const postToFacebookPage = async (message: string, link?: string | null) => {
-  const pageId = process.env.MEALSCOUT_FB_PAGE_ID;
-  const pageToken = process.env.MEALSCOUT_FB_PAGE_TOKEN;
-
-  if (!pageId || !pageToken) {
-    return {
-      ok: false as const,
-      error: "Missing Facebook page credentials",
-    };
-  }
-
-  const body = new URLSearchParams();
-  body.set("message", link ? `${message} ${link}` : message);
-  body.set("access_token", pageToken);
-
-  const res = await fetch(`https://graph.facebook.com/v19.0/${pageId}/feed`, {
-    method: "POST",
-    body,
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    return {
-      ok: false as const,
-      error: data?.error?.message || "Facebook post failed",
-    };
-  }
-  return { ok: true as const, postId: data?.id || null };
-};
 
 export async function runSocialQueueProcessor(limit = 25) {
   const normalizedLimit = Math.max(1, Math.min(Math.floor(limit), 200));
@@ -76,37 +51,11 @@ export async function runSocialQueueProcessor(limit = 25) {
 
     for (const row of rows) {
       try {
-        if (row.platform === "facebook") {
-          const result = await postToFacebookPage(row.message, row.link);
-          const status: QueueStatus = result.ok ? "posted" : "failed";
-          await db
-            .update(socialPostQueue)
-            .set({
-              status,
-              errorMessage: result.ok ? null : result.error || null,
-              updatedAt: new Date(),
-            })
-            .where(eq(socialPostQueue.id, row.id));
-
-          if (result.ok) {
-            stats.posted += 1;
-          } else {
-            stats.failed += 1;
-          }
-          continue;
-        }
-
-        await db
-          .update(socialPostQueue)
-          .set({
-            status: "manual_required",
-            errorMessage:
-              `Automatic publishing for platform '${row.platform}' is not configured. ` +
-              "Keep this post as a manual publish task.",
-            updatedAt: new Date(),
-          })
-          .where(eq(socialPostQueue.id, row.id));
-        stats.manualRequired += 1;
+        const result = await publishSocialQueueItem(row);
+        await markSocialPostResult(row, result);
+        if (result.ok) stats.posted += 1;
+        else if (result.manualRequired) stats.manualRequired += 1;
+        else stats.failed += 1;
       } catch (error) {
         await db
           .update(socialPostQueue)

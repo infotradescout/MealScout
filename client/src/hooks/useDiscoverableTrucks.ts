@@ -6,6 +6,8 @@ export type DiscoverableTruck = {
   name: string;
   lat?: number | string | null;
   lng?: number | string | null;
+  currentLatitude?: number | string | null;
+  currentLongitude?: number | string | null;
   latitude?: number | string | null;
   longitude?: number | string | null;
   address?: string | null;
