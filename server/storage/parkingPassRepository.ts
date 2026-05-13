@@ -118,8 +118,6 @@ export function createParkingPassRepository(deps: ParkingPassRepoDeps) {
   async function createDraftParkingPassForHost(host: Host): Promise<boolean> {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const horizon = new Date(today);
-    horizon.setDate(horizon.getDate() + 30);
 
     const existing = await db
       .select({ id: eventSeries.id })
@@ -179,7 +177,7 @@ export function createParkingPassRepository(deps: ParkingPassRepoDeps) {
         timezone: seriesTimezone,
         recurrenceRule: null,
         startDate: today,
-        endDate: horizon,
+        endDate: null,
         defaultStartTime: startTime || defaultStartTime,
         defaultEndTime: endTime || defaultEndTime,
         defaultMaxTrucks: spotCount,
@@ -353,9 +351,18 @@ export function createParkingPassRepository(deps: ParkingPassRepoDeps) {
         seriesId = match?.id ?? null;
       }
 
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
       const updates: any = {
         name: `Parking Pass - ${host.businessName}`,
         description: host.address,
+        timezone: resolveCityTimeZoneSync({
+          city: host.city,
+          state: host.state,
+        }),
+        startDate: today,
+        endDate: null,
         defaultStartTime: startTime,
         defaultEndTime: endTime,
         defaultMaxTrucks: spotCount,
@@ -380,10 +387,6 @@ export function createParkingPassRepository(deps: ParkingPassRepoDeps) {
             .where(eq(eventSeries.id, seriesId));
           return seriesId;
         }
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const horizon = new Date(today);
-        horizon.setDate(horizon.getDate() + 30);
         const [created] = await db
           .insert(eventSeries)
           .values({
@@ -394,7 +397,7 @@ export function createParkingPassRepository(deps: ParkingPassRepoDeps) {
             }),
             recurrenceRule: null,
             startDate: today,
-            endDate: horizon,
+            endDate: null,
             defaultHardCapEnabled: false,
             seriesType: "parking_pass",
             ...updates,

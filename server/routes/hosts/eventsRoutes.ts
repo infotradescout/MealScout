@@ -212,9 +212,6 @@ export function registerHostEventsRoutes(app: Express) {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
-      const horizon = new Date(today);
-      horizon.setDate(horizon.getDate() + 90);
-
       const hardCapEnabled = Boolean(req.body?.hardCapEnabled);
 
       // Airbnb-style listing: store defaults on the series; do not materialize occurrences here.
@@ -290,7 +287,7 @@ export function registerHostEventsRoutes(app: Express) {
         timezone: seriesTimezone,
         recurrenceRule: null,
         startDate: today,
-        endDate: horizon,
+        endDate: null as any,
         defaultStartTime: parsed.startTime,
         defaultEndTime: parsed.endTime,
         defaultMaxTrucks: spotCount,

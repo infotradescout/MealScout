@@ -415,7 +415,10 @@ const buildSlotOptions = (listing: ParkingPassListing) =>
     },
   ].filter(
     (slot) =>
-      (slot.priceCents || 0) > 0 &&
+      slot.priceCents !== null &&
+      slot.priceCents !== undefined &&
+      Number.isFinite(Number(slot.priceCents)) &&
+      Number(slot.priceCents) >= 0 &&
       isSlotWithinHours(
         slot.type as (typeof PARKING_PASS_SLOT_TYPES)[number],
         listing.startTime,
@@ -643,6 +646,15 @@ export default function ParkingPassPage() {
       canManageTruckProfile,
     retry: false,
     refetchOnWindowFocus: false,
+  });
+  const { data: stripeConfig, isLoading: isStripeConfigLoading } = useQuery<{
+    paymentsReady: boolean;
+    publishableKey?: string;
+  }>({
+    queryKey: ["/api/payments/stripe-config"],
+    retry: false,
+    refetchOnWindowFocus: false,
+    staleTime: 5 * 60 * 1000,
   });
   const socialConnectionByPlatform = useMemo(() => {
     const map = new Map<string, SocialConnectionStatus>();
@@ -3670,7 +3682,9 @@ export default function ParkingPassPage() {
 
   // Trucks pay MealScout (platform payments). Hosts can optionally enable Stripe Connect payouts (cashout).
   // If host payouts aren't configured, host earnings are held as credit.
-  const platformPaymentsReady = Boolean(import.meta.env.VITE_STRIPE_PUBLIC_KEY);
+  const platformPaymentsReady =
+    stripeConfig?.paymentsReady ??
+    (isStripeConfigLoading ? true : Boolean(import.meta.env.VITE_STRIPE_PUBLIC_KEY));
 
   const listingHasAvailability = (
     listing: ParkingPassListing | null | undefined,
@@ -6218,13 +6232,12 @@ export default function ParkingPassPage() {
               {isTruckViewUser && truck && truck.isVerified === false && (
                 <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 space-y-2">
                   <p className="font-semibold">
-                    ⚠️ Verification required to book parking passes
+                    Verification pending
                   </p>
                   <p className="text-xs">
-                    Your business is pending verification. Booking is locked
-                    until your account is approved — most reviews complete
-                    within 1 business day. You can still browse available spots
-                    below.
+                    Your business is pending verification. You can still book
+                    available Parking Pass spots while review is in progress.
+                    Most reviews complete within 1 business day.
                   </p>
                   <a
                     href="/restaurant-signup"
@@ -6641,7 +6654,8 @@ export default function ParkingPassPage() {
                                         Choose a day with availability.
                                       </p>
                                     )}
-                                    {!platformPaymentsReady && (
+                                    {!isStripeConfigLoading &&
+                                      !platformPaymentsReady && (
                                       <p className="pt-1 text-[11px] text-[color:var(--status-error)]">
                                         Payments are temporarily unavailable.
                                       </p>

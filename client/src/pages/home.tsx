@@ -11,24 +11,15 @@ import { Input } from "@/components/ui/input";
 import {
   MapPin,
   Sparkles,
-  Rocket,
   Pizza,
-  DollarSign,
   Truck,
   RotateCw,
   ChefHat,
-  Clock,
   Target,
-  Heart,
-  Bell,
   Map as MapIcon,
-  LogIn,
-  UserPlus,
   Store,
-  Bug,
   Sandwich,
   Soup,
-  UtensilsCrossed,
   Croissant,
   Salad,
   Fish,
@@ -151,90 +142,6 @@ interface TrendingStory {
   creatorName?: string;
   viewCount?: number;
   likeCount?: number;
-}
-
-function formatBusinessTypeLabel(business: {
-  isFoodTruck?: boolean;
-  businessType?: string;
-}): string {
-  if (business.isFoodTruck) return "Food Truck";
-  const normalizedType = String(business.businessType || "")
-    .toLowerCase()
-    .trim();
-  if (normalizedType.includes("bar")) return "Bar";
-  return "Restaurant";
-}
-
-function BusinessDealsCard({
-  business,
-  compact = false,
-}: {
-  business: BusinessDealsSummary;
-  compact?: boolean;
-}) {
-  const businessTypeLabel = formatBusinessTypeLabel(business);
-  const distanceLabel =
-    typeof business.distance === "number" && Number.isFinite(business.distance)
-      ? `${business.distance.toFixed(1)} mi away`
-      : null;
-
-  return (
-    <Link href={`/restaurant/${business.id}`}>
-      <div className="rounded-3xl border border-white/10 bg-white/5 p-5 backdrop-blur-md hover:bg-white/10 transition-all group h-full">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h4 className="text-base font-bold text-white truncate group-hover:text-primary transition-colors">
-              {business.name}
-            </h4>
-            <p className="text-xs text-white/40 truncate mt-1 uppercase tracking-widest font-bold">
-              {business.cuisineType || businessTypeLabel}
-            </p>
-          </div>
-          <span className="rounded-full bg-white/5 border border-white/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-white/40">
-            {businessTypeLabel}
-          </span>
-        </div>
-
-        <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-bold text-white/40 uppercase tracking-widest">
-          <span className="flex items-center gap-1 text-primary">
-            <Sparkles className="w-3 h-3" />
-            {business.recommendationCount} Recs
-          </span>
-          <span>{business.favoriteCount} Favs</span>
-          {distanceLabel && <span>{distanceLabel}</span>}
-        </div>
-
-        <p className="mt-3 text-[11px] text-white/40 leading-relaxed italic line-clamp-2">
-          "{business.rankReason}"
-        </p>
-
-        <div className="mt-4 pt-4 border-t border-white/5">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/40">
-              Active Deals
-            </p>
-            <span className="text-[10px] font-bold text-primary">{business.deals.length}</span>
-          </div>
-          {business.deals.length > 0 ? (
-            <div className="space-y-2">
-              {business.deals.slice(0, compact ? 1 : 2).map((deal) => (
-                <div key={deal.id} className="flex items-center gap-2">
-                  <div className="w-1 h-1 rounded-full bg-primary" />
-                  <p className="text-xs text-white/80 font-medium line-clamp-1">
-                    {deal.title}
-                  </p>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-[10px] text-white/20 uppercase tracking-widest font-bold italic">
-              No deals active
-            </p>
-          )}
-        </div>
-      </div>
-    </Link>
-  );
 }
 
 export default function Home() {
@@ -857,7 +764,7 @@ export default function Home() {
       )}
 
       {/* Hero & Search Section - Atmospheric Adaptation */}
-      <section className="px-6 py-8 border-b border-white/5 bg-black/20 backdrop-blur-md">
+      <section className="px-6 pt-8 pb-28 md:pb-8 border-b border-white/5 bg-black/20 backdrop-blur-md">
         <div className="max-w-4xl mx-auto">
           <div className="flex flex-col items-start text-left">
             <div className="mb-6">
@@ -932,65 +839,21 @@ export default function Home() {
               </Link>
             </div>
 
-            {geoAds.length > 0 && (
-              <div className="mb-8 w-full">
-                {geoAds.map((ad) => (
-                  <div
-                    key={ad.id}
-                    className="p-6 rounded-3xl border border-primary/20 bg-primary/5 backdrop-blur-sm shadow-[0_8px_32px_rgba(245,158,11,0.1)]"
-                  >
-                    {ad.mediaUrl && (
-                      <img
-                        src={ad.mediaUrl}
-                        alt={ad.title}
-                        className="w-full h-48 object-cover rounded-2xl mb-4 grayscale contrast-125 brightness-75"
-                        loading="lazy"
-                        decoding="async"
-                      />
-                    )}
-                    <div className="flex items-center gap-2 mb-3">
-                      <Sparkles className="w-4 h-4 text-primary" />
-                      <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary">
-                        Local Spotlight
-                      </span>
-                    </div>
-                    <div className="text-xl font-serif font-bold text-white">
-                      {ad.title}
-                    </div>
-                    {ad.body && (
-                      <p className="text-sm text-white/60 mt-2 leading-relaxed">
-                        {ad.body}
-                      </p>
-                    )}
-                    <div className="mt-4">
-                      <Button 
-                        size="sm" 
-                        onClick={() => handleGeoAdClick(ad)}
-                        className="rounded-xl bg-primary text-black font-bold hover:shadow-[0_0_20px_rgba(245,158,11,0.4)]"
-                      >
-                        {ad.ctaText || "Pull Up"}
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
             {/* Filter Chips - Inline category filtering (no navigation away) */}
             <div className="flex space-x-3 overflow-x-auto pb-2 w-full">
               {[
-                { label: "Hot Deals", key: "deals", icon: "✦" },
-                { label: "Pizza", key: "pizza", icon: "🍕" },
-                { label: "Burgers", key: "burgers", icon: "🍔" },
-                { label: "Sushi", key: "sushi", icon: "🍣" },
-                { label: "Chinese", key: "chinese", icon: "🥡" },
-                { label: "Tacos", key: "mexican", icon: "🌮" },
-                { label: "Breakfast", key: "breakfast", icon: "🍳" },
-                { label: "Seafood", key: "seafood", icon: "🦞" },
-                { label: "BBQ", key: "bbq", icon: "🔥" },
-                { label: "Desserts", key: "dessert", icon: "🍰" },
-                { label: "Coffee", key: "coffee", icon: "☕" },
-                { label: "Healthy", key: "healthy", icon: "🥗" },
+                { label: "Hot Deals", key: "deals", icon: Sparkles },
+                { label: "Pizza", key: "pizza", icon: Pizza },
+                { label: "Burgers", key: "burgers", icon: Beef },
+                { label: "Sushi", key: "sushi", icon: Fish },
+                { label: "Chinese", key: "chinese", icon: Soup },
+                { label: "Tacos", key: "mexican", icon: Flame },
+                { label: "Breakfast", key: "breakfast", icon: Croissant },
+                { label: "Seafood", key: "seafood", icon: Fish },
+                { label: "BBQ", key: "bbq", icon: Flame },
+                { label: "Desserts", key: "dessert", icon: Cake },
+                { label: "Coffee", key: "coffee", icon: Coffee },
+                { label: "Healthy", key: "healthy", icon: Salad },
               ].map((chip) => (
                 <Button
                   key={chip.key}
@@ -1001,9 +864,9 @@ export default function Home() {
                       : "bg-white/5 border border-white/10 text-white/80 hover:bg-white/10 hover:text-white"
                   }`}
                   size="sm"
-                  id={chip.key === "deals" ? "scout-deals-section" : undefined}
                 >
-                  <span className="mr-1.5">{chip.icon}</span> {chip.label}
+                  <chip.icon className="mr-1.5 h-4 w-4" />
+                  {chip.label}
                 </Button>
               ))}
             </div>
@@ -1177,108 +1040,40 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Tonight's Specials - Deals Discovery Section */}
-      <section className="py-10 border-b border-white/5 bg-black/50">
-        <div className="px-6">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex flex-col gap-1">
-              <div className="flex items-center gap-2">
-                <Tag className="w-3.5 h-3.5 text-primary" />
-                <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary">Tonight's Specials</span>
-              </div>
-              <h3 className="text-2xl font-serif font-bold text-white">Deals Near You</h3>
-            </div>
-            <Link href="#scout-deals-section">
-              <Button variant="ghost" className="text-white/40 hover:text-white text-xs font-bold uppercase tracking-widest">
-                See All
-              </Button>
-            </Link>
-          </div>
-
-          {sortedFeaturedDeals.length > 0 ? (
-            <div className="flex gap-3 overflow-x-auto pb-2 -mx-6 px-6">
-              {sortedFeaturedDeals.slice(0, 8).map((deal) => (
-                <Link key={deal.id} href={`/deal/${deal.id}`}>
-                  <div className="flex-shrink-0 w-56 rounded-3xl border border-white/10 bg-white/5 p-4 backdrop-blur-md hover:bg-white/10 transition-all group">
-                    <div className="flex items-start justify-between gap-2 mb-3">
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-primary bg-primary/10 px-2 py-1 rounded-full">
-                        {deal.dealType === "percentage" ? `${deal.discountValue}% OFF` : `$${deal.discountValue} OFF`}
-                      </span>
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-white/30">{deal.dealType}</span>
-                    </div>
-                    <h4 className="text-sm font-bold text-white line-clamp-2 group-hover:text-primary transition-colors mb-2">
-                      {deal.title}
-                    </h4>
-                    {deal.restaurantId && (
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-white/30 truncate">
-                        {(dealsByRestaurant.get(String(deal.restaurantId)) || []).length > 0
-                          ? "View deal"
-                          : "Stop in tonight"}
-                      </p>
-                    )}
-                    <div className="mt-3 pt-3 border-t border-white/5 flex items-center justify-between">
-                      <span className="text-[10px] text-white/20 font-bold uppercase tracking-widest">
-                        {deal.startTime && deal.endTime
-                          ? `${deal.startTime.slice(0,5)} – ${deal.endTime.slice(0,5)}`
-                          : "All day"}
-                      </span>
-                      <span className="text-[10px] font-bold text-primary uppercase tracking-widest">Pull Up →</span>
-                    </div>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          ) : (
-            <div className="rounded-2xl border border-dashed border-white/10 p-8 text-center">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-white/20">No specials posted nearby yet.</p>
-              <Link href="#scout-deals-section">
-                <Button className="mt-4 bg-white/5 border border-white/10 text-white font-bold uppercase tracking-widest text-[10px] rounded-xl px-5 py-2 hover:bg-white/10">Browse Featured</Button>
-              </Link>
-            </div>
-          )}
-        </div>
-      </section>
-
-      {/* Public Profiles Section - Atmospheric Adaptation */}
-      <section className="py-12 border-b border-white/5 bg-black/60">
-        <div className="px-6">
-          <div className="flex items-end justify-between mb-8">
-            <div className="flex flex-col gap-2">
+      {/* Relevance-first Scout feed */}
+      <section className="py-10 border-b border-white/5 bg-black/55">
+        <div className="px-6 space-y-8">
+          <div className="flex items-end justify-between gap-4">
+            <div>
               <div className="flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-primary" />
-                <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary">Discover</span>
+                <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary">
+                  Scout Picks
+                </span>
               </div>
-              <h2 className="text-3xl font-serif font-bold text-white">
-                {shortLocation === "Your Location"
-                  ? "Local Favorites"
-                  : `Best of ${shortLocation}`}
+              <h2 className="mt-2 text-2xl font-serif font-bold text-white">
+                Food that makes sense nearby
               </h2>
-              <p className="text-white/40 text-sm font-medium max-w-md">
-                Public truck, restaurant, and bar profiles. Community recommendations carry extra weight.
+              <p className="mt-1 text-sm text-white/40">
+                Ranked by local food signal, not general map noise.
               </p>
             </div>
-            <Link href="#scout-deals-section">
-              <Button
-                variant="ghost"
-                className="text-white/40 hover:text-white text-xs font-bold uppercase tracking-widest"
-              >
-                View All
+            <Link href="/search">
+              <Button variant="ghost" className="text-white/40 hover:text-white text-xs font-bold uppercase tracking-widest">
+                Search
               </Button>
             </Link>
           </div>
 
           {publicProfilesLoading ? (
-            <div className="flex gap-3 overflow-x-auto pb-2 -mx-6 px-6">
+            <div className="space-y-3">
               {[1, 2, 3].map((i) => (
-                <div
-                  key={i}
-                  className="flex-shrink-0 w-64 bg-white/5 rounded-lg h-52 animate-pulse"
-                />
+                <div key={i} className="h-24 rounded-2xl bg-white/5 animate-pulse" />
               ))}
             </div>
           ) : publicProfilesError ? (
-            <div className="text-center py-8 text-red-400 text-sm">
-              <p>We couldn't load profiles right now. Try again in a bit.</p>
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-5 text-sm text-red-300">
+              <p>Scout signal did not load.</p>
               <Button
                 size="sm"
                 variant="outline"
@@ -1288,74 +1083,180 @@ export default function Home() {
                   refetchFeaturedDeals();
                 }}
               >
-                Retry Profiles
+                Retry
               </Button>
             </div>
           ) : filteredBusinesses.length > 0 ? (
-            <div className="flex gap-3 overflow-x-auto pb-2 -mx-6 px-6">
-              {filteredBusinesses.map((business) => (
-                <div key={business.id} className="flex-shrink-0 w-64">
-                  <BusinessDealsCard business={business} />
-                </div>
+            <div className="space-y-3">
+              {filteredBusinesses.slice(0, 6).map((business, index) => (
+                <Link key={business.id} href={`/restaurant/${business.id}`}>
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.06] p-4 hover:bg-white/10 transition-all">
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-sm font-black text-primary">
+                        {index + 1}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <h3 className="truncate text-base font-bold text-white">
+                              {business.name}
+                            </h3>
+                            <p className="mt-1 truncate text-[11px] font-bold uppercase tracking-widest text-white/35">
+                              {business.isFoodTruck
+                                ? "Food truck"
+                                : business.businessType === "bar"
+                                  ? "Bar"
+                                  : business.businessType === "private_chef"
+                                    ? "Private chef"
+                                    : "Restaurant"}
+                              {business.cuisineType ? ` · ${business.cuisineType}` : ""}
+                            </p>
+                          </div>
+                          {business.mobileOnline && (
+                            <span className="rounded-full border border-primary/30 bg-primary/10 px-2 py-1 text-[9px] font-black uppercase tracking-widest text-primary">
+                              Live
+                            </span>
+                          )}
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[10px] font-bold uppercase tracking-widest text-white/30">
+                          {business.distance != null && Number.isFinite(business.distance) && (
+                            <span>{Number(business.distance).toFixed(1)} mi</span>
+                          )}
+                          {business.activeDealCount > 0 && (
+                            <span>{business.activeDealCount} deal{business.activeDealCount === 1 ? "" : "s"}</span>
+                          )}
+                          {business.favoriteCount > 0 && (
+                            <span>{business.favoriteCount} saved</span>
+                          )}
+                          <span>{business.rankReason}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </Link>
               ))}
             </div>
           ) : (
-            <div className="text-center py-8 text-muted-foreground">
-              <p className="mb-3">No public profiles to show yet.</p>
-              <div className="flex flex-wrap justify-center gap-2">
-                <Link href="/scout">
-                  <Button size="sm" variant="outline">
-                    Open Map
-                  </Button>
-                </Link>
-                <Link href="#scout-deals-section">
-                  <Button size="sm" variant="outline">
-                    View Featured
-                  </Button>
-                </Link>
-                <Link href="/contact">
-                  <Button size="sm" variant="outline">
-                    Recommend a Spot
-                  </Button>
-                </Link>
-              </div>
+            <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.03] p-7 text-center">
+              <p className="text-sm text-white/45">No strong Scout picks here yet.</p>
+              <Link href="/contact">
+                <Button size="sm" variant="outline" className="mt-4">
+                  Recommend a spot
+                </Button>
+              </Link>
             </div>
           )}
         </div>
       </section>
 
-      {/* Video Recommendations - Atmospheric Adaptation */}
-      <section className="py-12 border-b border-white/5 bg-black/40">
-        <div className="px-6">
-          <div className="flex items-end justify-between mb-8">
-            <div className="flex flex-col gap-2">
+      <section id="scout-deals-section" className="py-10 border-b border-white/5 bg-black/45">
+        <div className="px-6 space-y-8">
+          <div>
+            <div className="flex items-center gap-2">
+              <Tag className="w-4 h-4 text-primary" />
+              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary">
+                Deals
+              </span>
+            </div>
+            <h2 className="mt-2 text-2xl font-serif font-bold text-white">
+              Current value nearby
+            </h2>
+          </div>
+
+          {sortedFeaturedDeals.length > 0 ? (
+            <div className="flex gap-3 overflow-x-auto pb-2 -mx-6 px-6">
+              {sortedFeaturedDeals.slice(0, 8).map((deal) => (
+                <Link key={deal.id} href={`/deal/${deal.id}`}>
+                  <div className="flex-shrink-0 w-56 rounded-2xl border border-white/10 bg-white/[0.06] p-4 hover:bg-white/10 transition-all">
+                    <span className="rounded-full bg-primary/10 px-2 py-1 text-[10px] font-black uppercase tracking-widest text-primary">
+                      {deal.dealType === "percentage"
+                        ? `${deal.discountValue}% off`
+                        : `$${deal.discountValue} off`}
+                    </span>
+                    <h3 className="mt-3 line-clamp-2 text-sm font-bold text-white">
+                      {deal.title}
+                    </h3>
+                    <p className="mt-3 text-[10px] font-bold uppercase tracking-widest text-white/30">
+                      {deal.restaurant?.name || "MealScout spot"}
+                    </p>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-dashed border-white/10 p-6 text-sm text-white/35">
+              No active deals posted nearby.
+            </div>
+          )}
+
+          <div>
+            <div className="mb-4 flex items-center gap-2">
+              <Sandwich className="w-4 h-4 text-primary" />
+              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary">
+                Cravings
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {[
+                { label: "Pizza", key: "pizza", icon: Pizza },
+                { label: "Burgers", key: "burgers", icon: Beef },
+                { label: "Tacos", key: "mexican", icon: Flame },
+                { label: "Breakfast", key: "breakfast", icon: Croissant },
+                { label: "Seafood", key: "seafood", icon: Fish },
+                { label: "Coffee", key: "coffee", icon: Coffee },
+                { label: "Healthy", key: "healthy", icon: Salad },
+                { label: "Dessert", key: "dessert", icon: Cake },
+              ].map((item) => (
+                <Button
+                  key={item.key}
+                  variant="ghost"
+                  onClick={() => setActiveCategory(activeCategory === item.key ? null : item.key)}
+                  className={`h-14 justify-start rounded-2xl border px-4 ${
+                    activeCategory === item.key
+                      ? "border-primary/40 bg-primary/15 text-primary"
+                      : "border-white/10 bg-white/[0.05] text-white/75 hover:bg-white/10"
+                  }`}
+                >
+                  <item.icon className="mr-2 h-4 w-4" />
+                  {item.label}
+                </Button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="py-10 border-b border-white/5 bg-black/60">
+        <div className="px-6 space-y-6">
+          <div className="flex items-end justify-between gap-4">
+            <div>
               <div className="flex items-center gap-2">
                 <PlayCircle className="w-4 h-4 text-primary" />
-                <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary">Watch</span>
+                <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary">
+                  Community Signal
+                </span>
               </div>
-              <h2 className="text-3xl font-serif font-bold text-white">Trending Stories</h2>
-              <p className="text-white/40 text-sm font-medium">Community food recommendations that are moving the needle this week.</p>
+              <h2 className="mt-2 text-2xl font-serif font-bold text-white">
+                What locals are checking
+              </h2>
             </div>
             <Link href="/video">
-              <Button
-                variant="ghost"
-                className="text-white/40 hover:text-white text-xs font-bold uppercase tracking-widest"
-              >
-                Post Video
+              <Button variant="ghost" className="text-white/40 hover:text-white text-xs font-bold uppercase tracking-widest">
+                Stories
               </Button>
             </Link>
           </div>
 
           {weeklyTrendingVideos.length > 0 ? (
-            <div className="grid grid-cols-1 gap-3">
-              {weeklyTrendingVideos.map((story) => (
+            <div className="space-y-3">
+              {weeklyTrendingVideos.slice(0, 4).map((story) => (
                 <Link key={story.id} href={`/video/${story.id}`}>
-                  <div className="rounded-2xl border border-white/10 bg-white/5 px-5 py-4 hover:bg-white/10 transition-all group">
-                    <p className="text-base font-bold text-white group-hover:text-primary transition-colors">
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.05] px-5 py-4 hover:bg-white/10 transition-all">
+                    <p className="text-sm font-bold text-white">
                       {story.title || "Food recommendation"}
                     </p>
-                    <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] font-bold text-white/40 uppercase tracking-widest">
-                      <span>{story.creatorName || "MealScout User"}</span>
+                    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[10px] font-bold uppercase tracking-widest text-white/35">
+                      <span>{story.creatorName || "MealScout user"}</span>
                       <span>{Number(story.viewCount || 0).toLocaleString()} views</span>
                       <span>{Number(story.likeCount || 0).toLocaleString()} likes</span>
                     </div>
@@ -1364,8 +1265,39 @@ export default function Home() {
               ))}
             </div>
           ) : (
-            <div className="rounded-2xl border border-dashed border-white/10 p-8 text-center text-xs text-white/20 font-bold uppercase tracking-widest">
-              No trending stories yet.
+            <div className="rounded-2xl border border-dashed border-white/10 p-6 text-sm text-white/35">
+              No community stories trending yet.
+            </div>
+          )}
+
+          {geoAds.length > 0 && (
+            <div className="pt-2">
+              <div className="mb-3 flex items-center gap-2">
+                <Store className="h-4 w-4 text-white/35" />
+                <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/35">
+                  Sponsored local
+                </span>
+              </div>
+              <div className="flex gap-3 overflow-x-auto pb-2 -mx-6 px-6">
+                {geoAds.slice(0, 4).map((ad) => (
+                  <button
+                    key={ad.id}
+                    type="button"
+                    onClick={() => handleGeoAdClick(ad)}
+                    className="flex-shrink-0 w-60 rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-left hover:bg-white/10 transition-all"
+                  >
+                    <p className="text-sm font-bold text-white">{ad.title}</p>
+                    {ad.body && (
+                      <p className="mt-2 line-clamp-2 text-xs text-white/40">
+                        {ad.body}
+                      </p>
+                    )}
+                    <p className="mt-3 text-[10px] font-black uppercase tracking-widest text-primary">
+                      {ad.ctaText || "Open"}
+                    </p>
+                  </button>
+                ))}
+              </div>
             </div>
           )}
         </div>
@@ -1382,192 +1314,49 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Owner Section - Atmospheric Adaptation */}
-      {!user && (
-        <section className="py-12 border-b border-white/5 bg-primary/5 backdrop-blur-md">
-          <div className="px-6 text-center max-w-lg mx-auto">
-            <div className="p-3 rounded-2xl bg-primary/10 w-fit mx-auto mb-6">
-              <ChefHat className="w-8 h-8 text-primary" />
-            </div>
-            <h3 className="text-2xl font-serif font-bold text-white mb-3">
-              Bring your place to the neighborhood
-            </h3>
-            <p className="text-white/60 mb-8 text-sm leading-relaxed">
-              Post real-time deals, broadcast when you're open, and start converting nearby regulars today.
-            </p>
-            <Link href="/customer-signup?role=business">
-              <Button
-                size="lg"
-                className="bg-primary text-black font-bold uppercase tracking-widest px-8 rounded-2xl shadow-[0_0_30px_rgba(245,158,11,0.3)]"
-                onClick={() => {
-                  trackFunnelEvent(FUNNEL_EVENTS.primaryCtaClick, {
-                    page: "home",
-                    cta: "owner_section_claim_go_live",
-                    destination: "/customer-signup?role=business",
-                    role: "business",
-                  });
-                }}
-              >
-                Claim & Go Live
-              </Button>
-            </Link>
-          </div>
-        </section>
-      )}
-
-      {/* TWO-COLUMN SECTIONS - Atmospheric Adaptation */}
-      <section className="py-16 border-b border-white/5 bg-black/80">
+      <section className="py-12 border-b border-white/5 bg-black/80">
         <div className="px-6">
-          {!user ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
-              {/* Stay Connected Section */}
-              <div className="space-y-8">
-                <div className="flex flex-col gap-2 text-center md:text-left">
-                  <div className="flex items-center gap-2 justify-center md:justify-start">
-                    <Heart className="w-4 h-4 text-primary" />
-                    <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary">Join Us</span>
-                  </div>
-                  <h3 className="text-3xl font-serif font-bold text-white">
-                    Unlock the{" "}
-                    {shortLocation === "Your Location" ? "Local" : shortLocation}{" "}
-                    Scene
-                  </h3>
-                  <p className="text-white/40 text-sm font-medium">
-                    Save go-tos, track trucks live, and get a heads-up when spots reopen.
-                  </p>
-                </div>
-
-                <div className="space-y-4">
-                  {[
-                    { icon: Heart, title: `${shortLocation === "Your Location" ? "Neighborhood" : shortLocation} Favorites`, desc: "Keep your go-tos one tap away" },
-                    { icon: Truck, title: `Food trucks ${shortLocation === "Your Location" ? "nearby" : `in ${shortLocation}`}`, desc: "Live locations around you" },
-                    { icon: Bell, title: `Deals ${shortLocation === "Your Location" ? "nearby" : `in ${shortLocation}`}`, desc: "Quick wins close to you" }
-                  ].map((item, idx) => (
-                    <div key={idx} className="bg-white/5 p-4 rounded-2xl border border-white/10 flex items-center gap-4 group hover:bg-white/10 transition-all">
-                      <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
-                        <item.icon className="w-5 h-5 text-primary" />
-                      </div>
-                      <div className="flex-1">
-                        <h4 className="font-bold text-white text-sm">{item.title}</h4>
-                        <p className="text-xs text-white/40 font-medium">{item.desc}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <Link href="/customer-signup">
-                  <Button
-                    className="w-full bg-white text-black font-bold uppercase tracking-widest py-6 rounded-2xl hover:bg-primary transition-all"
-                    onClick={() => {
-                      trackFunnelEvent(FUNNEL_EVENTS.primaryCtaClick, {
-                        page: "home",
-                        cta: "stay_connected_create_account",
-                        destination: "/customer-signup",
-                        role: "diner",
-                      });
-                    }}
-                  >
-                    Create Free Account
-                  </Button>
-                </Link>
+          <div className="mx-auto max-w-xl rounded-2xl border border-primary/20 bg-primary/[0.08] p-5">
+            <div className="flex items-start gap-4">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary/10">
+                <ChefHat className="h-6 w-6 text-primary" />
               </div>
-
-              {/* Community Building Section */}
-              <div className="space-y-8">
-                <div className="flex flex-col gap-2 text-center md:text-left">
-                  <div className="flex items-center gap-2 justify-center md:justify-start">
-                    <Sparkles className="w-4 h-4 text-primary" />
-                    <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary">Promote</span>
-                  </div>
-                  <h3 className="text-3xl font-serif font-bold text-white">
-                    Support Local Gems
-                  </h3>
-                  <p className="text-white/40 text-sm font-medium">
-                    Pass along great spots and help them stay busy.
-                  </p>
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-primary">
+                  For food businesses
+                </p>
+                <h3 className="mt-1 text-xl font-serif font-bold text-white">
+                  Show up where local food decisions happen.
+                </h3>
+                <p className="mt-2 text-sm text-white/50">
+                  Claim your profile, post deals, go live, and share the same signal to your socials.
+                </p>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <Link href="/customer-signup?role=business">
+                    <Button
+                      size="sm"
+                      className="bg-primary text-black font-bold"
+                      onClick={() => {
+                        trackFunnelEvent(FUNNEL_EVENTS.primaryCtaClick, {
+                          page: "home",
+                          cta: "scout_business_claim",
+                          destination: "/customer-signup?role=business",
+                          role: "business",
+                        });
+                      }}
+                    >
+                      Claim business
+                    </Button>
+                  </Link>
+                  <Link href="/share-hub">
+                    <Button size="sm" variant="outline">
+                      Share MealScout
+                    </Button>
+                  </Link>
                 </div>
-
-                <div className="space-y-4">
-                  {[
-                    { step: "1", title: "Share Your Link", desc: "Get a unique referral link to share with restaurants" },
-                    { step: "2", title: "Restaurant Subscribes", desc: "When they join, you become their community partner" },
-                    { step: "3", title: "Earn Recurring Income", desc: "Receive commission as long as they remain active" }
-                  ].map((item, idx) => (
-                    <div key={idx} className="bg-white/5 p-4 rounded-2xl border border-white/10 flex items-start gap-4 group hover:bg-white/10 transition-all">
-                      <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
-                        <span className="text-primary font-bold text-lg">{item.step}</span>
-                      </div>
-                      <div className="flex-1">
-                        <h4 className="font-bold text-white text-sm mb-1">{item.title}</h4>
-                        <p className="text-xs text-white/40 font-medium leading-relaxed">{item.desc}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <Link href={user ? "/affiliate-dashboard" : "/customer-signup"}>
-                  <Button className="w-full bg-primary/10 border border-primary/20 text-primary font-bold uppercase tracking-widest py-6 rounded-2xl hover:bg-primary/20 transition-all">
-                    {user ? "Community Builder Dashboard" : "Start Building"}
-                  </Button>
-                </Link>
               </div>
             </div>
-          ) : (
-            <div className="max-w-[600px] mx-auto">
-              <div className="flex items-center justify-between mb-8">
-                <h3 className="text-2xl font-serif font-bold text-white">Nearby Profiles</h3>
-                <Link href="#scout-deals-section">
-                  <Button variant="ghost" className="text-white/40 hover:text-white text-xs font-bold uppercase tracking-widest">
-                    View All
-                  </Button>
-                </Link>
-              </div>
-
-              {publicProfilesLoading ? (
-                <div className="space-y-4">
-                  {[1, 2, 3].map((i) => (
-                    <div key={i} className="h-48 rounded-3xl bg-white/5 animate-pulse border border-white/10" />
-                  ))}
-                </div>
-              ) : publicProfilesError ? (
-                <div className="text-center py-12 rounded-3xl border border-white/10 bg-white/5">
-                  <p className="text-white/40 text-sm font-medium mb-4">We couldn't load profiles right now.</p>
-                  <Button
-                    variant="ghost"
-                    className="text-primary font-bold uppercase tracking-widest text-xs"
-                    onClick={() => {
-                      refetchPublicProfiles();
-                      refetchFeaturedDeals();
-                    }}
-                  >
-                    Retry Profiles
-                  </Button>
-                </div>
-              ) : filteredBusinesses.length > 0 ? (
-                <div className="space-y-4">
-                  {filteredBusinesses.map((business) => (
-                    <BusinessDealsCard key={business.id} business={business} compact />
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-16 rounded-3xl border border-dashed border-white/10 bg-white/5">
-                  <p className="text-white/40 text-sm font-medium mb-6">No deals nearby yet.</p>
-                  <div className="flex flex-wrap justify-center gap-4">
-                    <Link href="/scout">
-                      <Button className="bg-white/5 border border-white/10 text-white font-bold uppercase tracking-widest px-6 rounded-xl hover:bg-white/10">
-                        Open Map
-                      </Button>
-                    </Link>
-                    <Link href="#scout-deals-section">
-                      <Button className="bg-primary/10 border border-primary/20 text-primary font-bold uppercase tracking-widest px-6 rounded-xl hover:bg-primary/20">
-                        Featured Deals
-                      </Button>
-                    </Link>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
+          </div>
         </div>
       </section>
 

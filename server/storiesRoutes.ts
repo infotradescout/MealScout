@@ -809,7 +809,7 @@ export default function setupStoriesRoutes(app: Express) {
       if (timeframe === 'month') hoursBack = 30 * 24;
       if (timeframe === 'all') hoursBack = 365 * 24;
 
-      const cutoffDate = sql`NOW() - INTERVAL '${hoursBack} hours'`;
+      const cutoffDate = new Date(Date.now() - hoursBack * 60 * 60 * 1000);
 
       const trending = await db
         .select({

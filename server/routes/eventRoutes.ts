@@ -140,6 +140,8 @@ export function registerEventRoutes(
   let parkingPassPublicFeedCache: { expiresAt: number; payload: any[] } | null =
     null;
   let parkingPassPublicFeedLastGood: { payload: any[] } | null = null;
+  let parkingPassHostDefaultsLastSyncedAt = 0;
+  let parkingPassHostDefaultsSyncInFlight: Promise<number> | null = null;
 
   const toTeaserId = (value: string) =>
     crypto.createHash("sha256").update(value).digest("hex").slice(0, 16);
@@ -203,6 +205,24 @@ export function registerEventRoutes(
     return Math.min(...centsValues);
   };
 
+  const hasPositiveParkingPassHostPrice = (host: any) =>
+    [
+      host?.parkingPassBreakfastPriceCents,
+      host?.parkingPassLunchPriceCents,
+      host?.parkingPassDinnerPriceCents,
+      host?.parkingPassDailyPriceCents,
+      host?.parkingPassWeeklyPriceCents,
+      host?.parkingPassMonthlyPriceCents,
+    ].some((value) => Number(value) > 0);
+
+  const hasParkingPassHostScheduleDefaults = (host: any) =>
+    Boolean(
+      String(host?.parkingPassStartTime || "").trim() ||
+        String(host?.parkingPassEndTime || "").trim() ||
+        (Array.isArray(host?.parkingPassDaysOfWeek) &&
+          host.parkingPassDaysOfWeek.length > 0),
+    );
+
   const redactParkingPassEventForGuest = (event: any) => {
     const host = event?.host ? { ...(event.host as any) } : null;
     const hostLat = host?.latitude ?? null;
@@ -222,6 +242,96 @@ export function registerEventRoutes(
     if ("hostBusinessName" in redacted)
       redacted.hostBusinessName = "Verified host";
     return redacted;
+  };
+
+  const syncPublicReadyParkingPassHostDefaults = async () => {
+    const now = Date.now();
+    if (now - parkingPassHostDefaultsLastSyncedAt < 15 * 60_000) {
+      return 0;
+    }
+    if (parkingPassHostDefaultsSyncInFlight) {
+      return parkingPassHostDefaultsSyncInFlight;
+    }
+
+    parkingPassHostDefaultsSyncInFlight = (async () => {
+    const allHosts = await storage.getAllHosts();
+    const seriesHostIds = new Set(
+      (await storage.getParkingPassSeriesSafe().catch(() => []))
+        .map((series: any) => String(series?.hostId || "").trim())
+        .filter(Boolean),
+    );
+    let synced = 0;
+
+    for (const host of allHosts as any[]) {
+      const hostId = String(host?.id || "").trim();
+      if (!hostId) continue;
+      if (
+        !seriesHostIds.has(hostId) &&
+        !hasPositiveParkingPassHostPrice(host) &&
+        !hasParkingPassHostScheduleDefaults(host)
+      ) {
+        continue;
+      }
+
+      const hostStatus = normalizeParkingStatus(host?.status || "");
+      if (hostStatus && unavailableParkingStatuses.has(hostStatus)) continue;
+      if (host?.deletedAt || host?.archivedAt || host?.cancelledAt) continue;
+      if (
+        !isHostProfileMapEligible({
+          businessName: host?.businessName,
+          address: host?.address,
+          city: host?.city,
+          state: host?.state,
+        })
+      ) {
+        continue;
+      }
+
+      const listing = {
+        host,
+        startTime:
+          String(host?.parkingPassStartTime || "").trim() ||
+          PARKING_PASS_MEAL_WINDOWS.breakfast.start,
+        endTime:
+          String(host?.parkingPassEndTime || "").trim() ||
+          PARKING_PASS_MEAL_WINDOWS.dinner.end,
+        maxTrucks: host?.spotCount ?? 1,
+        breakfastPriceCents: host?.parkingPassBreakfastPriceCents,
+        lunchPriceCents: host?.parkingPassLunchPriceCents,
+        dinnerPriceCents: host?.parkingPassDinnerPriceCents,
+        dailyPriceCents: host?.parkingPassDailyPriceCents,
+        weeklyPriceCents: host?.parkingPassWeeklyPriceCents,
+        monthlyPriceCents: host?.parkingPassMonthlyPriceCents,
+      };
+
+      if (!isParkingPassPublicReady(listing as any)) continue;
+
+      try {
+        const seriesId = await storage.syncParkingPassSeriesFromHost(hostId);
+        if (seriesId) synced += 1;
+      } catch (error) {
+        console.warn("Failed to sync Parking Pass host defaults:", {
+          hostId,
+          error,
+        });
+      }
+    }
+
+    if (synced > 0) {
+      console.info(
+        `[parking-pass] Synced ${synced} host default listing(s) before feed build`,
+      );
+    }
+
+      parkingPassHostDefaultsLastSyncedAt = Date.now();
+      return synced;
+    })();
+
+    try {
+      return await parkingPassHostDefaultsSyncInFlight;
+    } finally {
+      parkingPassHostDefaultsSyncInFlight = null;
+    }
   };
 
   const buildParkingPassPublicFeed = async (): Promise<any[]> => {
@@ -537,6 +647,14 @@ export function registerEventRoutes(
       try {
         res.setHeader("Cache-Control", "public, max-age=60");
         const isAuthed = Boolean(req.isAuthenticated?.() && req.user?.id);
+        const synced = await syncPublicReadyParkingPassHostDefaults();
+        if (synced > 0) {
+          parkingPassPublicFeedCache = null;
+          parkingPassPublicFeedLastGood = null;
+          parkingPassHostIdsCache = null;
+          parkingPassHostIdsLastGood = null;
+          parkingPassHostStatusCacheByDate = new Map();
+        }
         if (
           parkingPassPublicFeedCache &&
           parkingPassPublicFeedCache.expiresAt > Date.now()
@@ -580,6 +698,14 @@ export function registerEventRoutes(
     try {
       res.setHeader("Cache-Control", "public, max-age=60");
       const isAuthed = Boolean(req.isAuthenticated?.() && req.user?.id);
+      const synced = await syncPublicReadyParkingPassHostDefaults();
+      if (synced > 0) {
+        parkingPassPublicFeedCache = null;
+        parkingPassPublicFeedLastGood = null;
+        parkingPassHostIdsCache = null;
+        parkingPassHostIdsLastGood = null;
+        parkingPassHostStatusCacheByDate = new Map();
+      }
 
       const feed = sanitizeParkingPassPublicFeedRows(
         parkingPassPublicFeedCache &&
@@ -958,6 +1084,14 @@ export function registerEventRoutes(
     async (_req: any, res) => {
       try {
         res.setHeader("Cache-Control", "public, max-age=60");
+        const synced = await syncPublicReadyParkingPassHostDefaults();
+        if (synced > 0) {
+          parkingPassPublicFeedCache = null;
+          parkingPassPublicFeedLastGood = null;
+          parkingPassHostIdsCache = null;
+          parkingPassHostIdsLastGood = null;
+          parkingPassHostStatusCacheByDate = new Map();
+        }
         if (
           parkingPassHostIdsCache &&
           parkingPassHostIdsCache.expiresAt > Date.now()
@@ -970,9 +1104,21 @@ export function registerEventRoutes(
         const hostPricingIds = new Set<string>();
         try {
           const allHosts = await storage.getAllHosts();
+          const seriesHostIds = new Set(
+            (await storage.getParkingPassSeriesSafe().catch(() => []))
+              .map((series: any) => String(series?.hostId || "").trim())
+              .filter(Boolean),
+          );
           for (const host of allHosts as any[]) {
             const hostId = String(host?.id || "").trim();
             if (!hostId) continue;
+            if (
+              !seriesHostIds.has(hostId) &&
+              !hasPositiveParkingPassHostPrice(host) &&
+              !hasParkingPassHostScheduleDefaults(host)
+            ) {
+              continue;
+            }
             const hostStatus = normalizeParkingStatus(host?.status || "");
             if (hostStatus && unavailableParkingStatuses.has(hostStatus)) continue;
             if (host?.deletedAt || host?.archivedAt || host?.cancelledAt) continue;
@@ -996,12 +1142,12 @@ export function registerEventRoutes(
                 String(host?.parkingPassEndTime || "").trim() ||
                 PARKING_PASS_MEAL_WINDOWS.dinner.end,
               maxTrucks: host?.spotCount ?? 1,
-              breakfastPriceCents: host?.parkingPassBreakfastPriceCents ?? 0,
-              lunchPriceCents: host?.parkingPassLunchPriceCents ?? 0,
-              dinnerPriceCents: host?.parkingPassDinnerPriceCents ?? 0,
-              dailyPriceCents: host?.parkingPassDailyPriceCents ?? 0,
-              weeklyPriceCents: host?.parkingPassWeeklyPriceCents ?? 0,
-              monthlyPriceCents: host?.parkingPassMonthlyPriceCents ?? 0,
+              breakfastPriceCents: host?.parkingPassBreakfastPriceCents,
+              lunchPriceCents: host?.parkingPassLunchPriceCents,
+              dinnerPriceCents: host?.parkingPassDinnerPriceCents,
+              dailyPriceCents: host?.parkingPassDailyPriceCents,
+              weeklyPriceCents: host?.parkingPassWeeklyPriceCents,
+              monthlyPriceCents: host?.parkingPassMonthlyPriceCents,
             };
             if (!isParkingPassPublicReady(listing as any)) continue;
             hostPricingIds.add(hostId);
@@ -1245,6 +1391,14 @@ export function registerEventRoutes(
       try {
         res.setHeader("Cache-Control", "public, max-age=60");
         const dateKey = normalizeDateKey(req.query?.date);
+        const synced = await syncPublicReadyParkingPassHostDefaults();
+        if (synced > 0) {
+          parkingPassPublicFeedCache = null;
+          parkingPassPublicFeedLastGood = null;
+          parkingPassHostIdsCache = null;
+          parkingPassHostIdsLastGood = null;
+          parkingPassHostStatusCacheByDate = new Map();
+        }
         const cached = parkingPassHostStatusCacheByDate.get(dateKey);
         if (cached && cached.expiresAt > Date.now()) {
           return res.json(cached.payload);

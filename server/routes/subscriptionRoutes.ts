@@ -25,9 +25,139 @@ type SubscriptionRouteDependencies = {
   getLockedPriceForUser: (userId: string) => Promise<LockedPriceResult>;
 };
 
+function parseEnabledFlag(value: string | undefined): boolean {
+  return ["1", "true", "yes", "on"].includes(String(value || "").toLowerCase());
+}
+
+function parseCsvCodes(value: string | undefined): Set<string> {
+  return new Set(
+    String(value || "")
+      .split(",")
+      .map((code) => code.trim().toUpperCase())
+      .filter(Boolean),
+  );
+}
+
+function isLifetimeAccessPromoCode(code: string): boolean {
+  if (!code) return false;
+
+  const configuredCodes = parseCsvCodes(
+    process.env.LIFETIME_ACCESS_CODES ||
+      process.env.MEALSCOUT_LIFETIME_ACCESS_CODES,
+  );
+  if (configuredCodes.has(code)) return true;
+
+  const defaultCodeEnabled =
+    process.env.NODE_ENV !== "production" ||
+    parseEnabledFlag(process.env.LIFETIME25_ENABLED);
+  return defaultCodeEnabled && code === "LIFETIME25";
+}
+
 async function userHasVerifiedBusiness(userId: string) {
   const restaurantsByOwner = await storage.getRestaurantsByOwner(userId);
   return restaurantsByOwner.some((restaurant) => restaurant.isVerified);
+}
+
+async function grantLifetimeAccessForOwnedBusinesses(
+  user: User,
+  promoCode: string,
+) {
+  const ownerId = String(user.id || "").trim();
+  const ownedRestaurants = await storage.getRestaurantsByOwner(ownerId);
+
+  if (!ownedRestaurants.length) {
+    const error = new Error(
+      "Create or claim your business profile before applying this access code.",
+    ) as Error & { statusCode?: number };
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const now = new Date();
+  const grantedRestaurantIds: string[] = [];
+
+  for (const restaurant of ownedRestaurants) {
+    const existingSubscription = await db
+      .select()
+      .from(restaurantSubscriptions)
+      .where(eq(restaurantSubscriptions.restaurantId, restaurant.id))
+      .limit(1);
+
+    const lifetimeAccessValues = {
+      tier: "premium",
+      status: "active",
+      priceCents: 0,
+      billingInterval: "lifetime",
+      nextBillingAt: null,
+      isLifetimeFree: true,
+      lifetimeGrantedBy: `promo:${promoCode}`,
+      lifetimeGrantedAt: now,
+      lifetimeReason: `Lifetime access code ${promoCode}`,
+      canPostVideos: true,
+      canPostDeals: true,
+      canUseFeaturedSlots: true,
+      maxFeaturedSlots: 3,
+      hasAnalytics: true,
+      hasDealScheduling: true,
+      stripeSubscriptionId: null,
+      currentPeriodEnd: null,
+      canceledAt: null,
+      updatedAt: now,
+    };
+
+    if (existingSubscription.length > 0) {
+      await db
+        .update(restaurantSubscriptions)
+        .set(lifetimeAccessValues)
+        .where(eq(restaurantSubscriptions.id, existingSubscription[0].id));
+    } else {
+      await db.insert(restaurantSubscriptions).values({
+        restaurantId: restaurant.id,
+        ...lifetimeAccessValues,
+      });
+    }
+
+    grantedRestaurantIds.push(restaurant.id);
+  }
+
+  return grantedRestaurantIds;
+}
+
+async function stopPaidSubscriptionRenewalForLifetimeAccess(
+  user: User,
+  stripe: Stripe | null,
+): Promise<boolean> {
+  const subscriptionId = String(user.stripeSubscriptionId || "").trim();
+  if (!subscriptionId) return false;
+
+  if (!stripe) {
+    console.warn(
+      "[subscriptions] Lifetime access granted but Stripe was unavailable to stop paid renewal",
+      { userId: user.id, subscriptionId },
+    );
+    return false;
+  }
+
+  try {
+    await stripe.subscriptions.update(subscriptionId, {
+      cancel_at_period_end: true,
+      metadata: {
+        lifetimeAccessGranted: "true",
+      },
+    });
+    await storage.updateUser(user.id, { stripeSubscriptionId: null });
+    return true;
+  } catch (error: any) {
+    console.warn(
+      "[subscriptions] Failed to stop paid renewal after lifetime access grant",
+      {
+        userId: user.id,
+        subscriptionId,
+        error: error.message || error,
+      },
+    );
+    return false;
+  }
 }
 
 async function userHasLifetimeRestaurantAccess(
@@ -93,6 +223,33 @@ export function registerSubscriptionRoutes(
       console.log("User Email:", user?.email);
       console.log("Promo Code:", promoCode);
       console.log("Billing Interval:", billingInterval);
+
+      if (isLifetimeAccessPromoCode(normalizedPromoCode)) {
+        try {
+          const restaurantIds = await grantLifetimeAccessForOwnedBusinesses(
+            user,
+            normalizedPromoCode,
+          );
+          const subscriptionRenewalStopped =
+            await stopPaidSubscriptionRenewalForLifetimeAccess(user, stripe);
+          return res.send({
+            status: "active",
+            subscriptionId: null,
+            lifetimeAccess: true,
+            promo: normalizedPromoCode,
+            restaurantIds,
+            subscriptionRenewalStopped,
+            message: "Lifetime premium access activated.",
+          });
+        } catch (error: any) {
+          return res.status(error.statusCode || 500).json({
+            error: {
+              message:
+                error.message || "Unable to activate lifetime access code",
+            },
+          });
+        }
+      }
 
       if (["restaurant_owner", "food_truck"].includes(user?.userType)) {
         const hasVerified = await userHasVerifiedBusiness(user.id);
@@ -207,6 +364,33 @@ export function registerSubscriptionRoutes(
         "super_admin",
         "staff",
       ].includes(String(user?.userType || ""));
+
+      if (isLifetimeAccessPromoCode(normalizedPromoCode)) {
+        try {
+          const restaurantIds = await grantLifetimeAccessForOwnedBusinesses(
+            user,
+            normalizedPromoCode,
+          );
+          const subscriptionRenewalStopped =
+            await stopPaidSubscriptionRenewalForLifetimeAccess(user, stripe);
+          return res.send({
+            status: "active",
+            subscriptionId: null,
+            lifetimeAccess: true,
+            promo: normalizedPromoCode,
+            restaurantIds,
+            subscriptionRenewalStopped,
+            message: "Lifetime premium access activated.",
+          });
+        } catch (error: any) {
+          return res.status(error.statusCode || 500).json({
+            error: {
+              message:
+                error.message || "Unable to activate lifetime access code",
+            },
+          });
+        }
+      }
 
       const hydratedUser = await ensureTrialForUser(user);
       if (isTrialActive(hydratedUser)) {
