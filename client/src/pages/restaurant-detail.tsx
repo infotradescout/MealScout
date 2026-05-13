@@ -471,7 +471,7 @@ export default function RestaurantDetailPage() {
   const sourceOfTruthSchema = {
     "@context": "https://schema.org",
     "@type": "WebPage",
-    name: `${restaurantName} source of truth`,
+    name: `${restaurantName} on MealScout`,
     url: `https://www.mealscout.us${profilePath}`,
     dateModified:
       canonical?.updatedAt || (restaurant as any)?.updatedAt || undefined,
@@ -604,7 +604,7 @@ export default function RestaurantDetailPage() {
             </div>
           )}
 
-          {canonical ? (
+          {canonical && false ? (
             <Card className="mb-6 border-[color:var(--border-subtle)] bg-[var(--bg-card)]/80">
               <CardContent className="p-4 space-y-3">
                 <div className="flex items-center justify-between gap-3">
@@ -693,7 +693,7 @@ export default function RestaurantDetailPage() {
             </Card>
           ) : null}
 
-          {evidence ? (
+          {evidence && false ? (
             <Card className="mb-6 border-[color:var(--border-subtle)] bg-[var(--bg-card)]/80">
               <CardContent className="p-4 space-y-3">
                 <div className="flex items-center justify-between gap-3">

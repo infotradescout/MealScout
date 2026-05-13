@@ -185,7 +185,7 @@ export default function EventDetailPage() {
                 {
                   "@context": "https://schema.org",
                   "@type": "WebPage",
-                  name: `${data.title || "Event"} source of truth`,
+                  name: `${data.title || "Event"} on MealScout`,
                   url: data.canonicalUrl || undefined,
                   dateModified:
                     canonical?.updatedAt ||
@@ -223,7 +223,7 @@ export default function EventDetailPage() {
               <CardTitle>Details</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
-              {canonical ? (
+              {canonical && false ? (
                 <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-3">
                   <div className="flex items-start justify-between gap-3">
                     <div>
@@ -307,7 +307,7 @@ export default function EventDetailPage() {
                 </div>
               ) : null}
 
-              {evidence ? (
+              {evidence && false ? (
                 <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-3">
                   <div className="flex items-start justify-between gap-3">
                     <div>

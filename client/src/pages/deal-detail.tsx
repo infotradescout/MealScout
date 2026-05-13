@@ -382,7 +382,7 @@ export default function DealDetail() {
           </div>
         </div>
 
-        {canonical ? (
+        {canonical && false ? (
           <Card className="bg-[var(--bg-surface-muted)] mb-6 border-[color:var(--border-subtle)] shadow-clean">
             <CardContent className="p-4 space-y-3">
               <div className="flex items-center justify-between gap-3">
@@ -428,7 +428,7 @@ export default function DealDetail() {
           </Card>
         ) : null}
 
-        {evidence ? (
+        {evidence && false ? (
           <Card className="bg-[var(--bg-surface-muted)] mb-6 border-[color:var(--border-subtle)] shadow-clean">
             <CardContent className="p-4 space-y-3">
               <div className="flex items-center justify-between gap-3">
