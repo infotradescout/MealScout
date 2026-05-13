@@ -371,6 +371,7 @@ export async function setupUnifiedAuth(app: Express) {
       welcomeLabel: string;
       signupMethod: string;
       intendedNextPath?: string | null;
+      notifyAdmin?: boolean;
     },
   ) => {
     try {
@@ -393,6 +394,9 @@ export async function setupUnifiedAuth(app: Express) {
         params.welcomeLabel,
         params.intendedNextPath,
       );
+      if (params.notifyAdmin === false) {
+        return;
+      }
       emailService
         .sendAdminSignupNotification(user, {
           signupMethod: params.signupMethod,
@@ -582,6 +586,7 @@ export async function setupUnifiedAuth(app: Express) {
               void sendAccountCreationEmails(user, req, {
                 welcomeLabel: "customer",
                 signupMethod: "google",
+                notifyAdmin: false,
               });
             }
             return done(null, user);
@@ -691,6 +696,7 @@ export async function setupUnifiedAuth(app: Express) {
               void sendAccountCreationEmails(user, req, {
                 welcomeLabel: "restaurant owner",
                 signupMethod: "google",
+                notifyAdmin: false,
               });
             }
             return done(null, user);
@@ -941,6 +947,7 @@ export async function setupUnifiedAuth(app: Express) {
               void sendAccountCreationEmails(user, req, {
                 welcomeLabel: "customer",
                 signupMethod: "facebook",
+                notifyAdmin: false,
               });
             }
             return done(null, user);
