@@ -1448,7 +1448,7 @@ export default function ExplorePreview() {
                 zIndex: 0,
               }}
             >
-              {hasMapKey && !googleMapFailed && coords ? (
+              {hasMapKey && coords ? (
                 <MapErrorBoundary>
                   <GoogleMapSurface
                     apiKey={effectiveGoogleMapsApiKey}
@@ -1464,13 +1464,12 @@ export default function ExplorePreview() {
                     onZoomChanged={ignorePreviewZoomChanged}
                     onCenterChanged={ignorePreviewCenterChanged}
                     onMarkerTap={handleMarkerTap}
-                    onFatalError={() => setGoogleMapFailed(true)}
                   />
                 </MapErrorBoundary>
               ) : (
                 <HeroMapFallback
                   reason={
-                    !hasMapKey || googleMapFailed
+                    !hasMapKey
                       ? "no-key"
                       : locationStatus === "denied"
                         ? "denied"

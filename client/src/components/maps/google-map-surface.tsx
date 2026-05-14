@@ -910,29 +910,30 @@ export function GoogleMapSurface({
         />
       )}
 
-      {/* Map controls */}
-      <div className="absolute top-5 right-5 flex flex-col gap-2 z-[1000]">
-        <Button
-          variant="secondary"
-          size="sm"
-          className={btnClass}
-          onClick={() => mapRef.current?.setZoom?.((mapRef.current?.getZoom?.() || zoom) + 1)}
-          title="Zoom in"
-          aria-label="Zoom in"
-        >
-          <span className="text-lg font-bold leading-none">+</span>
-        </Button>
-        <Button
-          variant="secondary"
-          size="sm"
-          className={btnClass}
-          onClick={() => mapRef.current?.setZoom?.((mapRef.current?.getZoom?.() || zoom) - 1)}
-          title="Zoom out"
-          aria-label="Zoom out"
-        >
-          <span className="text-lg font-bold leading-none">−</span>
-        </Button>
-      </div>
+      {interactive && (
+        <div className="absolute top-5 right-5 flex flex-col gap-2 z-[1000]">
+          <Button
+            variant="secondary"
+            size="sm"
+            className={btnClass}
+            onClick={() => mapRef.current?.setZoom?.((mapRef.current?.getZoom?.() || zoom) + 1)}
+            title="Zoom in"
+            aria-label="Zoom in"
+          >
+            <span className="text-lg font-bold leading-none">+</span>
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            className={btnClass}
+            onClick={() => mapRef.current?.setZoom?.((mapRef.current?.getZoom?.() || zoom) - 1)}
+            title="Zoom out"
+            aria-label="Zoom out"
+          >
+            <span className="text-lg font-bold leading-none">-</span>
+          </Button>
+        </div>
+      )}
 
       {loadError && (
         <div className="absolute left-3 right-3 bottom-3 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-400">
