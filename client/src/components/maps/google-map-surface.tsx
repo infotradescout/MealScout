@@ -119,8 +119,8 @@ const ensureGoogleMapConstructor = async (googleMaps: any) => {
    ────────────────────────────────────────────────────────────────────────── */
 const mapStyleNeon = [
   // ── Base ──────────────────────────────────────────────────────────────────
-  { elementType: "geometry",            stylers: [{ color: "#24180f" }] },
-  { elementType: "labels.text.fill",    stylers: [{ color: "#ffd18a" }] },
+  { elementType: "geometry",            stylers: [{ color: "#302418" }] },
+  { elementType: "labels.text.fill",    stylers: [{ color: "#ffe8bd" }] },
   { elementType: "labels.text.stroke",  stylers: [{ color: "#120b07" }, { weight: 2 }] },
   { elementType: "labels.icon",         stylers: [{ visibility: "off" }] },
 
@@ -129,12 +129,12 @@ const mapStyleNeon = [
   {
     featureType: "road.highway",
     elementType: "geometry.fill",
-    stylers: [{ color: "#8a3f0b" }],
+    stylers: [{ color: "#a84d0f" }],
   },
   {
     featureType: "road.highway",
     elementType: "geometry.stroke",
-    stylers: [{ color: "#ff9a32" }, { weight: 2.6 }],
+    stylers: [{ color: "#ff9a32" }, { weight: 3 }],
   },
   {
     featureType: "road.highway",
@@ -150,12 +150,12 @@ const mapStyleNeon = [
   {
     featureType: "road.arterial",
     elementType: "geometry.fill",
-    stylers: [{ color: "#64320f" }],
+    stylers: [{ color: "#7a3c12" }],
   },
   {
     featureType: "road.arterial",
     elementType: "geometry.stroke",
-    stylers: [{ color: "#ff7a1a" }, { weight: 1.65 }],
+    stylers: [{ color: "#ff7a1a" }, { weight: 2 }],
   },
   {
     featureType: "road.arterial",
@@ -171,12 +171,12 @@ const mapStyleNeon = [
   {
     featureType: "road.local",
     elementType: "geometry.fill",
-    stylers: [{ color: "#3a2616" }],
+    stylers: [{ color: "#4a3020" }],
   },
   {
     featureType: "road.local",
     elementType: "geometry.stroke",
-    stylers: [{ color: "#c86a24" }, { weight: 1 }],
+    stylers: [{ color: "#d97931" }, { weight: 1.2 }],
   },
   {
     featureType: "road.local",
@@ -190,13 +190,13 @@ const mapStyleNeon = [
   },
 
   // ── Water ─────────────────────────────────────────────────────────────────
-  { featureType: "water", elementType: "geometry",          stylers: [{ color: "#13243a" }] },
-  { featureType: "water", elementType: "labels.text.fill",  stylers: [{ color: "#6f8caf" }] },
+  { featureType: "water", elementType: "geometry",          stylers: [{ color: "#173654" }] },
+  { featureType: "water", elementType: "labels.text.fill",  stylers: [{ color: "#9ab6d5" }] },
 
   // ── Landscape ─────────────────────────────────────────────────────────────
-  { featureType: "landscape",         elementType: "geometry", stylers: [{ color: "#24180f" }] },
-  { featureType: "landscape.natural", elementType: "geometry", stylers: [{ color: "#1d2a16" }] },
-  { featureType: "landscape.man_made",elementType: "geometry", stylers: [{ color: "#2a1d14" }] },
+  { featureType: "landscape",         elementType: "geometry", stylers: [{ color: "#302418" }] },
+  { featureType: "landscape.natural", elementType: "geometry", stylers: [{ color: "#24351c" }] },
+  { featureType: "landscape.man_made",elementType: "geometry", stylers: [{ color: "#35261a" }] },
 
   // ── Parks ─────────────────────────────────────────────────────────────────
   { featureType: "poi.park",  elementType: "geometry",          stylers: [{ color: "#183018" }] },
