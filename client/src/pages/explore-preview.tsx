@@ -1314,12 +1314,15 @@ export default function ExplorePreview() {
   const mouseDragLastY = useRef<number | null>(null);
 
   const handleSheetTouchStart = useCallback((e: React.TouchEvent) => {
-    dragStartY.current = e.touches[0].clientY;
-    dragLastY.current = e.touches[0].clientY;
+    const touch = e.touches[0];
+    if (!touch) return;
+    dragStartY.current = touch.clientY;
+    dragLastY.current = touch.clientY;
   }, []);
   const handleSheetTouchMove = useCallback((e: React.TouchEvent) => {
-    const y = e.touches[0].clientY;
-    dragLastY.current = y;
+    const touch = e.touches[0];
+    if (!touch) return;
+    dragLastY.current = touch.clientY;
   }, []);
   const handleSheetTouchEnd = useCallback(() => {
     const start = dragStartY.current;
