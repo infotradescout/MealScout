@@ -8,8 +8,8 @@
  *   amber-glow brand pins over the top so the hero matches the
  *   Atmospheric UI (dark backgrounds, glassmorphism, glowing amber accents).
  *
- * - The camera fits the user's location and nearby pins into the visible
- *   hero area. Bottom padding keeps pins above the dashboard panel.
+ * - The camera anchors on the user's location. Nearby pins render as local
+ *   context, but they do not pull the compact hero away from the user.
  *
  * - The map gently drifts/rotates around the user's pin so the hero feels
  *   alive even when nothing is happening.
@@ -85,16 +85,6 @@ const DARK_STYLE: StyleSpecification = {
   ],
 };
 
-/**
- * Fallback padding used before the container has a measured size.
- */
-const HERO_CAMERA_PADDING = {
-  top: 40,
-  right: 32,
-  bottom: 150,
-  left: 32,
-};
-
 export function ThemedScoutMap({
   userLocation,
   markers,
@@ -108,48 +98,12 @@ export function ThemedScoutMap({
   const driftRafRef = useRef<number | null>(null);
   const driftStartRef = useRef<number | null>(null);
 
-  /* --------------------------------------------------------------
-     Compute padding that reserves the bottom dashboard space and keeps
-     pins inside the readable upper map area on mobile.
-     -------------------------------------------------------------- */
-  const computePadding = () => {
-    const el = containerRef.current;
-    if (!el) return HERO_CAMERA_PADDING;
-    const w = el.clientWidth || 0;
-    const h = el.clientHeight || 0;
-    return {
-      top: Math.max(28, Math.round(h * 0.12)),
-      right: Math.max(24, Math.round(w * 0.08)),
-      bottom: Math.max(120, Math.round(h * 0.46)),
-      left: Math.max(24, Math.round(w * 0.08)),
-    };
-  };
-
-  const fitMapToContent = (duration = 0) => {
+  const centerMapOnUser = (duration = 0) => {
     const m = mapRef.current;
     if (!m) return;
-    const points = [
-      userLocation,
-      ...markers.filter(
-        (marker) => Number.isFinite(marker.lat) && Number.isFinite(marker.lng),
-      ),
-    ];
-
-    if (points.length <= 1) {
-      m.easeTo({
-        center: [userLocation.lng, userLocation.lat],
-        zoom,
-        padding: computePadding(),
-        duration,
-      });
-      return;
-    }
-
-    const bounds = new maplibregl.LngLatBounds();
-    points.forEach((point) => bounds.extend([point.lng, point.lat]));
-    m.fitBounds(bounds, {
-      padding: computePadding(),
-      maxZoom: Math.min(zoom, 11.75),
+    m.easeTo({
+      center: [userLocation.lng, userLocation.lat],
+      zoom,
       duration,
     });
   };
@@ -189,14 +143,14 @@ export function ThemedScoutMap({
       const m = mapRef.current;
       if (!m) return;
       m.resize();
-      fitMapToContent(0);
+      centerMapOnUser(0);
     };
     const initialResizeFrame = requestAnimationFrame(resizeMap);
     const initialResizeTimeout = window.setTimeout(resizeMap, 250);
 
     map.on("load", () => {
-      // Fit once the canvas has its real size.
-      fitMapToContent(0);
+      // Center once the canvas has its real size.
+      centerMapOnUser(0);
 
       // Build the user pulsing pin (amber).
       const userEl = document.createElement("div");
@@ -236,7 +190,7 @@ export function ThemedScoutMap({
       const m = mapRef.current;
       if (!m) return;
       m.resize();
-      fitMapToContent(200);
+      centerMapOnUser(200);
     });
     ro.observe(containerRef.current);
 
@@ -273,7 +227,7 @@ export function ThemedScoutMap({
   useEffect(() => {
     const m = mapRef.current;
     if (!m) return;
-    fitMapToContent(600);
+    centerMapOnUser(600);
     userMarkerRef.current?.setLngLat([userLocation.lng, userLocation.lat]);
   }, [userLocation.lat, userLocation.lng, markerKey]);
 
