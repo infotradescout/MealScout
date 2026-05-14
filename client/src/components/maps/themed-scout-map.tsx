@@ -3,8 +3,8 @@
  * --------------
  * Custom atmospheric "scout view" for the embedded MealScout /scout map.
  *
- * - NOT a raw Google Maps widget. Uses MapLibre GL JS with a custom dark
- *   style + free Carto dark-matter raster tiles, then layers MealScout's
+ * - NOT a raw Google Maps widget. Uses MapLibre GL JS with a custom warm
+ *   style + free CARTO Voyager raster tiles, then layers MealScout's
  *   amber-glow brand pins over the top so the hero matches the
  *   Atmospheric UI (dark backgrounds, glassmorphism, glowing amber accents).
  *
@@ -41,21 +41,21 @@ interface ThemedScoutMapProps {
 }
 
 /**
- * Custom dark style spec. We use Carto's free `dark_all` raster tiles
- * as the base (no API key needed, ODbL attribution) and crank down the
- * brightness/saturation so the amber pins read as the only color.
+ * Custom branded style spec. We use CARTO's free Voyager raster tiles
+ * as the base (no API key needed, ODbL attribution), then grade them warm
+ * so streets stay readable without looking like stock Google Maps.
  */
 const DARK_STYLE: StyleSpecification = {
   version: 8,
   // No glyphs or sprites needed — we don't render text/icons from the style.
   sources: {
-    "carto-dark": {
+    "carto-voyager": {
       type: "raster",
       tiles: [
-        "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
-        "https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
-        "https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
-        "https://d.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
+        "https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png",
+        "https://b.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png",
+        "https://c.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png",
+        "https://d.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png",
       ],
       tileSize: 256,
       attribution:
@@ -67,20 +67,19 @@ const DARK_STYLE: StyleSpecification = {
       id: "background",
       type: "background",
       paint: {
-        "background-color": "#0a0c10",
+        "background-color": "#130b07",
       },
     },
     {
-      id: "carto-dark-tiles",
+      id: "carto-voyager-tiles",
       type: "raster",
-      source: "carto-dark",
+      source: "carto-voyager",
       paint: {
-        // Keep the brand-dark treatment while preserving road and place detail.
-        "raster-opacity": 0.96,
-        "raster-brightness-min": 0.08,
-        "raster-brightness-max": 1,
-        "raster-saturation": 0.12,
-        "raster-contrast": 0.32,
+        "raster-opacity": 1,
+        "raster-brightness-min": 0,
+        "raster-brightness-max": 0.92,
+        "raster-saturation": 0.18,
+        "raster-contrast": 0.22,
       },
     },
   ],
@@ -391,24 +390,24 @@ export function ThemedScoutMap({
         }
 
         .msm-map-canvas .maplibregl-canvas {
-          filter: saturate(1.35) contrast(1.22) brightness(1.1) sepia(0.12) hue-rotate(-8deg);
+          filter: saturate(1.16) contrast(1.14) brightness(0.8) sepia(0.38) hue-rotate(-18deg);
         }
         .msm-map-grade {
           pointer-events: none;
           background:
-            radial-gradient(circle at 78% 18%, rgba(249, 115, 22, 0.18), transparent 34%),
-            radial-gradient(circle at 20% 8%, rgba(251, 191, 36, 0.1), transparent 24%),
-            linear-gradient(180deg, rgba(7, 8, 11, 0.04) 0%, rgba(7, 8, 11, 0) 38%, rgba(7, 8, 11, 0.12) 100%);
-          mix-blend-mode: screen;
+            radial-gradient(circle at 78% 16%, rgba(249, 115, 22, 0.28), transparent 34%),
+            radial-gradient(circle at 22% 10%, rgba(251, 191, 36, 0.12), transparent 28%),
+            linear-gradient(180deg, rgba(14, 8, 5, 0.08) 0%, rgba(14, 8, 5, 0.18) 48%, rgba(5, 6, 8, 0.42) 100%);
+          mix-blend-mode: multiply;
         }
         .msm-map-grade::after {
           content: "";
           position: absolute;
           inset: 0;
           background:
-            linear-gradient(90deg, rgba(0, 0, 0, 0.16), transparent 28%, transparent 72%, rgba(0, 0, 0, 0.08)),
-            linear-gradient(180deg, rgba(0, 0, 0, 0.05), transparent 42%);
-          mix-blend-mode: multiply;
+            radial-gradient(circle at 72% 18%, rgba(255, 120, 35, 0.2), transparent 34%),
+            linear-gradient(90deg, rgba(0, 0, 0, 0.14), transparent 30%, transparent 70%, rgba(0, 0, 0, 0.1));
+          mix-blend-mode: screen;
         }
 
         /* Hide MapLibre's built-in attribution chrome — we still surface

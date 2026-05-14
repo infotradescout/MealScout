@@ -1441,8 +1441,7 @@ export default function ExplorePreview() {
                 (GoogleMapSurface) for full pan/zoom/tap-pin exploration.
           */}
           <div className="absolute inset-0">
-            {/* ThemedScoutMap is a real tile map and remains behind Google as
-                a resilient fallback while the Google script loads. */}
+            {/* ThemedScoutMap is the branded collapsed Scout hero map. */}
             <div
               data-testid="scout-map-preview"
               className="absolute inset-0"
@@ -1452,25 +1451,26 @@ export default function ExplorePreview() {
                 zIndex: 0,
               }}
             >
-              <Suspense fallback={<HeroMapFallback reason="loading" />}>
-                <ThemedScoutMap
-                  markers={allMapMarkers}
-                  userLocation={coords ?? { lat: 30.4213, lng: -87.2169 }}
-                  zoom={11}
-                  onMarkerTap={handleMarkerTap}
-                />
-              </Suspense>
+              {coords ? (
+                <Suspense fallback={<HeroMapFallback reason="loading" />}>
+                  <ThemedScoutMap
+                    markers={allMapMarkers}
+                    userLocation={coords}
+                    zoom={11}
+                    onMarkerTap={handleMarkerTap}
+                  />
+                </Suspense>
+              ) : (
+                <HeroMapFallback reason="loading" />
+              )}
             </div>
 
             {/* GoogleMapSurface:
-                - Visible in the collapsed hero so Scout looks like a real map,
-                  not a placeholder grid.
-                - Pointer events stay disabled while collapsed so the pull-up
-                  sheet gesture and expand button remain reliable.
-                - Once opened, it remains mounted so collapse/expand cycles do
-                  not re-initialize Google Maps.
+                - Used for full interactive pan/zoom/tap-pin exploration.
+                - Kept off the collapsed hero so Scout keeps its branded map
+                  contrast instead of inheriting Google's dark styling.
             */}
-            {hasMapKey && !googleMapFailed && coords && mapCenter ? (
+            {sheetState === "fullMap" && hasMapKey && !googleMapFailed && coords && mapCenter ? (
               <div
                 ref={googleMapContainerRef}
                 data-testid="scout-interactive-map"
