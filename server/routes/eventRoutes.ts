@@ -227,6 +227,8 @@ export function registerEventRoutes(
     const host = event?.host ? { ...(event.host as any) } : null;
     const hostLat = host?.latitude ?? null;
     const hostLng = host?.longitude ?? null;
+    const hostCity = host?.city ?? event?.hostCity ?? event?.city ?? null;
+    const hostState = host?.state ?? event?.hostState ?? event?.state ?? null;
     if (host) {
       host.businessName = "Verified host";
       host.address = null;
@@ -237,10 +239,16 @@ export function registerEventRoutes(
     }
 
     const redacted: any = { ...event, host };
+    redacted.name = "Parking Pass host spot";
+    redacted.description =
+      [hostCity, hostState].filter(Boolean).join(", ") ||
+      "Verified host location";
     if ("hostAddress" in redacted) redacted.hostAddress = null;
     if ("address" in redacted) redacted.address = null;
+    if ("hostName" in redacted) redacted.hostName = "Verified host";
     if ("hostBusinessName" in redacted)
       redacted.hostBusinessName = "Verified host";
+    if ("businessName" in redacted) redacted.businessName = "Verified host";
     return redacted;
   };
 

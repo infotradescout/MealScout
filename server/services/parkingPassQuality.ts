@@ -111,6 +111,8 @@ const firstFiniteNumber = (
 
 const SUSPICIOUS_TEST_TOKEN =
   /\b(test|asdf|qwer|dummy|sample|temp|fake|placeholder)\b/i;
+const SUSPICIOUS_PRIVATE_HOST_NAME =
+  /^(my|our)\s+(house|home|place)$|^(home|house|residence|personal residence)$/i;
 const LONG_GIBBERISH_TOKEN = /^[a-z0-9]{16,}$/i;
 const STREET_HINT =
   /\b(st|street|ave|avenue|rd|road|dr|drive|blvd|boulevard|ln|lane|hwy|highway|pkwy|parkway|way|ct|court)\b/i;
@@ -131,6 +133,7 @@ export function computeHostProfileQualityFlags(profile: {
     const compactName = businessName.replace(/\s+/g, "");
     if (
       SUSPICIOUS_TEST_TOKEN.test(businessName) ||
+      SUSPICIOUS_PRIVATE_HOST_NAME.test(businessName) ||
       LONG_GIBBERISH_TOKEN.test(compactName)
     ) {
       flags.push("suspicious_business_name");
