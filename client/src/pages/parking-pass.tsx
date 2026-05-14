@@ -1773,7 +1773,7 @@ export default function ParkingPassPage() {
           "Off-platform schedule stops require Premium. Parking pass bookings and menu browsing are always free.",
         variant: "destructive",
       });
-      setLocation("/subscription");
+      setLocation("/subscribe");
       return;
     }
 
@@ -1885,7 +1885,7 @@ export default function ParkingPassPage() {
           "Managing off-platform schedule stops requires Premium. Parking pass bookings and menu browsing are always free.",
         variant: "destructive",
       });
-      setLocation("/subscription");
+      setLocation("/subscribe");
       return;
     }
 
@@ -3074,7 +3074,7 @@ export default function ParkingPassPage() {
           "Social auto-post settings require Premium. Parking pass bookings and menu browsing are always free.",
         variant: "destructive",
       });
-      setLocation("/subscription");
+      setLocation("/subscribe");
       return;
     }
 
@@ -3184,7 +3184,7 @@ export default function ParkingPassPage() {
           "One-click live location sharing requires Premium. Parking pass bookings and menu browsing are always free.",
         variant: "destructive",
       });
-      setLocation("/subscription");
+      setLocation("/subscribe");
       return;
     }
 

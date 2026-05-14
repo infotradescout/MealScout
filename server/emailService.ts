@@ -1883,7 +1883,7 @@ export class EmailService {
       </div>
 
       <div style="text-align: center; margin: 26px 0;">
-        <a href="https://mealscout.io/subscription/manage" style="background-color: #ea580c; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 700;">Open Premium Dashboard</a>
+        <a href="https://www.mealscout.us/subscribe" style="background-color: #ea580c; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 700;">Open Premium Dashboard</a>
       </div>
 
       <p style="font-size: 12px; color: #64748b; margin-top: 24px;">
@@ -1892,7 +1892,7 @@ export class EmailService {
     `;
 
     const html = EmailTemplates.getBaseTemplate(title, content);
-    const text = `Hi ${operatorName}, weekly premium summary (${weekStartLabel} - ${weekEndLabel}): stops covered ${data.stopsCovered}, live location activations ${data.liveLocationActivations}, manual schedule usage ${data.manualScheduleUsage}, parking reports completed ${data.parkingReportsCompleted}. Open: https://mealscout.io/subscription/manage`;
+    const text = `Hi ${operatorName}, weekly premium summary (${weekStartLabel} - ${weekEndLabel}): stops covered ${data.stopsCovered}, live location activations ${data.liveLocationActivations}, manual schedule usage ${data.manualScheduleUsage}, parking reports completed ${data.parkingReportsCompleted}. Open: https://www.mealscout.us/subscribe`;
 
     return await this.sendEmail({
       to,

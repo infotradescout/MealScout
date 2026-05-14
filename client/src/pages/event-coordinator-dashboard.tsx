@@ -769,7 +769,7 @@ export default function EventCoordinatorDashboard() {
             Event coordinator access is a paid feature. Upgrade to post events
             and manage truck interest.
           </p>
-          <Button onClick={() => setLocation("/subscription")}>
+          <Button onClick={() => setLocation("/subscribe")}>
             View subscription
           </Button>
         </div>

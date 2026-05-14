@@ -196,7 +196,6 @@ export function registerSeoRoutes(app: Express) {
 
       [
         "/",
-        "/truck-landing",
         "/for-hosts",
         "/host-location-partner",
         "/for-restaurants",
@@ -204,7 +203,6 @@ export function registerSeoRoutes(app: Express) {
         "/for-events",
         "/restaurant-signup",
         "/host-signup",
-        "/event-signup",
         "/search",
         "/scout",
         "/parking-pass",
@@ -910,7 +908,6 @@ export function registerSeoRoutes(app: Express) {
         `${baseUrl}/scout`,
         `${baseUrl}/restaurant-signup`,
         `${baseUrl}/claim-truck`,
-        `${baseUrl}/truck-landing`,
         `${baseUrl}/for-hosts`,
         `${baseUrl}/host-location-partner`,
         `${baseUrl}/map`,

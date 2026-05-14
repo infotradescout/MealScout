@@ -583,7 +583,7 @@ function TruckDiscovery() {
           description: "Upgrade to express interest in events.",
           variant: "destructive",
         });
-        setLocation("/subscription");
+        setLocation("/subscribe");
         return;
       }
 
@@ -690,7 +690,7 @@ function TruckDiscovery() {
               Event participation is a premium feature.{" "}
               <button
                 className="text-[color:var(--accent-text)] hover:underline font-medium"
-                onClick={() => setLocation("/subscription")}
+                onClick={() => setLocation("/subscribe")}
               >
                 Upgrade your plan
               </button>{" "}

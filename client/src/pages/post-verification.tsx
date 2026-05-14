@@ -74,7 +74,6 @@ function getSetupBrief(redirectPath: string) {
     };
   }
   if (
-    redirectPath.startsWith("/event-signup") ||
     redirectPath.startsWith("/event-coordinator/dashboard")
   ) {
     return {

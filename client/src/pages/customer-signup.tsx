@@ -790,7 +790,7 @@ export default function CustomerSignup() {
         <SEOHead
           title="Sign Up - MealScout | Choose Account Type"
           description="Choose the MealScout account path that fits you: diner, food truck, restaurant, chef, host, event organizer, or supplier."
-          canonicalUrl="https://www.mealscout.us/signup"
+          canonicalUrl="https://www.mealscout.us/customer-signup"
           noIndex={true}
         />
         <BackHeader
@@ -1028,7 +1028,7 @@ export default function CustomerSignup() {
                   </p>
                 </div>
                 <Link
-                  href="/signup"
+                  href="/customer-signup"
                   className="shrink-0 rounded-full border border-[color:var(--border-subtle)] px-3 py-1 text-xs font-bold text-[color:var(--text-primary)] hover:bg-[var(--bg-surface)]"
                 >
                   Change

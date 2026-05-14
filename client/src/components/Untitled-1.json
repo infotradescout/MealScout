@@ -4413,14 +4413,6 @@
         "isDefault": true
       }
     ],
-    "TruckLanding": [
-      {
-        "name": "TruckLanding",
-        "path": "c:\\Users\\trob4\\TradeScout\\MealScout\\client\\src\\pages\\truck-landing.tsx",
-        "type": "function",
-        "isDefault": true
-      }
-    ],
     "useMemo": [
       {
         "name": "useMemo",
@@ -5507,14 +5499,6 @@
         "isDefault": true
       }
     ],
-    "FindFood": [
-      {
-        "name": "FindFood",
-        "path": "c:\\Users\\trob4\\TradeScout\\MealScout\\client\\src\\pages\\find-food.tsx",
-        "type": "function",
-        "isDefault": true
-      }
-    ],
     "FavoritesPage": [
       {
         "name": "FavoritesPage",
@@ -5562,14 +5546,6 @@
       {
         "name": "EventsRouter",
         "path": "c:\\Users\\trob4\\TradeScout\\MealScout\\client\\src\\pages\\events-router.tsx",
-        "type": "function",
-        "isDefault": true
-      }
-    ],
-    "EventSignup": [
-      {
-        "name": "EventSignup",
-        "path": "c:\\Users\\trob4\\TradeScout\\MealScout\\client\\src\\pages\\event-signup.tsx",
         "type": "function",
         "isDefault": true
       }

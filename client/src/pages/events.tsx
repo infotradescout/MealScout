@@ -373,7 +373,7 @@ export default function EventsPage() {
                   workflows.
                 </p>
                 <Button
-                  onClick={() => (window.location.href = "/subscription")}
+                  onClick={() => (window.location.href = "/subscribe")}
                 >
                   View subscription
                 </Button>

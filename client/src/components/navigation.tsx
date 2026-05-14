@@ -326,7 +326,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
         { path: "/menu-builder", icon: Store, label: "Menu Builder" },
         { path: "/kitchen", icon: ChefHat, label: "Kitchen" },
         { path: "/orders", icon: ShoppingCart, label: "Orders" },
-        { path: "/subscription", icon: BarChart3, label: "Subscription" },
+        { path: "/subscribe", icon: BarChart3, label: "Subscription" },
         { path: "/events", icon: Calendar, label: "Events" },
         { path: "/suppliers", icon: Truck, label: "Supplies" },
         { path: "/share-hub", icon: Share2, label: "Share" },

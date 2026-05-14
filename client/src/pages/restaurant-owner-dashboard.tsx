@@ -899,7 +899,7 @@ export default function RestaurantOwnerDashboard() {
         description: "Upgrade to use live location broadcasting.",
         variant: "destructive",
       });
-      setLocation("/subscription");
+      setLocation("/subscribe");
       return;
     }
 
@@ -960,7 +960,7 @@ export default function RestaurantOwnerDashboard() {
         description: "Upgrade to use one-click live location updates.",
         variant: "destructive",
       });
-      setLocation("/subscription");
+      setLocation("/subscribe");
       return;
     }
 
@@ -1350,7 +1350,7 @@ export default function RestaurantOwnerDashboard() {
               )
             ) : null}
             {canManageBilling ? (
-              <Link href="/subscription">
+              <Link href="/subscribe">
                 <Button
                   variant="outline"
                   data-testid="button-manage-subscription"

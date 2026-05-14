@@ -14,7 +14,6 @@ import { useToast } from "@/hooks/use-toast";
 // Eager load only critical pages (welcome, login) - everything else lazy loads
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/login";
-import Home from "@/pages/home";
 import Welcome from "@/pages/welcome";
 
 // Lazy load all other pages - they only download when the user navigates to them
@@ -136,7 +135,6 @@ const ForEvents = lazy(() => import("@/pages/for-events"));
 const VideoPage = lazy(() => import("@/pages/video"));
 const VideoDetailPage = lazy(() => import("@/pages/video-detail"));
 const ChangePassword = lazy(() => import("@/pages/change-password"));
-const TruckLanding = lazy(() => import("@/pages/truck-landing"));
 const ClaimTruckPage = lazy(() => import("@/pages/claim-truck"));
 const SuppliersPage = lazy(() => import("@/pages/suppliers"));
 const SupplierDetailPage = lazy(() => import("@/pages/supplier-detail"));
@@ -176,30 +174,11 @@ const RedirectToScout = () => {
   return <PageLoader />;
 };
 
-const RedirectToEventOnboarding = () => {
-  const [, setLocation] = useLocation();
-  const { user, authState } = useAuth();
-
-  useEffect(() => {
-    if (authState === "loading") return;
-    if (user?.userType === "event_coordinator") {
-      setLocation("/event-coordinator/dashboard");
-      return;
-    }
-    setLocation("/customer-signup?role=event_coordinator");
-  }, [authState, setLocation, user?.userType]);
-
-  return <PageLoader />;
-};
-
 const publicRoutePrefixes = [
   "/",
   "/scout",
-  "/explore",
-  "/explore-preview",
   "/food-truck-rush",
   "/login",
-  "/signup",
   "/customer-signup",
   "/restaurant-signup",
   "/claim-truck",
@@ -233,10 +212,8 @@ const publicRoutePrefixes = [
   "/hiring",
   "/jobs",
   "/private-chefs",
-  "/event-signup",
   "/events",
   "/food-trucks/",
-  "/truck-landing",
   "/sitemap",
   "/status",
   "/golden-plate-winners",
@@ -330,13 +307,9 @@ function Router() {
         {shouldUseGuestRoutes ? (
           <>
             <Route path="/" component={Welcome} />
-            <Route path="/home" component={Home} />
-            <Route path="/explore" component={RedirectToScout} />
-            <Route path="/explore-preview" component={RedirectToScout} />
             <Route path="/scout" component={ScoutPage} />
             <Route path="/food-truck-rush" component={FoodTruckRush} />
             <Route path="/login" component={Login} />
-            <Route path="/signup" component={CustomerSignup} />
             <Route path="/customer-signup" component={CustomerSignup} />
             <Route path="/restaurant-signup" component={RestaurantSignup} />
             <Route path="/claim-truck" component={ClaimTruckPage} />
@@ -413,10 +386,6 @@ function Router() {
             <Route path="/hiring" component={HiringPage} />
             <Route path="/jobs" component={HiringPage} />
             <Route path="/private-chefs" component={HiringPage} />
-            <Route
-              path="/event-signup"
-              component={RedirectToEventOnboarding}
-            />
             <Route path="/events" component={EventsRouter} />
             <Route path="/events/public" component={EventsPage} />
             <Route path="/event/:slug" component={EventDetailPage} />
@@ -426,7 +395,6 @@ function Router() {
               path="/food-trucks/:citySlug/:cuisineSlug"
               component={CityLanding}
             />
-            <Route path="/truck-landing" component={TruckLanding} />
             <Route path="/sitemap" component={Sitemap} />
             <Route path="/status" component={StatusPage} />
             <Route
@@ -469,12 +437,9 @@ function Router() {
         ) : (
           <>
             <Route path="/" component={RedirectToScout} />
-            <Route path="/explore" component={RedirectToScout} />
-            <Route path="/explore-preview" component={RedirectToScout} />
             <Route path="/scout" component={ScoutPage} />
             <Route path="/food-truck-rush" component={FoodTruckRush} />
             <Route path="/login" component={Login} />
-            <Route path="/signup" component={CustomerSignup} />
             <Route path="/customer-signup" component={CustomerSignup} />
             <Route path="/restaurant-signup" component={RestaurantSignup} />
             <Route path="/claim-truck" component={ClaimTruckPage} />
@@ -482,8 +447,6 @@ function Router() {
             <Route path="/deal-edit/:dealId" component={DealEdit} />
             <Route path="/deal/:id" component={DealDetail} />
             <Route path="/subscribe" component={Subscribe} />
-            <Route path="/subscription" component={Subscribe} />
-            <Route path="/subscription/manage" component={Subscribe} />
             <Route
               path="/restaurant-owner-dashboard"
               component={RestaurantOwnerDashboard}
@@ -499,7 +462,6 @@ function Router() {
               path="/event-coordinator/dashboard"
               component={EventCoordinatorDashboard}
             />
-            <Route path="/trucks" component={TruckDiscovery} />
             <Route path="/truck-discovery" component={TruckDiscovery} />
             <Route path="/for-restaurants" component={ForRestaurants} />
             <Route path="/for-bars" component={ForBars} />
@@ -539,7 +501,6 @@ function Router() {
               path="/admin/control-center"
               component={AdminControlCenter}
             />
-            <Route path="/admin/legacy-dashboard" component={AdminDashboard} />
             <Route
               path="/admin/giveaway-wheel"
               component={AdminGiveawayWheel}
@@ -618,7 +579,6 @@ function Router() {
             <Route path="/contact" component={Contact} />
             <Route path="/install" component={InstallApp} />
             <Route path="/host-signup" component={HostSignup} />
-            <Route path="/event-signup" component={RedirectToEventOnboarding} />
             <Route path="/events" component={EventsRouter} />
             <Route path="/events/public" component={EventsPage} />
             <Route path="/event/:slug" component={EventDetailPage} />
@@ -630,7 +590,6 @@ function Router() {
               component={CityLanding}
             />
             <Route path="/sitemap" component={Sitemap} />
-            <Route path="/truck-landing" component={TruckLanding} />
             <Route path="/status" component={StatusPage} />
             <Route
               path="/p/:profileType/:profileId"

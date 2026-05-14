@@ -50,7 +50,7 @@ export const roleLandingContent = {
       description:
         "List your food truck on MealScout to get discovered, book host locations, and grow your schedule. Free to join — built for food truck owners.",
       keywords: "list food truck, food truck booking platform, food truck host locations, book food truck spots, food truck scheduling, local food truck discovery",
-      canonicalPath: "/truck-landing",
+      canonicalPath: "/for-restaurants",
     },
     badge: "MealScout for Trucks",
     headline: "Stop chasing.\nStart getting booked.",

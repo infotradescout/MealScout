@@ -118,7 +118,7 @@ export default function PensacolaSpots() {
             ) : null}
             {isAuthenticated && isTruckOperator && !subscription?.hasAccess ? (
               <Button variant="outline" asChild>
-                <a href="/subscription">Start premium ($25/mo)</a>
+                <a href="/subscribe">Start premium ($25/mo)</a>
               </Button>
             ) : null}
           </div>

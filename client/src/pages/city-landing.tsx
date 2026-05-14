@@ -335,7 +335,7 @@ export default function CityLanding() {
             <span className="hover:text-[color:var(--accent-text)]">Home</span>
           </Link>
           <ChevronRight className="h-3 w-3" />
-          <Link href="/truck-landing">
+          <Link href="/for-restaurants">
             <span className="hover:text-[color:var(--accent-text)]">
               Food Trucks
             </span>

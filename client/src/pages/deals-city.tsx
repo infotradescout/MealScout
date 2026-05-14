@@ -368,7 +368,7 @@ export default function DealsCityPage() {
                 variant="outline"
                 className="border-[color:var(--border-subtle)]"
               >
-                <Link href="/signup">Sign up to earn credits</Link>
+                <Link href="/customer-signup">Sign up to earn credits</Link>
               </Button>
             )}
           </div>
