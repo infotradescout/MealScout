@@ -51,6 +51,7 @@ import {
   Loader2,
   UtensilsCrossed,
   DollarSign,
+  Package,
   Eye,
   EyeOff,
   Settings,
@@ -101,6 +102,7 @@ interface MenuItem {
   name: string;
   description: string | null;
   priceCents: number;
+  itemType: "food" | "merchandise";
   imageUrl: string | null;
   isAvailable: boolean;
   trackInventory: boolean;
@@ -1231,6 +1233,12 @@ function MenuItemRow({
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <span className="font-medium text-sm truncate">{item.name}</span>
+          {item.itemType === "merchandise" && (
+            <Badge variant="outline" className="text-xs gap-1">
+              <Package className="w-3 h-3" />
+              Merch
+            </Badge>
+          )}
           {!item.isAvailable && (
             <Badge variant="secondary" className="text-xs">
               86'd
@@ -1239,7 +1247,9 @@ function MenuItemRow({
         </div>
         <div className="text-xs text-muted-foreground flex gap-2 mt-0.5">
           <span>{formatMoney(item.priceCents)}</span>
-          {item.calories && <span>· {item.calories} cal</span>}
+          {item.itemType !== "merchandise" && item.calories && (
+            <span>· {item.calories} cal</span>
+          )}
           {item.trackInventory && item.inventoryQty !== null && (
             <span>· {item.inventoryQty} left</span>
           )}
@@ -1301,6 +1311,7 @@ function MenuItemDialog({
     name: item?.name ?? "",
     description: item?.description ?? "",
     priceCents: item ? String(item.priceCents / 100) : "",
+    itemType: item?.itemType ?? "food",
     calories: item?.calories ? String(item.calories) : "",
     isAvailable: item?.isAvailable ?? true,
     trackInventory: item?.trackInventory ?? false,
@@ -1320,20 +1331,30 @@ function MenuItemDialog({
         name: form.name.trim(),
         description: form.description.trim() || null,
         priceCents: Math.round(parseFloat(form.priceCents) * 100),
-        calories: form.calories ? parseInt(form.calories) : null,
+        itemType: form.itemType,
+        calories:
+          form.itemType === "merchandise"
+            ? null
+            : form.calories
+              ? parseInt(form.calories)
+              : null,
         isAvailable: form.isAvailable,
         trackInventory: form.trackInventory,
         inventoryQty:
           form.trackInventory && form.inventoryQty
             ? parseInt(form.inventoryQty)
             : null,
-        dietaryTags: form.dietaryTags
+        dietaryTags: form.itemType === "merchandise"
+          ? []
+          : form.dietaryTags
           ? form.dietaryTags
               .split(",")
               .map((t) => t.trim())
               .filter(Boolean)
           : [],
-        allergens: form.allergens
+        allergens: form.itemType === "merchandise"
+          ? []
+          : form.allergens
           ? form.allergens
               .split(",")
               .map((a) => a.trim())
@@ -1395,16 +1416,27 @@ function MenuItemDialog({
               </div>
             </div>
             <div>
-              <Label>Calories</Label>
-              <Input
-                value={form.calories}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, calories: e.target.value }))
+              <Label>Item type</Label>
+              <Select
+                value={form.itemType}
+                onValueChange={(value) =>
+                  setForm((f) => ({
+                    ...f,
+                    itemType: value as "food" | "merchandise",
+                    calories: value === "merchandise" ? "" : f.calories,
+                    dietaryTags: value === "merchandise" ? "" : f.dietaryTags,
+                    allergens: value === "merchandise" ? "" : f.allergens,
+                  }))
                 }
-                placeholder="e.g. 650"
-                type="number"
-                min="0"
-              />
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="food">Food / drink</SelectItem>
+                  <SelectItem value="merchandise">Merchandise</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="col-span-2">
               <Label>Description</Label>
@@ -1417,36 +1449,52 @@ function MenuItemDialog({
                 rows={2}
               />
             </div>
-            <div className="col-span-2">
-              <Label>
-                Dietary Tags{" "}
-                <span className="text-xs text-muted-foreground">
-                  (comma separated)
-                </span>
-              </Label>
-              <Input
-                value={form.dietaryTags}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, dietaryTags: e.target.value }))
-                }
-                placeholder="vegan, gluten-free, keto"
-              />
-            </div>
-            <div className="col-span-2">
-              <Label>
-                Allergens{" "}
-                <span className="text-xs text-muted-foreground">
-                  (comma separated)
-                </span>
-              </Label>
-              <Input
-                value={form.allergens}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, allergens: e.target.value }))
-                }
-                placeholder="nuts, dairy, gluten"
-              />
-            </div>
+            {form.itemType !== "merchandise" && (
+              <>
+                <div>
+                  <Label>Calories</Label>
+                  <Input
+                    value={form.calories}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, calories: e.target.value }))
+                    }
+                    placeholder="e.g. 650"
+                    type="number"
+                    min="0"
+                  />
+                </div>
+                <div className="col-span-2">
+                  <Label>
+                    Dietary Tags{" "}
+                    <span className="text-xs text-muted-foreground">
+                      (comma separated)
+                    </span>
+                  </Label>
+                  <Input
+                    value={form.dietaryTags}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, dietaryTags: e.target.value }))
+                    }
+                    placeholder="vegan, gluten-free, keto"
+                  />
+                </div>
+                <div className="col-span-2">
+                  <Label>
+                    Allergens{" "}
+                    <span className="text-xs text-muted-foreground">
+                      (comma separated)
+                    </span>
+                  </Label>
+                  <Input
+                    value={form.allergens}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, allergens: e.target.value }))
+                    }
+                    placeholder="nuts, dairy, gluten"
+                  />
+                </div>
+              </>
+            )}
           </div>
 
           <div className="space-y-3 pt-2 border-t">

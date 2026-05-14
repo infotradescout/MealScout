@@ -438,6 +438,7 @@ export function registerMenuRoutes(app: Express) {
           name: menuItems.name,
           description: menuItems.description,
           priceCents: menuItems.priceCents,
+          itemType: menuItems.itemType,
           imageUrl: menuItems.imageUrl,
           dietaryTags: menuItems.dietaryTags,
           updatedAt: menuItems.updatedAt,
@@ -497,6 +498,7 @@ export function registerMenuRoutes(app: Express) {
           const itemHaystack = [
             row.name,
             row.description,
+            row.itemType,
             row.cuisineType,
             row.businessType,
             ...(Array.isArray(row.dietaryTags) ? row.dietaryTags : []),
@@ -504,7 +506,14 @@ export function registerMenuRoutes(app: Express) {
             .join(" ")
             .toLowerCase();
 
-          if (itemTypeFilter && !itemHaystack.includes(itemTypeFilter)) {
+          if (
+            itemTypeFilter &&
+            (["merch", "merchandise"].includes(itemTypeFilter)
+              ? row.itemType !== "merchandise"
+              : itemTypeFilter === "food"
+                ? row.itemType !== "food"
+                : !itemHaystack.includes(itemTypeFilter))
+          ) {
             return null;
           }
 
@@ -1431,6 +1440,7 @@ type NormalizedImportResult = {
     name: string;
     description: string | null;
     priceCents: number;
+    itemType: "food" | "merchandise";
     dietaryTags: string[];
     allergens: string[];
     isAvailable: boolean;
@@ -1504,6 +1514,15 @@ function normalizeExternalMenuData(
         name,
         description,
         priceCents,
+        itemType:
+          String(row.itemType || row.item_type || row.type || "")
+            .trim()
+            .toLowerCase() === "merchandise" ||
+          String(row.itemType || row.item_type || row.type || "")
+            .trim()
+            .toLowerCase() === "merch"
+            ? "merchandise"
+            : "food",
         dietaryTags,
         allergens,
         isAvailable: true,

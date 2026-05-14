@@ -5688,6 +5688,7 @@ export const menuItems = pgTable(
     name: varchar("name").notNull(),
     description: text("description"),
     priceCents: integer("price_cents").notNull(), // base price in cents
+    itemType: varchar("item_type").notNull().default("food"),
     imageUrl: varchar("image_url"),
     sku: varchar("sku"),
     // Nutrition info (optional, for health-conscious labeling)
@@ -5715,6 +5716,7 @@ export const menuItems = pgTable(
     index("idx_menu_items_category").on(table.categoryId),
     index("idx_menu_items_restaurant").on(table.restaurantId),
     index("idx_menu_items_available").on(table.isAvailable),
+    index("idx_menu_items_item_type").on(table.itemType),
   ],
 );
 
@@ -6397,6 +6399,7 @@ export const insertMenuCategorySchema = createInsertSchema(menuCategories).omit(
 
 export const insertMenuItemSchema = createInsertSchema(menuItems, {
   priceCents: z.number().int().min(0),
+  itemType: z.enum(["food", "merchandise"]).default("food"),
   calories: z.number().int().min(0).optional().nullable(),
 }).omit({ id: true, createdAt: true, updatedAt: true });
 

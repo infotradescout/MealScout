@@ -66,6 +66,7 @@ interface MenuItem {
   name: string;
   description: string | null;
   priceCents: number;
+  itemType: "food" | "merchandise";
   imageUrl: string | null;
   isAvailable: boolean;
   calories: number | null;
@@ -498,7 +499,14 @@ function MenuItemCard({
       onClick={orderingEnabled ? onAdd : undefined}
     >
       <div className="flex-1">
-        <div className="font-medium">{item.name}</div>
+        <div className="flex items-center gap-2">
+          <div className="font-medium">{item.name}</div>
+          {item.itemType === "merchandise" && (
+            <Badge variant="outline" className="text-xs">
+              Merch
+            </Badge>
+          )}
+        </div>
         {item.description && (
           <p className="text-sm text-muted-foreground mt-0.5 line-clamp-2">
             {item.description}
@@ -508,12 +516,12 @@ function MenuItemCard({
           <span className="text-sm font-semibold">
             {formatMoney(item.priceCents)}
           </span>
-          {item.calories && (
+          {item.itemType !== "merchandise" && item.calories && (
             <span className="text-xs text-muted-foreground">
               {item.calories} cal
             </span>
           )}
-          {(item.dietaryTags ?? []).map((tag) => (
+          {item.itemType !== "merchandise" && (item.dietaryTags ?? []).map((tag) => (
             <Badge
               key={tag}
               variant="secondary"
@@ -637,12 +645,12 @@ function AddItemDialog({
           {item.description && (
             <p className="text-sm text-muted-foreground">{item.description}</p>
           )}
-          {item.calories && (
+          {item.itemType !== "merchandise" && item.calories && (
             <p className="text-xs text-muted-foreground">
               {item.calories} calories
             </p>
           )}
-          {item.allergens && item.allergens.length > 0 && (
+          {item.itemType !== "merchandise" && item.allergens && item.allergens.length > 0 && (
             <p className="text-xs text-amber-700">
               ⚠ Contains: {item.allergens.join(", ")}
             </p>
