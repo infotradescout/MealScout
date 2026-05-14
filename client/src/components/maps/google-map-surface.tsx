@@ -97,10 +97,13 @@ const refreshGoogleMapLayout = (googleMaps: any, map: any) => {
 };
 
 const ensureGoogleMapConstructor = async (googleMaps: any) => {
-  if (typeof googleMaps?.Map === "function") return googleMaps.Map;
-  if (typeof googleMaps?.importLibrary === "function") {
-    const mapsLibrary = await googleMaps.importLibrary("maps");
-    if (typeof mapsLibrary?.Map === "function") return mapsLibrary.Map;
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    if (typeof googleMaps?.Map === "function") return googleMaps.Map;
+    if (typeof googleMaps?.importLibrary === "function") {
+      const mapsLibrary = await googleMaps.importLibrary("maps");
+      if (typeof mapsLibrary?.Map === "function") return mapsLibrary.Map;
+    }
+    await new Promise((resolve) => window.setTimeout(resolve, 100));
   }
   throw new Error("Google Maps Map constructor unavailable");
 };
