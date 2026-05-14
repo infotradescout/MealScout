@@ -545,6 +545,17 @@ function isParkingPassListingRenderable(listing: ParkingPassListing): boolean {
   return parkingPassHasAvailability(listing);
 }
 
+function parkingPassHostKey(listing: ParkingPassListing): string {
+  const hostId = String(listing.hostId || "").trim();
+  if (hostId) return hostId;
+  const hostName = String(
+    listing.hostName || listing.businessName || listing.host?.businessName || "",
+  ).trim();
+  const lat = String(listing.latitude ?? listing.host?.latitude ?? "").trim();
+  const lng = String(listing.longitude ?? listing.host?.longitude ?? "").trim();
+  return [hostName, lat, lng].filter(Boolean).join(":") || listing.id;
+}
+
 function extractMenuPreviewItems(data: any): MenuPreviewItem[] {
   const menus = Array.isArray(data?.menus) ? data.menus : [];
   const items: MenuPreviewItem[] = [];
@@ -953,15 +964,26 @@ export default function ExplorePreview() {
   }, [parkingPassData]);
 
   const localParkingPassHosts = useMemo<ParkingPassListing[]>(() => {
-    return parkingPassHosts.filter((listing) => {
-      if (!isParkingPassListingRenderable(listing)) return false;
-      return isWithinScoutRadius(
-        coords,
-        listing.latitude ?? listing.host?.latitude,
-        listing.longitude ?? listing.host?.longitude,
-        discoveryRadiusKm,
-      );
-    });
+    const uniqueByHost = new Map<string, ParkingPassListing>();
+    for (const listing of parkingPassHosts) {
+      if (!isParkingPassListingRenderable(listing)) continue;
+      if (
+        !isWithinScoutRadius(
+          coords,
+          listing.latitude ?? listing.host?.latitude,
+          listing.longitude ?? listing.host?.longitude,
+          discoveryRadiusKm,
+        )
+      ) {
+        continue;
+      }
+
+      const key = parkingPassHostKey(listing);
+      if (!uniqueByHost.has(key)) {
+        uniqueByHost.set(key, listing);
+      }
+    }
+    return Array.from(uniqueByHost.values());
   }, [coords, discoveryRadiusKm, parkingPassHosts]);
 
   /* --------- nearby deals (location-aware) --------- */
@@ -1055,7 +1077,6 @@ export default function ExplorePreview() {
           const parsed = typeof value === "string" ? Number(value) : value;
           return Number.isFinite(parsed) ? parsed : null;
         };
-        // Coordinates may be on the listing directly or nested under host.
         const lat = parseCoord(p.latitude ?? p.host?.latitude);
         const lng = parseCoord(p.longitude ?? p.host?.longitude);
         if (lat === null || lng === null) return null;
@@ -1069,7 +1090,7 @@ export default function ExplorePreview() {
               ? Math.max(0, capacity - p.bookedSpots)
               : null;
         return {
-          id: `parking-${p.id}`,
+          id: `parking-${parkingPassHostKey(p)}`,
           sourceId: String(p.id),
           kind: "parking" as const,
           lat,
@@ -1822,7 +1843,7 @@ export default function ExplorePreview() {
                   <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
                     <ul className="flex gap-4 pr-5" role="list" aria-label="Parking pass hosts">
                       {localParkingPassHosts.slice(0, 8).map((h) => (
-                        <li key={h.id} className="shrink-0 w-[200px] sm:w-[220px]">
+                        <li key={parkingPassHostKey(h)} className="shrink-0 w-[200px] sm:w-[220px]">
                           <ParkingPassCard listing={h} />
                         </li>
                       ))}
@@ -2044,7 +2065,7 @@ function LocalFoodDashboard({
               </h2>
               <p className="mt-1.5 text-white/62 text-xs leading-relaxed max-w-[32rem]">
                 Local food signal from trucks, menus, independent spots, deals,
-                events, and host locations near you.
+                events, and future truck host locations near you.
               </p>
             </div>
             <span className="shrink-0 rounded-full bg-[#120805]/35 ring-1 ring-orange-300/25 px-3 py-1 text-[11px] font-semibold text-orange-100">
@@ -3340,7 +3361,7 @@ function ScoutMapHud({
         {isExpanded && (
           <div className="mt-3">
             <p className="text-xs text-white/62">
-              Blue dot is you. Orange pins are live food, hosts, and local action.
+              Blue dot is you. Orange pins are live food, host spots, and local action.
             </p>
             <div className="mt-3 grid grid-cols-4 gap-2 text-center">
               <MapHudCount label="Trucks" value={liveTruckCount} />
