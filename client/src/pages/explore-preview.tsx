@@ -1415,7 +1415,7 @@ export default function ExplorePreview() {
       >
         {/* ============================================================
              SCOUT SURFACE
-             Default: compact holographic local-signal preview.
+             Default: compact branded mini map.
              Full map: interactive Google Map fills the viewport.
            ============================================================ */}
         <section
@@ -1438,7 +1438,7 @@ export default function ExplorePreview() {
         >
           {/* Scout map surfaces
               ------------------
-              DEFAULT state: branded holographic signal preview.
+              DEFAULT state: compact real-map preview with MealScout styling.
               FULLMAP state: interactive Google Map widget for real
                 pan/zoom/tap-pin exploration.
           */}

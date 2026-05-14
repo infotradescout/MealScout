@@ -1,14 +1,19 @@
 /**
  * ThemedScoutMap
  * --------------
- * Compact animated Scout mini-map for /scout.
+ * Compact Scout mini-map for /scout.
  *
- * The collapsed hero is a lightweight, branded mini-map element: stylized
- * streets, animated route glow, user position, and nearby signal pins. Pulling
- * down expands into the full Google map for real pan/zoom/tap exploration.
+ * This is the collapsed map element that lives on the Scout page: a real
+ * street map, branded with MealScout contrast and animated pins. Pulling down
+ * expands into the full Google map for real pan/zoom/tap exploration.
  */
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
+import maplibregl, {
+  type Map as MaplibreMap,
+  type StyleSpecification,
+} from "maplibre-gl";
+import "maplibre-gl/dist/maplibre-gl.css";
 
 import type { MapAdapterMarker } from "./map-adapter.types";
 
@@ -19,336 +24,329 @@ interface ThemedScoutMapProps {
   zoom?: number;
 }
 
-type ProjectedMarker = MapAdapterMarker & {
-  x: number;
-  y: number;
-  distanceKm: number;
-};
-
-const compact = (value: number, min: number, max: number) =>
-  Math.max(min, Math.min(max, value));
-
-const markerClassName = (kind: MapAdapterMarker["kind"] | undefined) => {
-  switch (kind) {
-    case "parking":
-      return "msm-signal msm-signal--parking";
-    case "restaurant":
-      return "msm-signal msm-signal--food";
-    case "event":
-      return "msm-signal msm-signal--event";
-    case "deal":
-      return "msm-signal msm-signal--deal";
-    default:
-      return "msm-signal msm-signal--truck";
-  }
-};
-
-const projectMarkers = (
-  userLocation: { lat: number; lng: number },
-  markers: MapAdapterMarker[],
-): ProjectedMarker[] => {
-  const lngKm = Math.max(25, 111.32 * Math.cos((userLocation.lat * Math.PI) / 180));
-  const rangeKm = 42;
-
-  return markers
-    .filter((marker) => Number.isFinite(marker.lat) && Number.isFinite(marker.lng))
-    .map((marker) => {
-      const dxKm = (marker.lng - userLocation.lng) * lngKm;
-      const dyKm = (marker.lat - userLocation.lat) * 110.57;
-      const distanceKm = Math.sqrt(dxKm * dxKm + dyKm * dyKm);
-      return {
-        ...marker,
-        distanceKm,
-        x: compact(50 + (dxKm / rangeKm) * 38, 9, 91),
-        y: compact(50 - (dyKm / rangeKm) * 38, 9, 91),
-      };
-    })
-    .sort((a, b) => a.distanceKm - b.distanceKm)
-    .slice(0, 24);
+const MINI_MAP_STYLE: StyleSpecification = {
+  version: 8,
+  sources: {
+    "carto-voyager": {
+      type: "raster",
+      tiles: [
+        "https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png",
+        "https://b.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png",
+        "https://c.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png",
+        "https://d.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png",
+      ],
+      tileSize: 256,
+      attribution:
+        'Map data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a>, tiles © <a href="https://carto.com/attributions" target="_blank" rel="noopener noreferrer">CARTO</a>',
+    },
+  },
+  layers: [
+    {
+      id: "background",
+      type: "background",
+      paint: {
+        "background-color": "#100b08",
+      },
+    },
+    {
+      id: "carto-voyager-tiles",
+      type: "raster",
+      source: "carto-voyager",
+      paint: {
+        "raster-opacity": 1,
+        "raster-brightness-min": 0,
+        "raster-brightness-max": 1,
+        "raster-saturation": 0.04,
+        "raster-contrast": 0.08,
+      },
+    },
+  ],
 };
 
 export function ThemedScoutMap({
   userLocation,
   markers,
   onMarkerTap,
+  zoom = 13,
 }: ThemedScoutMapProps) {
-  const projectedMarkers = useMemo(
-    () => projectMarkers(userLocation, markers),
-    [userLocation.lat, userLocation.lng, markers],
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const mapRef = useRef<MaplibreMap | null>(null);
+  const userMarkerRef = useRef<maplibregl.Marker | null>(null);
+  const markerRefs = useRef<maplibregl.Marker[]>([]);
+  const driftRafRef = useRef<number | null>(null);
+  const driftStartRef = useRef<number | null>(null);
+
+  const centerMapOnUser = (duration = 0) => {
+    const map = mapRef.current;
+    if (!map) return;
+    map.easeTo({
+      center: [userLocation.lng, userLocation.lat],
+      zoom,
+      duration,
+    });
+  };
+
+  useEffect(() => {
+    if (!containerRef.current || mapRef.current) return;
+
+    const map = new maplibregl.Map({
+      container: containerRef.current,
+      style: MINI_MAP_STYLE,
+      center: [userLocation.lng, userLocation.lat],
+      zoom,
+      pitch: 0,
+      bearing: 0,
+      interactive: false,
+      attributionControl: false,
+      dragRotate: false,
+      pitchWithRotate: false,
+      touchPitch: false,
+      keyboard: false,
+      doubleClickZoom: false,
+      boxZoom: false,
+      scrollZoom: false,
+      dragPan: false,
+      touchZoomRotate: false,
+      fadeDuration: 240,
+    });
+
+    mapRef.current = map;
+
+    const resizeMap = () => {
+      const current = mapRef.current;
+      if (!current) return;
+      current.resize();
+      centerMapOnUser(0);
+    };
+    const initialResizeFrame = requestAnimationFrame(resizeMap);
+    const initialResizeTimeout = window.setTimeout(resizeMap, 250);
+
+    map.on("load", () => {
+      centerMapOnUser(0);
+
+      const userEl = document.createElement("div");
+      userEl.className = "msm-user-pin";
+      userEl.setAttribute("aria-label", "Your location");
+      userEl.innerHTML = `
+        <span class="msm-user-pin__pulse"></span>
+        <span class="msm-user-pin__pulse msm-user-pin__pulse--delay"></span>
+        <span class="msm-user-pin__core"></span>
+      `;
+      userMarkerRef.current = new maplibregl.Marker({
+        element: userEl,
+        anchor: "center",
+      })
+        .setLngLat([userLocation.lng, userLocation.lat])
+        .addTo(map);
+
+      driftStartRef.current = performance.now();
+      const tick = () => {
+        const current = mapRef.current;
+        if (!current) return;
+        if (driftStartRef.current == null) {
+          driftStartRef.current = performance.now();
+        }
+        const t = (performance.now() - driftStartRef.current) / 1000;
+        current.setBearing(Math.sin((t / 70) * Math.PI * 2) * 3);
+        driftRafRef.current = requestAnimationFrame(tick);
+      };
+      driftRafRef.current = requestAnimationFrame(tick);
+    });
+
+    const ro = new ResizeObserver(() => {
+      const current = mapRef.current;
+      if (!current) return;
+      current.resize();
+      centerMapOnUser(160);
+    });
+    ro.observe(containerRef.current);
+
+    return () => {
+      ro.disconnect();
+      cancelAnimationFrame(initialResizeFrame);
+      window.clearTimeout(initialResizeTimeout);
+      if (driftRafRef.current != null) {
+        cancelAnimationFrame(driftRafRef.current);
+        driftRafRef.current = null;
+      }
+      markerRefs.current.forEach((marker) => marker.remove());
+      markerRefs.current = [];
+      userMarkerRef.current?.remove();
+      userMarkerRef.current = null;
+      mapRef.current?.remove();
+      mapRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const markerKey = useMemo(
+    () =>
+      markers
+        .map((marker) => `${marker.id}:${marker.lat.toFixed(5)},${marker.lng.toFixed(5)}`)
+        .join("|"),
+    [markers],
   );
 
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    centerMapOnUser(500);
+    userMarkerRef.current?.setLngLat([userLocation.lng, userLocation.lat]);
+  }, [userLocation.lat, userLocation.lng, markerKey]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    markerRefs.current.forEach((marker) => marker.remove());
+    markerRefs.current = [];
+
+    markers.forEach((marker) => {
+      if (!Number.isFinite(marker.lat) || !Number.isFinite(marker.lng)) return;
+
+      const el = document.createElement("button");
+      el.type = "button";
+      el.className = `msm-map-pin msm-map-pin--${marker.kind || "truck"}`;
+      el.setAttribute(
+        "aria-label",
+        marker.title ? `${marker.title} pin` : "MealScout map pin",
+      );
+      el.innerHTML = `
+        <span class="msm-map-pin__halo"></span>
+        <span class="msm-map-pin__core"></span>
+      `;
+      el.addEventListener("click", (event) => {
+        event.stopPropagation();
+        onMarkerTap?.(marker);
+      });
+
+      markerRefs.current.push(
+        new maplibregl.Marker({ element: el, anchor: "center" })
+          .setLngLat([marker.lng, marker.lat])
+          .addTo(map),
+      );
+    });
+  }, [markerKey, markers, onMarkerTap]);
+
   return (
-    <div
-      className="msm-holo absolute inset-0 h-full w-full min-h-full overflow-hidden"
-      aria-label="MealScout animated mini map"
-    >
-      <div className="msm-holo__base" aria-hidden="true" />
-      <div className="msm-holo__grid" aria-hidden="true" />
-      <svg
-        className="msm-mini-map"
-        viewBox="0 0 1000 560"
-        preserveAspectRatio="xMidYMid slice"
-        aria-hidden="true"
-      >
-        <defs>
-          <filter id="msm-road-glow" x="-30%" y="-30%" width="160%" height="160%">
-            <feGaussianBlur stdDeviation="4" result="blur" />
-            <feMerge>
-              <feMergeNode in="blur" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
-          </filter>
-          <linearGradient id="msm-route-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="#f97316" stopOpacity="0" />
-            <stop offset="48%" stopColor="#fb923c" stopOpacity="0.95" />
-            <stop offset="100%" stopColor="#facc15" stopOpacity="0" />
-          </linearGradient>
-        </defs>
-
-        <g className="msm-map-blocks">
-          <path d="M-20 88 H1040" />
-          <path d="M-20 236 H1040" />
-          <path d="M-20 386 H1040" />
-          <path d="M96 -20 V600" />
-          <path d="M278 -20 V600" />
-          <path d="M458 -20 V600" />
-          <path d="M640 -20 V600" />
-          <path d="M824 -20 V600" />
-        </g>
-
-        <g className="msm-map-roads msm-map-roads--base">
-          <path d="M-40 474 C142 394 230 440 372 352 C518 262 644 290 1040 134" />
-          <path d="M-20 190 C164 238 300 202 426 142 C570 76 722 108 1040 64" />
-          <path d="M196 -40 C236 112 186 226 264 344 C340 460 498 474 584 620" />
-          <path d="M720 -40 C668 98 694 204 770 294 C850 390 824 478 908 620" />
-        </g>
-        <g className="msm-map-roads msm-map-roads--minor">
-          <path d="M-10 322 C116 286 226 294 358 248 C484 204 574 190 708 206 C834 222 930 196 1010 154" />
-          <path d="M42 62 C176 132 268 116 390 96 C522 72 594 122 704 154 C818 186 908 170 1020 112" />
-          <path d="M360 -20 C382 110 354 216 424 314 C500 420 612 438 684 594" />
-          <path d="M548 -20 C518 132 548 224 612 316 C686 424 678 500 732 600" />
-        </g>
-        <path
-          className="msm-map-route"
-          d="M-40 474 C142 394 230 440 372 352 C518 262 644 290 1040 134"
-        />
-      </svg>
-      <div className="msm-holo__scan msm-holo__scan--one" aria-hidden="true" />
-      <div className="msm-holo__scan msm-holo__scan--two" aria-hidden="true" />
-      <div className="msm-holo__core" aria-hidden="true">
-        <span className="msm-holo__core-ring" />
-        <span className="msm-holo__core-dot" />
-      </div>
-
-      <div className="msm-holo__signals" aria-hidden={projectedMarkers.length === 0}>
-        {projectedMarkers.map((marker, index) => (
-          <button
-            key={`${marker.id}-${index}`}
-            type="button"
-            className={markerClassName(marker.kind)}
-            style={{
-              left: `${marker.x}%`,
-              top: `${marker.y}%`,
-              animationDelay: `${(index % 7) * 110}ms`,
-            }}
-            aria-label={marker.title ? `${marker.title} signal` : "MealScout signal"}
-            onClick={(event) => {
-              event.stopPropagation();
-              onMarkerTap?.(marker);
-            }}
-          >
-            <span className="msm-signal__halo" />
-            <span className="msm-signal__dot" />
-          </button>
-        ))}
-      </div>
-
-      <div className="msm-holo__vignette" aria-hidden="true" />
-
+    <div className="absolute inset-0 h-full w-full min-h-full">
+      <div
+        ref={containerRef}
+        className="msm-map-canvas absolute inset-0 h-full w-full min-h-full"
+        style={{ height: "100%", width: "100%", minHeight: "100%" }}
+      />
+      <div aria-hidden="true" className="msm-map-grade absolute inset-0" />
       <style>{`
-        .msm-holo {
-          background:
-            radial-gradient(circle at 50% 47%, rgba(249, 115, 22, 0.2), transparent 15%),
-            radial-gradient(circle at 70% 18%, rgba(255, 122, 24, 0.17), transparent 27%),
-            radial-gradient(circle at 26% 30%, rgba(59, 130, 246, 0.12), transparent 28%),
-            linear-gradient(180deg, #090a0d 0%, #100b08 55%, #050608 100%);
+        .msm-map-canvas .maplibregl-canvas {
+          filter: saturate(1.06) contrast(1.08) brightness(0.82) sepia(0.1) hue-rotate(-10deg);
         }
-        .msm-holo__base,
-        .msm-holo__grid,
-        .msm-mini-map,
-        .msm-holo__scan,
-        .msm-holo__vignette {
+        .msm-map-grade {
+          pointer-events: none;
+          background:
+            radial-gradient(circle at 50% 44%, rgba(249, 115, 22, 0.13), transparent 22%),
+            linear-gradient(180deg, rgba(12, 8, 6, 0.12) 0%, rgba(8, 8, 9, 0.06) 44%, rgba(4, 5, 7, 0.2) 100%),
+            linear-gradient(90deg, rgba(0, 0, 0, 0.1), transparent 28%, transparent 72%, rgba(0, 0, 0, 0.08));
+          mix-blend-mode: multiply;
+        }
+        .msm-map-grade::after {
+          content: "";
           position: absolute;
           inset: 0;
-          pointer-events: none;
-        }
-        .msm-holo__base {
           background:
-            linear-gradient(115deg, transparent 0 43%, rgba(249, 115, 22, 0.13) 44%, transparent 45% 100%),
-            linear-gradient(65deg, transparent 0 55%, rgba(245, 158, 11, 0.08) 56%, transparent 57% 100%);
-          opacity: 0.58;
-          transform: skewY(-2deg);
+            radial-gradient(circle at 68% 20%, rgba(255, 122, 24, 0.1), transparent 28%),
+            radial-gradient(ellipse at center, transparent 0%, rgba(0, 0, 0, 0.36) 78%);
+          mix-blend-mode: screen;
         }
-        .msm-holo__grid {
-          background-image:
-            linear-gradient(rgba(255, 177, 87, 0.065) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(255, 177, 87, 0.065) 1px, transparent 1px);
-          background-size: 38px 38px;
-          opacity: 0.28;
-          transform: perspective(460px) rotateX(54deg) translateY(-12%);
-          transform-origin: 50% 20%;
-        }
-        .msm-mini-map {
-          width: 100%;
-          height: 100%;
-          opacity: 0.95;
-          filter: drop-shadow(0 0 24px rgba(249, 115, 22, 0.16));
-        }
-        .msm-map-blocks path {
-          fill: none;
-          stroke: rgba(255, 237, 213, 0.06);
-          stroke-width: 1.4;
-        }
-        .msm-map-roads path {
-          fill: none;
-          stroke-linecap: round;
-          stroke-linejoin: round;
-        }
-        .msm-map-roads--base path {
-          stroke: rgba(234, 88, 12, 0.76);
-          stroke-width: 13;
-          filter: url(#msm-road-glow);
-        }
-        .msm-map-roads--minor path {
-          stroke: rgba(251, 146, 60, 0.34);
-          stroke-width: 4;
-        }
-        .msm-map-route {
-          fill: none;
-          stroke: url(#msm-route-gradient);
-          stroke-linecap: round;
-          stroke-width: 5;
-          stroke-dasharray: 86 220;
-          animation: msm-route-flow 5.8s linear infinite;
-          filter: url(#msm-road-glow);
-        }
-        .msm-holo__scan {
-          border-radius: 9999px;
-          border: 1px solid rgba(251, 191, 36, 0.18);
-          box-shadow: 0 0 40px rgba(249, 115, 22, 0.12);
-          animation: msm-scan 5.8s ease-in-out infinite;
-        }
-        .msm-holo__scan--one {
-          inset: 26% 34%;
-        }
-        .msm-holo__scan--two {
-          inset: 12% 22%;
-          animation-delay: 1.6s;
-          opacity: 0.68;
-        }
-        .msm-holo__core {
-          position: absolute;
-          left: 50%;
-          top: 50%;
-          width: 28px;
-          height: 28px;
-          transform: translate(-50%, -50%);
+
+        .msm-user-pin {
+          position: relative;
+          width: 24px;
+          height: 24px;
           pointer-events: none;
         }
-        .msm-holo__core-ring,
-        .msm-holo__core-dot {
+        .msm-user-pin__core {
           position: absolute;
+          inset: 7px;
           border-radius: 9999px;
-        }
-        .msm-holo__core-ring {
-          inset: 0;
-          border: 2px solid rgba(255, 255, 255, 0.72);
+          background: #2563eb;
+          border: 2px solid rgba(255, 255, 255, 0.9);
           box-shadow:
-            0 0 0 5px rgba(59, 130, 246, 0.45),
-            0 0 28px rgba(59, 130, 246, 0.55);
+            0 0 0 5px rgba(37, 99, 235, 0.34),
+            0 0 22px rgba(37, 99, 235, 0.7);
         }
-        .msm-holo__core-dot {
-          inset: 8px;
-          background: #3b82f6;
-          box-shadow: 0 0 24px rgba(59, 130, 246, 0.82);
-        }
-        .msm-holo__signals {
+        .msm-user-pin__pulse {
           position: absolute;
-          inset: 0;
+          inset: 1px;
+          border-radius: 9999px;
+          background: rgba(37, 99, 235, 0.34);
+          animation: msm-user-pulse 2.4s ease-out infinite;
         }
-        .msm-signal {
-          position: absolute;
+        .msm-user-pin__pulse--delay {
+          animation-delay: 1.2s;
+        }
+        @keyframes msm-user-pulse {
+          0%   { transform: scale(0.7); opacity: 0.8; }
+          80%  { transform: scale(2.3); opacity: 0; }
+          100% { transform: scale(2.3); opacity: 0; }
+        }
+
+        .msm-map-pin {
+          position: relative;
           width: 18px;
           height: 18px;
           padding: 0;
           border: 0;
-          border-radius: 9999px;
           background: transparent;
-          transform: translate(-50%, -50%);
           cursor: pointer;
           pointer-events: auto;
-          animation: msm-signal-float 3.4s ease-in-out infinite;
         }
-        .msm-signal__halo,
-        .msm-signal__dot {
+        .msm-map-pin__halo,
+        .msm-map-pin__core {
           position: absolute;
           border-radius: 9999px;
+        }
+        .msm-map-pin__halo {
           inset: 0;
+          background: rgba(245, 158, 11, 0.32);
+          filter: blur(3px);
+          animation: msm-map-pin-glow 3s ease-in-out infinite;
         }
-        .msm-signal__halo {
-          background: rgba(249, 115, 22, 0.28);
-          filter: blur(4px);
-          transform: scale(1.8);
-        }
-        .msm-signal__dot {
+        .msm-map-pin__core {
           inset: 5px;
           background: #f59e0b;
           box-shadow:
-            0 0 0 2px rgba(15, 10, 8, 0.74),
-            0 0 18px rgba(245, 158, 11, 0.78);
+            0 0 0 2px rgba(15, 18, 24, 0.82),
+            0 0 14px rgba(245, 158, 11, 0.72);
         }
-        .msm-signal--parking .msm-signal__halo { background: rgba(14, 165, 233, 0.28); }
-        .msm-signal--parking .msm-signal__dot {
-          background: #38bdf8;
-          box-shadow: 0 0 0 2px rgba(15, 10, 8, 0.74), 0 0 18px rgba(56, 189, 248, 0.72);
+        .msm-map-pin--parking .msm-map-pin__halo { background: rgba(14, 165, 233, 0.32); }
+        .msm-map-pin--parking .msm-map-pin__core { background: #38bdf8; }
+        .msm-map-pin--restaurant .msm-map-pin__halo,
+        .msm-map-pin--deal .msm-map-pin__halo { background: rgba(34, 197, 94, 0.26); }
+        .msm-map-pin--restaurant .msm-map-pin__core,
+        .msm-map-pin--deal .msm-map-pin__core { background: #22c55e; }
+        .msm-map-pin--event .msm-map-pin__halo { background: rgba(217, 70, 239, 0.26); }
+        .msm-map-pin--event .msm-map-pin__core { background: #d946ef; }
+        @keyframes msm-map-pin-glow {
+          0%, 100% { transform: scale(1); opacity: 0.58; }
+          50% { transform: scale(1.55); opacity: 0.95; }
         }
-        .msm-signal--food .msm-signal__halo,
-        .msm-signal--deal .msm-signal__halo { background: rgba(34, 197, 94, 0.24); }
-        .msm-signal--food .msm-signal__dot,
-        .msm-signal--deal .msm-signal__dot {
-          background: #22c55e;
-          box-shadow: 0 0 0 2px rgba(15, 10, 8, 0.74), 0 0 18px rgba(34, 197, 94, 0.66);
+
+        .maplibregl-ctrl-attrib,
+        .maplibregl-ctrl-bottom-right,
+        .maplibregl-ctrl-bottom-left {
+          display: none !important;
         }
-        .msm-signal--event .msm-signal__halo { background: rgba(217, 70, 239, 0.24); }
-        .msm-signal--event .msm-signal__dot {
-          background: #d946ef;
-          box-shadow: 0 0 0 2px rgba(15, 10, 8, 0.74), 0 0 18px rgba(217, 70, 239, 0.66);
-        }
-        .msm-holo__vignette {
-          background:
-            linear-gradient(180deg, rgba(0, 0, 0, 0.18), transparent 34%, rgba(0, 0, 0, 0.36)),
-            radial-gradient(ellipse at center, transparent 0%, rgba(0, 0, 0, 0.42) 76%);
-        }
-        @keyframes msm-route-flow {
-          from { stroke-dashoffset: 0; }
-          to { stroke-dashoffset: -306; }
-        }
-        @keyframes msm-scan {
-          0%, 100% { transform: scale(0.82); opacity: 0.15; }
-          45% { transform: scale(1.12); opacity: 0.58; }
-        }
-        @keyframes msm-signal-float {
-          0%, 100% { transform: translate(-50%, -50%) scale(0.95); opacity: 0.76; }
-          50% { transform: translate(-50%, -54%) scale(1.08); opacity: 1; }
-        }
-        @media (prefers-reduced-motion: reduce) {
-          .msm-holo__scan,
-          .msm-map-route,
-          .msm-signal {
-            animation: none;
-          }
+        .maplibregl-map,
+        .maplibregl-canvas-container,
+        .maplibregl-canvas {
+          min-height: 100% !important;
+          width: 100% !important;
+          height: 100% !important;
         }
       `}</style>
+      <span className="sr-only" aria-label="Map data attribution">
+        Map data © OpenStreetMap contributors. Tiles © CARTO.
+      </span>
     </div>
   );
 }
