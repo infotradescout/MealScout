@@ -1436,23 +1436,22 @@ export default function ExplorePreview() {
             </div>
 
             {/* GoogleMapSurface:
-                - Only mounts the FIRST TIME sheetState becomes "fullMap"
-                  (hasOpenedFullMapRef). This guarantees the map initializes
-                  at full 100dvh height, not at the collapsed 38vh height.
-                - Once mounted, stays mounted (keep-alive) so subsequent
-                  collapse/expand cycles don't re-initialize.
-                - Hidden (visibility:hidden, pointer-events:none) when
-                  collapsed so it doesn't intercept hero touch events.
+                - Visible in the collapsed hero so Scout looks like a real map,
+                  not a placeholder grid.
+                - Pointer events stay disabled while collapsed so the pull-up
+                  sheet gesture and expand button remain reliable.
+                - Once opened, it remains mounted so collapse/expand cycles do
+                  not re-initialize Google Maps.
             */}
-            {hasMapKey && !googleMapFailed && coords && mapCenter && hasOpenedFullMap ? (
+            {hasMapKey && !googleMapFailed && coords && mapCenter ? (
               <div
                 ref={googleMapContainerRef}
                 data-testid="scout-interactive-map"
                 className="absolute inset-0"
                 style={{
-                  visibility: sheetState === "fullMap" ? "visible" : "hidden",
+                  visibility: "visible",
                   pointerEvents: sheetState === "fullMap" ? "auto" : "none",
-                  zIndex: sheetState === "fullMap" ? 1 : 0,
+                  zIndex: 1,
                 }}
               >
                 <MapErrorBoundary>
