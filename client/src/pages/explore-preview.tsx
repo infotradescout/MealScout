@@ -1,10 +1,8 @@
 import {
   useCallback,
   useEffect,
-  lazy,
   useMemo,
   useRef,
-  Suspense,
   useState,
 } from "react";
 import { Link, useLocation as useWouterLocation } from "wouter";
@@ -48,12 +46,6 @@ type MapRuntimeResponse = {
   hasGoogleMapsMapId?: boolean;
   googleMapsMapId?: string | null;
 };
-
-const ThemedScoutMap = lazy(() =>
-  import("@/components/maps/themed-scout-map").then((module) => ({
-    default: module.ThemedScoutMap,
-  })),
-);
 
 /**
  * /scout — The canonical MealScout food discovery page.
@@ -1245,6 +1237,9 @@ export default function ExplorePreview() {
     setMapCenter(c);
     userPushedMapRef.current = true;
   }, []);
+  const ignorePreviewBoundsChanged = useCallback((_bounds: MapBoundsLike) => {}, []);
+  const ignorePreviewZoomChanged = useCallback((_zoom: number) => {}, []);
+  const ignorePreviewCenterChanged = useCallback((_center: { lat: number; lng: number }) => {}, []);
   const selectLiveTruck = useCallback(
     (truck: LiveTruckSummary) => {
       const truckCoords = getTruckCoords(truck);
@@ -1438,12 +1433,11 @@ export default function ExplorePreview() {
         >
           {/* Scout map surfaces
               ------------------
-              DEFAULT state: compact real-map preview with MealScout styling.
+              DEFAULT state: compact noninteractive Google map preview.
               FULLMAP state: interactive Google Map widget for real
                 pan/zoom/tap-pin exploration.
           */}
           <div className="absolute inset-0">
-            {/* ThemedScoutMap is the branded collapsed Scout hero map. */}
             <div
               data-testid="scout-map-preview"
               className="absolute inset-0"
@@ -1453,24 +1447,42 @@ export default function ExplorePreview() {
                 zIndex: 0,
               }}
             >
-              {coords ? (
-                <Suspense fallback={<HeroMapFallback reason="loading" />}>
-                  <ThemedScoutMap
+              {hasMapKey && !googleMapFailed && coords ? (
+                <MapErrorBoundary>
+                  <GoogleMapSurface
+                    apiKey={effectiveGoogleMapsApiKey}
+                    mapId={effectiveGoogleMapsMapId || undefined}
+                    center={coords}
+                    zoom={14}
                     markers={allMapMarkers}
+                    showRoadTrafficLayer={false}
                     userLocation={coords}
-                    zoom={13}
+                    isNightTheme={true}
+                    interactive={false}
+                    onBoundsChanged={ignorePreviewBoundsChanged}
+                    onZoomChanged={ignorePreviewZoomChanged}
+                    onCenterChanged={ignorePreviewCenterChanged}
                     onMarkerTap={handleMarkerTap}
+                    onFatalError={() => setGoogleMapFailed(true)}
                   />
-                </Suspense>
+                </MapErrorBoundary>
               ) : (
-                <HeroMapFallback reason="loading" />
+                <HeroMapFallback
+                  reason={
+                    !hasMapKey || googleMapFailed
+                      ? "no-key"
+                      : locationStatus === "denied"
+                        ? "denied"
+                        : "loading"
+                  }
+                />
               )}
             </div>
 
             {/* GoogleMapSurface:
                 - Used for full interactive pan/zoom/tap-pin exploration.
-                - Kept off the collapsed hero so Scout keeps its branded map
-                  contrast instead of inheriting Google's dark styling.
+                - Collapsed preview uses the same map family above, locked
+                  noninteractive so the pull-down gesture owns the surface.
             */}
             {sheetState === "fullMap" && hasMapKey && !googleMapFailed && coords && mapCenter ? (
               <div

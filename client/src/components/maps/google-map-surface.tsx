@@ -34,6 +34,7 @@ type GoogleMapSurfaceProps = {
   onAreaSelected?: (bounds: AreaBounds | null) => void;
   onMarkerTap: (marker: MapAdapterMarker) => void;
   onFatalError?: (message: string) => void;
+  interactive?: boolean;
 };
 
 type GoogleMapsWindow = Window & {
@@ -434,6 +435,7 @@ export function GoogleMapSurface({
   onPopupAnchorPosition,
   onMarkerTap,
   onFatalError,
+  interactive = true,
 }: GoogleMapSurfaceProps) {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
@@ -542,10 +544,18 @@ export function GoogleMapSurface({
             zoom: zoomRef.current,
             disableDefaultUI: true,
             zoomControl: false,
-            clickableIcons: false,
+            clickableIcons: interactive,
             tilt: 0,
             heading: 0,
-            gestureHandling: prefersFinePointer ? "greedy" : "cooperative",
+            draggable: interactive,
+            keyboardShortcuts: interactive,
+            scrollwheel: interactive,
+            disableDoubleClickZoom: !interactive,
+            gestureHandling: interactive
+              ? prefersFinePointer
+                ? "greedy"
+                : "cooperative"
+              : "none",
           };
           const runtimeMapId = String(mapId || "").trim();
           if (runtimeMapId && !isNightTheme) {
@@ -634,6 +644,20 @@ export function GoogleMapSurface({
           } else {
             mapRef.current.setOptions({ mapId: undefined, styles: mapStyleNeon });
           }
+          mapRef.current.setOptions({
+            clickableIcons: interactive,
+            draggable: interactive,
+            keyboardShortcuts: interactive,
+            scrollwheel: interactive,
+            disableDoubleClickZoom: !interactive,
+            gestureHandling: interactive
+              ? typeof window !== "undefined" &&
+                typeof window.matchMedia === "function" &&
+                window.matchMedia("(pointer: fine)").matches
+                ? "greedy"
+                : "cooperative"
+              : "none",
+          });
         }
 
         setLoadError(null);
@@ -651,7 +675,7 @@ export function GoogleMapSurface({
     return () => {
       mounted = false;
     };
-  }, [apiKey, mapId, isNightTheme]);
+  }, [apiKey, mapId, isNightTheme, interactive]);
 
   useEffect(() => {
     if (!mapRef.current) return;
@@ -747,17 +771,20 @@ export function GoogleMapSurface({
 
       if (typeof instance.addEventListener === "function") {
         instance.addEventListener("gmp-click", () => {
+          if (!interactive) return;
           if (marker.id === "__user-location") return;
           const tapped = markerIndex.get(marker.id);
           if (tapped) onMarkerTapRef.current?.(tapped);
         });
       } else {
         instance.addListener("click", () => {
+          if (!interactive) return;
           if (marker.id === "__user-location") return;
           const tapped = markerIndex.get(marker.id);
           if (tapped) onMarkerTapRef.current?.(tapped);
         });
         instance.addListener("mouseover", (event: any) => {
+          if (!interactive) return;
           const hovered = markerIndex.get(marker.id);
           if (!hovered || !onMarkerHoverRef.current) return;
           const latLng = event?.latLng;
@@ -769,6 +796,7 @@ export function GoogleMapSurface({
           onMarkerHoverRef.current(hovered, position);
         });
         instance.addListener("mouseout", () => {
+          if (!interactive) return;
           onMarkerHoverRef.current?.(null, null);
         });
       }
@@ -782,7 +810,7 @@ export function GoogleMapSurface({
       markerRefs.current.delete(id);
       markerSignatureRefs.current.delete(id);
     });
-  }, [renderedMarkers, markerIndex, mapReadyVersion]);
+  }, [renderedMarkers, markerIndex, mapReadyVersion, interactive]);
 
   // Traffic cells
   useEffect(() => {
