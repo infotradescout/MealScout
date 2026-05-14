@@ -1411,9 +1411,9 @@ export default function ExplorePreview() {
         style={{ overscrollBehaviorY: "none" }}
       >
         {/* ============================================================
-             HERO MAP — live Google Map. When sheetState === "fullMap"
-             the map fills the viewport. Otherwise it occupies ~58vh
-             behind the hero text + sits above the lower content sheet.
+             SCOUT SURFACE
+             Default: compact holographic local-signal preview.
+             Full map: interactive Google Map fills the viewport.
            ============================================================ */}
         <section
           data-testid="scout-map-container"
@@ -1433,12 +1433,11 @@ export default function ExplorePreview() {
           onMouseUp={sheetState !== "fullMap" ? handleSheetMouseUp : undefined}
           onMouseLeave={sheetState !== "fullMap" ? handleSheetMouseUp : undefined}
         >
-          {/* Map
-              ----
-              DEFAULT state: a real MapLibre street-tile map in MealScout's
-                brand aesthetic. Google Maps mounts above it when available.
-              FULLMAP state: the interactive Google Map widget
-                (GoogleMapSurface) for full pan/zoom/tap-pin exploration.
+          {/* Scout map surfaces
+              ------------------
+              DEFAULT state: branded holographic signal preview.
+              FULLMAP state: interactive Google Map widget for real
+                pan/zoom/tap-pin exploration.
           */}
           <div className="absolute inset-0">
             {/* ThemedScoutMap is the branded collapsed Scout hero map. */}

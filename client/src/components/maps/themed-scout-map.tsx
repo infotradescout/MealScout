@@ -1,390 +1,267 @@
 /**
  * ThemedScoutMap
  * --------------
- * Custom atmospheric "scout view" for the embedded MealScout /scout map.
+ * Compact holographic Scout surface for /scout.
  *
- * - NOT a raw Google Maps widget. Uses MapLibre GL JS with a street-forward
- *   style + free CARTO Voyager raster tiles, then layers MealScout's
- *   amber-glow brand pins over the top so the hero matches the
- *   Atmospheric UI (dark backgrounds, glassmorphism, glowing amber accents).
- *
- * - The camera anchors on the user's location. Nearby pins render as local
- *   context, but they do not pull the compact hero away from the user.
- *
- * - The map gently drifts/rotates around the user's pin so the hero feels
- *   alive even when nothing is happening.
- *
- * - All built-in controls (zoom, attribution, scale, etc.) are disabled
- *   because this is a presentation surface, not an interactive map. The
- *   real interactive map is mounted separately (GoogleMapSurface) when
- *   the user pulls down to fullscreen.
+ * This is intentionally not a street map. The collapsed hero should feel like
+ * a branded local-signal preview, then expand into the full Google map when the
+ * user pulls down. Keeping this surface abstract avoids fighting with map tile
+ * contrast, labels, centering, and stale cartography in a space that is mostly
+ * covered by the Scout sheet.
  */
 
-import { useEffect, useMemo, useRef } from "react";
-import maplibregl, {
-  type Map as MaplibreMap,
-  type StyleSpecification,
-} from "maplibre-gl";
-import "maplibre-gl/dist/maplibre-gl.css";
+import { useMemo } from "react";
 
 import type { MapAdapterMarker } from "./map-adapter.types";
 
 interface ThemedScoutMapProps {
-  /** User's geolocation. */
   userLocation: { lat: number; lng: number };
-  /** Truck pins to render as amber glow markers. */
   markers: MapAdapterMarker[];
-  /** Optional callback when a marker is tapped. */
   onMarkerTap?: (marker: MapAdapterMarker) => void;
-  /** Hero zoom level. Defaults to 14 (neighborhood scale). */
   zoom?: number;
 }
 
-/**
- * Custom branded style spec. We use CARTO's free Voyager raster tiles
- * as the base (no API key needed, ODbL attribution), then grade them down
- * gently so roads and labels stay visible without looking like stock maps.
- */
-const DARK_STYLE: StyleSpecification = {
-  version: 8,
-  // No glyphs or sprites needed — we don't render text/icons from the style.
-  sources: {
-    "carto-voyager": {
-      type: "raster",
-      tiles: [
-        "https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png",
-        "https://b.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png",
-        "https://c.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png",
-        "https://d.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png",
-      ],
-      tileSize: 256,
-      attribution:
-        '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OSM</a> contributors © <a href="https://carto.com/attributions" target="_blank" rel="noopener noreferrer">CARTO</a>',
-    },
-  },
-  layers: [
-    {
-      id: "background",
-      type: "background",
-      paint: {
-        "background-color": "#110b08",
-      },
-    },
-    {
-      id: "carto-voyager-tiles",
-      type: "raster",
-      source: "carto-voyager",
-      paint: {
-        "raster-opacity": 1,
-        "raster-brightness-min": 0,
-        "raster-brightness-max": 1,
-        "raster-saturation": 0.08,
-        "raster-contrast": 0.14,
-      },
-    },
-  ],
+type ProjectedMarker = MapAdapterMarker & {
+  x: number;
+  y: number;
+  distanceKm: number;
+};
+
+const compact = (value: number, min: number, max: number) =>
+  Math.max(min, Math.min(max, value));
+
+const markerClassName = (kind: MapAdapterMarker["kind"] | undefined) => {
+  switch (kind) {
+    case "parking":
+      return "msm-signal msm-signal--parking";
+    case "restaurant":
+      return "msm-signal msm-signal--food";
+    case "event":
+      return "msm-signal msm-signal--event";
+    case "deal":
+      return "msm-signal msm-signal--deal";
+    default:
+      return "msm-signal msm-signal--truck";
+  }
+};
+
+const projectMarkers = (
+  userLocation: { lat: number; lng: number },
+  markers: MapAdapterMarker[],
+): ProjectedMarker[] => {
+  const lngKm = Math.max(25, 111.32 * Math.cos((userLocation.lat * Math.PI) / 180));
+  const rangeKm = 42;
+
+  return markers
+    .filter((marker) => Number.isFinite(marker.lat) && Number.isFinite(marker.lng))
+    .map((marker) => {
+      const dxKm = (marker.lng - userLocation.lng) * lngKm;
+      const dyKm = (marker.lat - userLocation.lat) * 110.57;
+      const distanceKm = Math.sqrt(dxKm * dxKm + dyKm * dyKm);
+      return {
+        ...marker,
+        distanceKm,
+        x: compact(50 + (dxKm / rangeKm) * 38, 9, 91),
+        y: compact(50 - (dyKm / rangeKm) * 38, 9, 91),
+      };
+    })
+    .sort((a, b) => a.distanceKm - b.distanceKm)
+    .slice(0, 24);
 };
 
 export function ThemedScoutMap({
   userLocation,
   markers,
   onMarkerTap,
-  zoom = 14,
 }: ThemedScoutMapProps) {
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const mapRef = useRef<MaplibreMap | null>(null);
-  const userMarkerRef = useRef<maplibregl.Marker | null>(null);
-  const truckMarkersRef = useRef<maplibregl.Marker[]>([]);
-  const driftRafRef = useRef<number | null>(null);
-  const driftStartRef = useRef<number | null>(null);
-
-  const centerMapOnUser = (duration = 0) => {
-    const m = mapRef.current;
-    if (!m) return;
-    m.easeTo({
-      center: [userLocation.lng, userLocation.lat],
-      zoom,
-      duration,
-    });
-  };
-
-  /* --------------------------------------------------------------
-     Initialize the map exactly once.
-     -------------------------------------------------------------- */
-  useEffect(() => {
-    if (!containerRef.current) return;
-    if (mapRef.current) return;
-
-    const map = new maplibregl.Map({
-      container: containerRef.current,
-      style: DARK_STYLE,
-      center: [userLocation.lng, userLocation.lat],
-      zoom,
-      pitch: 0,
-      bearing: 0,
-      // Disable every default interaction — this is a presentation surface.
-      interactive: false,
-      attributionControl: false,
-      dragRotate: false,
-      pitchWithRotate: false,
-      touchPitch: false,
-      keyboard: false,
-      doubleClickZoom: false,
-      boxZoom: false,
-      scrollZoom: false,
-      dragPan: false,
-      touchZoomRotate: false,
-      fadeDuration: 240,
-    });
-
-    mapRef.current = map;
-
-    const resizeMap = () => {
-      const m = mapRef.current;
-      if (!m) return;
-      m.resize();
-      centerMapOnUser(0);
-    };
-    const initialResizeFrame = requestAnimationFrame(resizeMap);
-    const initialResizeTimeout = window.setTimeout(resizeMap, 250);
-
-    map.on("load", () => {
-      // Center once the canvas has its real size.
-      centerMapOnUser(0);
-
-      // Build the user pulsing pin (amber).
-      const userEl = document.createElement("div");
-      userEl.className = "msm-user-pin";
-      userEl.setAttribute("aria-label", "Your location");
-      userEl.innerHTML = `
-        <span class="msm-user-pin__pulse"></span>
-        <span class="msm-user-pin__pulse msm-user-pin__pulse--delay"></span>
-        <span class="msm-user-pin__core"></span>
-      `;
-      const userMarker = new maplibregl.Marker({
-        element: userEl,
-        anchor: "center",
-      })
-        .setLngLat([userLocation.lng, userLocation.lat])
-        .addTo(map);
-      userMarkerRef.current = userMarker;
-
-      // Start the slow drift animation (rotates the bearing very gently
-      // around the user's pin so the world appears to breathe).
-      driftStartRef.current = performance.now();
-      const tick = () => {
-        const m = mapRef.current;
-        if (!m) return;
-        if (driftStartRef.current == null) driftStartRef.current = performance.now();
-        const t = (performance.now() - driftStartRef.current) / 1000;
-        // Bearing oscillates between -6deg and +6deg over a 60s period.
-        const bearing = Math.sin((t / 60) * Math.PI * 2) * 6;
-        m.setBearing(bearing);
-        driftRafRef.current = requestAnimationFrame(tick);
-      };
-      driftRafRef.current = requestAnimationFrame(tick);
-    });
-
-    // Resize handling
-    const ro = new ResizeObserver(() => {
-      const m = mapRef.current;
-      if (!m) return;
-      m.resize();
-      centerMapOnUser(200);
-    });
-    ro.observe(containerRef.current);
-
-    return () => {
-      ro.disconnect();
-      cancelAnimationFrame(initialResizeFrame);
-      window.clearTimeout(initialResizeTimeout);
-      if (driftRafRef.current != null) {
-        cancelAnimationFrame(driftRafRef.current);
-        driftRafRef.current = null;
-      }
-      truckMarkersRef.current.forEach((mk) => mk.remove());
-      truckMarkersRef.current = [];
-      userMarkerRef.current?.remove();
-      userMarkerRef.current = null;
-      mapRef.current?.remove();
-      mapRef.current = null;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const markerKey = useMemo(
-    () =>
-      markers
-        .map((m) => `${m.id}:${m.lat.toFixed(5)},${m.lng.toFixed(5)}`)
-        .join("|"),
-    [markers],
+  const projectedMarkers = useMemo(
+    () => projectMarkers(userLocation, markers),
+    [userLocation.lat, userLocation.lng, markers],
   );
 
-  /* --------------------------------------------------------------
-     Re-fit on user-location change (e.g. permission granted later
-     or user moves).
-     -------------------------------------------------------------- */
-  useEffect(() => {
-    const m = mapRef.current;
-    if (!m) return;
-    centerMapOnUser(600);
-    userMarkerRef.current?.setLngLat([userLocation.lng, userLocation.lat]);
-  }, [userLocation.lat, userLocation.lng, markerKey]);
-
-  /* --------------------------------------------------------------
-     Update truck markers when the marker list changes.
-     -------------------------------------------------------------- */
-  useEffect(() => {
-    const m = mapRef.current;
-    if (!m) return;
-
-    // Tear down old truck markers.
-    truckMarkersRef.current.forEach((mk) => mk.remove());
-    truckMarkersRef.current = [];
-
-    markers.forEach((marker) => {
-      const el = document.createElement("button");
-      el.type = "button";
-      el.className = "msm-truck-pin";
-      el.setAttribute(
-        "aria-label",
-        marker.title ? `${marker.title} pin` : "Food truck pin",
-      );
-      el.innerHTML = `
-        <span class="msm-truck-pin__glow"></span>
-        <span class="msm-truck-pin__core"></span>
-      `;
-      el.addEventListener("click", (ev) => {
-        ev.stopPropagation();
-        if (onMarkerTap) onMarkerTap(marker);
-      });
-      const mlMarker = new maplibregl.Marker({
-        element: el,
-        anchor: "center",
-      })
-        .setLngLat([marker.lng, marker.lat])
-        .addTo(m);
-      truckMarkersRef.current.push(mlMarker);
-    });
-  }, [markerKey, onMarkerTap, markers]);
-
   return (
-    <div className="absolute inset-0 h-full w-full min-h-full">
-      <div
-        ref={containerRef}
-        className="msm-map-canvas absolute inset-0 h-full w-full min-h-full"
-        style={{ height: "100%", width: "100%", minHeight: "100%" }}
-        // The map canvas itself
-      />
-      <div aria-hidden="true" className="msm-map-grade absolute inset-0" />
-      {/* Inline scoped styles for the pins. Kept here so the component
-          is self-contained and doesn't require global CSS edits. */}
+    <div
+      className="msm-holo absolute inset-0 h-full w-full min-h-full overflow-hidden"
+      aria-label="MealScout local signal preview"
+    >
+      <div className="msm-holo__base" aria-hidden="true" />
+      <div className="msm-holo__grid" aria-hidden="true" />
+      <div className="msm-holo__scan msm-holo__scan--one" aria-hidden="true" />
+      <div className="msm-holo__scan msm-holo__scan--two" aria-hidden="true" />
+      <div className="msm-holo__core" aria-hidden="true">
+        <span className="msm-holo__core-ring" />
+        <span className="msm-holo__core-dot" />
+      </div>
+
+      <div className="msm-holo__signals" aria-hidden={projectedMarkers.length === 0}>
+        {projectedMarkers.map((marker, index) => (
+          <button
+            key={`${marker.id}-${index}`}
+            type="button"
+            className={markerClassName(marker.kind)}
+            style={{
+              left: `${marker.x}%`,
+              top: `${marker.y}%`,
+              animationDelay: `${(index % 7) * 110}ms`,
+            }}
+            aria-label={marker.title ? `${marker.title} signal` : "MealScout signal"}
+            onClick={(event) => {
+              event.stopPropagation();
+              onMarkerTap?.(marker);
+            }}
+          >
+            <span className="msm-signal__halo" />
+            <span className="msm-signal__dot" />
+          </button>
+        ))}
+      </div>
+
+      <div className="msm-holo__vignette" aria-hidden="true" />
+
       <style>{`
-        .msm-user-pin {
-          position: relative;
-          width: 22px;
-          height: 22px;
-          pointer-events: none;
+        .msm-holo {
+          background:
+            radial-gradient(circle at 50% 45%, rgba(249, 115, 22, 0.22), transparent 13%),
+            radial-gradient(circle at 68% 22%, rgba(255, 122, 24, 0.16), transparent 24%),
+            radial-gradient(circle at 28% 28%, rgba(59, 130, 246, 0.11), transparent 26%),
+            linear-gradient(180deg, #080a0d 0%, #0c0a08 58%, #050608 100%);
         }
-        .msm-user-pin__core {
-          position: absolute;
-          inset: 6px;
-          border-radius: 9999px;
-          background: #f59e0b;
-          box-shadow:
-            0 0 0 3px rgba(245, 158, 11, 0.35),
-            0 0 18px 4px rgba(245, 158, 11, 0.55);
-        }
-        .msm-user-pin__pulse {
+        .msm-holo__base,
+        .msm-holo__grid,
+        .msm-holo__scan,
+        .msm-holo__vignette {
           position: absolute;
           inset: 0;
+          pointer-events: none;
+        }
+        .msm-holo__base {
+          background:
+            linear-gradient(115deg, transparent 0 44%, rgba(249, 115, 22, 0.14) 45%, transparent 46% 100%),
+            linear-gradient(65deg, transparent 0 56%, rgba(245, 158, 11, 0.08) 57%, transparent 58% 100%);
+          opacity: 0.68;
+          transform: skewY(-3deg);
+        }
+        .msm-holo__grid {
+          background-image:
+            linear-gradient(rgba(255, 177, 87, 0.085) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(255, 177, 87, 0.085) 1px, transparent 1px);
+          background-size: 38px 38px;
+          opacity: 0.34;
+          transform: perspective(460px) rotateX(54deg) translateY(-12%);
+          transform-origin: 50% 20%;
+        }
+        .msm-holo__scan {
           border-radius: 9999px;
-          background: rgba(245, 158, 11, 0.35);
-          animation: msm-user-pulse 2.4s ease-out infinite;
+          border: 1px solid rgba(251, 191, 36, 0.22);
+          box-shadow: 0 0 40px rgba(249, 115, 22, 0.14);
+          animation: msm-scan 5.8s ease-in-out infinite;
         }
-        .msm-user-pin__pulse--delay {
-          animation-delay: 1.2s;
+        .msm-holo__scan--one {
+          inset: 26% 34%;
         }
-        @keyframes msm-user-pulse {
-          0%   { transform: scale(0.6); opacity: 0.7; }
-          80%  { transform: scale(2.4); opacity: 0;   }
-          100% { transform: scale(2.4); opacity: 0;   }
+        .msm-holo__scan--two {
+          inset: 12% 22%;
+          animation-delay: 1.6s;
+          opacity: 0.68;
         }
-
-        .msm-truck-pin {
-          position: relative;
+        .msm-holo__core {
+          position: absolute;
+          left: 50%;
+          top: 50%;
+          width: 28px;
+          height: 28px;
+          transform: translate(-50%, -50%);
+          pointer-events: none;
+        }
+        .msm-holo__core-ring,
+        .msm-holo__core-dot {
+          position: absolute;
+          border-radius: 9999px;
+        }
+        .msm-holo__core-ring {
+          inset: 0;
+          border: 2px solid rgba(255, 255, 255, 0.72);
+          box-shadow:
+            0 0 0 5px rgba(59, 130, 246, 0.45),
+            0 0 28px rgba(59, 130, 246, 0.55);
+        }
+        .msm-holo__core-dot {
+          inset: 8px;
+          background: #3b82f6;
+          box-shadow: 0 0 24px rgba(59, 130, 246, 0.82);
+        }
+        .msm-holo__signals {
+          position: absolute;
+          inset: 0;
+        }
+        .msm-signal {
+          position: absolute;
           width: 18px;
           height: 18px;
           padding: 0;
           border: 0;
+          border-radius: 9999px;
           background: transparent;
+          transform: translate(-50%, -50%);
           cursor: pointer;
           pointer-events: auto;
+          animation: msm-signal-float 3.4s ease-in-out infinite;
         }
-        .msm-truck-pin__core {
+        .msm-signal__halo,
+        .msm-signal__dot {
           position: absolute;
+          border-radius: 9999px;
+          inset: 0;
+        }
+        .msm-signal__halo {
+          background: rgba(249, 115, 22, 0.28);
+          filter: blur(4px);
+          transform: scale(1.8);
+        }
+        .msm-signal__dot {
           inset: 5px;
-          border-radius: 9999px;
-          background: #fbbf24;
+          background: #f59e0b;
           box-shadow:
-            0 0 0 2px rgba(15, 18, 24, 0.85),
-            0 0 12px 2px rgba(245, 158, 11, 0.65);
+            0 0 0 2px rgba(15, 10, 8, 0.74),
+            0 0 18px rgba(245, 158, 11, 0.78);
         }
-        .msm-truck-pin__glow {
-          position: absolute;
-          inset: 0;
-          border-radius: 9999px;
-          background: rgba(245, 158, 11, 0.32);
-          filter: blur(2px);
-          animation: msm-truck-glow 3s ease-in-out infinite;
+        .msm-signal--parking .msm-signal__halo { background: rgba(14, 165, 233, 0.28); }
+        .msm-signal--parking .msm-signal__dot {
+          background: #38bdf8;
+          box-shadow: 0 0 0 2px rgba(15, 10, 8, 0.74), 0 0 18px rgba(56, 189, 248, 0.72);
         }
-        @keyframes msm-truck-glow {
-          0%, 100% { transform: scale(1);   opacity: 0.55; }
-          50%      { transform: scale(1.4); opacity: 0.85; }
+        .msm-signal--food .msm-signal__halo,
+        .msm-signal--deal .msm-signal__halo { background: rgba(34, 197, 94, 0.24); }
+        .msm-signal--food .msm-signal__dot,
+        .msm-signal--deal .msm-signal__dot {
+          background: #22c55e;
+          box-shadow: 0 0 0 2px rgba(15, 10, 8, 0.74), 0 0 18px rgba(34, 197, 94, 0.66);
         }
-
-        .msm-map-canvas .maplibregl-canvas {
-          filter: saturate(1.08) contrast(1.18) brightness(0.68) sepia(0.18) hue-rotate(-12deg);
+        .msm-signal--event .msm-signal__halo { background: rgba(217, 70, 239, 0.24); }
+        .msm-signal--event .msm-signal__dot {
+          background: #d946ef;
+          box-shadow: 0 0 0 2px rgba(15, 10, 8, 0.74), 0 0 18px rgba(217, 70, 239, 0.66);
         }
-        .msm-map-grade {
-          pointer-events: none;
+        .msm-holo__vignette {
           background:
-            linear-gradient(180deg, rgba(18, 10, 6, 0.16) 0%, rgba(10, 8, 8, 0.1) 42%, rgba(5, 6, 8, 0.22) 100%),
-            linear-gradient(90deg, rgba(0, 0, 0, 0.12), transparent 26%, transparent 74%, rgba(0, 0, 0, 0.1));
-          mix-blend-mode: multiply;
+            linear-gradient(180deg, rgba(0, 0, 0, 0.28), transparent 34%, rgba(0, 0, 0, 0.34)),
+            radial-gradient(ellipse at center, transparent 0%, rgba(0, 0, 0, 0.48) 74%);
         }
-        .msm-map-grade::after {
-          content: "";
-          position: absolute;
-          inset: 0;
-          background:
-            radial-gradient(circle at 72% 18%, rgba(249, 115, 22, 0.1), transparent 32%);
-          mix-blend-mode: screen;
+        @keyframes msm-scan {
+          0%, 100% { transform: scale(0.82); opacity: 0.15; }
+          45% { transform: scale(1.12); opacity: 0.58; }
         }
-
-        /* Hide MapLibre's built-in attribution chrome — we still surface
-           OSM/CARTO credit via aria-label on the container for compliance. */
-        .maplibregl-ctrl-attrib,
-        .maplibregl-ctrl-bottom-right,
-        .maplibregl-ctrl-bottom-left {
-          display: none !important;
+        @keyframes msm-signal-float {
+          0%, 100% { transform: translate(-50%, -50%) scale(0.95); opacity: 0.76; }
+          50% { transform: translate(-50%, -54%) scale(1.08); opacity: 1; }
         }
-        .maplibregl-map,
-        .maplibregl-canvas-container,
-        .maplibregl-canvas {
-          min-height: 100% !important;
-          width: 100% !important;
-          height: 100% !important;
+        @media (prefers-reduced-motion: reduce) {
+          .msm-holo__scan,
+          .msm-signal {
+            animation: none;
+          }
         }
       `}</style>
-      {/* Visually-hidden attribution to satisfy CARTO/OSM ToS without
-          breaking the cinematic hero. Screen-reader friendly. */}
-      <span
-        className="sr-only"
-        aria-label="Map data attribution"
-      >
-        Map data © OpenStreetMap contributors. Tiles © CARTO.
-      </span>
     </div>
   );
 }
