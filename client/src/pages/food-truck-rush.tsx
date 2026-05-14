@@ -788,7 +788,7 @@ function FoodTruckRush() {
                     Play Again
                   </Button>
                   <Button asChild variant="outline">
-                    <Link href="/find-food">
+                    <Link href="/search">
                       <MapPin aria-hidden="true" />
                       Find Trucks Near Me
                     </Link>

@@ -294,7 +294,7 @@ const DISCOVERY_LAYERS: Record<
   },
   cravings: {
     title: "Explore by Craving",
-    href: "/find-food",
+    href: "/search",
     subtitle: "Jump into local food by mood, not by chain category.",
   },
   trending: {
@@ -304,7 +304,7 @@ const DISCOVERY_LAYERS: Record<
   },
   menuItems: {
     title: "New Local Menu Items",
-    href: "/find-food",
+    href: "/search",
     subtitle: "Freshly available dishes from nearby restaurants and trucks.",
   },
   foodTrucks: {
@@ -314,7 +314,7 @@ const DISCOVERY_LAYERS: Record<
   },
   restaurants: {
     title: "Restaurants Near You",
-    href: "/find-food",
+    href: "/search",
     subtitle: "Local restaurants and bars worth knowing about - not a fast-food feed.",
   },
   parkingHosts: {
@@ -2002,7 +2002,7 @@ function LocalFoodDashboard({
   const stats = [
     { label: "Trucks", value: liveTruckCount, href: "/truck-discovery" },
     { label: "Menu", value: menuItemCount, href: DISCOVERY_LAYERS.menuItems.href },
-    { label: "Food", value: restaurantCount, href: "/find-food" },
+    { label: "Food", value: restaurantCount, href: "/search" },
     { label: "Deals", value: dealCount, href: "/deals" },
     { label: "Events", value: eventCount, href: "/events" },
     { label: "Hosts", value: parkingHostCount, href: "/parking-pass" },
@@ -2012,7 +2012,7 @@ function LocalFoodDashboard({
     { label: "All trucks", href: "/truck-discovery" },
     { label: "Trending", href: DISCOVERY_LAYERS.trending.href },
     { label: "Menus", href: DISCOVERY_LAYERS.menuItems.href },
-    { label: "Find dinner", href: "/find-food" },
+    { label: "Find dinner", href: "/search" },
     { label: "Deals", href: "/deals" },
   ];
   const radiusOptions = [5, 12, 25, 40];

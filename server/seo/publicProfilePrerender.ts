@@ -453,7 +453,7 @@ async function restaurantPage(baseUrl: string, restaurantId: string) {
       ...(offersCatering
         ? [{ label: "Catering", href: `${canonicalPath}?service=catering` }]
         : []),
-      { label: "Find food nearby", href: "/find-food" },
+      { label: "Find food nearby", href: "/search" },
       { label: "Scout local dashboard", href: "/scout" },
     ],
     body: [
@@ -700,7 +700,7 @@ async function dealPage(baseUrl: string, dealId: string) {
     links: [
       { label: "Open deal", href: canonicalPath },
       { label: "Featured deals", href: "/deals/featured" },
-      { label: "Find food nearby", href: "/find-food" },
+      { label: "Find food nearby", href: "/search" },
     ],
     body: [
       row.restaurantName ? `Restaurant: ${row.restaurantName}` : "",

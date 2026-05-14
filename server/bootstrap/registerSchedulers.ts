@@ -597,7 +597,7 @@ export async function registerSchedulers(app: Express): Promise<void> {
         // Build the canonical URL list: home, discovery, city landing pages, deals, events
         const staticUrls = [
           baseUrl,
-          `${baseUrl}/find-food`,
+          `${baseUrl}/scout`,
           `${baseUrl}/deals/featured`,
           `${baseUrl}/events/public`,
           `${baseUrl}/for-restaurants`,

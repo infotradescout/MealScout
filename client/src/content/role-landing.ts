@@ -317,7 +317,7 @@ export const roleLandingContent = {
       description:
         "Find local restaurants, bars, and food trucks near you. Discover specials, deals, and community recommendations on MealScout.",
       keywords: "find food near me, local restaurants near me, food trucks near me, nearby bars and restaurants, local food discovery",
-      canonicalPath: "/find-food",
+      canonicalPath: "/scout",
     },
     badge: "MealScout for Diners",
     headline: "Find what's actually local.",
