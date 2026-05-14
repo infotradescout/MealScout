@@ -232,6 +232,7 @@ function GoogleMapRenderer({
   onPinClick,
   onBoundsChanged,
   interactionsEnabled = true,
+  onLoadError,
 }: {
   apiKey: string;
   mapId?: string;
@@ -245,9 +246,11 @@ function GoogleMapRenderer({
   onPinClick?: (key: string) => void;
   onBoundsChanged?: (bounds: MapBoundsLike) => void;
   interactionsEnabled?: boolean;
+  onLoadError?: () => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
+  const resizeObserverRef = useRef<ResizeObserver | null>(null);
   const markersRef = useRef<Map<string, any>>(new Map());
   const trafficCircleRefs = useRef<Map<string, any>>(new Map());
   const circleRef = useRef<any>(null);
@@ -275,6 +278,19 @@ function GoogleMapRenderer({
           ...(mapId ? { mapId } : {}),
         });
         mapRef.current = map;
+        const refreshLayout = () => {
+          const currentMap = mapRef.current;
+          if (!currentMap) return;
+          const currentCenter = currentMap.getCenter?.();
+          g.maps.event.trigger(currentMap, "resize");
+          if (currentCenter) currentMap.setCenter(currentCenter);
+        };
+        resizeObserverRef.current?.disconnect();
+        resizeObserverRef.current = new ResizeObserver(refreshLayout);
+        resizeObserverRef.current.observe(containerRef.current);
+        [0, 80, 240, 520].forEach((delay) => {
+          window.setTimeout(refreshLayout, delay);
+        });
         const iw = new g.maps.InfoWindow();
         infoWindowRef.current = iw;
         // Create a persistent DOM node that React will portal into
@@ -320,7 +336,10 @@ function GoogleMapRenderer({
         }
       })
       .catch((err) => {
-        if (!cancelled) setLoadError(String(err?.message || "Map failed to load"));
+        if (!cancelled) {
+          setLoadError(String(err?.message || "Map failed to load"));
+          onLoadError?.();
+        }
       });
     return () => {
       cancelled = true;
@@ -336,6 +355,8 @@ function GoogleMapRenderer({
         circleRef.current.setMap?.(null);
         circleRef.current = null;
       }
+      resizeObserverRef.current?.disconnect();
+      resizeObserverRef.current = null;
       infoWindowRef.current?.close?.();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -685,6 +706,7 @@ export function GoogleMapPicker({
           onPinClick={onPinClick}
           onBoundsChanged={onBoundsChanged}
           interactionsEnabled={interactionsEnabled}
+          onLoadError={() => setGoogleFailed(true)}
         />
       ) : (
         <LeafletRenderer

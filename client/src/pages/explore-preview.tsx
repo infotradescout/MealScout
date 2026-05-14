@@ -3439,43 +3439,60 @@ function ScoutMapHud({
   onRecenter: () => void;
 }) {
   const radiusOptions = [5, 12, 25, 40];
+  const [isExpanded, setIsExpanded] = useState(false);
+  const totalPins =
+    liveTruckCount + restaurantCount + parkingHostCount + eventCount;
 
   return (
-    <div className="pointer-events-none absolute left-4 right-4 top-[calc(env(safe-area-inset-top)+4.5rem)] z-20">
+    <div className="pointer-events-none absolute left-3 right-3 top-[calc(env(safe-area-inset-top)+4.25rem)] z-20 sm:left-4 sm:right-auto sm:w-[360px]">
       <div
-        className="pointer-events-auto rounded-3xl bg-[#1b0d05]/82 p-4 text-white ring-1 ring-orange-300/35 backdrop-blur-xl"
+        className="pointer-events-auto rounded-2xl bg-[#1b0d05]/82 p-3 text-white ring-1 ring-orange-300/35 backdrop-blur-xl"
         style={{ boxShadow: "0 18px 54px rgba(0,0,0,0.48), 0 0 22px rgba(255,90,47,0.18)" }}
       >
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center justify-between gap-2">
           <div className="min-w-0">
-            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-orange-300/80">
-              Scout map
-            </p>
-            <h2 className="mt-1 truncate text-lg font-black">
+            <h2 className="truncate text-base font-black">
               {locationLabel}
             </h2>
-            <p className="mt-1 text-xs text-white/62">
-              Blue dot is you. Orange pins are live food, hosts, and local action.
+            <p className="text-[11px] font-semibold text-white/58">
+              {totalPins} pins nearby
             </p>
           </div>
-          <button
-            type="button"
-            onClick={onRecenter}
-            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-orange-500 text-[#160904] ring-1 ring-orange-200/40"
-            aria-label="Recenter map on your location"
-          >
-            <Navigation2 className="h-5 w-5" aria-hidden="true" />
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setIsExpanded((value) => !value)}
+              className="rounded-full bg-white/8 px-3 py-2 text-xs font-black text-orange-100 ring-1 ring-white/12"
+              aria-expanded={isExpanded}
+            >
+              {isExpanded ? "Less" : "Details"}
+            </button>
+            <button
+              type="button"
+              onClick={onRecenter}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-orange-500 text-[#160904] ring-1 ring-orange-200/40"
+              aria-label="Recenter map on your location"
+            >
+              <Navigation2 className="h-4 w-4" aria-hidden="true" />
+            </button>
+          </div>
         </div>
 
-        <div className="mt-3 grid grid-cols-4 gap-2 text-center">
-          <MapHudCount label="Trucks" value={liveTruckCount} />
-          <MapHudCount label="Food" value={restaurantCount} />
-          <MapHudCount label="Hosts" value={parkingHostCount} />
-          <MapHudCount label="Events" value={eventCount} />
-        </div>
+        {isExpanded && (
+          <div className="mt-3">
+            <p className="text-xs text-white/62">
+              Blue dot is you. Orange pins are live food, hosts, and local action.
+            </p>
+            <div className="mt-3 grid grid-cols-4 gap-2 text-center">
+              <MapHudCount label="Trucks" value={liveTruckCount} />
+              <MapHudCount label="Food" value={restaurantCount} />
+              <MapHudCount label="Hosts" value={parkingHostCount} />
+              <MapHudCount label="Events" value={eventCount} />
+            </div>
+          </div>
+        )}
 
-        <div className="mt-3 flex items-center justify-between gap-3 rounded-2xl bg-white/7 px-3 py-2 ring-1 ring-white/10">
+        <div className="mt-3 flex items-center justify-between gap-2 rounded-2xl bg-white/7 px-3 py-2 ring-1 ring-white/10">
           <span className="text-xs font-bold text-white/72">
             Radius
           </span>
@@ -3502,7 +3519,7 @@ function ScoutMapHud({
           </div>
         </div>
 
-        {localSignalCount === 0 ? (
+        {isExpanded && localSignalCount === 0 ? (
           <div className="mt-3 rounded-2xl bg-white/7 px-3 py-2 text-xs text-white/72 ring-1 ring-white/10">
             No live local pins right here yet. Move the map or widen discovery from the feed below.
           </div>
@@ -3514,9 +3531,9 @@ function ScoutMapHud({
 
 function MapHudCount({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-2xl bg-white/7 px-2 py-2 ring-1 ring-white/10">
+    <div className="rounded-xl bg-white/7 px-2 py-2 ring-1 ring-white/10">
       <p className="text-base font-black text-orange-200">{value}</p>
-      <p className="text-[10px] font-bold uppercase tracking-wide text-white/48">{label}</p>
+      <p className="text-[9px] font-bold uppercase tracking-wide text-white/48">{label}</p>
     </div>
   );
 }

@@ -88,6 +88,13 @@ const latLngToContainerPixel = (
 const hasMeaningfulCenterDelta = (a: GeoPoint, b: GeoPoint) =>
   Math.abs(a.lat - b.lat) > 0.00001 || Math.abs(a.lng - b.lng) > 0.00001;
 
+const refreshGoogleMapLayout = (googleMaps: any, map: any) => {
+  if (!googleMaps || !map) return;
+  const center = map.getCenter?.();
+  googleMaps.event.trigger(map, "resize");
+  if (center) map.setCenter(center);
+};
+
 /* ─── Google Maps style — MealScout Neon Night ──────────────────────────────
    Goals:
    - Land: near-black (#080b12), same as the SVG hero base
@@ -597,7 +604,7 @@ export function GoogleMapSurface({
           resizeObserverRef.current = new ResizeObserver(() => {
             const map = mapRef.current;
             if (!map) return;
-            googleMaps.event.trigger(map, "resize");
+            refreshGoogleMapLayout(googleMaps, map);
           });
           if (mapContainerRef.current) {
             resizeObserverRef.current.observe(mapContainerRef.current);
@@ -609,12 +616,17 @@ export function GoogleMapSurface({
           onWindowResizeRef.current = () => {
             const map = mapRef.current;
             if (map) {
-              googleMaps.event.trigger(map, "resize");
+              refreshGoogleMapLayout(googleMaps, map);
             }
           };
           window.addEventListener("resize", onWindowResizeRef.current);
 
           setMapReadyVersion((v) => v + 1);
+          [0, 80, 240, 520].forEach((delay) => {
+            window.setTimeout(() => {
+              if (mapRef.current) refreshGoogleMapLayout(googleMaps, mapRef.current);
+            }, delay);
+          });
         } else {
           const runtimeMapId = String(mapId || "").trim();
           if (runtimeMapId && !isNightTheme) {
@@ -851,7 +863,7 @@ export function GoogleMapSurface({
 
   return (
     <div className="h-full w-full relative">
-      <div ref={mapContainerRef} className="h-full w-full rounded-lg overflow-hidden" />
+      <div ref={mapContainerRef} className="h-full w-full overflow-hidden" />
 
       {/* Neon bloom overlay — screen blend amplifies the amber road glow */}
       {isNightTheme && (
