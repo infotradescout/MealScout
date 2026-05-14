@@ -8,10 +8,8 @@
  *   amber-glow brand pins over the top so the hero matches the
  *   Atmospheric UI (dark backgrounds, glassmorphism, glowing amber accents).
  *
- * - The user's location is permanently anchored to the RIGHT THIRD of the
- *   visible viewport. We do this by passing the user's coordinate to
- *   `setCenter()` along with a `padding` value that pushes the visual
- *   center to the right edge.
+ * - The camera fits the user's location and nearby pins into the visible
+ *   hero area. Bottom padding keeps pins above the dashboard panel.
  *
  * - The map gently drifts/rotates around the user's pin so the hero feels
  *   alive even when nothing is happening.
@@ -32,7 +30,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import type { MapAdapterMarker } from "./map-adapter.types";
 
 interface ThemedScoutMapProps {
-  /** User's geolocation. The themed map anchors this to the right third. */
+  /** User's geolocation. */
   userLocation: { lat: number; lng: number };
   /** Truck pins to render as amber glow markers. */
   markers: MapAdapterMarker[];
@@ -77,29 +75,26 @@ const DARK_STYLE: StyleSpecification = {
       type: "raster",
       source: "carto-dark",
       paint: {
-        // Soft, recessed look so amber pins pop and the page chrome stays
-        // primary. Increase brightness-max to lift the contrast a touch.
-        "raster-opacity": 0.55,
+        // Keep the brand-dark treatment, but leave enough tile detail for the
+        // surface to read as a real map in mobile screenshots.
+        "raster-opacity": 0.82,
         "raster-brightness-min": 0,
-        "raster-brightness-max": 0.85,
-        "raster-saturation": -0.4,
-        "raster-contrast": 0.05,
+        "raster-brightness-max": 1.15,
+        "raster-saturation": -0.25,
+        "raster-contrast": 0.14,
       },
     },
   ],
 };
 
 /**
- * Right-third padding. MapLibre's `padding` shifts the optical center,
- * so a large LEFT padding pushes the user's coordinate to the right side
- * of the visible canvas. The actual pixel values are computed from the
- * canvas size at runtime (see effect below) — this is the fallback.
+ * Fallback padding used before the container has a measured size.
  */
-const RIGHT_ANCHOR_PADDING = {
-  top: 0,
-  right: 0,
-  bottom: 0,
-  left: 0,
+const HERO_CAMERA_PADDING = {
+  top: 40,
+  right: 32,
+  bottom: 150,
+  left: 32,
 };
 
 export function ThemedScoutMap({
@@ -116,22 +111,49 @@ export function ThemedScoutMap({
   const driftStartRef = useRef<number | null>(null);
 
   /* --------------------------------------------------------------
-     Compute a stable padding object that anchors the user pin to
-     the right third. We update this whenever the container resizes.
+     Compute padding that reserves the bottom dashboard space and keeps
+     pins inside the readable upper map area on mobile.
      -------------------------------------------------------------- */
   const computePadding = () => {
     const el = containerRef.current;
-    if (!el) return RIGHT_ANCHOR_PADDING;
+    if (!el) return HERO_CAMERA_PADDING;
     const w = el.clientWidth || 0;
-    // Left padding ~ 50% of width pushes the optical center to the right
-    // edge area. We use 48% so the pin sits at roughly x=74% of the canvas
-    // (right third) without crowding the right edge.
+    const h = el.clientHeight || 0;
     return {
-      top: 0,
-      right: 0,
-      bottom: 0,
-      left: Math.round(w * 0.48),
+      top: Math.max(28, Math.round(h * 0.12)),
+      right: Math.max(24, Math.round(w * 0.08)),
+      bottom: Math.max(120, Math.round(h * 0.46)),
+      left: Math.max(24, Math.round(w * 0.08)),
     };
+  };
+
+  const fitMapToContent = (duration = 0) => {
+    const m = mapRef.current;
+    if (!m) return;
+    const points = [
+      userLocation,
+      ...markers.filter(
+        (marker) => Number.isFinite(marker.lat) && Number.isFinite(marker.lng),
+      ),
+    ];
+
+    if (points.length <= 1) {
+      m.easeTo({
+        center: [userLocation.lng, userLocation.lat],
+        zoom,
+        padding: computePadding(),
+        duration,
+      });
+      return;
+    }
+
+    const bounds = new maplibregl.LngLatBounds();
+    points.forEach((point) => bounds.extend([point.lng, point.lat]));
+    m.fitBounds(bounds, {
+      padding: computePadding(),
+      maxZoom: Math.min(zoom, 11.75),
+      duration,
+    });
   };
 
   /* --------------------------------------------------------------
@@ -169,24 +191,14 @@ export function ThemedScoutMap({
       const m = mapRef.current;
       if (!m) return;
       m.resize();
-      const padding = computePadding();
-      m.easeTo({
-        center: [userLocation.lng, userLocation.lat],
-        padding,
-        duration: 0,
-      });
+      fitMapToContent(0);
     };
     const initialResizeFrame = requestAnimationFrame(resizeMap);
     const initialResizeTimeout = window.setTimeout(resizeMap, 250);
 
     map.on("load", () => {
-      // Apply right-anchor padding once the canvas has its real size.
-      const padding = computePadding();
-      map.easeTo({
-        center: [userLocation.lng, userLocation.lat],
-        padding,
-        duration: 0,
-      });
+      // Fit once the canvas has its real size.
+      fitMapToContent(0);
 
       // Build the user pulsing pin (amber).
       const userEl = document.createElement("div");
@@ -226,12 +238,7 @@ export function ThemedScoutMap({
       const m = mapRef.current;
       if (!m) return;
       m.resize();
-      // Re-apply right-anchor padding after a resize so the pin stays right.
-      const padding = computePadding();
-      m.easeTo({
-        padding,
-        duration: 200,
-      });
+      fitMapToContent(200);
     });
     ro.observe(containerRef.current);
 
@@ -253,25 +260,6 @@ export function ThemedScoutMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /* --------------------------------------------------------------
-     Re-center on user-location change (e.g. permission granted later
-     or user moves). Always keep right-anchored.
-     -------------------------------------------------------------- */
-  useEffect(() => {
-    const m = mapRef.current;
-    if (!m) return;
-    const padding = computePadding();
-    m.easeTo({
-      center: [userLocation.lng, userLocation.lat],
-      padding,
-      duration: 600,
-    });
-    userMarkerRef.current?.setLngLat([userLocation.lng, userLocation.lat]);
-  }, [userLocation.lat, userLocation.lng]);
-
-  /* --------------------------------------------------------------
-     Update truck markers when the marker list changes.
-     -------------------------------------------------------------- */
   const markerKey = useMemo(
     () =>
       markers
@@ -280,6 +268,20 @@ export function ThemedScoutMap({
     [markers],
   );
 
+  /* --------------------------------------------------------------
+     Re-fit on user-location change (e.g. permission granted later
+     or user moves).
+     -------------------------------------------------------------- */
+  useEffect(() => {
+    const m = mapRef.current;
+    if (!m) return;
+    fitMapToContent(600);
+    userMarkerRef.current?.setLngLat([userLocation.lng, userLocation.lat]);
+  }, [userLocation.lat, userLocation.lng, markerKey]);
+
+  /* --------------------------------------------------------------
+     Update truck markers when the marker list changes.
+     -------------------------------------------------------------- */
   useEffect(() => {
     const m = mapRef.current;
     if (!m) return;
