@@ -1458,7 +1458,7 @@ export default function ExplorePreview() {
                   <ThemedScoutMap
                     markers={allMapMarkers}
                     userLocation={coords}
-                    zoom={11}
+                    zoom={13}
                     onMarkerTap={handleMarkerTap}
                   />
                 </Suspense>
