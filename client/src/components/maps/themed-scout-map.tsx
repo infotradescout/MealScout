@@ -3,8 +3,8 @@
  * --------------
  * Custom atmospheric "scout view" for the embedded MealScout /scout map.
  *
- * - NOT a raw Google Maps widget. Uses MapLibre GL JS with a custom dark
- *   style + free CARTO Dark Matter raster tiles, then layers MealScout's
+ * - NOT a raw Google Maps widget. Uses MapLibre GL JS with a street-forward
+ *   style + free CARTO Voyager raster tiles, then layers MealScout's
  *   amber-glow brand pins over the top so the hero matches the
  *   Atmospheric UI (dark backgrounds, glassmorphism, glowing amber accents).
  *
@@ -41,21 +41,21 @@ interface ThemedScoutMapProps {
 }
 
 /**
- * Custom branded style spec. We use CARTO's free Dark Matter raster tiles
- * as the base (no API key needed, ODbL attribution), then lightly grade them
- * warm so roads stay readable without turning the hero into a bright wash.
+ * Custom branded style spec. We use CARTO's free Voyager raster tiles
+ * as the base (no API key needed, ODbL attribution), then grade them down
+ * gently so roads and labels stay visible without looking like stock maps.
  */
 const DARK_STYLE: StyleSpecification = {
   version: 8,
   // No glyphs or sprites needed — we don't render text/icons from the style.
   sources: {
-    "carto-dark": {
+    "carto-voyager": {
       type: "raster",
       tiles: [
-        "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
-        "https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
-        "https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
-        "https://d.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
+        "https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png",
+        "https://b.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png",
+        "https://c.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png",
+        "https://d.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png",
       ],
       tileSize: 256,
       attribution:
@@ -67,19 +67,19 @@ const DARK_STYLE: StyleSpecification = {
       id: "background",
       type: "background",
       paint: {
-        "background-color": "#08090b",
+        "background-color": "#110b08",
       },
     },
     {
-      id: "carto-dark-tiles",
+      id: "carto-voyager-tiles",
       type: "raster",
-      source: "carto-dark",
+      source: "carto-voyager",
       paint: {
-        "raster-opacity": 0.98,
-        "raster-brightness-min": 0.04,
+        "raster-opacity": 1,
+        "raster-brightness-min": 0,
         "raster-brightness-max": 1,
-        "raster-saturation": 0.22,
-        "raster-contrast": 0.38,
+        "raster-saturation": 0.08,
+        "raster-contrast": 0.14,
       },
     },
   ],
@@ -390,23 +390,22 @@ export function ThemedScoutMap({
         }
 
         .msm-map-canvas .maplibregl-canvas {
-          filter: saturate(1.42) contrast(1.28) brightness(1.18) sepia(0.14) hue-rotate(-10deg);
+          filter: saturate(1.08) contrast(1.18) brightness(0.68) sepia(0.18) hue-rotate(-12deg);
         }
         .msm-map-grade {
           pointer-events: none;
           background:
-            radial-gradient(circle at 72% 18%, rgba(249, 115, 22, 0.12), transparent 30%),
-            linear-gradient(180deg, rgba(255, 122, 36, 0.05) 0%, rgba(0, 0, 0, 0) 42%, rgba(0, 0, 0, 0.1) 100%);
-          mix-blend-mode: screen;
+            linear-gradient(180deg, rgba(18, 10, 6, 0.16) 0%, rgba(10, 8, 8, 0.1) 42%, rgba(5, 6, 8, 0.22) 100%),
+            linear-gradient(90deg, rgba(0, 0, 0, 0.12), transparent 26%, transparent 74%, rgba(0, 0, 0, 0.1));
+          mix-blend-mode: multiply;
         }
         .msm-map-grade::after {
           content: "";
           position: absolute;
           inset: 0;
           background:
-            linear-gradient(90deg, rgba(0, 0, 0, 0.16), transparent 26%, transparent 74%, rgba(0, 0, 0, 0.1)),
-            linear-gradient(180deg, rgba(0, 0, 0, 0.04), transparent 36%);
-          mix-blend-mode: multiply;
+            radial-gradient(circle at 72% 18%, rgba(249, 115, 22, 0.1), transparent 32%);
+          mix-blend-mode: screen;
         }
 
         /* Hide MapLibre's built-in attribution chrome — we still surface
