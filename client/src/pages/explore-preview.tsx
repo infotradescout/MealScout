@@ -1160,11 +1160,12 @@ export default function ExplorePreview() {
   const runtimeGoogleMapsMapId = String(
     mapRuntime?.googleMapsMapId || "",
   ).trim();
+  const mapRuntimeResolved = mapRuntime !== undefined;
   const buildGoogleMapsMapId = String(
     (import.meta as any).env?.VITE_GOOGLE_MAPS_MAP_ID || "",
   ).trim();
-  const effectiveGoogleMapsApiKey =
-    runtimeGoogleMapsApiKey || GOOGLE_MAPS_WEB_API_KEY;
+  const effectiveGoogleMapsApiKey = runtimeGoogleMapsApiKey ||
+    (mapRuntimeResolved ? GOOGLE_MAPS_WEB_API_KEY : "");
   const effectiveGoogleMapsMapId =
     runtimeGoogleMapsMapId || buildGoogleMapsMapId;
   const hasMapKey = effectiveGoogleMapsApiKey.length > 0;
