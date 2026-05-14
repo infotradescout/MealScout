@@ -1540,7 +1540,7 @@ export default function ExplorePreview() {
               className="absolute inset-0 pointer-events-none"
               style={{
                 backgroundImage:
-                  "linear-gradient(90deg, rgba(8,10,15,0.78) 0%, rgba(8,10,15,0.55) 28%, rgba(8,10,15,0.20) 52%, rgba(8,10,15,0.00) 70%), linear-gradient(180deg, rgba(8,10,15,0.40) 0%, rgba(8,10,15,0.00) 26%, rgba(8,10,15,0.00) 70%, rgba(10,12,16,0.92) 100%)",
+                  "linear-gradient(90deg, rgba(8,10,15,0.38) 0%, rgba(8,10,15,0.22) 30%, rgba(8,10,15,0.08) 52%, rgba(8,10,15,0.00) 70%), linear-gradient(180deg, rgba(8,10,15,0.12) 0%, rgba(8,10,15,0.00) 30%, rgba(8,10,15,0.00) 72%, rgba(10,12,16,0.58) 100%)",
               }}
             />
           )}
