@@ -75,13 +75,12 @@ const DARK_STYLE: StyleSpecification = {
       type: "raster",
       source: "carto-dark",
       paint: {
-        // Keep the brand-dark treatment, but leave enough tile detail for the
-        // surface to read as a real map in mobile screenshots.
-        "raster-opacity": 0.82,
-        "raster-brightness-min": 0,
+        // Keep the brand-dark treatment while preserving road and place detail.
+        "raster-opacity": 0.96,
+        "raster-brightness-min": 0.08,
         "raster-brightness-max": 1,
-        "raster-saturation": -0.25,
-        "raster-contrast": 0.14,
+        "raster-saturation": 0.12,
+        "raster-contrast": 0.32,
       },
     },
   ],
@@ -320,10 +319,11 @@ export function ThemedScoutMap({
     <div className="absolute inset-0 h-full w-full min-h-full">
       <div
         ref={containerRef}
-        className="absolute inset-0 h-full w-full min-h-full"
+        className="msm-map-canvas absolute inset-0 h-full w-full min-h-full"
         style={{ height: "100%", width: "100%", minHeight: "100%" }}
         // The map canvas itself
       />
+      <div aria-hidden="true" className="msm-map-grade absolute inset-0" />
       {/* Inline scoped styles for the pins. Kept here so the component
           is self-contained and doesn't require global CSS edits. */}
       <style>{`
@@ -388,6 +388,27 @@ export function ThemedScoutMap({
         @keyframes msm-truck-glow {
           0%, 100% { transform: scale(1);   opacity: 0.55; }
           50%      { transform: scale(1.4); opacity: 0.85; }
+        }
+
+        .msm-map-canvas .maplibregl-canvas {
+          filter: saturate(1.35) contrast(1.22) brightness(1.1) sepia(0.12) hue-rotate(-8deg);
+        }
+        .msm-map-grade {
+          pointer-events: none;
+          background:
+            radial-gradient(circle at 78% 18%, rgba(249, 115, 22, 0.18), transparent 34%),
+            radial-gradient(circle at 20% 8%, rgba(251, 191, 36, 0.1), transparent 24%),
+            linear-gradient(180deg, rgba(7, 8, 11, 0.04) 0%, rgba(7, 8, 11, 0) 38%, rgba(7, 8, 11, 0.12) 100%);
+          mix-blend-mode: screen;
+        }
+        .msm-map-grade::after {
+          content: "";
+          position: absolute;
+          inset: 0;
+          background:
+            linear-gradient(90deg, rgba(0, 0, 0, 0.16), transparent 28%, transparent 72%, rgba(0, 0, 0, 0.08)),
+            linear-gradient(180deg, rgba(0, 0, 0, 0.05), transparent 42%);
+          mix-blend-mode: multiply;
         }
 
         /* Hide MapLibre's built-in attribution chrome — we still surface
