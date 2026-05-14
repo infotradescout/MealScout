@@ -96,6 +96,15 @@ const refreshGoogleMapLayout = (googleMaps: any, map: any) => {
   if (center) map.setCenter(center);
 };
 
+const ensureGoogleMapConstructor = async (googleMaps: any) => {
+  if (typeof googleMaps?.Map === "function") return googleMaps.Map;
+  if (typeof googleMaps?.importLibrary === "function") {
+    const mapsLibrary = await googleMaps.importLibrary("maps");
+    if (typeof mapsLibrary?.Map === "function") return mapsLibrary.Map;
+  }
+  throw new Error("Google Maps Map constructor unavailable");
+};
+
 /* ─── Google Maps style — MealScout Neon Night ──────────────────────────────
    Goals:
    - Land: near-black (#080b12), same as the SVG hero base
@@ -532,6 +541,7 @@ export function GoogleMapSurface({
         if (!mounted || !mapContainerRef.current) return;
         const googleMaps = (window as GoogleMapsWindow).google?.maps;
         if (!googleMaps) throw new Error("Google Maps not available");
+        const GoogleMapConstructor = await ensureGoogleMapConstructor(googleMaps);
 
         if (!mapRef.current) {
           const prefersFinePointer =
@@ -564,7 +574,7 @@ export function GoogleMapSurface({
             mapOptions.styles = mapStyleNeon;
           }
 
-          mapRef.current = new googleMaps.Map(mapContainerRef.current, mapOptions);
+          mapRef.current = new GoogleMapConstructor(mapContainerRef.current, mapOptions);
 
           const emitViewportState = () => {
             const map = mapRef.current;
