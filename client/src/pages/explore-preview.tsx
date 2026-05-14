@@ -1,8 +1,10 @@
 import {
   useCallback,
   useEffect,
+  lazy,
   useMemo,
   useRef,
+  Suspense,
   useState,
 } from "react";
 import { Link, useLocation as useWouterLocation } from "wouter";
@@ -46,6 +48,12 @@ type MapRuntimeResponse = {
   hasGoogleMapsMapId?: boolean;
   googleMapsMapId?: string | null;
 };
+
+const ThemedScoutMap = lazy(() =>
+  import("@/components/maps/themed-scout-map").then((module) => ({
+    default: module.ThemedScoutMap,
+  })),
+);
 
 /**
  * /scout — The canonical MealScout food discovery page.
@@ -1406,20 +1414,14 @@ export default function ExplorePreview() {
         >
           {/* Map
               ----
-              DEFAULT state: a lightweight ScoutMapPreview
-                that uses real map data but renders in MealScout's brand
-                aesthetic — dark, glowing amber pins, user pin anchored to
-                the right third, slow drift animation. NO Google Maps SDK
-                is mounted in this state, so referrer/billing failures on
-                the JS API can never break the hero.
-              FULLMAP state: the real interactive Google Map widget
+              DEFAULT state: a real MapLibre street-tile map in MealScout's
+                brand aesthetic. Google Maps mounts above it when available.
+              FULLMAP state: the interactive Google Map widget
                 (GoogleMapSurface) for full pan/zoom/tap-pin exploration.
           */}
           <div className="absolute inset-0">
-            {/* ScoutMapPreview: atmospheric SVG hero — always mounted and
-                Google-free. In full map mode it remains behind the Google
-                canvas so expansion has an instant visual while the script
-                finishes loading. */}
+            {/* ThemedScoutMap is a real tile map and remains behind Google as
+                a resilient fallback while the Google script loads. */}
             <div
               data-testid="scout-map-preview"
               className="absolute inset-0"
@@ -1429,10 +1431,14 @@ export default function ExplorePreview() {
                 zIndex: 0,
               }}
             >
-              <ScoutMapPreview
-                markers={allMapMarkers}
-                userLocation={coords ?? { lat: 30.4213, lng: -87.2169 }}
-              />
+              <Suspense fallback={<HeroMapFallback reason="loading" />}>
+                <ThemedScoutMap
+                  markers={allMapMarkers}
+                  userLocation={coords ?? { lat: 30.4213, lng: -87.2169 }}
+                  zoom={11}
+                  onMarkerTap={handleMarkerTap}
+                />
+              </Suspense>
             </div>
 
             {/* GoogleMapSurface:
@@ -2110,7 +2116,7 @@ function LocalFoodDashboard({
               <div className="flex gap-2 pr-1">
               {lanes.map((lane) => (
                 <Link
-                  key={lane.href}
+                  key={`${lane.label}:${lane.href}`}
                   href={lane.href}
                   className="shrink-0 inline-flex items-center gap-1.5 rounded-full bg-white/[0.06] ring-1 ring-white/10 px-3 py-2 text-xs font-semibold text-white/82 active:scale-[0.98]"
                 >
@@ -2124,153 +2130,6 @@ function LocalFoodDashboard({
         </div>
       </div>
     </section>
-  );
-}
-
-/* ============================================================
-   SCOUT MAP PREVIEW (LIGHTWEIGHT)
-   No SDK and no network fetches. Just a subtle animated background
-   plus projected pins so default /scout loads instantly.
-   ============================================================ */
-
-function ScoutMapPreview({
-  markers,
-  userLocation,
-}: {
-  markers: MapAdapterMarker[];
-  userLocation: { lat: number; lng: number };
-}) {
-  const previewMarkers = useMemo(() => {
-    const LAT_SPAN = 0.016;
-    const LNG_SPAN = LAT_SPAN * 1.35;
-    return markers
-      .filter((marker) => Number.isFinite(marker.lat) && Number.isFinite(marker.lng))
-      .slice(0, 10)
-      .map((marker) => {
-        const dx = (marker.lng - userLocation.lng) / LNG_SPAN;
-        const dy = (marker.lat - userLocation.lat) / LAT_SPAN;
-        return {
-          marker,
-          x: 0.68 + dx,
-          y: 0.56 - dy,
-        };
-      })
-      .filter(({ x, y }) => x >= -0.08 && x <= 1.08 && y >= -0.08 && y <= 1.08);
-  }, [markers, userLocation.lat, userLocation.lng]);
-
-  return (
-    <div className="absolute inset-0 overflow-hidden bg-[#080b12]">
-      <style>{`
-        @keyframes scout-preview-pan {
-          0% { transform: translate3d(0, 0, 0) scale(1); }
-          50% { transform: translate3d(-8px, -10px, 0) scale(1.015); }
-          100% { transform: translate3d(0, 0, 0) scale(1); }
-        }
-        @keyframes scout-user-pulse {
-          0% { transform: translate(-50%, -50%) scale(0.85); opacity: 0.5; }
-          70% { transform: translate(-50%, -50%) scale(2.25); opacity: 0; }
-          100% { transform: translate(-50%, -50%) scale(2.25); opacity: 0; }
-        }
-        @keyframes scout-pin-float {
-          0% { transform: translate(-50%, -50%) translateY(0px); }
-          50% { transform: translate(-50%, -50%) translateY(-4px); }
-          100% { transform: translate(-50%, -50%) translateY(0px); }
-        }
-      `}</style>
-
-      {/* Faux-street texture for a fast "map-like" preview */}
-      <div
-        aria-hidden="true"
-        className="absolute inset-0"
-        style={{
-          backgroundImage: `
-            radial-gradient(140% 90% at 75% 58%, rgba(249,115,22,0.22) 0%, rgba(249,115,22,0.06) 34%, transparent 66%),
-            repeating-linear-gradient(115deg, rgba(255,255,255,0.06) 0px, rgba(255,255,255,0.06) 1px, transparent 1px, transparent 24px),
-            repeating-linear-gradient(25deg, rgba(255,255,255,0.03) 0px, rgba(255,255,255,0.03) 1px, transparent 1px, transparent 20px),
-            linear-gradient(160deg, #080b12 0%, #0b1018 52%, #080b12 100%)
-          `,
-          animation: "scout-preview-pan 14s ease-in-out infinite",
-        }}
-      />
-
-      {/* Atmospheric amber bloom — warm glow radiating from map center */}
-      <div
-        aria-hidden="true"
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          background: "radial-gradient(ellipse 72% 56% at 66% 56%, rgba(255,90,47,0.16) 0%, rgba(249,115,22,0.07) 42%, transparent 76%)",
-          mixBlendMode: "screen",
-        }}
-      />
-
-      {/* Edge fade so the tilted grid blends into the dark background */}
-      <div
-        aria-hidden="true"
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          background: `
-            linear-gradient(180deg, rgba(5,7,13,0.55) 0%, transparent 18%, transparent 60%, rgba(5,7,13,0.95) 100%),
-            linear-gradient(90deg, rgba(5,7,13,0.5) 0%, transparent 10%, transparent 90%, rgba(5,7,13,0.5) 100%)
-          `,
-        }}
-      />
-
-      {/* User pin anchored to right-third */}
-      <div aria-hidden="true" className="absolute inset-0 pointer-events-none">
-        <span
-          style={{
-            position: "absolute",
-            left: "68%",
-            top: "56%",
-            width: 18,
-            height: 18,
-            borderRadius: "9999px",
-            background: "#fbbf24",
-            transform: "translate(-50%, -50%)",
-            boxShadow:
-              "0 0 0 3px rgba(251,191,36,0.28), 0 0 16px rgba(249,115,22,0.6)",
-          }}
-        />
-        <span
-          style={{
-            position: "absolute",
-            left: "68%",
-            top: "56%",
-            width: 22,
-            height: 22,
-            borderRadius: "9999px",
-            background: "rgba(251,191,36,0.35)",
-            animation: "scout-user-pulse 2.4s ease-out infinite",
-          }}
-        />
-      </div>
-
-      {/* Nearby pins */}
-      <div aria-hidden="true" className="absolute inset-0 pointer-events-none">
-        {previewMarkers.map(({ marker, x, y }, i) => (
-          <span
-            key={marker.id}
-            style={{
-              position: "absolute",
-              left: `${x * 100}%`,
-              top: `${y * 100}%`,
-              width: marker.kind === "truck" ? 12 : 9,
-              height: marker.kind === "truck" ? 12 : 9,
-              borderRadius: "9999px",
-              background:
-                marker.kind === "truck"
-                  ? "rgba(251,191,36,0.95)"
-                  : "rgba(255,255,255,0.88)",
-              boxShadow:
-                marker.kind === "truck"
-                  ? "0 0 0 2px rgba(15,23,42,0.85), 0 0 12px rgba(249,115,22,0.65)"
-                  : "0 0 0 2px rgba(15,23,42,0.78), 0 0 9px rgba(255,255,255,0.32)",
-              animation: `scout-pin-float 4.2s ease-in-out ${(i * 0.35) % 2.2}s infinite`,
-            }}
-          />
-        ))}
-      </div>
-    </div>
   );
 }
 

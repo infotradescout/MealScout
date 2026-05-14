@@ -165,6 +165,20 @@ export function ThemedScoutMap({
 
     mapRef.current = map;
 
+    const resizeMap = () => {
+      const m = mapRef.current;
+      if (!m) return;
+      m.resize();
+      const padding = computePadding();
+      m.easeTo({
+        center: [userLocation.lng, userLocation.lat],
+        padding,
+        duration: 0,
+      });
+    };
+    const initialResizeFrame = requestAnimationFrame(resizeMap);
+    const initialResizeTimeout = window.setTimeout(resizeMap, 250);
+
     map.on("load", () => {
       // Apply right-anchor padding once the canvas has its real size.
       const padding = computePadding();
@@ -223,6 +237,8 @@ export function ThemedScoutMap({
 
     return () => {
       ro.disconnect();
+      cancelAnimationFrame(initialResizeFrame);
+      window.clearTimeout(initialResizeTimeout);
       if (driftRafRef.current != null) {
         cancelAnimationFrame(driftRafRef.current);
         driftRafRef.current = null;
@@ -299,10 +315,11 @@ export function ThemedScoutMap({
   }, [markerKey, onMarkerTap, markers]);
 
   return (
-    <div className="absolute inset-0">
+    <div className="absolute inset-0 h-full w-full min-h-full">
       <div
         ref={containerRef}
-        className="absolute inset-0"
+        className="absolute inset-0 h-full w-full min-h-full"
+        style={{ height: "100%", width: "100%", minHeight: "100%" }}
         // The map canvas itself
       />
       {/* Inline scoped styles for the pins. Kept here so the component
@@ -377,6 +394,13 @@ export function ThemedScoutMap({
         .maplibregl-ctrl-bottom-right,
         .maplibregl-ctrl-bottom-left {
           display: none !important;
+        }
+        .maplibregl-map,
+        .maplibregl-canvas-container,
+        .maplibregl-canvas {
+          min-height: 100% !important;
+          width: 100% !important;
+          height: 100% !important;
         }
       `}</style>
       {/* Visually-hidden attribution to satisfy CARTO/OSM ToS without
