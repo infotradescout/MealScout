@@ -1,13 +1,11 @@
 /**
  * ThemedScoutMap
  * --------------
- * Compact holographic Scout surface for /scout.
+ * Compact animated Scout mini-map for /scout.
  *
- * This is intentionally not a street map. The collapsed hero should feel like
- * a branded local-signal preview, then expand into the full Google map when the
- * user pulls down. Keeping this surface abstract avoids fighting with map tile
- * contrast, labels, centering, and stale cartography in a space that is mostly
- * covered by the Scout sheet.
+ * The collapsed hero is a lightweight, branded mini-map element: stylized
+ * streets, animated route glow, user position, and nearby signal pins. Pulling
+ * down expands into the full Google map for real pan/zoom/tap exploration.
  */
 
 import { useMemo } from "react";
@@ -82,10 +80,59 @@ export function ThemedScoutMap({
   return (
     <div
       className="msm-holo absolute inset-0 h-full w-full min-h-full overflow-hidden"
-      aria-label="MealScout local signal preview"
+      aria-label="MealScout animated mini map"
     >
       <div className="msm-holo__base" aria-hidden="true" />
       <div className="msm-holo__grid" aria-hidden="true" />
+      <svg
+        className="msm-mini-map"
+        viewBox="0 0 1000 560"
+        preserveAspectRatio="xMidYMid slice"
+        aria-hidden="true"
+      >
+        <defs>
+          <filter id="msm-road-glow" x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur stdDeviation="4" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+          <linearGradient id="msm-route-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor="#f97316" stopOpacity="0" />
+            <stop offset="48%" stopColor="#fb923c" stopOpacity="0.95" />
+            <stop offset="100%" stopColor="#facc15" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+
+        <g className="msm-map-blocks">
+          <path d="M-20 88 H1040" />
+          <path d="M-20 236 H1040" />
+          <path d="M-20 386 H1040" />
+          <path d="M96 -20 V600" />
+          <path d="M278 -20 V600" />
+          <path d="M458 -20 V600" />
+          <path d="M640 -20 V600" />
+          <path d="M824 -20 V600" />
+        </g>
+
+        <g className="msm-map-roads msm-map-roads--base">
+          <path d="M-40 474 C142 394 230 440 372 352 C518 262 644 290 1040 134" />
+          <path d="M-20 190 C164 238 300 202 426 142 C570 76 722 108 1040 64" />
+          <path d="M196 -40 C236 112 186 226 264 344 C340 460 498 474 584 620" />
+          <path d="M720 -40 C668 98 694 204 770 294 C850 390 824 478 908 620" />
+        </g>
+        <g className="msm-map-roads msm-map-roads--minor">
+          <path d="M-10 322 C116 286 226 294 358 248 C484 204 574 190 708 206 C834 222 930 196 1010 154" />
+          <path d="M42 62 C176 132 268 116 390 96 C522 72 594 122 704 154 C818 186 908 170 1020 112" />
+          <path d="M360 -20 C382 110 354 216 424 314 C500 420 612 438 684 594" />
+          <path d="M548 -20 C518 132 548 224 612 316 C686 424 678 500 732 600" />
+        </g>
+        <path
+          className="msm-map-route"
+          d="M-40 474 C142 394 230 440 372 352 C518 262 644 290 1040 134"
+        />
+      </svg>
       <div className="msm-holo__scan msm-holo__scan--one" aria-hidden="true" />
       <div className="msm-holo__scan msm-holo__scan--two" aria-hidden="true" />
       <div className="msm-holo__core" aria-hidden="true">
@@ -121,13 +168,14 @@ export function ThemedScoutMap({
       <style>{`
         .msm-holo {
           background:
-            radial-gradient(circle at 50% 45%, rgba(249, 115, 22, 0.22), transparent 13%),
-            radial-gradient(circle at 68% 22%, rgba(255, 122, 24, 0.16), transparent 24%),
-            radial-gradient(circle at 28% 28%, rgba(59, 130, 246, 0.11), transparent 26%),
-            linear-gradient(180deg, #080a0d 0%, #0c0a08 58%, #050608 100%);
+            radial-gradient(circle at 50% 47%, rgba(249, 115, 22, 0.2), transparent 15%),
+            radial-gradient(circle at 70% 18%, rgba(255, 122, 24, 0.17), transparent 27%),
+            radial-gradient(circle at 26% 30%, rgba(59, 130, 246, 0.12), transparent 28%),
+            linear-gradient(180deg, #090a0d 0%, #100b08 55%, #050608 100%);
         }
         .msm-holo__base,
         .msm-holo__grid,
+        .msm-mini-map,
         .msm-holo__scan,
         .msm-holo__vignette {
           position: absolute;
@@ -136,24 +184,58 @@ export function ThemedScoutMap({
         }
         .msm-holo__base {
           background:
-            linear-gradient(115deg, transparent 0 44%, rgba(249, 115, 22, 0.14) 45%, transparent 46% 100%),
-            linear-gradient(65deg, transparent 0 56%, rgba(245, 158, 11, 0.08) 57%, transparent 58% 100%);
-          opacity: 0.68;
-          transform: skewY(-3deg);
+            linear-gradient(115deg, transparent 0 43%, rgba(249, 115, 22, 0.13) 44%, transparent 45% 100%),
+            linear-gradient(65deg, transparent 0 55%, rgba(245, 158, 11, 0.08) 56%, transparent 57% 100%);
+          opacity: 0.58;
+          transform: skewY(-2deg);
         }
         .msm-holo__grid {
           background-image:
-            linear-gradient(rgba(255, 177, 87, 0.085) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(255, 177, 87, 0.085) 1px, transparent 1px);
+            linear-gradient(rgba(255, 177, 87, 0.065) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(255, 177, 87, 0.065) 1px, transparent 1px);
           background-size: 38px 38px;
-          opacity: 0.34;
+          opacity: 0.28;
           transform: perspective(460px) rotateX(54deg) translateY(-12%);
           transform-origin: 50% 20%;
         }
+        .msm-mini-map {
+          width: 100%;
+          height: 100%;
+          opacity: 0.95;
+          filter: drop-shadow(0 0 24px rgba(249, 115, 22, 0.16));
+        }
+        .msm-map-blocks path {
+          fill: none;
+          stroke: rgba(255, 237, 213, 0.06);
+          stroke-width: 1.4;
+        }
+        .msm-map-roads path {
+          fill: none;
+          stroke-linecap: round;
+          stroke-linejoin: round;
+        }
+        .msm-map-roads--base path {
+          stroke: rgba(234, 88, 12, 0.76);
+          stroke-width: 13;
+          filter: url(#msm-road-glow);
+        }
+        .msm-map-roads--minor path {
+          stroke: rgba(251, 146, 60, 0.34);
+          stroke-width: 4;
+        }
+        .msm-map-route {
+          fill: none;
+          stroke: url(#msm-route-gradient);
+          stroke-linecap: round;
+          stroke-width: 5;
+          stroke-dasharray: 86 220;
+          animation: msm-route-flow 5.8s linear infinite;
+          filter: url(#msm-road-glow);
+        }
         .msm-holo__scan {
           border-radius: 9999px;
-          border: 1px solid rgba(251, 191, 36, 0.22);
-          box-shadow: 0 0 40px rgba(249, 115, 22, 0.14);
+          border: 1px solid rgba(251, 191, 36, 0.18);
+          box-shadow: 0 0 40px rgba(249, 115, 22, 0.12);
           animation: msm-scan 5.8s ease-in-out infinite;
         }
         .msm-holo__scan--one {
@@ -244,8 +326,12 @@ export function ThemedScoutMap({
         }
         .msm-holo__vignette {
           background:
-            linear-gradient(180deg, rgba(0, 0, 0, 0.28), transparent 34%, rgba(0, 0, 0, 0.34)),
-            radial-gradient(ellipse at center, transparent 0%, rgba(0, 0, 0, 0.48) 74%);
+            linear-gradient(180deg, rgba(0, 0, 0, 0.18), transparent 34%, rgba(0, 0, 0, 0.36)),
+            radial-gradient(ellipse at center, transparent 0%, rgba(0, 0, 0, 0.42) 76%);
+        }
+        @keyframes msm-route-flow {
+          from { stroke-dashoffset: 0; }
+          to { stroke-dashoffset: -306; }
         }
         @keyframes msm-scan {
           0%, 100% { transform: scale(0.82); opacity: 0.15; }
@@ -257,6 +343,7 @@ export function ThemedScoutMap({
         }
         @media (prefers-reduced-motion: reduce) {
           .msm-holo__scan,
+          .msm-map-route,
           .msm-signal {
             animation: none;
           }
