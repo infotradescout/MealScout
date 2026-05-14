@@ -79,7 +79,7 @@ const DARK_STYLE: StyleSpecification = {
         // surface to read as a real map in mobile screenshots.
         "raster-opacity": 0.82,
         "raster-brightness-min": 0,
-        "raster-brightness-max": 1.15,
+        "raster-brightness-max": 1,
         "raster-saturation": -0.25,
         "raster-contrast": 0.14,
       },
