@@ -933,7 +933,7 @@ export default function ParkingPassPage() {
   }, [mapLocationsData, cachedMapLocations]);
 
   // Keep Parking Pass maps in sync with the main map: only show paid/priced host locations.
-  const BOOKABLE_HOST_CACHE_KEY = "mealscout:parking-pass:bookableHostIds:v1";
+  const BOOKABLE_HOST_CACHE_KEY = "mealscout:parking-pass:bookableHostIds:v2";
   const [cachedBookableHostIds, setCachedBookableHostIds] = useState<
     Set<string>
   >(() => {
@@ -961,7 +961,9 @@ export default function ParkingPassPage() {
     refetchOnWindowFocus: false,
   });
   useEffect(() => {
-    if (!bookableHostIdPayload?.hostIds?.length) return;
+    if (!bookableHostIdPayload || !Array.isArray(bookableHostIdPayload.hostIds)) {
+      return;
+    }
     const next = new Set(bookableHostIdPayload.hostIds.map((id) => String(id)));
     setCachedBookableHostIds(next);
     try {
@@ -981,8 +983,8 @@ export default function ParkingPassPage() {
   const bookableHostIds = useMemo(() => {
     const serverIds = Array.isArray(bookableHostIdPayload?.hostIds)
       ? bookableHostIdPayload.hostIds
-      : [];
-    if (serverIds.length > 0) return new Set(serverIds.map((id) => String(id)));
+      : null;
+    if (serverIds) return new Set(serverIds.map((id) => String(id)));
     return cachedBookableHostIds;
   }, [bookableHostIdPayload, cachedBookableHostIds]);
 
@@ -996,6 +998,31 @@ export default function ParkingPassPage() {
       (loc: any) => {
         const hostId = String(loc?.hostId || "").trim();
         if (!hostId) return false;
+        const status = String(loc?.status || "").trim().toLowerCase();
+        if (
+          [
+            "deleted",
+            "archived",
+            "inactive",
+            "cancelled",
+            "canceled",
+            "expired",
+            "unavailable",
+            "draft",
+          ].includes(status)
+        ) {
+          return false;
+        }
+        if (
+          loc?.deletedAt ||
+          loc?.archivedAt ||
+          loc?.cancelledAt ||
+          loc?.canceledAt ||
+          loc?.isDeleted === true ||
+          loc?.isArchived === true
+        ) {
+          return false;
+        }
         // Primary source of truth: if we have a visible listing for the host, show it.
         // Fallback to host-id feed for hosts with map records but no current listing payload.
         return listingHostIds.has(hostId) || bookableHostIds.has(hostId);
