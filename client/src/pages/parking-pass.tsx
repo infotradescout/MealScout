@@ -110,6 +110,7 @@ interface ParkingPassListing {
   paymentsEnabled?: boolean;
   lastConfirmedAt?: string | null;
   maxTrucks?: number;
+  hardCapEnabled?: boolean;
   spotCount?: number;
   bookedSpots?: number;
   availableSpotNumbers?: number[];
@@ -3477,7 +3478,9 @@ export default function ParkingPassPage() {
     ? activeListing.bookings
     : [];
   const activeListingAvailability = activeListing?.availableSpotNumbers
-    ? activeListing.availableSpotNumbers.length > 0
+    ? !activeListing.hardCapEnabled
+      ? "Open"
+      : activeListing.availableSpotNumbers.length > 0
       ? `Open spots: ${activeListing.availableSpotNumbers.join(", ")}`
       : "Fully booked"
     : activeListing?.status
@@ -3718,6 +3721,7 @@ export default function ParkingPassPage() {
   ): boolean => {
     if (!listing) return false;
     if (listing.status !== "open") return false;
+    if (!listing.hardCapEnabled) return true;
     const spots = listing.availableSpotNumbers;
     return Array.isArray(spots) ? spots.length > 0 : true;
   };
@@ -6552,11 +6556,13 @@ export default function ParkingPassPage() {
                                 const selectedFeeCents =
                                   getFeeCentsForSlots(selectedSlots);
                                 const selectedTotalWithFee =
-                                  selectedTotalCents > 0
+                                  selectedSlots.length > 0
                                     ? selectedTotalCents + selectedFeeCents
                                     : 0;
                                 const availability = listingForDate
-                                  ? listingForDate.availableSpotNumbers
+                                  ? !listingForDate.hardCapEnabled
+                                    ? "Open"
+                                    : listingForDate.availableSpotNumbers
                                     ? listingForDate.availableSpotNumbers
                                         .length > 0
                                       ? `Open spots: ${listingForDate.availableSpotNumbers.join(
@@ -6833,7 +6839,7 @@ export default function ParkingPassPage() {
                           const selectedFeeCents =
                             getFeeCentsForSlots(selectedSlots);
                           const selectedTotalWithFee =
-                            selectedTotalCents > 0
+                            selectedSlots.length > 0
                               ? selectedTotalCents + selectedFeeCents
                               : 0;
                           const hasAvailability = Boolean(
@@ -6949,7 +6955,8 @@ export default function ParkingPassPage() {
                                       : "No open dates right now."}
                                   </p>
                                 )}
-                                {listingForDate?.availableSpotNumbers && (
+                                {listingForDate?.hardCapEnabled &&
+                                  listingForDate?.availableSpotNumbers && (
                                   <p className="text-[11px] text-[color:var(--text-muted)]">
                                     {listingForDate.availableSpotNumbers
                                       .length > 0
@@ -7129,7 +7136,7 @@ export default function ParkingPassPage() {
                         const selectedFeeCents =
                           getFeeCentsForSlots(selectedSlots);
                         const selectedTotalWithFee =
-                          selectedTotalCents > 0
+                          selectedSlots.length > 0
                             ? selectedTotalCents + selectedFeeCents
                             : 0;
 
@@ -7251,7 +7258,8 @@ export default function ParkingPassPage() {
                                     )}
                                   </p>
                                 )}
-                              {listingForDate?.availableSpotNumbers && (
+                              {listingForDate?.hardCapEnabled &&
+                                listingForDate?.availableSpotNumbers && (
                                 <p className="text-[11px] text-[color:var(--text-muted)]">
                                   {listingForDate.availableSpotNumbers.length >
                                   0

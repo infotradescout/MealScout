@@ -1405,7 +1405,9 @@ export default function ExplorePreview() {
 
       <main
         className={`relative z-10 ${
-          sheetState === "fullMap" ? "" : "pb-36"
+          sheetState === "fullMap"
+            ? ""
+            : "pb-36 md:mx-auto md:max-w-[640px] md:min-h-screen md:bg-[#0a0c10] md:shadow-[0_0_0_1px_rgba(255,255,255,0.08),0_24px_80px_rgba(0,0,0,0.55)]"
         }`}
         style={{ overscrollBehaviorY: "none" }}
       >

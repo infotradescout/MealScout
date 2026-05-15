@@ -44,8 +44,10 @@ import {
   slotWindowsOverlap,
 } from "@shared/parkingPassSlots";
 import {
+  buildParkingPassVirtualId,
   ensureParkingPassEventRow,
   listParkingPassOccurrences,
+  parseParkingPassVirtualId,
 } from "../services/parkingPassVirtual";
 import {
   addDaysToDateKey,
@@ -1329,6 +1331,21 @@ export function registerHostRoutes(app: Express) {
         const rangeQueryEnd = new Date(lastDate);
         rangeQueryEnd.setDate(rangeQueryEnd.getDate() + 1);
 
+        const parsedVirtualPassId = parseParkingPassVirtualId(passId);
+        if (parsedVirtualPassId) {
+          await Promise.all(
+            expectedDateKeys.map((dateKey) =>
+              ensureParkingPassEventRow({
+                passId: buildParkingPassVirtualId(
+                  parsedVirtualPassId.seriesId,
+                  dateKey,
+                ),
+                requireFuture: true,
+              }),
+            ),
+          );
+        }
+
         const bookingEvents = await db
           .select()
           .from(events)
@@ -1644,8 +1661,9 @@ export function registerHostRoutes(app: Express) {
                 );
 
               const reservedCount = Number(counts[0]?.count || 0);
-              const maxSpots = row.maxTrucks ?? 1;
-              if (reservedCount >= maxSpots) {
+              const hardCapEnabled = Boolean(row.hardCapEnabled);
+              const maxSpots = Math.max(1, Number(row.maxTrucks ?? 1) || 1);
+              if (hardCapEnabled && reservedCount >= maxSpots) {
                 const err: any = new Error(
                   "This parking pass is fully booked.",
                 );

@@ -375,6 +375,21 @@ export async function setupUnifiedAuth(app: Express) {
     },
   ) => {
     try {
+      const createdAtMs = user.createdAt
+        ? new Date(user.createdAt).getTime()
+        : NaN;
+      const accountAgeMs = Number.isFinite(createdAtMs)
+        ? Date.now() - createdAtMs
+        : Number.POSITIVE_INFINITY;
+      if (accountAgeMs > 10 * 60 * 1000) {
+        console.log("[auth] Existing account login; skipping creation emails", {
+          userId: user.id,
+          signupMethod: params.signupMethod,
+          createdAt: user.createdAt,
+        });
+        return;
+      }
+
       const reserved = await reserveAccountCreationEmail(user, {
         signupMethod: params.signupMethod,
         welcomeLabel: params.welcomeLabel,

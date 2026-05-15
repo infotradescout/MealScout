@@ -95,6 +95,9 @@ export const isParkingPassFeedCandidate = (event: any) => {
 };
 
 export const hasParkingPassAvailability = (event: any) => {
+  if (!Boolean(event?.hardCapEnabled)) {
+    return true;
+  }
   if (Array.isArray(event?.availableSpotNumbers)) {
     return event.availableSpotNumbers.length > 0;
   }
@@ -539,9 +542,17 @@ export function registerEventRoutes(
       }
 
       const confirmedCount = rows.length;
-      const reservedCount = Math.min(confirmedCount + pending, maxSpots);
-      const availableCount = Math.max(0, maxSpots - reservedCount);
-      const trimmedAvailable = availableSpotNumbers.slice(0, availableCount);
+      const hardCapEnabled = Boolean(event.hardCapEnabled);
+      const reservedRaw = confirmedCount + pending;
+      const reservedCount = hardCapEnabled
+        ? Math.min(reservedRaw, maxSpots)
+        : reservedRaw;
+      const availableCount = hardCapEnabled
+        ? Math.max(0, maxSpots - reservedCount)
+        : maxSpots;
+      const trimmedAvailable = hardCapEnabled
+        ? availableSpotNumbers.slice(0, availableCount)
+        : [];
 
       return {
         ...event,
@@ -1359,11 +1370,14 @@ export function registerEventRoutes(
         confirmed: 0,
         pending: 0,
       };
-      const reservedCount = Math.min(
-        maxSpots,
-        Number(counts.confirmed) + Number(counts.pending),
-      );
-      const availableCount = Math.max(0, maxSpots - reservedCount);
+      const hardCapEnabled = Boolean(event?.hardCapEnabled);
+      const reservedRaw = Number(counts.confirmed) + Number(counts.pending);
+      const reservedCount = hardCapEnabled
+        ? Math.min(maxSpots, reservedRaw)
+        : reservedRaw;
+      const availableCount = hardCapEnabled
+        ? Math.max(0, maxSpots - reservedCount)
+        : maxSpots;
 
       const prev = byHost.get(hostId) || {
         availableCount: 0,
