@@ -243,16 +243,14 @@ export function ThemedScoutMap({
         .msm-map-grade {
           pointer-events: none;
           background:
-            linear-gradient(90deg, rgba(22, 9, 4, 0.54), rgba(4, 9, 8, 0.08) 34%, rgba(22, 9, 4, 0.38)),
-            radial-gradient(circle at 55% 43%, rgba(255, 92, 47, 0.26), transparent 20%),
-            radial-gradient(circle at 23% 26%, rgba(255, 180, 92, 0.1), transparent 22%),
-            radial-gradient(circle at 79% 22%, rgba(255, 112, 52, 0.14), transparent 24%),
-            radial-gradient(circle at 44% 20%, rgba(255, 190, 116, 0.13) 0 1px, transparent 1.45px),
-            radial-gradient(circle at 72% 64%, rgba(255, 156, 82, 0.1) 0 1px, transparent 1.35px),
+            linear-gradient(90deg, rgba(22, 9, 4, 0.34), rgba(4, 9, 8, 0.05) 34%, rgba(22, 9, 4, 0.28)),
+            radial-gradient(circle at 55% 43%, rgba(255, 92, 47, 0.18), transparent 22%),
+            radial-gradient(circle at 23% 26%, rgba(255, 180, 92, 0.06), transparent 24%),
+            radial-gradient(circle at 79% 22%, rgba(255, 112, 52, 0.08), transparent 26%),
             linear-gradient(180deg, rgba(17, 8, 4, 0.18) 0%, rgba(17, 8, 4, 0.02) 44%, rgba(3, 4, 5, 0.46) 100%);
-          background-size: 100% 100%, 100% 100%, 100% 100%, 100% 100%, 26px 26px, 37px 37px, 100% 100%;
+          background-size: 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%;
           mix-blend-mode: normal;
-          opacity: 0.88;
+          opacity: 0.76;
         }
         .msm-map-grade::after {
           content: "";
@@ -263,19 +261,6 @@ export function ThemedScoutMap({
             linear-gradient(180deg, rgba(10, 4, 2, 0.16), rgba(5, 6, 7, 0.42));
           mix-blend-mode: normal;
         }
-        .msm-map-grade::before {
-          content: "";
-          position: absolute;
-          inset: 0;
-          background:
-            linear-gradient(78deg, transparent 0 35%, rgba(255, 90, 47, 0.22) 35.2%, transparent 35.8%),
-            linear-gradient(174deg, transparent 0 18%, rgba(255, 168, 92, 0.16) 18.2%, transparent 18.55%),
-            linear-gradient(6deg, transparent 0 68%, rgba(255, 90, 47, 0.22) 68.2%, transparent 68.8%);
-          filter: blur(0.75px);
-          opacity: 0.76;
-          mix-blend-mode: screen;
-        }
-
         .msm-user-pin {
           position: relative;
           width: 24px;
