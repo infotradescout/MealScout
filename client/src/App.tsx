@@ -660,23 +660,6 @@ function App() {
           <BetaDisclaimer />
           <Router />
           <Navigation scope="global" />
-          {/* Build canary - shows deployment timestamp */}
-          {import.meta.env.PROD && (
-            <div
-              style={{
-                position: "fixed",
-                bottom: 4,
-                right: 6,
-                fontSize: 10,
-                opacity: 0.4,
-                zIndex: 99999,
-                pointerEvents: "none",
-                fontFamily: "monospace",
-              }}
-            >
-              {typeof __BUILD_ID__ !== "undefined" ? __BUILD_ID__ : "dev"}
-            </div>
-          )}
         </div>
       </TooltipProvider>
     </QueryClientProvider>
