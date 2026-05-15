@@ -860,6 +860,34 @@ export function GoogleMapSurface({
   const btnClass =
     "h-11 w-11 rounded-full border border-orange-200/35 bg-[#120805]/85 p-0 text-orange-200 shadow-lg backdrop-blur transition-colors hover:bg-[#1f0d06]";
 
+  const adjustZoom = (delta: number) => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const currentZoom = Number(map.getZoom?.() ?? zoom);
+    const nextZoom = Math.max(1, Math.min(21, Math.round(currentZoom + delta)));
+    const currentCenter = map.getCenter?.();
+    const camera: Record<string, unknown> = { zoom: nextZoom };
+
+    if (currentCenter) camera.center = currentCenter;
+    if (isNightTheme) {
+      camera.tilt = 25;
+      camera.heading = 8;
+    }
+
+    if (typeof map.moveCamera === "function") {
+      map.moveCamera(camera);
+    } else {
+      if (currentCenter) map.setCenter?.(currentCenter);
+      map.setZoom?.(nextZoom);
+      if (currentCenter) {
+        window.requestAnimationFrame(() => map.setCenter?.(currentCenter));
+      }
+    }
+
+    onZoomChangedRef.current?.(nextZoom);
+  };
+
   return (
     <div className="h-full w-full relative">
       <div className="h-full w-full">
@@ -921,7 +949,7 @@ export function GoogleMapSurface({
             variant="secondary"
             size="sm"
             className={btnClass}
-            onClick={() => mapRef.current?.setZoom?.((mapRef.current?.getZoom?.() || zoom) + 1)}
+            onClick={() => adjustZoom(1)}
             title="Zoom in"
             aria-label="Zoom in"
           >
@@ -931,7 +959,7 @@ export function GoogleMapSurface({
             variant="secondary"
             size="sm"
             className={btnClass}
-            onClick={() => mapRef.current?.setZoom?.((mapRef.current?.getZoom?.() || zoom) - 1)}
+            onClick={() => adjustZoom(-1)}
             title="Zoom out"
             aria-label="Zoom out"
           >
