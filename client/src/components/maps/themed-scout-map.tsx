@@ -204,6 +204,11 @@ export function ThemedScoutMap({
     markerRefs.current.forEach((marker) => marker.remove());
     markerRefs.current = [];
 
+    const KIND_ICONS: Record<string, string> = {
+      truck: "T", restaurant: "R", parking: "P",
+      event: "E", deal: "$", geo_ad: "◆", supplier: "S",
+    };
+
     markers.forEach((marker) => {
       if (!Number.isFinite(marker.lat) || !Number.isFinite(marker.lng)) return;
 
@@ -214,8 +219,10 @@ export function ThemedScoutMap({
         "aria-label",
         marker.title ? `${marker.title} pin` : "MealScout map pin",
       );
+      const icon = KIND_ICONS[marker.kind || "truck"] ?? "·";
       el.innerHTML = `
         <span class="msm-map-pin__drop" aria-hidden="true">
+          <span class="msm-map-pin__icon">${icon}</span>
           <span class="msm-map-pin__glow"></span>
         </span>
       `;
@@ -241,16 +248,47 @@ export function ThemedScoutMap({
           style={{ height: "100%", width: "100%", minHeight: "100%" }}
         />
       </div>
+      {/* ── Atmospheric grade ── */}
       <div aria-hidden="true" className="msm-map-grade absolute inset-0" />
+
+      {/* ── Radar rings + sweep ── */}
+      <div aria-hidden="true" className="msm-radar absolute inset-0 pointer-events-none">
+        <span className="msm-radar__ring msm-radar__ring--1" />
+        <span className="msm-radar__ring msm-radar__ring--2" />
+        <span className="msm-radar__ring msm-radar__ring--3" />
+        <span className="msm-radar__sweep" />
+      </div>
+
+      {/* ── Scanlines ── */}
+      <div aria-hidden="true" className="msm-scanlines absolute inset-0 pointer-events-none" />
+
+      {/* ── HUD corner brackets ── */}
+      <div aria-hidden="true" className="msm-hud absolute inset-0 pointer-events-none">
+        <span className="msm-hud__corner msm-hud__corner--tl" />
+        <span className="msm-hud__corner msm-hud__corner--tr" />
+        <span className="msm-hud__corner msm-hud__corner--bl" />
+        <span className="msm-hud__corner msm-hud__corner--br" />
+      </div>
+
+      {/* ── LIVE badge ── */}
+      <div aria-label="Live map" className="msm-live-badge">
+        <span aria-hidden="true" className="msm-live-badge__dot" />
+        LIVE
+      </div>
+
+      {/* ── Tap-to-explore hint ── */}
+      <div aria-hidden="true" className="msm-tap-hint">TAP TO EXPLORE</div>
+
       <style>{`
-        /* ── Holographic amber filter ───────────────────────────────── */
+        /* ── Holographic amber filter ── */
         .msm-map-canvas .maplibregl-canvas {
           filter: sepia(1) hue-rotate(-18deg) saturate(5.5) contrast(2.1) brightness(0.46);
         }
 
-        /* ── Atmospheric amber glow overlay ─────────────────────────── */
+        /* ── Atmospheric grade ── */
         .msm-map-grade {
           pointer-events: none;
+          z-index: 1;
           background:
             radial-gradient(ellipse at 50% 55%, rgba(255, 140, 30, 0.26), transparent 62%),
             radial-gradient(ellipse at 18% 72%, rgba(255, 110, 20, 0.16), transparent 44%),
@@ -269,7 +307,149 @@ export function ThemedScoutMap({
           mix-blend-mode: normal;
         }
 
-        /* ── User location pin (amber pulse) ─────────────────────────── */
+        /* ── Scanlines ── */
+        .msm-scanlines {
+          z-index: 2;
+          background: repeating-linear-gradient(
+            0deg,
+            transparent,
+            transparent 3px,
+            rgba(0, 0, 0, 0.055) 3px,
+            rgba(0, 0, 0, 0.055) 4px
+          );
+        }
+
+        /* ── Radar rings ── */
+        .msm-radar { z-index: 3; overflow: hidden; }
+        .msm-radar__ring--1,
+        .msm-radar__ring--2,
+        .msm-radar__ring--3 {
+          display: block;
+          position: absolute;
+          border-radius: 50%;
+          border: 1px solid rgba(245, 158, 11, 0.18);
+          top: 50%;
+          left: 50%;
+        }
+        .msm-radar__ring--1 {
+          width: 280px; height: 280px;
+          margin-top: -140px; margin-left: -140px;
+          animation: msm-ring-pulse 4s ease-in-out infinite;
+        }
+        .msm-radar__ring--2 {
+          width: 175px; height: 175px;
+          margin-top: -87.5px; margin-left: -87.5px;
+          animation: msm-ring-pulse 4s ease-in-out infinite 0.55s;
+        }
+        .msm-radar__ring--3 {
+          width: 88px; height: 88px;
+          margin-top: -44px; margin-left: -44px;
+          animation: msm-ring-pulse 4s ease-in-out infinite 1.1s;
+        }
+        @keyframes msm-ring-pulse {
+          0%, 100% { opacity: 0.45; }
+          50%       { opacity: 1; }
+        }
+
+        /* ── Radar sweep ── */
+        .msm-radar__sweep {
+          display: block;
+          position: absolute;
+          width: 280px; height: 280px;
+          top: 50%; left: 50%;
+          margin-top: -140px; margin-left: -140px;
+          border-radius: 50%;
+          background: conic-gradient(
+            from 0deg,
+            rgba(245, 158, 11, 0.65) 0deg,
+            rgba(245, 158, 11, 0.28) 38deg,
+            rgba(245, 158, 11, 0.04) 75deg,
+            transparent 75deg
+          );
+          animation: msm-radar-spin 7s linear infinite;
+        }
+        @keyframes msm-radar-spin {
+          from { transform: rotate(0deg); }
+          to   { transform: rotate(360deg); }
+        }
+
+        /* ── HUD corner brackets ── */
+        .msm-hud { z-index: 5; }
+        .msm-hud__corner {
+          display: block;
+          position: absolute;
+          width: 16px;
+          height: 16px;
+          border-color: rgba(245, 158, 11, 0.72);
+          border-style: solid;
+          border-width: 0;
+        }
+        .msm-hud__corner--tl { top: 10px; left: 10px; border-top-width: 2px; border-left-width: 2px; }
+        .msm-hud__corner--tr { top: 10px; right: 10px; border-top-width: 2px; border-right-width: 2px; }
+        .msm-hud__corner--bl { bottom: 10px; left: 10px; border-bottom-width: 2px; border-left-width: 2px; }
+        .msm-hud__corner--br { bottom: 10px; right: 10px; border-bottom-width: 2px; border-right-width: 2px; }
+
+        /* ── LIVE badge ── */
+        .msm-live-badge {
+          position: absolute;
+          top: 14px;
+          right: 14px;
+          z-index: 10;
+          display: flex;
+          align-items: center;
+          gap: 5px;
+          padding: 3px 9px 3px 7px;
+          border-radius: 999px;
+          background: rgba(10, 4, 1, 0.78);
+          border: 1px solid rgba(245, 158, 11, 0.52);
+          font-size: 10px;
+          font-weight: 800;
+          letter-spacing: 0.14em;
+          color: #fde68a;
+          text-transform: uppercase;
+          backdrop-filter: blur(8px);
+          pointer-events: none;
+          font-family: ui-monospace, 'Courier New', monospace;
+          box-shadow: 0 0 14px rgba(245, 158, 11, 0.20);
+        }
+        .msm-live-badge__dot {
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          flex-shrink: 0;
+          background: #f59e0b;
+          box-shadow: 0 0 8px rgba(245, 158, 11, 0.95);
+          animation: msm-live-blink 1.6s ease-in-out infinite;
+        }
+        @keyframes msm-live-blink {
+          0%, 100% { opacity: 1; }
+          50%       { opacity: 0.18; }
+        }
+
+        /* ── Tap hint ── */
+        .msm-tap-hint {
+          position: absolute;
+          bottom: 20px;
+          left: 50%;
+          transform: translateX(-50%);
+          z-index: 10;
+          font-size: 9px;
+          font-weight: 800;
+          letter-spacing: 0.22em;
+          color: rgba(253, 230, 138, 0.55);
+          text-transform: uppercase;
+          pointer-events: none;
+          font-family: ui-monospace, 'Courier New', monospace;
+          text-shadow: 0 0 14px rgba(245, 158, 11, 0.50);
+          white-space: nowrap;
+          animation: msm-tap-fade 3.2s ease-in-out infinite;
+        }
+        @keyframes msm-tap-fade {
+          0%, 100% { opacity: 0.65; }
+          50%       { opacity: 1; }
+        }
+
+        /* ── User location pin ── */
         .msm-user-pin {
           position: relative;
           width: 28px;
@@ -293,20 +473,18 @@ export function ThemedScoutMap({
           background: rgba(255, 155, 25, 0.38);
           animation: msm-user-pulse 2.4s ease-out infinite;
         }
-        .msm-user-pin__pulse--delay {
-          animation-delay: 1.2s;
-        }
+        .msm-user-pin__pulse--delay { animation-delay: 1.2s; }
         @keyframes msm-user-pulse {
           0%   { transform: scale(0.7); opacity: 0.9; }
           80%  { transform: scale(2.7); opacity: 0; }
           100% { transform: scale(2.7); opacity: 0; }
         }
 
-        /* ── Teardrop map pins ───────────────────────────────────────── */
+        /* ── Teardrop pins ── */
         .msm-map-pin {
           position: relative;
-          width: 24px;
-          height: 30px;
+          width: 26px;
+          height: 32px;
           padding: 0;
           border: 0;
           background: transparent;
@@ -318,58 +496,68 @@ export function ThemedScoutMap({
         }
         .msm-map-pin__drop {
           position: relative;
-          width: 18px;
-          height: 18px;
+          width: 20px;
+          height: 20px;
           border-radius: 50% 50% 50% 0;
           transform: rotate(-45deg);
           background: #f59e0b;
+          overflow: hidden;
           box-shadow:
             0 0 6px rgba(245, 158, 11, 0.95),
-            0 0 18px rgba(245, 158, 11, 0.55),
-            0 0 40px rgba(245, 158, 11, 0.22);
+            0 0 20px rgba(245, 158, 11, 0.55),
+            0 0 44px rgba(245, 158, 11, 0.22);
         }
-        .msm-map-pin__drop::after {
-          content: '';
+        .msm-map-pin__icon {
           position: absolute;
-          width: 6px;
-          height: 6px;
-          border-radius: 50%;
-          background: rgba(8, 3, 0, 0.55);
           top: 50%;
           left: 50%;
-          transform: translate(-50%, -50%);
+          transform: translate(-50%, -50%) rotate(45deg);
+          font-size: 7px;
+          font-weight: 900;
+          line-height: 1;
+          color: rgba(5, 2, 0, 0.72);
+          font-family: ui-monospace, 'Courier New', monospace;
+          letter-spacing: 0;
+          user-select: none;
         }
         .msm-map-pin__glow {
           position: absolute;
-          inset: -5px;
+          inset: -6px;
           border-radius: 50% 50% 50% 0;
-          background: rgba(245, 158, 11, 0.44);
-          filter: blur(6px);
+          background: rgba(245, 158, 11, 0.42);
+          filter: blur(7px);
           animation: msm-pin-glow 2.8s ease-in-out infinite;
+          pointer-events: none;
         }
         /* Parking — cyan */
         .msm-map-pin--parking .msm-map-pin__drop {
           background: #06b6d4;
-          box-shadow: 0 0 6px rgba(6,182,212,0.95), 0 0 18px rgba(6,182,212,0.55), 0 0 40px rgba(6,182,212,0.22);
+          box-shadow: 0 0 6px rgba(6,182,212,0.95), 0 0 20px rgba(6,182,212,0.55), 0 0 44px rgba(6,182,212,0.22);
         }
-        .msm-map-pin--parking .msm-map-pin__glow { background: rgba(6,182,212,0.44); }
-        /* Restaurant / deal — warm orange */
+        .msm-map-pin--parking .msm-map-pin__glow { background: rgba(6,182,212,0.42); }
+        /* Restaurant / deal */
         .msm-map-pin--restaurant .msm-map-pin__drop,
         .msm-map-pin--deal .msm-map-pin__drop {
           background: #fb923c;
-          box-shadow: 0 0 6px rgba(251,146,60,0.95), 0 0 18px rgba(251,146,60,0.55), 0 0 40px rgba(251,146,60,0.22);
+          box-shadow: 0 0 6px rgba(251,146,60,0.95), 0 0 20px rgba(251,146,60,0.55), 0 0 44px rgba(251,146,60,0.22);
         }
         .msm-map-pin--restaurant .msm-map-pin__glow,
-        .msm-map-pin--deal .msm-map-pin__glow { background: rgba(251,146,60,0.44); }
+        .msm-map-pin--deal .msm-map-pin__glow { background: rgba(251,146,60,0.42); }
         /* Event — fuchsia */
         .msm-map-pin--event .msm-map-pin__drop {
           background: #e879f9;
-          box-shadow: 0 0 6px rgba(232,121,249,0.95), 0 0 18px rgba(232,121,249,0.55), 0 0 40px rgba(232,121,249,0.22);
+          box-shadow: 0 0 6px rgba(232,121,249,0.95), 0 0 20px rgba(232,121,249,0.55), 0 0 44px rgba(232,121,249,0.22);
         }
-        .msm-map-pin--event .msm-map-pin__glow { background: rgba(232,121,249,0.44); }
+        .msm-map-pin--event .msm-map-pin__glow { background: rgba(232,121,249,0.42); }
+        /* Geo ad — teal */
+        .msm-map-pin--geo_ad .msm-map-pin__drop {
+          background: #34d399;
+          box-shadow: 0 0 6px rgba(52,211,153,0.95), 0 0 20px rgba(52,211,153,0.55), 0 0 44px rgba(52,211,153,0.22);
+        }
+        .msm-map-pin--geo_ad .msm-map-pin__glow { background: rgba(52,211,153,0.42); }
         @keyframes msm-pin-glow {
-          0%, 100% { opacity: 0.44; transform: scale(1); }
-          50%       { opacity: 1;    transform: scale(1.45); }
+          0%, 100% { opacity: 0.42; transform: scale(1); }
+          50%       { opacity: 1;    transform: scale(1.5); }
         }
 
         .maplibregl-ctrl-attrib,
