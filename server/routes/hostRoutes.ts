@@ -1078,9 +1078,15 @@ export function registerHostRoutes(app: Express) {
           "super_admin",
           "staff",
         ].includes(String(req.user?.userType || ""));
+        const bookingFeePromoFlag = String(
+          process.env.BOOKFEE10_ENABLED || "",
+        )
+          .trim()
+          .toLowerCase();
         const bookingFeePromoEnabled =
-          String(process.env.BOOKFEE10_ENABLED || "").toLowerCase() ===
-            "true" || process.env.NODE_ENV !== "production";
+          !["0", "false", "no", "off", "disabled"].includes(
+            bookingFeePromoFlag,
+          );
         const bypassStripe =
           String(process.env.MEALSCOUT_BYPASS_STRIPE || "").toLowerCase() ===
             "true" ||
