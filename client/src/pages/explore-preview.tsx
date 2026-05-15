@@ -2076,25 +2076,56 @@ function LocalFoodDashboard({
     localSignalCount > 0
       ? `${localSignalCount} local signal${localSignalCount === 1 ? "" : "s"}`
       : hasLocation
-        ? "Building local signal"
+        ? "Syncing nearby activity"
         : "Location needed";
 
-  const stats = [
-    { label: "Trucks", value: liveTruckCount, href: "/truck-discovery" },
-    { label: "Menu", value: menuItemCount, href: DISCOVERY_LAYERS.menuItems.href },
-    { label: "Food", value: restaurantCount, href: "/search" },
-    { label: "Deals", value: dealCount, href: "/deals" },
-    { label: "Events", value: eventCount, href: "/events" },
-    { label: "Hosts", value: parkingHostCount, href: "/parking-pass" },
+  const quickActions = [
+    {
+      label: "Live trucks",
+      count: liveTruckCount,
+      href: "/truck-discovery",
+      helper: liveTruckCount > 0 ? "Open now" : "No live trucks yet",
+    },
+    {
+      label: "Hot deals",
+      count: dealCount,
+      href: "/deals",
+      helper: dealCount > 0 ? "Saving now" : "No nearby deals yet",
+    },
+    {
+      label: "Find dinner",
+      count: restaurantCount,
+      href: "/search",
+      helper: restaurantCount > 0 ? "Food spots nearby" : "No nearby spots yet",
+    },
+    {
+      label: "Menus",
+      count: menuItemCount,
+      href: DISCOVERY_LAYERS.menuItems.href,
+      helper: menuItemCount > 0 ? "Fresh menu items" : "Menus still loading",
+    },
+    {
+      label: "Events",
+      count: eventCount,
+      href: "/events",
+      helper: eventCount > 0 ? "Happening nearby" : "No live events yet",
+    },
+    {
+      label: "Host parking",
+      count: parkingHostCount,
+      href: "/parking-pass",
+      helper: parkingHostCount > 0 ? "Available host spots" : "No host spots yet",
+    },
   ];
 
-  const lanes = [
-    { label: "All trucks", href: "/truck-discovery" },
-    { label: "Trending", href: DISCOVERY_LAYERS.trending.href },
-    { label: "Menus", href: DISCOVERY_LAYERS.menuItems.href },
-    { label: "Find dinner", href: "/search" },
-    { label: "Deals", href: "/deals" },
-  ];
+  const readyNow = quickActions.filter((item) => item.count > 0);
+  const headline = !hasLocation
+    ? "Turn on location to load your local feed"
+    : readyNow.length > 0
+      ? `${readyNow.length} things ready right now`
+      : "Nothing live right now. Try widening your radius.";
+
+  const topSignals = readyNow.slice(0, 3);
   const radiusOptions = [5, 12, 25, 40];
   const radiusMiles = Math.max(1, Math.round(discoveryRadiusKm * 0.621371));
 
@@ -2105,20 +2136,19 @@ function LocalFoodDashboard({
           className="px-4 py-4"
           style={{
             backgroundImage:
-              "radial-gradient(circle at 16% 0%, rgba(255,90,47,0.22), transparent 34%), radial-gradient(circle at 84% 8%, rgba(34,197,94,0.10), transparent 30%)",
+              "radial-gradient(circle at 16% 0%, rgba(255,90,47,0.24), transparent 36%), radial-gradient(circle at 84% 8%, rgba(34,197,94,0.09), transparent 34%)",
           }}
         >
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="text-[10px] uppercase tracking-[0.2em] text-orange-200/75 font-bold">
-                Today's Food Board
+                Right now near you
               </p>
               <h2 className="mt-1 text-white text-xl font-bold leading-tight">
                 {locationLabel}
               </h2>
               <p className="mt-1.5 text-white/62 text-xs leading-relaxed max-w-[32rem]">
-                Local food signal from trucks, menus, independent spots, deals,
-                events, and future truck host locations near you.
+                {headline}
               </p>
             </div>
             <span className="shrink-0 rounded-full bg-[#120805]/35 ring-1 ring-orange-300/25 px-3 py-1 text-[11px] font-semibold text-orange-100">
@@ -2126,18 +2156,36 @@ function LocalFoodDashboard({
             </span>
           </div>
 
-          <div className="mt-3 grid grid-cols-3 gap-2">
-            {stats.map((item) => (
+          {!hasLocation ? (
+            <button
+              type="button"
+              onClick={onRefreshLocation}
+              className="mt-3 w-full rounded-2xl bg-[#120805]/45 ring-1 ring-orange-300/30 px-4 py-3 text-left active:scale-[0.99]"
+            >
+              <p className="text-white text-sm font-bold">Use my location</p>
+              <p className="mt-1 text-white/65 text-xs">
+                This unlocks nearby trucks, deals, events, and food spots instantly.
+              </p>
+            </button>
+          ) : null}
+
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            {quickActions.map((item) => (
               <Link
                 key={item.label}
                 href={item.href}
-                className="rounded-2xl bg-[#120805]/30 ring-1 ring-white/8 px-3 py-2.5 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
+                className="rounded-2xl bg-[#120805]/32 ring-1 ring-white/8 px-3 py-2.5 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
               >
-                <p className="text-white text-lg font-bold leading-none">
-                  {item.value}
-                </p>
-                <p className="mt-1 text-white/62 text-[11px] font-semibold">
-                  {item.label}
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-white text-sm font-semibold truncate">
+                    {item.label}
+                  </p>
+                  <span className="rounded-full bg-black/35 px-2 py-0.5 text-[11px] font-bold text-orange-100 ring-1 ring-white/10">
+                    {item.count}
+                  </span>
+                </div>
+                <p className="mt-1 text-white/60 text-[11px] font-medium leading-relaxed">
+                  {item.helper}
                 </p>
               </Link>
             ))}
@@ -2175,31 +2223,51 @@ function LocalFoodDashboard({
                 })}
               </div>
             </div>
-          </div>
 
-          <div className="mt-3 flex items-center gap-2">
-            <button
-              type="button"
-              onClick={onRefreshLocation}
-              className="shrink-0 inline-flex items-center gap-2 rounded-full bg-[#120805]/35 ring-1 ring-white/12 text-white px-3 py-2 text-xs font-semibold active:scale-[0.98]"
-            >
-              <Search className="h-3.5 w-3.5 text-orange-200" aria-hidden="true" />
-              Refresh
-            </button>
-            <div className="min-w-0 flex-1 overflow-x-auto atmo-hide-scrollbar">
-              <div className="flex gap-2 pr-1">
-              {lanes.map((lane) => (
-                <Link
-                  key={`${lane.label}:${lane.href}`}
-                  href={lane.href}
-                  className="shrink-0 inline-flex items-center gap-1.5 rounded-full bg-white/[0.06] ring-1 ring-white/10 px-3 py-2 text-xs font-semibold text-white/82 active:scale-[0.98]"
-                >
-                  {lane.label}
-                  <ChevronRight className="h-3.5 w-3.5 text-orange-200" aria-hidden="true" />
-                </Link>
-              ))}
+            <div className="mt-3 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={onRefreshLocation}
+                className="shrink-0 inline-flex items-center gap-2 rounded-full bg-[#120805]/35 ring-1 ring-white/12 text-white px-3 py-2 text-xs font-semibold active:scale-[0.98]"
+              >
+                <Search className="h-3.5 w-3.5 text-orange-200" aria-hidden="true" />
+                Refresh location
+              </button>
+              <div className="min-w-0 flex-1 overflow-x-auto atmo-hide-scrollbar">
+                <div className="flex gap-2 pr-1">
+                  {topSignals.length > 0 ? (
+                    topSignals.map((item) => (
+                      <Link
+                        key={`${item.label}:${item.href}`}
+                        href={item.href}
+                        className="shrink-0 inline-flex items-center gap-1.5 rounded-full bg-white/[0.06] ring-1 ring-white/10 px-3 py-2 text-xs font-semibold text-white/82 active:scale-[0.98]"
+                      >
+                        {item.label}
+                        <ChevronRight className="h-3.5 w-3.5 text-orange-200" aria-hidden="true" />
+                      </Link>
+                    ))
+                  ) : (
+                    <span className="inline-flex items-center rounded-full bg-white/[0.06] ring-1 ring-white/10 px-3 py-2 text-xs font-semibold text-white/62">
+                      No live categories nearby yet
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
+          </div>
+
+          <div className="mt-3 grid grid-cols-3 gap-2">
+            {quickActions.slice(0, 3).map((item) => (
+              <div
+                key={`snapshot-${item.label}`}
+                className="rounded-2xl bg-black/20 ring-1 ring-white/8 px-3 py-2"
+              >
+                <p className="text-white text-base font-bold leading-none">{item.count}</p>
+                <p className="mt-1 text-white/58 text-[11px] font-semibold">
+                  {item.label}
+                </p>
+              </div>
+            ))}
           </div>
         </div>
       </div>
