@@ -27,26 +27,17 @@ interface ThemedScoutMapProps {
 const MINI_MAP_STYLE: StyleSpecification = {
   version: 8,
   sources: {
-    "esri-imagery": {
+    "carto-dark": {
       type: "raster",
       tiles: [
-        "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+        "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
+        "https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
+        "https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
+        "https://d.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
       ],
       tileSize: 256,
       attribution:
-        'Tiles © <a href="https://www.esri.com/" target="_blank" rel="noopener noreferrer">Esri</a>',
-    },
-    "carto-labels": {
-      type: "raster",
-      tiles: [
-        "https://a.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}@2x.png",
-        "https://b.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}@2x.png",
-        "https://c.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}@2x.png",
-        "https://d.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}@2x.png",
-      ],
-      tileSize: 256,
-      attribution:
-        'Map labels © <a href="https://carto.com/attributions" target="_blank" rel="noopener noreferrer">CARTO</a>, data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a>',
+        'Map tiles © <a href="https://carto.com/attributions" target="_blank" rel="noopener noreferrer">CARTO</a>, data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a>',
     },
   },
   layers: [
@@ -58,27 +49,15 @@ const MINI_MAP_STYLE: StyleSpecification = {
       },
     },
     {
-      id: "esri-imagery-tiles",
+      id: "carto-dark-tiles",
       type: "raster",
-      source: "esri-imagery",
+      source: "carto-dark",
       paint: {
         "raster-opacity": 1,
-        "raster-brightness-min": 0.02,
-        "raster-brightness-max": 0.86,
-        "raster-saturation": -0.18,
-        "raster-contrast": 0.26,
-      },
-    },
-    {
-      id: "carto-label-tiles",
-      type: "raster",
-      source: "carto-labels",
-      paint: {
-        "raster-opacity": 0.58,
         "raster-brightness-min": 0,
-        "raster-brightness-max": 0.78,
-        "raster-saturation": -0.24,
-        "raster-contrast": 0.18,
+        "raster-brightness-max": 0.82,
+        "raster-saturation": 0.32,
+        "raster-contrast": 0.46,
       },
     },
   ],
@@ -380,7 +359,7 @@ export function ThemedScoutMap({
         }
       `}</style>
       <span className="sr-only" aria-label="Map data attribution">
-        Imagery © Esri. Labels © CARTO and OpenStreetMap contributors.
+        Map tiles © CARTO. Data © OpenStreetMap contributors.
       </span>
     </div>
   );
