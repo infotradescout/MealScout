@@ -1,7 +1,10 @@
 import type { MapProvider } from "@/components/maps/map-adapter.types";
 
 export const GOOGLE_MAPS_WEB_API_KEY = String(
-  import.meta.env.VITE_GOOGLE_MAPS_WEB_API_KEY || "",
+  import.meta.env.VITE_GOOGLE_MAPS_WEB_API_KEY ||
+    import.meta.env.VITE_GOOGLE_MAPS_API_KEY ||
+    import.meta.env.VITE_GOOGLE_API_KEY ||
+    "",
 ).trim();
 
 const rawProvider = String(import.meta.env.VITE_MAP_PROVIDER || "auto")

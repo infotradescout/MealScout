@@ -33,6 +33,7 @@ const baseline: Record<string, number> = {
   "server/routes/restaurantOperationsRoutes.ts": 1,
   "server/routes/restaurantSignupRoutes.ts": 1,
   "server/routes/stripeWebhookRoutes.ts": 5,
+  "server/routes/supportRoutes.ts": 2,
   "server/routes/supplierMarketplaceRoutes.ts": 1,
   "server/routes/suppliers/requestsRoutes.ts": 3,
   "server/routes/truckClaimRoutes.ts": 1,

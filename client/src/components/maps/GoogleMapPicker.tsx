@@ -647,7 +647,12 @@ function LeafletRenderer({
 
 // ─── Public component ─────────────────────────────────────────────────────────
 
-type MapRuntimeResponse = { hasGoogleMapsKey: boolean; googleMapsApiKey?: string | null };
+type MapRuntimeResponse = {
+  hasGoogleMapsKey: boolean;
+  googleMapsApiKey?: string | null;
+  hasGoogleMapsMapId?: boolean;
+  googleMapsMapId?: string | null;
+};
 
 export function GoogleMapPicker({
   center,
@@ -676,16 +681,22 @@ export function GoogleMapPicker({
 
   // Build-time key takes priority; runtime key is a fallback for server-injected keys
   const buildTimeKey = String(
-    (import.meta as any).env?.VITE_GOOGLE_MAPS_WEB_API_KEY || "",
+    (import.meta as any).env?.VITE_GOOGLE_MAPS_WEB_API_KEY ||
+      (import.meta as any).env?.VITE_GOOGLE_MAPS_API_KEY ||
+      (import.meta as any).env?.VITE_GOOGLE_API_KEY ||
+      "",
   ).trim();
   const runtimeKey = String(mapRuntime?.googleMapsApiKey || "").trim();
   const apiKey = buildTimeKey || runtimeKey;
 
   // Map ID: caller-provided prop takes priority, then build-time env var
   const envMapId = String(
-    (import.meta as any).env?.VITE_GOOGLE_MAPS_MAP_ID || "",
+    (import.meta as any).env?.VITE_GOOGLE_MAPS_MAP_ID ||
+      (import.meta as any).env?.GOOGLE_MAPS_MAP_ID ||
+      "",
   ).trim();
-  const mapId = mapIdProp || envMapId || undefined;
+  const runtimeMapId = String(mapRuntime?.googleMapsMapId || "").trim();
+  const mapId = mapIdProp || envMapId || runtimeMapId || undefined;
 
   const [googleFailed, setGoogleFailed] = useState(false);
   const useGoogle = apiKey.length > 0 && !googleFailed;

@@ -1,6 +1,6 @@
 # Email Trigger Inventory
 
-Last updated: 2026-05-10
+Last updated: 2026-05-15
 
 This file tracks MealScout email sends by trigger class so optional notifications do not drift into spammy behavior. Global delivery is centralized in `server/emailService.ts`.
 
@@ -42,6 +42,7 @@ These should respect user preferences and/or idempotency.
 | Nearby deal alert | Nearby users | `routes/dealRouteDependencies.ts` | `notifyUser`, `dealAlerts`, saved-address radius |
 | Followed restaurant deal | Followers | `routes/dealRouteDependencies.ts` | `notifyUser`, `followedActivity` |
 | Business contact message | Business owner | `routes/restaurantCoreRoutes.ts` | `notifyUser`, `businessMessages` |
+| Support ticket and direct admin message | Super admin | `routes/supportRoutes.ts` | User action, `notifyUser`, `businessMessages`, internal/admin recipient |
 | Booking request to truck | Truck owner | `routes/bookingRoutes.ts` | `businessMessages` preference |
 | Truck interest in location request | Host/request owner | `emailNotifications.ts` | `businessMessages` preference |
 | Location demand threshold crossed | Host and interested trucks | `routes/locationDemandRoutes.ts` | Fires only on first threshold crossing; host uses `businessMessages`, trucks use `nearbyEvents` |

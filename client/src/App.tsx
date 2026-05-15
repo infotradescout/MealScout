@@ -5,7 +5,6 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
-import { BetaDisclaimer } from "@/components/beta-disclaimer";
 import Navigation from "@/components/navigation";
 import { apiUrl } from "@/lib/api";
 import { TimeOfDayBackground } from "@/components/TimeOfDayBackground";
@@ -657,7 +656,6 @@ function App() {
         <TimeOfDayBackground />
         <div className="desktop-full-width app-background app-content min-h-screen md:pt-16 relative z-10">
           <Toaster />
-          <BetaDisclaimer />
           <Router />
           <Navigation scope="global" />
         </div>
