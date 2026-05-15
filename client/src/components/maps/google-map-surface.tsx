@@ -511,7 +511,9 @@ export function GoogleMapSurface({
               : "none",
           };
           const runtimeMapId = String(mapId || "").trim();
-          if (runtimeMapId && !isNightTheme) {
+          if (isNightTheme) {
+            mapOptions.mapTypeId = "hybrid";
+          } else if (runtimeMapId) {
             mapOptions.mapId = runtimeMapId;
           } else {
             mapOptions.styles = mapStyleNeon;
@@ -592,10 +594,20 @@ export function GoogleMapSurface({
           });
         } else {
           const runtimeMapId = String(mapId || "").trim();
-          if (runtimeMapId && !isNightTheme) {
+          if (isNightTheme) {
+            mapRef.current.setOptions({
+              mapId: undefined,
+              styles: null,
+              mapTypeId: "hybrid",
+            });
+          } else if (runtimeMapId) {
             mapRef.current.setOptions({ mapId: runtimeMapId });
           } else {
-            mapRef.current.setOptions({ mapId: undefined, styles: mapStyleNeon });
+            mapRef.current.setOptions({
+              mapId: undefined,
+              mapTypeId: "roadmap",
+              styles: mapStyleNeon,
+            });
           }
           mapRef.current.setOptions({
             clickableIcons: interactive,
@@ -859,7 +871,7 @@ export function GoogleMapSurface({
           />
           <style>{`
             .ms-google-map-canvas .gm-style > div:first-child {
-              filter: saturate(1.04) contrast(1.12) brightness(1.12) sepia(0.14) hue-rotate(-8deg);
+              filter: saturate(0.72) contrast(1.38) brightness(0.74) sepia(0.38) hue-rotate(-16deg);
             }
             .ms-google-map-canvas .gm-style-cc,
             .ms-google-map-canvas a[href^="https://maps.google.com/maps"] {
@@ -872,24 +884,24 @@ export function GoogleMapSurface({
               z-index: 1;
               mix-blend-mode: normal;
               background:
-                linear-gradient(90deg, rgba(22, 9, 4, 0.18), rgba(4, 9, 8, 0.02) 34%, rgba(22, 9, 4, 0.14)),
-                radial-gradient(circle at 58% 47%, rgba(255, 112, 58, 0.13), transparent 23%),
-                radial-gradient(circle at 78% 20%, rgba(255, 160, 82, 0.05), transparent 25%),
-                radial-gradient(circle at 16% 76%, rgba(255, 136, 68, 0.04), transparent 24%);
+                linear-gradient(90deg, rgba(26, 9, 3, 0.3), rgba(3, 9, 8, 0.02) 36%, rgba(26, 9, 3, 0.24)),
+                radial-gradient(circle at 58% 47%, rgba(255, 112, 58, 0.15), transparent 25%),
+                radial-gradient(circle at 76% 18%, rgba(255, 168, 86, 0.08), transparent 27%),
+                radial-gradient(circle at 12% 72%, rgba(255, 132, 64, 0.08), transparent 26%);
               background-size:
                 100% 100%,
                 100% 100%,
                 100% 100%,
                 100% 100%;
-              opacity: 0.58;
+              opacity: 0.7;
             }
             .ms-google-map-grade::after {
               content: "";
               position: absolute;
               inset: 0;
               background:
-                radial-gradient(ellipse at 50% 46%, transparent 0%, rgba(0, 0, 0, 0) 60%, rgba(0, 0, 0, 0.24) 100%),
-                linear-gradient(180deg, rgba(9, 4, 2, 0.08) 0%, rgba(3, 4, 5, 0) 44%, rgba(3, 4, 5, 0.22) 100%);
+                radial-gradient(ellipse at 50% 46%, transparent 0%, rgba(0, 0, 0, 0) 58%, rgba(0, 0, 0, 0.34) 100%),
+                linear-gradient(180deg, rgba(9, 4, 2, 0.12) 0%, rgba(3, 4, 5, 0) 44%, rgba(3, 4, 5, 0.28) 100%);
               mix-blend-mode: normal;
             }
           `}</style>
