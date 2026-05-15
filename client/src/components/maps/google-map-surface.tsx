@@ -498,8 +498,8 @@ export function GoogleMapSurface({
             disableDefaultUI: true,
             zoomControl: false,
             clickableIcons: interactive,
-            tilt: 0,
-            heading: 0,
+            tilt: isNightTheme ? 45 : 0,
+            heading: isNightTheme ? 18 : 0,
             draggable: interactive,
             keyboardShortcuts: interactive,
             scrollwheel: interactive,
@@ -599,14 +599,18 @@ export function GoogleMapSurface({
               mapId: undefined,
               styles: null,
               mapTypeId: "hybrid",
+              tilt: 45,
+              heading: 18,
             });
           } else if (runtimeMapId) {
-            mapRef.current.setOptions({ mapId: runtimeMapId });
+            mapRef.current.setOptions({ mapId: runtimeMapId, tilt: 0, heading: 0 });
           } else {
             mapRef.current.setOptions({
               mapId: undefined,
               mapTypeId: "roadmap",
               styles: mapStyleNeon,
+              tilt: 0,
+              heading: 0,
             });
           }
           mapRef.current.setOptions({

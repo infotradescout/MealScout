@@ -103,6 +103,8 @@ export function ThemedScoutMap({
     map.easeTo({
       center: [userLocation.lng, userLocation.lat],
       zoom,
+      pitch: 54,
+      bearing: 18,
       duration,
     });
   };
@@ -115,8 +117,8 @@ export function ThemedScoutMap({
       style: MINI_MAP_STYLE,
       center: [userLocation.lng, userLocation.lat],
       zoom,
-      pitch: 0,
-      bearing: 0,
+      pitch: 54,
+      bearing: 18,
       interactive: false,
       attributionControl: false,
       dragRotate: false,
@@ -168,7 +170,8 @@ export function ThemedScoutMap({
           driftStartRef.current = performance.now();
         }
         const t = (performance.now() - driftStartRef.current) / 1000;
-        current.setBearing(Math.sin((t / 70) * Math.PI * 2) * 3);
+        current.setBearing(18 + Math.sin((t / 70) * Math.PI * 2) * 2.5);
+        current.setPitch(54 + Math.sin((t / 90) * Math.PI * 2) * 2);
         driftRafRef.current = requestAnimationFrame(tick);
       };
       driftRafRef.current = requestAnimationFrame(tick);
