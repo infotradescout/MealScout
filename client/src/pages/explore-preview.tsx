@@ -1,9 +1,11 @@
 import {
   useCallback,
   useEffect,
+  lazy,
   useMemo,
   useRef,
   useState,
+  Suspense,
 } from "react";
 import { Link, useLocation as useWouterLocation } from "wouter";
 import { useQueries, useQuery } from "@tanstack/react-query";
@@ -39,6 +41,8 @@ import type {
   MapAdapterMarker,
   MapBoundsLike,
 } from "@/components/maps/map-adapter.types";
+
+const ThemedScoutMap = lazy(() => import("@/components/maps/themed-scout-map"));
 
 type MapRuntimeResponse = {
   hasGoogleMapsKey: boolean;
@@ -1238,9 +1242,6 @@ export default function ExplorePreview() {
     setMapCenter(c);
     userPushedMapRef.current = true;
   }, []);
-  const ignorePreviewBoundsChanged = useCallback((_bounds: MapBoundsLike) => {}, []);
-  const ignorePreviewZoomChanged = useCallback((_zoom: number) => {}, []);
-  const ignorePreviewCenterChanged = useCallback((_center: { lat: number; lng: number }) => {}, []);
   const selectLiveTruck = useCallback(
     (truck: LiveTruckSummary) => {
       const truckCoords = getTruckCoords(truck);
@@ -1276,6 +1277,15 @@ export default function ExplorePreview() {
       }
     },
     [liveTruckById, mapZoom, navigate, selectLiveTruck],
+  );
+  const handlePreviewMarkerTap = useCallback(
+    (marker: MapAdapterMarker) => {
+      setHasOpenedFullMap(true);
+      setGoogleMapFailed(false);
+      setSheetState("fullMap");
+      handleMarkerTap(marker);
+    },
+    [handleMarkerTap],
   );
 
   /* --------- pull-down-to-fullscreen sheet --------- */
@@ -1450,30 +1460,19 @@ export default function ExplorePreview() {
                 zIndex: 0,
               }}
             >
-              {hasMapKey && coords ? (
-                <MapErrorBoundary>
-                  <GoogleMapSurface
-                    apiKey={effectiveGoogleMapsApiKey}
-                    mapId={effectiveGoogleMapsMapId || undefined}
-                    center={coords}
-                    zoom={15}
-                    markers={allMapMarkers}
-                    showRoadTrafficLayer={false}
+              {coords ? (
+                <Suspense fallback={<HeroMapFallback reason="loading" />}>
+                  <ThemedScoutMap
                     userLocation={coords}
-                    isNightTheme={true}
-                    interactive={false}
-                    onBoundsChanged={ignorePreviewBoundsChanged}
-                    onZoomChanged={ignorePreviewZoomChanged}
-                    onCenterChanged={ignorePreviewCenterChanged}
-                    onMarkerTap={handleMarkerTap}
+                    markers={allMapMarkers}
+                    zoom={13}
+                    onMarkerTap={handlePreviewMarkerTap}
                   />
-                </MapErrorBoundary>
+                </Suspense>
               ) : (
                 <HeroMapFallback
                   reason={
-                    !hasMapKey
-                      ? "no-key"
-                      : locationStatus === "denied"
+                    locationStatus === "denied"
                         ? "denied"
                         : "loading"
                   }
