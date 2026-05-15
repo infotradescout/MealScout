@@ -54,10 +54,10 @@ const MINI_MAP_STYLE: StyleSpecification = {
       source: "carto-dark",
       paint: {
         "raster-opacity": 1,
-        "raster-brightness-min": 0.02,
-        "raster-brightness-max": 0.88,
-        "raster-saturation": 0.28,
-        "raster-contrast": 0.42,
+        "raster-brightness-min": 0,
+        "raster-brightness-max": 0.64,
+        "raster-saturation": -0.18,
+        "raster-contrast": 0.58,
       },
     },
   ],
@@ -238,27 +238,29 @@ export function ThemedScoutMap({
       <div aria-hidden="true" className="msm-map-grade absolute inset-0" />
       <style>{`
         .msm-map-canvas .maplibregl-canvas {
-          filter: saturate(1.45) contrast(1.42) brightness(1.1) sepia(0.48) hue-rotate(-20deg);
+          filter: saturate(0.92) contrast(1.62) brightness(0.78) sepia(0.44) hue-rotate(-18deg);
         }
         .msm-map-grade {
           pointer-events: none;
           background:
-            radial-gradient(circle at 50% 44%, rgba(255, 90, 47, 0.28), transparent 18%),
-            radial-gradient(circle at 24% 22%, rgba(255, 180, 92, 0.14), transparent 22%),
-            radial-gradient(circle at 76% 28%, rgba(255, 90, 47, 0.18), transparent 24%),
-            radial-gradient(circle at 28% 36%, rgba(255, 178, 102, 0.24) 0 1px, transparent 1.4px),
-            radial-gradient(circle at 58% 22%, rgba(255, 178, 102, 0.18) 0 1px, transparent 1.4px),
-            linear-gradient(180deg, rgba(17, 8, 4, 0.12) 0%, rgba(17, 8, 4, 0.04) 44%, rgba(6, 7, 10, 0.3) 100%);
-          background-size: 100% 100%, 100% 100%, 100% 100%, 18px 18px, 23px 23px, 100% 100%;
-          mix-blend-mode: screen;
+            linear-gradient(90deg, rgba(22, 9, 4, 0.54), rgba(4, 9, 8, 0.08) 34%, rgba(22, 9, 4, 0.38)),
+            radial-gradient(circle at 55% 43%, rgba(255, 92, 47, 0.26), transparent 20%),
+            radial-gradient(circle at 23% 26%, rgba(255, 180, 92, 0.1), transparent 22%),
+            radial-gradient(circle at 79% 22%, rgba(255, 112, 52, 0.14), transparent 24%),
+            radial-gradient(circle at 44% 20%, rgba(255, 190, 116, 0.13) 0 1px, transparent 1.45px),
+            radial-gradient(circle at 72% 64%, rgba(255, 156, 82, 0.1) 0 1px, transparent 1.35px),
+            linear-gradient(180deg, rgba(17, 8, 4, 0.18) 0%, rgba(17, 8, 4, 0.02) 44%, rgba(3, 4, 5, 0.46) 100%);
+          background-size: 100% 100%, 100% 100%, 100% 100%, 100% 100%, 26px 26px, 37px 37px, 100% 100%;
+          mix-blend-mode: normal;
+          opacity: 0.88;
         }
         .msm-map-grade::after {
           content: "";
           position: absolute;
           inset: 0;
           background:
-            linear-gradient(180deg, rgba(10, 12, 16, 0.02), rgba(10, 12, 16, 0.34)),
-            radial-gradient(ellipse at center, transparent 0%, transparent 62%, rgba(0, 0, 0, 0.42) 100%);
+            radial-gradient(ellipse at center, transparent 0%, transparent 58%, rgba(0, 0, 0, 0.54) 100%),
+            linear-gradient(180deg, rgba(10, 4, 2, 0.16), rgba(5, 6, 7, 0.42));
           mix-blend-mode: normal;
         }
         .msm-map-grade::before {
@@ -266,11 +268,11 @@ export function ThemedScoutMap({
           position: absolute;
           inset: 0;
           background:
-            linear-gradient(78deg, transparent 0 35%, rgba(255, 90, 47, 0.42) 35.2%, transparent 35.7%),
-            linear-gradient(174deg, transparent 0 18%, rgba(255, 168, 92, 0.28) 18.2%, transparent 18.5%),
-            linear-gradient(6deg, transparent 0 68%, rgba(255, 90, 47, 0.38) 68.2%, transparent 68.7%);
-          filter: blur(0.45px);
-          opacity: 0.7;
+            linear-gradient(78deg, transparent 0 35%, rgba(255, 90, 47, 0.22) 35.2%, transparent 35.8%),
+            linear-gradient(174deg, transparent 0 18%, rgba(255, 168, 92, 0.16) 18.2%, transparent 18.55%),
+            linear-gradient(6deg, transparent 0 68%, rgba(255, 90, 47, 0.22) 68.2%, transparent 68.8%);
+          filter: blur(0.75px);
+          opacity: 0.76;
           mix-blend-mode: screen;
         }
 
