@@ -1549,6 +1549,7 @@ export default function ExplorePreview() {
                         userLocation={coords}
                         markers={allMapMarkers}
                         zoom={13}
+                        interactive={true}
                         onMarkerTap={handlePreviewMarkerTap}
                       />
                     </Suspense>

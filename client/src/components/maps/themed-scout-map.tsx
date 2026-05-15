@@ -22,6 +22,7 @@ interface ThemedScoutMapProps {
   markers: MapAdapterMarker[];
   onMarkerTap?: (marker: MapAdapterMarker) => void;
   zoom?: number;
+  interactive?: boolean;
 }
 
 const MINI_MAP_STYLE: StyleSpecification = {
@@ -55,9 +56,9 @@ const MINI_MAP_STYLE: StyleSpecification = {
       paint: {
         "raster-opacity": 1,
         "raster-brightness-min": 0,
-        "raster-brightness-max": 0.88,
-        "raster-saturation": -0.4,
-        "raster-contrast": 0.38,
+        "raster-brightness-max": 0.72,
+        "raster-saturation": -0.52,
+        "raster-contrast": 0.62,
       },
     },
   ],
@@ -68,6 +69,7 @@ export function ThemedScoutMap({
   markers,
   onMarkerTap,
   zoom = 13,
+  interactive = false,
 }: ThemedScoutMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MaplibreMap | null>(null);
@@ -98,17 +100,17 @@ export function ThemedScoutMap({
       zoom,
       pitch: 48,
       bearing: 14,
-      interactive: false,
+      interactive,
       attributionControl: false,
       dragRotate: false,
       pitchWithRotate: false,
       touchPitch: false,
-      keyboard: false,
-      doubleClickZoom: false,
-      boxZoom: false,
-      scrollZoom: false,
-      dragPan: false,
-      touchZoomRotate: false,
+      keyboard: interactive,
+      doubleClickZoom: interactive,
+      boxZoom: interactive,
+      scrollZoom: interactive,
+      dragPan: interactive,
+      touchZoomRotate: interactive,
       fadeDuration: 240,
     });
 
@@ -141,26 +143,30 @@ export function ThemedScoutMap({
         .setLngLat([userLocation.lng, userLocation.lat])
         .addTo(map);
 
-      driftStartRef.current = performance.now();
-      const tick = () => {
-        const current = mapRef.current;
-        if (!current) return;
-        if (driftStartRef.current == null) {
-          driftStartRef.current = performance.now();
-        }
-        const t = (performance.now() - driftStartRef.current) / 1000;
-        current.setBearing(14 + Math.sin((t / 70) * Math.PI * 2) * 3);
-        current.setPitch(48 + Math.sin((t / 90) * Math.PI * 2) * 2.5);
+      if (!interactive) {
+        driftStartRef.current = performance.now();
+        const tick = () => {
+          const current = mapRef.current;
+          if (!current) return;
+          if (driftStartRef.current == null) {
+            driftStartRef.current = performance.now();
+          }
+          const t = (performance.now() - driftStartRef.current) / 1000;
+          current.setBearing(14 + Math.sin((t / 70) * Math.PI * 2) * 3);
+          current.setPitch(48 + Math.sin((t / 90) * Math.PI * 2) * 2.5);
+          driftRafRef.current = requestAnimationFrame(tick);
+        };
         driftRafRef.current = requestAnimationFrame(tick);
-      };
-      driftRafRef.current = requestAnimationFrame(tick);
+      }
     });
 
     const ro = new ResizeObserver(() => {
       const current = mapRef.current;
       if (!current) return;
       current.resize();
-      centerMapOnUser(160);
+      if (!interactive) {
+        centerMapOnUser(160);
+      }
     });
     ro.observe(containerRef.current);
 
@@ -180,7 +186,7 @@ export function ThemedScoutMap({
       mapRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [interactive]);
 
   const markerKey = useMemo(
     () =>
@@ -193,9 +199,11 @@ export function ThemedScoutMap({
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    centerMapOnUser(500);
+    if (!interactive) {
+      centerMapOnUser(500);
+    }
     userMarkerRef.current?.setLngLat([userLocation.lng, userLocation.lat]);
-  }, [userLocation.lat, userLocation.lng, markerKey]);
+  }, [interactive, userLocation.lat, userLocation.lng]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -282,7 +290,7 @@ export function ThemedScoutMap({
       <style>{`
         /* ── Holographic amber filter ── */
         .msm-map-canvas .maplibregl-canvas {
-          filter: sepia(1) hue-rotate(-18deg) saturate(5.5) contrast(2.1) brightness(0.46);
+          filter: sepia(1) hue-rotate(-20deg) saturate(7.2) contrast(2.7) brightness(0.34);
         }
 
         /* ── Atmospheric grade ── */
@@ -290,19 +298,19 @@ export function ThemedScoutMap({
           pointer-events: none;
           z-index: 1;
           background:
-            radial-gradient(ellipse at 50% 55%, rgba(255, 140, 30, 0.26), transparent 62%),
-            radial-gradient(ellipse at 18% 72%, rgba(255, 110, 20, 0.16), transparent 44%),
-            radial-gradient(ellipse at 82% 28%, rgba(230, 95, 10, 0.14), transparent 40%),
-            radial-gradient(ellipse at 60% 20%, rgba(255, 180, 50, 0.10), transparent 35%),
-            linear-gradient(180deg, rgba(0,0,0,0.60) 0%, transparent 22%, transparent 72%, rgba(0,0,0,0.72) 100%);
+            radial-gradient(ellipse at 50% 55%, rgba(255, 140, 30, 0.18), transparent 56%),
+            radial-gradient(ellipse at 18% 72%, rgba(255, 110, 20, 0.12), transparent 38%),
+            radial-gradient(ellipse at 82% 28%, rgba(230, 95, 10, 0.10), transparent 34%),
+            radial-gradient(ellipse at 60% 20%, rgba(255, 180, 50, 0.08), transparent 30%),
+            linear-gradient(180deg, rgba(0,0,0,0.72) 0%, transparent 18%, transparent 68%, rgba(0,0,0,0.82) 100%);
           mix-blend-mode: screen;
-          opacity: 0.88;
+          opacity: 0.62;
         }
         .msm-map-grade::after {
           content: "";
           position: absolute;
           inset: 0;
-          background: radial-gradient(ellipse at center, transparent 38%, rgba(0, 0, 0, 0.62) 100%);
+          background: radial-gradient(ellipse at center, transparent 32%, rgba(0, 0, 0, 0.78) 100%);
           pointer-events: none;
           mix-blend-mode: normal;
         }
