@@ -41,6 +41,7 @@ import type {
   MapAdapterMarker,
   MapBoundsLike,
 } from "@/components/maps/map-adapter.types";
+import mealScoutIcon from "@assets/meal-scout-icon.png";
 
 const ThemedScoutMap = lazy(() => import("@/components/maps/themed-scout-map"));
 
@@ -1407,17 +1408,22 @@ export default function ExplorePreview() {
         description="Discover live food trucks, restaurants, and deals near you. MealScout puts the local food scene right in your hands."
       />
 
-      {/* True-black page base */}
+      {/* Welcome-style atmospheric page base. The live map sits on top of this
+          so Scout feels like one continuous map surface, not a widget stack. */}
       <div
         aria-hidden="true"
-        className="fixed inset-0 -z-10 pointer-events-none bg-[#0a0c10]"
+        className="pointer-events-none fixed inset-0 -z-10 bg-[#120805] bg-cover bg-center bg-no-repeat"
+        style={{
+          backgroundImage:
+            "linear-gradient(180deg,rgba(24,10,5,0.12)_0%,rgba(24,10,5,0.31)_46%,rgba(15,6,3,0.72)_100%), url('/atmospheric/mealscout-welcome-map-night.png')",
+        }}
       />
 
       <main
         className={`relative z-10 ${
           sheetState === "fullMap"
             ? ""
-            : "pb-36 md:mx-auto md:max-w-[640px] md:min-h-screen md:bg-[#0a0c10] md:shadow-[0_0_0_1px_rgba(255,255,255,0.08),0_24px_80px_rgba(0,0,0,0.55)]"
+            : "pb-36 md:mx-auto md:max-w-[640px] md:min-h-screen md:bg-[#090b0f]/72 md:backdrop-blur-sm md:shadow-[0_0_0_1px_rgba(255,255,255,0.08),0_24px_80px_rgba(0,0,0,0.55)]"
         }`}
         style={{ overscrollBehaviorY: "none" }}
       >
@@ -1428,21 +1434,18 @@ export default function ExplorePreview() {
            ============================================================ */}
         <section
           data-testid="scout-map-container"
-          className="relative w-full overflow-hidden"
+          className="relative w-full overflow-hidden bg-[#120805]"
           style={{
             height:
-              sheetState === "fullMap" ? "100dvh" : "min(38vh, 320px)",
+              sheetState === "fullMap" ? "100dvh" : "min(56vh, 470px)",
             transition: "height 320ms cubic-bezier(0.22,0.61,0.36,1)",
-            touchAction: sheetState === "fullMap" ? "auto" : "none",
+            touchAction: "auto",
             overscrollBehaviorY: "none",
+            boxShadow:
+              sheetState === "fullMap"
+                ? undefined
+                : "inset 0 -80px 90px rgba(10,12,16,0.72)",
           }}
-          onTouchStart={sheetState !== "fullMap" ? handleSheetTouchStart : undefined}
-          onTouchMove={sheetState !== "fullMap" ? handleSheetTouchMove : undefined}
-          onTouchEnd={sheetState !== "fullMap" ? handleSheetTouchEnd : undefined}
-          onMouseDown={sheetState !== "fullMap" ? handleSheetMouseDown : undefined}
-          onMouseMove={sheetState !== "fullMap" ? handleSheetMouseMove : undefined}
-          onMouseUp={sheetState !== "fullMap" ? handleSheetMouseUp : undefined}
-          onMouseLeave={sheetState !== "fullMap" ? handleSheetMouseUp : undefined}
         >
           {/* Scout map surfaces
               ------------------
@@ -1461,14 +1464,35 @@ export default function ExplorePreview() {
               }}
             >
               {coords ? (
-                <Suspense fallback={<HeroMapFallback reason="loading" />}>
-                  <ThemedScoutMap
-                    userLocation={coords}
-                    markers={allMapMarkers}
-                    zoom={13}
-                    onMarkerTap={handlePreviewMarkerTap}
-                  />
-                </Suspense>
+                hasMapKey && !googleMapFailed && mapCenter ? (
+                  <MapErrorBoundary>
+                    <GoogleMapSurface
+                      apiKey={effectiveGoogleMapsApiKey}
+                      mapId={effectiveGoogleMapsMapId || undefined}
+                      center={mapCenter}
+                      zoom={13}
+                      markers={allMapMarkers}
+                      showRoadTrafficLayer={false}
+                      userLocation={coords}
+                      isNightTheme={true}
+                      interactive={true}
+                      onBoundsChanged={handleMapBoundsChanged}
+                      onZoomChanged={handleMapZoomChanged}
+                      onCenterChanged={handleMapCenterChanged}
+                      onMarkerTap={handleMarkerTap}
+                      onFatalError={() => setGoogleMapFailed(true)}
+                    />
+                  </MapErrorBoundary>
+                ) : (
+                  <Suspense fallback={<HeroMapFallback reason="loading" />}>
+                    <ThemedScoutMap
+                      userLocation={coords}
+                      markers={allMapMarkers}
+                      zoom={13}
+                      onMarkerTap={handlePreviewMarkerTap}
+                    />
+                  </Suspense>
+                )
               ) : (
                 <HeroMapFallback
                   reason={
@@ -1520,18 +1544,36 @@ export default function ExplorePreview() {
                 className="absolute inset-0"
                 style={{ zIndex: 1 }}
               >
-                <HeroMapFallback
-                  reason={
-                    !hasMapKey || googleMapFailed
-                      ? "no-key"
-                      : locationStatus === "denied"
-                        ? "denied"
-                        : "loading"
-                  }
-                />
+                {coords ? (
+                  <>
+                    <Suspense fallback={<HeroMapFallback reason="loading" />}>
+                      <ThemedScoutMap
+                        userLocation={coords}
+                        markers={allMapMarkers}
+                        zoom={13}
+                        onMarkerTap={handlePreviewMarkerTap}
+                      />
+                    </Suspense>
+                    {(!hasMapKey || googleMapFailed) && (
+                      <div className="pointer-events-none absolute left-1/2 top-1/2 z-10 max-w-[18rem] -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-[#120805]/82 px-5 py-4 text-center text-sm font-bold text-orange-50 ring-1 ring-orange-200/30 backdrop-blur-xl">
+                        Full pan and zoom are warming up. The local MealScout map is still live.
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <HeroMapFallback
+                    reason={locationStatus === "denied" ? "denied" : "loading"}
+                  />
+                )}
               </div>
             ) : null}
           </div>
+
+          {sheetState !== "fullMap" && (
+            <ScoutAtmosphericMapVeil
+              mapIsLive={hasMapKey && !googleMapFailed && Boolean(coords && mapCenter)}
+            />
+          )}
 
           {/* Left-side gradient so headline reads cleanly. We KEEP the
               right side (where user pin lives) clear of overlay. */}
@@ -1541,7 +1583,7 @@ export default function ExplorePreview() {
               className="absolute inset-0 pointer-events-none"
               style={{
                 backgroundImage:
-                  "linear-gradient(180deg, rgba(8,10,15,0.00) 0%, rgba(8,10,15,0.00) 70%, rgba(10,12,16,0.34) 100%)",
+                  "linear-gradient(180deg, rgba(18,8,5,0.10) 0%, rgba(18,8,5,0.00) 34%, rgba(10,12,16,0.20) 68%, rgba(10,12,16,0.82) 100%), radial-gradient(circle at 50% 44%, rgba(255,90,47,0.14), transparent 22%)",
               }}
             />
           )}
@@ -1557,7 +1599,7 @@ export default function ExplorePreview() {
               <Link
                 href="/profile"
                 aria-label="Open profile"
-                className="flex items-center justify-center h-12 w-12 rounded-full overflow-hidden ring-2 ring-white/30 bg-[#120805]/60 backdrop-blur-md shrink-0"
+                className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#120805]/58 ring-1 ring-orange-200/28 backdrop-blur-md"
               >
                 {user?.profileImageUrl ? (
                   <img
@@ -1573,7 +1615,7 @@ export default function ExplorePreview() {
               <button
                 type="button"
                 onClick={requestLocation}
-                className="flex-1 inline-flex items-center justify-center gap-2 h-12 rounded-full text-white text-sm font-medium px-4 bg-[#120805]/55 backdrop-blur-md ring-1 ring-white/15 active:scale-95 transition-transform"
+                className="inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-full bg-[#120805]/52 px-4 text-sm font-black text-white ring-1 ring-orange-200/18 backdrop-blur-md transition-transform active:scale-95"
                 aria-label={`Refresh location. Currently ${shortLocation}.`}
               >
                 {locationStatus === "requesting" ? (
@@ -1591,7 +1633,7 @@ export default function ExplorePreview() {
                 type="button"
                 onClick={openScoutMap}
                 aria-label="Expand map to fullscreen"
-                className="flex items-center justify-center h-12 w-12 rounded-full bg-[#120805]/55 backdrop-blur-md ring-1 ring-orange-300/40 shrink-0"
+                className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#120805]/62 ring-1 ring-orange-300/40 backdrop-blur-md"
                 style={{ boxShadow: "0 0 14px rgba(255,90,47,0.3)" }}
               >
                 <Maximize2 className="h-5 w-5 text-orange-300" aria-hidden="true" />
@@ -1609,9 +1651,9 @@ export default function ExplorePreview() {
               type="button"
               onClick={collapseScoutMap}
               aria-label="Collapse map and return to discover"
-              className="absolute z-30 right-4 top-[calc(env(safe-area-inset-top)+0.75rem)] inline-flex items-center gap-2 h-12 px-4 rounded-full bg-[#120805]/75 backdrop-blur-md ring-1 ring-orange-300/60 text-orange-100 font-semibold"
+              className="absolute z-30 right-4 top-[calc(env(safe-area-inset-top)+0.75rem)] inline-flex h-12 items-center gap-2 rounded-full bg-[#120805]/88 px-4 font-black text-orange-100 ring-1 ring-orange-200/45 backdrop-blur-md transition-colors hover:bg-[#1f0d06]/92"
               style={{
-                boxShadow: "0 0 22px rgba(255,90,47,0.45)",
+                boxShadow: "0 0 24px rgba(255,90,47,0.38)",
               }}
             >
               <Minimize2 className="h-4 w-4" aria-hidden="true" />
@@ -1691,8 +1733,11 @@ export default function ExplorePreview() {
            ============================================================ */}
         {sheetState !== "fullMap" && (
           <div
-            className="relative z-10 -mt-4 rounded-t-3xl bg-[#0a0c10]"
-            style={{ boxShadow: "0 -24px 48px rgba(0,0,0,0.55)" }}
+            className="relative z-10 -mt-24 rounded-t-[2rem] bg-[#0a0c10]/76 backdrop-blur-xl"
+            style={{
+              boxShadow:
+                "0 -28px 70px rgba(0,0,0,0.48), inset 0 1px 0 rgba(255,255,255,0.08)",
+            }}
           >
             {/* Drag handle — pull UP on this to expand map, pull DOWN to stay */}
             <div
@@ -1707,12 +1752,12 @@ export default function ExplorePreview() {
               onMouseUp={handleSheetMouseUp}
               onMouseLeave={handleSheetMouseUp}
               onClick={openScoutMap}
-              className="w-full h-10 flex items-center justify-center cursor-pointer"
+              className="flex h-12 w-full cursor-pointer items-center justify-center"
               style={{ touchAction: "none" }}
             >
               <span
                 aria-hidden="true"
-                className="block h-1.5 w-12 rounded-full bg-white/30"
+                className="block h-1.5 w-12 rounded-full bg-orange-100/35"
               />
             </div>
 
@@ -1996,6 +2041,73 @@ function SectionHeader({
       {subtitle ? (
         <p className="mt-1 text-xs sm:text-sm text-white/60">{subtitle}</p>
       ) : null}
+    </div>
+  );
+}
+
+function ScoutAtmosphericMapVeil({ mapIsLive }: { mapIsLive: boolean }) {
+  return (
+    <div
+      aria-hidden="true"
+      className="pointer-events-none absolute inset-0 z-[2] overflow-hidden"
+      style={{
+        opacity: mapIsLive ? 0.32 : 0.96,
+      }}
+    >
+      <div
+        className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+        style={{
+          backgroundImage: "url('/atmospheric/mealscout-welcome-map-night.png')",
+          filter: "saturate(1.16) contrast(1.08) brightness(0.92)",
+          transform: "scale(1.03)",
+        }}
+      />
+      <div
+        className="absolute inset-0"
+        style={{
+          background:
+            "radial-gradient(circle at 52% 42%, rgba(255,90,47,0.24), transparent 18%), linear-gradient(180deg, rgba(18,8,5,0.03) 0%, rgba(18,8,5,0.26) 56%, rgba(10,12,16,0.78) 100%)",
+        }}
+      />
+      <svg
+        className="absolute inset-0 h-full w-full"
+        viewBox="0 0 100 100"
+        preserveAspectRatio="none"
+      >
+        <defs>
+          <filter id="scoutRoadGlow" x="-40%" y="-40%" width="180%" height="180%">
+            <feGaussianBlur stdDeviation="0.9" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+        </defs>
+        <path
+          d="M-4 63 C 15 60, 25 61, 39 56 S 61 48, 78 50 S 96 55, 106 48"
+          fill="none"
+          stroke="rgba(255,90,47,0.72)"
+          strokeLinecap="round"
+          strokeWidth="0.55"
+          filter="url(#scoutRoadGlow)"
+        />
+        <path
+          d="M18 -4 C 25 19, 30 31, 45 41 S 71 55, 82 104"
+          fill="none"
+          stroke="rgba(255,178,102,0.46)"
+          strokeLinecap="round"
+          strokeWidth="0.42"
+          filter="url(#scoutRoadGlow)"
+        />
+        <path
+          d="M-4 34 C 18 38, 32 35, 48 31 S 75 24, 104 29"
+          fill="none"
+          stroke="rgba(255,178,102,0.34)"
+          strokeLinecap="round"
+          strokeWidth="0.32"
+          filter="url(#scoutRoadGlow)"
+        />
+      </svg>
     </div>
   );
 }
@@ -3341,12 +3453,35 @@ function ScoutMapHud({
   return (
     <div className="pointer-events-none absolute left-3 right-3 top-[calc(env(safe-area-inset-top)+4.25rem)] z-20 sm:left-4 sm:right-auto sm:w-[360px]">
       <div
-        className="pointer-events-auto rounded-2xl bg-[#1b0d05]/82 p-3 text-white ring-1 ring-orange-300/35 backdrop-blur-xl"
-        style={{ boxShadow: "0 18px 54px rgba(0,0,0,0.48), 0 0 22px rgba(255,90,47,0.18)" }}
+        className="pointer-events-auto rounded-2xl bg-[#120805]/88 p-3 text-white ring-1 ring-orange-200/35 backdrop-blur-xl"
+        style={{ boxShadow: "0 18px 54px rgba(0,0,0,0.52), 0 0 26px rgba(255,90,47,0.2)" }}
       >
+        <div className="mb-3 flex items-center justify-between gap-3 border-b border-white/10 pb-3">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-orange-500/15 ring-1 ring-orange-200/30">
+              <img
+                src={mealScoutIcon}
+                alt=""
+                className="h-7 w-7 object-contain"
+                aria-hidden="true"
+              />
+            </span>
+            <div className="min-w-0">
+              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-orange-200/75">
+                MealScout
+              </p>
+              <p className="truncate text-sm font-black text-white">
+                Local food map
+              </p>
+            </div>
+          </div>
+          <span className="rounded-full bg-orange-500/16 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-orange-100 ring-1 ring-orange-200/25">
+            Live
+          </span>
+        </div>
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0">
-            <h2 className="truncate text-base font-black">
+            <h2 className="truncate text-base font-black text-orange-50">
               {locationLabel}
             </h2>
             <p className="text-[11px] font-semibold text-white/58">
@@ -3357,7 +3492,7 @@ function ScoutMapHud({
             <button
               type="button"
               onClick={() => setIsExpanded((value) => !value)}
-              className="rounded-full bg-white/8 px-3 py-2 text-xs font-black text-orange-100 ring-1 ring-white/12"
+              className="rounded-full bg-white/8 px-3 py-2 text-xs font-black text-orange-100 ring-1 ring-orange-200/20 transition-colors hover:bg-white/12"
               aria-expanded={isExpanded}
             >
               {isExpanded ? "Less" : "Details"}
@@ -3365,7 +3500,7 @@ function ScoutMapHud({
             <button
               type="button"
               onClick={onRecenter}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-orange-500 text-[#160904] ring-1 ring-orange-200/40"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-[#ff5a2f] text-[#160904] ring-1 ring-orange-200/40 shadow-[0_0_18px_rgba(255,90,47,0.32)]"
               aria-label="Recenter map on your location"
             >
               <Navigation2 className="h-4 w-4" aria-hidden="true" />
@@ -3376,7 +3511,7 @@ function ScoutMapHud({
         {isExpanded && (
           <div className="mt-3">
             <p className="text-xs text-white/62">
-              Blue dot is you. Orange pins are live food, host spots, and local action.
+              Blue dot is you. MealScout pins mark live food, host spots, and local action.
             </p>
             <div className="mt-3 grid grid-cols-4 gap-2 text-center">
               <MapHudCount label="Trucks" value={liveTruckCount} />
@@ -3387,7 +3522,7 @@ function ScoutMapHud({
           </div>
         )}
 
-        <div className="mt-3 flex items-center justify-between gap-2 rounded-2xl bg-white/7 px-3 py-2 ring-1 ring-white/10">
+        <div className="mt-3 flex items-center justify-between gap-2 rounded-2xl bg-white/7 px-3 py-2 ring-1 ring-orange-200/12">
           <span className="text-xs font-bold text-white/72">
             Radius
           </span>
@@ -3402,7 +3537,7 @@ function ScoutMapHud({
                   className={[
                     "rounded-full px-2 py-1 text-[10px] font-black transition-colors",
                     isActive
-                      ? "bg-orange-400 text-[#1b0b02]"
+                      ? "bg-[#ff5a2f] text-[#1b0b02] shadow-[0_0_14px_rgba(255,90,47,0.3)]"
                       : "text-white/58 hover:text-white",
                   ].join(" ")}
                   aria-pressed={isActive}

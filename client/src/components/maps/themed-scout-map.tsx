@@ -27,13 +27,13 @@ interface ThemedScoutMapProps {
 const MINI_MAP_STYLE: StyleSpecification = {
   version: 8,
   sources: {
-    "carto-dark": {
+    "carto-voyager": {
       type: "raster",
       tiles: [
-        "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
-        "https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
-        "https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
-        "https://d.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
+        "https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png",
+        "https://b.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png",
+        "https://c.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png",
+        "https://d.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png",
       ],
       tileSize: 256,
       attribution:
@@ -45,19 +45,19 @@ const MINI_MAP_STYLE: StyleSpecification = {
       id: "background",
       type: "background",
       paint: {
-        "background-color": "#100b08",
+        "background-color": "#180d08",
       },
     },
     {
-      id: "carto-dark-tiles",
+      id: "carto-voyager-tiles",
       type: "raster",
-      source: "carto-dark",
+      source: "carto-voyager",
       paint: {
-        "raster-opacity": 1,
-        "raster-brightness-min": 0,
-        "raster-brightness-max": 1,
-        "raster-saturation": 0.18,
-        "raster-contrast": 0.22,
+        "raster-opacity": 0.92,
+        "raster-brightness-min": 0.12,
+        "raster-brightness-max": 0.72,
+        "raster-saturation": -0.22,
+        "raster-contrast": 0.28,
       },
     },
   ],
@@ -238,14 +238,14 @@ export function ThemedScoutMap({
       <div aria-hidden="true" className="msm-map-grade absolute inset-0" />
       <style>{`
         .msm-map-canvas .maplibregl-canvas {
-          filter: saturate(1.18) contrast(1.16) brightness(1.04) sepia(0.08) hue-rotate(-8deg);
+          filter: saturate(1.08) contrast(1.22) brightness(0.86) sepia(0.34) hue-rotate(-18deg);
         }
         .msm-map-grade {
           pointer-events: none;
           background:
-            radial-gradient(circle at 50% 44%, rgba(255, 122, 24, 0.18), transparent 16%),
-            linear-gradient(180deg, rgba(8, 8, 10, 0.1) 0%, rgba(8, 8, 10, 0.02) 42%, rgba(4, 5, 7, 0.18) 100%),
-            linear-gradient(90deg, rgba(0, 0, 0, 0.2), transparent 24%, transparent 76%, rgba(0, 0, 0, 0.14));
+            radial-gradient(circle at 50% 44%, rgba(255, 90, 47, 0.16), transparent 18%),
+            linear-gradient(180deg, rgba(17, 8, 4, 0.22) 0%, rgba(17, 8, 4, 0.08) 44%, rgba(6, 7, 10, 0.24) 100%),
+            linear-gradient(90deg, rgba(0, 0, 0, 0.24), transparent 24%, transparent 76%, rgba(0, 0, 0, 0.16));
           mix-blend-mode: normal;
         }
         .msm-map-grade::after {
@@ -253,8 +253,9 @@ export function ThemedScoutMap({
           position: absolute;
           inset: 0;
           background:
+            linear-gradient(0deg, rgba(10, 12, 16, 0.18), rgba(10, 12, 16, 0.18)),
             radial-gradient(circle at 62% 22%, rgba(255, 122, 24, 0.08), transparent 24%),
-            radial-gradient(ellipse at center, transparent 0%, transparent 58%, rgba(0, 0, 0, 0.34) 100%);
+            radial-gradient(ellipse at center, transparent 0%, transparent 62%, rgba(0, 0, 0, 0.3) 100%);
           mix-blend-mode: normal;
         }
 
