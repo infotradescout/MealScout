@@ -512,7 +512,7 @@ export function GoogleMapSurface({
           };
           const runtimeMapId = String(mapId || "").trim();
           if (isNightTheme) {
-            mapOptions.mapTypeId = "hybrid";
+            mapOptions.mapTypeId = "satellite";
           } else if (runtimeMapId) {
             mapOptions.mapId = runtimeMapId;
           } else {
@@ -598,7 +598,7 @@ export function GoogleMapSurface({
             mapRef.current.setOptions({
               mapId: undefined,
               styles: null,
-              mapTypeId: "hybrid",
+              mapTypeId: "satellite",
               tilt: 45,
               heading: 18,
             });
@@ -861,10 +861,12 @@ export function GoogleMapSurface({
 
   return (
     <div className="h-full w-full relative">
-      <div
-        ref={mapContainerRef}
-        className="ms-google-map-canvas h-full w-full overflow-hidden"
-      />
+      <div className={isNightTheme ? "ms-google-map-camera" : "h-full w-full"}>
+        <div
+          ref={mapContainerRef}
+          className="ms-google-map-canvas h-full w-full overflow-hidden"
+        />
+      </div>
 
       {/* Cinematic grade over the live map; no bitmap overlay, map stays interactive. */}
       {isNightTheme && (
@@ -876,6 +878,19 @@ export function GoogleMapSurface({
           <style>{`
             .ms-google-map-canvas .gm-style > div:first-child {
               filter: saturate(0.72) contrast(1.38) brightness(0.74) sepia(0.38) hue-rotate(-16deg);
+            }
+            .ms-google-map-camera {
+              position: absolute;
+              inset: -18% -12% -10% -12%;
+              height: auto;
+              width: auto;
+              transform: perspective(760px) rotateX(46deg) rotateZ(-3deg) scale(1.26);
+              transform-origin: 50% 54%;
+              will-change: transform;
+            }
+            .ms-google-map-camera .ms-google-map-canvas {
+              height: 100%;
+              width: 100%;
             }
             .ms-google-map-canvas .gm-style-cc,
             .ms-google-map-canvas a[href^="https://maps.google.com/maps"] {

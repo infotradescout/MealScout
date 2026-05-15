@@ -254,15 +254,23 @@ export function ThemedScoutMap({
 
   return (
     <div className="absolute inset-0 h-full w-full min-h-full">
-      <div
-        ref={containerRef}
-        className="msm-map-canvas absolute inset-0 h-full w-full min-h-full"
-        style={{ height: "100%", width: "100%", minHeight: "100%" }}
-      />
+      <div className="msm-map-camera absolute inset-0">
+        <div
+          ref={containerRef}
+          className="msm-map-canvas absolute inset-0 h-full w-full min-h-full"
+          style={{ height: "100%", width: "100%", minHeight: "100%" }}
+        />
+      </div>
       <div aria-hidden="true" className="msm-map-grade absolute inset-0" />
       <style>{`
         .msm-map-canvas .maplibregl-canvas {
           filter: saturate(0.82) contrast(1.42) brightness(0.86) sepia(0.42) hue-rotate(-18deg);
+        }
+        .msm-map-camera {
+          inset: -18% -12% -10% -12%;
+          transform: perspective(760px) rotateX(46deg) rotateZ(-3deg) scale(1.26);
+          transform-origin: 50% 54%;
+          will-change: transform;
         }
         .msm-map-grade {
           pointer-events: none;
