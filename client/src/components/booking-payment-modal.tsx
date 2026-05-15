@@ -58,6 +58,8 @@ interface PaymentFormProps {
     hostPrice: number;
     platformFee: number;
     creditsApplied?: number;
+    promoDiscount?: number;
+    promoCode?: string;
   };
   onSuccess: (outcome: "confirmed" | "pending" | "credited") => void;
   onCancel: () => void;
@@ -184,6 +186,16 @@ function PaymentForm({
             </span>
           </div>
         ) : null}
+        {breakdown.promoDiscount ? (
+          <div className="flex items-center justify-between text-[color:var(--status-success)]">
+            <span>
+              Promo Applied{breakdown.promoCode ? ` (${breakdown.promoCode})` : ""}
+            </span>
+            <span className="font-medium">
+              -${(breakdown.promoDiscount / 100).toFixed(2)}
+            </span>
+          </div>
+        ) : null}
         <div className="border-t border-[var(--border-subtle)] pt-2 flex items-center justify-between font-semibold text-[color:var(--text-primary)]">
           <span>Total</span>
           <span className="text-lg">${(totalCents / 100).toFixed(2)}</span>
@@ -249,7 +261,13 @@ export function BookingPaymentModal({
   const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
   const [bookingData, setBookingData] = useState<{
     totalCents: number;
-    breakdown: { hostPrice: number; platformFee: number; creditsApplied?: number };
+    breakdown: {
+      hostPrice: number;
+      platformFee: number;
+      creditsApplied?: number;
+      promoDiscount?: number;
+      promoCode?: string;
+    };
   } | null>(null);
   const [creditBalance, setCreditBalance] = useState<number | null>(null);
   const [creditsToApply, setCreditsToApply] = useState("");
@@ -531,22 +549,19 @@ export function BookingPaymentModal({
               </p>
             </div>
 
-            {(import.meta.env.DEV ||
-              String(import.meta.env.VITE_SHOW_TEST_PROMOS || "").toLowerCase() ===
-                "true") && (
-              <div className="space-y-2">
-                <label className="text-xs font-semibold text-[color:var(--text-muted)]">
-                  Promo code (testing)
-                </label>
-                <input
-                  type="text"
-                  value={promoCode}
-                  onChange={(e) => setPromoCode(e.target.value)}
-                  className="w-full rounded-md border border-[var(--border-subtle)] px-3 py-2 text-sm"
-                  placeholder="e.g. BOOKFEE10, TEST1, or FREE100"
-                />
-              </div>
-            )}
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-[color:var(--text-muted)]">
+                Promo code
+              </label>
+              <input
+                type="text"
+                value={promoCode}
+                onChange={(e) => setPromoCode(e.target.value)}
+                className="w-full rounded-md border border-[var(--border-subtle)] px-3 py-2 text-sm uppercase"
+                placeholder="Enter promo code"
+                autoCapitalize="characters"
+              />
+            </div>
 
             <div className="flex gap-2">
               <Button
