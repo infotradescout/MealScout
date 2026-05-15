@@ -55,9 +55,9 @@ const MINI_MAP_STYLE: StyleSpecification = {
       paint: {
         "raster-opacity": 1,
         "raster-brightness-min": 0,
-        "raster-brightness-max": 0.64,
-        "raster-saturation": -0.18,
-        "raster-contrast": 0.58,
+        "raster-brightness-max": 0.9,
+        "raster-saturation": 0.05,
+        "raster-contrast": 0.34,
       },
     },
   ],
@@ -238,27 +238,27 @@ export function ThemedScoutMap({
       <div aria-hidden="true" className="msm-map-grade absolute inset-0" />
       <style>{`
         .msm-map-canvas .maplibregl-canvas {
-          filter: saturate(0.92) contrast(1.62) brightness(0.78) sepia(0.44) hue-rotate(-18deg);
+          filter: saturate(1.08) contrast(1.25) brightness(1.08) sepia(0.22) hue-rotate(-12deg);
         }
         .msm-map-grade {
           pointer-events: none;
           background:
-            linear-gradient(90deg, rgba(22, 9, 4, 0.34), rgba(4, 9, 8, 0.05) 34%, rgba(22, 9, 4, 0.28)),
-            radial-gradient(circle at 55% 43%, rgba(255, 92, 47, 0.18), transparent 22%),
-            radial-gradient(circle at 23% 26%, rgba(255, 180, 92, 0.06), transparent 24%),
-            radial-gradient(circle at 79% 22%, rgba(255, 112, 52, 0.08), transparent 26%),
-            linear-gradient(180deg, rgba(17, 8, 4, 0.18) 0%, rgba(17, 8, 4, 0.02) 44%, rgba(3, 4, 5, 0.46) 100%);
+            linear-gradient(90deg, rgba(22, 9, 4, 0.18), rgba(4, 9, 8, 0.02) 34%, rgba(22, 9, 4, 0.14)),
+            radial-gradient(circle at 55% 43%, rgba(255, 108, 55, 0.12), transparent 24%),
+            radial-gradient(circle at 23% 26%, rgba(255, 180, 92, 0.04), transparent 26%),
+            radial-gradient(circle at 79% 22%, rgba(255, 112, 52, 0.05), transparent 28%),
+            linear-gradient(180deg, rgba(17, 8, 4, 0.08) 0%, rgba(17, 8, 4, 0) 44%, rgba(3, 4, 5, 0.2) 100%);
           background-size: 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%;
           mix-blend-mode: normal;
-          opacity: 0.76;
+          opacity: 0.58;
         }
         .msm-map-grade::after {
           content: "";
           position: absolute;
           inset: 0;
           background:
-            radial-gradient(ellipse at center, transparent 0%, transparent 58%, rgba(0, 0, 0, 0.54) 100%),
-            linear-gradient(180deg, rgba(10, 4, 2, 0.16), rgba(5, 6, 7, 0.42));
+            radial-gradient(ellipse at center, transparent 0%, transparent 64%, rgba(0, 0, 0, 0.26) 100%),
+            linear-gradient(180deg, rgba(10, 4, 2, 0.06), rgba(5, 6, 7, 0.18));
           mix-blend-mode: normal;
         }
         .msm-user-pin {
