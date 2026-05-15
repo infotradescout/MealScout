@@ -53,11 +53,11 @@ const MINI_MAP_STYLE: StyleSpecification = {
       type: "raster",
       source: "carto-dark",
       paint: {
-        "raster-opacity": 1,
+        "raster-opacity": 0.96,
         "raster-brightness-min": 0,
-        "raster-brightness-max": 0.82,
-        "raster-saturation": 0.32,
-        "raster-contrast": 0.46,
+        "raster-brightness-max": 1,
+        "raster-saturation": 0.18,
+        "raster-contrast": 0.22,
       },
     },
   ],
@@ -82,8 +82,8 @@ export function ThemedScoutMap({
     map.easeTo({
       center: [userLocation.lng, userLocation.lat],
       zoom,
-      pitch: 54,
-      bearing: 18,
+      pitch: 28,
+      bearing: 8,
       duration,
     });
   };
@@ -96,8 +96,8 @@ export function ThemedScoutMap({
       style: MINI_MAP_STYLE,
       center: [userLocation.lng, userLocation.lat],
       zoom,
-      pitch: 54,
-      bearing: 18,
+      pitch: 28,
+      bearing: 8,
       interactive: false,
       attributionControl: false,
       dragRotate: false,
@@ -149,8 +149,8 @@ export function ThemedScoutMap({
           driftStartRef.current = performance.now();
         }
         const t = (performance.now() - driftStartRef.current) / 1000;
-        current.setBearing(18 + Math.sin((t / 70) * Math.PI * 2) * 2.5);
-        current.setPitch(54 + Math.sin((t / 90) * Math.PI * 2) * 2);
+        current.setBearing(8 + Math.sin((t / 70) * Math.PI * 2) * 1.5);
+        current.setPitch(28 + Math.sin((t / 90) * Math.PI * 2) * 1);
         driftRafRef.current = requestAnimationFrame(tick);
       };
       driftRafRef.current = requestAnimationFrame(tick);
@@ -233,7 +233,7 @@ export function ThemedScoutMap({
 
   return (
     <div className="absolute inset-0 h-full w-full min-h-full">
-      <div className="msm-map-camera absolute inset-0">
+      <div className="absolute inset-0">
         <div
           ref={containerRef}
           className="msm-map-canvas absolute inset-0 h-full w-full min-h-full"
@@ -243,25 +243,19 @@ export function ThemedScoutMap({
       <div aria-hidden="true" className="msm-map-grade absolute inset-0" />
       <style>{`
         .msm-map-canvas .maplibregl-canvas {
-          filter: saturate(0.82) contrast(1.42) brightness(0.86) sepia(0.42) hue-rotate(-18deg);
-        }
-        .msm-map-camera {
-          inset: -18% -12% -10% -12%;
-          transform: perspective(760px) rotateX(46deg) rotateZ(-3deg) scale(1.26);
-          transform-origin: 50% 54%;
-          will-change: transform;
+          filter: saturate(1.05) contrast(1.08) brightness(1.02) sepia(0.12) hue-rotate(-8deg);
         }
         .msm-map-grade {
           pointer-events: none;
           background:
-            linear-gradient(90deg, rgba(22, 9, 4, 0.18), rgba(4, 9, 8, 0.02) 34%, rgba(22, 9, 4, 0.14)),
-            radial-gradient(circle at 55% 43%, rgba(255, 108, 55, 0.15), transparent 25%),
-            radial-gradient(circle at 23% 26%, rgba(255, 180, 92, 0.07), transparent 28%),
-            radial-gradient(circle at 79% 22%, rgba(255, 112, 52, 0.08), transparent 29%),
-            linear-gradient(180deg, rgba(17, 8, 4, 0.14) 0%, rgba(17, 8, 4, 0) 44%, rgba(3, 4, 5, 0.3) 100%);
+            linear-gradient(90deg, rgba(22, 9, 4, 0.11), rgba(4, 9, 8, 0.02) 34%, rgba(22, 9, 4, 0.08)),
+            radial-gradient(circle at 55% 43%, rgba(255, 108, 55, 0.08), transparent 25%),
+            radial-gradient(circle at 23% 26%, rgba(255, 180, 92, 0.04), transparent 28%),
+            radial-gradient(circle at 79% 22%, rgba(255, 112, 52, 0.045), transparent 29%),
+            linear-gradient(180deg, rgba(17, 8, 4, 0.07) 0%, rgba(17, 8, 4, 0) 44%, rgba(3, 4, 5, 0.16) 100%);
           background-size: 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%;
           mix-blend-mode: normal;
-          opacity: 0.72;
+          opacity: 0.42;
         }
         .msm-map-grade::after {
           content: "";
@@ -269,7 +263,7 @@ export function ThemedScoutMap({
           inset: 0;
           background:
             radial-gradient(ellipse at center, transparent 0%, transparent 60%, rgba(0, 0, 0, 0.34) 100%),
-            linear-gradient(180deg, rgba(10, 4, 2, 0.08), rgba(5, 6, 7, 0.28));
+            linear-gradient(180deg, rgba(10, 4, 2, 0.04), rgba(5, 6, 7, 0.14));
           mix-blend-mode: normal;
         }
         .msm-user-pin {

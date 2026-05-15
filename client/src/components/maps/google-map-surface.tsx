@@ -10,8 +10,6 @@ import mealScoutIcon from "@assets/meal-scout-icon.png";
 type GeoPoint = { lat: number; lng: number };
 type ScreenPoint = { x: number; y: number };
 type AreaBounds = { north: number; south: number; east: number; west: number };
-type RoadOverlayPath = { id: string; d: string; kind: string };
-type RoadOverlaySize = { width: number; height: number };
 
 type GoogleMapSurfaceProps = {
   apiKey: string;
@@ -43,17 +41,6 @@ type GoogleMapsWindow = Window & {
   google?: any;
   __mealScoutGoogleMapsPromise?: Promise<void>;
   gm_authFailure?: () => void;
-};
-
-const ROAD_OVERLAY_HIGHWAYS =
-  "motorway|trunk|primary|secondary|tertiary|unclassified|residential|service";
-
-const classifyRoadOverlay = (highway: unknown): string => {
-  const value = String(highway || "");
-  if (value === "motorway" || value === "trunk") return "major";
-  if (value === "primary" || value === "secondary") return "arterial";
-  if (value === "tertiary" || value === "unclassified") return "collector";
-  return "local";
 };
 
 const createBoundsLike = (
@@ -122,53 +109,53 @@ const ensureGoogleMapConstructor = async (googleMaps: any) => {
 };
 
 /* ─── Google Maps style — MealScout scout plate ─────────────────────────────
-   The actual Google map gets pushed toward a dark aerial plate: muted land,
-   low-label density, ember roads, and no default bright map personality.
+   Keep the map readable and let the brand live in restrained color grading:
+   dark field, warm labels, clear orange roads, no artificial line overlays.
    ────────────────────────────────────────────────────────────────────────── */
 const mapStyleNeon = [
-  { elementType: "geometry", stylers: [{ color: "#161719" }] },
+  { elementType: "geometry", stylers: [{ color: "#202225" }] },
   { elementType: "labels.icon", stylers: [{ visibility: "off" }] },
-  { elementType: "labels.text.fill", stylers: [{ color: "#c99a70" }] },
-  { elementType: "labels.text.stroke", stylers: [{ color: "#101113" }, { weight: 3.2 }] },
+  { elementType: "labels.text.fill", stylers: [{ color: "#c5a07c" }] },
+  { elementType: "labels.text.stroke", stylers: [{ color: "#151719" }, { weight: 3 }] },
 
-  { featureType: "administrative", elementType: "geometry.stroke", stylers: [{ color: "#4a3327" }, { weight: 0.55 }] },
+  { featureType: "administrative", elementType: "geometry.stroke", stylers: [{ color: "#49392f" }, { weight: 0.45 }] },
   { featureType: "administrative", elementType: "labels.text.fill", stylers: [{ color: "#a98466" }] },
   { featureType: "administrative.country", elementType: "labels", stylers: [{ visibility: "off" }] },
   { featureType: "administrative.province", elementType: "labels", stylers: [{ visibility: "off" }] },
   { featureType: "administrative.neighborhood", elementType: "labels", stylers: [{ visibility: "off" }] },
   { featureType: "administrative.land_parcel", stylers: [{ visibility: "off" }] },
 
-  { featureType: "landscape", elementType: "geometry", stylers: [{ color: "#17191b" }] },
-  { featureType: "landscape.man_made", elementType: "geometry", stylers: [{ color: "#1a1a1b" }] },
-  { featureType: "landscape.natural", elementType: "geometry", stylers: [{ color: "#15191a" }] },
+  { featureType: "landscape", elementType: "geometry", stylers: [{ color: "#202326" }] },
+  { featureType: "landscape.man_made", elementType: "geometry", stylers: [{ color: "#232427" }] },
+  { featureType: "landscape.natural", elementType: "geometry", stylers: [{ color: "#1d2522" }] },
 
-  { featureType: "poi", elementType: "geometry", stylers: [{ color: "#18191a" }] },
+  { featureType: "poi", elementType: "geometry", stylers: [{ color: "#222421" }] },
   { featureType: "poi", elementType: "labels", stylers: [{ visibility: "off" }] },
-  { featureType: "poi.park", elementType: "geometry", stylers: [{ color: "#1a241f" }] },
+  { featureType: "poi.park", elementType: "geometry", stylers: [{ color: "#1f2b24" }] },
   { featureType: "poi.park", elementType: "labels", stylers: [{ visibility: "off" }] },
 
   { featureType: "road", elementType: "geometry", stylers: [{ visibility: "simplified" }] },
   { featureType: "road", elementType: "labels.icon", stylers: [{ visibility: "off" }] },
-  { featureType: "road", elementType: "labels.text.fill", stylers: [{ color: "#b8865f" }] },
-  { featureType: "road", elementType: "labels.text.stroke", stylers: [{ color: "#101113" }, { weight: 2.8 }] },
+  { featureType: "road", elementType: "labels.text.fill", stylers: [{ color: "#bd8c67" }] },
+  { featureType: "road", elementType: "labels.text.stroke", stylers: [{ color: "#151719" }, { weight: 2.6 }] },
 
-  { featureType: "road.highway", elementType: "geometry.fill", stylers: [{ color: "#2b2522" }] },
-  { featureType: "road.highway", elementType: "geometry.stroke", stylers: [{ color: "#ff7a3d" }, { weight: 2.35 }] },
-  { featureType: "road.highway.controlled_access", elementType: "geometry.fill", stylers: [{ color: "#33241f" }] },
-  { featureType: "road.highway.controlled_access", elementType: "geometry.stroke", stylers: [{ color: "#ff9a4d" }, { weight: 2.7 }] },
-  { featureType: "road.highway", elementType: "labels.text.fill", stylers: [{ color: "#f0ae78" }] },
+  { featureType: "road.highway", elementType: "geometry.fill", stylers: [{ color: "#3d332e" }] },
+  { featureType: "road.highway", elementType: "geometry.stroke", stylers: [{ color: "#e57842" }, { weight: 1.75 }] },
+  { featureType: "road.highway.controlled_access", elementType: "geometry.fill", stylers: [{ color: "#44342d" }] },
+  { featureType: "road.highway.controlled_access", elementType: "geometry.stroke", stylers: [{ color: "#f08a48" }, { weight: 1.95 }] },
+  { featureType: "road.highway", elementType: "labels.text.fill", stylers: [{ color: "#dfa06f" }] },
 
-  { featureType: "road.arterial", elementType: "geometry.fill", stylers: [{ color: "#242020" }] },
-  { featureType: "road.arterial", elementType: "geometry.stroke", stylers: [{ color: "#c16437" }, { weight: 1.15 }] },
+  { featureType: "road.arterial", elementType: "geometry.fill", stylers: [{ color: "#302b27" }] },
+  { featureType: "road.arterial", elementType: "geometry.stroke", stylers: [{ color: "#9d5638" }, { weight: 0.9 }] },
   { featureType: "road.arterial", elementType: "labels.text.fill", stylers: [{ color: "#b47c58" }] },
 
-  { featureType: "road.local", elementType: "geometry.fill", stylers: [{ color: "#1d1d1e" }] },
-  { featureType: "road.local", elementType: "geometry.stroke", stylers: [{ color: "#3b302a" }, { weight: 0.45 }] },
+  { featureType: "road.local", elementType: "geometry.fill", stylers: [{ color: "#282827" }] },
+  { featureType: "road.local", elementType: "geometry.stroke", stylers: [{ color: "#4a3d35" }, { weight: 0.35 }] },
   { featureType: "road.local", elementType: "labels", stylers: [{ visibility: "off" }] },
 
   { featureType: "transit", stylers: [{ visibility: "off" }] },
-  { featureType: "water", elementType: "geometry", stylers: [{ color: "#10232a" }] },
-  { featureType: "water", elementType: "labels.text.fill", stylers: [{ color: "#578491" }] },
+  { featureType: "water", elementType: "geometry", stylers: [{ color: "#163039" }] },
+  { featureType: "water", elementType: "labels.text.fill", stylers: [{ color: "#6992a0" }] },
 ];
 
 /* ─── Marker colors ─────────────────────────────────────────────────────── */
@@ -409,12 +396,8 @@ export function GoogleMapSurface({
   const markerSignatureRefs = useRef<Map<string, string>>(new Map());
   const trafficCircleRefs = useRef<Map<string, any>>(new Map());
   const roadTrafficLayerRef = useRef<any>(null);
-  const roadOverlayCacheRef = useRef<Map<string, any[]>>(new Map());
-  const roadOverlayRequestRef = useRef(0);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [mapReadyVersion, setMapReadyVersion] = useState(0);
-  const [roadOverlayPaths, setRoadOverlayPaths] = useState<RoadOverlayPath[]>([]);
-  const [roadOverlaySize, setRoadOverlaySize] = useState<RoadOverlaySize | null>(null);
   const hasReportedFatalErrorRef = useRef(false);
   const onWindowResizeRef = useRef<(() => void) | null>(null);
   const onBoundsChangedRef = useRef(onBoundsChanged);
@@ -475,110 +458,6 @@ export function GoogleMapSurface({
 
   useEffect(() => { hasReportedFatalErrorRef.current = false; }, [apiKey]);
 
-  const updateRoadDataOverlay = async (googleMaps: any, map: any) => {
-    if (!isNightTheme || !googleMaps || !map || !mapContainerRef.current) {
-      setRoadOverlayPaths([]);
-      setRoadOverlaySize(null);
-      return;
-    }
-
-    const bounds = map.getBounds?.();
-    const projection = map.getProjection?.();
-    if (!bounds || !projection) return;
-
-    const ne = bounds.getNorthEast();
-    const sw = bounds.getSouthWest();
-    const north = Number(ne.lat());
-    const south = Number(sw.lat());
-    const east = Number(ne.lng());
-    const west = Number(sw.lng());
-    if (![north, south, east, west].every(Number.isFinite)) return;
-
-    const width = mapContainerRef.current.clientWidth;
-    const height = mapContainerRef.current.clientHeight;
-    if (width <= 0 || height <= 0) return;
-    setRoadOverlaySize({ width, height });
-
-    const zoom = Number(map.getZoom?.() || 0);
-    const cacheKey = [
-      Math.round(south * 100) / 100,
-      Math.round(west * 100) / 100,
-      Math.round(north * 100) / 100,
-      Math.round(east * 100) / 100,
-      Math.round(zoom),
-    ].join(",");
-
-    const requestId = ++roadOverlayRequestRef.current;
-    let elements: any[] | undefined = roadOverlayCacheRef.current.get(cacheKey);
-    if (!elements) {
-      try {
-        const query = `
-          [out:json][timeout:8];
-          (
-            way["highway"~"${ROAD_OVERLAY_HIGHWAYS}"](${south},${west},${north},${east});
-          );
-          out tags geom;
-        `;
-        const response = await fetch(
-          `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`,
-        );
-        if (!response.ok) return;
-        const data = await response.json();
-        const fetchedElements: any[] = Array.isArray(data?.elements)
-          ? data.elements
-          : [];
-        elements = fetchedElements;
-        roadOverlayCacheRef.current.set(cacheKey, fetchedElements);
-        if (roadOverlayCacheRef.current.size > 16) {
-          const firstKey = roadOverlayCacheRef.current.keys().next().value;
-          if (firstKey) roadOverlayCacheRef.current.delete(firstKey);
-        }
-      } catch {
-        return;
-      }
-    }
-
-    if (requestId !== roadOverlayRequestRef.current) return;
-    const roadElements: any[] = elements || [];
-
-    const paths: RoadOverlayPath[] = [];
-    for (const element of roadElements.slice(0, 280)) {
-      const geometry = Array.isArray(element?.geometry) ? element.geometry : [];
-      if (geometry.length < 2) continue;
-      const points = geometry
-        .map((point: any) =>
-          latLngToContainerPixel(googleMaps, map, {
-            lat: Number(point.lat),
-            lng: Number(point.lon),
-          }),
-        )
-        .filter((point: ScreenPoint | null): point is ScreenPoint => {
-          if (!point) return false;
-          return (
-            Number.isFinite(point.x) &&
-            Number.isFinite(point.y) &&
-            point.x > -80 &&
-            point.x < width + 80 &&
-            point.y > -80 &&
-            point.y < height + 80
-          );
-        });
-      if (points.length < 2) continue;
-      const d = points
-        .map((point: ScreenPoint, index: number) =>
-          `${index === 0 ? "M" : "L"}${point.x.toFixed(1)} ${point.y.toFixed(1)}`,
-        )
-        .join(" ");
-      paths.push({
-        id: String(element.id || `${paths.length}`),
-        d,
-        kind: classifyRoadOverlay(element?.tags?.highway),
-      });
-    }
-
-    setRoadOverlayPaths(paths);
-  };
-
   // Auth failure handler
   useEffect(() => {
     const w = window as GoogleMapsWindow;
@@ -619,8 +498,8 @@ export function GoogleMapSurface({
             disableDefaultUI: true,
             zoomControl: false,
             clickableIcons: interactive,
-            tilt: isNightTheme ? 45 : 0,
-            heading: isNightTheme ? 18 : 0,
+            tilt: isNightTheme ? 25 : 0,
+            heading: isNightTheme ? 8 : 0,
             draggable: interactive,
             keyboardShortcuts: interactive,
             scrollwheel: interactive,
@@ -677,7 +556,6 @@ export function GoogleMapSurface({
             } else if (onPopupAnchorPositionRef.current) {
               onPopupAnchorPositionRef.current(null);
             }
-            void updateRoadDataOverlay(googleMaps, map);
           };
 
           mapRef.current.addListener("idle", emitViewportState);
@@ -722,8 +600,8 @@ export function GoogleMapSurface({
               mapId: undefined,
               styles: mapStyleNeon,
               mapTypeId: "roadmap",
-              tilt: 45,
-              heading: 18,
+              tilt: 25,
+              heading: 8,
             });
           } else if (runtimeMapId) {
             mapRef.current.setOptions({ mapId: runtimeMapId, tilt: 0, heading: 0 });
@@ -984,36 +862,11 @@ export function GoogleMapSurface({
 
   return (
     <div className="h-full w-full relative">
-      <div className={isNightTheme ? "ms-google-map-camera" : "h-full w-full"}>
+      <div className="h-full w-full">
         <div
           ref={mapContainerRef}
           className="ms-google-map-canvas h-full w-full overflow-hidden"
         />
-        {isNightTheme && roadOverlaySize && roadOverlayPaths.length > 0 ? (
-          <svg
-            aria-hidden="true"
-            className="ms-google-road-overlay"
-            viewBox={`0 0 ${roadOverlaySize.width} ${roadOverlaySize.height}`}
-            preserveAspectRatio="none"
-          >
-            <defs>
-              <filter id="ms-road-data-glow" x="-40%" y="-80%" width="180%" height="260%">
-                <feGaussianBlur stdDeviation="3" result="blur" />
-                <feMerge>
-                  <feMergeNode in="blur" />
-                  <feMergeNode in="SourceGraphic" />
-                </feMerge>
-              </filter>
-            </defs>
-            {roadOverlayPaths.map((path) => (
-              <path
-                key={path.id}
-                className={`ms-road-data ms-road-data--${path.kind}`}
-                d={path.d}
-              />
-            ))}
-          </svg>
-        ) : null}
       </div>
 
       {/* Cinematic grade over the live map; no bitmap overlay, map stays interactive. */}
@@ -1025,53 +878,7 @@ export function GoogleMapSurface({
           />
           <style>{`
             .ms-google-map-canvas .gm-style > div:first-child {
-              filter: saturate(0.72) contrast(1.38) brightness(0.74) sepia(0.38) hue-rotate(-16deg);
-            }
-            .ms-google-map-camera {
-              position: absolute;
-              inset: -18% -12% -10% -12%;
-              height: auto;
-              width: auto;
-              transform: perspective(760px) rotateX(46deg) rotateZ(-3deg) scale(1.26);
-              transform-origin: 50% 54%;
-              will-change: transform;
-            }
-            .ms-google-map-camera .ms-google-map-canvas {
-              height: 100%;
-              width: 100%;
-            }
-            .ms-google-road-overlay {
-              position: absolute;
-              inset: 0;
-              height: 100%;
-              width: 100%;
-              pointer-events: none;
-              z-index: 3;
-              mix-blend-mode: screen;
-              opacity: 0.86;
-            }
-            .ms-road-data {
-              fill: none;
-              stroke-linecap: round;
-              stroke-linejoin: round;
-              vector-effect: non-scaling-stroke;
-              filter: url(#ms-road-data-glow);
-            }
-            .ms-road-data--major {
-              stroke: rgba(255, 122, 61, 0.92);
-              stroke-width: 3.8;
-            }
-            .ms-road-data--arterial {
-              stroke: rgba(255, 164, 86, 0.62);
-              stroke-width: 2.4;
-            }
-            .ms-road-data--collector {
-              stroke: rgba(255, 148, 76, 0.38);
-              stroke-width: 1.5;
-            }
-            .ms-road-data--local {
-              stroke: rgba(255, 194, 120, 0.18);
-              stroke-width: 0.9;
+              filter: saturate(1.05) contrast(1.08) brightness(0.98) sepia(0.08) hue-rotate(-6deg);
             }
             .ms-google-map-canvas .gm-style-cc,
             .ms-google-map-canvas a[href^="https://maps.google.com/maps"] {
@@ -1084,16 +891,16 @@ export function GoogleMapSurface({
               z-index: 1;
               mix-blend-mode: normal;
               background:
-                linear-gradient(90deg, rgba(26, 9, 3, 0.3), rgba(3, 9, 8, 0.02) 36%, rgba(26, 9, 3, 0.24)),
-                radial-gradient(circle at 58% 47%, rgba(255, 112, 58, 0.15), transparent 25%),
-                radial-gradient(circle at 76% 18%, rgba(255, 168, 86, 0.08), transparent 27%),
-                radial-gradient(circle at 12% 72%, rgba(255, 132, 64, 0.08), transparent 26%);
+                linear-gradient(90deg, rgba(26, 9, 3, 0.16), rgba(3, 9, 8, 0.02) 38%, rgba(26, 9, 3, 0.12)),
+                radial-gradient(circle at 58% 47%, rgba(255, 112, 58, 0.08), transparent 25%),
+                radial-gradient(circle at 76% 18%, rgba(255, 168, 86, 0.045), transparent 27%),
+                radial-gradient(circle at 12% 72%, rgba(255, 132, 64, 0.045), transparent 26%);
               background-size:
                 100% 100%,
                 100% 100%,
                 100% 100%,
                 100% 100%;
-              opacity: 0.7;
+              opacity: 0.42;
             }
             .ms-google-map-grade::after {
               content: "";
@@ -1101,7 +908,7 @@ export function GoogleMapSurface({
               inset: 0;
               background:
                 radial-gradient(ellipse at 50% 46%, transparent 0%, rgba(0, 0, 0, 0) 58%, rgba(0, 0, 0, 0.34) 100%),
-                linear-gradient(180deg, rgba(9, 4, 2, 0.12) 0%, rgba(3, 4, 5, 0) 44%, rgba(3, 4, 5, 0.28) 100%);
+                linear-gradient(180deg, rgba(9, 4, 2, 0.06) 0%, rgba(3, 4, 5, 0) 44%, rgba(3, 4, 5, 0.16) 100%);
               mix-blend-mode: normal;
             }
           `}</style>
