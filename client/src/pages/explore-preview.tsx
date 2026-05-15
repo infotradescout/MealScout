@@ -1408,14 +1408,13 @@ export default function ExplorePreview() {
         description="Discover live food trucks, restaurants, and deals near you. MealScout puts the local food scene right in your hands."
       />
 
-      {/* Welcome-style atmospheric page base. The live map sits on top of this
-          so Scout feels like one continuous map surface, not a widget stack. */}
+      {/* Atmospheric page base. The live map carries the detailed map styling. */}
       <div
         aria-hidden="true"
-        className="pointer-events-none fixed inset-0 -z-10 bg-[#120805] bg-cover bg-center bg-no-repeat"
+        className="pointer-events-none fixed inset-0 -z-10 bg-[#120805]"
         style={{
           backgroundImage:
-            "linear-gradient(180deg,rgba(24,10,5,0.12)_0%,rgba(24,10,5,0.31)_46%,rgba(15,6,3,0.72)_100%), url('/atmospheric/mealscout-welcome-map-night.png')",
+            "radial-gradient(circle at 50% 0%, rgba(255,90,47,0.16), transparent 34%), linear-gradient(180deg, rgba(24,10,5,0.96), rgba(10,12,16,1))",
         }}
       />
 
@@ -1449,7 +1448,7 @@ export default function ExplorePreview() {
         >
           {/* Scout map surfaces
               ------------------
-              DEFAULT state: compact noninteractive Google map preview.
+              DEFAULT state: compact interactive Google map surface.
               FULLMAP state: interactive Google Map widget for real
                 pan/zoom/tap-pin exploration.
           */}
@@ -1506,8 +1505,7 @@ export default function ExplorePreview() {
 
             {/* GoogleMapSurface:
                 - Used for full interactive pan/zoom/tap-pin exploration.
-                - Collapsed preview uses the same map family above, locked
-                  noninteractive so the pull-down gesture owns the surface.
+                - Collapsed preview uses the same styled map family above.
             */}
             {sheetState === "fullMap" && hasMapKey && !googleMapFailed && coords && mapCenter ? (
               <div
@@ -1568,12 +1566,6 @@ export default function ExplorePreview() {
               </div>
             ) : null}
           </div>
-
-          {sheetState !== "fullMap" && (
-            <ScoutAtmosphericMapVeil
-              mapIsLive={hasMapKey && !googleMapFailed && Boolean(coords && mapCenter)}
-            />
-          )}
 
           {/* Left-side gradient so headline reads cleanly. We KEEP the
               right side (where user pin lives) clear of overlay. */}
@@ -2041,73 +2033,6 @@ function SectionHeader({
       {subtitle ? (
         <p className="mt-1 text-xs sm:text-sm text-white/60">{subtitle}</p>
       ) : null}
-    </div>
-  );
-}
-
-function ScoutAtmosphericMapVeil({ mapIsLive }: { mapIsLive: boolean }) {
-  return (
-    <div
-      aria-hidden="true"
-      className="pointer-events-none absolute inset-0 z-[2] overflow-hidden"
-      style={{
-        opacity: mapIsLive ? 0.32 : 0.96,
-      }}
-    >
-      <div
-        className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-        style={{
-          backgroundImage: "url('/atmospheric/mealscout-welcome-map-night.png')",
-          filter: "saturate(1.16) contrast(1.08) brightness(0.92)",
-          transform: "scale(1.03)",
-        }}
-      />
-      <div
-        className="absolute inset-0"
-        style={{
-          background:
-            "radial-gradient(circle at 52% 42%, rgba(255,90,47,0.24), transparent 18%), linear-gradient(180deg, rgba(18,8,5,0.03) 0%, rgba(18,8,5,0.26) 56%, rgba(10,12,16,0.78) 100%)",
-        }}
-      />
-      <svg
-        className="absolute inset-0 h-full w-full"
-        viewBox="0 0 100 100"
-        preserveAspectRatio="none"
-      >
-        <defs>
-          <filter id="scoutRoadGlow" x="-40%" y="-40%" width="180%" height="180%">
-            <feGaussianBlur stdDeviation="0.9" result="blur" />
-            <feMerge>
-              <feMergeNode in="blur" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
-          </filter>
-        </defs>
-        <path
-          d="M-4 63 C 15 60, 25 61, 39 56 S 61 48, 78 50 S 96 55, 106 48"
-          fill="none"
-          stroke="rgba(255,90,47,0.72)"
-          strokeLinecap="round"
-          strokeWidth="0.55"
-          filter="url(#scoutRoadGlow)"
-        />
-        <path
-          d="M18 -4 C 25 19, 30 31, 45 41 S 71 55, 82 104"
-          fill="none"
-          stroke="rgba(255,178,102,0.46)"
-          strokeLinecap="round"
-          strokeWidth="0.42"
-          filter="url(#scoutRoadGlow)"
-        />
-        <path
-          d="M-4 34 C 18 38, 32 35, 48 31 S 75 24, 104 29"
-          fill="none"
-          stroke="rgba(255,178,102,0.34)"
-          strokeLinecap="round"
-          strokeWidth="0.32"
-          filter="url(#scoutRoadGlow)"
-        />
-      </svg>
     </div>
   );
 }

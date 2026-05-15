@@ -27,13 +27,13 @@ interface ThemedScoutMapProps {
 const MINI_MAP_STYLE: StyleSpecification = {
   version: 8,
   sources: {
-    "carto-voyager": {
+    "carto-dark": {
       type: "raster",
       tiles: [
-        "https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png",
-        "https://b.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png",
-        "https://c.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png",
-        "https://d.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png",
+        "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
+        "https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
+        "https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
+        "https://d.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
       ],
       tileSize: 256,
       attribution:
@@ -45,19 +45,19 @@ const MINI_MAP_STYLE: StyleSpecification = {
       id: "background",
       type: "background",
       paint: {
-        "background-color": "#180d08",
+        "background-color": "#050807",
       },
     },
     {
-      id: "carto-voyager-tiles",
+      id: "carto-dark-tiles",
       type: "raster",
-      source: "carto-voyager",
+      source: "carto-dark",
       paint: {
-        "raster-opacity": 0.92,
-        "raster-brightness-min": 0.12,
-        "raster-brightness-max": 0.72,
-        "raster-saturation": -0.22,
-        "raster-contrast": 0.28,
+        "raster-opacity": 1,
+        "raster-brightness-min": 0.02,
+        "raster-brightness-max": 0.88,
+        "raster-saturation": 0.28,
+        "raster-contrast": 0.42,
       },
     },
   ],
@@ -238,25 +238,40 @@ export function ThemedScoutMap({
       <div aria-hidden="true" className="msm-map-grade absolute inset-0" />
       <style>{`
         .msm-map-canvas .maplibregl-canvas {
-          filter: saturate(1.08) contrast(1.22) brightness(0.86) sepia(0.34) hue-rotate(-18deg);
+          filter: saturate(1.45) contrast(1.42) brightness(1.1) sepia(0.48) hue-rotate(-20deg);
         }
         .msm-map-grade {
           pointer-events: none;
           background:
-            radial-gradient(circle at 50% 44%, rgba(255, 90, 47, 0.16), transparent 18%),
-            linear-gradient(180deg, rgba(17, 8, 4, 0.22) 0%, rgba(17, 8, 4, 0.08) 44%, rgba(6, 7, 10, 0.24) 100%),
-            linear-gradient(90deg, rgba(0, 0, 0, 0.24), transparent 24%, transparent 76%, rgba(0, 0, 0, 0.16));
-          mix-blend-mode: normal;
+            radial-gradient(circle at 50% 44%, rgba(255, 90, 47, 0.28), transparent 18%),
+            radial-gradient(circle at 24% 22%, rgba(255, 180, 92, 0.14), transparent 22%),
+            radial-gradient(circle at 76% 28%, rgba(255, 90, 47, 0.18), transparent 24%),
+            radial-gradient(circle at 28% 36%, rgba(255, 178, 102, 0.24) 0 1px, transparent 1.4px),
+            radial-gradient(circle at 58% 22%, rgba(255, 178, 102, 0.18) 0 1px, transparent 1.4px),
+            linear-gradient(180deg, rgba(17, 8, 4, 0.12) 0%, rgba(17, 8, 4, 0.04) 44%, rgba(6, 7, 10, 0.3) 100%);
+          background-size: 100% 100%, 100% 100%, 100% 100%, 18px 18px, 23px 23px, 100% 100%;
+          mix-blend-mode: screen;
         }
         .msm-map-grade::after {
           content: "";
           position: absolute;
           inset: 0;
           background:
-            linear-gradient(0deg, rgba(10, 12, 16, 0.18), rgba(10, 12, 16, 0.18)),
-            radial-gradient(circle at 62% 22%, rgba(255, 122, 24, 0.08), transparent 24%),
-            radial-gradient(ellipse at center, transparent 0%, transparent 62%, rgba(0, 0, 0, 0.3) 100%);
+            linear-gradient(180deg, rgba(10, 12, 16, 0.02), rgba(10, 12, 16, 0.34)),
+            radial-gradient(ellipse at center, transparent 0%, transparent 62%, rgba(0, 0, 0, 0.42) 100%);
           mix-blend-mode: normal;
+        }
+        .msm-map-grade::before {
+          content: "";
+          position: absolute;
+          inset: 0;
+          background:
+            linear-gradient(78deg, transparent 0 35%, rgba(255, 90, 47, 0.42) 35.2%, transparent 35.7%),
+            linear-gradient(174deg, transparent 0 18%, rgba(255, 168, 92, 0.28) 18.2%, transparent 18.5%),
+            linear-gradient(6deg, transparent 0 68%, rgba(255, 90, 47, 0.38) 68.2%, transparent 68.7%);
+          filter: blur(0.45px);
+          opacity: 0.7;
+          mix-blend-mode: screen;
         }
 
         .msm-user-pin {

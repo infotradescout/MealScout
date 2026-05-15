@@ -119,9 +119,9 @@ const ensureGoogleMapConstructor = async (googleMaps: any) => {
    ────────────────────────────────────────────────────────────────────────── */
 const mapStyleNeon = [
   // ── Base ──────────────────────────────────────────────────────────────────
-  { elementType: "geometry",            stylers: [{ color: "#201612" }] },
-  { elementType: "labels.text.fill",    stylers: [{ color: "#f7dfb1" }] },
-  { elementType: "labels.text.stroke",  stylers: [{ color: "#110906" }, { weight: 2.4 }] },
+  { elementType: "geometry",            stylers: [{ color: "#07100c" }] },
+  { elementType: "labels.text.fill",    stylers: [{ color: "#d7b27f" }] },
+  { elementType: "labels.text.stroke",  stylers: [{ color: "#050806" }, { weight: 2.8 }] },
   { elementType: "labels.icon",         stylers: [{ visibility: "off" }] },
 
   // ── Roads ─────────────────────────────────────────────────────────────────
@@ -129,17 +129,17 @@ const mapStyleNeon = [
   {
     featureType: "road.highway",
     elementType: "geometry.fill",
-    stylers: [{ color: "#7a3413" }],
+    stylers: [{ color: "#7f220f" }],
   },
   {
     featureType: "road.highway",
     elementType: "geometry.stroke",
-    stylers: [{ color: "#ff6b2f" }, { weight: 2.4 }],
+    stylers: [{ color: "#ff4d2e" }, { weight: 3.2 }],
   },
   {
     featureType: "road.highway",
     elementType: "labels.text.fill",
-    stylers: [{ color: "#ffb36b" }],
+    stylers: [{ color: "#ff9f65" }],
   },
   {
     featureType: "road.highway",
@@ -150,17 +150,17 @@ const mapStyleNeon = [
   {
     featureType: "road.arterial",
     elementType: "geometry.fill",
-    stylers: [{ color: "#5a2b19" }],
+    stylers: [{ color: "#4f1f12" }],
   },
   {
     featureType: "road.arterial",
     elementType: "geometry.stroke",
-    stylers: [{ color: "#ff5a2f" }, { weight: 1.8 }],
+    stylers: [{ color: "#f15a32" }, { weight: 2.2 }],
   },
   {
     featureType: "road.arterial",
     elementType: "labels.text.fill",
-    stylers: [{ color: "#f5ba72" }],
+    stylers: [{ color: "#e79b65" }],
   },
   {
     featureType: "road.arterial",
@@ -171,17 +171,17 @@ const mapStyleNeon = [
   {
     featureType: "road.local",
     elementType: "geometry.fill",
-    stylers: [{ color: "#31201a" }],
+    stylers: [{ color: "#21140f" }],
   },
   {
     featureType: "road.local",
     elementType: "geometry.stroke",
-    stylers: [{ color: "#c26135" }, { weight: 1 }],
+    stylers: [{ color: "#994128" }, { weight: 1.2 }],
   },
   {
     featureType: "road.local",
     elementType: "labels.text.fill",
-    stylers: [{ color: "#d99a68" }],
+    stylers: [{ color: "#ad7656" }],
   },
   {
     featureType: "road.local",
@@ -190,32 +190,32 @@ const mapStyleNeon = [
   },
 
   // ── Water ─────────────────────────────────────────────────────────────────
-  { featureType: "water", elementType: "geometry",          stylers: [{ color: "#102b3a" }] },
-  { featureType: "water", elementType: "labels.text.fill",  stylers: [{ color: "#8eb3c6" }] },
+  { featureType: "water", elementType: "geometry",          stylers: [{ color: "#061d25" }] },
+  { featureType: "water", elementType: "labels.text.fill",  stylers: [{ color: "#4f7890" }] },
 
   // ── Landscape ─────────────────────────────────────────────────────────────
-  { featureType: "landscape",         elementType: "geometry", stylers: [{ color: "#201612" }] },
-  { featureType: "landscape.natural", elementType: "geometry", stylers: [{ color: "#17251a" }] },
-  { featureType: "landscape.man_made",elementType: "geometry", stylers: [{ color: "#241713" }] },
+  { featureType: "landscape",         elementType: "geometry", stylers: [{ color: "#07100c" }] },
+  { featureType: "landscape.natural", elementType: "geometry", stylers: [{ color: "#0b1b12" }] },
+  { featureType: "landscape.man_made",elementType: "geometry", stylers: [{ color: "#0d100c" }] },
 
   // ── Parks ─────────────────────────────────────────────────────────────────
-  { featureType: "poi.park",  elementType: "geometry",          stylers: [{ color: "#17281b" }] },
-  { featureType: "poi.park",  elementType: "labels.text.fill",  stylers: [{ color: "#78966a" }] },
+  { featureType: "poi.park",  elementType: "geometry",          stylers: [{ color: "#0b2214" }] },
+  { featureType: "poi.park",  elementType: "labels.text.fill",  stylers: [{ color: "#5e8054" }] },
 
   // ── POI — suppress everything else ────────────────────────────────────────
-  { featureType: "poi",       elementType: "geometry",          stylers: [{ color: "#18110e" }] },
-  { featureType: "poi",       elementType: "labels.text.fill",  stylers: [{ color: "#9b7246" }] },
+  { featureType: "poi",       elementType: "geometry",          stylers: [{ color: "#0a0d09" }] },
+  { featureType: "poi",       elementType: "labels.text.fill",  stylers: [{ color: "#76583c" }] },
   { featureType: "poi",       elementType: "labels.icon",       stylers: [{ visibility: "off" }] },
 
   // ── Transit ───────────────────────────────────────────────────────────────
-  { featureType: "transit",           elementType: "geometry",          stylers: [{ color: "#251813" }] },
-  { featureType: "transit.station",   elementType: "labels.text.fill",  stylers: [{ color: "#d97745" }] },
+  { featureType: "transit",           elementType: "geometry",          stylers: [{ color: "#14100d" }] },
+  { featureType: "transit.station",   elementType: "labels.text.fill",  stylers: [{ color: "#b7653e" }] },
 
   // ── Administrative ────────────────────────────────────────────────────────
-  { featureType: "administrative",              elementType: "geometry.stroke",  stylers: [{ color: "#6b3a20" }, { weight: 0.7 }] },
-  { featureType: "administrative",              elementType: "labels.text.fill", stylers: [{ color: "#c48b58" }] },
-  { featureType: "administrative.locality",     elementType: "labels.text.fill", stylers: [{ color: "#ffd19c" }] },
-  { featureType: "administrative.neighborhood", elementType: "labels.text.fill", stylers: [{ color: "#c49164" }] },
+  { featureType: "administrative",              elementType: "geometry.stroke",  stylers: [{ color: "#65321f" }, { weight: 0.7 }] },
+  { featureType: "administrative",              elementType: "labels.text.fill", stylers: [{ color: "#a57550" }] },
+  { featureType: "administrative.locality",     elementType: "labels.text.fill", stylers: [{ color: "#d7a374" }] },
+  { featureType: "administrative.neighborhood", elementType: "labels.text.fill", stylers: [{ color: "#9f7155" }] },
 ];
 
 /* ─── Marker colors ─────────────────────────────────────────────────────── */
@@ -909,19 +909,91 @@ export function GoogleMapSurface({
 
       {/* Neon bloom overlay — screen blend amplifies the amber road glow */}
       {isNightTheme && (
-        <div
-          aria-hidden="true"
-          style={{
-            position: "absolute",
-            inset: 0,
-            pointerEvents: "none",
-            borderRadius: "0.5rem",
-            overflow: "hidden",
-            zIndex: 1,
-            mixBlendMode: "screen",
-            background: "radial-gradient(ellipse 100% 80% at 50% 50%, rgba(255,90,47,0.05) 0%, transparent 72%)",
-          }}
-        />
+        <>
+          <div
+            aria-hidden="true"
+            className="ms-google-map-grade"
+          />
+          <svg
+            aria-hidden="true"
+            className="ms-google-map-traces"
+            viewBox="0 0 100 100"
+            preserveAspectRatio="none"
+          >
+            <defs>
+              <filter id="ms-google-trace-glow" x="-40%" y="-80%" width="180%" height="260%">
+                <feGaussianBlur stdDeviation="0.85" result="blur" />
+                <feMerge>
+                  <feMergeNode in="blur" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+            </defs>
+            <path d="M-3 66 C 18 60, 34 63, 51 55 S 77 43, 106 47" />
+            <path d="M14 -4 C 21 18, 31 29, 47 39 S 73 53, 86 104" />
+            <path d="M-4 35 C 17 38, 32 36, 49 32 S 78 25, 104 29" />
+          </svg>
+          <style>{`
+            .ms-google-map-grade {
+              position: absolute;
+              inset: 0;
+              pointer-events: none;
+              z-index: 1;
+              mix-blend-mode: screen;
+              background:
+                radial-gradient(circle at 50% 42%, rgba(255, 90, 47, 0.2), transparent 18%),
+                radial-gradient(circle at 22% 18%, rgba(255, 180, 92, 0.12), transparent 20%),
+                radial-gradient(circle at 76% 28%, rgba(255, 90, 47, 0.14), transparent 22%),
+                radial-gradient(circle at 18% 78%, rgba(255, 132, 54, 0.1), transparent 18%),
+                radial-gradient(circle at 28% 36%, rgba(255, 178, 102, 0.22) 0 1px, transparent 1.4px),
+                radial-gradient(circle at 58% 22%, rgba(255, 178, 102, 0.18) 0 1px, transparent 1.4px),
+                radial-gradient(circle at 74% 66%, rgba(255, 178, 102, 0.16) 0 1px, transparent 1.4px);
+              background-size:
+                100% 100%,
+                100% 100%,
+                100% 100%,
+                100% 100%,
+                18px 18px,
+                23px 23px,
+                29px 29px;
+              opacity: 0.78;
+            }
+            .ms-google-map-grade::after {
+              content: "";
+              position: absolute;
+              inset: 0;
+              background:
+                linear-gradient(180deg, rgba(18, 8, 5, 0.08) 0%, rgba(18, 8, 5, 0) 44%, rgba(7, 8, 10, 0.4) 100%),
+                radial-gradient(ellipse at center, transparent 0%, transparent 62%, rgba(0, 0, 0, 0.38) 100%);
+              mix-blend-mode: normal;
+            }
+            .ms-google-map-traces {
+              position: absolute;
+              inset: 0;
+              width: 100%;
+              height: 100%;
+              pointer-events: none;
+              z-index: 2;
+              opacity: 0.34;
+              mix-blend-mode: screen;
+            }
+            .ms-google-map-traces path {
+              fill: none;
+              stroke: rgba(255, 90, 47, 0.72);
+              stroke-width: 0.42;
+              stroke-linecap: round;
+              filter: url(#ms-google-trace-glow);
+            }
+            .ms-google-map-traces path:nth-child(3) {
+              stroke: rgba(255, 178, 102, 0.46);
+              stroke-width: 0.32;
+            }
+            .ms-google-map-traces path:nth-child(4) {
+              stroke: rgba(255, 178, 102, 0.34);
+              stroke-width: 0.28;
+            }
+          `}</style>
+        </>
       )}
 
       {interactive && (
