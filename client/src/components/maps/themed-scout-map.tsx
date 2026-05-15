@@ -45,7 +45,7 @@ const MINI_MAP_STYLE: StyleSpecification = {
       id: "background",
       type: "background",
       paint: {
-        "background-color": "#050807",
+        "background-color": "#010101",
       },
     },
     {
@@ -53,11 +53,11 @@ const MINI_MAP_STYLE: StyleSpecification = {
       type: "raster",
       source: "carto-dark",
       paint: {
-        "raster-opacity": 0.96,
+        "raster-opacity": 1,
         "raster-brightness-min": 0,
-        "raster-brightness-max": 1,
-        "raster-saturation": 0.18,
-        "raster-contrast": 0.22,
+        "raster-brightness-max": 0.88,
+        "raster-saturation": -0.4,
+        "raster-contrast": 0.38,
       },
     },
   ],
@@ -82,8 +82,8 @@ export function ThemedScoutMap({
     map.easeTo({
       center: [userLocation.lng, userLocation.lat],
       zoom,
-      pitch: 28,
-      bearing: 8,
+      pitch: 48,
+      bearing: 14,
       duration,
     });
   };
@@ -96,8 +96,8 @@ export function ThemedScoutMap({
       style: MINI_MAP_STYLE,
       center: [userLocation.lng, userLocation.lat],
       zoom,
-      pitch: 28,
-      bearing: 8,
+      pitch: 48,
+      bearing: 14,
       interactive: false,
       attributionControl: false,
       dragRotate: false,
@@ -149,8 +149,8 @@ export function ThemedScoutMap({
           driftStartRef.current = performance.now();
         }
         const t = (performance.now() - driftStartRef.current) / 1000;
-        current.setBearing(8 + Math.sin((t / 70) * Math.PI * 2) * 1.5);
-        current.setPitch(28 + Math.sin((t / 90) * Math.PI * 2) * 1);
+        current.setBearing(14 + Math.sin((t / 70) * Math.PI * 2) * 3);
+        current.setPitch(48 + Math.sin((t / 90) * Math.PI * 2) * 2.5);
         driftRafRef.current = requestAnimationFrame(tick);
       };
       driftRafRef.current = requestAnimationFrame(tick);
@@ -215,8 +215,9 @@ export function ThemedScoutMap({
         marker.title ? `${marker.title} pin` : "MealScout map pin",
       );
       el.innerHTML = `
-        <span class="msm-map-pin__halo"></span>
-        <span class="msm-map-pin__core"></span>
+        <span class="msm-map-pin__drop" aria-hidden="true">
+          <span class="msm-map-pin__glow"></span>
+        </span>
       `;
       el.addEventListener("click", (event) => {
         event.stopPropagation();
@@ -224,7 +225,7 @@ export function ThemedScoutMap({
       });
 
       markerRefs.current.push(
-        new maplibregl.Marker({ element: el, anchor: "center" })
+        new maplibregl.Marker({ element: el, anchor: "bottom" })
           .setLngLat([marker.lng, marker.lat])
           .addTo(map),
       );
@@ -242,101 +243,133 @@ export function ThemedScoutMap({
       </div>
       <div aria-hidden="true" className="msm-map-grade absolute inset-0" />
       <style>{`
+        /* ── Holographic amber filter ───────────────────────────────── */
         .msm-map-canvas .maplibregl-canvas {
-          filter: saturate(1.05) contrast(1.08) brightness(1.02) sepia(0.12) hue-rotate(-8deg);
+          filter: sepia(1) hue-rotate(-18deg) saturate(5.5) contrast(2.1) brightness(0.46);
         }
+
+        /* ── Atmospheric amber glow overlay ─────────────────────────── */
         .msm-map-grade {
           pointer-events: none;
           background:
-            linear-gradient(90deg, rgba(22, 9, 4, 0.11), rgba(4, 9, 8, 0.02) 34%, rgba(22, 9, 4, 0.08)),
-            radial-gradient(circle at 55% 43%, rgba(255, 108, 55, 0.08), transparent 25%),
-            radial-gradient(circle at 23% 26%, rgba(255, 180, 92, 0.04), transparent 28%),
-            radial-gradient(circle at 79% 22%, rgba(255, 112, 52, 0.045), transparent 29%),
-            linear-gradient(180deg, rgba(17, 8, 4, 0.07) 0%, rgba(17, 8, 4, 0) 44%, rgba(3, 4, 5, 0.16) 100%);
-          background-size: 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%;
-          mix-blend-mode: normal;
-          opacity: 0.42;
+            radial-gradient(ellipse at 50% 55%, rgba(255, 140, 30, 0.26), transparent 62%),
+            radial-gradient(ellipse at 18% 72%, rgba(255, 110, 20, 0.16), transparent 44%),
+            radial-gradient(ellipse at 82% 28%, rgba(230, 95, 10, 0.14), transparent 40%),
+            radial-gradient(ellipse at 60% 20%, rgba(255, 180, 50, 0.10), transparent 35%),
+            linear-gradient(180deg, rgba(0,0,0,0.60) 0%, transparent 22%, transparent 72%, rgba(0,0,0,0.72) 100%);
+          mix-blend-mode: screen;
+          opacity: 0.88;
         }
         .msm-map-grade::after {
           content: "";
           position: absolute;
           inset: 0;
-          background:
-            radial-gradient(ellipse at center, transparent 0%, transparent 60%, rgba(0, 0, 0, 0.34) 100%),
-            linear-gradient(180deg, rgba(10, 4, 2, 0.04), rgba(5, 6, 7, 0.14));
+          background: radial-gradient(ellipse at center, transparent 38%, rgba(0, 0, 0, 0.62) 100%);
+          pointer-events: none;
           mix-blend-mode: normal;
         }
+
+        /* ── User location pin (amber pulse) ─────────────────────────── */
         .msm-user-pin {
           position: relative;
-          width: 24px;
-          height: 24px;
+          width: 28px;
+          height: 28px;
           pointer-events: none;
         }
         .msm-user-pin__core {
           position: absolute;
-          inset: 7px;
+          inset: 8px;
           border-radius: 9999px;
-          background: #2563eb;
-          border: 2px solid rgba(255, 255, 255, 0.9);
+          background: #fff8e0;
+          border: 2px solid rgba(255, 210, 80, 0.92);
           box-shadow:
-            0 0 0 5px rgba(37, 99, 235, 0.34),
-            0 0 22px rgba(37, 99, 235, 0.7);
+            0 0 0 4px rgba(255, 175, 35, 0.38),
+            0 0 24px rgba(255, 210, 60, 0.9);
         }
         .msm-user-pin__pulse {
           position: absolute;
           inset: 1px;
           border-radius: 9999px;
-          background: rgba(37, 99, 235, 0.34);
+          background: rgba(255, 155, 25, 0.38);
           animation: msm-user-pulse 2.4s ease-out infinite;
         }
         .msm-user-pin__pulse--delay {
           animation-delay: 1.2s;
         }
         @keyframes msm-user-pulse {
-          0%   { transform: scale(0.7); opacity: 0.8; }
-          80%  { transform: scale(2.3); opacity: 0; }
-          100% { transform: scale(2.3); opacity: 0; }
+          0%   { transform: scale(0.7); opacity: 0.9; }
+          80%  { transform: scale(2.7); opacity: 0; }
+          100% { transform: scale(2.7); opacity: 0; }
         }
 
+        /* ── Teardrop map pins ───────────────────────────────────────── */
         .msm-map-pin {
           position: relative;
-          width: 18px;
-          height: 18px;
+          width: 24px;
+          height: 30px;
           padding: 0;
           border: 0;
           background: transparent;
           cursor: pointer;
           pointer-events: auto;
+          display: flex;
+          align-items: flex-start;
+          justify-content: center;
         }
-        .msm-map-pin__halo,
-        .msm-map-pin__core {
-          position: absolute;
-          border-radius: 9999px;
-        }
-        .msm-map-pin__halo {
-          inset: 0;
-          background: rgba(245, 158, 11, 0.32);
-          filter: blur(3px);
-          animation: msm-map-pin-glow 3s ease-in-out infinite;
-        }
-        .msm-map-pin__core {
-          inset: 5px;
+        .msm-map-pin__drop {
+          position: relative;
+          width: 18px;
+          height: 18px;
+          border-radius: 50% 50% 50% 0;
+          transform: rotate(-45deg);
           background: #f59e0b;
           box-shadow:
-            0 0 0 2px rgba(15, 18, 24, 0.82),
-            0 0 14px rgba(245, 158, 11, 0.72);
+            0 0 6px rgba(245, 158, 11, 0.95),
+            0 0 18px rgba(245, 158, 11, 0.55),
+            0 0 40px rgba(245, 158, 11, 0.22);
         }
-        .msm-map-pin--parking .msm-map-pin__halo { background: rgba(14, 165, 233, 0.32); }
-        .msm-map-pin--parking .msm-map-pin__core { background: #38bdf8; }
-        .msm-map-pin--restaurant .msm-map-pin__halo,
-        .msm-map-pin--deal .msm-map-pin__halo { background: rgba(34, 197, 94, 0.26); }
-        .msm-map-pin--restaurant .msm-map-pin__core,
-        .msm-map-pin--deal .msm-map-pin__core { background: #22c55e; }
-        .msm-map-pin--event .msm-map-pin__halo { background: rgba(217, 70, 239, 0.26); }
-        .msm-map-pin--event .msm-map-pin__core { background: #d946ef; }
-        @keyframes msm-map-pin-glow {
-          0%, 100% { transform: scale(1); opacity: 0.58; }
-          50% { transform: scale(1.55); opacity: 0.95; }
+        .msm-map-pin__drop::after {
+          content: '';
+          position: absolute;
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          background: rgba(8, 3, 0, 0.55);
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+        }
+        .msm-map-pin__glow {
+          position: absolute;
+          inset: -5px;
+          border-radius: 50% 50% 50% 0;
+          background: rgba(245, 158, 11, 0.44);
+          filter: blur(6px);
+          animation: msm-pin-glow 2.8s ease-in-out infinite;
+        }
+        /* Parking — cyan */
+        .msm-map-pin--parking .msm-map-pin__drop {
+          background: #06b6d4;
+          box-shadow: 0 0 6px rgba(6,182,212,0.95), 0 0 18px rgba(6,182,212,0.55), 0 0 40px rgba(6,182,212,0.22);
+        }
+        .msm-map-pin--parking .msm-map-pin__glow { background: rgba(6,182,212,0.44); }
+        /* Restaurant / deal — warm orange */
+        .msm-map-pin--restaurant .msm-map-pin__drop,
+        .msm-map-pin--deal .msm-map-pin__drop {
+          background: #fb923c;
+          box-shadow: 0 0 6px rgba(251,146,60,0.95), 0 0 18px rgba(251,146,60,0.55), 0 0 40px rgba(251,146,60,0.22);
+        }
+        .msm-map-pin--restaurant .msm-map-pin__glow,
+        .msm-map-pin--deal .msm-map-pin__glow { background: rgba(251,146,60,0.44); }
+        /* Event — fuchsia */
+        .msm-map-pin--event .msm-map-pin__drop {
+          background: #e879f9;
+          box-shadow: 0 0 6px rgba(232,121,249,0.95), 0 0 18px rgba(232,121,249,0.55), 0 0 40px rgba(232,121,249,0.22);
+        }
+        .msm-map-pin--event .msm-map-pin__glow { background: rgba(232,121,249,0.44); }
+        @keyframes msm-pin-glow {
+          0%, 100% { opacity: 0.44; transform: scale(1); }
+          50%       { opacity: 1;    transform: scale(1.45); }
         }
 
         .maplibregl-ctrl-attrib,
