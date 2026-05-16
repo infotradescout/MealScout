@@ -158,6 +158,50 @@ const mapStyleNeon = [
   { featureType: "water", elementType: "labels.text.fill", stylers: [{ color: "#6992a0" }] },
 ];
 
+const mapStyleFoodDay = [
+  { elementType: "geometry", stylers: [{ color: "#fff4d6" }] },
+  { elementType: "labels.icon", stylers: [{ saturation: -15 }, { lightness: 18 }] },
+  { elementType: "labels.text.fill", stylers: [{ color: "#6f3b18" }] },
+  { elementType: "labels.text.stroke", stylers: [{ color: "#fff8e8" }, { weight: 3 }] },
+
+  { featureType: "administrative", elementType: "geometry.stroke", stylers: [{ color: "#e5b779" }, { weight: 0.55 }] },
+  { featureType: "administrative", elementType: "labels.text.fill", stylers: [{ color: "#8a5a28" }] },
+  { featureType: "administrative.country", elementType: "labels", stylers: [{ visibility: "off" }] },
+  { featureType: "administrative.province", elementType: "labels", stylers: [{ visibility: "off" }] },
+  { featureType: "administrative.land_parcel", stylers: [{ visibility: "off" }] },
+
+  { featureType: "landscape", elementType: "geometry", stylers: [{ color: "#fff2cf" }] },
+  { featureType: "landscape.man_made", elementType: "geometry", stylers: [{ color: "#ffefd0" }] },
+  { featureType: "landscape.natural", elementType: "geometry", stylers: [{ color: "#f4f2c7" }] },
+
+  { featureType: "poi", elementType: "geometry", stylers: [{ color: "#ffe8bf" }] },
+  { featureType: "poi", elementType: "labels.text.fill", stylers: [{ color: "#9a5a1f" }] },
+  { featureType: "poi.business", elementType: "labels.icon", stylers: [{ visibility: "on" }, { saturation: -20 }, { lightness: 22 }] },
+  { featureType: "poi.park", elementType: "geometry", stylers: [{ color: "#dff0b5" }] },
+  { featureType: "poi.park", elementType: "labels.text.fill", stylers: [{ color: "#5f7a2d" }] },
+
+  { featureType: "road", elementType: "geometry", stylers: [{ visibility: "simplified" }] },
+  { featureType: "road", elementType: "labels.icon", stylers: [{ visibility: "off" }] },
+  { featureType: "road", elementType: "labels.text.fill", stylers: [{ color: "#8a5a28" }] },
+  { featureType: "road", elementType: "labels.text.stroke", stylers: [{ color: "#fff8e8" }, { weight: 2.8 }] },
+
+  { featureType: "road.highway", elementType: "geometry.fill", stylers: [{ color: "#ffc66d" }] },
+  { featureType: "road.highway", elementType: "geometry.stroke", stylers: [{ color: "#f97316" }, { weight: 1.15 }] },
+  { featureType: "road.highway.controlled_access", elementType: "geometry.fill", stylers: [{ color: "#ffb85a" }] },
+  { featureType: "road.highway.controlled_access", elementType: "geometry.stroke", stylers: [{ color: "#ea580c" }, { weight: 1.35 }] },
+  { featureType: "road.highway", elementType: "labels.text.fill", stylers: [{ color: "#7c3b12" }] },
+
+  { featureType: "road.arterial", elementType: "geometry.fill", stylers: [{ color: "#ffd98f" }] },
+  { featureType: "road.arterial", elementType: "geometry.stroke", stylers: [{ color: "#f59e0b" }, { weight: 0.55 }] },
+  { featureType: "road.local", elementType: "geometry.fill", stylers: [{ color: "#fffaf0" }] },
+  { featureType: "road.local", elementType: "geometry.stroke", stylers: [{ color: "#efd59d" }, { weight: 0.35 }] },
+  { featureType: "road.local", elementType: "labels", stylers: [{ visibility: "off" }] },
+
+  { featureType: "transit", stylers: [{ visibility: "off" }] },
+  { featureType: "water", elementType: "geometry", stylers: [{ color: "#a7e8f0" }] },
+  { featureType: "water", elementType: "labels.text.fill", stylers: [{ color: "#2f7484" }] },
+];
+
 /* ─── Marker colors ─────────────────────────────────────────────────────── */
 const markerColor = (marker: MapAdapterMarker): string => {
   if (marker.color) return marker.color;
@@ -510,14 +554,12 @@ export function GoogleMapSurface({
                 : "cooperative"
               : "none",
           };
-          const runtimeMapId = String(mapId || "").trim();
           if (isNightTheme) {
             mapOptions.mapTypeId = "roadmap";
             mapOptions.styles = mapStyleNeon;
-          } else if (runtimeMapId) {
-            mapOptions.mapId = runtimeMapId;
           } else {
-            mapOptions.styles = mapStyleNeon;
+            mapOptions.mapTypeId = "roadmap";
+            mapOptions.styles = mapStyleFoodDay;
           }
 
           mapRef.current = new GoogleMapConstructor(mapContainerRef.current, mapOptions);
@@ -594,7 +636,6 @@ export function GoogleMapSurface({
             }, delay);
           });
         } else {
-          const runtimeMapId = String(mapId || "").trim();
           if (isNightTheme) {
             mapRef.current.setOptions({
               mapId: undefined,
@@ -603,13 +644,11 @@ export function GoogleMapSurface({
               tilt: 25,
               heading: 8,
             });
-          } else if (runtimeMapId) {
-            mapRef.current.setOptions({ mapId: runtimeMapId, tilt: 0, heading: 0 });
           } else {
             mapRef.current.setOptions({
               mapId: undefined,
               mapTypeId: "roadmap",
-              styles: mapStyleNeon,
+              styles: mapStyleFoodDay,
               tilt: 0,
               heading: 0,
             });
@@ -857,8 +896,9 @@ export function GoogleMapSurface({
     };
   }, []);
 
-  const btnClass =
-    "h-11 w-11 rounded-full border border-orange-200/35 bg-[#120805]/85 p-0 text-orange-200 shadow-lg backdrop-blur transition-colors hover:bg-[#1f0d06]";
+  const btnClass = isNightTheme
+    ? "h-11 w-11 rounded-full border border-orange-200/35 bg-[#120805]/85 p-0 text-orange-200 shadow-lg backdrop-blur transition-colors hover:bg-[#1f0d06]"
+    : "h-11 w-11 rounded-full border border-orange-200/70 bg-white/90 p-0 text-orange-700 shadow-lg backdrop-blur transition-colors hover:bg-orange-50";
 
   const adjustZoom = (delta: number) => {
     const map = mapRef.current;

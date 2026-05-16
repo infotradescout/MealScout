@@ -1411,10 +1411,10 @@ export default function ExplorePreview() {
       {/* Atmospheric page base. The live map carries the detailed map styling. */}
       <div
         aria-hidden="true"
-        className="pointer-events-none fixed inset-0 -z-10 bg-[#120805]"
+        className="pointer-events-none fixed inset-0 -z-10 bg-[#fff4d6]"
         style={{
           backgroundImage:
-            "radial-gradient(circle at 50% 0%, rgba(255,90,47,0.16), transparent 34%), linear-gradient(180deg, rgba(24,10,5,0.96), rgba(10,12,16,1))",
+            "radial-gradient(circle at 50% 0%, rgba(255,168,86,0.30), transparent 34%), linear-gradient(180deg, rgba(255,247,226,0.96), rgba(16,18,22,1) 70%)",
         }}
       />
 
@@ -1433,7 +1433,7 @@ export default function ExplorePreview() {
            ============================================================ */}
         <section
           data-testid="scout-map-container"
-          className="relative w-full overflow-hidden bg-[#120805]"
+          className="relative w-full overflow-hidden bg-[#fff4d6]"
           style={{
             height:
               sheetState === "fullMap" ? "100dvh" : "min(56vh, 470px)",
@@ -1443,7 +1443,7 @@ export default function ExplorePreview() {
             boxShadow:
               sheetState === "fullMap"
                 ? undefined
-                : "inset 0 -80px 90px rgba(10,12,16,0.72)",
+                : "inset 0 -70px 90px rgba(255,255,255,0.10), inset 0 -120px 120px rgba(120,54,16,0.20)",
           }}
         >
           {/* Scout map surfaces
@@ -1473,7 +1473,7 @@ export default function ExplorePreview() {
                       markers={allMapMarkers}
                       showRoadTrafficLayer={false}
                       userLocation={coords}
-                      isNightTheme={true}
+                      isNightTheme={false}
                       interactive={true}
                       onBoundsChanged={handleMapBoundsChanged}
                       onZoomChanged={handleMapZoomChanged}
@@ -1527,7 +1527,7 @@ export default function ExplorePreview() {
                     markers={allMapMarkers}
                     showRoadTrafficLayer={false}
                     userLocation={coords}
-                    isNightTheme={true}
+                    isNightTheme={false}
                     onBoundsChanged={handleMapBoundsChanged}
                     onZoomChanged={handleMapZoomChanged}
                     onCenterChanged={handleMapCenterChanged}
@@ -1554,7 +1554,7 @@ export default function ExplorePreview() {
                       />
                     </Suspense>
                     {(!hasMapKey || googleMapFailed) && (
-                      <div className="pointer-events-none absolute left-1/2 top-1/2 z-10 max-w-[18rem] -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-[#120805]/82 px-5 py-4 text-center text-sm font-bold text-orange-50 ring-1 ring-orange-200/30 backdrop-blur-xl">
+                      <div className="pointer-events-none absolute left-1/2 top-1/2 z-10 max-w-[18rem] -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-white/88 px-5 py-4 text-center text-sm font-bold text-orange-900 ring-1 ring-orange-200/60 backdrop-blur-xl">
                         Full pan and zoom are warming up. The local MealScout map is still live.
                       </div>
                     )}
@@ -1576,7 +1576,7 @@ export default function ExplorePreview() {
               className="absolute inset-0 pointer-events-none"
               style={{
                 backgroundImage:
-                  "linear-gradient(180deg, rgba(18,8,5,0.10) 0%, rgba(18,8,5,0.00) 34%, rgba(10,12,16,0.20) 68%, rgba(10,12,16,0.82) 100%), radial-gradient(circle at 50% 44%, rgba(255,90,47,0.14), transparent 22%)",
+                  "linear-gradient(180deg, rgba(255,253,244,0.22) 0%, rgba(255,253,244,0.00) 38%, rgba(120,54,16,0.08) 68%, rgba(10,12,16,0.54) 100%), radial-gradient(circle at 50% 44%, rgba(255,168,86,0.18), transparent 22%)",
               }}
             />
           )}
@@ -1592,7 +1592,7 @@ export default function ExplorePreview() {
               <Link
                 href="/profile"
                 aria-label="Open profile"
-                className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#120805]/58 ring-1 ring-orange-200/28 backdrop-blur-md"
+                className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white/72 ring-1 ring-orange-200/60 backdrop-blur-md shadow-[0_8px_24px_rgba(154,72,18,0.16)]"
               >
                 {user?.profileImageUrl ? (
                   <img
@@ -1601,23 +1601,23 @@ export default function ExplorePreview() {
                     className="h-full w-full object-cover"
                   />
                 ) : (
-                  <UserIcon className="h-5 w-5 text-orange-300" aria-hidden="true" />
+                  <UserIcon className="h-5 w-5 text-orange-700" aria-hidden="true" />
                 )}
               </Link>
 
               <button
                 type="button"
                 onClick={requestLocation}
-                className="inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-full bg-[#120805]/52 px-4 text-sm font-black text-white ring-1 ring-orange-200/18 backdrop-blur-md transition-transform active:scale-95"
+                className="inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-full bg-white/76 px-4 text-sm font-black text-orange-900 ring-1 ring-orange-200/60 backdrop-blur-md shadow-[0_8px_24px_rgba(154,72,18,0.14)] transition-transform active:scale-95"
                 aria-label={`Refresh location. Currently ${shortLocation}.`}
               >
                 {locationStatus === "requesting" ? (
-                  <svg className="h-4 w-4 text-orange-300 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <svg className="h-4 w-4 text-orange-600 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
                   </svg>
                 ) : (
-                  <MapPin className="h-4 w-4 text-orange-300" aria-hidden="true" />
+                  <MapPin className="h-4 w-4 text-orange-600" aria-hidden="true" />
                 )}
                 <span className="truncate max-w-[180px]">{shortLocation}</span>
               </button>
@@ -1626,10 +1626,10 @@ export default function ExplorePreview() {
                 type="button"
                 onClick={openScoutMap}
                 aria-label="Expand map to fullscreen"
-                className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#120805]/62 ring-1 ring-orange-300/40 backdrop-blur-md"
-                style={{ boxShadow: "0 0 14px rgba(255,90,47,0.3)" }}
+                className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white/78 ring-1 ring-orange-200/70 backdrop-blur-md"
+                style={{ boxShadow: "0 8px 24px rgba(154,72,18,0.18)" }}
               >
-                <Maximize2 className="h-5 w-5 text-orange-300" aria-hidden="true" />
+                <Maximize2 className="h-5 w-5 text-orange-700" aria-hidden="true" />
               </button>
             </div>
           )}
@@ -1644,9 +1644,9 @@ export default function ExplorePreview() {
               type="button"
               onClick={collapseScoutMap}
               aria-label="Collapse map and return to discover"
-              className="absolute z-30 right-4 top-[calc(env(safe-area-inset-top)+0.75rem)] inline-flex h-12 items-center gap-2 rounded-full bg-[#120805]/88 px-4 font-black text-orange-100 ring-1 ring-orange-200/45 backdrop-blur-md transition-colors hover:bg-[#1f0d06]/92"
+              className="absolute z-30 right-4 top-[calc(env(safe-area-inset-top)+0.75rem)] inline-flex h-12 items-center gap-2 rounded-full bg-white/90 px-4 font-black text-orange-800 ring-1 ring-orange-200/70 backdrop-blur-md transition-colors hover:bg-orange-50"
               style={{
-                boxShadow: "0 0 24px rgba(255,90,47,0.38)",
+                boxShadow: "0 12px 30px rgba(154,72,18,0.18)",
               }}
             >
               <Minimize2 className="h-4 w-4" aria-hidden="true" />

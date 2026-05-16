@@ -3,9 +3,9 @@
  * --------------
  * Compact Scout mini-map for /scout.
  *
- * This is the collapsed map element that lives on the Scout page: a real
- * street map, branded with MealScout contrast and animated pins. Pulling down
- * expands into the full Google map for real pan/zoom/tap exploration.
+ * This is the collapsed map element that lives on the Scout page: a bright,
+ * food-forward street map with animated pins. Pulling down expands into the
+ * full Google map for real pan/zoom/tap exploration.
  */
 
 import { useEffect, useMemo, useRef } from "react";
@@ -28,13 +28,13 @@ interface ThemedScoutMapProps {
 const MINI_MAP_STYLE: StyleSpecification = {
   version: 8,
   sources: {
-    "carto-dark": {
+    "carto-light": {
       type: "raster",
       tiles: [
-        "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
-        "https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
-        "https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
-        "https://d.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
+        "https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png",
+        "https://b.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png",
+        "https://c.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png",
+        "https://d.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png",
       ],
       tileSize: 256,
       attribution:
@@ -46,19 +46,19 @@ const MINI_MAP_STYLE: StyleSpecification = {
       id: "background",
       type: "background",
       paint: {
-        "background-color": "#010101",
+        "background-color": "#fff7df",
       },
     },
     {
-      id: "carto-dark-tiles",
+      id: "carto-light-tiles",
       type: "raster",
-      source: "carto-dark",
+      source: "carto-light",
       paint: {
         "raster-opacity": 1,
-        "raster-brightness-min": 0,
-        "raster-brightness-max": 0.72,
-        "raster-saturation": -0.52,
-        "raster-contrast": 0.62,
+        "raster-brightness-min": 0.08,
+        "raster-brightness-max": 1.08,
+        "raster-saturation": 0.14,
+        "raster-contrast": 0.08,
       },
     },
   ],
@@ -258,28 +258,42 @@ export function ThemedScoutMap({
           style={{ height: "100%", width: "100%", minHeight: "100%" }}
         />
       </div>
-      {/* ── Atmospheric grade ── */}
+      <svg
+        className="msm-map-illustration absolute inset-0 h-full w-full pointer-events-none"
+        viewBox="0 0 800 520"
+        preserveAspectRatio="none"
+        aria-hidden="true"
+      >
+        <defs>
+          <filter id="msm-soft-shadow" x="-20%" y="-40%" width="140%" height="180%">
+            <feDropShadow dx="0" dy="5" stdDeviation="5" floodColor="#9a4812" floodOpacity="0.16" />
+          </filter>
+        </defs>
+        <g fill="none" strokeLinecap="round" strokeLinejoin="round" filter="url(#msm-soft-shadow)">
+          <path className="msm-road msm-road--major" d="M-40 365 C120 312 196 244 322 250 C456 256 548 338 840 278" />
+          <path className="msm-road msm-road--major msm-road--alt" d="M96 -28 C120 90 182 170 280 214 C410 274 458 344 506 548" />
+          <path className="msm-road" d="M-10 174 C126 186 210 164 306 112 C392 66 510 76 812 128" />
+          <path className="msm-road" d="M56 512 C100 440 182 386 294 354 C436 314 570 326 828 390" />
+          <path className="msm-road msm-road--thin" d="M164 18 C198 112 242 168 300 210 C370 260 424 276 560 286" />
+          <path className="msm-road msm-road--thin" d="M14 268 C114 242 224 244 346 284 C430 312 508 374 620 514" />
+          <path className="msm-road msm-road--thin" d="M594 -20 C562 92 560 176 596 244 C636 322 650 410 628 548" />
+        </g>
+        <g className="msm-food-dots">
+          <circle cx="166" cy="168" r="8" />
+          <circle cx="300" cy="250" r="7" />
+          <circle cx="512" cy="286" r="8" />
+          <circle cx="620" cy="390" r="7" />
+        </g>
+      </svg>
+      {/* ── Warm daylight grade ── */}
       <div aria-hidden="true" className="msm-map-grade absolute inset-0" />
 
       {!interactive && (
         <>
-          {/* ── Radar rings + sweep ── */}
-          <div aria-hidden="true" className="msm-radar absolute inset-0 pointer-events-none">
-            <span className="msm-radar__ring msm-radar__ring--1" />
-            <span className="msm-radar__ring msm-radar__ring--2" />
-            <span className="msm-radar__ring msm-radar__ring--3" />
-            <span className="msm-radar__sweep" />
-          </div>
-
-          {/* ── Scanlines ── */}
-          <div aria-hidden="true" className="msm-scanlines absolute inset-0 pointer-events-none" />
-
-          {/* ── HUD corner brackets ── */}
-          <div aria-hidden="true" className="msm-hud absolute inset-0 pointer-events-none">
-            <span className="msm-hud__corner msm-hud__corner--tl" />
-            <span className="msm-hud__corner msm-hud__corner--tr" />
-            <span className="msm-hud__corner msm-hud__corner--bl" />
-            <span className="msm-hud__corner msm-hud__corner--br" />
+          <div aria-hidden="true" className="msm-food-glow absolute inset-0 pointer-events-none">
+            <span className="msm-food-glow__spot msm-food-glow__spot--1" />
+            <span className="msm-food-glow__spot msm-food-glow__spot--2" />
+            <span className="msm-food-glow__spot msm-food-glow__spot--3" />
           </div>
         </>
       )}
@@ -287,130 +301,111 @@ export function ThemedScoutMap({
       {/* ── LIVE badge ── */}
       <div aria-label="Live map" className="msm-live-badge">
         <span aria-hidden="true" className="msm-live-badge__dot" />
-        LIVE
+        Open
       </div>
 
       {/* ── Tap-to-explore hint ── */}
-      {!interactive && <div aria-hidden="true" className="msm-tap-hint">TAP TO EXPLORE</div>}
+      {!interactive && <div aria-hidden="true" className="msm-tap-hint">Tap for the food map</div>}
 
       <style>{`
-        /* ── Holographic amber filter ── */
         .msm-map-canvas .maplibregl-canvas {
-          filter: sepia(1) hue-rotate(-18deg) saturate(6.6) contrast(2.45) brightness(0.38);
+          filter: saturate(1.12) contrast(1.03) brightness(1.04) sepia(0.06);
         }
         .msm-mode-interactive .msm-map-canvas .maplibregl-canvas {
-          filter: sepia(0.86) hue-rotate(-14deg) saturate(4.4) contrast(2.05) brightness(0.45);
+          filter: saturate(1.08) contrast(1.02) brightness(1.03) sepia(0.04);
         }
 
-        /* ── Atmospheric grade ── */
+        .msm-map-illustration {
+          z-index: 1;
+          opacity: 0.92;
+          mix-blend-mode: multiply;
+        }
+        .msm-road {
+          stroke: rgba(255, 178, 80, 0.78);
+          stroke-width: 18;
+        }
+        .msm-road--major {
+          stroke: rgba(249, 115, 22, 0.68);
+          stroke-width: 28;
+        }
+        .msm-road--alt {
+          stroke: rgba(34, 197, 94, 0.34);
+        }
+        .msm-road--thin {
+          stroke: rgba(255, 214, 128, 0.72);
+          stroke-width: 10;
+        }
+        .msm-food-dots circle {
+          fill: #fff7ed;
+          stroke: #f97316;
+          stroke-width: 4;
+          filter: drop-shadow(0 5px 10px rgba(154,72,18,0.18));
+        }
+
         .msm-map-grade {
           pointer-events: none;
-          z-index: 1;
+          z-index: 2;
           background:
-            radial-gradient(ellipse at 50% 52%, rgba(255, 128, 24, 0.20), transparent 60%),
-            radial-gradient(ellipse at 24% 68%, rgba(255, 103, 15, 0.12), transparent 40%),
-            radial-gradient(ellipse at 78% 32%, rgba(255, 162, 48, 0.10), transparent 34%),
-            linear-gradient(180deg, rgba(0,0,0,0.66) 0%, transparent 24%, transparent 70%, rgba(0,0,0,0.80) 100%);
-          mix-blend-mode: screen;
-          opacity: 0.58;
+            radial-gradient(ellipse at 22% 18%, rgba(255, 188, 68, 0.28), transparent 34%),
+            radial-gradient(ellipse at 78% 26%, rgba(255, 111, 72, 0.18), transparent 32%),
+            linear-gradient(180deg, rgba(255, 253, 244, 0.40) 0%, transparent 44%, rgba(255, 206, 117, 0.18) 100%);
+          mix-blend-mode: soft-light;
+          opacity: 0.72;
         }
         .msm-mode-interactive .msm-map-grade {
-          opacity: 0.38;
+          opacity: 0.45;
           mix-blend-mode: soft-light;
         }
         .msm-map-grade::after {
           content: "";
           position: absolute;
           inset: 0;
-          background: radial-gradient(ellipse at center, transparent 34%, rgba(0, 0, 0, 0.72) 100%);
+          background:
+            radial-gradient(ellipse at center, transparent 38%, rgba(255, 236, 184, 0.34) 100%),
+            linear-gradient(180deg, rgba(255,255,255,0.20), transparent 30%, rgba(150,77,25,0.08) 100%);
           pointer-events: none;
-          mix-blend-mode: normal;
+          mix-blend-mode: multiply;
         }
         .msm-mode-interactive .msm-map-grade::after {
-          background: radial-gradient(ellipse at center, transparent 38%, rgba(0, 0, 0, 0.56) 100%);
+          background: radial-gradient(ellipse at center, transparent 42%, rgba(255, 236, 184, 0.22) 100%);
         }
 
-        /* ── Scanlines ── */
-        .msm-scanlines {
-          z-index: 2;
-          background: repeating-linear-gradient(
-            0deg,
-            transparent,
-            transparent 3px,
-            rgba(0, 0, 0, 0.04) 3px,
-            rgba(0, 0, 0, 0.04) 4px
-          );
-        }
-
-        /* ── Radar rings ── */
-        .msm-radar { z-index: 3; overflow: hidden; }
-        .msm-radar__ring--1,
-        .msm-radar__ring--2,
-        .msm-radar__ring--3 {
-          display: block;
+        .msm-food-glow { z-index: 3; overflow: hidden; }
+        .msm-food-glow__spot {
           position: absolute;
-          border-radius: 50%;
-          border: 1px solid rgba(245, 158, 11, 0.12);
-          top: 50%;
-          left: 50%;
-        }
-        .msm-radar__ring--1 {
-          width: 240px; height: 240px;
-          margin-top: -120px; margin-left: -120px;
-          animation: msm-ring-pulse 4.8s ease-in-out infinite;
-        }
-        .msm-radar__ring--2 {
-          width: 152px; height: 152px;
-          margin-top: -76px; margin-left: -76px;
-          animation: msm-ring-pulse 4.8s ease-in-out infinite 0.65s;
-        }
-        .msm-radar__ring--3 {
-          width: 78px; height: 78px;
-          margin-top: -39px; margin-left: -39px;
-          animation: msm-ring-pulse 4.8s ease-in-out infinite 1.25s;
-        }
-        @keyframes msm-ring-pulse {
-          0%, 100% { opacity: 0.45; }
-          50%       { opacity: 1; }
-        }
-
-        /* ── Radar sweep ── */
-        .msm-radar__sweep {
           display: block;
-          position: absolute;
-          width: 240px; height: 240px;
-          top: 50%; left: 50%;
-          margin-top: -120px; margin-left: -120px;
-          border-radius: 50%;
-          background: conic-gradient(
-            from 0deg,
-            rgba(245, 158, 11, 0.36) 0deg,
-            rgba(245, 158, 11, 0.16) 36deg,
-            rgba(245, 158, 11, 0.03) 68deg,
-            transparent 75deg
-          );
-          animation: msm-radar-spin 9s linear infinite;
+          border-radius: 999px;
+          filter: blur(2px);
+          opacity: 0.58;
+          animation: msm-food-float 8s ease-in-out infinite;
         }
-        @keyframes msm-radar-spin {
-          from { transform: rotate(0deg); }
-          to   { transform: rotate(360deg); }
+        .msm-food-glow__spot--1 {
+          width: 132px;
+          height: 132px;
+          left: 8%;
+          top: 14%;
+          background: radial-gradient(circle, rgba(255, 188, 68, 0.32), transparent 64%);
         }
-
-        /* ── HUD corner brackets ── */
-        .msm-hud { z-index: 5; }
-        .msm-hud__corner {
-          display: block;
-          position: absolute;
-          width: 16px;
-          height: 16px;
-          border-color: rgba(245, 158, 11, 0.58);
-          border-style: solid;
-          border-width: 0;
+        .msm-food-glow__spot--2 {
+          width: 116px;
+          height: 116px;
+          right: 12%;
+          top: 30%;
+          background: radial-gradient(circle, rgba(255, 111, 72, 0.24), transparent 66%);
+          animation-delay: 1.4s;
         }
-        .msm-hud__corner--tl { top: 10px; left: 10px; border-top-width: 2px; border-left-width: 2px; }
-        .msm-hud__corner--tr { top: 10px; right: 10px; border-top-width: 2px; border-right-width: 2px; }
-        .msm-hud__corner--bl { bottom: 10px; left: 10px; border-bottom-width: 2px; border-left-width: 2px; }
-        .msm-hud__corner--br { bottom: 10px; right: 10px; border-bottom-width: 2px; border-right-width: 2px; }
+        .msm-food-glow__spot--3 {
+          width: 150px;
+          height: 150px;
+          left: 36%;
+          bottom: 3%;
+          background: radial-gradient(circle, rgba(52, 211, 153, 0.16), transparent 64%);
+          animation-delay: 2.2s;
+        }
+        @keyframes msm-food-float {
+          0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+          50% { transform: translate3d(0, -8px, 0) scale(1.05); }
+        }
 
         /* ── LIVE badge ── */
         .msm-live-badge {
@@ -421,31 +416,31 @@ export function ThemedScoutMap({
           display: flex;
           align-items: center;
           gap: 5px;
-          padding: 4px 10px 4px 8px;
+          padding: 5px 11px 5px 9px;
           border-radius: 999px;
-          background: rgba(8, 8, 10, 0.70);
-          border: 1px solid rgba(255, 170, 52, 0.55);
+          background: rgba(255, 253, 244, 0.88);
+          border: 1px solid rgba(255, 142, 70, 0.38);
           font-size: 10px;
           font-weight: 800;
-          letter-spacing: 0.14em;
-          color: #ffe3ac;
+          letter-spacing: 0.08em;
+          color: #8a2d0d;
           text-transform: uppercase;
           backdrop-filter: blur(8px);
           pointer-events: none;
-          font-family: ui-monospace, 'Courier New', monospace;
-          box-shadow: 0 0 14px rgba(255, 160, 35, 0.24);
+          font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+          box-shadow: 0 10px 28px rgba(154, 72, 18, 0.18);
         }
         .msm-mode-interactive .msm-live-badge {
-          background: rgba(8, 8, 10, 0.54);
-          border-color: rgba(255, 170, 52, 0.40);
+          background: rgba(255, 253, 244, 0.78);
+          border-color: rgba(255, 142, 70, 0.30);
         }
         .msm-live-badge__dot {
           width: 6px;
           height: 6px;
           border-radius: 50%;
           flex-shrink: 0;
-          background: #f59e0b;
-          box-shadow: 0 0 8px rgba(245, 158, 11, 0.95);
+          background: #22c55e;
+          box-shadow: 0 0 8px rgba(34, 197, 94, 0.75);
           animation: msm-live-blink 1.6s ease-in-out infinite;
         }
         @keyframes msm-live-blink {
@@ -460,16 +455,20 @@ export function ThemedScoutMap({
           left: 50%;
           transform: translateX(-50%);
           z-index: 10;
-          font-size: 9px;
+          font-size: 11px;
           font-weight: 800;
-          letter-spacing: 0.22em;
-          color: rgba(255, 228, 170, 0.52);
-          text-transform: uppercase;
+          letter-spacing: 0.01em;
+          color: rgba(100, 45, 16, 0.72);
           pointer-events: none;
-          font-family: ui-monospace, 'Courier New', monospace;
-          text-shadow: 0 0 14px rgba(245, 158, 11, 0.50);
+          font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+          text-shadow: 0 1px 0 rgba(255,255,255,0.75);
           white-space: nowrap;
           animation: msm-tap-fade 3.2s ease-in-out infinite;
+          background: rgba(255, 253, 244, 0.72);
+          border: 1px solid rgba(255, 142, 70, 0.24);
+          border-radius: 999px;
+          padding: 6px 12px;
+          backdrop-filter: blur(8px);
         }
         @keyframes msm-tap-fade {
           0%, 100% { opacity: 0.65; }
@@ -487,17 +486,17 @@ export function ThemedScoutMap({
           position: absolute;
           inset: 8px;
           border-radius: 9999px;
-          background: #fff8e0;
-          border: 2px solid rgba(255, 210, 80, 0.92);
+          background: #fff7ed;
+          border: 2px solid rgba(249, 115, 22, 0.92);
           box-shadow:
-            0 0 0 4px rgba(255, 175, 35, 0.38),
-            0 0 24px rgba(255, 210, 60, 0.9);
+            0 0 0 4px rgba(255, 237, 213, 0.80),
+            0 8px 22px rgba(194, 65, 12, 0.28);
         }
         .msm-user-pin__pulse {
           position: absolute;
           inset: 1px;
           border-radius: 9999px;
-          background: rgba(255, 155, 25, 0.38);
+          background: rgba(249, 115, 22, 0.22);
           animation: msm-user-pulse 2.4s ease-out infinite;
         }
         .msm-user-pin__pulse--delay { animation-delay: 1.2s; }
@@ -527,12 +526,12 @@ export function ThemedScoutMap({
           height: 20px;
           border-radius: 50% 50% 50% 0;
           transform: rotate(-45deg);
-          background: #f59e0b;
+          background: #ff6f3c;
           overflow: hidden;
           box-shadow:
-            0 0 6px rgba(245, 158, 11, 0.95),
-            0 0 16px rgba(245, 158, 11, 0.48),
-            0 0 34px rgba(245, 158, 11, 0.20);
+            0 2px 0 rgba(255, 255, 255, 0.58) inset,
+            0 8px 18px rgba(194, 65, 12, 0.25),
+            0 0 0 3px rgba(255, 237, 213, 0.72);
         }
         .msm-map-pin__icon {
           position: absolute;
@@ -542,8 +541,8 @@ export function ThemedScoutMap({
           font-size: 7px;
           font-weight: 900;
           line-height: 1;
-          color: rgba(5, 2, 0, 0.72);
-          font-family: ui-monospace, 'Courier New', monospace;
+          color: rgba(68, 22, 7, 0.86);
+          font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
           letter-spacing: 0;
           user-select: none;
         }
@@ -551,37 +550,37 @@ export function ThemedScoutMap({
           position: absolute;
           inset: -6px;
           border-radius: 50% 50% 50% 0;
-          background: rgba(245, 158, 11, 0.34);
-          filter: blur(7px);
+          background: rgba(255, 111, 60, 0.24);
+          filter: blur(8px);
           animation: msm-pin-glow 2.8s ease-in-out infinite;
           pointer-events: none;
         }
         /* Parking — cyan */
         .msm-map-pin--parking .msm-map-pin__drop {
           background: #06b6d4;
-          box-shadow: 0 0 6px rgba(6,182,212,0.95), 0 0 20px rgba(6,182,212,0.55), 0 0 44px rgba(6,182,212,0.22);
+          box-shadow: 0 2px 0 rgba(255,255,255,0.58) inset, 0 8px 18px rgba(8,145,178,0.24), 0 0 0 3px rgba(207,250,254,0.80);
         }
-        .msm-map-pin--parking .msm-map-pin__glow { background: rgba(6,182,212,0.42); }
+        .msm-map-pin--parking .msm-map-pin__glow { background: rgba(6,182,212,0.24); }
         /* Restaurant / deal */
         .msm-map-pin--restaurant .msm-map-pin__drop,
         .msm-map-pin--deal .msm-map-pin__drop {
-          background: #fb923c;
-          box-shadow: 0 0 6px rgba(251,146,60,0.95), 0 0 20px rgba(251,146,60,0.55), 0 0 44px rgba(251,146,60,0.22);
+          background: #fbbf24;
+          box-shadow: 0 2px 0 rgba(255,255,255,0.62) inset, 0 8px 18px rgba(180,83,9,0.24), 0 0 0 3px rgba(254,243,199,0.86);
         }
         .msm-map-pin--restaurant .msm-map-pin__glow,
-        .msm-map-pin--deal .msm-map-pin__glow { background: rgba(251,146,60,0.42); }
+        .msm-map-pin--deal .msm-map-pin__glow { background: rgba(251,191,36,0.24); }
         /* Event — fuchsia */
         .msm-map-pin--event .msm-map-pin__drop {
           background: #e879f9;
-          box-shadow: 0 0 6px rgba(232,121,249,0.95), 0 0 20px rgba(232,121,249,0.55), 0 0 44px rgba(232,121,249,0.22);
+          box-shadow: 0 2px 0 rgba(255,255,255,0.60) inset, 0 8px 18px rgba(192,38,211,0.24), 0 0 0 3px rgba(250,232,255,0.86);
         }
-        .msm-map-pin--event .msm-map-pin__glow { background: rgba(232,121,249,0.42); }
+        .msm-map-pin--event .msm-map-pin__glow { background: rgba(232,121,249,0.24); }
         /* Geo ad — teal */
         .msm-map-pin--geo_ad .msm-map-pin__drop {
           background: #34d399;
-          box-shadow: 0 0 6px rgba(52,211,153,0.95), 0 0 20px rgba(52,211,153,0.55), 0 0 44px rgba(52,211,153,0.22);
+          box-shadow: 0 2px 0 rgba(255,255,255,0.58) inset, 0 8px 18px rgba(5,150,105,0.24), 0 0 0 3px rgba(209,250,229,0.82);
         }
-        .msm-map-pin--geo_ad .msm-map-pin__glow { background: rgba(52,211,153,0.42); }
+        .msm-map-pin--geo_ad .msm-map-pin__glow { background: rgba(52,211,153,0.24); }
         @keyframes msm-pin-glow {
           0%, 100% { opacity: 0.36; transform: scale(1); }
           50%       { opacity: 0.92; transform: scale(1.36); }
