@@ -1634,6 +1634,16 @@ export default function ExplorePreview() {
             </div>
           )}
 
+          {sheetState !== "fullMap" && (
+            <ScoutHeroScenePanel
+              locationLabel={shortLocation}
+              liveTruckCount={liveTrucks.length}
+              dealCount={allDeals.length}
+              eventCount={visibleEvents.length}
+              onOpenMap={openScoutMap}
+            />
+          )}
+
 
 
 
@@ -2023,18 +2033,113 @@ function SectionHeader({
 }) {
   return (
     <div className="pr-5 mb-5">
-      <div className="flex items-baseline justify-between">
-        <h2 className="text-white text-xl sm:text-2xl font-bold">{title}</h2>
+      <div className="flex items-end justify-between gap-3">
+        <div className="min-w-0">
+          <div className="mb-1 inline-flex items-center gap-2 rounded-full bg-orange-500/12 px-2.5 py-1 ring-1 ring-orange-300/20">
+            <span className="h-1.5 w-1.5 rounded-full bg-orange-300" aria-hidden="true" />
+            <span className="text-[10px] font-black uppercase tracking-[0.14em] text-orange-200/80">
+              Scout feed
+            </span>
+          </div>
+          <h2 className="truncate text-white text-xl sm:text-2xl font-black tracking-tight">{title}</h2>
+        </div>
         <Link
           href={linkHref}
-          className="text-sm text-orange-300 inline-flex items-center gap-1 font-medium"
+          className="shrink-0 text-sm text-orange-200 inline-flex items-center gap-1.5 rounded-full bg-white/[0.04] px-3 py-1.5 ring-1 ring-white/10 font-semibold transition-colors hover:bg-white/[0.08]"
         >
           See All <ChevronRight className="h-4 w-4" aria-hidden="true" />
         </Link>
       </div>
       {subtitle ? (
-        <p className="mt-1 text-xs sm:text-sm text-white/60">{subtitle}</p>
+        <p className="mt-1.5 text-xs sm:text-sm text-white/64 leading-relaxed">{subtitle}</p>
       ) : null}
+    </div>
+  );
+}
+
+function ScoutHeroScenePanel({
+  locationLabel,
+  liveTruckCount,
+  dealCount,
+  eventCount,
+  onOpenMap,
+}: {
+  locationLabel: string;
+  liveTruckCount: number;
+  dealCount: number;
+  eventCount: number;
+  onOpenMap: () => void;
+}) {
+  const sceneCount = liveTruckCount + dealCount + eventCount;
+  const sceneLine =
+    sceneCount > 0
+      ? `${sceneCount} live food signals in your area`
+      : "Local scene is quiet right now — check nearby anyway";
+
+  return (
+    <div className="absolute left-4 right-4 top-[calc(env(safe-area-inset-top)+4.3rem)] z-10 sm:right-auto sm:w-[390px] pointer-events-none">
+      <div
+        className="pointer-events-auto rounded-3xl bg-[#0b0f14]/76 px-4 py-3.5 ring-1 ring-white/12 backdrop-blur-xl"
+        style={{
+          boxShadow: "0 20px 55px rgba(0,0,0,0.46), 0 0 20px rgba(255,90,47,0.15)",
+          backgroundImage:
+            "radial-gradient(circle at 8% 4%, rgba(255,90,47,0.24), transparent 36%), radial-gradient(circle at 92% 0%, rgba(253,186,116,0.16), transparent 34%)",
+        }}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-orange-200/76">
+              Tonight in {locationLabel}
+            </p>
+            <h1 className="mt-1 text-white text-[1.05rem] leading-tight font-black tracking-tight">
+              Follow the local food scene
+            </h1>
+            <p className="mt-1.5 text-[12px] text-white/70 leading-relaxed">
+              {sceneLine}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onOpenMap}
+            className="shrink-0 inline-flex h-10 items-center justify-center rounded-2xl bg-[#ff5a2f] px-3.5 text-xs font-black text-[#160904] ring-1 ring-orange-100/40 shadow-[0_0_18px_rgba(255,90,47,0.32)] active:scale-[0.97]"
+          >
+            Open map
+          </button>
+        </div>
+
+        <div className="mt-3 grid grid-cols-3 gap-2">
+          <Link
+            href="/truck-discovery"
+            className="rounded-2xl bg-black/25 px-2.5 py-2 ring-1 ring-white/10 active:scale-[0.98]"
+          >
+            <p className="flex items-center gap-1 text-[11px] font-semibold text-white/75">
+              <Flame className="h-3.5 w-3.5 text-orange-300" aria-hidden="true" />
+              Live trucks
+            </p>
+            <p className="mt-1 text-base font-black text-orange-100">{liveTruckCount}</p>
+          </Link>
+          <Link
+            href="/deals"
+            className="rounded-2xl bg-black/25 px-2.5 py-2 ring-1 ring-white/10 active:scale-[0.98]"
+          >
+            <p className="flex items-center gap-1 text-[11px] font-semibold text-white/75">
+              <Tag className="h-3.5 w-3.5 text-orange-300" aria-hidden="true" />
+              Deals
+            </p>
+            <p className="mt-1 text-base font-black text-orange-100">{dealCount}</p>
+          </Link>
+          <Link
+            href="/events"
+            className="rounded-2xl bg-black/25 px-2.5 py-2 ring-1 ring-white/10 active:scale-[0.98]"
+          >
+            <p className="flex items-center gap-1 text-[11px] font-semibold text-white/75">
+              <CalendarDays className="h-3.5 w-3.5 text-orange-300" aria-hidden="true" />
+              Events
+            </p>
+            <p className="mt-1 text-base font-black text-orange-100">{eventCount}</p>
+          </Link>
+        </div>
+      </div>
     </div>
   );
 }
