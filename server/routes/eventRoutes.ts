@@ -143,8 +143,11 @@ export function registerEventRoutes(
   let parkingPassPublicFeedCache: { expiresAt: number; payload: any[] } | null =
     null;
   let parkingPassPublicFeedLastGood: { payload: any[] } | null = null;
+  let parkingPassPublicFeedBuildInFlight: Promise<any[]> | null = null;
   let parkingPassHostDefaultsLastSyncedAt = 0;
   let parkingPassHostDefaultsSyncInFlight: Promise<number> | null = null;
+  let parkingPassCoordinateWarmupInFlight = false;
+  const parkingPassCoordinateWarmupCooldown = new Map<string, number>();
 
   const toTeaserId = (value: string) =>
     crypto.createHash("sha256").update(value).digest("hex").slice(0, 16);
@@ -345,12 +348,98 @@ export function registerEventRoutes(
     }
   };
 
+  const scheduleParkingPassCoordinateWarmup = (parkingEvents: any[]) => {
+    if (!Array.isArray(parkingEvents) || parkingEvents.length === 0) return;
+    if (parkingPassCoordinateWarmupInFlight) return;
+
+    const now = Date.now();
+    const seenHostIds = new Set<string>();
+    const candidateHosts: any[] = [];
+
+    for (const event of parkingEvents) {
+      const host: any = event?.host;
+      const hostId = String(host?.id || "").trim();
+      if (!hostId || seenHostIds.has(hostId)) continue;
+      seenHostIds.add(hostId);
+
+      const lat = host.latitude !== null && host.latitude !== undefined
+        ? Number(host.latitude)
+        : NaN;
+      const lng = host.longitude !== null && host.longitude !== undefined
+        ? Number(host.longitude)
+        : NaN;
+      const hasCoords =
+        Number.isFinite(lat) &&
+        Number.isFinite(lng) &&
+        Math.abs(lat) <= 90 &&
+        Math.abs(lng) <= 180;
+      if (hasCoords) continue;
+
+      const nextAllowedAt = parkingPassCoordinateWarmupCooldown.get(hostId) || 0;
+      if (nextAllowedAt > now) continue;
+      candidateHosts.push(host);
+    }
+
+    if (candidateHosts.length === 0) return;
+
+    parkingPassCoordinateWarmupInFlight = true;
+    const timer = setTimeout(async () => {
+      const startedAt = Date.now();
+      let updated = 0;
+      try {
+        for (const host of candidateHosts.slice(0, 10)) {
+          const hostId = String(host?.id || "").trim();
+          if (!hostId) continue;
+          parkingPassCoordinateWarmupCooldown.set(hostId, Date.now() + 60 * 60_000);
+
+          const addressParts = [host.address, host.city, host.state, "USA"]
+            .map((value: any) => String(value || "").trim())
+            .filter((value: string) => value.length > 0);
+          if (addressParts.length === 0) continue;
+
+          const coords = await forwardGeocode(addressParts.join(", ")).catch(
+            () => null,
+          );
+          if (!coords) continue;
+
+          try {
+            await storage.updateHostCoordinates(hostId, coords.lat, coords.lng);
+            updated += 1;
+            parkingPassPublicFeedCache = null;
+          } catch {
+            // Ignore persistence errors; this is a background warmup.
+          }
+        }
+      } catch (error) {
+        console.warn("[parking-pass] Coordinate warmup failed:", error);
+      } finally {
+        parkingPassCoordinateWarmupInFlight = false;
+        if (updated > 0) {
+          console.info(
+            `[parking-pass] Coordinate warmup updated ${updated} host(s) in ${Date.now() - startedAt}ms`,
+          );
+        }
+      }
+    }, 0);
+    timer.unref?.();
+  };
+
   const buildParkingPassPublicFeed = async (): Promise<any[]> => {
+    const startedAt = Date.now();
+    let lastMarkAt = startedAt;
+    const timings: Record<string, number> = {};
+    const mark = (label: string) => {
+      const now = Date.now();
+      timings[label] = now - lastMarkAt;
+      lastMarkAt = now;
+    };
+
     // Public feed only returns published, current, available Parking Pass inventory.
     const { occurrences } = await listParkingPassOccurrences({
       horizonDays: 30,
       includeDraft: false,
     });
+    mark("occurrences");
 
     const payoutsEnabled = (event: any) =>
       Boolean(
@@ -395,6 +484,7 @@ export function registerEventRoutes(
         paymentsEnabled: payoutsEnabled(event),
         qualityFlags: computeParkingPassQualityFlags(event),
       }));
+    mark("legacy");
 
     const dedupedById = new Map<string, any>();
     for (const item of [...virtualEvents, ...legacyEvents]) {
@@ -402,99 +492,47 @@ export function registerEventRoutes(
     }
     const parkingEvents = Array.from(dedupedById.values());
 
-    // Best-effort: ensure host coordinates exist so map pins can render.
-    // We intentionally cap work per request to avoid hammering geocoding providers.
-    const MAX_GEOCODE_PER_REQUEST = 30;
-    const seenHostIds = new Set<string>();
-    let geocodeCount = 0;
-
-    const candidateHosts: any[] = [];
-    for (const event of parkingEvents) {
-      const host: any = (event as any)?.host;
-      const hostId = String(host?.id || "").trim();
-      if (!hostId) continue;
-      if (seenHostIds.has(hostId)) continue;
-      seenHostIds.add(hostId);
-
-      const lat =
-        host.latitude !== null && host.latitude !== undefined
-          ? Number(host.latitude)
-          : NaN;
-      const lng =
-        host.longitude !== null && host.longitude !== undefined
-          ? Number(host.longitude)
-          : NaN;
-      const hasCoords =
-        Number.isFinite(lat) &&
-        Number.isFinite(lng) &&
-        Math.abs(lat) <= 90 &&
-        Math.abs(lng) <= 180;
-      if (hasCoords) continue;
-
-      candidateHosts.push(host);
-    }
-
-    for (
-      let index = 0;
-      index < candidateHosts.length && geocodeCount < MAX_GEOCODE_PER_REQUEST;
-      index += 1
-    ) {
-      const host: any = candidateHosts[index];
-      const addressParts = [host.address, host.city, host.state, "USA"]
-        .map((value: any) => String(value || "").trim())
-        .filter((value: string) => value.length > 0);
-      if (addressParts.length === 0) continue;
-
-      const geocodeAddress = addressParts.join(", ");
-      const coords = await forwardGeocode(geocodeAddress).catch(() => null);
-      if (!coords) continue;
-
-      geocodeCount += 1;
-
-      // Persist and patch the in-memory host so this response includes the coords.
-      try {
-        await storage.updateHostCoordinates(host.id, coords.lat, coords.lng);
-      } catch {
-        // Ignore persistence errors; response can still use computed coords.
-      }
-      host.latitude = coords.lat.toString();
-      host.longitude = coords.lng.toString();
-    }
-
     // Do not drop listings just because coordinates are missing.
     // Host locations can still render via /api/map/locations coords or client geocode fallback.
     const eventIds = parkingEvents.map((event) => event.id);
 
-    const bookingRows =
+    const [bookingRows, pendingCounts] =
       eventIds.length > 0
-        ? await db
-            .select({
-              eventId: eventBookings.eventId,
-              spotNumber: eventBookings.spotNumber,
-              bookingConfirmedAt: eventBookings.bookingConfirmedAt,
-              slotType: eventBookings.slotType,
-              truckId: eventBookings.truckId,
-              truckName: restaurants.name,
-            })
-            .from(eventBookings)
-            .innerJoin(restaurants, eq(eventBookings.truckId, restaurants.id))
-            .where(inArray(eventBookings.eventId, eventIds))
-            .where(inArray(eventBookings.status, ["confirmed"]))
-            .orderBy(asc(eventBookings.bookingConfirmedAt))
-        : [];
-
-    const pendingCounts =
-      eventIds.length > 0
-        ? await db
-            .select({
-              eventId: eventBookings.eventId,
-              count: sql<number>`count(*)`,
-            })
-            .from(eventBookings)
-            .where(inArray(eventBookings.eventId, eventIds))
-            .where(inArray(eventBookings.status, ["pending"]))
-            .groupBy(eventBookings.eventId)
-        : [];
+        ? await Promise.all([
+            db
+              .select({
+                eventId: eventBookings.eventId,
+                spotNumber: eventBookings.spotNumber,
+                bookingConfirmedAt: eventBookings.bookingConfirmedAt,
+                slotType: eventBookings.slotType,
+                truckId: eventBookings.truckId,
+                truckName: restaurants.name,
+              })
+              .from(eventBookings)
+              .innerJoin(restaurants, eq(eventBookings.truckId, restaurants.id))
+              .where(
+                and(
+                  inArray(eventBookings.eventId, eventIds),
+                  inArray(eventBookings.status, ["confirmed"]),
+                ),
+              )
+              .orderBy(asc(eventBookings.bookingConfirmedAt)),
+            db
+              .select({
+                eventId: eventBookings.eventId,
+                count: sql<number>`count(*)`,
+              })
+              .from(eventBookings)
+              .where(
+                and(
+                  inArray(eventBookings.eventId, eventIds),
+                  inArray(eventBookings.status, ["pending"]),
+                ),
+              )
+              .groupBy(eventBookings.eventId),
+          ])
+        : [[], []];
+    mark("bookings");
 
     const pendingByEvent = new Map<string, number>();
     for (const row of pendingCounts) {
@@ -568,6 +606,9 @@ export function registerEventRoutes(
         })),
       };
     }).filter(hasParkingPassAvailability);
+    mark("shape");
+
+    scheduleParkingPassCoordinateWarmup(parkingEvents);
 
     parkingPassPublicFeedCache = {
       payload: enhancedEvents,
@@ -575,7 +616,34 @@ export function registerEventRoutes(
     };
     parkingPassPublicFeedLastGood = { payload: enhancedEvents };
 
+    const totalMs = Date.now() - startedAt;
+    if (totalMs > 750 || process.env.PARKING_PASS_FEED_DEBUG === "true") {
+      console.info("[parking-pass] public feed build timing", {
+        totalMs,
+        timings,
+        occurrences: occurrences.length,
+        legacy: legacyEvents.length,
+        returned: enhancedEvents.length,
+      });
+    }
+
     return enhancedEvents;
+  };
+
+  const getParkingPassPublicFeed = async (feedBuilder: () => Promise<any[]>) => {
+    if (
+      parkingPassPublicFeedCache &&
+      parkingPassPublicFeedCache.expiresAt > Date.now()
+    ) {
+      return parkingPassPublicFeedCache.payload;
+    }
+    if (parkingPassPublicFeedBuildInFlight) {
+      return parkingPassPublicFeedBuildInFlight;
+    }
+    parkingPassPublicFeedBuildInFlight = feedBuilder().finally(() => {
+      parkingPassPublicFeedBuildInFlight = null;
+    });
+    return parkingPassPublicFeedBuildInFlight;
   };
   // Get all upcoming events (public)
   // ── Open event coordinator requests (visible to food trucks) ─────────────
@@ -670,6 +738,7 @@ export function registerEventRoutes(
         if (synced > 0) {
           parkingPassPublicFeedCache = null;
           parkingPassPublicFeedLastGood = null;
+          parkingPassPublicFeedBuildInFlight = null;
           parkingPassHostIdsCache = null;
           parkingPassHostIdsLastGood = null;
           parkingPassHostStatusCacheByDate = new Map();
@@ -688,7 +757,7 @@ export function registerEventRoutes(
         const feedBuilder =
           dependencies.parkingPassFeedBuilder ?? buildParkingPassPublicFeed;
         const enhancedEvents = sanitizeParkingPassPublicFeedRows(
-          await feedBuilder(),
+          await getParkingPassPublicFeed(feedBuilder),
         );
         res.json(
           isAuthed
@@ -721,6 +790,7 @@ export function registerEventRoutes(
       if (synced > 0) {
         parkingPassPublicFeedCache = null;
         parkingPassPublicFeedLastGood = null;
+        parkingPassPublicFeedBuildInFlight = null;
         parkingPassHostIdsCache = null;
         parkingPassHostIdsLastGood = null;
         parkingPassHostStatusCacheByDate = new Map();
@@ -730,7 +800,7 @@ export function registerEventRoutes(
         parkingPassPublicFeedCache &&
         parkingPassPublicFeedCache.expiresAt > Date.now()
           ? parkingPassPublicFeedCache.payload
-          : await buildParkingPassPublicFeed(),
+          : await getParkingPassPublicFeed(buildParkingPassPublicFeed),
       );
 
       const pensacolaEvents = (Array.isArray(feed) ? feed : []).filter(

@@ -51,7 +51,10 @@ export function validateEnv(): EnvSpec {
     throw new Error("CLIENT_ORIGIN must be a valid http(s) origin");
   }
 
-  if (!env.TRADESCOUT_API_TOKEN) {
+  const tradeScoutIntegrationEnabled =
+    process.env.TRADESCOUT_INTEGRATION_ENABLED === "true" ||
+    process.env.TRADESCOUT_API_TOKEN_REQUIRED === "true";
+  if (!env.TRADESCOUT_API_TOKEN && tradeScoutIntegrationEnabled) {
     console.warn(
       "⚠️  TRADESCOUT_API_TOKEN not set - TradeScout LLM integration will be unavailable"
     );
