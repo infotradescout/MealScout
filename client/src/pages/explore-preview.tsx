@@ -192,68 +192,6 @@ interface RestaurantRelationshipSnapshot {
   recommendationIds: Set<string>;
 }
 
-interface ParkingPassListing {
-  id: string;
-  date?: string | null;
-  startTime?: string | null;
-  endTime?: string | null;
-  hostId?: string | null;
-  hostName?: string | null;
-  businessName?: string | null;
-  address?: string | null;
-  city?: string | null;
-  state?: string | null;
-  imageUrl?: string | null;
-  heroImageUrl?: string | null;
-  spotImageUrl?: string | null;
-  spotCount?: number | null;
-  maxTrucks?: number | null;
-  bookedSpots?: number | null;
-  availableSpotNumbers?: number[] | null;
-  availableSpots?: number | null;
-  hostPriceCents?: number | null;
-  breakfastPriceCents?: number | null;
-  lunchPriceCents?: number | null;
-  dinnerPriceCents?: number | null;
-  dailyPriceCents?: number | null;
-  weeklyPriceCents?: number | null;
-  monthlyPriceCents?: number | null;
-  paymentsEnabled?: boolean | null;
-  status?: string | null;
-  seriesStatus?: string | null;
-  seriesPublishedAt?: string | null;
-  publishedAt?: string | null;
-  deletedAt?: string | null;
-  archivedAt?: string | null;
-  cancelledAt?: string | null;
-  canceledAt?: string | null;
-  expiresAt?: string | null;
-  endDate?: string | null;
-  isActive?: boolean | null;
-  isArchived?: boolean | null;
-  isDeleted?: boolean | null;
-  isCancelled?: boolean | null;
-  isCanceled?: boolean | null;
-  isAvailable?: boolean | null;
-  latitude?: number | string | null;
-  longitude?: number | string | null;
-  host?: {
-    businessName?: string | null;
-    address?: string | null;
-    city?: string | null;
-    state?: string | null;
-    imageUrl?: string | null;
-    spotImageUrl?: string | null;
-    latitude?: number | string | null;
-    longitude?: number | string | null;
-    deletedAt?: string | null;
-    archivedAt?: string | null;
-    isActive?: boolean | null;
-    isArchived?: boolean | null;
-    isDeleted?: boolean | null;
-  } | null;
-}
-
 type CravingCategory = {
   id: string;
   label: string;
@@ -278,7 +216,6 @@ type DiscoveryLayerId =
   | "menuItems"
   | "foodTrucks"
   | "restaurants"
-  | "parkingHosts"
   | "deals"
   | "events"
   | "saved";
@@ -321,11 +258,6 @@ const DISCOVERY_LAYERS: Record<
     title: "Restaurants Near You",
     href: "/search",
     subtitle: "Local restaurants and bars worth knowing about - not a fast-food feed.",
-  },
-  parkingHosts: {
-    title: "Host & Truck Parking",
-    href: "/parking-pass",
-    subtitle: "For hosts and trucks planning where service happens next.",
   },
   deals: {
     title: "Deals Near You",
@@ -469,88 +401,6 @@ function isWithinScoutRadius(
     return fallbackDistanceKm <= radiusKm;
   }
   return false;
-}
-
-const BLOCKED_PARKING_PASS_STATUSES = new Set([
-  "archived",
-  "cancelled",
-  "canceled",
-  "closed",
-  "completed",
-  "deleted",
-  "disabled",
-  "draft",
-  "expired",
-  "inactive",
-  "unavailable",
-]);
-
-function normalizeScoutStatus(value: unknown): string {
-  return String(value ?? "")
-    .trim()
-    .toLowerCase();
-}
-
-function parkingPassHasAvailability(listing: ParkingPassListing): boolean {
-  if (Array.isArray(listing.availableSpotNumbers)) {
-    return listing.availableSpotNumbers.length > 0;
-  }
-  if (typeof listing.availableSpots === "number") {
-    return listing.availableSpots > 0;
-  }
-  const capacity = Number(listing.spotCount ?? listing.maxTrucks ?? 0);
-  const booked = Number(listing.bookedSpots ?? 0);
-  if (!Number.isFinite(capacity) || capacity <= 0) return false;
-  if (!Number.isFinite(booked)) return true;
-  return capacity - booked > 0;
-}
-
-function parkingPassIsCurrent(listing: ParkingPassListing): boolean {
-  const rawDate = listing.date ?? listing.endDate ?? listing.expiresAt;
-  if (!rawDate) return true;
-  const parsed = new Date(rawDate);
-  if (!Number.isFinite(parsed.getTime())) return true;
-  const endTime = String(listing.endTime || "").trim();
-  const match = endTime.match(/^(\d{1,2}):(\d{2})/);
-  if (match) {
-    parsed.setHours(Number(match[1]), Number(match[2]), 0, 0);
-  }
-  return parsed.getTime() >= Date.now() - 30 * 60 * 1000;
-}
-
-function isParkingPassListingRenderable(listing: ParkingPassListing): boolean {
-  const status = normalizeScoutStatus(listing.status || "open");
-  const seriesStatus = normalizeScoutStatus(listing.seriesStatus || "published");
-  if (BLOCKED_PARKING_PASS_STATUSES.has(status)) return false;
-  if (seriesStatus && seriesStatus !== "published") return false;
-  if (listing.isActive === false || listing.host?.isActive === false) return false;
-  if (listing.isAvailable === false) return false;
-  if (listing.isArchived || listing.host?.isArchived) return false;
-  if (listing.isDeleted || listing.host?.isDeleted) return false;
-  if (listing.isCancelled || listing.isCanceled) return false;
-  if (
-    listing.deletedAt ||
-    listing.archivedAt ||
-    listing.cancelledAt ||
-    listing.canceledAt ||
-    listing.host?.deletedAt ||
-    listing.host?.archivedAt
-  ) {
-    return false;
-  }
-  if (!parkingPassIsCurrent(listing)) return false;
-  return parkingPassHasAvailability(listing);
-}
-
-function parkingPassHostKey(listing: ParkingPassListing): string {
-  const hostId = String(listing.hostId || "").trim();
-  if (hostId) return hostId;
-  const hostName = String(
-    listing.hostName || listing.businessName || listing.host?.businessName || "",
-  ).trim();
-  const lat = String(listing.latitude ?? listing.host?.latitude ?? "").trim();
-  const lng = String(listing.longitude ?? listing.host?.longitude ?? "").trim();
-  return [hostName, lat, lng].filter(Boolean).join(":") || listing.id;
 }
 
 function extractMenuPreviewItems(data: any): MenuPreviewItem[] {
@@ -937,52 +787,6 @@ export default function ExplorePreview() {
       );
   }, [favoriteRestaurantsData]);
 
-  /* --------- parking pass hosts --------- */
-
-  const { data: parkingPassData, isLoading: parkingPassLoading } = useQuery<ParkingPassListing[]>({
-    queryKey: ["/api/parking-pass"],
-    enabled: !!coords,
-    queryFn: async () => {
-      const response = await fetch("/api/parking-pass", { credentials: "include" });
-      if (!response.ok) return [];
-      const data = await response.json();
-      if (Array.isArray(data)) return data;
-      if (Array.isArray(data.listings)) return data.listings;
-      if (Array.isArray(data.passes)) return data.passes;
-      return [];
-    },
-    staleTime: 120_000,
-  });
-
-  const parkingPassHosts = useMemo<ParkingPassListing[]>(() => {
-    if (!parkingPassData) return [];
-    if (Array.isArray(parkingPassData)) return parkingPassData;
-    return [];
-  }, [parkingPassData]);
-
-  const localParkingPassHosts = useMemo<ParkingPassListing[]>(() => {
-    const uniqueByHost = new Map<string, ParkingPassListing>();
-    for (const listing of parkingPassHosts) {
-      if (!isParkingPassListingRenderable(listing)) continue;
-      if (
-        !isWithinScoutRadius(
-          coords,
-          listing.latitude ?? listing.host?.latitude,
-          listing.longitude ?? listing.host?.longitude,
-          discoveryRadiusKm,
-        )
-      ) {
-        continue;
-      }
-
-      const key = parkingPassHostKey(listing);
-      if (!uniqueByHost.has(key)) {
-        uniqueByHost.set(key, listing);
-      }
-    }
-    return Array.from(uniqueByHost.values());
-  }, [coords, discoveryRadiusKm, parkingPassHosts]);
-
   /* --------- nearby deals (location-aware) --------- */
 
   const { data: nearbyDealsData } = useQuery<DealSummary[]>({
@@ -1066,42 +870,6 @@ export default function ExplorePreview() {
       .filter((m): m is MapAdapterMarker => m !== null);
   }, [nearbyRestaurants]);
 
-  const parkingMarkers = useMemo<MapAdapterMarker[]>(() => {
-    return localParkingPassHosts
-      .map((p) => {
-        const parseCoord = (value: number | string | null | undefined) => {
-          if (value === null || value === undefined) return null;
-          const parsed = typeof value === "string" ? Number(value) : value;
-          return Number.isFinite(parsed) ? parsed : null;
-        };
-        const lat = parseCoord(p.latitude ?? p.host?.latitude);
-        const lng = parseCoord(p.longitude ?? p.host?.longitude);
-        if (lat === null || lng === null) return null;
-        const name = p.businessName ?? p.hostName ?? p.host?.businessName ?? undefined;
-        const capacity = p.spotCount ?? p.maxTrucks ?? null;
-        const openSpots = Array.isArray(p.availableSpotNumbers)
-          ? p.availableSpotNumbers.length
-          : typeof p.availableSpots === "number"
-            ? p.availableSpots
-            : typeof capacity === "number" && typeof p.bookedSpots === "number"
-              ? Math.max(0, capacity - p.bookedSpots)
-              : null;
-        return {
-          id: `parking-${parkingPassHostKey(p)}`,
-          sourceId: String(p.id),
-          kind: "parking" as const,
-          lat,
-          lng,
-          title: name,
-          subtitle:
-            typeof openSpots === "number" && openSpots >= 0
-              ? `${openSpots} spot${openSpots === 1 ? "" : "s"} open`
-              : undefined,
-        } as MapAdapterMarker;
-      })
-      .filter((m): m is MapAdapterMarker => m !== null);
-  }, [localParkingPassHosts]);
-
   const eventMarkers = useMemo<MapAdapterMarker[]>(() => {
     return visibleEvents
       .map((e) => {
@@ -1123,8 +891,8 @@ export default function ExplorePreview() {
 
   // Combined markers for the full Google Map view
   const allMapMarkers = useMemo<MapAdapterMarker[]>(
-    () => [...truckMarkers, ...restaurantMarkers, ...parkingMarkers, ...eventMarkers],
-    [truckMarkers, restaurantMarkers, parkingMarkers, eventMarkers],
+    () => [...truckMarkers, ...restaurantMarkers, ...eventMarkers],
+    [truckMarkers, restaurantMarkers, eventMarkers],
   );
 
   /* --------- map state --------- */
@@ -1270,7 +1038,7 @@ export default function ExplorePreview() {
         }
         navigate(`/truck/${marker.sourceId}`);
       }
-      else if (marker.kind === "restaurant" || marker.kind === "parking" || marker.kind === "event") {
+      else if (marker.kind === "restaurant" || marker.kind === "event") {
         setSelectedLiveTruck(null);
         setSelectedMapMarker(marker);
         setMapCenter({ lat: marker.lat, lng: marker.lng });
@@ -1390,14 +1158,12 @@ export default function ExplorePreview() {
   const showMenuItemsSection = localMenuItems.length > 0;
   const showRestaurantsSection =
     nearbyRestaurantsLoading || nearbyRestaurants.length > 0;
-  const showParkingHostsSection = parkingPassLoading || localParkingPassHosts.length > 0;
   const showDealsSection = allDeals.length > 0;
   const showEventsSection = visibleEvents.length > 0;
   const localSignalCount =
     liveTrucks.length +
     localMenuItems.length +
     nearbyRestaurants.length +
-    localParkingPassHosts.length +
     allDeals.length +
     visibleEvents.length;
 
@@ -1663,7 +1429,6 @@ export default function ExplorePreview() {
               locationLabel={shortLocation}
               liveTruckCount={liveTrucks.length}
               restaurantCount={nearbyRestaurants.length}
-              parkingHostCount={localParkingPassHosts.length}
               eventCount={visibleEvents.length}
               dealCount={allDeals.length}
               localSignalCount={localSignalCount}
@@ -1738,10 +1503,10 @@ export default function ExplorePreview() {
            ============================================================ */}
         {sheetState !== "fullMap" && (
           <div
-            className="relative z-10 mt-4 rounded-t-[1.5rem] bg-[#0a0c10]/76 backdrop-blur-xl"
+            className="relative z-10 mt-4 rounded-t-[1.5rem] bg-[#fff8e6]/92 text-[#211309] backdrop-blur-xl"
             style={{
               boxShadow:
-                "inset 0 1px 0 rgba(255,255,255,0.08)",
+                "inset 0 1px 0 rgba(255,255,255,0.78), 0 -18px 48px rgba(80,42,14,0.18)",
             }}
           >
             {/* LIVE NOW — collapsed when empty, expanded when trucks are live */}
@@ -1759,7 +1524,6 @@ export default function ExplorePreview() {
               liveTruckCount={liveTrucks.length}
               restaurantCount={nearbyRestaurants.length}
               menuItemCount={localMenuItems.length}
-              parkingHostCount={localParkingPassHosts.length}
               dealCount={allDeals.length}
               eventCount={visibleEvents.length}
               localSignalCount={localSignalCount}
@@ -1790,7 +1554,7 @@ export default function ExplorePreview() {
                       >
                         <img src={cat.image} alt="" className="h-full w-full object-cover" loading="lazy" />
                       </span>
-                      <span className="text-white text-[11px] sm:text-xs font-semibold">{cat.label}</span>
+                      <span className="text-[#3c2213] text-[11px] sm:text-xs font-semibold">{cat.label}</span>
                     </button>
                   </li>
                 ))}
@@ -1931,11 +1695,11 @@ export default function ExplorePreview() {
                       <button
                         type="button"
                         onClick={() => navigate("/favorites")}
-                        className="h-full min-h-[132px] w-full rounded-3xl bg-white/5 ring-1 ring-white/10 px-4 py-5 text-left hover:bg-white/8 transition-colors"
+                        className="h-full min-h-[132px] w-full rounded-3xl bg-white/82 ring-1 ring-orange-200/70 px-4 py-5 text-left shadow-sm hover:bg-white transition-colors"
                       >
-                        <Bookmark className="mb-4 h-5 w-5 text-orange-300" />
-                        <p className="text-sm font-semibold text-white">View all saved</p>
-                        <p className="mt-1 text-xs text-white/50">Restaurants and deals</p>
+                        <Bookmark className="mb-4 h-5 w-5 text-orange-600" />
+                        <p className="text-sm font-semibold text-[#241107]">View all saved</p>
+                        <p className="mt-1 text-xs text-[#765038]">Restaurants and deals</p>
                       </button>
                     </li>
                   </ul>
@@ -1944,51 +1708,27 @@ export default function ExplorePreview() {
                 <button
                   type="button"
                   onClick={() => navigate(user ? "/favorites" : "/login?redirect=/scout")}
-                  className="w-full text-left rounded-3xl bg-white/5 ring-1 ring-white/10 backdrop-blur-md p-5 hover:bg-white/8 transition-colors active:scale-[0.99]"
+                  className="w-full text-left rounded-3xl bg-white/78 ring-1 ring-orange-200/70 backdrop-blur-md p-5 shadow-sm hover:bg-white transition-colors active:scale-[0.99]"
                 >
                   <div className="flex items-center gap-4">
-                    <span className="h-12 w-12 rounded-full bg-orange-500/15 ring-1 ring-orange-300/40 flex items-center justify-center shrink-0" aria-hidden="true">
-                      <Bookmark className="h-5 w-5 text-orange-300" />
+                    <span className="h-12 w-12 rounded-full bg-orange-100 ring-1 ring-orange-300/60 flex items-center justify-center shrink-0" aria-hidden="true">
+                      <Bookmark className="h-5 w-5 text-orange-600" />
                     </span>
                     <div className="flex-1 min-w-0">
-                      <p className="text-white font-semibold">
+                      <p className="text-[#241107] font-semibold">
                         {user ? "No saved spots yet" : "Save your food map"}
                       </p>
-                      <p className="text-white/60 text-sm mt-0.5">
+                      <p className="text-[#765038] text-sm mt-0.5">
                         {user
                           ? "Tap Save on restaurants worth coming back to."
                           : "Sign in to keep restaurants, deals, and places you want to revisit."}
                       </p>
                     </div>
-                    <ChevronRight className="h-5 w-5 text-white/50" aria-hidden="true" />
+                    <ChevronRight className="h-5 w-5 text-orange-600" aria-hidden="true" />
                   </div>
                 </button>
               )}
             </section>
-
-            {/* ── HOST & TRUCK PARKING ── */}
-            {showParkingHostsSection && (
-              <section className="pl-5 pr-0 pt-2 pb-12">
-                <SectionHeader
-                  title={DISCOVERY_LAYERS.parkingHosts.title}
-                  linkHref={DISCOVERY_LAYERS.parkingHosts.href}
-                  subtitle={DISCOVERY_LAYERS.parkingHosts.subtitle}
-                />
-                {parkingPassLoading && localParkingPassHosts.length === 0 ? (
-                  <HorizontalSkeletonRow count={3} width={200} />
-                ) : (
-                  <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
-                    <ul className="flex gap-4 pr-5" role="list" aria-label="Host and truck parking">
-                      {localParkingPassHosts.slice(0, 8).map((h) => (
-                        <li key={parkingPassHostKey(h)} className="shrink-0 w-[200px] sm:w-[220px]">
-                          <ParkingPassCard listing={h} />
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </section>
-            )}
           </div>
         )}
       </main>
@@ -2014,23 +1754,23 @@ function SectionHeader({
     <div className="pr-5 mb-5">
       <div className="flex items-end justify-between gap-3">
         <div className="min-w-0">
-          <div className="mb-1 inline-flex items-center gap-2 rounded-full bg-orange-500/12 px-2.5 py-1 ring-1 ring-orange-300/20">
-            <span className="h-1.5 w-1.5 rounded-full bg-orange-300" aria-hidden="true" />
-            <span className="text-[10px] font-black uppercase tracking-[0.14em] text-orange-200/80">
+          <div className="mb-1 inline-flex items-center gap-2 rounded-full bg-orange-100/80 px-2.5 py-1 ring-1 ring-orange-300/50">
+            <span className="h-1.5 w-1.5 rounded-full bg-orange-500" aria-hidden="true" />
+            <span className="text-[10px] font-black uppercase tracking-[0.14em] text-orange-800/80">
               Scout feed
             </span>
           </div>
-          <h2 className="truncate text-white text-xl sm:text-2xl font-black tracking-tight">{title}</h2>
+          <h2 className="truncate text-[#241107] text-xl sm:text-2xl font-black tracking-tight">{title}</h2>
         </div>
         <Link
           href={linkHref}
-          className="shrink-0 text-sm text-orange-200 inline-flex items-center gap-1.5 rounded-full bg-white/[0.04] px-3 py-1.5 ring-1 ring-white/10 font-semibold transition-colors hover:bg-white/[0.08]"
+          className="shrink-0 text-sm text-orange-700 inline-flex items-center gap-1.5 rounded-full bg-white/80 px-3 py-1.5 ring-1 ring-orange-200/70 font-semibold transition-colors hover:bg-orange-50"
         >
           See All <ChevronRight className="h-4 w-4" aria-hidden="true" />
         </Link>
       </div>
       {subtitle ? (
-        <p className="mt-1.5 text-xs sm:text-sm text-white/64 leading-relaxed">{subtitle}</p>
+        <p className="mt-1.5 text-xs sm:text-sm text-[#765038] leading-relaxed">{subtitle}</p>
       ) : null}
     </div>
   );
@@ -2048,7 +1788,6 @@ function LocalFoodDashboard({
   liveTruckCount,
   restaurantCount,
   menuItemCount,
-  parkingHostCount,
   dealCount,
   eventCount,
   localSignalCount,
@@ -2061,7 +1800,6 @@ function LocalFoodDashboard({
   liveTruckCount: number;
   restaurantCount: number;
   menuItemCount: number;
-  parkingHostCount: number;
   dealCount: number;
   eventCount: number;
   localSignalCount: number;
@@ -2108,12 +1846,6 @@ function LocalFoodDashboard({
       href: "/events",
       helper: eventCount > 0 ? "Food events nearby" : "Find upcoming events",
     },
-    {
-      label: "Host spots",
-      count: parkingHostCount,
-      href: "/parking-pass",
-      helper: parkingHostCount > 0 ? "For hosts and trucks" : "Plan truck service",
-    },
   ];
 
   const featuredLanes = actionLanes.slice(0, 3);
@@ -2123,34 +1855,34 @@ function LocalFoodDashboard({
     ? "Enable location so Scout can load your nearby food scene."
     : hasAnythingLive
       ? "Here is the fastest way to jump into what is happening near you right now."
-      : "Nothing is active yet. Widen radius or browse all categories.";
+      : "Quiet nearby right now. Widen your radius or jump into dinner, deals, and menus.";
 
   const radiusOptions = [5, 12, 25, 40];
   const radiusMiles = Math.max(1, Math.round(discoveryRadiusKm * 0.621371));
 
   return (
     <section className="px-5 pt-2 pb-6">
-      <div className="rounded-[1.65rem] overflow-hidden bg-white/[0.04] ring-1 ring-white/10 backdrop-blur-md">
+      <div className="rounded-[1.65rem] overflow-hidden bg-white/78 ring-1 ring-orange-200/70 backdrop-blur-md">
         <div
           className="px-4 py-4"
           style={{
             backgroundImage:
-              "radial-gradient(circle at 12% 0%, rgba(255,90,47,0.18), transparent 34%), radial-gradient(circle at 90% 12%, rgba(251,191,36,0.10), transparent 30%)",
+              "radial-gradient(circle at 12% 0%, rgba(255,139,59,0.18), transparent 34%), radial-gradient(circle at 90% 12%, rgba(251,191,36,0.18), transparent 30%)",
           }}
         >
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-[10px] uppercase tracking-[0.2em] text-orange-200/75 font-bold">
+              <p className="text-[10px] uppercase tracking-[0.2em] text-orange-700/75 font-bold">
                 What to eat right now
               </p>
-              <h2 className="mt-1 text-white text-xl font-black leading-tight tracking-tight">
+              <h2 className="mt-1 text-[#241107] text-xl font-black leading-tight tracking-tight">
                 {locationLabel}
               </h2>
-              <p className="mt-1.5 text-white/62 text-xs leading-relaxed max-w-[32rem]">
+              <p className="mt-1.5 text-[#5f3a20] text-xs leading-relaxed max-w-[32rem]">
                 {headline}
               </p>
             </div>
-            <span className="shrink-0 rounded-full bg-[#120805]/45 ring-1 ring-orange-300/25 px-3 py-1 text-[11px] font-semibold text-orange-100">
+            <span className="shrink-0 rounded-full bg-orange-100/80 ring-1 ring-orange-300/60 px-3 py-1 text-[11px] font-semibold text-orange-900">
               {signalLabel}
             </span>
           </div>
@@ -2159,10 +1891,10 @@ function LocalFoodDashboard({
             <button
               type="button"
               onClick={onRefreshLocation}
-              className="mt-3 w-full rounded-2xl bg-[#120805]/45 ring-1 ring-orange-300/30 px-4 py-3 text-left active:scale-[0.99]"
+              className="mt-3 w-full rounded-2xl bg-orange-500 text-white ring-1 ring-orange-300/70 px-4 py-3 text-left active:scale-[0.99]"
             >
               <p className="text-white text-sm font-bold">Use my location</p>
-              <p className="mt-1 text-white/65 text-xs">
+              <p className="mt-1 text-white/82 text-xs">
                 This unlocks nearby trucks, deals, events, and food spots instantly.
               </p>
             </button>
@@ -2173,35 +1905,35 @@ function LocalFoodDashboard({
               <Link
                 key={lane.label}
                 href={lane.href}
-                className="flex items-center justify-between gap-3 rounded-2xl bg-[#120805]/35 ring-1 ring-white/10 px-3.5 py-3 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
+                className="flex items-center justify-between gap-3 rounded-2xl bg-white/86 ring-1 ring-orange-200/70 px-3.5 py-3 shadow-sm active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-400/70"
               >
                 <div className="min-w-0">
-                  <p className="text-white text-sm font-black truncate">
+                  <p className="text-[#241107] text-sm font-black truncate">
                     {index + 1}. {lane.label}
                   </p>
-                  <p className="mt-0.5 text-white/62 text-xs truncate">{lane.helper}</p>
+                  <p className="mt-0.5 text-[#765038] text-xs truncate">{lane.helper}</p>
                 </div>
                 <div className="shrink-0 flex items-center gap-2">
-                  <span className="rounded-full bg-black/35 px-2 py-1 text-[11px] font-bold text-orange-100 ring-1 ring-white/10">
+                  <span className="rounded-full bg-orange-50 px-2 py-1 text-[11px] font-bold text-orange-900 ring-1 ring-orange-200">
                     {lane.count}
                   </span>
-                  <ChevronRight className="h-4 w-4 text-orange-300" aria-hidden="true" />
+                  <ChevronRight className="h-4 w-4 text-orange-600" aria-hidden="true" />
                 </div>
               </Link>
             ))}
           </div>
 
-          <div className="mt-3 rounded-2xl bg-[#120805]/30 ring-1 ring-white/8 p-3">
+          <div className="mt-3 rounded-2xl bg-[#fff3cf]/82 ring-1 ring-orange-200/70 p-3">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-[10px] uppercase tracking-[0.18em] text-orange-200/70 font-bold">
+                <p className="text-[10px] uppercase tracking-[0.18em] text-orange-700/70 font-bold">
                   Discovery radius
                 </p>
-                <p className="mt-0.5 text-white text-sm font-semibold">
+                <p className="mt-0.5 text-[#241107] text-sm font-semibold">
                   {radiusMiles} mi around you
                 </p>
               </div>
-              <div className="flex rounded-full bg-black/25 p-1 ring-1 ring-white/10">
+              <div className="flex rounded-full bg-white/70 p-1 ring-1 ring-orange-200/70">
                 {radiusOptions.map((radius) => {
                   const isActive = discoveryRadiusKm === radius;
                   return (
@@ -2212,8 +1944,8 @@ function LocalFoodDashboard({
                       className={[
                         "rounded-full px-2.5 py-1 text-[11px] font-bold transition-colors",
                         isActive
-                          ? "bg-orange-400 text-[#1b0b02]"
-                          : "text-white/62 hover:text-white",
+                          ? "bg-orange-500 text-white"
+                          : "text-[#765038] hover:text-[#241107]",
                       ].join(" ")}
                       aria-pressed={isActive}
                     >
@@ -2228,9 +1960,9 @@ function LocalFoodDashboard({
               <button
                 type="button"
                 onClick={onRefreshLocation}
-                className="shrink-0 inline-flex items-center gap-2 rounded-full bg-[#120805]/35 ring-1 ring-white/12 text-white px-3 py-2 text-xs font-semibold active:scale-[0.98]"
+                className="shrink-0 inline-flex items-center gap-2 rounded-full bg-white/80 ring-1 ring-orange-200/70 text-[#241107] px-3 py-2 text-xs font-semibold active:scale-[0.98]"
               >
-                <Search className="h-3.5 w-3.5 text-orange-200" aria-hidden="true" />
+                <Search className="h-3.5 w-3.5 text-orange-600" aria-hidden="true" />
                 Refresh location
               </button>
               <div className="min-w-0 flex-1 overflow-x-auto atmo-hide-scrollbar">
@@ -2240,15 +1972,15 @@ function LocalFoodDashboard({
                       <Link
                         key={`${lane.label}:${lane.href}`}
                         href={lane.href}
-                        className="shrink-0 inline-flex items-center gap-1.5 rounded-full bg-white/[0.06] ring-1 ring-white/10 px-3 py-2 text-xs font-semibold text-white/82 active:scale-[0.98]"
+                        className="shrink-0 inline-flex items-center gap-1.5 rounded-full bg-white/82 ring-1 ring-orange-200/70 px-3 py-2 text-xs font-semibold text-[#3c2213] active:scale-[0.98]"
                       >
                         {lane.label}
-                        <span className="text-orange-100/80">{lane.count}</span>
-                        <ChevronRight className="h-3.5 w-3.5 text-orange-200" aria-hidden="true" />
+                        <span className="text-orange-700">{lane.count}</span>
+                        <ChevronRight className="h-3.5 w-3.5 text-orange-600" aria-hidden="true" />
                       </Link>
                     ))
                   ) : (
-                    <span className="inline-flex items-center rounded-full bg-white/[0.06] ring-1 ring-white/10 px-3 py-2 text-xs font-semibold text-white/62">
+                    <span className="inline-flex items-center rounded-full bg-white/82 ring-1 ring-orange-200/70 px-3 py-2 text-xs font-semibold text-[#765038]">
                       All food lanes already shown above
                     </span>
                   )}
@@ -3133,7 +2865,7 @@ function LiveNowSection({
   liveTrucksLoading,
   liveTrucksError,
   locationStatus,
-  onExpandMap: _onExpandMap,
+  onExpandMap,
 }: {
   liveTrucks: LiveTruckSummary[];
   liveTrucksLoading: boolean;
@@ -3206,12 +2938,12 @@ function LiveNowSection({
         : "Nothing live right now";
 
   return (
-    <section className="px-5 pt-2 pb-4">
+    <section className="px-5 pt-2 pb-5">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <h2 className="text-white text-xl sm:text-2xl font-bold">Live Now</h2>
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/8 ring-1 ring-white/10 text-white/50 text-[11px] font-medium">
-            <span className="h-1.5 w-1.5 rounded-full bg-white/30" aria-hidden="true" />
+          <h2 className="text-[#241107] text-xl sm:text-2xl font-bold">Live Now</h2>
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-orange-100/80 ring-1 ring-orange-300/50 text-orange-900 text-[11px] font-medium">
+            <span className="h-1.5 w-1.5 rounded-full bg-orange-400" aria-hidden="true" />
             {statusChip}
           </span>
         </div>
@@ -3220,7 +2952,7 @@ function LiveNowSection({
             <button
               type="button"
               onClick={() => setExpanded((v) => !v)}
-              className="text-xs text-white/40 hover:text-white/70 transition-colors"
+              className="text-xs text-[#765038] hover:text-[#241107] transition-colors"
               aria-expanded={expanded}
             >
               {expanded ? "Less" : "Why?"}
@@ -3228,7 +2960,7 @@ function LiveNowSection({
           )}
           <Link
             href="/truck-discovery"
-            className="text-sm text-orange-300 inline-flex items-center gap-1 font-medium"
+            className="text-sm text-orange-700 inline-flex items-center gap-1 font-medium"
           >
             See All <ChevronRight className="h-4 w-4" aria-hidden="true" />
           </Link>
@@ -3237,14 +2969,47 @@ function LiveNowSection({
 
       {/* Expandable context — only shown when user taps "Why?" */}
       {expanded && (
-        <div className="mt-3 rounded-2xl bg-white/5 ring-1 ring-white/10 px-4 py-3">
-          <p className="text-white/70 text-sm leading-relaxed">
+        <div className="mt-3 rounded-2xl bg-white/82 ring-1 ring-orange-200/70 px-4 py-3 shadow-sm">
+          <p className="text-[#5f3a20] text-sm leading-relaxed">
             {locationStatus === "denied"
               ? "Turn on location so MealScout can show food trucks, deals, and events near you in real time."
               : liveTrucksError
                 ? "We couldn't reach the live feed. Pull down to refresh."
-                : "Trucks pop up throughout the day. Check back later or scroll down to discover restaurants and events near you."}
+                : "Trucks pop up throughout the day. You can still find dinner, deals, fresh menus, and events nearby."}
           </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {locationStatus === "denied" ? (
+              <button
+                type="button"
+                onClick={onExpandMap}
+                className="inline-flex items-center gap-2 rounded-full bg-orange-500 px-3 py-2 text-xs font-black text-white active:scale-[0.98]"
+              >
+                Open map
+                <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
+              </button>
+            ) : null}
+            <Link
+              href="/search"
+              className="inline-flex items-center gap-2 rounded-full bg-[#241107] px-3 py-2 text-xs font-black text-white active:scale-[0.98]"
+            >
+              Find dinner
+              <Utensils className="h-3.5 w-3.5" aria-hidden="true" />
+            </Link>
+            <Link
+              href="/deals"
+              className="inline-flex items-center gap-2 rounded-full bg-orange-100 px-3 py-2 text-xs font-black text-orange-900 ring-1 ring-orange-300/70 active:scale-[0.98]"
+            >
+              Deals
+              <Tag className="h-3.5 w-3.5" aria-hidden="true" />
+            </Link>
+            <Link
+              href="/events"
+              className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-2 text-xs font-black text-[#3c2213] ring-1 ring-orange-200/70 active:scale-[0.98]"
+            >
+              Tonight
+              <CalendarDays className="h-3.5 w-3.5 text-orange-600" aria-hidden="true" />
+            </Link>
+          </div>
         </div>
       )}
     </section>
@@ -3340,21 +3105,15 @@ function MapPlaceCard({
   const destination =
     marker.kind === "restaurant"
       ? `/restaurant/${marker.sourceId}`
-      : marker.kind === "parking"
-        ? "/parking-pass"
-        : "/events";
+      : "/events";
   const label =
     marker.kind === "restaurant"
       ? "Food spot"
-      : marker.kind === "parking"
-        ? "Truck host"
-        : "Local event";
+      : "Local event";
   const action =
     marker.kind === "restaurant"
       ? "Open profile"
-      : marker.kind === "parking"
-        ? "See host spots"
-        : "See events";
+      : "See events";
   const originParam = userLocation ? `&origin=${userLocation.lat},${userLocation.lng}` : "";
   const directionsUrl = `https://www.google.com/maps/dir/?api=1${originParam}&destination=${marker.lat},${marker.lng}&travelmode=driving`;
 
@@ -3409,7 +3168,6 @@ function ScoutMapHud({
   locationLabel,
   liveTruckCount,
   restaurantCount,
-  parkingHostCount,
   eventCount,
   dealCount,
   localSignalCount,
@@ -3420,7 +3178,6 @@ function ScoutMapHud({
   locationLabel: string;
   liveTruckCount: number;
   restaurantCount: number;
-  parkingHostCount: number;
   eventCount: number;
   dealCount: number;
   localSignalCount: number;
@@ -3431,7 +3188,7 @@ function ScoutMapHud({
   const radiusOptions = [5, 12, 25, 40];
   const [isExpanded, setIsExpanded] = useState(false);
   const totalPins =
-    liveTruckCount + restaurantCount + parkingHostCount + eventCount;
+    liveTruckCount + restaurantCount + eventCount;
   const sceneLine =
     totalPins > 0
       ? `${liveTruckCount} trucks • ${dealCount} deals • ${eventCount} events`
@@ -3500,11 +3257,10 @@ function ScoutMapHud({
             <p className="text-xs text-white/62">
               Tap the glowing pins to jump into what's cooking near you right now.
             </p>
-            <div className="mt-3 grid grid-cols-5 gap-2 text-center">
+            <div className="mt-3 grid grid-cols-4 gap-2 text-center">
               <MapHudCount label="Trucks" value={liveTruckCount} />
               <MapHudCount label="Food" value={restaurantCount} />
               <MapHudCount label="Deals" value={dealCount} />
-              <MapHudCount label="Hosts" value={parkingHostCount} />
               <MapHudCount label="Events" value={eventCount} />
             </div>
           </div>
@@ -3622,7 +3378,7 @@ function MapEdgeIndicators({
               <span className="text-orange-300">
                 {edge === "left" ? "‹" : edge === "right" ? "›" : edge === "top" ? "⌃" : "⌄"}
               </span>
-              <span>{marker.kind === "truck" ? "Truck" : marker.kind === "restaurant" ? "Food" : marker.kind === "parking" ? "Host" : "Event"}</span>
+              <span>{marker.kind === "truck" ? "Truck" : marker.kind === "restaurant" ? "Food" : "Event"}</span>
             </button>
           ))}
         </div>
@@ -3709,174 +3465,6 @@ function TruckCard({
           {distLabel && waitLabel && <span className="text-white/30 text-[11px]">·</span>}
           {waitLabel && <span className="text-white/50 text-[11px]">{waitLabel} wait</span>}
         </div>
-      </div>
-    </Link>
-  );
-}
-
-/* ============================================================
-   PARKING PASS CARD
-   Shows a parking pass host in the Parking Pass Hosts section.
-   ============================================================ */
-
-function ParkingPassCard({ listing }: { listing: ParkingPassListing }) {
-  const name =
-    listing.host?.businessName ??
-    listing.businessName ??
-    listing.hostName ??
-    "Parking Host";
-  const address = listing.host?.address ?? listing.address ?? null;
-  const city = listing.host?.city ?? listing.city ?? null;
-  const state = listing.host?.state ?? listing.state ?? null;
-  const cityState = [city, state].filter(Boolean).join(", ");
-  const locationLabel = address
-    ? [address, cityState].filter(Boolean).join(", ")
-    : cityState || null;
-  const img =
-    listing.spotImageUrl ??
-    listing.host?.spotImageUrl ??
-    listing.heroImageUrl ??
-    listing.imageUrl ??
-    listing.host?.imageUrl ??
-    null;
-  const spots = listing.spotCount ?? listing.maxTrucks ?? null;
-  const available = Array.isArray(listing.availableSpotNumbers)
-    ? listing.availableSpotNumbers.length
-    : typeof listing.availableSpots === "number"
-      ? listing.availableSpots
-      : typeof spots === "number" && typeof listing.bookedSpots === "number"
-        ? Math.max(0, spots - listing.bookedSpots)
-        : null;
-  const isFull = typeof available === "number" && available <= 0;
-
-  const toCents = (value: unknown): number | null => {
-    const parsed = Number(value);
-    if (!Number.isFinite(parsed) || parsed <= 0) return null;
-    return Math.floor(parsed);
-  };
-
-  const startingCents = [
-    listing.hostPriceCents,
-    listing.breakfastPriceCents,
-    listing.lunchPriceCents,
-    listing.dinnerPriceCents,
-    listing.dailyPriceCents,
-    listing.weeklyPriceCents,
-    listing.monthlyPriceCents,
-  ]
-    .map(toCents)
-    .filter((value): value is number => value !== null)
-    .sort((a, b) => a - b)[0] ?? null;
-  const startingPrice =
-    startingCents !== null ? `$${(startingCents / 100).toFixed(2)}` : null;
-
-  const formatClock = (value?: string | null) => {
-    const raw = String(value || "").trim();
-    if (!raw) return null;
-    const match = raw.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
-    if (match) {
-      const hour24 = Number(match[1]);
-      const minute = match[2];
-      if (!Number.isFinite(hour24) || hour24 < 0 || hour24 > 23) return raw;
-      const suffix = hour24 >= 12 ? "PM" : "AM";
-      const hour12 = hour24 % 12 || 12;
-      return `${hour12}:${minute} ${suffix}`;
-    }
-    const parsed = new Date(raw);
-    if (!Number.isNaN(parsed.getTime())) {
-      return parsed.toLocaleTimeString(undefined, {
-        hour: "numeric",
-        minute: "2-digit",
-      });
-    }
-    return raw;
-  };
-
-  const dateLabel = (() => {
-    const raw = String(listing.date || "").trim();
-    if (!raw) return null;
-    const parsed = new Date(raw);
-    if (Number.isNaN(parsed.getTime())) return null;
-    return parsed.toLocaleDateString(undefined, {
-      month: "short",
-      day: "numeric",
-    });
-  })();
-  const startLabel = formatClock(listing.startTime);
-  const endLabel = formatClock(listing.endTime);
-  const timeLabel =
-    startLabel && endLabel
-      ? `${startLabel} - ${endLabel}`
-      : startLabel || endLabel || null;
-  const scheduleLabel =
-    dateLabel && timeLabel
-      ? `${dateLabel} · ${timeLabel}`
-      : dateLabel || timeLabel || null;
-
-  return (
-    <Link
-      href={listing.id ? `/parking-pass?pass=${encodeURIComponent(String(listing.id))}` : "/parking-pass"}
-      className="block rounded-2xl overflow-hidden bg-white/5 ring-1 ring-white/10 hover:ring-orange-500/40 transition-all active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
-    >
-      {/* Hero image */}
-      <div className="relative aspect-[4/3] w-full bg-[#120805]/40 overflow-hidden">
-        {img ? (
-          <img
-            src={img}
-            alt=""
-            className="h-full w-full object-cover"
-            loading="lazy"
-          />
-        ) : (
-          <div className="h-full w-full relative">
-            <div
-              className="absolute inset-0"
-              style={{
-                backgroundImage:
-                  "linear-gradient(150deg, rgba(255,90,47,0.24), rgba(2,6,23,0.92))",
-              }}
-              aria-hidden="true"
-            />
-            <div className="absolute inset-0 flex items-center justify-center">
-              <MapPin className="h-8 w-8 text-orange-300/70" aria-hidden="true" />
-            </div>
-          </div>
-        )}
-        <div
-          className="absolute inset-0"
-          style={{ backgroundImage: "linear-gradient(180deg, rgba(0,0,0,0) 40%, rgba(0,0,0,0.75) 100%)" }}
-          aria-hidden="true"
-        />
-        {available !== null && (
-          <span className="absolute top-2.5 left-2.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide text-white bg-emerald-600/90 shadow">
-            {isFull
-              ? "Full"
-              : `${available} spot${available !== 1 ? "s" : ""} open`}
-          </span>
-        )}
-        {startingPrice && (
-          <span className="absolute top-2.5 right-2.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide text-[#1a0d08] bg-orange-300 shadow">
-            From {startingPrice}
-          </span>
-        )}
-      </div>
-      {/* Info */}
-      <div className="px-3 py-2.5">
-        <p className="text-white font-semibold text-sm leading-snug truncate">{name}</p>
-        <div className="mt-0.5 flex items-center gap-1.5 flex-wrap">
-          {locationLabel && (
-            <span className="text-white/60 text-[11px] truncate">{locationLabel}</span>
-          )}
-          {locationLabel && spots !== null && (
-            <span className="text-white/30 text-[11px]">·</span>
-          )}
-          {spots !== null && (
-            <span className="text-orange-300/70 text-[11px]">{spots} spot{spots !== 1 ? "s" : ""}</span>
-          )}
-        </div>
-        {scheduleLabel && (
-          <p className="mt-1 text-white/55 text-[11px] truncate">{scheduleLabel}</p>
-        )}
       </div>
     </Link>
   );
