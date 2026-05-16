@@ -1634,16 +1634,6 @@ export default function ExplorePreview() {
             </div>
           )}
 
-          {sheetState !== "fullMap" && (
-            <ScoutHeroScenePanel
-              locationLabel={shortLocation}
-              liveTruckCount={liveTrucks.length}
-              dealCount={allDeals.length}
-              eventCount={visibleEvents.length}
-              onOpenMap={openScoutMap}
-            />
-          )}
-
 
 
 
@@ -2057,93 +2047,6 @@ function SectionHeader({
   );
 }
 
-function ScoutHeroScenePanel({
-  locationLabel,
-  liveTruckCount,
-  dealCount,
-  eventCount,
-  onOpenMap,
-}: {
-  locationLabel: string;
-  liveTruckCount: number;
-  dealCount: number;
-  eventCount: number;
-  onOpenMap: () => void;
-}) {
-  const sceneCount = liveTruckCount + dealCount + eventCount;
-  const sceneLine =
-    sceneCount > 0
-      ? `${sceneCount} live food signals in your area`
-      : "Local scene is quiet right now — check nearby anyway";
-
-  return (
-    <div className="absolute left-4 right-4 top-[calc(env(safe-area-inset-top)+4.3rem)] z-10 sm:right-auto sm:w-[390px] pointer-events-none">
-      <div
-        className="pointer-events-auto rounded-3xl bg-[#0b0f14]/76 px-4 py-3.5 ring-1 ring-white/12 backdrop-blur-xl"
-        style={{
-          boxShadow: "0 20px 55px rgba(0,0,0,0.46), 0 0 20px rgba(255,90,47,0.15)",
-          backgroundImage:
-            "radial-gradient(circle at 8% 4%, rgba(255,90,47,0.24), transparent 36%), radial-gradient(circle at 92% 0%, rgba(253,186,116,0.16), transparent 34%)",
-        }}
-      >
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-orange-200/76">
-              Tonight in {locationLabel}
-            </p>
-            <h1 className="mt-1 text-white text-[1.05rem] leading-tight font-black tracking-tight">
-              Follow the local food scene
-            </h1>
-            <p className="mt-1.5 text-[12px] text-white/70 leading-relaxed">
-              {sceneLine}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onOpenMap}
-            className="shrink-0 inline-flex h-10 items-center justify-center rounded-2xl bg-[#ff5a2f] px-3.5 text-xs font-black text-[#160904] ring-1 ring-orange-100/40 shadow-[0_0_18px_rgba(255,90,47,0.32)] active:scale-[0.97]"
-          >
-            Open map
-          </button>
-        </div>
-
-        <div className="mt-3 grid grid-cols-3 gap-2">
-          <Link
-            href="/truck-discovery"
-            className="rounded-2xl bg-black/25 px-2.5 py-2 ring-1 ring-white/10 active:scale-[0.98]"
-          >
-            <p className="flex items-center gap-1 text-[11px] font-semibold text-white/75">
-              <Flame className="h-3.5 w-3.5 text-orange-300" aria-hidden="true" />
-              Live trucks
-            </p>
-            <p className="mt-1 text-base font-black text-orange-100">{liveTruckCount}</p>
-          </Link>
-          <Link
-            href="/deals"
-            className="rounded-2xl bg-black/25 px-2.5 py-2 ring-1 ring-white/10 active:scale-[0.98]"
-          >
-            <p className="flex items-center gap-1 text-[11px] font-semibold text-white/75">
-              <Tag className="h-3.5 w-3.5 text-orange-300" aria-hidden="true" />
-              Deals
-            </p>
-            <p className="mt-1 text-base font-black text-orange-100">{dealCount}</p>
-          </Link>
-          <Link
-            href="/events"
-            className="rounded-2xl bg-black/25 px-2.5 py-2 ring-1 ring-white/10 active:scale-[0.98]"
-          >
-            <p className="flex items-center gap-1 text-[11px] font-semibold text-white/75">
-              <CalendarDays className="h-3.5 w-3.5 text-orange-300" aria-hidden="true" />
-              Events
-            </p>
-            <p className="mt-1 text-base font-black text-orange-100">{eventCount}</p>
-          </Link>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 /* ============================================================
    LOCAL FOOD DASHBOARD
    A persistent dashboard strip so Scout still feels useful when
@@ -2180,102 +2083,86 @@ function LocalFoodDashboard({
   const hasLocation = locationStatus === "ready";
   const signalLabel =
     localSignalCount > 0
-      ? `${localSignalCount} local signal${localSignalCount === 1 ? "" : "s"}`
+      ? `${localSignalCount} live signal${localSignalCount === 1 ? "" : "s"}`
       : hasLocation
-        ? "Syncing nearby activity"
-        : "Location needed";
+        ? "No live signal yet"
+        : "Location off";
 
-  const quickActions = [
+  const actionLanes = [
     {
       label: "Live trucks",
       count: liveTruckCount,
       href: "/truck-discovery",
-      helper: liveTruckCount > 0 ? "Open now" : "No live trucks yet",
-    },
-    {
-      label: "Hot deals",
-      count: dealCount,
-      href: "/deals",
-      helper: dealCount > 0 ? "Saving now" : "No nearby deals yet",
+      helper: liveTruckCount > 0 ? "Open now" : "Check nearby trucks",
     },
     {
       label: "Find dinner",
       count: restaurantCount,
       href: "/search",
-      helper: restaurantCount > 0 ? "Food spots nearby" : "No nearby spots yet",
+      helper: restaurantCount > 0 ? "Nearby food spots" : "Browse all food",
     },
     {
-      label: "Menus",
-      count: menuItemCount,
-      href: DISCOVERY_LAYERS.menuItems.href,
-      helper: menuItemCount > 0 ? "Fresh menu items" : "Menus still loading",
+      label: "Hot deals",
+      count: dealCount,
+      href: "/deals",
+      helper: dealCount > 0 ? "Save money now" : "See available deals",
     },
     {
-      label: "Events",
+      label: "Tonight's events",
       count: eventCount,
       href: "/events",
-      helper: eventCount > 0 ? "Happening nearby" : "No live events yet",
+      helper: eventCount > 0 ? "Food events nearby" : "Find upcoming events",
+    },
+    {
+      label: "Fresh menus",
+      count: menuItemCount,
+      href: DISCOVERY_LAYERS.menuItems.href,
+      helper: menuItemCount > 0 ? "New menu items" : "Explore menu drops",
     },
     {
       label: "Host parking",
       count: parkingHostCount,
       href: "/parking-pass",
-      helper: parkingHostCount > 0 ? "Available host spots" : "No host spots yet",
+      helper: parkingHostCount > 0 ? "Set up your spot" : "See host locations",
     },
   ];
 
-  const readyNow = quickActions.filter((item) => item.count > 0);
+  const sortedLanes = [...actionLanes].sort((a, b) => b.count - a.count);
+  const featuredLanes = sortedLanes.slice(0, 3);
+  const supportLanes = sortedLanes.slice(3);
+  const hasAnythingLive = sortedLanes.some((lane) => lane.count > 0);
   const headline = !hasLocation
-    ? "Turn on location to load your local feed"
-    : readyNow.length > 0
-      ? `${readyNow.length} things ready right now`
-      : "Nothing live right now. Try widening your radius.";
-  const sceneTags = [
-    { label: "Street food", count: liveTruckCount },
-    { label: "Dinner spots", count: restaurantCount },
-    { label: "Deals", count: dealCount },
-    { label: "Events", count: eventCount },
-  ].filter((tag) => tag.count > 0);
+    ? "Enable location so Scout can load your nearby food scene."
+    : hasAnythingLive
+      ? "Here is the fastest way to jump into what is happening near you right now."
+      : "Nothing is active yet. Widen radius or browse all categories.";
 
-  const topSignals = readyNow.slice(0, 3);
   const radiusOptions = [5, 12, 25, 40];
   const radiusMiles = Math.max(1, Math.round(discoveryRadiusKm * 0.621371));
 
   return (
-    <section className="px-5 pt-1 pb-6">
-      <div className="rounded-[1.65rem] overflow-hidden bg-white/[0.045] ring-1 ring-white/10 backdrop-blur-md">
+    <section className="px-5 pt-2 pb-6">
+      <div className="rounded-[1.65rem] overflow-hidden bg-white/[0.04] ring-1 ring-white/10 backdrop-blur-md">
         <div
           className="px-4 py-4"
           style={{
             backgroundImage:
-              "radial-gradient(circle at 16% 0%, rgba(255,90,47,0.24), transparent 36%), radial-gradient(circle at 84% 8%, rgba(34,197,94,0.09), transparent 34%)",
+              "radial-gradient(circle at 12% 0%, rgba(255,90,47,0.18), transparent 34%), radial-gradient(circle at 90% 12%, rgba(251,191,36,0.10), transparent 30%)",
           }}
         >
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="text-[10px] uppercase tracking-[0.2em] text-orange-200/75 font-bold">
-                Tonight's local food scene
+                What to eat right now
               </p>
-              <h2 className="mt-1 text-white text-xl font-bold leading-tight">
+              <h2 className="mt-1 text-white text-xl font-black leading-tight tracking-tight">
                 {locationLabel}
               </h2>
               <p className="mt-1.5 text-white/62 text-xs leading-relaxed max-w-[32rem]">
                 {headline}
               </p>
-              {hasLocation && sceneTags.length > 0 ? (
-                <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                  {sceneTags.slice(0, 4).map((tag) => (
-                    <span
-                      key={tag.label}
-                      className="inline-flex items-center rounded-full bg-[#120805]/45 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-orange-100 ring-1 ring-orange-300/25"
-                    >
-                      {tag.count} {tag.label}
-                    </span>
-                  ))}
-                </div>
-              ) : null}
             </div>
-            <span className="shrink-0 rounded-full bg-[#120805]/35 ring-1 ring-orange-300/25 px-3 py-1 text-[11px] font-semibold text-orange-100">
+            <span className="shrink-0 rounded-full bg-[#120805]/45 ring-1 ring-orange-300/25 px-3 py-1 text-[11px] font-semibold text-orange-100">
               {signalLabel}
             </span>
           </div>
@@ -2293,24 +2180,25 @@ function LocalFoodDashboard({
             </button>
           ) : null}
 
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            {quickActions.map((item) => (
+          <div className="mt-3 space-y-2.5">
+            {featuredLanes.map((lane, index) => (
               <Link
-                key={item.label}
-                href={item.href}
-                className="rounded-2xl bg-[#120805]/32 ring-1 ring-white/8 px-3 py-2.5 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
+                key={lane.label}
+                href={lane.href}
+                className="flex items-center justify-between gap-3 rounded-2xl bg-[#120805]/35 ring-1 ring-white/10 px-3.5 py-3 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
               >
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-white text-sm font-semibold truncate">
-                    {item.label}
+                <div className="min-w-0">
+                  <p className="text-white text-sm font-black truncate">
+                    {index + 1}. {lane.label}
                   </p>
-                  <span className="rounded-full bg-black/35 px-2 py-0.5 text-[11px] font-bold text-orange-100 ring-1 ring-white/10">
-                    {item.count}
-                  </span>
+                  <p className="mt-0.5 text-white/62 text-xs truncate">{lane.helper}</p>
                 </div>
-                <p className="mt-1 text-white/60 text-[11px] font-medium leading-relaxed">
-                  {item.helper}
-                </p>
+                <div className="shrink-0 flex items-center gap-2">
+                  <span className="rounded-full bg-black/35 px-2 py-1 text-[11px] font-bold text-orange-100 ring-1 ring-white/10">
+                    {lane.count}
+                  </span>
+                  <ChevronRight className="h-4 w-4 text-orange-300" aria-hidden="true" />
+                </div>
               </Link>
             ))}
           </div>
@@ -2359,39 +2247,26 @@ function LocalFoodDashboard({
               </button>
               <div className="min-w-0 flex-1 overflow-x-auto atmo-hide-scrollbar">
                 <div className="flex gap-2 pr-1">
-                  {topSignals.length > 0 ? (
-                    topSignals.map((item) => (
+                  {supportLanes.length > 0 ? (
+                    supportLanes.map((lane) => (
                       <Link
-                        key={`${item.label}:${item.href}`}
-                        href={item.href}
+                        key={`${lane.label}:${lane.href}`}
+                        href={lane.href}
                         className="shrink-0 inline-flex items-center gap-1.5 rounded-full bg-white/[0.06] ring-1 ring-white/10 px-3 py-2 text-xs font-semibold text-white/82 active:scale-[0.98]"
                       >
-                        {item.label}
+                        {lane.label}
+                        <span className="text-orange-100/80">{lane.count}</span>
                         <ChevronRight className="h-3.5 w-3.5 text-orange-200" aria-hidden="true" />
                       </Link>
                     ))
                   ) : (
                     <span className="inline-flex items-center rounded-full bg-white/[0.06] ring-1 ring-white/10 px-3 py-2 text-xs font-semibold text-white/62">
-                      No live categories nearby yet
+                      All food lanes already shown above
                     </span>
                   )}
                 </div>
               </div>
             </div>
-          </div>
-
-          <div className="mt-3 grid grid-cols-3 gap-2">
-            {quickActions.slice(0, 3).map((item) => (
-              <div
-                key={`snapshot-${item.label}`}
-                className="rounded-2xl bg-black/20 ring-1 ring-white/8 px-3 py-2"
-              >
-                <p className="text-white text-base font-bold leading-none">{item.count}</p>
-                <p className="mt-1 text-white/58 text-[11px] font-semibold">
-                  {item.label}
-                </p>
-              </div>
-            ))}
           </div>
         </div>
       </div>
