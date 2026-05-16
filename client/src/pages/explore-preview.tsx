@@ -323,9 +323,9 @@ const DISCOVERY_LAYERS: Record<
     subtitle: "Local restaurants and bars worth knowing about - not a fast-food feed.",
   },
   parkingHosts: {
-    title: "Parking Pass Hosts",
+    title: "Host & Truck Parking",
     href: "/parking-pass",
-    subtitle: "Host locations are places that let food trucks park, serve, and build a route.",
+    subtitle: "For hosts and trucks planning where service happens next.",
   },
   deals: {
     title: "Deals Near You",
@@ -1872,30 +1872,6 @@ export default function ExplorePreview() {
               </section>
             )}
 
-            {/* ── PARKING PASS HOSTS ── */}
-            {showParkingHostsSection && (
-              <section className="pl-5 pr-0 pt-2 pb-10">
-                <SectionHeader
-                  title={DISCOVERY_LAYERS.parkingHosts.title}
-                  linkHref={DISCOVERY_LAYERS.parkingHosts.href}
-                  subtitle={DISCOVERY_LAYERS.parkingHosts.subtitle}
-                />
-                {parkingPassLoading && localParkingPassHosts.length === 0 ? (
-                  <HorizontalSkeletonRow count={3} width={200} />
-                ) : (
-                  <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
-                    <ul className="flex gap-4 pr-5" role="list" aria-label="Parking pass hosts">
-                      {localParkingPassHosts.slice(0, 8).map((h) => (
-                        <li key={parkingPassHostKey(h)} className="shrink-0 w-[200px] sm:w-[220px]">
-                          <ParkingPassCard listing={h} />
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </section>
-            )}
-
             {/* ── DEALS NEAR YOU ── */}
             {showDealsSection && (
               <section className="pl-5 pr-0 pt-2 pb-10">
@@ -1989,6 +1965,30 @@ export default function ExplorePreview() {
                 </button>
               )}
             </section>
+
+            {/* ── HOST & TRUCK PARKING ── */}
+            {showParkingHostsSection && (
+              <section className="pl-5 pr-0 pt-2 pb-12">
+                <SectionHeader
+                  title={DISCOVERY_LAYERS.parkingHosts.title}
+                  linkHref={DISCOVERY_LAYERS.parkingHosts.href}
+                  subtitle={DISCOVERY_LAYERS.parkingHosts.subtitle}
+                />
+                {parkingPassLoading && localParkingPassHosts.length === 0 ? (
+                  <HorizontalSkeletonRow count={3} width={200} />
+                ) : (
+                  <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
+                    <ul className="flex gap-4 pr-5" role="list" aria-label="Host and truck parking">
+                      {localParkingPassHosts.slice(0, 8).map((h) => (
+                        <li key={parkingPassHostKey(h)} className="shrink-0 w-[200px] sm:w-[220px]">
+                          <ParkingPassCard listing={h} />
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </section>
+            )}
           </div>
         )}
       </main>
@@ -2097,29 +2097,28 @@ function LocalFoodDashboard({
       helper: dealCount > 0 ? "Save money now" : "See available deals",
     },
     {
-      label: "Tonight's events",
-      count: eventCount,
-      href: "/events",
-      helper: eventCount > 0 ? "Food events nearby" : "Find upcoming events",
-    },
-    {
       label: "Fresh menus",
       count: menuItemCount,
       href: DISCOVERY_LAYERS.menuItems.href,
       helper: menuItemCount > 0 ? "New menu items" : "Explore menu drops",
     },
     {
-      label: "Host parking",
+      label: "Tonight's events",
+      count: eventCount,
+      href: "/events",
+      helper: eventCount > 0 ? "Food events nearby" : "Find upcoming events",
+    },
+    {
+      label: "Host spots",
       count: parkingHostCount,
       href: "/parking-pass",
-      helper: parkingHostCount > 0 ? "Set up your spot" : "See host locations",
+      helper: parkingHostCount > 0 ? "For hosts and trucks" : "Plan truck service",
     },
   ];
 
-  const sortedLanes = [...actionLanes].sort((a, b) => b.count - a.count);
-  const featuredLanes = sortedLanes.slice(0, 3);
-  const supportLanes = sortedLanes.slice(3);
-  const hasAnythingLive = sortedLanes.some((lane) => lane.count > 0);
+  const featuredLanes = actionLanes.slice(0, 3);
+  const supportLanes = actionLanes.slice(3);
+  const hasAnythingLive = actionLanes.some((lane) => lane.count > 0);
   const headline = !hasLocation
     ? "Enable location so Scout can load your nearby food scene."
     : hasAnythingLive
