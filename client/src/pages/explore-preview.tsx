@@ -1661,6 +1661,7 @@ export default function ExplorePreview() {
               restaurantCount={nearbyRestaurants.length}
               parkingHostCount={localParkingPassHosts.length}
               eventCount={visibleEvents.length}
+              dealCount={allDeals.length}
               localSignalCount={localSignalCount}
               discoveryRadiusKm={discoveryRadiusKm}
               onRadiusChange={updateDiscoveryRadiusKm}
@@ -2124,6 +2125,12 @@ function LocalFoodDashboard({
     : readyNow.length > 0
       ? `${readyNow.length} things ready right now`
       : "Nothing live right now. Try widening your radius.";
+  const sceneTags = [
+    { label: "Street food", count: liveTruckCount },
+    { label: "Dinner spots", count: restaurantCount },
+    { label: "Deals", count: dealCount },
+    { label: "Events", count: eventCount },
+  ].filter((tag) => tag.count > 0);
 
   const topSignals = readyNow.slice(0, 3);
   const radiusOptions = [5, 12, 25, 40];
@@ -2142,7 +2149,7 @@ function LocalFoodDashboard({
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="text-[10px] uppercase tracking-[0.2em] text-orange-200/75 font-bold">
-                Right now near you
+                Tonight's local food scene
               </p>
               <h2 className="mt-1 text-white text-xl font-bold leading-tight">
                 {locationLabel}
@@ -2150,6 +2157,18 @@ function LocalFoodDashboard({
               <p className="mt-1.5 text-white/62 text-xs leading-relaxed max-w-[32rem]">
                 {headline}
               </p>
+              {hasLocation && sceneTags.length > 0 ? (
+                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                  {sceneTags.slice(0, 4).map((tag) => (
+                    <span
+                      key={tag.label}
+                      className="inline-flex items-center rounded-full bg-[#120805]/45 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-orange-100 ring-1 ring-orange-300/25"
+                    >
+                      {tag.count} {tag.label}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
             </div>
             <span className="shrink-0 rounded-full bg-[#120805]/35 ring-1 ring-orange-300/25 px-3 py-1 text-[11px] font-semibold text-orange-100">
               {signalLabel}
@@ -3424,6 +3443,7 @@ function ScoutMapHud({
   restaurantCount,
   parkingHostCount,
   eventCount,
+  dealCount,
   localSignalCount,
   discoveryRadiusKm,
   onRadiusChange,
@@ -3434,6 +3454,7 @@ function ScoutMapHud({
   restaurantCount: number;
   parkingHostCount: number;
   eventCount: number;
+  dealCount: number;
   localSignalCount: number;
   discoveryRadiusKm: number;
   onRadiusChange: (value: number) => void;
@@ -3443,6 +3464,10 @@ function ScoutMapHud({
   const [isExpanded, setIsExpanded] = useState(false);
   const totalPins =
     liveTruckCount + restaurantCount + parkingHostCount + eventCount;
+  const sceneLine =
+    totalPins > 0
+      ? `${liveTruckCount} trucks • ${dealCount} deals • ${eventCount} events`
+      : "No live pins yet - move map or widen radius";
 
   return (
     <div className="pointer-events-none absolute left-3 right-3 top-[calc(env(safe-area-inset-top)+4.25rem)] z-20 sm:left-4 sm:right-auto sm:w-[360px]">
@@ -3462,10 +3487,10 @@ function ScoutMapHud({
             </span>
             <div className="min-w-0">
               <p className="text-[10px] font-black uppercase tracking-[0.16em] text-orange-200/75">
-                MealScout
+                Scout live
               </p>
               <p className="truncate text-sm font-black text-white">
-                Local food map
+                Local food scene
               </p>
             </div>
           </div>
@@ -3479,7 +3504,7 @@ function ScoutMapHud({
               {locationLabel}
             </h2>
             <p className="text-[11px] font-semibold text-white/58">
-              {totalPins} pins nearby
+              {sceneLine}
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
@@ -3505,11 +3530,12 @@ function ScoutMapHud({
         {isExpanded && (
           <div className="mt-3">
             <p className="text-xs text-white/62">
-              Blue dot is you. MealScout pins mark live food, host spots, and local action.
+              Tap the glowing pins to jump into what's cooking near you right now.
             </p>
-            <div className="mt-3 grid grid-cols-4 gap-2 text-center">
+            <div className="mt-3 grid grid-cols-5 gap-2 text-center">
               <MapHudCount label="Trucks" value={liveTruckCount} />
               <MapHudCount label="Food" value={restaurantCount} />
+              <MapHudCount label="Deals" value={dealCount} />
               <MapHudCount label="Hosts" value={parkingHostCount} />
               <MapHudCount label="Events" value={eventCount} />
             </div>
