@@ -304,9 +304,6 @@ export function ThemedScoutMap({
         Open
       </div>
 
-      {/* ── Tap-to-explore hint ── */}
-      {!interactive && <div aria-hidden="true" className="msm-tap-hint">Tap for the food map</div>}
-
       <style>{`
         .msm-map-canvas .maplibregl-canvas {
           filter: saturate(1.12) contrast(1.03) brightness(1.04) sepia(0.06);
@@ -446,33 +443,6 @@ export function ThemedScoutMap({
         @keyframes msm-live-blink {
           0%, 100% { opacity: 1; }
           50%       { opacity: 0.18; }
-        }
-
-        /* ── Tap hint ── */
-        .msm-tap-hint {
-          position: absolute;
-          bottom: 20px;
-          left: 50%;
-          transform: translateX(-50%);
-          z-index: 10;
-          font-size: 11px;
-          font-weight: 800;
-          letter-spacing: 0.01em;
-          color: rgba(100, 45, 16, 0.72);
-          pointer-events: none;
-          font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-          text-shadow: 0 1px 0 rgba(255,255,255,0.75);
-          white-space: nowrap;
-          animation: msm-tap-fade 3.2s ease-in-out infinite;
-          background: rgba(255, 253, 244, 0.72);
-          border: 1px solid rgba(255, 142, 70, 0.24);
-          border-radius: 999px;
-          padding: 6px 12px;
-          backdrop-filter: blur(8px);
-        }
-        @keyframes msm-tap-fade {
-          0%, 100% { opacity: 0.65; }
-          50%       { opacity: 1; }
         }
 
         /* ── User location pin ── */

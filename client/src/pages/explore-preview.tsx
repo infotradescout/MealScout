@@ -1428,15 +1428,19 @@ export default function ExplorePreview() {
       >
         {/* ============================================================
              SCOUT SURFACE
-             Default: compact branded mini map.
+             Default: compact map accessory.
              Full map: interactive Google Map fills the viewport.
            ============================================================ */}
         <section
           data-testid="scout-map-container"
-          className="relative w-full overflow-hidden bg-[#fff4d6]"
+          className={`relative overflow-hidden bg-[#fff4d6] ${
+            sheetState === "fullMap"
+              ? "w-full"
+              : "mx-4 mt-4 rounded-[1.75rem] ring-1 ring-orange-200/45 shadow-[0_18px_42px_rgba(70,28,8,0.24)]"
+          }`}
           style={{
             height:
-              sheetState === "fullMap" ? "100dvh" : "min(56vh, 470px)",
+              sheetState === "fullMap" ? "100dvh" : "clamp(190px, 30vh, 260px)",
             transition: "height 320ms cubic-bezier(0.22,0.61,0.36,1)",
             touchAction: "auto",
             overscrollBehaviorY: "none",
@@ -1474,7 +1478,7 @@ export default function ExplorePreview() {
                       showRoadTrafficLayer={false}
                       userLocation={coords}
                       isNightTheme={false}
-                      interactive={true}
+                      interactive={false}
                       onBoundsChanged={handleMapBoundsChanged}
                       onZoomChanged={handleMapZoomChanged}
                       onCenterChanged={handleMapCenterChanged}
@@ -1576,7 +1580,7 @@ export default function ExplorePreview() {
               className="absolute inset-0 pointer-events-none"
               style={{
                 backgroundImage:
-                  "linear-gradient(180deg, rgba(255,253,244,0.22) 0%, rgba(255,253,244,0.00) 38%, rgba(120,54,16,0.08) 68%, rgba(10,12,16,0.54) 100%), radial-gradient(circle at 50% 44%, rgba(255,168,86,0.18), transparent 22%)",
+                  "linear-gradient(180deg, rgba(255,253,244,0.12) 0%, rgba(255,253,244,0.00) 44%, rgba(120,54,16,0.10) 100%), radial-gradient(circle at 50% 44%, rgba(255,168,86,0.12), transparent 22%)",
               }}
             />
           )}
@@ -1712,11 +1716,18 @@ export default function ExplorePreview() {
 
           {/* Pull bar indicator (default state) */}
           {sheetState === "default" && (
-            <div
-              className="absolute bottom-3 left-1/2 -translate-x-1/2 z-20"
-              aria-hidden="true"
-            >
-              <span className="block h-1 w-8 rounded-full bg-white/25" />
+            <div className="absolute bottom-3 left-3 right-3 z-20 flex items-center justify-between gap-3">
+              <div className="min-w-0 rounded-full bg-white/78 px-3 py-2 text-xs font-black text-orange-900 ring-1 ring-orange-200/55 backdrop-blur-md">
+                <span className="block truncate">Nearby food map</span>
+              </div>
+              <button
+                type="button"
+                onClick={openScoutMap}
+                className="shrink-0 rounded-full bg-[#ff6f3c] px-3 py-2 text-xs font-black text-white shadow-[0_10px_24px_rgba(194,65,12,0.28)] ring-1 ring-white/45"
+                aria-label="Open full map"
+              >
+                Open map
+              </button>
             </div>
           )}
         </section>
@@ -1727,34 +1738,12 @@ export default function ExplorePreview() {
            ============================================================ */}
         {sheetState !== "fullMap" && (
           <div
-            className="relative z-10 -mt-24 rounded-t-[2rem] bg-[#0a0c10]/76 backdrop-blur-xl"
+            className="relative z-10 mt-4 rounded-t-[1.5rem] bg-[#0a0c10]/76 backdrop-blur-xl"
             style={{
               boxShadow:
-                "0 -28px 70px rgba(0,0,0,0.48), inset 0 1px 0 rgba(255,255,255,0.08)",
+                "inset 0 1px 0 rgba(255,255,255,0.08)",
             }}
           >
-            {/* Drag handle — pull UP on this to expand map, pull DOWN to stay */}
-            <div
-              role="button"
-              aria-label="Pull up to expand map"
-              tabIndex={0}
-              onTouchStart={handleSheetTouchStart}
-              onTouchMove={handleSheetTouchMove}
-              onTouchEnd={handleSheetTouchEnd}
-              onMouseDown={handleSheetMouseDown}
-              onMouseMove={handleSheetMouseMove}
-              onMouseUp={handleSheetMouseUp}
-              onMouseLeave={handleSheetMouseUp}
-              onClick={openScoutMap}
-              className="flex h-12 w-full cursor-pointer items-center justify-center"
-              style={{ touchAction: "none" }}
-            >
-              <span
-                aria-hidden="true"
-                className="block h-1.5 w-12 rounded-full bg-orange-100/35"
-              />
-            </div>
-
             {/* LIVE NOW — collapsed when empty, expanded when trucks are live */}
             <LiveNowSection
               liveTrucks={liveTrucks}
