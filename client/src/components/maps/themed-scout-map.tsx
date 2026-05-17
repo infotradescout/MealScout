@@ -213,7 +213,7 @@ export function ThemedScoutMap({
     markerRefs.current = [];
 
     const KIND_ICONS: Record<string, string> = {
-      truck: "T", restaurant: "R", parking: "P",
+      truck: "T", restaurant: "R",
       event: "E", deal: "$", geo_ad: "◆", supplier: "S",
     };
 
@@ -525,12 +525,6 @@ export function ThemedScoutMap({
           animation: msm-pin-glow 2.8s ease-in-out infinite;
           pointer-events: none;
         }
-        /* Parking — cyan */
-        .msm-map-pin--parking .msm-map-pin__drop {
-          background: #06b6d4;
-          box-shadow: 0 2px 0 rgba(255,255,255,0.58) inset, 0 8px 18px rgba(8,145,178,0.24), 0 0 0 3px rgba(207,250,254,0.80);
-        }
-        .msm-map-pin--parking .msm-map-pin__glow { background: rgba(6,182,212,0.24); }
         /* Restaurant / deal */
         .msm-map-pin--restaurant .msm-map-pin__drop,
         .msm-map-pin--deal .msm-map-pin__drop {
