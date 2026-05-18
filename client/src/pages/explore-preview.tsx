@@ -45,6 +45,16 @@ import mealScoutIcon from "@assets/meal-scout-icon.png";
 
 const ThemedScoutMap = lazy(() => import("@/components/maps/themed-scout-map"));
 
+/**
+ * Atmospheric page background.
+ * `/atmospheric/foodpark-night-hero.jpg` is the originally approved
+ * Atmospheric UI reference (commit 4011a0b7). Swap this constant to point
+ * at a different asset under `client/public/atmospheric/` if a new approved
+ * background is provided. Known alternates already shipped:
+ *   - /atmospheric/mealscout-welcome-map-night.png (welcome map-pin scene)
+ */
+const SCOUT_BACKGROUND_IMAGE = "/atmospheric/foodpark-night-hero.jpg";
+
 type MapRuntimeResponse = {
   hasGoogleMapsKey: boolean;
   googleMapsApiKey?: string | null;
@@ -281,9 +291,9 @@ const DISCOVERY_LAYERS: Record<
   { title: string; href: string; subtitle?: string }
 > = {
   liveNow: {
-    title: "Live Now",
+    title: "Open Now",
     href: "/truck-discovery",
-    subtitle: "Trucks broadcasting service nearby right now.",
+    subtitle: "Trucks, restaurants, bars, and pop-ups serving near you right now.",
   },
   localBoard: {
     title: "Today's Food Board",
@@ -1475,13 +1485,14 @@ export default function ExplorePreview() {
         description="Discover live food trucks, restaurants, and deals near you. MealScout puts the local food scene right in your hands."
       />
 
-      {/* Atmospheric page base — immersive night food scene with dark overlay. */}
+      {/* Atmospheric page base — approved Atmospheric UI reference photo
+          with a soft vertical gradient so the scene reads through clearly
+          while content surfaces stay legible. */}
       <div
         aria-hidden="true"
         className="pointer-events-none fixed inset-0 -z-20 bg-cover bg-center bg-no-repeat bg-[#08060a]"
         style={{
-          backgroundImage:
-            "url('/atmospheric/foodpark-night-hero.jpg')",
+          backgroundImage: `url('${SCOUT_BACKGROUND_IMAGE}')`,
         }}
       />
       <div
@@ -1489,7 +1500,7 @@ export default function ExplorePreview() {
         className="pointer-events-none fixed inset-0 -z-10"
         style={{
           backgroundImage:
-            "radial-gradient(120% 70% at 50% 0%, rgba(255,138,60,0.22) 0%, rgba(10,6,4,0) 42%), linear-gradient(180deg, rgba(8,6,10,0.55) 0%, rgba(8,6,10,0.78) 38%, rgba(6,4,8,0.94) 100%)",
+            "radial-gradient(120% 70% at 50% 0%, rgba(255,138,60,0.18) 0%, rgba(10,6,4,0) 44%), linear-gradient(180deg, rgba(8,6,10,0.35) 0%, rgba(8,6,10,0.62) 42%, rgba(6,4,8,0.92) 100%)",
         }}
       />
 
@@ -1517,18 +1528,18 @@ export default function ExplorePreview() {
           className={`relative overflow-hidden ${
             sheetState === "fullMap"
               ? "w-full bg-[#fff4d6]"
-              : "mx-4 mt-4 rounded-[1.5rem] ring-1 ring-white/10 bg-[#0d0a08]"
+              : "mx-4 mt-4 rounded-[1.75rem] ring-1 ring-white/10 bg-[#0d0a08]"
           }`}
           style={{
             height:
-              sheetState === "fullMap" ? "100dvh" : "clamp(108px, 14vh, 140px)",
+              sheetState === "fullMap" ? "100dvh" : "clamp(248px, 38vh, 340px)",
             transition: "height 320ms cubic-bezier(0.22,0.61,0.36,1)",
             touchAction: "auto",
             overscrollBehaviorY: "none",
             boxShadow:
               sheetState === "fullMap"
                 ? undefined
-                : "0 14px 36px rgba(0,0,0,0.55), inset 0 0 0 1px rgba(255,255,255,0.04)",
+                : "0 22px 60px rgba(0,0,0,0.62), inset 0 0 0 1px rgba(255,255,255,0.05)",
           }}
         >
           {/* Scout map surfaces
@@ -1805,16 +1816,22 @@ export default function ExplorePreview() {
                     "linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.45) 70%, rgba(0,0,0,0.7) 100%)",
                 }}
               />
-              <div className="absolute bottom-2 left-2 right-2 z-20 flex items-center justify-between gap-2">
-                <div className="min-w-0 rounded-full bg-black/55 px-2.5 py-1 text-[10px] font-bold text-orange-100 ring-1 ring-white/10 backdrop-blur">
-                  <span className="block truncate">Nearby food map</span>
+              <div className="absolute bottom-3 left-3 right-3 z-20 flex items-end justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-[10px] font-black uppercase tracking-[0.22em] text-orange-200/90">
+                    Local food map
+                  </p>
+                  <p className="mt-0.5 text-sm font-extrabold text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.65)]">
+                    {shortLocation}
+                  </p>
                 </div>
                 <button
                   type="button"
                   onClick={openScoutMap}
-                  className="shrink-0 rounded-full bg-[#ff6f3c] px-2.5 py-1 text-[10px] font-bold text-white shadow-[0_6px_16px_rgba(255,111,60,0.4)] ring-1 ring-orange-200/40"
+                  className="shrink-0 inline-flex items-center gap-1.5 rounded-full bg-[#ff6f3c] px-3.5 py-2 text-xs font-black text-white shadow-[0_8px_22px_rgba(255,111,60,0.5)] ring-1 ring-orange-200/50"
                   aria-label="Open full map"
                 >
+                  <Maximize2 className="h-3.5 w-3.5" aria-hidden="true" />
                   Open map
                 </button>
               </div>
@@ -1828,55 +1845,19 @@ export default function ExplorePreview() {
            ============================================================ */}
         {sheetState !== "fullMap" && (
           <div
-            className="relative z-10 mt-3"
+            className="relative z-10 mt-4"
           >
-            <CravingCompass
-              cravings={CRAVING_CATEGORIES}
-              selectedCraving={selectedCraving}
-              recommendations={compassRecommendations}
-              locationLabel={shortLocation}
-              locationStatus={locationStatus}
-              liveTruckCount={liveTrucks.length}
-              restaurantCount={nearbyRestaurants.length}
-              menuItemCount={localMenuItems.length}
-              dealCount={allDeals.length}
-              eventCount={visibleEvents.length}
-              localSignalCount={localSignalCount}
-              discoveryRadiusKm={discoveryRadiusKm}
-              onRadiusChange={updateDiscoveryRadiusKm}
-              onRefreshLocation={requestLocation}
-              onCravingSelect={setSelectedCravingId}
-              onSearchCraving={goToCraving}
-            />
-
-            {/* LIVE NOW — supporting signal, not the main decision model. */}
-            <LiveNowSection
+            {/* OPEN NOW — broad live signal across trucks, restaurants, bars, and public events. */}
+            <OpenNowSection
               liveTrucks={liveTrucks}
               liveTrucksLoading={liveTrucksLoading}
               liveTrucksError={!!liveTrucksError}
+              events={visibleEvents}
+              deals={allDeals}
               locationStatus={locationStatus}
               onExpandMap={openScoutMap}
+              onSelectTruck={selectLiveTruck}
             />
-
-            {/* ── NEW LOCAL MENU ITEMS ── */}
-            {showMenuItemsSection && (
-              <section className="pl-5 pr-0 pt-2 pb-10">
-                <SectionHeader
-                  title={DISCOVERY_LAYERS.menuItems.title}
-                  linkHref={DISCOVERY_LAYERS.menuItems.href}
-                  subtitle={DISCOVERY_LAYERS.menuItems.subtitle}
-                />
-                <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
-                  <ul className="flex gap-4 pr-5" role="list" aria-label="New local menu items">
-                    {localMenuItems.slice(0, 12).map((item, index) => (
-                      <li key={item.id} className="shrink-0 w-[210px] sm:w-[230px]">
-                        <LocalMenuItemCard item={item} position={index} />
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </section>
-            )}
 
             {/* ── FOOD TRUCKS NEAR YOU ── */}
             {showFoodTrucksSection && (
@@ -1899,6 +1880,26 @@ export default function ExplorePreview() {
                     </ul>
                   </div>
                 )}
+              </section>
+            )}
+
+            {/* ── NEW LOCAL MENU ITEMS ── */}
+            {showMenuItemsSection && (
+              <section className="pl-5 pr-0 pt-2 pb-10">
+                <SectionHeader
+                  title={DISCOVERY_LAYERS.menuItems.title}
+                  linkHref={DISCOVERY_LAYERS.menuItems.href}
+                  subtitle={DISCOVERY_LAYERS.menuItems.subtitle}
+                />
+                <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
+                  <ul className="flex gap-4 pr-5" role="list" aria-label="New local menu items">
+                    {localMenuItems.slice(0, 12).map((item, index) => (
+                      <li key={item.id} className="shrink-0 w-[210px] sm:w-[230px]">
+                        <LocalMenuItemCard item={item} position={index} />
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               </section>
             )}
 
@@ -1972,6 +1973,29 @@ export default function ExplorePreview() {
                 </div>
               </section>
             )}
+
+            {/* ── STILL DECIDING? — Meal Radar (CravingCompass) ──
+                 The radar is a decision assistant, not the hero. Users meet
+                 it AFTER the map and the primary discovery feeds, when they
+                 still can't pick. Kept compact and on-brand. */}
+            <CravingCompass
+              cravings={CRAVING_CATEGORIES}
+              selectedCraving={selectedCraving}
+              recommendations={compassRecommendations}
+              locationLabel={shortLocation}
+              locationStatus={locationStatus}
+              liveTruckCount={liveTrucks.length}
+              restaurantCount={nearbyRestaurants.length}
+              menuItemCount={localMenuItems.length}
+              dealCount={allDeals.length}
+              eventCount={visibleEvents.length}
+              localSignalCount={localSignalCount}
+              discoveryRadiusKm={discoveryRadiusKm}
+              onRadiusChange={updateDiscoveryRadiusKm}
+              onRefreshLocation={requestLocation}
+              onCravingSelect={setSelectedCravingId}
+              onSearchCraving={goToCraving}
+            />
 
             {/* ── YOUR SAVED ── */}
             <section className="px-5 pt-2 pb-12">
@@ -2160,10 +2184,10 @@ function CravingCompass({
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="text-[10px] uppercase tracking-[0.32em] text-orange-300/90 font-bold">
-                Meal Radar
+                Still deciding?
               </p>
               <h2 className="mt-1 font-sans text-white text-[19px] font-extrabold leading-[1.15] tracking-tight">
-                Find your move tonight.
+                Spin the Meal Radar.
               </h2>
             </div>
             <span className="shrink-0 inline-flex items-center gap-1.5 rounded-full bg-white/[0.06] ring-1 ring-white/10 px-2.5 py-1 text-[10px] font-semibold text-orange-100/90">
@@ -3275,45 +3299,60 @@ function SavedRestaurantCard({ restaurant }: { restaurant: RestaurantSummary }) 
 }
 
 /* ============================================================
-   LIVE NOW SECTION
-   Collapsed when empty (just the header + quiet status chip).
-   Expanded automatically when trucks are live.
-   No "open the map" CTA — the map is already on the page.
+   OPEN NOW SECTION
+   The first content rail under the map. Broad live signal across
+   any business with a public hours/schedule footprint:
+     - live food trucks broadcasting service
+     - public events / pop-ups happening today
+     - restaurants and bars with active deals (signal of "open serving")
+   Empty state collapses to a quiet status chip + Why? helper.
    ============================================================ */
 
-function LiveNowSection({
+function OpenNowSection({
   liveTrucks,
   liveTrucksLoading,
   liveTrucksError,
+  events,
+  deals,
   locationStatus,
   onExpandMap,
+  onSelectTruck,
 }: {
   liveTrucks: LiveTruckSummary[];
   liveTrucksLoading: boolean;
   liveTrucksError: boolean;
+  events: EventSummary[];
+  deals: DealSummary[];
   locationStatus: "idle" | "requesting" | "ready" | "denied";
   onExpandMap: () => void;
+  onSelectTruck: (truck: LiveTruckSummary) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
 
-  const isEmpty =
-    !liveTrucksLoading &&
-    liveTrucks.length === 0;
+  const todaysEvents = useMemo(() => {
+    const now = new Date();
+    const startOfTomorrow = new Date(now);
+    startOfTomorrow.setHours(24, 0, 0, 0);
+    return events.filter((e) => {
+      const raw = e.startsAt || e.startTime;
+      if (!raw) return true; // unknown start → still surface (likely current)
+      const t = new Date(raw).getTime();
+      if (!Number.isFinite(t)) return true;
+      return t < startOfTomorrow.getTime();
+    });
+  }, [events]);
 
-  // Auto-expand when trucks go live
-  const hadTrucks = useRef(false);
-  useEffect(() => {
-    if (liveTrucks.length > 0) hadTrucks.current = true;
-  }, [liveTrucks.length]);
+  const hasAnyContent =
+    liveTrucks.length > 0 || todaysEvents.length > 0 || deals.length > 0;
 
-  // While loading, show skeletons (no collapse needed)
-  if (liveTrucksLoading && liveTrucks.length === 0) {
+  // While loading and no content yet, show skeletons
+  if (liveTrucksLoading && !hasAnyContent) {
     return (
       <section className="pl-5 pr-0 pt-2 pb-10">
         <SectionHeader
-          title="Live Now"
+          title="Open Now"
           linkHref="/truck-discovery"
-          subtitle="Trucks currently broadcasting service nearby."
+          subtitle="Trucks, restaurants, bars, and pop-ups serving near you right now."
         />
         <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
           <ul className="flex gap-4 pr-5" role="list">
@@ -3328,20 +3367,47 @@ function LiveNowSection({
     );
   }
 
-  // Trucks are live — show them fully expanded
-  if (liveTrucks.length > 0) {
+  // We have signal — render a unified rail of cards.
+  if (hasAnyContent) {
+    const liveCount = liveTrucks.length;
+    const eventsCount = todaysEvents.length;
+    const dealsCount = deals.length;
+    const summaryBits = [
+      liveCount > 0 ? `${liveCount} live truck${liveCount === 1 ? "" : "s"}` : null,
+      eventsCount > 0 ? `${eventsCount} happening today` : null,
+      dealsCount > 0 ? `${dealsCount} active deal${dealsCount === 1 ? "" : "s"}` : null,
+    ].filter(Boolean);
+
     return (
       <section className="pl-5 pr-0 pt-2 pb-10">
         <SectionHeader
-          title="Live Now"
+          title="Open Now"
           linkHref="/truck-discovery"
-          subtitle="Trucks currently broadcasting service nearby."
+          subtitle={
+            summaryBits.length > 0
+              ? summaryBits.join(" · ")
+              : "Trucks, restaurants, bars, and pop-ups serving near you right now."
+          }
         />
         <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
-          <ul className="flex gap-4 pr-5" role="list" aria-label="Live food trucks near you">
-            {liveTrucks.slice(0, 12).map((truck) => (
-              <li key={truck.id} className="shrink-0 w-[230px] sm:w-[260px]">
+          <ul
+            className="flex gap-4 pr-5"
+            role="list"
+            aria-label="Businesses, events, and deals open right now"
+          >
+            {liveTrucks.slice(0, 8).map((truck) => (
+              <li key={`truck-${truck.id}`} className="shrink-0 w-[230px] sm:w-[260px]">
                 <LiveTruckCard truck={truck} />
+              </li>
+            ))}
+            {todaysEvents.slice(0, 6).map((ev) => (
+              <li key={`event-${ev.id}`} className="shrink-0 w-[230px] sm:w-[260px]">
+                <EventCard event={ev} />
+              </li>
+            ))}
+            {deals.slice(0, 6).map((d) => (
+              <li key={`deal-${d.id}`} className="shrink-0 w-[230px] sm:w-[260px]">
+                <DealCard deal={d} />
               </li>
             ))}
           </ul>
@@ -3350,35 +3416,33 @@ function LiveNowSection({
     );
   }
 
-  // Empty state — collapsed by default, expand on tap to show context
+  // Empty state — collapsed by default; "Why?" reveals broader CTAs.
   const statusChip =
     locationStatus === "denied"
       ? "Location off"
       : liveTrucksError
         ? "Feed unavailable"
-        : "Nothing live right now";
+        : "No public signal yet";
 
   return (
     <section className="px-5 pt-2 pb-5">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <h2 className="text-white text-xl sm:text-2xl font-bold">Live Now</h2>
+          <h2 className="text-white text-xl sm:text-2xl font-bold">Open Now</h2>
           <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-orange-100/90 ring-1 ring-orange-300/45 text-orange-900 text-[11px] font-semibold">
             <span className="h-1.5 w-1.5 rounded-full bg-orange-500" aria-hidden="true" />
             {statusChip}
           </span>
         </div>
         <div className="flex items-center gap-2">
-          {isEmpty && (
-            <button
-              type="button"
-              onClick={() => setExpanded((v) => !v)}
-              className="text-xs text-orange-200/70 hover:text-orange-100 transition-colors"
-              aria-expanded={expanded}
-            >
-              {expanded ? "Less" : "Why?"}
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            className="text-xs text-orange-200/70 hover:text-orange-100 transition-colors"
+            aria-expanded={expanded}
+          >
+            {expanded ? "Less" : "Why?"}
+          </button>
           <Link
             href="/truck-discovery"
             className="text-sm text-orange-300 inline-flex items-center gap-1 font-medium"
@@ -3387,16 +3451,19 @@ function LiveNowSection({
           </Link>
         </div>
       </div>
+      <p className="mt-2 text-white/55 text-xs leading-snug">
+        Trucks, restaurants, bars, and public events with current hours or
+        schedules will appear here as soon as they're broadcasting.
+      </p>
 
-      {/* Expandable context — only shown when user taps "Why?" */}
       {expanded && (
         <div className="mt-3 rounded-2xl bg-[#120805]/70 ring-1 ring-orange-300/25 px-4 py-3">
           <p className="text-white/70 text-sm leading-relaxed">
             {locationStatus === "denied"
-              ? "Turn on location so MealScout can show food trucks, deals, and events near you in real time."
+              ? "Turn on location so MealScout can show open trucks, restaurants, bars, and pop-ups near you in real time."
               : liveTrucksError
                 ? "We couldn't reach the live feed. Pull down to refresh."
-                : "Trucks pop up throughout the day. You can still find dinner, deals, fresh menus, and events nearby."}
+                : "Listings show up here when a business publishes hours, a vendor schedules service, or an event goes live."}
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             {locationStatus === "denied" ? (
