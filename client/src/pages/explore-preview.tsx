@@ -248,7 +248,7 @@ const DAYPART_SEARCH_COPY: Record<Daypart, { title: string; body: string }> = {
   },
   late: {
     title: "Still hungry?",
-    body: "Open spots, late bites, and local food still moving.",
+    body: "Open spots, late bites, and local food still open.",
   },
 };
 
@@ -434,9 +434,9 @@ const DISCOVERY_LAYERS: Record<
     subtitle: "All nearby trucks that are broadcasting or ready to be discovered.",
   },
   restaurants: {
-    title: "Open Local Food Now",
+    title: "Open Nearby Now",
     href: "/search",
-    subtitle: "Live local food signals, trucks, and fresh deals ranked by what is open and moving right now.",
+    subtitle: "Open places, food trucks, deals, and menu updates near you today.",
   },
   deals: {
     title: "Deals Near You",
@@ -454,6 +454,13 @@ const DISCOVERY_LAYERS: Record<
     subtitle: "Your personal shortlist for trucks, restaurants, deals, and places to revisit.",
   },
 };
+
+function getMetaDistance(meta: string): string | null {
+  const match = meta.match(/(\d+(?:\.\d+)?)\s*mi\b/i);
+  if (!match) return null;
+  const value = match[1];
+  return `${value} mi`;
+}
 
 /* ============================================================
    FORMATTERS
@@ -539,14 +546,14 @@ function getRestaurantDiscoveryReason(restaurant: RestaurantSummary): string {
     Number(restaurant.activeDealsCount || restaurant.activeDealCount || 0) > 0 ? "active deal" : null,
   ].filter(Boolean);
   return signals.length > 0
-    ? `Local signal: ${signals.slice(0, 2).join(" + ")}.`
-    : "Nearby and active enough to keep on the board.";
+    ? `${signals.slice(0, 2).join(" + ")}`
+    : "Open and nearby today.";
 }
 
 function getMenuItemSearchReason(item: LocalMenuItemFeedItem): string {
   if (item.discoveryReasons?.[0]) return item.discoveryReasons[0];
   if (typeof item.discoveryScore === "number" && item.discoveryScore > 0) {
-    return "Popular menu signal";
+    return "Menu updated";
   }
   if (Array.isArray(item.dietaryTags) && item.dietaryTags.length > 0) {
     return item.dietaryTags.slice(0, 2).join(" + ");
@@ -675,7 +682,7 @@ function buildCravingBoardItems({
       href: `/truck/${truck.id}`,
       imageUrl: getTruckImage(truck),
       meta: [formatDistance(truck), formatWait(truck)].filter(Boolean).join(" / ") || "Open now",
-      reason: truck.vibe || "Live nearby signal",
+      reason: truck.vibe || "Open now",
       score,
     });
   }
@@ -1584,6 +1591,14 @@ export default function ExplorePreview() {
     nearbyRestaurants.length +
     allDeals.length +
     visibleEvents.length;
+  const nearbySectionUsesMixedSignals =
+    liveTrucks.length + localMenuItems.length + allDeals.length + visibleEvents.length > 0;
+  const nearbyRestaurantsTitle = nearbySectionUsesMixedSignals
+    ? "Best Nearby Right Now"
+    : DISCOVERY_LAYERS.restaurants.title;
+  const nearbyRestaurantsSubtitle = nearbySectionUsesMixedSignals
+    ? "Open places, food trucks, deals, and menu updates near you today."
+    : DISCOVERY_LAYERS.restaurants.subtitle;
 
   const selectedCraving = useMemo(() => {
     return (
@@ -2073,15 +2088,15 @@ export default function ExplorePreview() {
             {showRestaurantsSection && (
               <section className="pl-5 pr-0 pt-2 pb-10">
                 <SectionHeader
-                  title={DISCOVERY_LAYERS.restaurants.title}
+                  title={nearbyRestaurantsTitle}
                   linkHref={DISCOVERY_LAYERS.restaurants.href}
-                  subtitle={DISCOVERY_LAYERS.restaurants.subtitle}
+                  subtitle={nearbyRestaurantsSubtitle}
                 />
                 {nearbyRestaurantsLoading && nearbyRestaurants.length === 0 ? (
                   <HorizontalSkeletonRow count={3} width={200} />
                 ) : (
                   <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
-                    <ul className="flex gap-4 pr-5" role="list" aria-label="Restaurants near you">
+                    <ul className="flex gap-4 pr-5" role="list" aria-label="Best moves nearby">
                       {nearbyRestaurants.slice(0, 10).map((r) => (
                         <li key={r.id} className="shrink-0 w-[200px] sm:w-[220px]">
                           <NearbyRestaurantCard
@@ -2277,6 +2292,35 @@ function CravingCompass({
     { Menu: 0, Place: 0, Truck: 0, Deal: 0 } as Record<CravingBoardItem["kind"], number>,
   );
   const topPick = boardItems[0] || null;
+  const topPickDistance = useMemo(() => {
+    if (!topPick?.meta) return null;
+    return getMetaDistance(topPick.meta);
+  }, [topPick]);
+  const topPickMetaSignals = useMemo(() => {
+    if (!topPick) return [] as string[];
+    const signals = new Set<string>();
+
+    if (topPick.kind === "Truck") signals.add("Food truck");
+    if (topPick.kind === "Deal") signals.add("Deal today");
+    if (topPick.kind === "Menu") signals.add("Menu updated");
+    if (topPickDistance) {
+      signals.add(`${topPickDistance} away`);
+      signals.add("Nearby");
+    }
+    if (topPick.kind === "Truck") signals.add("Food truck");
+
+    const source = `${topPick.meta || ""} ${topPick.reason || ""}`.toLowerCase();
+    if (/\btoday\b/.test(source)) signals.add("Happening today");
+    if (/(new|fresh|updated|menu updated)/.test(source)) signals.add("Menu updated");
+    if (/\btruck\b/.test(source)) signals.add("Food truck");
+    if (/(deal|discount|off|special|offer)/.test(source)) signals.add("Deal today");
+    if (/(open now|open for|serving now|currently open|open)/.test(source))
+      signals.add("Open now");
+    if (/(close|closing|closes soon)/.test(source)) signals.add("Closes soon");
+    if (/(quick|fast|lunch|bite)/.test(source)) signals.add("Quick bite");
+
+    return [...signals];
+  }, [topPick, topPickDistance]);
   const orderedCravings = useMemo(() => {
     const orderedIds = [
       "open-now",
@@ -2293,25 +2337,25 @@ function CravingCompass({
   }, [cravings]);
 
   const topPickProofBits = useMemo(() => {
-    if (!topPick) return ["Nearby now", "Happening today"];
-    const bits: string[] = [];
-    if (topPick.meta) bits.push(topPick.meta);
-    if (topPick.kind === "Truck") bits.push("Food truck");
-    if (topPick.kind === "Deal") bits.push("Deal today");
-    bits.push(hasLocation ? "Open now" : "Nearby now");
-    if (topPick.kind === "Place" && topPick.reason) bits.push(topPick.reason);
-    return [...new Set(bits)];
-  }, [topPick, hasLocation]);
+    if (!topPick) return ["Nearby", "Happening today"];
+    const bits = [...topPickMetaSignals];
+    if (!bits.includes("Open now")) bits.push("Open now");
+    if (!bits.includes("Nearby")) bits.push("Nearby");
+    return [...new Set(bits)].slice(0, 4);
+  }, [topPick, hasLocation, topPickMetaSignals]);
 
   const topPickBadges = useMemo(() => {
     if (!topPick) return [];
-    const badges = new Set<string>(["Nearby", "Live signal"]);
-    if (topPick.kind === "Truck") badges.add("Live truck");
-    if (topPick.reason && /deal/i.test(topPick.reason)) badges.add("Deal signal");
-    if (topPick.reason && /truck/i.test(topPick.reason)) badges.add("Truck activity");
-    if (topPick.meta && /mi/i.test(topPick.meta)) badges.add("Nearby");
+    const badges = new Set<string>();
+    if (topPickDistance) badges.add("Nearby");
+    if (topPick.kind === "Truck") badges.add("Food truck");
+    if (topPickMetaSignals.includes("Deal today")) badges.add("Deal today");
+    if (topPickMetaSignals.includes("Open now")) badges.add("Open now");
+    if (topPickMetaSignals.includes("Menu updated")) badges.add("Menu updated");
+    if (topPickMetaSignals.includes("Closes soon")) badges.add("Closes soon");
+    if (topPickMetaSignals.includes("Food truck")) badges.add("Food truck");
     return Array.from(badges).slice(0, 3);
-  }, [topPick]);
+  }, [topPick, topPickDistance, topPickMetaSignals]);
   const topPickMenuHref =
     topPick && (topPick.kind === "Place" || topPick.kind === "Menu")
       ? `${topPick.href}?tab=menu`
@@ -2319,7 +2363,7 @@ function CravingCompass({
   const signalLabel =
     hasLocation
       ? resultCount > 0
-        ? `${resultCount} live signals`
+        ? `${resultCount} open options`
         : localSignalCount > 0
           ? "Search wider"
         : "No exact hits yet"
@@ -2345,7 +2389,7 @@ function CravingCompass({
                 Find your next food move.
               </h2>
               <p className="mt-1 text-orange-50/62 text-xs leading-relaxed">
-                Open, nearby, and active now. Pick the best move.
+                Open restaurants, food trucks, deals, and menu updates near you right now.
               </p>
             </div>
             {hasLocation ? (
@@ -2374,27 +2418,29 @@ function CravingCompass({
                     <img
                       src={topPick.imageUrl || selectedCraving.image}
                       alt=""
-                      className="h-28 w-full object-cover opacity-65"
+                      className="h-24 w-full object-cover opacity-65"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-[#120805]/95 via-[#120805]/55 to-transparent" />
                     <div className="absolute left-3 top-3">
                       <span className="inline-flex rounded-full bg-black/65 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-white ring-1 ring-white/12">
-                        BEST MATCH RIGHT NOW
+                        BEST OPTION RIGHT NOW
                       </span>
                     </div>
                   </div>
                   <p className="mt-2 text-[10px] font-black uppercase tracking-[0.12em] text-[#f3b67a]">
-                    Open now · nearby · happening today
+                    {topPickProofBits.join(" · ")}
                   </p>
                   <p className="mt-1 text-base font-black text-white leading-tight">
                     {topPick.title}
                   </p>
                   <p className="mt-1 text-sm text-white/75">{topPick.subtitle}</p>
-                  <p className="mt-1.5 text-xs font-semibold text-white/72">
-                    {topPickProofBits.join(" · ")}
-                  </p>
+                  {topPickMetaSignals.length > 0 ? (
+                    <p className="mt-1.5 text-xs font-semibold text-white/72">
+                      {topPickMetaSignals.join(" · ")}
+                    </p>
+                  ) : null}
                   <p className="mt-2 text-[10px] font-black uppercase tracking-[0.12em] text-orange-100/72">
-                    Why this match
+                    Why go now
                   </p>
                   <div className="mt-2 flex flex-wrap gap-1.5">
                     {topPickBadges.map((badge) => (
@@ -2405,11 +2451,6 @@ function CravingCompass({
                         {badge}
                       </span>
                     ))}
-                    {topPick.reason ? (
-                      <span className="inline-flex rounded-full bg-[#fff4e1]/10 px-2 py-1 text-[10px] font-black text-orange-100 ring-1 ring-orange-200/25">
-                        {topPick.reason}
-                      </span>
-                    ) : null}
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <Link
@@ -2426,7 +2467,14 @@ function CravingCompass({
                       >
                         View menu
                       </Link>
-                    ) : null}
+                    ) : (
+                      <Link
+                        href={topPick.href}
+                        className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full bg-[#fff4e1]/12 px-4 py-2 text-sm font-black text-orange-100 ring-1 ring-orange-200/25 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
+                      >
+                        View details
+                      </Link>
+                    )}
                   </div>
                 </>
               ) : (
@@ -2435,7 +2483,7 @@ function CravingCompass({
                     No exact {selectedCraving.label.toLowerCase()} picks yet.
                   </p>
                   <p className="mt-1 text-xs leading-relaxed text-white/62">
-                    Open the full layer to widen the radius and pull more signals.
+                    Open the full layer to widen the radius and pull more options.
                   </p>
                 </div>
               )}
@@ -2444,7 +2492,7 @@ function CravingCompass({
 
           <div className="mt-4">
             <p className="mb-2 text-xs font-black uppercase tracking-[0.13em] text-[#ffcf9b]">
-              Change the mission
+              Change what you&apos;re looking for
             </p>
                   <div className="overflow-x-auto atmo-hide-scrollbar">
                     <div className="flex w-max gap-2 pr-1">
@@ -2475,15 +2523,15 @@ function CravingCompass({
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-[10px] font-black uppercase tracking-[0.14em] text-[#e5b06f]/82">
-                  CURRENT MISSION
+                  WHAT YOU&apos;RE LOOKING FOR
                 </p>
                 <p className="mt-1 truncate text-base font-black text-white">
                   {selectedCraving.label}
                 </p>
                 <p className="mt-0.5 text-xs font-semibold leading-relaxed text-orange-100/62">
                   {isSearchOpen
-                    ? "Review the matches for this mission."
-                    : "Reviewing mission matches keeps your move decision clear."}
+                    ? "Review the options for this goal."
+                    : "Reviewing options keeps your move decision clear."}
                 </p>
               </div>
               <button
@@ -3164,10 +3212,10 @@ function NearbyRestaurantCard({
     restaurant.homeRankingReason.trim().length > 0
       ? restaurant.homeRankingReason.trim()
       : trustSignals.length > 0
-      ? `Ranked by ${trustSignals.slice(0, 2).join(" + ")}`
+      ? `Trusted by ${trustSignals.slice(0, 2).join(" + ")}`
       : distLabel
-        ? "Ranked by nearby local relevance"
-        : "Ranked by local relevance";
+        ? "Nearby and active now"
+        : "Open nearby and serving";
 
   const sendRestaurantAction = async (
     action: "favorite" | "follow" | "recommend",
