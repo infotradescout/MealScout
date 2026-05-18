@@ -751,14 +751,14 @@ function getDealCravingScore(
 }
 
 function getRestaurantDiscoveryReason(restaurant: RestaurantSummary): string {
-  const signals = [
+  const reasons = [
     Number(restaurant.favoriteCount || 0) > 0 ? "saved by locals" : null,
     Number(restaurant.videoRecommendationCount || 0) > 0 ? "recent video updates" : null,
     Number(restaurant.recommendationCount || 0) > 0 ? "community updates" : null,
     Number(restaurant.activeDealsCount || restaurant.activeDealCount || 0) > 0 ? "active deal" : null,
   ].filter(Boolean);
-  return signals.length > 0
-    ? `${signals.slice(0, 2).join(" + ")}`
+  return reasons.length > 0
+    ? `${reasons.slice(0, 2).join(" + ")}`
     : "Open and nearby today.";
 }
 
@@ -2062,18 +2062,18 @@ export default function ExplorePreview() {
     nearbyRestaurantsLoading || nearbyRestaurants.length > 0;
   const showDealsSection = allDeals.length > 0;
   const showEventsSection = visibleEvents.length > 0;
-  const localSignalCount =
+  const localActivityCount =
     liveTrucks.length +
     localMenuItems.length +
     nearbyRestaurants.length +
     allDeals.length +
     visibleEvents.length;
-  const nearbySectionUsesMixedSignals =
+  const nearbySectionUsesMixedFood =
     liveTrucks.length + localMenuItems.length + allDeals.length + visibleEvents.length > 0;
-  const nearbyRestaurantsTitle = nearbySectionUsesMixedSignals
+  const nearbyRestaurantsTitle = nearbySectionUsesMixedFood
     ? "Nearby Now"
     : DISCOVERY_LAYERS.restaurants.title;
-  const nearbyRestaurantsSubtitle = nearbySectionUsesMixedSignals
+  const nearbyRestaurantsSubtitle = nearbySectionUsesMixedFood
     ? "Open places, food trucks, deals, and menu updates near you today."
     : DISCOVERY_LAYERS.restaurants.subtitle;
 
@@ -2400,7 +2400,7 @@ export default function ExplorePreview() {
               restaurantCount={nearbyRestaurants.length}
               eventCount={visibleEvents.length}
               dealCount={allDeals.length}
-              localSignalCount={localSignalCount}
+              localActivityCount={localActivityCount}
               discoveryRadiusKm={discoveryRadiusKm}
               onRadiusChange={updateDiscoveryRadiusKm}
               onRecenter={() => {
@@ -2452,7 +2452,7 @@ export default function ExplorePreview() {
               ------------------------------
               Branded location module footer. Conveys "this is YOUR
               MealScout map" with a sharp eyebrow, the resolved place,
-              a live signal count, and an amber CTA. The gradient is a
+              a live local count, and an amber CTA. The gradient is a
               true pedestal — strong at the bottom edge, clear higher
               up so it never crowds important map labels. */}
           {sheetState === "default" && (
@@ -2473,13 +2473,13 @@ export default function ExplorePreview() {
                   <p className="mt-0.5 truncate text-[15px] font-extrabold text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.7)]">
                     {hasResolvedLocation ? shortLocation : "Nearby now"}
                   </p>
-                  {localSignalCount > 0 && (
+                  {localActivityCount > 0 && (
                     <p className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-bold text-orange-100 ring-1 ring-white/15 backdrop-blur-md">
                       <span
                         aria-hidden="true"
                         className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(74,222,128,0.85)]"
                       />
-                      {localSignalCount} open near you
+                      {localActivityCount} open near you
                     </p>
                   )}
                 </div>
@@ -2517,7 +2517,7 @@ export default function ExplorePreview() {
               boardItems={cravingBoardItems}
               daypartCopy={daypartSearchCopy}
               locationStatus={locationStatus}
-              localSignalCount={localSignalCount}
+              localActivityCount={localActivityCount}
               onRefreshLocation={requestLocation}
               onCravingSelect={setSelectedCravingId}
               onSearchCraving={goToCraving}
@@ -2529,7 +2529,7 @@ export default function ExplorePreview() {
 
             <LocalActivityRail items={localActivityItems} />
 
-            {/* OPEN NOW — broad live signal across trucks, restaurants, bars, and public events. */}
+            {/* OPEN NOW — broad live view across trucks, restaurants, bars, and public events. */}
             <OpenNowSection
               liveTrucks={liveTrucks}
               liveTrucksLoading={liveTrucksLoading}
@@ -2739,7 +2739,7 @@ function SectionHeader({
           <div className="mb-1 inline-flex items-center gap-2 rounded-full bg-orange-500/12 px-2.5 py-1 ring-1 ring-orange-300/20">
             <span className="h-1.5 w-1.5 rounded-full bg-orange-300" aria-hidden="true" />
             <span className="text-[10px] font-black uppercase tracking-[0.14em] text-orange-200/80">
-              Scout feed
+              Local feed
             </span>
           </div>
           <h2 className="truncate text-white text-xl sm:text-2xl font-black tracking-tight">{title}</h2>
@@ -2769,7 +2769,7 @@ function CravingCompass({
   boardItems,
   daypartCopy,
   locationStatus,
-  localSignalCount,
+  localActivityCount,
   onRefreshLocation,
   onCravingSelect,
   onSearchCraving,
@@ -2779,7 +2779,7 @@ function CravingCompass({
   boardItems: CravingBoardItem[];
   daypartCopy: { title: string; body: string };
   locationStatus: "idle" | "requesting" | "ready" | "denied";
-  localSignalCount: number;
+  localActivityCount: number;
   onRefreshLocation: () => void;
   onCravingSelect: (id: string) => void;
   onSearchCraving: (craving: CravingCategory) => void;
@@ -2813,7 +2813,7 @@ function CravingCompass({
       closesSoon: topPick.freshnessMeta?.closesSoon || /close|closing|closes soon/i.test(`${topPick.meta || ""} ${topPick.reason || ""}`),
     };
   }, [topPick, topPickDistance]);
-  const topPickMetaSignals = useMemo(() => {
+  const topPickProofLabels = useMemo(() => {
     if (!topPick || !topPickFreshnessMeta) return [] as string[];
     const labels = new Set<string>(getOperationalBadges(topPickFreshnessMeta));
     if (topPickDistance) {
@@ -2840,12 +2840,12 @@ function CravingCompass({
   const topPickProofBits = useMemo(() => {
     if (!topPick) return ["Nearby now", "Happening today"];
     const bits = topPickFreshnessMeta
-      ? [getFreshnessLabel(topPickFreshnessMeta), ...topPickMetaSignals]
-      : [...topPickMetaSignals];
+      ? [getFreshnessLabel(topPickFreshnessMeta), ...topPickProofLabels]
+      : [...topPickProofLabels];
     if (!bits.includes("Open now")) bits.push("Open now");
     if (!bits.includes("Nearby")) bits.push("Nearby");
     return [...new Set(bits)].slice(0, 4);
-  }, [topPick, topPickFreshnessMeta, topPickMetaSignals]);
+  }, [topPick, topPickFreshnessMeta, topPickProofLabels]);
 
   const topPickBadges = useMemo(() => {
     if (!topPick || !topPickFreshnessMeta) return [];
@@ -2857,11 +2857,11 @@ function CravingCompass({
     topPick && (topPick.kind === "Place" || topPick.kind === "Menu")
       ? `${topPick.href}?tab=menu`
       : null;
-  const signalLabel =
+  const activityLabel =
     hasLocation
       ? resultCount > 0
         ? `${resultCount} open options`
-        : localSignalCount > 0
+        : localActivityCount > 0
           ? "Show more nearby"
         : "No exact hits yet"
       : "Location off";
@@ -2891,7 +2891,7 @@ function CravingCompass({
             </div>
             {hasLocation ? (
               <span className="shrink-0 rounded-full bg-[#fff4e1]/10 ring-1 ring-orange-200/35 px-2.5 py-1 text-[11px] font-bold text-orange-100">
-                {signalLabel}
+                {activityLabel}
               </span>
             ) : (
               <button
@@ -3197,19 +3197,29 @@ function QuickUpdateBar() {
   ];
 
   return (
-    <section className="px-4 pb-5">
-      <div className="overflow-x-auto atmo-hide-scrollbar">
-        <div className="flex w-max gap-2 pr-1">
+    <section className="px-4 pb-4 -mt-1" aria-label="Quick updates">
+      <div className="rounded-2xl bg-[#120805]/42 px-3 py-2.5 ring-1 ring-orange-200/14">
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <p className="text-[10px] font-black uppercase tracking-[0.14em] text-orange-100/72">
+            Quick updates
+          </p>
+          <p className="text-[10px] font-bold text-white/42">
+            For your places
+          </p>
+        </div>
+        <div className="overflow-x-auto atmo-hide-scrollbar">
+          <div className="flex w-max gap-2 pr-1">
           {actions.map((action) => (
             <Link
               key={action.label}
               href={action.href}
-              className="inline-flex min-h-9 items-center gap-1.5 rounded-full bg-[#fff4e1]/10 px-3 py-2 text-[11px] font-black text-orange-50 ring-1 ring-orange-200/24 transition-colors hover:bg-[#fff4e1]/14 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
+              className="inline-flex min-h-8 items-center gap-1.5 rounded-full bg-[#fff4e1]/10 px-2.5 py-1.5 text-[10px] font-black text-orange-50 ring-1 ring-orange-200/24 transition-colors hover:bg-[#fff4e1]/14 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
             >
               {action.icon}
               <span>{action.label}</span>
             </Link>
           ))}
+          </div>
         </div>
       </div>
     </section>
@@ -3224,17 +3234,19 @@ function OwnerOperationalActions({
   if (actions.length === 0) return null;
 
   return (
-    <div className="mt-2 flex flex-wrap gap-1.5">
-      {actions.map((action) => (
-        <Link
-          key={`${action.label}-${action.href}`}
-          href={action.href}
-          className="inline-flex min-h-7 items-center gap-1 rounded-full bg-orange-300/14 px-2 py-1 text-[10px] font-black text-orange-100 ring-1 ring-orange-200/24 transition-colors hover:bg-orange-300/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
-        >
-          {action.icon}
-          <span>{action.label}</span>
-        </Link>
-      ))}
+    <div className="mt-2 overflow-x-auto atmo-hide-scrollbar">
+      <div className="flex w-max gap-1.5 pr-1">
+        {actions.map((action) => (
+          <Link
+            key={`${action.label}-${action.href}`}
+            href={action.href}
+            className="inline-flex min-h-7 shrink-0 items-center gap-1 rounded-full bg-orange-300/14 px-2 py-1 text-[10px] font-black text-orange-100 ring-1 ring-orange-200/24 transition-colors hover:bg-orange-300/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
+          >
+            {action.icon}
+            <span>{action.label}</span>
+          </Link>
+        ))}
+      </div>
     </div>
   );
 }
@@ -4316,11 +4328,11 @@ function SavedRestaurantCard({ restaurant }: { restaurant: RestaurantSummary }) 
 
 /* ============================================================
    OPEN NOW SECTION
-   The first content rail under the map. Broad live signal across
+   The first content rail under the map. Broad live food view across
    any business with a public hours/schedule footprint:
      - live food trucks broadcasting service
      - public events / pop-ups happening today
-     - restaurants and bars with active deals (signal of "open serving")
+     - restaurants and bars with active deals
    Empty state collapses to a quiet status chip + Why? helper.
    ============================================================ */
 
@@ -4383,7 +4395,7 @@ function OpenNowSection({
     );
   }
 
-  // We have signal — render a unified rail of cards.
+  // We have live local food — render a unified rail of cards.
   if (hasAnyContent) {
     const liveCount = liveTrucks.length;
     const eventsCount = todaysEvents.length;
@@ -4432,7 +4444,7 @@ function OpenNowSection({
     );
   }
 
-  // No useful signal yet: keep the page focused on the craving picker instead
+  // No useful local food yet: keep the page focused on the craving picker instead
   // of spending first-screen space explaining an empty feed.
   void liveTrucksError;
   void locationStatus;
@@ -4645,7 +4657,7 @@ function ScoutMapHud({
   restaurantCount,
   eventCount,
   dealCount,
-  localSignalCount,
+  localActivityCount,
   discoveryRadiusKm,
   onRadiusChange,
   onRecenter,
@@ -4655,7 +4667,7 @@ function ScoutMapHud({
   restaurantCount: number;
   eventCount: number;
   dealCount: number;
-  localSignalCount: number;
+  localActivityCount: number;
   discoveryRadiusKm: number;
   onRadiusChange: (value: number) => void;
   onRecenter: () => void;
@@ -4687,7 +4699,7 @@ function ScoutMapHud({
             </span>
             <div className="min-w-0">
               <p className="text-[10px] font-black uppercase tracking-[0.16em] text-orange-200/75">
-                Scout live
+                Live map
               </p>
               <p className="truncate text-sm font-black text-white">
                 Local food scene
@@ -4768,7 +4780,7 @@ function ScoutMapHud({
           </div>
         </div>
 
-        {isExpanded && localSignalCount === 0 ? (
+        {isExpanded && localActivityCount === 0 ? (
           <div className="mt-3 rounded-2xl bg-white/7 px-3 py-2 text-xs text-white/72 ring-1 ring-white/10">
             No live local pins right here yet. Pan the map or widen discovery from the feed below.
           </div>
@@ -5012,3 +5024,4 @@ function HorizontalSkeletonRow({
     </div>
   );
 }
+
