@@ -537,8 +537,8 @@ function buildCompassRecommendations({
       href: `/search?q=${encodeURIComponent(craving.query)}`,
       reason:
         localSignalCount > 0
-          ? "Search all nearby matches when you want the full board."
-          : "No live local signal yet, so Scout will widen into search.",
+          ? `See every ${craving.label.toLowerCase()} spot pinging on the radar tonight.`
+          : `Scout is still sweeping. Tap in to broaden the ${craving.label.toLowerCase()} search.`,
       meta: "Search",
     },
     {
@@ -1489,9 +1489,15 @@ export default function ExplorePreview() {
         className={`relative z-10 ${
           sheetState === "fullMap"
             ? ""
-            : "pb-36 md:mx-auto md:max-w-[640px] md:min-h-screen md:bg-[#090b0f]/72 md:backdrop-blur-sm md:shadow-[0_0_0_1px_rgba(255,255,255,0.08),0_24px_80px_rgba(0,0,0,0.55)]"
+            : "pb-40 md:mx-auto md:max-w-[640px] md:min-h-screen md:bg-[#090b0f]/72 md:backdrop-blur-sm md:shadow-[0_0_0_1px_rgba(255,255,255,0.08),0_24px_80px_rgba(0,0,0,0.55)]"
         }`}
-        style={{ overscrollBehaviorY: "none" }}
+        style={{
+          overscrollBehaviorY: "none",
+          paddingBottom:
+            sheetState === "fullMap"
+              ? undefined
+              : "calc(10rem + env(safe-area-inset-bottom, 0px))",
+        }}
       >
         {/* ============================================================
              SCOUT SURFACE
@@ -2113,110 +2119,215 @@ function CravingCompass({
     .filter(Boolean)
     .join(" / ");
 
+  const cravingCount = cravings.length;
+  const activeIndex = Math.max(
+    0,
+    cravings.findIndex((cat) => cat.id === selectedCraving.id),
+  );
+  // Active craving sits at the top of the dial; sweep rotates to face it.
+  const sweepAngle = (activeIndex / Math.max(cravingCount, 1)) * 360;
+  const emptyState =
+    !hasLocation
+      ? "Turn on location and Scout reads the menus, deals, and open spots within reach."
+      : localSignalCount === 0
+        ? "No live crowd pulse yet. Scout is reading nearby menus and open spots for you."
+        : null;
+
   return (
     <section className="px-5 pt-5 pb-7">
-      <div className="rounded-[1.65rem] overflow-hidden bg-[#180b05] ring-1 ring-orange-300/55 backdrop-blur-md shadow-[0_18px_60px_rgba(0,0,0,0.45)]">
+      <div className="rounded-[1.65rem] overflow-hidden bg-[#0a0604] ring-1 ring-orange-400/35 backdrop-blur-md shadow-[0_18px_60px_rgba(0,0,0,0.55)]">
         <div
-          className="px-4 py-4 sm:px-5"
+          className="px-4 py-5 sm:px-5"
           style={{
             backgroundImage:
-              "radial-gradient(circle at 16% 6%, rgba(255,111,60,0.55), transparent 42%), radial-gradient(circle at 88% 4%, rgba(251,191,36,0.32), transparent 36%), linear-gradient(180deg, rgba(64,27,9,0.85), rgba(18,8,5,0.95))",
+              "radial-gradient(circle at 18% 8%, rgba(255,140,60,0.32), transparent 48%), radial-gradient(circle at 86% 6%, rgba(251,191,36,0.20), transparent 42%), linear-gradient(180deg, #150a06 0%, #08050a 100%)",
           }}
         >
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-[10px] uppercase tracking-[0.2em] text-orange-200/75 font-bold">
-                Craving Compass
+              <p className="text-[10px] uppercase tracking-[0.28em] text-orange-300 font-black">
+                Meal Radar
               </p>
-              <h2 className="mt-1 font-sans text-white text-xl font-black leading-tight">
-                What did you actually want?
+              <h2 className="mt-1.5 font-sans text-white text-[22px] sm:text-2xl font-black leading-tight">
+                Find the move for tonight.
               </h2>
-              <p className="mt-1.5 text-orange-50/70 text-sm leading-relaxed max-w-[32rem]">
-                Pick a mood. Scout gives you three choices: safe, local upside,
-                and one wildcard.
+              <p className="mt-1.5 text-white/70 text-sm leading-relaxed max-w-[32rem]">
+                Spin through cravings, then let Scout surface the safe pick,
+                the local gem, and the wildcard nearby.
               </p>
             </div>
-            <span className="shrink-0 rounded-full bg-[#2a1308] ring-1 ring-orange-300/55 px-3 py-1 text-[11px] font-semibold text-orange-100">
+            <span className="shrink-0 inline-flex items-center gap-1.5 rounded-full bg-black/55 ring-1 ring-orange-300/50 px-3 py-1 text-[11px] font-bold text-orange-100">
+              <span
+                className="h-1.5 w-1.5 rounded-full bg-orange-300 atmo-pulse-amber"
+                aria-hidden="true"
+              />
               {signalLabel}
             </span>
+          </div>
+
+          {/* ── RADAR / COMPASS DIAL ─────────────────────────────────── */}
+          <div className="mt-5 flex justify-center">
+            <div
+              className="relative w-full max-w-[320px] aspect-square select-none"
+              role="group"
+              aria-label="Craving radar"
+            >
+              {/* Glow halo */}
+              <div
+                aria-hidden="true"
+                className="absolute inset-[10%] rounded-full"
+                style={{
+                  background:
+                    "radial-gradient(circle, rgba(255,140,60,0.28) 0%, rgba(255,90,47,0.10) 45%, rgba(0,0,0,0) 72%)",
+                  filter: "blur(2px)",
+                }}
+              />
+              {/* Concentric amber rings */}
+              <div
+                aria-hidden="true"
+                className="absolute inset-[6%] rounded-full border border-orange-400/35"
+              />
+              <div
+                aria-hidden="true"
+                className="absolute inset-[20%] rounded-full border border-orange-400/25"
+              />
+              <div
+                aria-hidden="true"
+                className="absolute inset-[34%] rounded-full border border-orange-400/20"
+              />
+              {/* Sweep beam — rotates to face the active craving */}
+              <div
+                aria-hidden="true"
+                className="absolute inset-0 transition-transform duration-500 ease-out"
+                style={{ transform: `rotate(${sweepAngle}deg)` }}
+              >
+                <div
+                  className="absolute left-1/2 top-1/2 h-1/2 w-1/2 origin-top-left"
+                  style={{
+                    background:
+                      "conic-gradient(from 270deg, rgba(255,140,60,0.55) 0deg, rgba(255,140,60,0.18) 22deg, rgba(0,0,0,0) 60deg)",
+                    transform: "rotate(-90deg)",
+                    borderTopLeftRadius: "100%",
+                  }}
+                />
+              </div>
+
+              {/* Center hub — active craving */}
+              <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center">
+                <div
+                  className="h-[88px] w-[88px] rounded-full overflow-hidden ring-2 ring-orange-300"
+                  style={{
+                    boxShadow:
+                      "0 0 0 6px rgba(255,111,60,0.18), 0 0 36px rgba(255,140,60,0.65), inset 0 0 22px rgba(0,0,0,0.55)",
+                  }}
+                >
+                  <img
+                    src={selectedCraving.image}
+                    alt=""
+                    className="h-full w-full object-cover"
+                  />
+                </div>
+                <p className="mt-2 text-[10px] uppercase tracking-[0.22em] text-orange-300 font-black">
+                  Locked on
+                </p>
+                <p className="text-white text-base font-black leading-tight">
+                  {selectedCraving.label}
+                </p>
+                <p className="mt-0.5 text-orange-100/75 text-[11px] font-semibold">
+                  {selectedCraving.helper}
+                </p>
+              </div>
+
+              {/* Orbiting craving buttons */}
+              {cravings.map((cat, i) => {
+                const isActive = cat.id === selectedCraving.id;
+                // Place index 0 at top (-90deg), then evenly around.
+                const angle = (i / cravingCount) * 360 - 90;
+                const radius = 44; // % of dial
+                const rad = (angle * Math.PI) / 180;
+                const x = 50 + radius * Math.cos(rad);
+                const y = 50 + radius * Math.sin(rad);
+                return (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => onCravingSelect(cat.id)}
+                    aria-label={`Pick ${cat.label}`}
+                    aria-pressed={isActive}
+                    className="absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70 rounded-full"
+                    style={{ left: `${x}%`, top: `${y}%` }}
+                  >
+                    <span
+                      className={[
+                        "h-[44px] w-[44px] rounded-full overflow-hidden bg-[#120805] transition-all",
+                        isActive
+                          ? "ring-2 ring-orange-300 scale-110"
+                          : "ring-1 ring-orange-300/55 hover:ring-orange-200",
+                      ].join(" ")}
+                      style={{
+                        boxShadow: isActive
+                          ? "0 0 0 4px rgba(255,111,60,0.25), 0 0 22px rgba(255,140,60,0.75)"
+                          : "0 0 14px rgba(255,90,47,0.40)",
+                      }}
+                    >
+                      <img
+                        src={cat.image}
+                        alt=""
+                        loading="lazy"
+                        className="h-full w-full object-cover"
+                      />
+                    </span>
+                    <span
+                      className={[
+                        "mt-1 text-[10px] font-bold leading-none whitespace-nowrap",
+                        isActive ? "text-orange-200" : "text-white/85",
+                      ].join(" ")}
+                    >
+                      {cat.label}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           {!hasLocation ? (
             <button
               type="button"
               onClick={onRefreshLocation}
-              className="mt-3 w-full rounded-2xl bg-[#2a1308] ring-1 ring-orange-300/55 px-4 py-3 text-left active:scale-[0.99]"
+              className="mt-4 w-full rounded-2xl bg-black/45 ring-1 ring-orange-300/55 px-4 py-3 text-left active:scale-[0.99]"
             >
-              <p className="text-white text-sm font-bold">Use my location</p>
-              <p className="mt-1 text-white/65 text-xs">
-                This unlocks nearby trucks, deals, events, and food spots instantly.
+              <p className="text-white text-sm font-black">
+                Drop a pin to sharpen the radar.
+              </p>
+              <p className="mt-1 text-white/65 text-xs leading-relaxed">
+                Scout uses your spot to surface the trucks, deals, and tables
+                actually within reach tonight.
               </p>
             </button>
           ) : null}
 
-          <div className="mt-4 rounded-[1.4rem] bg-[#0f0907] ring-1 ring-orange-300/35 p-3">
-            <p className="text-xs font-semibold leading-relaxed text-orange-100/85">
-              {selectedCraving.helper}
-            </p>
-            <div className="mt-3 overflow-x-auto atmo-hide-scrollbar">
-              <ul className="flex w-max items-start gap-3 pr-1" role="list">
-                {cravings.map((cat) => {
-                  const isActive = cat.id === selectedCraving.id;
-                  return (
-                    <li key={cat.id} className="shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => onCravingSelect(cat.id)}
-                        aria-label={`Pick ${cat.label}`}
-                        aria-pressed={isActive}
-                        className="group flex flex-col items-center gap-1.5 w-[60px] sm:w-[68px] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70 rounded-2xl active:scale-[0.96] transition-transform"
-                      >
-                        <span
-                          className={[
-                            "h-[56px] w-[56px] sm:h-[64px] sm:w-[64px] rounded-full overflow-hidden bg-[#120805] transition-all",
-                            isActive
-                              ? "ring-2 ring-orange-400"
-                              : "ring-2 ring-orange-500/70 group-hover:ring-orange-300",
-                          ].join(" ")}
-                          style={{
-                            boxShadow: isActive
-                              ? "0 0 0 3px rgba(255,111,60,0.22), 0 0 22px rgba(255,140,60,0.70)"
-                              : "0 0 0 3px rgba(255,90,47,0.14), 0 0 18px rgba(255,90,47,0.45)",
-                          }}
-                        >
-                          <img
-                            src={cat.image}
-                            alt=""
-                            loading="lazy"
-                            className="h-full w-full object-cover"
-                          />
-                        </span>
-                        <span
-                          className={[
-                            "text-[11px] sm:text-xs font-semibold leading-none",
-                            isActive ? "text-orange-200" : "text-white/90",
-                          ].join(" ")}
-                        >
-                          {cat.label}
-                        </span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          </div>
-
-          <div className="mt-3 space-y-2.5">
+          {/* ── THREE PICKS ─────────────────────────────────────────── */}
+          <div className="mt-5 space-y-2.5">
+            {emptyState ? (
+              <div className="rounded-2xl bg-black/40 ring-1 ring-orange-300/25 px-3.5 py-3">
+                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-orange-300">
+                  Sweeping
+                </p>
+                <p className="mt-1 text-white text-sm font-bold leading-snug">
+                  {emptyState}
+                </p>
+              </div>
+            ) : null}
             {recommendations.map((pick) => (
               <Link
                 key={pick.id}
                 href={pick.href}
-                className="block rounded-2xl bg-[#0f0907] ring-1 ring-orange-300/35 px-3.5 py-3 shadow-[0_8px_24px_rgba(0,0,0,0.35)] active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
+                className="block rounded-2xl bg-black/45 ring-1 ring-orange-300/35 px-3.5 py-3 shadow-[0_8px_24px_rgba(0,0,0,0.45)] active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-orange-300">
+                    <p className="text-[10px] font-black uppercase tracking-[0.22em] text-orange-300">
                       {pick.role}
                     </p>
                     <p className="mt-1 truncate text-base font-black text-white">
@@ -2226,7 +2337,7 @@ function CravingCompass({
                       {pick.subtitle}
                     </p>
                   </div>
-                  <span className="shrink-0 rounded-full bg-[#ff6f3c] px-2.5 py-1 text-[11px] font-black text-white ring-1 ring-orange-200/60 shadow-[0_6px_14px_rgba(255,111,60,0.35)]">
+                  <span className="shrink-0 rounded-full bg-gradient-to-br from-[#ff8a3c] to-[#ff6f3c] px-2.5 py-1 text-[11px] font-black text-white ring-1 ring-orange-200/60 shadow-[0_6px_14px_rgba(255,111,60,0.45)]">
                     {pick.meta}
                   </span>
                 </div>
@@ -2237,17 +2348,18 @@ function CravingCompass({
             ))}
           </div>
 
-          <div className="mt-3 rounded-2xl bg-[#0f0907] ring-1 ring-orange-300/35 p-3">
+          {/* ── LOCATION + RADIUS ───────────────────────────────────── */}
+          <div className="mt-3 rounded-2xl bg-black/45 ring-1 ring-orange-300/30 p-3">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0">
-                <p className="text-[10px] uppercase tracking-[0.18em] text-orange-300 font-bold">
+                <p className="text-[10px] uppercase tracking-[0.22em] text-orange-300 font-black">
                   {locationLabel}
                 </p>
-                <p className="mt-0.5 truncate text-white text-sm font-semibold">
-                  {signalSummary || `${radiusMiles} mi discovery radius`}
+                <p className="mt-0.5 truncate text-white text-sm font-bold">
+                  {signalSummary || `Scanning ${radiusMiles} mi around you`}
                 </p>
               </div>
-              <div className="flex self-start rounded-full bg-[#1a0c06] p-1 ring-1 ring-orange-300/30 sm:self-auto">
+              <div className="flex self-start rounded-full bg-black/55 p-1 ring-1 ring-orange-300/30 sm:self-auto">
                 {radiusOptions.map((radius) => {
                   const isActive = discoveryRadiusKm === radius;
                   return (
@@ -2256,7 +2368,7 @@ function CravingCompass({
                       type="button"
                       onClick={() => onRadiusChange(radius)}
                       className={[
-                        "rounded-full px-2.5 py-1 text-[11px] font-bold transition-colors",
+                        "rounded-full px-2.5 py-1 text-[11px] font-black transition-colors",
                         isActive
                           ? "bg-[#ff6f3c] text-white shadow-[0_4px_12px_rgba(255,111,60,0.45)]"
                           : "text-orange-100/80 hover:text-white",
@@ -2274,17 +2386,19 @@ function CravingCompass({
               <button
                 type="button"
                 onClick={onRefreshLocation}
-                className="shrink-0 inline-flex items-center gap-2 rounded-full bg-[#1a0c06] ring-1 ring-orange-300/55 text-orange-100 px-3 py-2 text-xs font-semibold active:scale-[0.98]"
+                className="shrink-0 inline-flex items-center gap-2 rounded-full bg-black/55 ring-1 ring-orange-300/55 text-orange-100 px-3 py-2 text-xs font-bold active:scale-[0.98]"
               >
                 <Search className="h-3.5 w-3.5 text-orange-300" aria-hidden="true" />
-                Refresh location
+                Re-scan
               </button>
               <button
                 type="button"
                 onClick={() => onSearchCraving(selectedCraving)}
-                className="min-w-0 flex-1 inline-flex items-center justify-center gap-1.5 rounded-full bg-[#ff6f3c] ring-1 ring-orange-200/60 px-3 py-2 text-xs font-black text-white shadow-[0_8px_20px_rgba(255,111,60,0.35)] active:scale-[0.98]"
+                className="min-w-0 flex-1 inline-flex items-center justify-center gap-1.5 rounded-full bg-gradient-to-br from-[#ff8a3c] to-[#ff6f3c] ring-1 ring-orange-200/60 px-3 py-2 text-xs font-black text-white shadow-[0_8px_20px_rgba(255,111,60,0.45)] active:scale-[0.98]"
               >
-                <span className="truncate">See every {selectedCraving.label.toLowerCase()} match</span>
+                <span className="truncate">
+                  Show every {selectedCraving.label.toLowerCase()} spot nearby
+                </span>
                 <ChevronRight className="h-3.5 w-3.5 shrink-0 text-white" aria-hidden="true" />
               </button>
             </div>
