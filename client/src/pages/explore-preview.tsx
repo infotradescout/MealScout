@@ -20,7 +20,6 @@ import {
   MessageCircle,
   Minimize2,
   Navigation2,
-  Search,
   Sparkles,
   Tag,
   TrendingUp,
@@ -435,9 +434,9 @@ const DISCOVERY_LAYERS: Record<
     subtitle: "All nearby trucks that are broadcasting or ready to be discovered.",
   },
   restaurants: {
-    title: "Restaurants Near You",
+    title: "Open Local Food Now",
     href: "/search",
-    subtitle: "Local restaurants and bars worth knowing about - not a fast-food feed.",
+    subtitle: "Live local food signals, trucks, and fresh deals ranked by what is open and moving right now.",
   },
   deals: {
     title: "Deals Near You",
@@ -2277,14 +2276,54 @@ function CravingCompass({
     },
     { Menu: 0, Place: 0, Truck: 0, Deal: 0 } as Record<CravingBoardItem["kind"], number>,
   );
+  const topPick = boardItems[0] || null;
+  const orderedCravings = useMemo(() => {
+    const orderedIds = [
+      "open-now",
+      "quick-bite",
+      "best-deal",
+      "food-truck",
+      "coffee-breakfast",
+      "something-new",
+    ];
+    const byId = new Map(cravings.map((cat) => [cat.id, cat]));
+    const ordered = orderedIds.map((id) => byId.get(id)).filter(Boolean) as CravingCategory[];
+    const orderedIdSet = new Set(orderedIds);
+    return [...ordered, ...cravings.filter((cat) => !orderedIdSet.has(cat.id))];
+  }, [cravings]);
+
+  const topPickProofBits = useMemo(() => {
+    if (!topPick) return ["Nearby now", "Happening today"];
+    const bits: string[] = [];
+    if (topPick.meta) bits.push(topPick.meta);
+    if (topPick.kind === "Truck") bits.push("Food truck");
+    if (topPick.kind === "Deal") bits.push("Deal today");
+    bits.push(hasLocation ? "Open now" : "Nearby now");
+    if (topPick.kind === "Place" && topPick.reason) bits.push(topPick.reason);
+    return [...new Set(bits)];
+  }, [topPick, hasLocation]);
+
+  const topPickBadges = useMemo(() => {
+    if (!topPick) return [];
+    const badges = new Set<string>(["Nearby", "Live signal"]);
+    if (topPick.kind === "Truck") badges.add("Live truck");
+    if (topPick.reason && /deal/i.test(topPick.reason)) badges.add("Deal signal");
+    if (topPick.reason && /truck/i.test(topPick.reason)) badges.add("Truck activity");
+    if (topPick.meta && /mi/i.test(topPick.meta)) badges.add("Nearby");
+    return Array.from(badges).slice(0, 3);
+  }, [topPick]);
+  const topPickMenuHref =
+    topPick && (topPick.kind === "Place" || topPick.kind === "Menu")
+      ? `${topPick.href}?tab=menu`
+      : null;
   const signalLabel =
-    resultCount > 0
-      ? `${resultCount} search match${resultCount === 1 ? "" : "es"}`
-      : localSignalCount > 0
-        ? "Search wider"
-      : hasLocation
-        ? "No exact hits yet"
-        : "Location off";
+    hasLocation
+      ? resultCount > 0
+        ? `${resultCount} live signals`
+        : localSignalCount > 0
+          ? "Search wider"
+        : "No exact hits yet"
+      : "Location off";
 
   useEffect(() => {
     setIsSearchOpen(false);
@@ -2306,7 +2345,7 @@ function CravingCompass({
                 Find your next food move.
               </h2>
               <p className="mt-1 text-orange-50/62 text-xs leading-relaxed">
-                Live trucks, menu drops, deals, and local favorites near you right now.
+                Open, nearby, and active now. Pick the best move.
               </p>
             </div>
             {hasLocation ? (
@@ -2325,12 +2364,91 @@ function CravingCompass({
           </div>
 
           <div className="mt-3">
-            <p className="mb-2 text-xs font-semibold leading-relaxed text-orange-50/64">
-              {daypartCopy.title} {daypartCopy.body}
+            <p className="text-xs font-semibold leading-relaxed text-orange-50/64">
+              {daypartCopy.body}
             </p>
-            <div className="overflow-x-auto atmo-hide-scrollbar">
-              <div className="flex w-max gap-2 pr-1">
-                {cravings.map((cat) => {
+            <div className="mt-2 rounded-xl bg-[#130b08]/70 p-3 ring-1 ring-white/10">
+              {topPick ? (
+                <>
+                  <div className="relative overflow-hidden rounded-xl bg-[#0d0705]/75">
+                    <img
+                      src={topPick.imageUrl || selectedCraving.image}
+                      alt=""
+                      className="h-28 w-full object-cover opacity-65"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-[#120805]/95 via-[#120805]/55 to-transparent" />
+                    <div className="absolute left-3 top-3">
+                      <span className="inline-flex rounded-full bg-black/65 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-white ring-1 ring-white/12">
+                        BEST MATCH RIGHT NOW
+                      </span>
+                    </div>
+                  </div>
+                  <p className="mt-2 text-[10px] font-black uppercase tracking-[0.12em] text-[#f3b67a]">
+                    Open now · nearby · happening today
+                  </p>
+                  <p className="mt-1 text-base font-black text-white leading-tight">
+                    {topPick.title}
+                  </p>
+                  <p className="mt-1 text-sm text-white/75">{topPick.subtitle}</p>
+                  <p className="mt-1.5 text-xs font-semibold text-white/72">
+                    {topPickProofBits.join(" · ")}
+                  </p>
+                  <p className="mt-2 text-[10px] font-black uppercase tracking-[0.12em] text-orange-100/72">
+                    Why this match
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {topPickBadges.map((badge) => (
+                      <span
+                        key={badge}
+                        className="inline-flex rounded-full bg-[#fff4e1]/10 px-2 py-1 text-[10px] font-black text-orange-100 ring-1 ring-orange-200/25"
+                      >
+                        {badge}
+                      </span>
+                    ))}
+                    {topPick.reason ? (
+                      <span className="inline-flex rounded-full bg-[#fff4e1]/10 px-2 py-1 text-[10px] font-black text-orange-100 ring-1 ring-orange-200/25">
+                        {topPick.reason}
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Link
+                      href={topPick.href}
+                      className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full bg-[#ff7945] px-4 py-2 text-sm font-black text-white shadow-[0_10px_24px_rgba(255,111,60,0.22)] ring-1 ring-white/20 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
+                    >
+                      Go now
+                      <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                    </Link>
+                    {topPickMenuHref ? (
+                      <Link
+                        href={topPickMenuHref}
+                        className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full bg-[#fff4e1]/12 px-4 py-2 text-sm font-black text-orange-100 ring-1 ring-orange-200/25 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
+                      >
+                        View menu
+                      </Link>
+                    ) : null}
+                  </div>
+                </>
+              ) : (
+                <div className="rounded-xl bg-black/20 p-3 ring-1 ring-white/10">
+                  <p className="text-sm font-black text-white">
+                    No exact {selectedCraving.label.toLowerCase()} picks yet.
+                  </p>
+                  <p className="mt-1 text-xs leading-relaxed text-white/62">
+                    Open the full layer to widen the radius and pull more signals.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="mt-4">
+            <p className="mb-2 text-xs font-black uppercase tracking-[0.13em] text-[#ffcf9b]">
+              Change the mission
+            </p>
+                  <div className="overflow-x-auto atmo-hide-scrollbar">
+                    <div className="flex w-max gap-2 pr-1">
+                {orderedCravings.map((cat) => {
                 const isActive = cat.id === selectedCraving.id;
                 return (
                   <button
@@ -2339,9 +2457,9 @@ function CravingCompass({
                     onClick={() => onCravingSelect(cat.id)}
                     className={[
                       "min-h-9 shrink-0 rounded-full px-3 py-2 text-[11px] font-black leading-none ring-1 transition-colors active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/60",
-                      isActive
-                        ? "bg-[#ff7945] text-white ring-white/35 shadow-[0_8px_18px_rgba(255,111,60,0.24)]"
-                        : "bg-[#fff4e1]/8 text-orange-50/78 ring-orange-200/25 hover:bg-[#fff4e1]/12",
+                    isActive
+                      ? "bg-[#ff7945] text-white ring-white/35 shadow-[0_8px_18px_rgba(255,111,60,0.24)]"
+                        : "bg-[#fff4e1]/8 text-orange-50/78 ring-orange-200/25 hover:bg-[#fff4e1]/12 text-[10px] md:text-[11px]",
                     ].join(" ")}
                     aria-pressed={isActive}
                   >
@@ -2357,15 +2475,15 @@ function CravingCompass({
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-[10px] font-black uppercase tracking-[0.14em] text-[#e5b06f]/82">
-                  Active search
+                  CURRENT MISSION
                 </p>
                 <p className="mt-1 truncate text-base font-black text-white">
                   {selectedCraving.label}
                 </p>
                 <p className="mt-0.5 text-xs font-semibold leading-relaxed text-orange-100/62">
                   {isSearchOpen
-                    ? "Results group menu items, places, trucks, and deals from business data."
-                    : "Tap search to open the result layer here."}
+                    ? "Review the matches for this mission."
+                    : "Reviewing mission matches keeps your move decision clear."}
                 </p>
               </div>
               <button
@@ -2374,8 +2492,7 @@ function CravingCompass({
                 className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-full bg-[#fff3e4] px-3.5 py-2 text-xs font-black text-orange-950 ring-1 ring-orange-200 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
                 aria-expanded={isSearchOpen}
               >
-                <Search className="h-3.5 w-3.5" aria-hidden="true" />
-                {isSearchOpen ? "Collapse" : "Search"}
+                {isSearchOpen ? "Hide matches" : "Show matches"}
               </button>
             </div>
 
