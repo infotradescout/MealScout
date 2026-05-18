@@ -236,7 +236,7 @@ const DAYPART_SEARCH_COPY: Record<Daypart, { title: string; body: string }> = {
   },
   lunch: {
     title: "Lunch without the scroll.",
-    body: "Fast local options, live trucks, and solid deals near you.",
+    body: "Fast local options, food trucks, and solid deals near you.",
   },
   afternoon: {
     title: "Need a reset?",
@@ -258,7 +258,7 @@ const SCOUT_SEARCH_OPTIONS: CravingCategory[] = [
     label: "Open now",
     query: "open now",
     helper: "Food you can actually get right now",
-    keywords: ["open", "serving", "live", "available", "pickup", "late"],
+    keywords: ["open", "serving", "available", "pickup", "late"],
     image: "/atmospheric/craving-burgers.jpg",
   },
   {
@@ -281,8 +281,8 @@ const SCOUT_SEARCH_OPTIONS: CravingCategory[] = [
     id: "food-truck",
     label: "Food truck",
     query: "food truck",
-    helper: "Live mobile kitchens nearby",
-    keywords: ["truck", "mobile", "pop-up", "street", "serving", "live"],
+    helper: "Mobile kitchens nearby",
+    keywords: ["truck", "mobile", "pop-up", "street", "serving"],
     image: "/atmospheric/craving-tacos.jpg",
   },
   {
@@ -401,7 +401,6 @@ type LocalActivityItem = {
 };
 
 type DiscoveryLayerId =
-  | "liveNow"
   | "localBoard"
   | "cravings"
   | "trending"
@@ -416,11 +415,6 @@ const DISCOVERY_LAYERS: Record<
   DiscoveryLayerId,
   { title: string; href: string; subtitle?: string }
 > = {
-  liveNow: {
-    title: "Open Now",
-    href: "/truck-discovery",
-    subtitle: "Trucks, restaurants, bars, and pop-ups serving near you right now.",
-  },
   localBoard: {
     title: "Top Local Favorites",
     href: "/scout",
@@ -442,14 +436,14 @@ const DISCOVERY_LAYERS: Record<
     subtitle: "Freshly available dishes from nearby restaurants and trucks.",
   },
   foodTrucks: {
-    title: "Food Trucks Nearby",
+    title: "Trucks Serving Now",
     href: "/truck-discovery",
-    subtitle: "Nearby trucks, live locations, and food you can get now.",
+    subtitle: "Food trucks currently serving nearby.",
   },
   restaurants: {
-    title: "Open Near You Now",
+    title: "Restaurants Open Now",
     href: "/search",
-    subtitle: "Open places, food trucks, deals, and menu updates near you today.",
+    subtitle: "Restaurants with current open status near you.",
   },
   deals: {
     title: "Deals Today",
@@ -509,6 +503,21 @@ function readStringField(source: unknown, fields: string[]): string | null {
   return null;
 }
 
+function readBooleanField(source: unknown, fields: string[]): boolean | null {
+  if (!source || typeof source !== "object") return null;
+  const record = source as Record<string, unknown>;
+  for (const field of fields) {
+    const value = record[field];
+    if (typeof value === "boolean") return value;
+    if (typeof value === "string") {
+      const normalized = value.trim().toLowerCase();
+      if (["true", "open", "serving", "available", "yes"].includes(normalized)) return true;
+      if (["false", "closed", "not_open", "unavailable", "no"].includes(normalized)) return false;
+    }
+  }
+  return null;
+}
+
 function getCurrentUserId(user: unknown): string | null {
   return readStringField(user, ["id", "userId"]);
 }
@@ -531,6 +540,25 @@ function isOwnedByCurrentUser(entity: unknown, currentUserId?: string | null): b
     "coordinatorUserId",
   ]);
   return ownerId === currentUserId;
+}
+
+function isTruckServingNow(truck: LiveTruckSummary): boolean {
+  const explicit = readBooleanField(truck, ["isOpen", "openNow", "currentlyOpen", "isServing", "servingNow", "availableNow"]);
+  if (explicit !== null) return explicit;
+  return truck.mobileOnline !== false;
+}
+
+function getRestaurantOpenState(restaurant: RestaurantSummary): "open" | "closed" | "unknown" {
+  const explicit = readBooleanField(restaurant, ["isOpen", "openNow", "currentlyOpen", "isCurrentlyOpen"]);
+  if (explicit === true) return "open";
+  if (explicit === false) return "closed";
+  const status = readStringField(restaurant, ["openStatus", "status", "hoursStatus", "businessStatus"]);
+  if (status) {
+    const normalized = status.toLowerCase();
+    if (normalized.includes("open")) return "open";
+    if (normalized.includes("closed") || normalized.includes("not open")) return "closed";
+  }
+  return "unknown";
 }
 
 function getKnownTimestamp(meta: FreshnessMeta): { value: string; type: "updated" | "confirmed" } | null {
@@ -603,7 +631,7 @@ function getFreshnessLabel(entityOrMeta: FreshnessMeta): string {
 
   if (entityOrMeta.hasMenu || entityOrMeta.kind === "Menu" || entityOrMeta.kind === "menu") return "Menu updated";
   if (entityOrMeta.hasDeal || entityOrMeta.kind === "Deal" || entityOrMeta.kind === "deal") return "Deal today";
-  if (entityOrMeta.kind === "Truck" || entityOrMeta.kind === "truck") return "Open now";
+  if (entityOrMeta.kind === "Truck" || entityOrMeta.kind === "truck") return "Serving now";
   if (isTodayDate(entityOrMeta.startsAt || entityOrMeta.startTime)) return "Happening today";
   if (entityOrMeta.isOpen) return "Open now";
   if (entityOrMeta.hasDistance) return "Nearby now";
@@ -627,11 +655,12 @@ function getOperationalBadges(entityOrMeta: FreshnessMeta): string[] {
   if (entityOrMeta.kind === "Truck" || entityOrMeta.kind === "truck") labels.add("Food truck");
   if (entityOrMeta.hasDeal || entityOrMeta.kind === "Deal" || entityOrMeta.kind === "deal") labels.add("Deal today");
   if (entityOrMeta.hasMenu || entityOrMeta.kind === "Menu" || entityOrMeta.kind === "menu") labels.add("Menu updated");
-  if (entityOrMeta.isOpen) labels.add("Open now");
+  if (entityOrMeta.isOpen) labels.add(entityOrMeta.kind === "Truck" || entityOrMeta.kind === "truck" ? "Serving now" : "Open now");
   if (entityOrMeta.hasDistance) labels.add("Nearby");
   if (isTodayDate(entityOrMeta.startsAt || entityOrMeta.startTime)) labels.add("Happening today");
   const allowedLabels = new Set([
     "Open now",
+    "Serving now",
     "Updated today",
     "Confirmed today",
     "Deal today",
@@ -921,11 +950,11 @@ function buildCravingBoardItems({
       id: `truck-${truck.id}`,
       kind: "Truck",
       title: truck.name,
-      subtitle: truck.cuisineType || "Live food truck",
+      subtitle: truck.cuisineType || "Food truck",
       href: `/truck/${truck.id}`,
       imageUrl: getTruckImage(truck),
-      meta: [formatDistance(truck), formatWait(truck)].filter(Boolean).join(" / ") || "Open now",
-      reason: "Open now",
+      meta: [formatDistance(truck), formatWait(truck)].filter(Boolean).join(" / ") || "Serving now",
+      reason: "Serving now",
       freshnessMeta: {
         kind: "truck",
         updatedAt: readStringField(truck, ["updatedAt", "lastUpdatedAt"]),
@@ -1143,7 +1172,6 @@ function getCrowdVibe(truck: LiveTruckSummary): { label: string } {
   const raw = (truck.crowdLevel || truck.vibe || "").toLowerCase();
   if (raw.includes("hot") || raw.includes("packed")) return { label: "Crowd is Hot" };
   if (raw.includes("busy")) return { label: "Busy Right Now" };
-  if (raw.includes("lively")) return { label: "Lively Crowd" };
   return { label: "Open & Serving" };
 }
 
@@ -1155,7 +1183,7 @@ function getTruckCoords(truck: LiveTruckSummary): { lat: number; lng: number } |
 }
 
 function formatTruckPlace(truck: LiveTruckSummary): string {
-  return [truck.address, truck.city, truck.state].filter(Boolean).join(", ") || "Live location";
+  return [truck.address, truck.city, truck.state].filter(Boolean).join(", ") || "Nearby location";
 }
 
 function buildTruckDirectionsUrl(
@@ -1371,7 +1399,7 @@ export default function ExplorePreview() {
     return trimmed.length > 0 && trimmed.toLowerCase() !== "your area";
   }, [locationName]);
 
-  /* --------- live trucks --------- */
+  /* --------- trucks --------- */
 
   const {
     data: liveTrucksData,
@@ -1388,7 +1416,7 @@ export default function ExplorePreview() {
         `/api/trucks/live?lat=${coords.lat}&lng=${coords.lng}&radiusKm=${discoveryRadiusKm}`,
         { credentials: "include" },
       );
-      if (!response.ok) throw new Error("Failed to load live trucks");
+      if (!response.ok) throw new Error("Failed to load trucks");
       return response.json();
     },
     staleTime: 15_000,
@@ -2065,11 +2093,24 @@ export default function ExplorePreview() {
 
   const currentUserId = getCurrentUserId(user);
   const showQuickUpdateBar = isFoodOperator(user);
+  const trucksServingNow = useMemo(
+    () => liveTrucks.filter(isTruckServingNow),
+    [liveTrucks],
+  );
+  const restaurantsOpenNow = useMemo(
+    () => nearbyRestaurants.filter((restaurant) => getRestaurantOpenState(restaurant) === "open"),
+    [nearbyRestaurants],
+  );
+  const moreFoodRestaurants = useMemo(
+    () => nearbyRestaurants.filter((restaurant) => getRestaurantOpenState(restaurant) !== "open"),
+    [nearbyRestaurants],
+  );
 
-  const showFoodTrucksSection = liveTrucksLoading || liveTrucks.length > 0;
+  const showFoodTrucksSection = liveTrucksLoading || trucksServingNow.length > 0;
   const showMenuItemsSection = localMenuItems.length > 0;
   const showRestaurantsSection =
-    nearbyRestaurantsLoading || nearbyRestaurants.length > 0;
+    nearbyRestaurantsLoading || restaurantsOpenNow.length > 0;
+  const showMoreFoodSection = moreFoodRestaurants.length > 0;
   const showDealsSection = allDeals.length > 0;
   const showEventsSection = visibleEvents.length > 0;
   const localActivityCount =
@@ -2078,14 +2119,8 @@ export default function ExplorePreview() {
     nearbyRestaurants.length +
     allDeals.length +
     visibleEvents.length;
-  const nearbySectionUsesMixedFood =
-    liveTrucks.length + localMenuItems.length + allDeals.length + visibleEvents.length > 0;
-  const nearbyRestaurantsTitle = nearbySectionUsesMixedFood
-    ? "Open Near You Now"
-    : DISCOVERY_LAYERS.restaurants.title;
-  const nearbyRestaurantsSubtitle = nearbySectionUsesMixedFood
-    ? "Open places, food trucks, deals, and menu updates near you today."
-    : DISCOVERY_LAYERS.restaurants.subtitle;
+  const nearbyRestaurantsTitle = DISCOVERY_LAYERS.restaurants.title;
+  const nearbyRestaurantsSubtitle = DISCOVERY_LAYERS.restaurants.subtitle;
 
   const selectedCraving = useMemo(() => {
     return (
@@ -2100,12 +2135,12 @@ export default function ExplorePreview() {
     () =>
       buildCravingBoardItems({
         craving: selectedCraving,
-        liveTrucks,
-        restaurants: nearbyRestaurants,
+        liveTrucks: trucksServingNow,
+        restaurants: restaurantsOpenNow,
         menuItems: localMenuItems,
         deals: allDeals,
       }),
-    [allDeals, liveTrucks, localMenuItems, nearbyRestaurants, selectedCraving],
+    [allDeals, localMenuItems, restaurantsOpenNow, selectedCraving, trucksServingNow],
   );
 
   const localActivityItems = useMemo(
@@ -2113,11 +2148,11 @@ export default function ExplorePreview() {
       buildLocalActivityItems({
         menuItems: localMenuItems,
         deals: allDeals,
-        liveTrucks,
+        liveTrucks: trucksServingNow,
         events: visibleEvents,
-        restaurants: nearbyRestaurants,
+        restaurants: restaurantsOpenNow,
       }),
-    [allDeals, liveTrucks, localMenuItems, nearbyRestaurants, visibleEvents],
+    [allDeals, localMenuItems, restaurantsOpenNow, trucksServingNow, visibleEvents],
   );
   const visibleLocalActivityItems = useMemo(() => {
     const uniqueKeys = new Set<string>();
@@ -2136,18 +2171,18 @@ export default function ExplorePreview() {
         .filter((id): id is string => Boolean(id)),
     );
   }, [visibleLocalActivityItems]);
-  const visibleNearbyRestaurants = useMemo(() => {
-    const filtered = nearbyRestaurants.filter(
+  const visibleOpenRestaurants = useMemo(() => {
+    const filtered = restaurantsOpenNow.filter(
       (restaurant) => !localActivityRestaurantIds.has(String(restaurant.id)),
     );
-    return filtered.length > 0 ? filtered : nearbyRestaurants;
-  }, [localActivityRestaurantIds, nearbyRestaurants]);
+    return filtered.length > 0 ? filtered : restaurantsOpenNow;
+  }, [localActivityRestaurantIds, restaurantsOpenNow]);
 
   return (
     <>
       <SEOHead
         title="Scout | MealScout — Follow The Flavor."
-        description="Discover live food trucks, restaurants, and deals near you. MealScout puts the local food scene right in your hands."
+        description="Discover food trucks, restaurants, and deals near you. MealScout puts the local food scene right in your hands."
       />
 
       {/* Quiet page base. The food park photo was fighting the actual app
@@ -2317,7 +2352,7 @@ export default function ExplorePreview() {
                     </Suspense>
                     {(!hasMapKey || googleMapFailed) && (
                       <div className="pointer-events-none absolute left-1/2 top-1/2 z-10 max-w-[18rem] -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-white/88 px-5 py-4 text-center text-sm font-bold text-orange-900 ring-1 ring-orange-200/60 backdrop-blur-xl">
-                        Full pan and zoom are warming up. The local MealScout map is still live.
+                        Full pan and zoom are warming up. The MealScout map is still available.
                       </div>
                     )}
                   </>
@@ -2485,7 +2520,7 @@ export default function ExplorePreview() {
               ------------------------------
               Branded location module footer. Conveys "this is YOUR
               MealScout map" with a sharp eyebrow, the resolved place,
-              a live local count, and an amber CTA. The gradient is a
+              a nearby food count, and an amber CTA. The gradient is a
               true pedestal — strong at the bottom edge, clear higher
               up so it never crowds important map labels. */}
           {sheetState === "default" && (
@@ -2541,7 +2576,7 @@ export default function ExplorePreview() {
 
         {/* ============================================================
              LOWER SHEET — discovery sections. Hidden when fullMap.
-             Touch-swipe handlers live on a thin drag handle at the top.
+             Touch-swipe handlers sit on a thin drag handle at the top.
            ============================================================ */}
         {sheetState !== "fullMap" && (
           <div
@@ -2554,14 +2589,10 @@ export default function ExplorePreview() {
               daypartCopy={daypartSearchCopy}
               locationStatus={locationStatus}
               localActivityCount={localActivityCount}
-              hasLivePriorityInventory={liveTrucks.length + allDeals.length + visibleEvents.length > 0}
+              hasServingPriorityInventory={trucksServingNow.length + allDeals.length + visibleEvents.length > 0}
               onRefreshLocation={requestLocation}
               onCravingSelect={setSelectedCravingId}
             />
-
-            {showQuickUpdateBar ? (
-              <QuickUpdateBar />
-            ) : null}
 
             {/* ── FOOD TRUCKS NEARBY ── */}
             {showFoodTrucksSection && (
@@ -2576,7 +2607,7 @@ export default function ExplorePreview() {
                 ) : (
                   <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
                     <ul className="flex gap-4 pr-5" role="list" aria-label="Food trucks near you">
-                      {liveTrucks.slice(0, 12).map((t) => (
+                      {trucksServingNow.slice(0, 12).map((t) => (
                         <li key={t.id} className="shrink-0 w-[200px] sm:w-[220px]">
                           <TruckCard truck={t} onSelect={selectLiveTruck} currentUserId={currentUserId} />
                         </li>
@@ -2587,18 +2618,41 @@ export default function ExplorePreview() {
               </section>
             )}
 
-            {/* OPEN NEAR YOU NOW — broad live view across trucks, restaurants, bars, and public events. */}
-            <OpenNowSection
-              liveTrucks={liveTrucks}
-              liveTrucksLoading={liveTrucksLoading}
-              liveTrucksError={!!liveTrucksError}
-              events={visibleEvents}
-              deals={allDeals}
-              locationStatus={locationStatus}
-              onExpandMap={openScoutMap}
-              onSelectTruck={selectLiveTruck}
-              currentUserId={currentUserId}
-            />
+            {/* ── RESTAURANTS OPEN NOW ── */}
+            {showRestaurantsSection && (
+              <section className="pl-5 pr-0 pt-2 pb-10">
+                <SectionHeader
+                  title={nearbyRestaurantsTitle}
+                  linkHref={DISCOVERY_LAYERS.restaurants.href}
+                  subtitle={nearbyRestaurantsSubtitle}
+                />
+                {nearbyRestaurantsLoading && visibleOpenRestaurants.length === 0 ? (
+                  <HorizontalSkeletonRow count={3} width={200} />
+                ) : (
+                  <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
+                    <ul className="flex gap-4 pr-5" role="list" aria-label="Restaurants open now">
+                      {visibleOpenRestaurants.slice(0, 10).map((r) => (
+                        <li key={r.id} className="shrink-0 w-[200px] sm:w-[220px]">
+                          <NearbyRestaurantCard
+                            restaurant={r}
+                            menuPreview={
+                              menuPreviewByRestaurantId.get(String(r.id)) ?? []
+                            }
+                            isSignedIn={!!user}
+                            currentUserId={currentUserId}
+                            relationshipSnapshot={restaurantRelationships}
+                          />
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </section>
+            )}
+
+            {showQuickUpdateBar ? (
+              <QuickUpdateBar />
+            ) : null}
 
             {/* ── DEALS TODAY ── */}
             {showDealsSection && (
@@ -2613,26 +2667,6 @@ export default function ExplorePreview() {
                     {allDeals.slice(0, 10).map((d) => (
                       <li key={d.id} className="shrink-0 w-[230px] sm:w-[260px]">
                         <DealCard deal={d} currentUserId={currentUserId} />
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </section>
-            )}
-
-            {/* ── HAPPENING TODAY ── */}
-            {showEventsSection && (
-              <section className="pl-5 pr-0 pt-2 pb-10">
-                <SectionHeader
-                  title={DISCOVERY_LAYERS.events.title}
-                  linkHref={DISCOVERY_LAYERS.events.href}
-                  subtitle={DISCOVERY_LAYERS.events.subtitle}
-                />
-                <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
-                  <ul className="flex gap-4 pr-5" role="list">
-                    {visibleEvents.slice(0, 8).map((e) => (
-                      <li key={e.id} className="shrink-0 w-[230px] sm:w-[260px]">
-                        <EventCard event={e} currentUserId={currentUserId} />
                       </li>
                     ))}
                   </ul>
@@ -2662,35 +2696,43 @@ export default function ExplorePreview() {
               </section>
             )}
 
-            {/* ── SUPPORTING LOCAL PLACES ── */}
-            {showRestaurantsSection && (
+            {/* ── MORE FOOD NEARBY ── */}
+            {showMoreFoodSection && (
               <section className="pl-5 pr-0 pt-2 pb-10">
                 <SectionHeader
-                  title={nearbyRestaurantsTitle}
+                  title="More Food Nearby"
                   linkHref={DISCOVERY_LAYERS.restaurants.href}
-                  subtitle={nearbyRestaurantsSubtitle}
+                  subtitle="Nearby trucks and restaurants without current open status."
                 />
-                {nearbyRestaurantsLoading && visibleNearbyRestaurants.length === 0 ? (
-                  <HorizontalSkeletonRow count={3} width={200} />
-                ) : (
-                  <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
-                    <ul className="flex gap-4 pr-5" role="list" aria-label="Nearby now">
-                      {visibleNearbyRestaurants.slice(0, 10).map((r) => (
-                        <li key={r.id} className="shrink-0 w-[200px] sm:w-[220px]">
-                          <NearbyRestaurantCard
-                            restaurant={r}
-                            menuPreview={
-                              menuPreviewByRestaurantId.get(String(r.id)) ?? []
-                            }
-                            isSignedIn={!!user}
-                            currentUserId={currentUserId}
-                            relationshipSnapshot={restaurantRelationships}
-                          />
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
+                <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
+                  <ul className="flex gap-4 pr-5" role="list" aria-label="More food nearby">
+                    {moreFoodRestaurants.slice(0, 10).map((r) => (
+                      <li key={`restaurant-${r.id}`} className="shrink-0 w-[200px] sm:w-[220px]">
+                        <SavedRestaurantCard restaurant={r} />
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </section>
+            )}
+
+            {/* ── HAPPENING TODAY ── */}
+            {showEventsSection && (
+              <section className="pl-5 pr-0 pt-2 pb-10">
+                <SectionHeader
+                  title={DISCOVERY_LAYERS.events.title}
+                  linkHref={DISCOVERY_LAYERS.events.href}
+                  subtitle={DISCOVERY_LAYERS.events.subtitle}
+                />
+                <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
+                  <ul className="flex gap-4 pr-5" role="list">
+                    {visibleEvents.slice(0, 8).map((e) => (
+                      <li key={e.id} className="shrink-0 w-[230px] sm:w-[260px]">
+                        <EventCard event={e} currentUserId={currentUserId} />
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               </section>
             )}
 
@@ -2800,7 +2842,7 @@ function CravingCompass({
   daypartCopy,
   locationStatus,
   localActivityCount,
-  hasLivePriorityInventory,
+  hasServingPriorityInventory,
   onRefreshLocation,
   onCravingSelect,
 }: {
@@ -2810,7 +2852,7 @@ function CravingCompass({
   daypartCopy: { title: string; body: string };
   locationStatus: "idle" | "requesting" | "ready" | "denied";
   localActivityCount: number;
-  hasLivePriorityInventory: boolean;
+  hasServingPriorityInventory: boolean;
   onRefreshLocation: () => void;
   onCravingSelect: (id: string) => void;
 }) {
@@ -2820,7 +2862,7 @@ function CravingCompass({
   const firstPriorityItem = boardItems.find((item) => item.kind === "Truck" || item.kind === "Deal");
   const rawTopPick = boardItems[0] || null;
   const topPick =
-    rawTopPick?.kind === "Place" && hasLivePriorityInventory
+    rawTopPick?.kind === "Place" && hasServingPriorityInventory
       ? firstPriorityItem || null
       : rawTopPick;
   const topPickDistance = useMemo(() => {
@@ -2869,7 +2911,7 @@ function CravingCompass({
     const bits = topPickFreshnessMeta
       ? [getFreshnessLabel(topPickFreshnessMeta), ...topPickProofLabels]
       : [...topPickProofLabels];
-    if (!bits.includes("Open now")) bits.push("Open now");
+    if (!bits.includes("Open now") && topPick.kind !== "Truck") bits.push("Open now");
     if (!bits.includes("Nearby")) bits.push("Nearby");
     return [...new Set(bits)].filter((label) => label !== "Open near you").slice(0, 3);
   }, [topPick, topPickFreshnessMeta, topPickProofLabels]);
@@ -3198,8 +3240,8 @@ function HeroMapFallback({
         {reason === "no-key"
           ? "Map preview unavailable."
           : reason === "denied"
-            ? "Turn on location for the live map."
-            : "Loading live map."}
+            ? "Turn on location for the map."
+            : "Loading map."}
       </span>
     </div>
   );
@@ -3332,9 +3374,7 @@ function LiveTruckCard({
           <span
             className="h-1.5 w-1.5 rounded-full bg-white atmo-pulse-amber"
             aria-hidden="true"
-          />
-          Live
-        </span>
+          />Serving now</span>
 
         <button
           type="button"
@@ -3356,7 +3396,7 @@ function LiveTruckCard({
             <span>{vibe.label}</span>
           </p>
           <p className="mt-1 text-white/75 text-xs">
-            {[wait, distance].filter(Boolean).join(" • ") || "Open now"}
+            {[wait, distance].filter(Boolean).join(" • ") || "Serving now"}
           </p>
           <div className="mt-2 flex flex-wrap gap-1">
             {badges.map((badge) => (
@@ -4168,9 +4208,9 @@ function SavedRestaurantCard({ restaurant }: { restaurant: RestaurantSummary }) 
 
 /* ============================================================
    OPEN NOW SECTION
-   The first content rail under the map. Broad live food view across
+   The first content rail under the map. Broad food view across
    any business with a public hours/schedule footprint:
-     - live food trucks broadcasting service
+     - food trucks broadcasting service
      - public events / pop-ups happening today
      - restaurants and bars with active deals
    Empty state collapses to a quiet status chip + Why? helper.
@@ -4235,13 +4275,13 @@ function OpenNowSection({
     );
   }
 
-  // We have live local food — render a unified rail of cards.
+  // We have local food — render a unified rail of cards.
   if (hasAnyContent) {
     const liveCount = liveTrucks.length;
     const eventsCount = todaysEvents.length;
     const dealsCount = deals.length;
     const summaryBits = [
-      liveCount > 0 ? `${liveCount} live truck${liveCount === 1 ? "" : "s"}` : null,
+      liveCount > 0 ? `${liveCount} truck${liveCount === 1 ? "" : "s"}` : null,
       eventsCount > 0 ? `${eventsCount} happening today` : null,
       dealsCount > 0 ? `${dealsCount} active deal${dealsCount === 1 ? "" : "s"}` : null,
     ].filter(Boolean);
@@ -4294,7 +4334,7 @@ function OpenNowSection({
 
 /* ============================================================
    TRUCK CARD
-   Shows a live food truck in the Food Trucks Near You section.
+   Shows a food truck in the Food Trucks Near You section.
    ============================================================ */
 
 function LiveTruckMapCard({
@@ -4320,7 +4360,7 @@ function LiveTruckMapCard({
         <div className="min-w-0">
           <div className="inline-flex items-center gap-1.5 rounded-full bg-orange-500/18 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-orange-200 ring-1 ring-orange-300/25">
             <span className="h-1.5 w-1.5 rounded-full bg-orange-300 animate-pulse" />
-            Live truck
+            Food truck
           </div>
           <h3 className="mt-2 truncate text-lg font-black">{truck.name || "Food Truck"}</h3>
           <p className="mt-1 flex items-center gap-1.5 text-sm text-orange-100/80">
@@ -4519,7 +4559,7 @@ function ScoutMapHud({
   const sceneLine =
     totalPins > 0
       ? `${liveTruckCount} trucks • ${dealCount} deals • ${eventCount} events`
-      : "No live pins yet - pan the map or widen radius";
+      : "No nearby pins yet - pan the map or widen radius";
 
   return (
     <div className="pointer-events-none absolute left-3 right-3 top-[calc(env(safe-area-inset-top)+4.25rem)] z-20 sm:left-4 sm:right-auto sm:w-[360px]">
@@ -4539,16 +4579,14 @@ function ScoutMapHud({
             </span>
             <div className="min-w-0">
               <p className="text-[10px] font-black uppercase tracking-[0.16em] text-orange-200/75">
-                Live map
+                Map
               </p>
               <p className="truncate text-sm font-black text-white">
                 Local food scene
               </p>
             </div>
           </div>
-          <span className="rounded-full bg-orange-500/16 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-orange-100 ring-1 ring-orange-200/25">
-            Live
-          </span>
+          <span className="rounded-full bg-orange-500/16 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-orange-100 ring-1 ring-orange-200/25">Serving now</span>
         </div>
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0">
@@ -4626,7 +4664,7 @@ function ScoutMapHud({
 
         {isExpanded && localActivityCount === 0 ? (
           <div className="mt-3 rounded-2xl bg-white/7 px-3 py-2 text-xs text-white/72 ring-1 ring-white/10">
-            No live local pins right here yet. Pan the map or widen discovery from the feed below.
+            No nearby pins right here yet. Pan the map or widen discovery from the feed below.
           </div>
         ) : null}
       </div>
@@ -4815,11 +4853,9 @@ function TruckCard({
           style={{ backgroundImage: "linear-gradient(180deg, rgba(0,0,0,0) 40%, rgba(0,0,0,0.75) 100%)" }}
           aria-hidden="true"
         />
-        {/* Live badge */}
+        {/* Serving badge */}
         <span className="absolute top-2.5 left-2.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide text-white bg-red-500/90 shadow">
-          <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse" aria-hidden="true" />
-          Live
-        </span>
+          <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse" aria-hidden="true" />Serving now</span>
         {truck.activeDealCount && truck.activeDealCount > 0 ? (
           <span className="absolute top-2.5 right-2.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide text-white bg-orange-600 shadow">
             <Tag className="h-2.5 w-2.5" aria-hidden="true" />
@@ -4883,5 +4919,10 @@ function HorizontalSkeletonRow({
     </div>
   );
 }
+
+
+
+
+
 
 
