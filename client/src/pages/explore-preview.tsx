@@ -1503,10 +1503,10 @@ export default function ExplorePreview() {
            ============================================================ */}
         {sheetState !== "fullMap" && (
           <div
-            className="relative z-10 mt-4 rounded-t-[1.5rem] bg-[#fff8e6]/92 text-[#211309] backdrop-blur-xl"
+            className="relative z-10 mt-4 rounded-t-[1.5rem] bg-[#0a0c10]/82 backdrop-blur-xl"
             style={{
               boxShadow:
-                "inset 0 1px 0 rgba(255,255,255,0.78), 0 -18px 48px rgba(80,42,14,0.18)",
+                "inset 0 1px 0 rgba(255,255,255,0.08), 0 -18px 48px rgba(80,42,14,0.30)",
             }}
           >
             {/* LIVE NOW — collapsed when empty, expanded when trucks are live */}
@@ -1554,7 +1554,7 @@ export default function ExplorePreview() {
                       >
                         <img src={cat.image} alt="" className="h-full w-full object-cover" loading="lazy" />
                       </span>
-                      <span className="text-[#3c2213] text-[11px] sm:text-xs font-semibold">{cat.label}</span>
+                      <span className="text-white text-[11px] sm:text-xs font-semibold">{cat.label}</span>
                     </button>
                   </li>
                 ))}
@@ -1695,11 +1695,11 @@ export default function ExplorePreview() {
                       <button
                         type="button"
                         onClick={() => navigate("/favorites")}
-                        className="h-full min-h-[132px] w-full rounded-3xl bg-white/82 ring-1 ring-orange-200/70 px-4 py-5 text-left shadow-sm hover:bg-white transition-colors"
+                        className="h-full min-h-[132px] w-full rounded-3xl bg-white/5 ring-1 ring-white/10 px-4 py-5 text-left hover:bg-white/8 transition-colors"
                       >
-                        <Bookmark className="mb-4 h-5 w-5 text-orange-600" />
-                        <p className="text-sm font-semibold text-[#241107]">View all saved</p>
-                        <p className="mt-1 text-xs text-[#765038]">Restaurants and deals</p>
+                        <Bookmark className="mb-4 h-5 w-5 text-orange-300" />
+                        <p className="text-sm font-semibold text-white">View all saved</p>
+                        <p className="mt-1 text-xs text-white/50">Restaurants and deals</p>
                       </button>
                     </li>
                   </ul>
@@ -1708,23 +1708,23 @@ export default function ExplorePreview() {
                 <button
                   type="button"
                   onClick={() => navigate(user ? "/favorites" : "/login?redirect=/scout")}
-                  className="w-full text-left rounded-3xl bg-white/78 ring-1 ring-orange-200/70 backdrop-blur-md p-5 shadow-sm hover:bg-white transition-colors active:scale-[0.99]"
+                  className="w-full text-left rounded-3xl bg-white/5 ring-1 ring-white/10 backdrop-blur-md p-5 hover:bg-white/8 transition-colors active:scale-[0.99]"
                 >
                   <div className="flex items-center gap-4">
-                    <span className="h-12 w-12 rounded-full bg-orange-100 ring-1 ring-orange-300/60 flex items-center justify-center shrink-0" aria-hidden="true">
-                      <Bookmark className="h-5 w-5 text-orange-600" />
+                    <span className="h-12 w-12 rounded-full bg-orange-500/15 ring-1 ring-orange-300/40 flex items-center justify-center shrink-0" aria-hidden="true">
+                      <Bookmark className="h-5 w-5 text-orange-300" />
                     </span>
                     <div className="flex-1 min-w-0">
-                      <p className="text-[#241107] font-semibold">
+                      <p className="text-white font-semibold">
                         {user ? "No saved spots yet" : "Save your food map"}
                       </p>
-                      <p className="text-[#765038] text-sm mt-0.5">
+                      <p className="text-white/60 text-sm mt-0.5">
                         {user
                           ? "Tap Save on restaurants worth coming back to."
                           : "Sign in to keep restaurants, deals, and places you want to revisit."}
                       </p>
                     </div>
-                    <ChevronRight className="h-5 w-5 text-orange-600" aria-hidden="true" />
+                    <ChevronRight className="h-5 w-5 text-white/50" aria-hidden="true" />
                   </div>
                 </button>
               )}
@@ -1754,23 +1754,23 @@ function SectionHeader({
     <div className="pr-5 mb-5">
       <div className="flex items-end justify-between gap-3">
         <div className="min-w-0">
-          <div className="mb-1 inline-flex items-center gap-2 rounded-full bg-orange-100/80 px-2.5 py-1 ring-1 ring-orange-300/50">
-            <span className="h-1.5 w-1.5 rounded-full bg-orange-500" aria-hidden="true" />
-            <span className="text-[10px] font-black uppercase tracking-[0.14em] text-orange-800/80">
+          <div className="mb-1 inline-flex items-center gap-2 rounded-full bg-orange-500/12 px-2.5 py-1 ring-1 ring-orange-300/20">
+            <span className="h-1.5 w-1.5 rounded-full bg-orange-300" aria-hidden="true" />
+            <span className="text-[10px] font-black uppercase tracking-[0.14em] text-orange-200/80">
               Scout feed
             </span>
           </div>
-          <h2 className="truncate text-[#241107] text-xl sm:text-2xl font-black tracking-tight">{title}</h2>
+          <h2 className="truncate text-white text-xl sm:text-2xl font-black tracking-tight">{title}</h2>
         </div>
         <Link
           href={linkHref}
-          className="shrink-0 text-sm text-orange-700 inline-flex items-center gap-1.5 rounded-full bg-white/80 px-3 py-1.5 ring-1 ring-orange-200/70 font-semibold transition-colors hover:bg-orange-50"
+          className="shrink-0 text-sm text-orange-200 inline-flex items-center gap-1.5 rounded-full bg-white/[0.04] px-3 py-1.5 ring-1 ring-white/10 font-semibold transition-colors hover:bg-white/[0.08]"
         >
           See All <ChevronRight className="h-4 w-4" aria-hidden="true" />
         </Link>
       </div>
       {subtitle ? (
-        <p className="mt-1.5 text-xs sm:text-sm text-[#765038] leading-relaxed">{subtitle}</p>
+        <p className="mt-1.5 text-xs sm:text-sm text-white/64 leading-relaxed">{subtitle}</p>
       ) : null}
     </div>
   );
@@ -1855,34 +1855,34 @@ function LocalFoodDashboard({
     ? "Enable location so Scout can load your nearby food scene."
     : hasAnythingLive
       ? "Here is the fastest way to jump into what is happening near you right now."
-      : "Quiet nearby right now. Widen your radius or jump into dinner, deals, and menus.";
+      : "Nothing is active yet. Widen radius or browse dinner, deals, and menus.";
 
   const radiusOptions = [5, 12, 25, 40];
   const radiusMiles = Math.max(1, Math.round(discoveryRadiusKm * 0.621371));
 
   return (
     <section className="px-5 pt-2 pb-6">
-      <div className="rounded-[1.65rem] overflow-hidden bg-white/78 ring-1 ring-orange-200/70 backdrop-blur-md">
+      <div className="rounded-[1.65rem] overflow-hidden bg-[#120805]/62 ring-1 ring-orange-300/35 backdrop-blur-md">
         <div
           className="px-4 py-4"
           style={{
             backgroundImage:
-              "radial-gradient(circle at 12% 0%, rgba(255,139,59,0.18), transparent 34%), radial-gradient(circle at 90% 12%, rgba(251,191,36,0.18), transparent 30%)",
+              "radial-gradient(circle at 12% 0%, rgba(255,90,47,0.18), transparent 34%), radial-gradient(circle at 90% 12%, rgba(251,191,36,0.10), transparent 30%)",
           }}
         >
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-[10px] uppercase tracking-[0.2em] text-orange-700/75 font-bold">
+              <p className="text-[10px] uppercase tracking-[0.2em] text-orange-200/75 font-bold">
                 What to eat right now
               </p>
-              <h2 className="mt-1 text-[#241107] text-xl font-black leading-tight tracking-tight">
+              <h2 className="mt-1 text-white text-xl font-black leading-tight tracking-tight">
                 {locationLabel}
               </h2>
-              <p className="mt-1.5 text-[#5f3a20] text-xs leading-relaxed max-w-[32rem]">
+              <p className="mt-1.5 text-white/68 text-xs leading-relaxed max-w-[32rem]">
                 {headline}
               </p>
             </div>
-            <span className="shrink-0 rounded-full bg-orange-100/80 ring-1 ring-orange-300/60 px-3 py-1 text-[11px] font-semibold text-orange-900">
+            <span className="shrink-0 rounded-full bg-[#2a1308]/80 ring-1 ring-orange-300/35 px-3 py-1 text-[11px] font-semibold text-orange-100">
               {signalLabel}
             </span>
           </div>
@@ -1891,10 +1891,10 @@ function LocalFoodDashboard({
             <button
               type="button"
               onClick={onRefreshLocation}
-              className="mt-3 w-full rounded-2xl bg-orange-500 text-white ring-1 ring-orange-300/70 px-4 py-3 text-left active:scale-[0.99]"
+              className="mt-3 w-full rounded-2xl bg-[#2a1308]/82 ring-1 ring-orange-300/35 px-4 py-3 text-left active:scale-[0.99]"
             >
               <p className="text-white text-sm font-bold">Use my location</p>
-              <p className="mt-1 text-white/82 text-xs">
+              <p className="mt-1 text-white/65 text-xs">
                 This unlocks nearby trucks, deals, events, and food spots instantly.
               </p>
             </button>
@@ -1905,35 +1905,35 @@ function LocalFoodDashboard({
               <Link
                 key={lane.label}
                 href={lane.href}
-                className="flex items-center justify-between gap-3 rounded-2xl bg-white/86 ring-1 ring-orange-200/70 px-3.5 py-3 shadow-sm active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-400/70"
+                className="flex items-center justify-between gap-3 rounded-2xl bg-[#0f0907]/72 ring-1 ring-orange-200/20 px-3.5 py-3 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
               >
                 <div className="min-w-0">
-                  <p className="text-[#241107] text-sm font-black truncate">
+                  <p className="text-white text-sm font-black truncate">
                     {index + 1}. {lane.label}
                   </p>
-                  <p className="mt-0.5 text-[#765038] text-xs truncate">{lane.helper}</p>
+                  <p className="mt-0.5 text-white/62 text-xs truncate">{lane.helper}</p>
                 </div>
                 <div className="shrink-0 flex items-center gap-2">
-                  <span className="rounded-full bg-orange-50 px-2 py-1 text-[11px] font-bold text-orange-900 ring-1 ring-orange-200">
+                  <span className="rounded-full bg-[#fff3e4] px-2 py-1 text-[11px] font-bold text-orange-900 ring-1 ring-orange-200">
                     {lane.count}
                   </span>
-                  <ChevronRight className="h-4 w-4 text-orange-600" aria-hidden="true" />
+                  <ChevronRight className="h-4 w-4 text-orange-300" aria-hidden="true" />
                 </div>
               </Link>
             ))}
           </div>
 
-          <div className="mt-3 rounded-2xl bg-[#fff3cf]/82 ring-1 ring-orange-200/70 p-3">
+          <div className="mt-3 rounded-2xl bg-[#0f0907]/62 ring-1 ring-orange-200/18 p-3">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-[10px] uppercase tracking-[0.18em] text-orange-700/70 font-bold">
+                <p className="text-[10px] uppercase tracking-[0.18em] text-orange-200/70 font-bold">
                   Discovery radius
                 </p>
-                <p className="mt-0.5 text-[#241107] text-sm font-semibold">
+                <p className="mt-0.5 text-white text-sm font-semibold">
                   {radiusMiles} mi around you
                 </p>
               </div>
-              <div className="flex rounded-full bg-white/70 p-1 ring-1 ring-orange-200/70">
+              <div className="flex rounded-full bg-black/25 p-1 ring-1 ring-white/10">
                 {radiusOptions.map((radius) => {
                   const isActive = discoveryRadiusKm === radius;
                   return (
@@ -1944,8 +1944,8 @@ function LocalFoodDashboard({
                       className={[
                         "rounded-full px-2.5 py-1 text-[11px] font-bold transition-colors",
                         isActive
-                          ? "bg-orange-500 text-white"
-                          : "text-[#765038] hover:text-[#241107]",
+                          ? "bg-orange-400 text-[#1b0b02]"
+                          : "text-white/62 hover:text-white",
                       ].join(" ")}
                       aria-pressed={isActive}
                     >
@@ -1960,7 +1960,7 @@ function LocalFoodDashboard({
               <button
                 type="button"
                 onClick={onRefreshLocation}
-                className="shrink-0 inline-flex items-center gap-2 rounded-full bg-white/80 ring-1 ring-orange-200/70 text-[#241107] px-3 py-2 text-xs font-semibold active:scale-[0.98]"
+                className="shrink-0 inline-flex items-center gap-2 rounded-full bg-[#fff3e4] ring-1 ring-orange-300/45 text-[#2a1308] px-3 py-2 text-xs font-semibold active:scale-[0.98]"
               >
                 <Search className="h-3.5 w-3.5 text-orange-600" aria-hidden="true" />
                 Refresh location
@@ -1972,15 +1972,15 @@ function LocalFoodDashboard({
                       <Link
                         key={`${lane.label}:${lane.href}`}
                         href={lane.href}
-                        className="shrink-0 inline-flex items-center gap-1.5 rounded-full bg-white/82 ring-1 ring-orange-200/70 px-3 py-2 text-xs font-semibold text-[#3c2213] active:scale-[0.98]"
+                        className="shrink-0 inline-flex items-center gap-1.5 rounded-full bg-white/[0.06] ring-1 ring-white/10 px-3 py-2 text-xs font-semibold text-white/82 active:scale-[0.98]"
                       >
                         {lane.label}
-                        <span className="text-orange-700">{lane.count}</span>
-                        <ChevronRight className="h-3.5 w-3.5 text-orange-600" aria-hidden="true" />
+                        <span className="text-orange-100/80">{lane.count}</span>
+                        <ChevronRight className="h-3.5 w-3.5 text-orange-200" aria-hidden="true" />
                       </Link>
                     ))
                   ) : (
-                    <span className="inline-flex items-center rounded-full bg-white/82 ring-1 ring-orange-200/70 px-3 py-2 text-xs font-semibold text-[#765038]">
+                    <span className="inline-flex items-center rounded-full bg-white/[0.06] ring-1 ring-white/10 px-3 py-2 text-xs font-semibold text-white/62">
                       All food lanes already shown above
                     </span>
                   )}
@@ -2941,9 +2941,9 @@ function LiveNowSection({
     <section className="px-5 pt-2 pb-5">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <h2 className="text-[#241107] text-xl sm:text-2xl font-bold">Live Now</h2>
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-orange-100/80 ring-1 ring-orange-300/50 text-orange-900 text-[11px] font-medium">
-            <span className="h-1.5 w-1.5 rounded-full bg-orange-400" aria-hidden="true" />
+          <h2 className="text-white text-xl sm:text-2xl font-bold">Live Now</h2>
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-orange-100/90 ring-1 ring-orange-300/45 text-orange-900 text-[11px] font-semibold">
+            <span className="h-1.5 w-1.5 rounded-full bg-orange-500" aria-hidden="true" />
             {statusChip}
           </span>
         </div>
@@ -2952,7 +2952,7 @@ function LiveNowSection({
             <button
               type="button"
               onClick={() => setExpanded((v) => !v)}
-              className="text-xs text-[#765038] hover:text-[#241107] transition-colors"
+              className="text-xs text-orange-200/70 hover:text-orange-100 transition-colors"
               aria-expanded={expanded}
             >
               {expanded ? "Less" : "Why?"}
@@ -2960,7 +2960,7 @@ function LiveNowSection({
           )}
           <Link
             href="/truck-discovery"
-            className="text-sm text-orange-700 inline-flex items-center gap-1 font-medium"
+            className="text-sm text-orange-300 inline-flex items-center gap-1 font-medium"
           >
             See All <ChevronRight className="h-4 w-4" aria-hidden="true" />
           </Link>
@@ -2969,8 +2969,8 @@ function LiveNowSection({
 
       {/* Expandable context — only shown when user taps "Why?" */}
       {expanded && (
-        <div className="mt-3 rounded-2xl bg-white/82 ring-1 ring-orange-200/70 px-4 py-3 shadow-sm">
-          <p className="text-[#5f3a20] text-sm leading-relaxed">
+        <div className="mt-3 rounded-2xl bg-[#120805]/70 ring-1 ring-orange-300/25 px-4 py-3">
+          <p className="text-white/70 text-sm leading-relaxed">
             {locationStatus === "denied"
               ? "Turn on location so MealScout can show food trucks, deals, and events near you in real time."
               : liveTrucksError
@@ -2982,7 +2982,7 @@ function LiveNowSection({
               <button
                 type="button"
                 onClick={onExpandMap}
-                className="inline-flex items-center gap-2 rounded-full bg-orange-500 px-3 py-2 text-xs font-black text-white active:scale-[0.98]"
+                className="inline-flex items-center gap-2 rounded-full bg-orange-500 px-3 py-2 text-xs font-black text-[#1b0b02] active:scale-[0.98]"
               >
                 Open map
                 <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
@@ -2990,24 +2990,24 @@ function LiveNowSection({
             ) : null}
             <Link
               href="/search"
-              className="inline-flex items-center gap-2 rounded-full bg-[#241107] px-3 py-2 text-xs font-black text-white active:scale-[0.98]"
+              className="inline-flex items-center gap-2 rounded-full bg-[#fff3e4] px-3 py-2 text-xs font-black text-[#2a1308] active:scale-[0.98]"
             >
               Find dinner
               <Utensils className="h-3.5 w-3.5" aria-hidden="true" />
             </Link>
             <Link
               href="/deals"
-              className="inline-flex items-center gap-2 rounded-full bg-orange-100 px-3 py-2 text-xs font-black text-orange-900 ring-1 ring-orange-300/70 active:scale-[0.98]"
+              className="inline-flex items-center gap-2 rounded-full bg-orange-500/16 px-3 py-2 text-xs font-black text-orange-100 ring-1 ring-orange-300/30 active:scale-[0.98]"
             >
               Deals
               <Tag className="h-3.5 w-3.5" aria-hidden="true" />
             </Link>
             <Link
               href="/events"
-              className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-2 text-xs font-black text-[#3c2213] ring-1 ring-orange-200/70 active:scale-[0.98]"
+              className="inline-flex items-center gap-2 rounded-full bg-white/[0.06] px-3 py-2 text-xs font-black text-white/86 ring-1 ring-white/10 active:scale-[0.98]"
             >
               Tonight
-              <CalendarDays className="h-3.5 w-3.5 text-orange-600" aria-hidden="true" />
+              <CalendarDays className="h-3.5 w-3.5 text-orange-300" aria-hidden="true" />
             </Link>
           </div>
         </div>
