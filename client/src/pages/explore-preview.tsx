@@ -211,7 +211,121 @@ type CravingCategory = {
   image: string;
 };
 
-const CRAVING_CATEGORIES: CravingCategory[] = [
+type Daypart = "morning" | "lunch" | "afternoon" | "dinner" | "late";
+
+function getDaypart(date = new Date()): Daypart {
+  const hour = date.getHours();
+  if (hour >= 5 && hour < 10) return "morning";
+  if (hour >= 10 && hour < 14) return "lunch";
+  if (hour >= 14 && hour < 17) return "afternoon";
+  if (hour >= 17 && hour < 21) return "dinner";
+  return "late";
+}
+
+const DAYPART_DEFAULT_INTENT: Record<Daypart, string> = {
+  morning: "coffee-breakfast",
+  lunch: "quick-bite",
+  afternoon: "snack-coffee",
+  dinner: "sit-down",
+  late: "open-now",
+};
+
+const DAYPART_SEARCH_COPY: Record<Daypart, { title: string; body: string }> = {
+  morning: {
+    title: "Start your day local.",
+    body: "Coffee, breakfast, bakeries, and quick bites near you.",
+  },
+  lunch: {
+    title: "Lunch without the scroll.",
+    body: "Fast local options, live trucks, and solid deals near you.",
+  },
+  afternoon: {
+    title: "Need a reset?",
+    body: "Coffee, snacks, sweets, and low-effort local stops.",
+  },
+  dinner: {
+    title: "Make dinner easier.",
+    body: "Local picks, deals, trucks, and events worth checking out.",
+  },
+  late: {
+    title: "Still hungry?",
+    body: "Open spots, late bites, and local food still moving.",
+  },
+};
+
+const SCOUT_SEARCH_OPTIONS: CravingCategory[] = [
+  {
+    id: "open-now",
+    label: "Open now",
+    query: "open now",
+    helper: "Food you can actually get right now",
+    keywords: ["open", "serving", "live", "available", "pickup", "late"],
+    image: "/atmospheric/craving-burgers.jpg",
+  },
+  {
+    id: "quick-bite",
+    label: "Quick bite",
+    query: "quick bite",
+    helper: "Fast, low-friction food nearby",
+    keywords: ["quick", "fast", "lunch", "pickup", "sandwich", "taco", "burger", "truck"],
+    image: "/atmospheric/craving-burgers.jpg",
+  },
+  {
+    id: "best-deal",
+    label: "Best deal",
+    query: "deals",
+    helper: "Local value without digging",
+    keywords: ["deal", "special", "discount", "offer", "value", "happy hour"],
+    image: "/atmospheric/craving-pizza.jpg",
+  },
+  {
+    id: "food-truck",
+    label: "Food truck",
+    query: "food truck",
+    helper: "Live mobile kitchens nearby",
+    keywords: ["truck", "mobile", "pop-up", "street", "serving", "live"],
+    image: "/atmospheric/craving-tacos.jpg",
+  },
+  {
+    id: "coffee-breakfast",
+    label: "Coffee & breakfast",
+    query: "coffee breakfast",
+    helper: "Start the day local",
+    keywords: ["coffee", "breakfast", "bakery", "biscuit", "bagel", "pastry", "brunch", "taco"],
+    image: "/atmospheric/craving-dessert.jpg",
+  },
+  {
+    id: "snack-coffee",
+    label: "Snack & coffee",
+    query: "coffee snack dessert",
+    helper: "A useful reset between meals",
+    keywords: ["coffee", "snack", "dessert", "sweet", "bakery", "pastry", "tea"],
+    image: "/atmospheric/craving-dessert.jpg",
+  },
+  {
+    id: "something-new",
+    label: "Something new",
+    query: "new menu items",
+    helper: "Fresh menu drops and new local finds",
+    keywords: ["new", "fresh", "menu", "drop", "special", "limited", "popular"],
+    image: "/atmospheric/craving-ramen.jpg",
+  },
+  {
+    id: "sit-down",
+    label: "Sit-down",
+    query: "sit down dinner",
+    helper: "A real meal, not just a snack",
+    keywords: ["dinner", "restaurant", "table", "plate", "meal", "group", "date"],
+    image: "/atmospheric/craving-pizza.jpg",
+  },
+  {
+    id: "sweet-tooth",
+    label: "Sweet tooth",
+    query: "dessert bakery sweets",
+    helper: "Dessert, bakeries, and treats",
+    keywords: ["dessert", "ice cream", "cake", "pastry", "sweet", "chocolate", "bakery"],
+    image: "/atmospheric/craving-dessert.jpg",
+  },
   {
     id: "tacos",
     label: "Tacos",
@@ -256,7 +370,7 @@ const CRAVING_CATEGORIES: CravingCategory[] = [
     id: "dessert",
     label: "Dessert",
     query: "dessert",
-    helper: "Sweet finish, late-night ok",
+    helper: "Sweet finish, any time",
     keywords: ["dessert", "ice cream", "cake", "pastry", "sweet", "chocolate"],
     image: "/atmospheric/craving-dessert.jpg",
   },
@@ -331,9 +445,9 @@ const DISCOVERY_LAYERS: Record<
     subtitle: "Active offers from nearby restaurants, bars, and food trucks.",
   },
   events: {
-    title: "Happening Tonight",
+    title: "Happening Today",
     href: "/events",
-    subtitle: "Upcoming events, pop-ups, and food nights near you.",
+    subtitle: "Events, pop-ups, and local food moments near you.",
   },
   saved: {
     title: "Your Saved",
@@ -779,8 +893,10 @@ export default function ExplorePreview() {
   const [locationStatus, setLocationStatus] = useState<
     "idle" | "requesting" | "ready" | "denied"
   >("idle");
-  const [selectedCravingId, setSelectedCravingId] =
-    useState<string>("cheap-filling");
+  const [currentDaypart] = useState<Daypart>(() => getDaypart());
+  const [selectedCravingId, setSelectedCravingId] = useState<string>(
+    () => DAYPART_DEFAULT_INTENT[getDaypart()],
+  );
 
   const requestLocation = useCallback(() => {
     if (typeof navigator === "undefined" || !navigator.geolocation) {
@@ -1472,10 +1588,12 @@ export default function ExplorePreview() {
 
   const selectedCraving = useMemo(() => {
     return (
-      CRAVING_CATEGORIES.find((cat) => cat.id === selectedCravingId) ??
-      CRAVING_CATEGORIES[0]
+      SCOUT_SEARCH_OPTIONS.find((cat) => cat.id === selectedCravingId) ??
+      SCOUT_SEARCH_OPTIONS[0]
     );
   }, [selectedCravingId]);
+
+  const daypartSearchCopy = DAYPART_SEARCH_COPY[currentDaypart];
 
   const cravingBoardItems = useMemo(
     () =>
@@ -1844,7 +1962,7 @@ export default function ExplorePreview() {
                     {hasResolvedLocation ? "Open around" : "MealScout map"}
                   </p>
                   <p className="mt-0.5 truncate text-[15px] font-extrabold text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.7)]">
-                    {hasResolvedLocation ? shortLocation : "Nearby tonight"}
+                    {hasResolvedLocation ? shortLocation : "Nearby now"}
                   </p>
                   {localSignalCount > 0 && (
                     <p className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-bold text-orange-100 ring-1 ring-white/15 backdrop-blur-md">
@@ -1885,9 +2003,10 @@ export default function ExplorePreview() {
             className="relative z-10 mt-4"
           >
             <CravingCompass
-              cravings={CRAVING_CATEGORIES}
+              cravings={SCOUT_SEARCH_OPTIONS}
               selectedCraving={selectedCraving}
               boardItems={cravingBoardItems}
+              daypartCopy={daypartSearchCopy}
               locationStatus={locationStatus}
               localSignalCount={localSignalCount}
               onRefreshLocation={requestLocation}
@@ -2131,6 +2250,7 @@ function CravingCompass({
   cravings,
   selectedCraving,
   boardItems,
+  daypartCopy,
   locationStatus,
   localSignalCount,
   onRefreshLocation,
@@ -2140,6 +2260,7 @@ function CravingCompass({
   cravings: CravingCategory[];
   selectedCraving: CravingCategory;
   boardItems: CravingBoardItem[];
+  daypartCopy: { title: string; body: string };
   locationStatus: "idle" | "requesting" | "ready" | "denied";
   localSignalCount: number;
   onRefreshLocation: () => void;
@@ -2182,10 +2303,10 @@ function CravingCompass({
           <div className="flex items-start justify-between gap-3 border-b border-white/10 pb-3">
             <div className="min-w-0">
               <h2 className="font-sans text-white text-lg font-black leading-tight">
-                Scout search
+                Find your next food move.
               </h2>
               <p className="mt-1 text-orange-50/62 text-xs leading-relaxed">
-                Menus, places, trucks, and deals populate from the same search.
+                Live trucks, menu drops, deals, and local favorites near you right now.
               </p>
             </div>
             {hasLocation ? (
@@ -2205,7 +2326,7 @@ function CravingCompass({
 
           <div className="mt-3">
             <p className="mb-2 text-xs font-semibold leading-relaxed text-orange-50/64">
-              {selectedCraving.label}: {selectedCraving.helper}
+              {daypartCopy.title} {daypartCopy.body}
             </p>
             <div className="overflow-x-auto atmo-hide-scrollbar">
               <div className="flex w-max gap-2 pr-1">
@@ -2243,7 +2364,7 @@ function CravingCompass({
                 </p>
                 <p className="mt-0.5 text-xs font-semibold leading-relaxed text-orange-100/62">
                   {isSearchOpen
-                    ? "Results are grouped by business data and local signals."
+                    ? "Results group menu items, places, trucks, and deals from business data."
                     : "Tap search to open the result layer here."}
                 </p>
               </div>
