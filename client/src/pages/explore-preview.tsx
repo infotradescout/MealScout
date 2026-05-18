@@ -244,7 +244,7 @@ const DAYPART_SEARCH_COPY: Record<Daypart, { title: string; body: string }> = {
   },
   dinner: {
     title: "Make dinner easier.",
-    body: "Local picks, deals, trucks, and events worth checking out.",
+    body: "Local food, deals, trucks, and events worth checking out.",
   },
   late: {
     title: "Still hungry?",
@@ -271,7 +271,7 @@ const SCOUT_SEARCH_OPTIONS: CravingCategory[] = [
   },
   {
     id: "best-deal",
-    label: "Best deal",
+    label: "Deals today",
     query: "deals",
     helper: "Local value without digging",
     keywords: ["deal", "special", "discount", "offer", "value", "happy hour"],
@@ -541,8 +541,8 @@ function getDealCravingScore(
 function getRestaurantDiscoveryReason(restaurant: RestaurantSummary): string {
   const signals = [
     Number(restaurant.favoriteCount || 0) > 0 ? "saved by locals" : null,
-    Number(restaurant.videoRecommendationCount || 0) > 0 ? "recent video recs" : null,
-    Number(restaurant.recommendationCount || 0) > 0 ? "community recs" : null,
+    Number(restaurant.videoRecommendationCount || 0) > 0 ? "recent video updates" : null,
+    Number(restaurant.recommendationCount || 0) > 0 ? "community updates" : null,
     Number(restaurant.activeDealsCount || restaurant.activeDealCount || 0) > 0 ? "active deal" : null,
   ].filter(Boolean);
   return signals.length > 0
@@ -551,18 +551,17 @@ function getRestaurantDiscoveryReason(restaurant: RestaurantSummary): string {
 }
 
 function getMenuItemSearchReason(item: LocalMenuItemFeedItem): string {
-  if (item.discoveryReasons?.[0]) return item.discoveryReasons[0];
+  if (item.discoveryReasons?.[0]) return "Menu updated";
   if (typeof item.discoveryScore === "number" && item.discoveryScore > 0) {
     return "Menu updated";
   }
   if (Array.isArray(item.dietaryTags) && item.dietaryTags.length > 0) {
     return item.dietaryTags.slice(0, 2).join(" + ");
   }
-  return "Menu match";
+  return "Menu option";
 }
 
 function getRestaurantSearchReason(restaurant: RestaurantSummary): string {
-  if (restaurant.homeRankingReason) return restaurant.homeRankingReason;
   return getRestaurantDiscoveryReason(restaurant);
 }
 
@@ -682,7 +681,7 @@ function buildCravingBoardItems({
       href: `/truck/${truck.id}`,
       imageUrl: getTruckImage(truck),
       meta: [formatDistance(truck), formatWait(truck)].filter(Boolean).join(" / ") || "Open now",
-      reason: truck.vibe || "Open now",
+      reason: "Open now",
       score,
     });
   }
@@ -696,7 +695,7 @@ function buildCravingBoardItems({
       href: `/deal/${deal.id}`,
       imageUrl: deal.imageUrl,
       meta: deal.discountText || "Deal",
-      reason: deal.description || "Offer matching this search",
+      reason: "Deal today",
       score,
     });
   }
@@ -2480,7 +2479,7 @@ function CravingCompass({
               ) : (
                 <div className="rounded-xl bg-black/20 p-3 ring-1 ring-white/10">
                   <p className="text-sm font-black text-white">
-                    No exact {selectedCraving.label.toLowerCase()} picks yet.
+                    No exact {selectedCraving.label.toLowerCase()} options yet.
                   </p>
                   <p className="mt-1 text-xs leading-relaxed text-white/62">
                     Open the full layer to widen the radius and pull more options.
@@ -2540,7 +2539,7 @@ function CravingCompass({
                 className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-full bg-[#fff3e4] px-3.5 py-2 text-xs font-black text-orange-950 ring-1 ring-orange-200 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
                 aria-expanded={isSearchOpen}
               >
-                {isSearchOpen ? "Hide matches" : "Show matches"}
+                {isSearchOpen ? "Hide options" : "Show options"}
               </button>
             </div>
 
@@ -3192,12 +3191,12 @@ function NearbyRestaurantCard({
     typeof cents === "number" && Number.isFinite(cents) && cents > 0
       ? `$${(cents / 100).toFixed(cents % 100 === 0 ? 0 : 2)}`
       : null;
-  const trustSignals = [
+  const communityUpdates = [
     videoRecommendationCount > 0
-      ? `${videoRecommendationCount} video rec${videoRecommendationCount === 1 ? "" : "s"}`
+      ? `${videoRecommendationCount} video update${videoRecommendationCount === 1 ? "" : "s"}`
       : null,
     recommendationCount > 0
-      ? `${recommendationCount} rec${recommendationCount === 1 ? "" : "s"}`
+      ? `${recommendationCount} community update${recommendationCount === 1 ? "" : "s"}`
       : null,
     favoriteCount > 0
       ? `${favoriteCount} save${favoriteCount === 1 ? "" : "s"}`
@@ -3206,16 +3205,19 @@ function NearbyRestaurantCard({
       ? `${followCount} follow${followCount === 1 ? "" : "s"}`
       : null,
     communityActivityCount > 0 ? "active buzz" : null,
-  ].filter((signal): signal is string => Boolean(signal));
+  ].filter((update): update is string => Boolean(update));
+  const statusLabels = [
+    dealCount > 0 ? "Deal today" : null,
+    menuPreview.length > 0 ? "Menu updated" : null,
+    communityUpdates.length > 0 ? "Community update" : null,
+    distLabel ? "Nearby" : null,
+  ].filter((label): label is string => Boolean(label));
   const rankingReason =
-    typeof restaurant.homeRankingReason === "string" &&
-    restaurant.homeRankingReason.trim().length > 0
-      ? restaurant.homeRankingReason.trim()
-      : trustSignals.length > 0
-      ? `Trusted by ${trustSignals.slice(0, 2).join(" + ")}`
+    communityUpdates.length > 0
+      ? `Community activity: ${communityUpdates.slice(0, 2).join(" + ")}`
       : distLabel
-        ? "Nearby and active now"
-        : "Open nearby and serving";
+        ? "Nearby now"
+        : "Open near you";
 
   const sendRestaurantAction = async (
     action: "favorite" | "follow" | "recommend",
@@ -3371,22 +3373,19 @@ function NearbyRestaurantCard({
           </div>
         )}
         <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] font-bold uppercase tracking-wide">
-          {trustSignals.slice(0, 2).map((signal) => (
+          {statusLabels.slice(0, 3).map((label) => (
             <span
-              key={signal}
+              key={label}
               className="rounded-full bg-emerald-300/12 px-2 py-1 text-emerald-200"
             >
-              {signal}
+              {label}
             </span>
           ))}
-          <span className="rounded-full bg-white/8 px-2 py-1 text-white/65">
-            Menu
-          </span>
-          {dealCount > 0 && (
-            <span className="rounded-full bg-orange-300/15 px-2 py-1 text-orange-200">
-              Deals
+          {statusLabels.length === 0 ? (
+            <span className="rounded-full bg-white/8 px-2 py-1 text-white/65">
+              Open near you
             </span>
-          )}
+          ) : null}
         </div>
         <p className="mt-2 text-[10px] font-semibold text-white/45">
           {rankingReason}
@@ -3435,7 +3434,7 @@ function NearbyRestaurantCard({
             aria-pressed={isRecommended}
           >
             <Sparkles className="h-3 w-3" aria-hidden="true" />
-            {isRecommended ? "Rec'd" : "Rec"}
+            {isRecommended ? "Supported" : "Support"}
           </button>
         </div>
       </div>
@@ -3802,7 +3801,7 @@ function ScoutMapHud({
   const sceneLine =
     totalPins > 0
       ? `${liveTruckCount} trucks • ${dealCount} deals • ${eventCount} events`
-      : "No live pins yet - move map or widen radius";
+      : "No live pins yet - pan the map or widen radius";
 
   return (
     <div className="pointer-events-none absolute left-3 right-3 top-[calc(env(safe-area-inset-top)+4.25rem)] z-20 sm:left-4 sm:right-auto sm:w-[360px]">
@@ -3905,7 +3904,7 @@ function ScoutMapHud({
 
         {isExpanded && localSignalCount === 0 ? (
           <div className="mt-3 rounded-2xl bg-white/7 px-3 py-2 text-xs text-white/72 ring-1 ring-white/10">
-            No live local pins right here yet. Move the map or widen discovery from the feed below.
+            No live local pins right here yet. Pan the map or widen discovery from the feed below.
           </div>
         ) : null}
       </div>
@@ -3983,7 +3982,7 @@ function MapEdgeIndicators({
               onClick={() => onSelect(marker)}
               className="pointer-events-auto inline-flex items-center gap-1.5 rounded-full bg-[#1b0d05]/88 px-3 py-2 text-xs font-black text-orange-100 ring-1 ring-orange-300/35 backdrop-blur-xl"
               style={{ boxShadow: "0 12px 36px rgba(0,0,0,0.42), 0 0 18px rgba(255,90,47,0.16)" }}
-              aria-label={`Move map to ${marker.title || marker.kind}`}
+              aria-label={`Show ${marker.title || marker.kind} on map`}
             >
               <span className="text-orange-300">
                 {edge === "left" ? "‹" : edge === "right" ? "›" : edge === "top" ? "⌃" : "⌄"}
