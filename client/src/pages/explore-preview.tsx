@@ -4750,6 +4750,11 @@ function ScoutMapHud({
               <MapHudCount label="Deals" value={dealCount} />
               <MapHudCount label="Events" value={eventCount} />
             </div>
+            <div className="mt-3 flex flex-wrap gap-1.5 rounded-2xl bg-black/18 px-2.5 py-2 ring-1 ring-white/10">
+              <MapFreshnessKey dotClassName="bg-emerald-300" label="Updated" />
+              <MapFreshnessKey dotClassName="bg-orange-200" label="Older info" />
+              <MapFreshnessKey dotClassName="bg-amber-300" label="Needs update" />
+            </div>
           </div>
         )}
 
@@ -4796,6 +4801,21 @@ function MapHudCount({ label, value }: { label: string; value: number }) {
       <p className="text-base font-black text-orange-200">{value}</p>
       <p className="text-[9px] font-bold uppercase tracking-wide text-white/48">{label}</p>
     </div>
+  );
+}
+
+function MapFreshnessKey({
+  dotClassName,
+  label,
+}: {
+  dotClassName: string;
+  label: string;
+}) {
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full bg-white/6 px-2 py-1 text-[10px] font-bold text-white/62">
+      <span className={`h-1.5 w-1.5 rounded-full ${dotClassName}`} aria-hidden="true" />
+      {label}
+    </span>
   );
 }
 
