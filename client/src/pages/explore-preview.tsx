@@ -483,6 +483,10 @@ type FreshnessMeta = {
   closesSoon?: boolean;
 };
 
+type MapLayerId = "openNow" | "foodTrucks" | "deals" | "happeningToday";
+
+type MapLayerState = Record<MapLayerId, boolean>;
+
 function readStringField(source: unknown, fields: string[]): string | null {
   if (!source || typeof source !== "object") return null;
   const record = source as Record<string, unknown>;
@@ -591,6 +595,22 @@ function getOperationalBadges(entityOrMeta: FreshnessMeta): string[] {
   if (entityOrMeta.hasDistance) labels.add("Nearby");
   if (isTodayDate(entityOrMeta.startsAt || entityOrMeta.startTime)) labels.add("Happening today");
   return [...labels];
+}
+
+function getMapMarkerColor(meta: FreshnessMeta): string {
+  if (meta.kind === "Truck" || meta.kind === "truck") return "#ff6f3c";
+  if (meta.hasDeal || meta.kind === "Deal" || meta.kind === "deal") return "#22c55e";
+  if (meta.kind === "event") return "#f59e0b";
+  if (getFreshnessState(meta) === "fresh") return "#14b8a6";
+  return "#f97316";
+}
+
+function getMapMarkerSubtitle(base: string | null | undefined, meta: FreshnessMeta): string | undefined {
+  const status = getOperationalBadges(meta)
+    .filter((label) => label !== "Open near you")
+    .slice(0, 2)
+    .join(" · ");
+  return [status, base].filter(Boolean).join(" · ") || undefined;
 }
 
 /* ============================================================
@@ -1428,7 +1448,19 @@ export default function ExplorePreview() {
           lat,
           lng,
           title: t.name,
-          subtitle: t.cuisineType ?? undefined,
+          subtitle: getMapMarkerSubtitle(t.cuisineType, {
+            kind: "truck",
+            updatedAt: readStringField(t, ["updatedAt", "lastUpdatedAt"]),
+            confirmedAt: readStringField(t, ["confirmedAt", "lastConfirmedAt"]),
+            hasDeal: Boolean(t.activeDealCount && t.activeDealCount > 0),
+            hasDistance: Boolean(formatDistance(t)),
+            isOpen: true,
+          }),
+          color: getMapMarkerColor({
+            kind: "truck",
+            hasDeal: Boolean(t.activeDealCount && t.activeDealCount > 0),
+            isOpen: true,
+          }),
         } as MapAdapterMarker;
       })
       .filter((m): m is MapAdapterMarker => m !== null);
@@ -1445,6 +1477,20 @@ export default function ExplorePreview() {
         const lat = r.latitude ?? r.lat;
         const lng = r.longitude ?? r.lng;
         if (typeof lat !== "number" || typeof lng !== "number") return null;
+        const dealCount = Number(r.activeDealsCount || r.activeDealCount || 0);
+        const hasCommunityUpdate =
+          Number(r.communityActivityCount || 0) > 0 ||
+          Number(r.recommendationCount || 0) > 0 ||
+          Number(r.videoRecommendationCount || 0) > 0;
+        const freshnessMeta: FreshnessMeta = {
+          kind: "restaurant",
+          updatedAt: readStringField(r, ["updatedAt", "lastUpdatedAt"]),
+          confirmedAt: readStringField(r, ["confirmedAt", "lastConfirmedAt"]),
+          hasDeal: dealCount > 0,
+          hasCommunityUpdate,
+          hasDistance: Boolean(getRestaurantDistance(r)),
+          isOpen: true,
+        };
         return {
           id: `restaurant-${r.id}`,
           sourceId: String(r.id),
@@ -1452,7 +1498,8 @@ export default function ExplorePreview() {
           lat,
           lng,
           title: r.businessName ?? r.name ?? undefined,
-          subtitle: r.cuisineType ?? undefined,
+          subtitle: getMapMarkerSubtitle(r.cuisineType, freshnessMeta),
+          color: getMapMarkerColor(freshnessMeta),
         } as MapAdapterMarker;
       })
       .filter((m): m is MapAdapterMarker => m !== null);
@@ -1464,6 +1511,13 @@ export default function ExplorePreview() {
         const lat = e.latitude ?? e.lat ?? e.venueLat;
         const lng = e.longitude ?? e.lng ?? e.venueLng;
         if (typeof lat !== "number" || typeof lng !== "number") return null;
+        const freshnessMeta: FreshnessMeta = {
+          kind: "event",
+          startsAt: e.startsAt,
+          startTime: e.startTime,
+          updatedAt: readStringField(e, ["updatedAt", "lastUpdatedAt"]),
+          confirmedAt: readStringField(e, ["confirmedAt", "lastConfirmedAt"]),
+        };
         return {
           id: `event-${e.id}`,
           sourceId: String(e.id),
@@ -1471,7 +1525,8 @@ export default function ExplorePreview() {
           lat,
           lng,
           title: e.title ?? e.name ?? undefined,
-          subtitle: e.venueName ?? e.locationName ?? undefined,
+          subtitle: getMapMarkerSubtitle(e.venueName ?? e.locationName, freshnessMeta),
+          color: getMapMarkerColor(freshnessMeta),
         } as MapAdapterMarker;
       })
       .filter((m): m is MapAdapterMarker => m !== null);
@@ -1482,6 +1537,37 @@ export default function ExplorePreview() {
     () => [...truckMarkers, ...restaurantMarkers, ...eventMarkers],
     [truckMarkers, restaurantMarkers, eventMarkers],
   );
+
+  const [activeMapLayers, setActiveMapLayers] = useState<MapLayerState>({
+    openNow: true,
+    foodTrucks: true,
+    deals: true,
+    happeningToday: true,
+  });
+
+  const filteredMapMarkers = useMemo<MapAdapterMarker[]>(() => {
+    return allMapMarkers.filter((marker) => {
+      if (marker.kind === "truck") return activeMapLayers.foodTrucks && activeMapLayers.openNow;
+      if (marker.kind === "event") return activeMapLayers.happeningToday;
+      if (marker.kind === "restaurant") {
+        const restaurant = nearbyRestaurants.find((item) => String(item.id) === String(marker.sourceId));
+        const hasDeal = Boolean(
+          restaurant &&
+            Number(restaurant.activeDealsCount || restaurant.activeDealCount || 0) > 0,
+        );
+        if (hasDeal && !activeMapLayers.deals) return false;
+        return activeMapLayers.openNow || (hasDeal && activeMapLayers.deals);
+      }
+      return true;
+    });
+  }, [activeMapLayers, allMapMarkers, nearbyRestaurants]);
+
+  const toggleMapLayer = useCallback((layer: MapLayerId) => {
+    setActiveMapLayers((current) => ({
+      ...current,
+      [layer]: !current[layer],
+    }));
+  }, []);
 
   /* --------- map state --------- */
 
@@ -1873,7 +1959,7 @@ export default function ExplorePreview() {
                       mapId={effectiveGoogleMapsMapId || undefined}
                       center={mapCenter}
                       zoom={13}
-                      markers={allMapMarkers}
+                      markers={filteredMapMarkers}
                       showRoadTrafficLayer={false}
                       userLocation={coords}
                       isNightTheme={false}
@@ -1889,7 +1975,7 @@ export default function ExplorePreview() {
                   <Suspense fallback={<HeroMapFallback reason="loading" />}>
                     <ThemedScoutMap
                       userLocation={coords}
-                      markers={allMapMarkers}
+                      markers={filteredMapMarkers}
                       zoom={13}
                       onMarkerTap={handlePreviewMarkerTap}
                     />
@@ -1927,7 +2013,7 @@ export default function ExplorePreview() {
                     mapId={effectiveGoogleMapsMapId || undefined}
                     center={mapCenter}
                     zoom={mapZoom}
-                    markers={allMapMarkers}
+                    markers={filteredMapMarkers}
                     showRoadTrafficLayer={false}
                     userLocation={coords}
                     isNightTheme={false}
@@ -1950,7 +2036,7 @@ export default function ExplorePreview() {
                     <Suspense fallback={<HeroMapFallback reason="loading" />}>
                       <ThemedScoutMap
                         userLocation={coords}
-                        markers={allMapMarkers}
+                        markers={filteredMapMarkers}
                         zoom={13}
                         interactive={true}
                         onMarkerTap={handlePreviewMarkerTap}
@@ -2043,6 +2129,12 @@ export default function ExplorePreview() {
 
 
 
+          <MapLayerToggles
+            layers={activeMapLayers}
+            onToggle={toggleMapLayer}
+            compact={sheetState !== "fullMap"}
+          />
+
 
 
           {/* Floating "Collapse" button (top-right) — visible in fullMap state. */}
@@ -2098,7 +2190,7 @@ export default function ExplorePreview() {
 
           {sheetState === "fullMap" && mapBounds && (
             <MapEdgeIndicators
-              markers={allMapMarkers}
+              markers={filteredMapMarkers}
               bounds={mapBounds}
               center={mapCenter || coords}
               selectedId={selectedLiveTruck ? String(selectedLiveTruck.id) : selectedMapMarker?.id || null}
@@ -2565,17 +2657,15 @@ function CravingCompass({
           </div>
 
           <div className="mt-3">
-            <p className="text-xs font-semibold leading-relaxed text-orange-50/64">
-              {daypartCopy.body}
-            </p>
-            <div className="mt-2 rounded-xl bg-[#130b08]/70 p-3 ring-1 ring-white/10">
+            <span className="sr-only">{daypartCopy.body}</span>
+            <div className="rounded-xl bg-[#130b08]/70 p-3 ring-1 ring-white/10">
               {topPick ? (
                 <>
                   <div className="relative overflow-hidden rounded-xl bg-[#0d0705]/75">
                     <img
                       src={topPick.imageUrl || selectedCraving.image}
                       alt=""
-                      className="h-24 w-full object-cover opacity-65"
+                      className="h-20 w-full object-cover opacity-65"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-[#120805]/95 via-[#120805]/55 to-transparent" />
                     <div className="absolute left-3 top-3">
@@ -2591,14 +2681,6 @@ function CravingCompass({
                     {topPick.title}
                   </p>
                   <p className="mt-1 text-sm text-white/75">{topPick.subtitle}</p>
-                  {topPickMetaSignals.length > 0 ? (
-                    <p className="mt-1.5 text-xs font-semibold text-white/72">
-                      {topPickMetaSignals.join(" · ")}
-                    </p>
-                  ) : null}
-                  <p className="mt-2 text-[10px] font-black uppercase tracking-[0.12em] text-orange-100/72">
-                    Why go now
-                  </p>
                   <div className="mt-2 flex flex-wrap gap-1.5">
                     {topPickBadges.map((badge) => (
                       <span
@@ -2647,9 +2729,9 @@ function CravingCompass({
             </div>
           </div>
 
-          <div className="mt-4">
+          <div className="mt-3">
             <p className="mb-2 text-xs font-black uppercase tracking-[0.13em] text-[#ffcf9b]">
-              Change what you&apos;re looking for
+              WHAT YOU&apos;RE LOOKING FOR
             </p>
                   <div className="overflow-x-auto atmo-hide-scrollbar">
                     <div className="flex w-max gap-2 pr-1">
@@ -2680,7 +2762,7 @@ function CravingCompass({
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-[10px] font-black uppercase tracking-[0.14em] text-[#e5b06f]/82">
-                  WHAT YOU&apos;RE LOOKING FOR
+                  MORE OPTIONS
                 </p>
                 <p className="mt-1 truncate text-base font-black text-white">
                   {selectedCraving.label}
@@ -4013,6 +4095,57 @@ function MapPlaceCard({
           Directions
           <Navigation2 className="h-4 w-4 text-orange-300" aria-hidden="true" />
         </a>
+      </div>
+    </div>
+  );
+}
+
+function MapLayerToggles({
+  layers,
+  onToggle,
+  compact,
+}: {
+  layers: MapLayerState;
+  onToggle: (layer: MapLayerId) => void;
+  compact: boolean;
+}) {
+  const options: Array<{ id: MapLayerId; label: string; icon: React.ReactNode }> = [
+    { id: "openNow", label: "Open now", icon: <Flame className="h-3.5 w-3.5" aria-hidden="true" /> },
+    { id: "foodTrucks", label: "Food trucks", icon: <Utensils className="h-3.5 w-3.5" aria-hidden="true" /> },
+    { id: "deals", label: "Deals", icon: <Tag className="h-3.5 w-3.5" aria-hidden="true" /> },
+    { id: "happeningToday", label: "Happening today", icon: <CalendarDays className="h-3.5 w-3.5" aria-hidden="true" /> },
+  ];
+
+  return (
+    <div
+      className={[
+        "absolute left-3 right-3 z-20 overflow-x-auto atmo-hide-scrollbar",
+        compact
+          ? "top-[calc(env(safe-area-inset-top)+4.4rem)]"
+          : "top-[calc(env(safe-area-inset-top)+4.7rem)] sm:left-4 sm:right-auto sm:w-[360px]",
+      ].join(" ")}
+    >
+      <div className="flex w-max gap-1.5 rounded-full bg-[#120805]/72 p-1 text-[10px] font-black uppercase tracking-wide text-orange-50 ring-1 ring-orange-200/24 backdrop-blur-xl">
+        {options.map((option) => {
+          const isActive = layers[option.id];
+          return (
+            <button
+              key={option.id}
+              type="button"
+              onClick={() => onToggle(option.id)}
+              className={[
+                "inline-flex h-8 items-center gap-1.5 rounded-full px-2.5 transition-colors",
+                isActive
+                  ? "bg-orange-300 text-[#1a0d08]"
+                  : "bg-white/6 text-white/62 hover:bg-white/10 hover:text-white",
+              ].join(" ")}
+              aria-pressed={isActive}
+            >
+              {option.icon}
+              <span>{option.label}</span>
+            </button>
+          );
+        })}
       </div>
     </div>
   );
