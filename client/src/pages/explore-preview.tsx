@@ -509,6 +509,30 @@ function readStringField(source: unknown, fields: string[]): string | null {
   return null;
 }
 
+function getCurrentUserId(user: unknown): string | null {
+  return readStringField(user, ["id", "userId"]);
+}
+
+function isFoodOperator(user: unknown): boolean {
+  const userType = readStringField(user, ["userType", "role", "primaryRole"]);
+  return userType === "restaurant_owner" || userType === "food_truck";
+}
+
+function isOwnedByCurrentUser(entity: unknown, currentUserId?: string | null): boolean {
+  if (!currentUserId) return false;
+  const ownerId = readStringField(entity, [
+    "ownerId",
+    "ownerUserId",
+    "userId",
+    "vendorUserId",
+    "restaurantOwnerId",
+    "truckOwnerId",
+    "businessOwnerId",
+    "coordinatorUserId",
+  ]);
+  return ownerId === currentUserId;
+}
+
 function getKnownTimestamp(meta: FreshnessMeta): { value: string; type: "updated" | "confirmed" } | null {
   const updated = meta.updatedAt || meta.lastUpdatedAt;
   if (updated) return { value: updated, type: "updated" };
@@ -607,6 +631,31 @@ function getOperationalBadges(entityOrMeta: FreshnessMeta): string[] {
   if (entityOrMeta.hasDistance) labels.add("Nearby");
   if (isTodayDate(entityOrMeta.startsAt || entityOrMeta.startTime)) labels.add("Happening today");
   return [...labels];
+}
+
+function getFreshnessBadgeClass(meta: FreshnessMeta, label: string): string {
+  const base = "rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ring-1";
+  if (label === "Needs update" || getFreshnessState(meta) === "needs_update") {
+    return `${base} bg-amber-300/14 text-amber-100 ring-amber-200/20`;
+  }
+  if (getFreshnessState(meta) === "aging") {
+    return `${base} bg-white/8 text-orange-100/78 ring-white/10`;
+  }
+  return `${base} bg-emerald-300/12 text-emerald-100 ring-emerald-200/18`;
+}
+
+function getRestaurantUpdateHref(restaurantId: string, setup: "status" | "location" | "menu" | "deal"): string {
+  if (setup === "menu") {
+    return `/menu-builder?src=scout&restaurantId=${encodeURIComponent(restaurantId)}`;
+  }
+  if (setup === "deal") {
+    return `/deal-creation?src=scout&restaurantId=${encodeURIComponent(restaurantId)}`;
+  }
+  return `/restaurant-owner-dashboard?src=scout&setup=${setup}&restaurantId=${encodeURIComponent(restaurantId)}`;
+}
+
+function getTruckUpdateHref(truckId: string, setup: "status" | "location" | "menu" | "deal"): string {
+  return getRestaurantUpdateHref(truckId, setup);
 }
 
 function getMapMarkerColor(meta: FreshnessMeta): string {
@@ -2004,6 +2053,8 @@ export default function ExplorePreview() {
   const goToCraving = (cat: CravingCategory) => {
     navigate(`/search?q=${encodeURIComponent(cat.query)}`);
   };
+  const currentUserId = getCurrentUserId(user);
+  const showQuickUpdateBar = isFoodOperator(user);
 
   const showFoodTrucksSection = liveTrucksLoading || liveTrucks.length > 0;
   const showMenuItemsSection = localMenuItems.length > 0;
@@ -2472,6 +2523,10 @@ export default function ExplorePreview() {
               onSearchCraving={goToCraving}
             />
 
+            {showQuickUpdateBar ? (
+              <QuickUpdateBar />
+            ) : null}
+
             <LocalActivityRail items={localActivityItems} />
 
             {/* OPEN NOW — broad live signal across trucks, restaurants, bars, and public events. */}
@@ -2484,6 +2539,7 @@ export default function ExplorePreview() {
               locationStatus={locationStatus}
               onExpandMap={openScoutMap}
               onSelectTruck={selectLiveTruck}
+              currentUserId={currentUserId}
             />
 
             {/* ── FOOD TRUCKS NEAR YOU ── */}
@@ -2501,7 +2557,7 @@ export default function ExplorePreview() {
                     <ul className="flex gap-4 pr-5" role="list" aria-label="Food trucks near you">
                       {liveTrucks.slice(0, 12).map((t) => (
                         <li key={t.id} className="shrink-0 w-[200px] sm:w-[220px]">
-                          <TruckCard truck={t} onSelect={selectLiveTruck} />
+                          <TruckCard truck={t} onSelect={selectLiveTruck} currentUserId={currentUserId} />
                         </li>
                       ))}
                     </ul>
@@ -2522,7 +2578,7 @@ export default function ExplorePreview() {
                   <ul className="flex gap-4 pr-5" role="list" aria-label="New local menu items">
                     {localMenuItems.slice(0, 12).map((item, index) => (
                       <li key={item.id} className="shrink-0 w-[210px] sm:w-[230px]">
-                        <LocalMenuItemCard item={item} position={index} />
+                        <LocalMenuItemCard item={item} position={index} currentUserId={currentUserId} />
                       </li>
                     ))}
                   </ul>
@@ -2551,6 +2607,7 @@ export default function ExplorePreview() {
                               menuPreviewByRestaurantId.get(String(r.id)) ?? []
                             }
                             isSignedIn={!!user}
+                            currentUserId={currentUserId}
                             relationshipSnapshot={restaurantRelationships}
                           />
                         </li>
@@ -2573,7 +2630,7 @@ export default function ExplorePreview() {
                   <ul className="flex gap-4 pr-5" role="list">
                     {allDeals.slice(0, 10).map((d) => (
                       <li key={d.id} className="shrink-0 w-[230px] sm:w-[260px]">
-                        <DealCard deal={d} />
+                        <DealCard deal={d} currentUserId={currentUserId} />
                       </li>
                     ))}
                   </ul>
@@ -2593,7 +2650,7 @@ export default function ExplorePreview() {
                   <ul className="flex gap-4 pr-5" role="list">
                     {visibleEvents.slice(0, 8).map((e) => (
                       <li key={e.id} className="shrink-0 w-[230px] sm:w-[260px]">
-                        <EventCard event={e} />
+                        <EventCard event={e} currentUserId={currentUserId} />
                       </li>
                     ))}
                   </ul>
@@ -2876,7 +2933,7 @@ function CravingCompass({
                     {topPickBadges.map((badge) => (
                       <span
                         key={badge}
-                        className="inline-flex rounded-full bg-[#fff4e1]/10 px-2 py-1 text-[10px] font-black text-orange-100 ring-1 ring-orange-200/25"
+                        className={topPickFreshnessMeta ? getFreshnessBadgeClass(topPickFreshnessMeta, badge) : "rounded-full bg-[#fff4e1]/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-orange-100 ring-1 ring-orange-200/25"}
                       >
                         {badge}
                       </span>
@@ -3095,7 +3152,7 @@ function ScoutSearchResultCard({
           {badges.map((badge) => (
             <span
               key={badge}
-              className="rounded-full bg-white/8 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-orange-100"
+              className={getFreshnessBadgeClass(item.freshnessMeta || { kind: item.kind }, badge)}
             >
               {badge}
             </span>
@@ -3126,6 +3183,59 @@ function LocalActivityRail({ items }: { items: LocalActivityItem[] }) {
         </ul>
       </div>
     </section>
+  );
+}
+
+function QuickUpdateBar() {
+  // Future flow hooks: one-tap open now, one-tap location confirm,
+  // quick deal posting, and quick menu updates can attach behind these links.
+  const actions = [
+    { label: "Update status", href: "/restaurant-owner-dashboard?src=scout&setup=status", icon: <Flame className="h-3.5 w-3.5" aria-hidden="true" /> },
+    { label: "Confirm location", href: "/restaurant-owner-dashboard?src=scout&setup=location", icon: <Navigation2 className="h-3.5 w-3.5" aria-hidden="true" /> },
+    { label: "Update menu", href: "/menu-builder?src=scout", icon: <Utensils className="h-3.5 w-3.5" aria-hidden="true" /> },
+    { label: "Post deal", href: "/deal-creation?src=scout", icon: <Tag className="h-3.5 w-3.5" aria-hidden="true" /> },
+  ];
+
+  return (
+    <section className="px-4 pb-5">
+      <div className="overflow-x-auto atmo-hide-scrollbar">
+        <div className="flex w-max gap-2 pr-1">
+          {actions.map((action) => (
+            <Link
+              key={action.label}
+              href={action.href}
+              className="inline-flex min-h-9 items-center gap-1.5 rounded-full bg-[#fff4e1]/10 px-3 py-2 text-[11px] font-black text-orange-50 ring-1 ring-orange-200/24 transition-colors hover:bg-[#fff4e1]/14 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
+            >
+              {action.icon}
+              <span>{action.label}</span>
+            </Link>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function OwnerOperationalActions({
+  actions,
+}: {
+  actions: Array<{ label: string; href: string; icon: React.ReactNode }>;
+}) {
+  if (actions.length === 0) return null;
+
+  return (
+    <div className="mt-2 flex flex-wrap gap-1.5">
+      {actions.map((action) => (
+        <Link
+          key={`${action.label}-${action.href}`}
+          href={action.href}
+          className="inline-flex min-h-7 items-center gap-1 rounded-full bg-orange-300/14 px-2 py-1 text-[10px] font-black text-orange-100 ring-1 ring-orange-200/24 transition-colors hover:bg-orange-300/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
+        >
+          {action.icon}
+          <span>{action.label}</span>
+        </Link>
+      ))}
+    </div>
   );
 }
 
@@ -3172,7 +3282,7 @@ function LocalActivityCard({ item }: { item: LocalActivityItem }) {
           {badges.map((badge) => (
             <span
               key={badge}
-              className="rounded-full bg-white/8 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-orange-100"
+              className={getFreshnessBadgeClass(item.freshnessMeta, badge)}
             >
               {badge}
             </span>
@@ -3296,19 +3406,41 @@ function LiveTruckSkeletonCard() {
   );
 }
 
-function LiveTruckCard({ truck }: { truck: LiveTruckSummary }) {
+function LiveTruckCard({
+  truck,
+  currentUserId,
+}: {
+  truck: LiveTruckSummary;
+  currentUserId?: string | null;
+}) {
   const distance = formatDistance(truck);
   const wait = formatWait(truck);
   const vibe = getCrowdVibe(truck);
   const heroImage = truck.heroImageUrl || truck.imageUrl || truck.logoUrl;
-  const badges = getOperationalBadges({
+  const freshnessMeta: FreshnessMeta = {
     kind: "truck",
     updatedAt: readStringField(truck, ["updatedAt", "lastUpdatedAt"]),
     confirmedAt: readStringField(truck, ["confirmedAt", "lastConfirmedAt"]),
     hasDeal: Boolean(truck.activeDealCount && truck.activeDealCount > 0),
     hasDistance: Boolean(distance),
     isOpen: true,
-  }).slice(0, 3);
+  };
+  const badges = getOperationalBadges(freshnessMeta).slice(0, 3);
+  const canEdit = isOwnedByCurrentUser(truck, currentUserId);
+  const actions = canEdit
+    ? [
+        {
+          label: "Update status",
+          href: getTruckUpdateHref(String(truck.id), "status"),
+          icon: <Flame className="h-3 w-3" aria-hidden="true" />,
+        },
+        {
+          label: "Confirm location",
+          href: getTruckUpdateHref(String(truck.id), "location"),
+          icon: <Navigation2 className="h-3 w-3" aria-hidden="true" />,
+        },
+      ]
+    : [];
 
   return (
     <Link
@@ -3378,25 +3510,43 @@ function LiveTruckCard({ truck }: { truck: LiveTruckSummary }) {
             {badges.map((badge) => (
               <span
                 key={badge}
-                className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-orange-100 ring-1 ring-white/10"
+                className={getFreshnessBadgeClass(freshnessMeta, badge)}
               >
                 {badge}
               </span>
             ))}
           </div>
+          <OwnerOperationalActions actions={actions} />
         </div>
       </div>
     </Link>
   );
 }
 
-function DealCard({ deal }: { deal: DealSummary }) {
-  const badges = getOperationalBadges({
+function DealCard({
+  deal,
+  currentUserId,
+}: {
+  deal: DealSummary;
+  currentUserId?: string | null;
+}) {
+  const freshnessMeta: FreshnessMeta = {
     kind: "deal",
     updatedAt: readStringField(deal, ["updatedAt", "lastUpdatedAt"]),
     confirmedAt: readStringField(deal, ["confirmedAt", "lastConfirmedAt"]),
     hasDeal: true,
-  }).slice(0, 2);
+  };
+  const badges = getOperationalBadges(freshnessMeta).slice(0, 2);
+  const canEdit = isOwnedByCurrentUser(deal, currentUserId);
+  const actions = canEdit
+    ? [
+        {
+          label: "Update status",
+          href: `/deal-edit/${encodeURIComponent(String(deal.id))}`,
+          icon: <Flame className="h-3 w-3" aria-hidden="true" />,
+        },
+      ]
+    : [];
 
   return (
     <Link
@@ -3449,12 +3599,13 @@ function DealCard({ deal }: { deal: DealSummary }) {
             {badges.map((badge) => (
               <span
                 key={badge}
-                className="rounded-full bg-orange-300/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-orange-100 ring-1 ring-orange-200/20"
+                className={getFreshnessBadgeClass(freshnessMeta, badge)}
               >
                 {badge}
               </span>
             ))}
           </div>
+          <OwnerOperationalActions actions={actions} />
         </div>
       </div>
     </Link>
@@ -3482,9 +3633,11 @@ function trackLocalMenuItemEngagement(payload: {
 function LocalMenuItemCard({
   item,
   position,
+  currentUserId,
 }: {
   item: LocalMenuItemFeedItem;
   position: number;
+  currentUserId?: string | null;
 }) {
   const price =
     typeof item.priceCents === "number" && Number.isFinite(item.priceCents)
@@ -3497,13 +3650,24 @@ function LocalMenuItemCard({
   const tags = Array.isArray(item.dietaryTags)
     ? item.dietaryTags.filter(Boolean).slice(0, 2)
     : [];
-  const badges = getOperationalBadges({
+  const freshnessMeta: FreshnessMeta = {
     kind: "menu",
     updatedAt: readStringField(item, ["updatedAt", "lastUpdatedAt"]),
     confirmedAt: readStringField(item, ["confirmedAt", "lastConfirmedAt"]),
     hasMenu: true,
     hasDistance: Boolean(distLabel),
-  }).slice(0, 3);
+  };
+  const badges = getOperationalBadges(freshnessMeta).slice(0, 3);
+  const canEdit = isOwnedByCurrentUser(item, currentUserId);
+  const actions = canEdit
+    ? [
+        {
+          label: "Update menu",
+          href: getRestaurantUpdateHref(String(item.restaurantId), "menu"),
+          icon: <Utensils className="h-3 w-3" aria-hidden="true" />,
+        },
+      ]
+    : [];
 
   useEffect(() => {
     trackLocalMenuItemEngagement({
@@ -3605,20 +3769,27 @@ function LocalMenuItemCard({
         )}
         <div className="mt-2 flex flex-wrap gap-1">
           {badges.map((badge) => (
-            <span
-              key={badge}
-              className="rounded-full bg-orange-300/12 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-orange-100"
-            >
-              {badge}
-            </span>
-          ))}
+              <span
+                key={badge}
+                className={getFreshnessBadgeClass(freshnessMeta, badge)}
+              >
+                {badge}
+              </span>
+            ))}
         </div>
+        <OwnerOperationalActions actions={actions} />
       </div>
     </Link>
   );
 }
 
-function EventCard({ event }: { event: EventSummary }) {
+function EventCard({
+  event,
+  currentUserId,
+}: {
+  event: EventSummary;
+  currentUserId?: string | null;
+}) {
   const title = event.title || event.name || "Event";
   const venue = event.venueName || event.locationName || "";
   const start = event.startsAt || event.startTime;
@@ -3630,13 +3801,24 @@ function EventCard({ event }: { event: EventSummary }) {
       })
     : "";
   const img = event.heroImageUrl || event.imageUrl;
-  const badges = getOperationalBadges({
+  const freshnessMeta: FreshnessMeta = {
     kind: "event",
     startsAt: event.startsAt,
     startTime: event.startTime,
     updatedAt: readStringField(event, ["updatedAt", "lastUpdatedAt"]),
     confirmedAt: readStringField(event, ["confirmedAt", "lastConfirmedAt"]),
-  }).slice(0, 2);
+  };
+  const badges = getOperationalBadges(freshnessMeta).slice(0, 2);
+  const canEdit = isOwnedByCurrentUser(event, currentUserId);
+  const actions = canEdit
+    ? [
+        {
+          label: "Update status",
+          href: `/host-dashboard?src=scout&eventId=${encodeURIComponent(String(event.id))}`,
+          icon: <Flame className="h-3 w-3" aria-hidden="true" />,
+        },
+      ]
+    : [];
   return (
     <Link
       href={`/event/${event.id}`}
@@ -3687,12 +3869,13 @@ function EventCard({ event }: { event: EventSummary }) {
             {badges.map((badge) => (
               <span
                 key={badge}
-                className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-orange-100 ring-1 ring-white/10"
+                className={getFreshnessBadgeClass(freshnessMeta, badge)}
               >
                 {badge}
               </span>
             ))}
           </div>
+          <OwnerOperationalActions actions={actions} />
         </div>
       </div>
     </Link>
@@ -3741,11 +3924,13 @@ function NearbyRestaurantCard({
   restaurant,
   menuPreview = [],
   isSignedIn,
+  currentUserId,
   relationshipSnapshot,
 }: {
   restaurant: RestaurantSummary;
   menuPreview?: MenuPreviewItem[];
   isSignedIn: boolean;
+  currentUserId?: string | null;
   relationshipSnapshot: RestaurantRelationshipSnapshot;
 }) {
   const name = restaurant.businessName || restaurant.name || "Restaurant";
@@ -3765,6 +3950,26 @@ function NearbyRestaurantCard({
     ? `${dist.toFixed(dist < 10 ? 1 : 0)} mi`
     : null;
   const restaurantId = String(restaurant.id);
+  const canEdit = isOwnedByCurrentUser(restaurant, currentUserId);
+  const ownerActions = canEdit
+    ? [
+        {
+          label: "Update status",
+          href: getRestaurantUpdateHref(restaurantId, "status"),
+          icon: <Flame className="h-3 w-3" aria-hidden="true" />,
+        },
+        {
+          label: "Update menu",
+          href: getRestaurantUpdateHref(restaurantId, "menu"),
+          icon: <Utensils className="h-3 w-3" aria-hidden="true" />,
+        },
+        {
+          label: "Post deal",
+          href: getRestaurantUpdateHref(restaurantId, "deal"),
+          icon: <Tag className="h-3 w-3" aria-hidden="true" />,
+        },
+      ]
+    : [];
   const [isFavorite, setIsFavorite] = useState(false);
   const [isFollowed, setIsFollowed] = useState(false);
   const [isRecommended, setIsRecommended] = useState(false);
@@ -3971,7 +4176,19 @@ function NearbyRestaurantCard({
           {statusLabels.slice(0, 3).map((label) => (
             <span
               key={label}
-              className="rounded-full bg-emerald-300/12 px-2 py-1 text-emerald-200"
+              className={getFreshnessBadgeClass(
+                {
+                  kind: "restaurant",
+                  updatedAt: readStringField(restaurant, ["updatedAt", "lastUpdatedAt"]),
+                  confirmedAt: readStringField(restaurant, ["confirmedAt", "lastConfirmedAt"]),
+                  hasDeal: dealCount > 0,
+                  hasMenu: menuPreview.length > 0,
+                  hasCommunityUpdate: communityUpdates.length > 0,
+                  hasDistance: Boolean(distLabel),
+                  isOpen: true,
+                },
+                label,
+              )}
             >
               {label}
             </span>
@@ -3985,6 +4202,7 @@ function NearbyRestaurantCard({
         <p className="mt-2 text-[10px] font-semibold text-white/45">
           {rankingReason}
         </p>
+        <OwnerOperationalActions actions={ownerActions} />
         <div
           className="mt-2 grid grid-cols-3 gap-1.5 text-[10px] font-bold"
           aria-label={`${name} quick actions`}
@@ -4115,6 +4333,7 @@ function OpenNowSection({
   locationStatus,
   onExpandMap,
   onSelectTruck,
+  currentUserId,
 }: {
   liveTrucks: LiveTruckSummary[];
   liveTrucksLoading: boolean;
@@ -4124,6 +4343,7 @@ function OpenNowSection({
   locationStatus: "idle" | "requesting" | "ready" | "denied";
   onExpandMap: () => void;
   onSelectTruck: (truck: LiveTruckSummary) => void;
+  currentUserId?: string | null;
 }) {
   const todaysEvents = useMemo(() => {
     const now = new Date();
@@ -4193,17 +4413,17 @@ function OpenNowSection({
           >
             {liveTrucks.slice(0, 8).map((truck) => (
               <li key={`truck-${truck.id}`} className="shrink-0 w-[230px] sm:w-[260px]">
-                <LiveTruckCard truck={truck} />
+                <LiveTruckCard truck={truck} currentUserId={currentUserId} />
               </li>
             ))}
             {todaysEvents.slice(0, 6).map((ev) => (
               <li key={`event-${ev.id}`} className="shrink-0 w-[230px] sm:w-[260px]">
-                <EventCard event={ev} />
+                <EventCard event={ev} currentUserId={currentUserId} />
               </li>
             ))}
             {deals.slice(0, 6).map((d) => (
               <li key={`deal-${d.id}`} className="shrink-0 w-[230px] sm:w-[260px]">
-                <DealCard deal={d} />
+                <DealCard deal={d} currentUserId={currentUserId} />
               </li>
             ))}
           </ul>
@@ -4645,9 +4865,11 @@ function MapEdgeIndicators({
 function TruckCard({
   truck,
   onSelect,
+  currentUserId,
 }: {
   truck: LiveTruckSummary;
   onSelect?: (truck: LiveTruckSummary) => void;
+  currentUserId?: string | null;
 }) {
   const name = truck.name || "Food Truck";
   const cuisine = truck.cuisineType ?? null;
@@ -4668,14 +4890,30 @@ function TruckCard({
     typeof wait === "number" && Number.isFinite(wait) && wait > 0
       ? `~${Math.round(wait)} min`
       : null;
-  const badges = getOperationalBadges({
+  const freshnessMeta: FreshnessMeta = {
     kind: "truck",
     updatedAt: readStringField(truck, ["updatedAt", "lastUpdatedAt"]),
     confirmedAt: readStringField(truck, ["confirmedAt", "lastConfirmedAt"]),
     hasDeal: Boolean(truck.activeDealCount && truck.activeDealCount > 0),
     hasDistance: Boolean(distLabel),
     isOpen: true,
-  }).slice(0, 3);
+  };
+  const badges = getOperationalBadges(freshnessMeta).slice(0, 3);
+  const canEdit = isOwnedByCurrentUser(truck, currentUserId);
+  const actions = canEdit
+    ? [
+        {
+          label: "Update status",
+          href: getTruckUpdateHref(String(truck.id), "status"),
+          icon: <Flame className="h-3 w-3" aria-hidden="true" />,
+        },
+        {
+          label: "Confirm location",
+          href: getTruckUpdateHref(String(truck.id), "location"),
+          icon: <Navigation2 className="h-3 w-3" aria-hidden="true" />,
+        },
+      ]
+    : [];
 
   return (
     <Link
@@ -4732,12 +4970,13 @@ function TruckCard({
           {badges.map((badge) => (
             <span
               key={badge}
-              className="rounded-full bg-white/8 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-orange-100"
+              className={getFreshnessBadgeClass(freshnessMeta, badge)}
             >
               {badge}
             </span>
           ))}
         </div>
+        <OwnerOperationalActions actions={actions} />
       </div>
     </Link>
   );
