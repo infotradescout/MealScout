@@ -262,16 +262,16 @@ const CRAVING_CATEGORIES: CravingCategory[] = [
   },
 ];
 
-type CompassPickRole = "Best Match" | "Menu Lead" | "Nearby Option";
-
-type CompassRecommendation = {
+type CravingBoardItem = {
   id: string;
-  role: CompassPickRole;
+  kind: "Menu" | "Place" | "Truck" | "Deal";
   title: string;
   subtitle: string;
   href: string;
-  reason: string;
-  meta: string;
+  imageUrl?: string | null;
+  meta?: string | null;
+  reason?: string | null;
+  score: number;
 };
 
 type DiscoveryLayerId =
@@ -410,6 +410,14 @@ function getMenuItemCravingScore(
   return scoreTextForCraving(text, craving);
 }
 
+function getDealCravingScore(
+  deal: DealSummary,
+  craving: CravingCategory,
+): number {
+  const text = `${deal.title || ""} ${deal.description || ""} ${deal.restaurantName || ""}`;
+  return scoreTextForCraving(text, craving);
+}
+
 function getRestaurantDiscoveryReason(restaurant: RestaurantSummary): string {
   const signals = [
     Number(restaurant.favoriteCount || 0) > 0 ? "saved by locals" : null,
@@ -422,204 +430,163 @@ function getRestaurantDiscoveryReason(restaurant: RestaurantSummary): string {
     : "Nearby and active enough to keep on the board.";
 }
 
-function buildCompassRecommendations({
+function getMenuItemSearchReason(item: LocalMenuItemFeedItem): string {
+  if (item.discoveryReasons?.[0]) return item.discoveryReasons[0];
+  if (typeof item.discoveryScore === "number" && item.discoveryScore > 0) {
+    return "Popular menu signal";
+  }
+  if (Array.isArray(item.dietaryTags) && item.dietaryTags.length > 0) {
+    return item.dietaryTags.slice(0, 2).join(" + ");
+  }
+  return "Menu match";
+}
+
+function getRestaurantSearchReason(restaurant: RestaurantSummary): string {
+  if (restaurant.homeRankingReason) return restaurant.homeRankingReason;
+  return getRestaurantDiscoveryReason(restaurant);
+}
+
+function getRestaurantImage(restaurant: RestaurantSummary): string | null {
+  return (
+    restaurant.coverImageUrl ||
+    restaurant.heroImageUrl ||
+    restaurant.imageUrl ||
+    restaurant.logoUrl ||
+    null
+  );
+}
+
+function getTruckImage(truck: LiveTruckSummary): string | null {
+  return (
+    truck.heroImageUrl ||
+    truck.coverImageUrl ||
+    truck.imageUrl ||
+    truck.logoUrl ||
+    null
+  );
+}
+
+function buildCravingBoardItems({
   craving,
   liveTrucks,
   restaurants,
   menuItems,
   deals,
-  localSignalCount,
 }: {
   craving: CravingCategory;
   liveTrucks: LiveTruckSummary[];
   restaurants: RestaurantSummary[];
   menuItems: LocalMenuItemFeedItem[];
   deals: DealSummary[];
-  localSignalCount: number;
-}): CompassRecommendation[] {
-  const picks: CompassRecommendation[] = [];
+}): CravingBoardItem[] {
   const used = new Set<string>();
-  const usedRoles = new Set<CompassPickRole>();
-  const addPick = (pick: CompassRecommendation | null) => {
-    if (!pick || used.has(pick.id) || usedRoles.has(pick.role) || picks.length >= 3) return;
+  const addPick = (items: CravingBoardItem[], pick: CravingBoardItem | null) => {
+    if (!pick || used.has(pick.id)) return;
     used.add(pick.id);
-    usedRoles.add(pick.role);
-    picks.push(pick);
+    items.push(pick);
   };
 
-  const rankedTrucks = [...liveTrucks].sort(
-    (a, b) =>
-      getTruckCravingScore(b, craving) - getTruckCravingScore(a, craving) ||
-      (a.distanceMiles ?? 999) - (b.distanceMiles ?? 999),
-  );
-  const rankedRestaurants = [...restaurants].sort(
-    (a, b) =>
-      getRestaurantCravingScore(b, craving) - getRestaurantCravingScore(a, craving) ||
-      (b.homeRankingScore ?? 0) - (a.homeRankingScore ?? 0) ||
-      (a.distanceMiles ?? 999) - (b.distanceMiles ?? 999),
-  );
-  const rankedMenuItems = [...menuItems].sort(
-    (a, b) =>
-      getMenuItemCravingScore(b, craving) - getMenuItemCravingScore(a, craving) ||
-      (b.discoveryScore ?? 0) - (a.discoveryScore ?? 0) ||
-      (a.distanceMiles ?? 999) - (b.distanceMiles ?? 999),
-  );
+  const rankedMenuItems = menuItems
+    .map((item) => ({ item, score: getMenuItemCravingScore(item, craving) }))
+    .filter(({ score }) => score > 0)
+    .sort(
+      (a, b) =>
+        b.score - a.score ||
+        (b.item.discoveryScore ?? 0) - (a.item.discoveryScore ?? 0) ||
+        (a.item.distanceMiles ?? 999) - (b.item.distanceMiles ?? 999),
+    );
 
-  const matchedTrucks = rankedTrucks.filter((truck) => getTruckCravingScore(truck, craving) > 0);
-  const matchedRestaurants = rankedRestaurants.filter(
-    (restaurant) => getRestaurantCravingScore(restaurant, craving) > 0,
-  );
-  const matchedMenuItems = rankedMenuItems.filter(
-    (item) => getMenuItemCravingScore(item, craving) > 0,
-  );
+  const rankedRestaurants = restaurants
+    .map((restaurant) => ({
+      restaurant,
+      score: getRestaurantCravingScore(restaurant, craving),
+    }))
+    .filter(({ score }) => score > 0)
+    .sort(
+      (a, b) =>
+        b.score - a.score ||
+        (b.restaurant.homeRankingScore ?? 0) - (a.restaurant.homeRankingScore ?? 0) ||
+        (a.restaurant.distanceMiles ?? 999) - (b.restaurant.distanceMiles ?? 999),
+    );
 
-  const safeTruck = matchedTrucks[0];
-  const safeRestaurant = matchedRestaurants[0];
-  if (safeTruck) {
-    const wait = formatWait(safeTruck);
-    const distance = formatDistance(safeTruck);
-    addPick({
-      id: `truck-${safeTruck.id}`,
-      role: "Best Match",
-      title: safeTruck.name,
-      subtitle: safeTruck.cuisineType || "Live food truck",
-      href: `/truck/${safeTruck.id}`,
-      reason:
-        [distance, wait].filter(Boolean).join(", ") ||
-        `Live nearby option for ${craving.label.toLowerCase()}.`,
-      meta: "Open now",
-    });
-  } else if (safeRestaurant) {
-    const distance = getRestaurantDistance(safeRestaurant);
-    addPick({
-      id: `restaurant-${safeRestaurant.id}`,
-      role: "Best Match",
-      title: getRestaurantName(safeRestaurant),
-      subtitle: safeRestaurant.cuisineType || "Nearby restaurant",
-      href: `/restaurant/${safeRestaurant.id}`,
-      reason:
-        `Matches ${craving.label.toLowerCase()}${distance ? ` within ${distance}` : ""}.`,
-      meta: distance || "Nearby",
+  const rankedTrucks = liveTrucks
+    .map((truck) => ({ truck, score: getTruckCravingScore(truck, craving) }))
+    .filter(({ score }) => score > 0)
+    .sort(
+      (a, b) =>
+        b.score - a.score ||
+        (a.truck.distanceMiles ?? 999) - (b.truck.distanceMiles ?? 999),
+    );
+
+  const rankedDeals = deals
+    .map((deal) => ({ deal, score: getDealCravingScore(deal, craving) }))
+    .filter(({ score }) => score > 0)
+    .sort((a, b) => b.score - a.score);
+
+  const items: CravingBoardItem[] = [];
+
+  for (const { item, score } of rankedMenuItems.slice(0, 4)) {
+    addPick(items, {
+      id: `menu-${item.id}`,
+      kind: "Menu",
+      title: item.name,
+      subtitle: item.restaurantName || item.cuisineType || "Local menu item",
+      href: `/restaurant/${item.restaurantId}`,
+      imageUrl: item.imageUrl,
+      meta: formatMiles(item.distanceMiles) || item.cuisineType || "Menu",
+      reason: getMenuItemSearchReason(item),
+      score,
     });
   }
 
-  const scoutMenuItem = matchedMenuItems.find(
-    (item) => !used.has(`menu-${item.id}`),
-  );
-  const scoutRestaurant = matchedRestaurants.find(
-    (restaurant) => !used.has(`restaurant-${restaurant.id}`),
-  );
-  if (scoutMenuItem) {
-    addPick({
-      id: `menu-${scoutMenuItem.id}`,
-      role: "Menu Lead",
-      title: scoutMenuItem.name,
-      subtitle: scoutMenuItem.restaurantName || "Local menu item",
-      href: `/restaurant/${scoutMenuItem.restaurantId}`,
-      reason:
-        scoutMenuItem.discoveryReasons?.[0] ||
-        `Menu item that lines up with ${craving.label.toLowerCase()}.`,
-      meta: formatMiles(scoutMenuItem.distanceMiles) || scoutMenuItem.cuisineType || "Fresh menu",
-    });
-  } else if (scoutRestaurant) {
-    addPick({
-      id: `restaurant-${scoutRestaurant.id}`,
-      role: "Menu Lead",
-      title: getRestaurantName(scoutRestaurant),
-      subtitle: scoutRestaurant.cuisineType || "Local restaurant",
-      href: `/restaurant/${scoutRestaurant.id}`,
-      reason: getRestaurantDiscoveryReason(scoutRestaurant),
-      meta: getRestaurantDistance(scoutRestaurant) || "Local signal",
+  for (const { restaurant, score } of rankedRestaurants.slice(0, 4)) {
+    addPick(items, {
+      id: `restaurant-${restaurant.id}`,
+      kind: "Place",
+      title: getRestaurantName(restaurant),
+      subtitle: restaurant.cuisineType || restaurant.description || "Local restaurant",
+      href: `/restaurant/${restaurant.id}`,
+      imageUrl: getRestaurantImage(restaurant),
+      meta: getRestaurantDistance(restaurant) || "Place",
+      reason: getRestaurantSearchReason(restaurant),
+      score,
     });
   }
 
-  const fallbackSearches: CompassRecommendation[] = [
-    {
-      id: "fallback-safe",
-      role: "Best Match",
-      title: craving.label,
-      subtitle: craving.helper,
-      href: `/search?q=${encodeURIComponent(craving.query)}`,
-      reason:
-        localSignalCount > 0
-          ? "Open search to see every nearby result for this craving."
-          : "No matching live signal yet. Search can widen the area.",
-      meta: "Search",
-    },
-    {
-      id: "fallback-scout",
-      role: "Menu Lead",
-      title: "Fresh menus",
-      subtitle: "New items nearby",
-      href: "/search",
-      reason: "New menu items are the cleanest way to find a real dish match.",
-      meta: "Menus",
-    },
-    {
-      id: "fallback-wildcard",
-      role: "Nearby Option",
-      title: "Tonight's deals",
-      subtitle: "Something different, on offer",
-      href: "/deals",
-      reason: "Check deals when the craving is flexible and price matters.",
-      meta: "Deals",
-    },
-  ];
-
-  if (!usedRoles.has("Best Match")) {
-    addPick(fallbackSearches[0]);
-  }
-  if (!usedRoles.has("Menu Lead")) {
-    addPick(fallbackSearches[1]);
+  for (const { truck, score } of rankedTrucks.slice(0, 3)) {
+    addPick(items, {
+      id: `truck-${truck.id}`,
+      kind: "Truck",
+      title: truck.name,
+      subtitle: truck.cuisineType || "Live food truck",
+      href: `/truck/${truck.id}`,
+      imageUrl: getTruckImage(truck),
+      meta: [formatDistance(truck), formatWait(truck)].filter(Boolean).join(" / ") || "Open now",
+      reason: truck.vibe || "Live nearby signal",
+      score,
+    });
   }
 
-  const deal = deals[0];
-  const wildcardTruck = rankedTrucks.find((truck) => !used.has(`truck-${truck.id}`));
-  const wildcardRestaurant = rankedRestaurants.find(
-    (restaurant) => !used.has(`restaurant-${restaurant.id}`),
-  );
-  if (deal) {
-    addPick({
+  for (const { deal, score } of rankedDeals.slice(0, 2)) {
+    addPick(items, {
       id: `deal-${deal.id}`,
-      role: "Nearby Option",
+      kind: "Deal",
       title: deal.title || "Nearby deal",
-      subtitle: deal.restaurantName || "Deal near you",
+      subtitle: deal.restaurantName || deal.description || "Local offer",
       href: `/deal/${deal.id}`,
-      reason:
-        deal.description ||
-        "A nearby offer worth checking if you are open to changing direction.",
+      imageUrl: deal.imageUrl,
       meta: deal.discountText || "Deal",
-    });
-  } else if (wildcardTruck) {
-    addPick({
-      id: `truck-${wildcardTruck.id}`,
-      role: "Nearby Option",
-      title: wildcardTruck.name,
-      subtitle: wildcardTruck.cuisineType || "Live food truck",
-      href: `/truck/${wildcardTruck.id}`,
-      reason:
-        getTruckCravingScore(wildcardTruck, craving) > 0
-          ? `Live nearby option that also matches ${craving.label.toLowerCase()}.`
-          : "Live nearby option if you are open to something different.",
-      meta: formatDistance(wildcardTruck) || "Open now",
-    });
-  } else if (wildcardRestaurant) {
-    addPick({
-      id: `restaurant-${wildcardRestaurant.id}`,
-      role: "Nearby Option",
-      title: getRestaurantName(wildcardRestaurant),
-      subtitle: wildcardRestaurant.cuisineType || "Nearby restaurant",
-      href: `/restaurant/${wildcardRestaurant.id}`,
-      reason:
-        getRestaurantCravingScore(wildcardRestaurant, craving) > 0
-          ? `Nearby option that matches ${craving.label.toLowerCase()}.`
-          : "Nearby reliable spot if you are open to switching cuisines.",
-      meta: getRestaurantDistance(wildcardRestaurant) || "Try it",
+      reason: deal.description || "Offer matching this search",
+      score,
     });
   }
 
-  for (const fallback of fallbackSearches) addPick(fallback);
-  return picks.slice(0, 3);
+  return items
+    .sort((a, b) => {
+      const kindRank = { Menu: 4, Place: 3, Truck: 2, Deal: 1 };
+      return b.score - a.score || kindRank[b.kind] - kindRank[a.kind];
+    })
+    .slice(0, 8);
 }
 
 function formatWait(truck: LiveTruckSummary): string | null {
@@ -1510,24 +1477,16 @@ export default function ExplorePreview() {
     );
   }, [selectedCravingId]);
 
-  const compassRecommendations = useMemo(
+  const cravingBoardItems = useMemo(
     () =>
-      buildCompassRecommendations({
+      buildCravingBoardItems({
         craving: selectedCraving,
         liveTrucks,
         restaurants: nearbyRestaurants,
         menuItems: localMenuItems,
         deals: allDeals,
-        localSignalCount,
       }),
-    [
-      allDeals,
-      liveTrucks,
-      localMenuItems,
-      localSignalCount,
-      nearbyRestaurants,
-      selectedCraving,
-    ],
+    [allDeals, liveTrucks, localMenuItems, nearbyRestaurants, selectedCraving],
   );
 
   return (
@@ -1928,17 +1887,9 @@ export default function ExplorePreview() {
             <CravingCompass
               cravings={CRAVING_CATEGORIES}
               selectedCraving={selectedCraving}
-              recommendations={compassRecommendations}
-              locationLabel={shortLocation}
+              boardItems={cravingBoardItems}
               locationStatus={locationStatus}
-              liveTruckCount={liveTrucks.length}
-              restaurantCount={nearbyRestaurants.length}
-              menuItemCount={localMenuItems.length}
-              dealCount={allDeals.length}
-              eventCount={visibleEvents.length}
               localSignalCount={localSignalCount}
-              discoveryRadiusKm={discoveryRadiusKm}
-              onRadiusChange={updateDiscoveryRadiusKm}
               onRefreshLocation={requestLocation}
               onCravingSelect={setSelectedCravingId}
               onSearchCraving={goToCraving}
@@ -2172,62 +2123,51 @@ function SectionHeader({
 }
 
 /* ============================================================
-   CRAVING COMPASS
-   Scout's primary decision surface: mood first, three choices only.
+   SCOUT SEARCH LAYER
+   Collapsed by default; expands into the local result board.
    ============================================================ */
 
 function CravingCompass({
   cravings,
   selectedCraving,
-  recommendations,
-  locationLabel,
+  boardItems,
   locationStatus,
-  liveTruckCount,
-  restaurantCount,
-  menuItemCount,
-  dealCount,
-  eventCount,
   localSignalCount,
-  discoveryRadiusKm,
-  onRadiusChange,
   onRefreshLocation,
   onCravingSelect,
   onSearchCraving,
 }: {
   cravings: CravingCategory[];
   selectedCraving: CravingCategory;
-  recommendations: CompassRecommendation[];
-  locationLabel: string;
+  boardItems: CravingBoardItem[];
   locationStatus: "idle" | "requesting" | "ready" | "denied";
-  liveTruckCount: number;
-  restaurantCount: number;
-  menuItemCount: number;
-  dealCount: number;
-  eventCount: number;
   localSignalCount: number;
-  discoveryRadiusKm: number;
-  onRadiusChange: (value: number) => void;
   onRefreshLocation: () => void;
   onCravingSelect: (id: string) => void;
   onSearchCraving: (craving: CravingCategory) => void;
 }) {
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
   const hasLocation = locationStatus === "ready";
+  const resultCount = boardItems.length;
+  const boardCounts = boardItems.reduce(
+    (counts, item) => {
+      counts[item.kind] += 1;
+      return counts;
+    },
+    { Menu: 0, Place: 0, Truck: 0, Deal: 0 } as Record<CravingBoardItem["kind"], number>,
+  );
   const signalLabel =
-    localSignalCount > 0
-      ? `${localSignalCount} nearby signal${localSignalCount === 1 ? "" : "s"}`
+    resultCount > 0
+      ? `${resultCount} search match${resultCount === 1 ? "" : "es"}`
+      : localSignalCount > 0
+        ? "Search wider"
       : hasLocation
-        ? "No nearby signal yet"
+        ? "No exact hits yet"
         : "Location off";
-  const primaryPick = recommendations[0];
-  const secondaryPicks = recommendations.slice(1, 3);
-  void locationLabel;
-  void liveTruckCount;
-  void restaurantCount;
-  void menuItemCount;
-  void dealCount;
-  void eventCount;
-  void discoveryRadiusKm;
-  void onRadiusChange;
+
+  useEffect(() => {
+    setIsSearchOpen(false);
+  }, [selectedCraving.id]);
 
   return (
     <section className="px-4 pt-4 pb-5">
@@ -2242,10 +2182,10 @@ function CravingCompass({
           <div className="flex items-start justify-between gap-3 border-b border-white/10 pb-3">
             <div className="min-w-0">
               <h2 className="font-sans text-white text-lg font-black leading-tight">
-                Pick a craving
+                Scout search
               </h2>
               <p className="mt-1 text-orange-50/62 text-xs leading-relaxed">
-                Exact matches first. Nearby alternatives are labeled clearly.
+                Menus, places, trucks, and deals populate from the same search.
               </p>
             </div>
             {hasLocation ? (
@@ -2265,7 +2205,7 @@ function CravingCompass({
 
           <div className="mt-3">
             <p className="mb-2 text-xs font-semibold leading-relaxed text-orange-50/64">
-              {selectedCraving.helper}
+              {selectedCraving.label}: {selectedCraving.helper}
             </p>
             <div className="overflow-x-auto atmo-hide-scrollbar">
               <div className="flex w-max gap-2 pr-1">
@@ -2292,66 +2232,143 @@ function CravingCompass({
             </div>
           </div>
 
-          <div className="mt-4">
-            {primaryPick ? (
-              <Link
-                href={primaryPick.href}
-                className="block rounded-xl bg-[#130b08]/78 ring-1 ring-white/10 px-3.5 py-3 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-[10px] font-black uppercase tracking-[0.12em] text-[#e5b06f]/82">
-                      {primaryPick.role}
-                    </p>
-                    <p className="mt-1 truncate text-base font-black text-white">
-                      {primaryPick.title}
-                    </p>
-                    <p className="mt-0.5 truncate text-xs font-semibold text-orange-100/65">
-                      {primaryPick.subtitle}
-                    </p>
-                  </div>
-                  <span className="shrink-0 rounded-full bg-[#fff3e4] px-2.5 py-1 text-[11px] font-black text-orange-900 ring-1 ring-orange-200">
-                    {primaryPick.meta}
-                  </span>
-                </div>
-                <p className="mt-2 text-xs leading-relaxed text-white/62">
-                  {primaryPick.reason}
+          <div className="mt-4 rounded-xl bg-[#130b08]/70 p-3 ring-1 ring-white/10">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[10px] font-black uppercase tracking-[0.14em] text-[#e5b06f]/82">
+                  Active search
                 </p>
-              </Link>
-            ) : null}
+                <p className="mt-1 truncate text-base font-black text-white">
+                  {selectedCraving.label}
+                </p>
+                <p className="mt-0.5 text-xs font-semibold leading-relaxed text-orange-100/62">
+                  {isSearchOpen
+                    ? "Results are grouped by business data and local signals."
+                    : "Tap search to open the result layer here."}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsSearchOpen((open) => !open)}
+                className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-full bg-[#fff3e4] px-3.5 py-2 text-xs font-black text-orange-950 ring-1 ring-orange-200 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
+                aria-expanded={isSearchOpen}
+              >
+                <Search className="h-3.5 w-3.5" aria-hidden="true" />
+                {isSearchOpen ? "Collapse" : "Search"}
+              </button>
+            </div>
 
-            {secondaryPicks.length > 0 ? (
-              <div className="mt-2.5 grid grid-cols-2 gap-2.5">
-                {secondaryPicks.map((pick) => (
-                <Link
-                  key={pick.id}
-                  href={pick.href}
-                  className="block min-h-[126px] rounded-xl bg-[#130b08]/62 ring-1 ring-white/10 px-3 py-2.5 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
-                >
-                  <div className="flex h-full flex-col">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[10px] font-black uppercase tracking-[0.12em] text-[#e5b06f]/82">
-                        {pick.role}
-                      </p>
-                      <p className="mt-1 line-clamp-2 text-sm font-black leading-tight text-white">
-                        {pick.title}
-                      </p>
-                      <p className="mt-1 line-clamp-2 text-[11px] leading-snug text-white/58">
-                        {pick.subtitle}
-                      </p>
+            {isSearchOpen ? (
+              <div className="mt-3 border-t border-white/10 pt-3">
+                {boardItems.length > 0 ? (
+                  <>
+                    <div className="mb-2 flex flex-wrap gap-1.5">
+                      {(["Menu", "Place", "Truck", "Deal"] as const).map((kind) =>
+                        boardCounts[kind] > 0 ? (
+                          <span
+                            key={kind}
+                            className="rounded-full bg-white/[0.06] px-2 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-orange-100/72 ring-1 ring-white/10"
+                          >
+                            {kind} {boardCounts[kind]}
+                          </span>
+                        ) : null,
+                      )}
                     </div>
-                    <span className="mt-2 w-fit rounded-full bg-[#fff3e4] px-2 py-0.5 text-[10px] font-black text-orange-900 ring-1 ring-orange-200">
-                      {pick.meta}
-                    </span>
+                    <div className="grid grid-cols-2 gap-2.5">
+                      {boardItems.map((item, index) => (
+                        <ScoutSearchResultCard
+                          key={item.id}
+                          item={item}
+                          fallbackImage={selectedCraving.image}
+                          featured={index === 0}
+                        />
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <div className="rounded-xl bg-black/20 px-3 py-3 ring-1 ring-white/10">
+                    <p className="text-sm font-black text-white">
+                      No exact {selectedCraving.label.toLowerCase()} hits here yet.
+                    </p>
+                    <p className="mt-1 text-xs leading-relaxed text-white/62">
+                      Open the full search to widen the radius and pull more results.
+                    </p>
                   </div>
-                </Link>
-              ))}
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => onSearchCraving(selectedCraving)}
+                  className="mt-3 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-full bg-[#ff7945] px-4 py-2 text-sm font-black text-white shadow-[0_10px_24px_rgba(255,111,60,0.22)] ring-1 ring-white/20 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
+                >
+                  Open full {selectedCraving.label.toLowerCase()} search
+                  <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                </button>
               </div>
             ) : null}
           </div>
         </div>
       </div>
     </section>
+  );
+}
+
+function ScoutSearchResultCard({
+  item,
+  fallbackImage,
+  featured,
+}: {
+  item: CravingBoardItem;
+  fallbackImage: string;
+  featured: boolean;
+}) {
+  const image = item.imageUrl || fallbackImage;
+  return (
+    <Link
+      href={item.href}
+      className={[
+        "group block overflow-hidden rounded-xl bg-[#0d0705]/84 ring-1 ring-white/10 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70",
+        featured ? "col-span-2" : "",
+      ].join(" ")}
+    >
+      <div className={featured ? "relative h-32" : "relative h-20"}>
+        <img
+          src={image}
+          alt=""
+          className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+          loading="lazy"
+        />
+        <div
+          className="absolute inset-0"
+          style={{
+            backgroundImage:
+              "linear-gradient(180deg, rgba(0,0,0,0.08) 0%, rgba(0,0,0,0.84) 100%)",
+          }}
+          aria-hidden="true"
+        />
+        <div className="absolute left-2 top-2 rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.08em] text-orange-100 ring-1 ring-white/12">
+          {item.kind}
+        </div>
+        {item.meta ? (
+          <div className="absolute bottom-2 right-2 max-w-[70%] truncate rounded-full bg-[#fff3e4] px-2 py-0.5 text-[10px] font-black text-orange-950 ring-1 ring-orange-200">
+            {item.meta}
+          </div>
+        ) : null}
+      </div>
+      <div className={featured ? "px-3 py-2.5" : "px-2.5 py-2"}>
+        <p className="line-clamp-2 text-sm font-black leading-tight text-white">
+          {item.title}
+        </p>
+        <p className="mt-1 line-clamp-1 text-[11px] font-semibold leading-snug text-orange-100/64">
+          {item.subtitle}
+        </p>
+        {item.reason ? (
+          <p className="mt-1.5 line-clamp-2 text-[11px] leading-snug text-white/54">
+            {item.reason}
+          </p>
+        ) : null}
+      </div>
+    </Link>
   );
 }
 
