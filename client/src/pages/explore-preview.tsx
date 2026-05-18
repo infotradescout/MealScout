@@ -447,7 +447,7 @@ const DISCOVERY_LAYERS: Record<
     subtitle: "All nearby trucks that are broadcasting or ready to be discovered.",
   },
   restaurants: {
-    title: "Open Nearby Now",
+    title: "Open Near You Now",
     href: "/search",
     subtitle: "Open places, food trucks, deals, and menu updates near you today.",
   },
@@ -557,12 +557,12 @@ function formatFreshnessTime(timestamp: string): { state: FreshnessState; label:
   if (ageMinutes < 60) {
     return {
       state: "fresh",
-      label: `Updated ${Math.max(1, ageMinutes)}m ago`,
+      label: "Updated today",
     };
   }
   if (isToday) return { state: "fresh", label: "Updated today" };
-  if (ageMinutes < 60 * 24 * 3) return { state: "aging", label: "Updated recently" };
-  return { state: "needs_update", label: "Updated recently" };
+  if (ageMinutes < 60 * 24 * 3) return { state: "aging", label: "" };
+  return { state: "needs_update", label: "" };
 }
 
 function isTodayDate(value?: string | null): boolean {
@@ -630,7 +630,15 @@ function getOperationalBadges(entityOrMeta: FreshnessMeta): string[] {
   if (entityOrMeta.isOpen) labels.add("Open now");
   if (entityOrMeta.hasDistance) labels.add("Nearby");
   if (isTodayDate(entityOrMeta.startsAt || entityOrMeta.startTime)) labels.add("Happening today");
-  return [...labels];
+  const allowedLabels = new Set([
+    "Open now",
+    "Updated today",
+    "Confirmed today",
+    "Deal today",
+    "Menu updated",
+    "Food truck",
+  ]);
+  return [...labels].filter((label) => allowedLabels.has(label));
 }
 
 function getFreshnessBadgeClass(meta: FreshnessMeta, label: string): string {
@@ -672,6 +680,11 @@ function getMapMarkerSubtitle(base: string | null | undefined, meta: FreshnessMe
     .slice(0, 2)
     .join(" · ");
   return [status, base].filter(Boolean).join(" · ") || undefined;
+}
+
+function getRestaurantIdFromActivity(item: LocalActivityItem): string | null {
+  const hrefMatch = item.href.match(/^\/restaurant\/([^/?#]+)/);
+  return hrefMatch?.[1] ? decodeURIComponent(hrefMatch[1]) : null;
 }
 
 /* ============================================================
@@ -2068,7 +2081,7 @@ export default function ExplorePreview() {
   const nearbySectionUsesMixedFood =
     liveTrucks.length + localMenuItems.length + allDeals.length + visibleEvents.length > 0;
   const nearbyRestaurantsTitle = nearbySectionUsesMixedFood
-    ? "Nearby Now"
+    ? "Open Near You Now"
     : DISCOVERY_LAYERS.restaurants.title;
   const nearbyRestaurantsSubtitle = nearbySectionUsesMixedFood
     ? "Open places, food trucks, deals, and menu updates near you today."
@@ -2106,6 +2119,29 @@ export default function ExplorePreview() {
       }),
     [allDeals, liveTrucks, localMenuItems, nearbyRestaurants, visibleEvents],
   );
+  const visibleLocalActivityItems = useMemo(() => {
+    const uniqueKeys = new Set<string>();
+    const uniqueItems = localActivityItems.filter((item) => {
+      const key = getRestaurantIdFromActivity(item) || `${item.type}-${item.entityId}`;
+      if (uniqueKeys.has(key)) return false;
+      uniqueKeys.add(key);
+      return true;
+    });
+    return uniqueItems.length >= 2 ? uniqueItems : [];
+  }, [localActivityItems]);
+  const localActivityRestaurantIds = useMemo(() => {
+    return new Set(
+      visibleLocalActivityItems
+        .map(getRestaurantIdFromActivity)
+        .filter((id): id is string => Boolean(id)),
+    );
+  }, [visibleLocalActivityItems]);
+  const visibleNearbyRestaurants = useMemo(() => {
+    const filtered = nearbyRestaurants.filter(
+      (restaurant) => !localActivityRestaurantIds.has(String(restaurant.id)),
+    );
+    return filtered.length > 0 ? filtered : nearbyRestaurants;
+  }, [localActivityRestaurantIds, nearbyRestaurants]);
 
   return (
     <>
@@ -2523,7 +2559,7 @@ export default function ExplorePreview() {
               <QuickUpdateBar />
             ) : null}
 
-            <LocalActivityRail items={localActivityItems} />
+            <LocalActivityRail items={visibleLocalActivityItems} />
 
             {/* OPEN NOW — broad live view across trucks, restaurants, bars, and public events. */}
             <OpenNowSection
@@ -2590,12 +2626,12 @@ export default function ExplorePreview() {
                   linkHref={DISCOVERY_LAYERS.restaurants.href}
                   subtitle={nearbyRestaurantsSubtitle}
                 />
-                {nearbyRestaurantsLoading && nearbyRestaurants.length === 0 ? (
+                {nearbyRestaurantsLoading && visibleNearbyRestaurants.length === 0 ? (
                   <HorizontalSkeletonRow count={3} width={200} />
                 ) : (
                   <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
                     <ul className="flex gap-4 pr-5" role="list" aria-label="Nearby now">
-                      {nearbyRestaurants.slice(0, 10).map((r) => (
+                      {visibleNearbyRestaurants.slice(0, 10).map((r) => (
                         <li key={r.id} className="shrink-0 w-[200px] sm:w-[220px]">
                           <NearbyRestaurantCard
                             restaurant={r}
@@ -2732,12 +2768,6 @@ function SectionHeader({
     <div className="pr-5 mb-5">
       <div className="flex items-end justify-between gap-3">
         <div className="min-w-0">
-          <div className="mb-1 inline-flex items-center gap-2 rounded-full bg-orange-500/12 px-2.5 py-1 ring-1 ring-orange-300/20">
-            <span className="h-1.5 w-1.5 rounded-full bg-orange-300" aria-hidden="true" />
-            <span className="text-[10px] font-black uppercase tracking-[0.14em] text-orange-200/80">
-              Local feed
-            </span>
-          </div>
           <h2 className="truncate text-white text-xl sm:text-2xl font-black tracking-tight">{title}</h2>
         </div>
         <Link
@@ -2805,7 +2835,6 @@ function CravingCompass({
     if (topPickDistance) {
       labels.add(`${topPickDistance} away`);
     }
-    if (/quick|fast|lunch|bite/i.test(topPick.reason || "")) labels.add("Quick bite");
     return [...labels];
   }, [topPick, topPickDistance, topPickFreshnessMeta]);
   const orderedCravings = useMemo(() => {
@@ -2841,9 +2870,7 @@ function CravingCompass({
     hasLocation
       ? resultCount > 0
         ? `${resultCount} open now`
-        : localActivityCount > 0
-          ? "Show more nearby"
-        : "No exact hits yet"
+        : null
       : "Location off";
 
   return (
@@ -2865,11 +2892,11 @@ function CravingCompass({
                 Open restaurants, food trucks, and deals nearby.
               </p>
             </div>
-            {hasLocation ? (
+            {hasLocation && activityLabel ? (
               <span className="shrink-0 rounded-full bg-[#fff4e1]/10 ring-1 ring-orange-200/35 px-2.5 py-1 text-[11px] font-bold text-orange-100">
                 {activityLabel}
               </span>
-            ) : (
+            ) : !hasLocation ? (
               <button
                 type="button"
                 onClick={onRefreshLocation}
@@ -2877,14 +2904,12 @@ function CravingCompass({
               >
                 Use location
               </button>
-            )}
+            ) : null}
           </div>
 
-          <div className="mt-3">
-            <span className="sr-only">{daypartCopy.body}</span>
-            <div className="rounded-xl bg-[#130b08]/70 p-3 ring-1 ring-white/10">
-              {topPick ? (
-                <>
+          <span className="sr-only">{daypartCopy.body}</span>
+          {topPick ? (
+            <div className="mt-3 rounded-xl bg-[#130b08]/70 p-3 ring-1 ring-white/10">
                   <div className="relative overflow-hidden rounded-xl bg-[#0d0705]/75">
                     <img
                       src={topPick.imageUrl || selectedCraving.image}
@@ -2929,19 +2954,8 @@ function CravingCompass({
                       </Link>
                     )}
                   </div>
-                </>
-              ) : (
-                <div className="rounded-xl bg-black/20 p-3 ring-1 ring-white/10">
-                  <p className="text-sm font-black text-white">
-                    No exact {selectedCraving.label.toLowerCase()} options yet.
-                  </p>
-                  <p className="mt-1 text-xs leading-relaxed text-white/62">
-                    Open the full layer to widen the radius and pull more options.
-                  </p>
-                </div>
-              )}
             </div>
-          </div>
+          ) : null}
 
           <div className="mt-3">
             <p className="mb-2 text-xs font-black uppercase tracking-[0.13em] text-[#ffcf9b]">
