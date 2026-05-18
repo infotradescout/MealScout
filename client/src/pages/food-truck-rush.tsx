@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { CalendarCheck, MapPin, Play, RotateCcw, Truck } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { useAuth } from "@/hooks/useAuth";
 
 type GameState = "ready" | "playing" | "finished";
 type Lane = 0 | 1 | 2;
@@ -64,8 +65,8 @@ const objectDefinitions: Record<GameObjectKind, GameObjectDefinition> = {
     points: 10,
     missPenalty: 10,
     streak: "increment",
-    successMessage: "Customer served",
-    missedMessage: "Missed customer",
+    successMessage: "Customer signal served",
+    missedMessage: "Signal lost",
   },
   vip: {
     label: "VIP Customer",
@@ -74,7 +75,7 @@ const objectDefinitions: Record<GameObjectKind, GameObjectDefinition> = {
     missPenalty: 10,
     streak: "increment",
     successMessage: "VIP served",
-    missedMessage: "Missed customer",
+    missedMessage: "Signal lost",
   },
   restock: {
     label: "Restock",
@@ -290,6 +291,9 @@ function createGameObject(
 }
 
 function FoodTruckRush() {
+  const { user, isLoading: authLoading } = useAuth();
+  const [, setLocation] = useLocation();
+
   const [gameState, setGameState] = useState<GameState>("ready");
   const [score, setScore] = useState(0);
   const [streak, setStreak] = useState(0);
@@ -347,7 +351,7 @@ function FoodTruckRush() {
         if (object.lane === playerLaneRef.current) {
           applyPenalty("Roadblock hit", definition.penalty ?? 15, true);
         } else {
-          setLastMessage("Roadblock avoided");
+          setLastMessage("Route clear");
         }
         return;
       }
@@ -445,7 +449,7 @@ function FoodTruckRush() {
     setTimeLeft(GAME_SECONDS);
     setPlayerLane(1);
     setNow(startTime);
-    setLastMessage("Rush started. Serve fast.");
+    setLastMessage("Rush signal live. Serve fast.");
     syncActiveObjects([]);
     setGameState("playing");
   }, [syncActiveObjects]);
@@ -453,7 +457,7 @@ function FoodTruckRush() {
   const finishGame = useCallback(() => {
     setGameState("finished");
     setTimeLeft(0);
-    setLastMessage("Shift complete.");
+    setLastMessage("Rush complete.");
     syncActiveObjects([]);
   }, [syncActiveObjects]);
 
@@ -532,41 +536,60 @@ function FoodTruckRush() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [gameState, handleInteract, movePlayer]);
 
+  const isAdminUser =
+    !authLoading &&
+    !!user &&
+    ["admin", "duper_admin", "super_admin"].includes(
+      String(user.userType ?? ""),
+    );
+
+  useEffect(() => {
+    if (!authLoading && !isAdminUser) setLocation("/");
+  }, [authLoading, isAdminUser, setLocation]);
+
+  if (authLoading || !isAdminUser) {
+    return (
+      <div className="min-h-[100dvh] bg-[#0d0f14] flex items-center justify-center">
+        <div className="animate-spin w-8 h-8 border-4 border-amber-500 border-t-transparent rounded-full" />
+      </div>
+    );
+  }
+
   const progressPercent = ((GAME_SECONDS - timeLeft) / GAME_SECONDS) * 100;
 
   return (
-    <main className="min-h-[100dvh] bg-[color:var(--bg-layered)] px-4 pb-28 pt-6 text-[color:var(--text-primary)] sm:px-6 lg:px-8">
+    <main className="min-h-[100dvh] bg-[#0d0f14] px-4 pb-28 pt-6 text-zinc-100 sm:px-6 lg:px-8">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-5">
-        <section className="flex flex-col gap-3 rounded-lg border border-subtle bg-[color:var(--bg-surface)] p-5 shadow-clean sm:flex-row sm:items-center sm:justify-between">
+        <section className="flex flex-col gap-3 rounded-lg border border-zinc-700/60 bg-zinc-900 p-5 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-[color:var(--accent-text)]">
-              MealScout Mini Game
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-amber-400">
+              MealScout Rush Signal
             </p>
             <h1 className="mt-2 text-3xl font-black leading-tight sm:text-4xl">
               Food Truck Rush
             </h1>
-            <p className="mt-2 max-w-2xl text-sm font-medium text-[color:var(--text-secondary)] sm:text-base">
+            <p className="mt-2 max-w-2xl text-sm font-medium text-zinc-400 sm:text-base">
               Serve customers. Dodge problems. Build your streak.
             </p>
           </div>
           <div className="grid grid-cols-3 gap-2 text-center sm:min-w-80">
-            <div className="rounded-lg border border-subtle bg-white/75 px-3 py-2">
-              <p className="text-xs font-semibold text-[color:var(--text-muted)]">
+            <div className="rounded-lg border border-sky-500/30 bg-zinc-800 px-3 py-2">
+              <p className="text-xs font-semibold text-zinc-400">
                 Score
               </p>
-              <p className="text-2xl font-black">{score}</p>
+              <p className="text-2xl font-black text-amber-400">{score}</p>
             </div>
-            <div className="rounded-lg border border-subtle bg-white/75 px-3 py-2">
-              <p className="text-xs font-semibold text-[color:var(--text-muted)]">
+            <div className="rounded-lg border border-sky-500/30 bg-zinc-800 px-3 py-2">
+              <p className="text-xs font-semibold text-zinc-400">
                 Timer
               </p>
-              <p className="text-2xl font-black">{timeLeft}s</p>
+              <p className="text-2xl font-black text-zinc-100">{timeLeft}s</p>
             </div>
-            <div className="rounded-lg border border-subtle bg-white/75 px-3 py-2">
-              <p className="text-xs font-semibold text-[color:var(--text-muted)]">
+            <div className="rounded-lg border border-sky-500/30 bg-zinc-800 px-3 py-2">
+              <p className="text-xs font-semibold text-zinc-400">
                 Streak
               </p>
-              <p className="text-2xl font-black">{streak}</p>
+              <p className="text-2xl font-black text-amber-400">{streak}</p>
             </div>
           </div>
         </section>
