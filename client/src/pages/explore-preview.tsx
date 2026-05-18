@@ -216,7 +216,7 @@ const CRAVING_CATEGORIES: CravingCategory[] = [
     id: "tacos",
     label: "Tacos",
     query: "tacos",
-    helper: "quick, bold, shareable",
+    helper: "Quick, bold, easy to share",
     keywords: ["taco", "mexican", "carne", "al pastor", "barbacoa", "salsa"],
     image: "/atmospheric/craving-tacos.jpg",
   },
@@ -224,7 +224,7 @@ const CRAVING_CATEGORIES: CravingCategory[] = [
     id: "burgers",
     label: "Burgers",
     query: "burgers",
-    helper: "comfort, sear, no fuss",
+    helper: "Comfort food, no fuss",
     keywords: ["burger", "smash", "cheese", "patty", "fries", "comfort"],
     image: "/atmospheric/craving-burgers.jpg",
   },
@@ -232,7 +232,7 @@ const CRAVING_CATEGORIES: CravingCategory[] = [
     id: "ramen",
     label: "Ramen",
     query: "ramen",
-    helper: "warm, deep, slow sip",
+    helper: "Warm bowl, slow sip",
     keywords: ["ramen", "noodle", "broth", "tonkotsu", "miso", "asian"],
     image: "/atmospheric/craving-ramen.jpg",
   },
@@ -240,7 +240,7 @@ const CRAVING_CATEGORIES: CravingCategory[] = [
     id: "pizza",
     label: "Pizza",
     query: "pizza",
-    helper: "easy win for the table",
+    helper: "Easy win for the table",
     keywords: ["pizza", "slice", "pepperoni", "italian", "wood", "neapolitan"],
     image: "/atmospheric/craving-pizza.jpg",
   },
@@ -248,7 +248,7 @@ const CRAVING_CATEGORIES: CravingCategory[] = [
     id: "drinks",
     label: "Drinks",
     query: "drinks",
-    helper: "bar energy, sip and stay",
+    helper: "Bar energy, sip and stay",
     keywords: ["bar", "cocktail", "wine", "beer", "drink", "lounge", "spritz"],
     image: "/atmospheric/craving-drinks.jpg",
   },
@@ -256,13 +256,13 @@ const CRAVING_CATEGORIES: CravingCategory[] = [
     id: "dessert",
     label: "Dessert",
     query: "dessert",
-    helper: "sweet finish, late-night ok",
+    helper: "Sweet finish, late-night ok",
     keywords: ["dessert", "ice cream", "cake", "pastry", "sweet", "chocolate"],
     image: "/atmospheric/craving-dessert.jpg",
   },
 ];
 
-type CompassPickRole = "Safe Pick" | "Scout Pick" | "Wildcard";
+type CompassPickRole = "Reliable" | "Local Signal" | "Wildcard";
 
 type CompassRecommendation = {
   id: string;
@@ -403,9 +403,11 @@ function buildCompassRecommendations({
 }): CompassRecommendation[] {
   const picks: CompassRecommendation[] = [];
   const used = new Set<string>();
+  const usedRoles = new Set<CompassPickRole>();
   const addPick = (pick: CompassRecommendation | null) => {
-    if (!pick || used.has(pick.id) || picks.length >= 3) return;
+    if (!pick || used.has(pick.id) || usedRoles.has(pick.role) || picks.length >= 3) return;
     used.add(pick.id);
+    usedRoles.add(pick.role);
     picks.push(pick);
   };
 
@@ -443,26 +445,26 @@ function buildCompassRecommendations({
     const distance = formatDistance(safeTruck);
     addPick({
       id: `truck-${safeTruck.id}`,
-      role: "Safe Pick",
+      role: "Reliable",
       title: safeTruck.name,
       subtitle: safeTruck.cuisineType || "Live food truck",
       href: `/truck/${safeTruck.id}`,
       reason:
         [distance, wait].filter(Boolean).join(", ") ||
-        `Best live match for ${craving.label.toLowerCase()}.`,
+        `Closest strong match for ${craving.label.toLowerCase()}, open now.`,
       meta: "Open now",
     });
   } else if (safeRestaurant) {
     const distance = getRestaurantDistance(safeRestaurant);
     addPick({
       id: `restaurant-${safeRestaurant.id}`,
-      role: "Safe Pick",
+      role: "Reliable",
       title: getRestaurantName(safeRestaurant),
       subtitle: safeRestaurant.cuisineType || "Nearby restaurant",
       href: `/restaurant/${safeRestaurant.id}`,
       reason:
         safeRestaurant.homeRankingReason ||
-        `Best reliable match for ${craving.label.toLowerCase()}${distance ? ` within ${distance}` : ""}.`,
+        `Closest strong match for ${craving.label.toLowerCase()}${distance ? `, ${distance} away` : ""}.`,
       meta: distance || "Nearby",
     });
   }
@@ -476,26 +478,26 @@ function buildCompassRecommendations({
   if (scoutMenuItem) {
     addPick({
       id: `menu-${scoutMenuItem.id}`,
-      role: "Scout Pick",
+      role: "Local Signal",
       title: scoutMenuItem.name,
       subtitle: scoutMenuItem.restaurantName || "Local menu item",
       href: `/restaurant/${scoutMenuItem.restaurantId}`,
       reason:
         scoutMenuItem.discoveryReasons?.[0] ||
-        `Better upside for ${craving.label.toLowerCase()} than another generic search result.`,
+        `A new ${craving.label.toLowerCase()} menu item open and nearby.`,
       meta: formatMiles(scoutMenuItem.distanceMiles) || scoutMenuItem.cuisineType || "Fresh menu",
     });
   } else if (scoutRestaurant) {
     addPick({
       id: `restaurant-${scoutRestaurant.id}`,
-      role: "Scout Pick",
+      role: "Local Signal",
       title: getRestaurantName(scoutRestaurant),
       subtitle: scoutRestaurant.cuisineType || "Local restaurant",
       href: `/restaurant/${scoutRestaurant.id}`,
       reason:
         scoutRestaurant.homeRankingReason ||
-        "Less obvious than the safe pick, with stronger local upside.",
-      meta: getRestaurantDistance(scoutRestaurant) || "Local signal",
+        "Open now and nearby, with quieter local buzz.",
+      meta: getRestaurantDistance(scoutRestaurant) || "Open now",
     });
   }
 
@@ -513,7 +515,7 @@ function buildCompassRecommendations({
       href: `/deal/${deal.id}`,
       reason:
         deal.description ||
-        "Unexpected value that still fits the mood and keeps dinner easy.",
+        "A deal worth switching lanes for if nothing else is calling you.",
       meta: deal.discountText || "Deal",
     });
   } else if (wildcardTruck) {
@@ -523,7 +525,7 @@ function buildCompassRecommendations({
       title: wildcardTruck.name,
       subtitle: wildcardTruck.cuisineType || "Live food truck",
       href: `/truck/${wildcardTruck.id}`,
-      reason: "A live nearby option with more surprise than the safest route.",
+      reason: "Something different if you want to switch lanes tonight.",
       meta: formatDistance(wildcardTruck) || "Open now",
     });
   } else if (wildcardRestaurant) {
@@ -533,7 +535,7 @@ function buildCompassRecommendations({
       title: getRestaurantName(wildcardRestaurant),
       subtitle: wildcardRestaurant.cuisineType || "Nearby restaurant",
       href: `/restaurant/${wildcardRestaurant.id}`,
-      reason: "Unexpected but still close enough to fit the craving.",
+      reason: "Off the obvious path, still close enough to commit to.",
       meta: getRestaurantDistance(wildcardRestaurant) || "Try it",
     });
   }
@@ -541,32 +543,32 @@ function buildCompassRecommendations({
   const fallbackSearches: CompassRecommendation[] = [
     {
       id: "fallback-safe",
-      role: "Safe Pick",
-      title: craving.label,
+      role: "Reliable",
+      title: `All ${craving.label.toLowerCase()} nearby`,
       subtitle: craving.helper,
       href: `/search?q=${encodeURIComponent(craving.query)}`,
       reason:
         localSignalCount > 0
-          ? `See every ${craving.label.toLowerCase()} spot pinging on the radar tonight.`
-          : `Scout is still sweeping. Tap in to broaden the ${craving.label.toLowerCase()} search.`,
+          ? `Open the full ${craving.label.toLowerCase()} list across the radar tonight.`
+          : `Broaden the ${craving.label.toLowerCase()} search and let Scout keep sweeping.`,
       meta: "Search",
     },
     {
       id: "fallback-scout",
-      role: "Scout Pick",
-      title: "Fresh menus",
-      subtitle: "New items nearby",
+      role: "Local Signal",
+      title: "New on local menus",
+      subtitle: "Fresh items, open now",
       href: "/search",
-      reason: "Menu drops are the best place to find something that feels new.",
+      reason: "New menu items nearby — a quieter pick worth a look.",
       meta: "Menus",
     },
     {
       id: "fallback-wildcard",
       role: "Wildcard",
       title: "Tonight's deals",
-      subtitle: "Value with a little luck",
+      subtitle: "Something different, on offer",
       href: "/deals",
-      reason: "A deal can break the tie when nothing obvious is calling you.",
+      reason: "A deal can break the tie when nothing obvious is calling.",
       meta: "Deals",
     },
   ];
@@ -1974,7 +1976,7 @@ export default function ExplorePreview() {
               </section>
             )}
 
-            {/* ── STILL DECIDING? — Meal Radar (CravingCompass) ──
+            {/* ── CAN'T PICK? — Meal Radar (CravingCompass) ──
                  The radar is a decision assistant, not the hero. Users meet
                  it AFTER the map and the primary discovery feeds, when they
                  still can't pick. Kept compact and on-brand. */}
@@ -2140,9 +2142,9 @@ function CravingCompass({
   const hasLocation = locationStatus === "ready";
   const signalLabel =
     localSignalCount > 0
-      ? `${localSignalCount} live signal${localSignalCount === 1 ? "" : "s"}`
+      ? `${localSignalCount} nearby signal${localSignalCount === 1 ? "" : "s"}`
       : hasLocation
-        ? "No live signal yet"
+        ? "No nearby signal yet"
         : "Location off";
 
   const radiusOptions = [5, 12, 25, 40];
@@ -2168,7 +2170,7 @@ function CravingCompass({
     !hasLocation
       ? "Turn on location and Scout reads the menus, deals, and open spots within reach."
       : localSignalCount === 0
-        ? "No live crowd pulse yet. Scout is reading nearby menus and open spots for you."
+        ? "Nothing pinging yet. Scout is reading nearby menus and open spots."
         : null;
 
   return (
@@ -2184,10 +2186,10 @@ function CravingCompass({
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="text-[10px] uppercase tracking-[0.32em] text-orange-300/90 font-bold">
-                Still deciding?
+                Can't pick?
               </p>
               <h2 className="mt-1 font-sans text-white text-[19px] font-extrabold leading-[1.15] tracking-tight">
-                Spin the Meal Radar.
+                Let Scout narrow it down.
               </h2>
             </div>
             <span className="shrink-0 inline-flex items-center gap-1.5 rounded-full bg-white/[0.06] ring-1 ring-white/10 px-2.5 py-1 text-[10px] font-semibold text-orange-100/90">
@@ -2329,10 +2331,10 @@ function CravingCompass({
               className="mt-3 w-full rounded-2xl bg-white/[0.04] ring-1 ring-white/10 px-3.5 py-2.5 text-left active:scale-[0.99]"
             >
               <p className="text-white text-[13px] font-semibold leading-tight">
-                Drop a pin to sharpen the radar.
+                Share your location to sharpen the radar.
               </p>
               <p className="mt-0.5 text-white/55 text-[11px] leading-snug">
-                Scout reads the trucks, deals, and tables within reach tonight.
+                Scout reads trucks, tables, and deals within reach tonight.
               </p>
             </button>
           ) : null}
