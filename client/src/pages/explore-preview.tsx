@@ -198,92 +198,57 @@ type CravingCategory = {
   query: string;
   helper: string;
   keywords: string[];
+  image: string;
 };
 
 const CRAVING_CATEGORIES: CravingCategory[] = [
   {
-    id: "comfort",
-    label: "Comfort",
-    query: "comfort food",
-    helper: "warm, familiar, low-risk",
-    keywords: ["comfort", "soul", "bbq", "burger", "pizza", "pasta", "chicken"],
+    id: "tacos",
+    label: "Tacos",
+    query: "tacos",
+    helper: "quick, bold, shareable",
+    keywords: ["taco", "mexican", "carne", "al pastor", "barbacoa", "salsa"],
+    image: "/atmospheric/craving-tacos.jpg",
   },
   {
-    id: "spicy",
-    label: "Spicy",
-    query: "spicy food",
-    helper: "heat, flavor, momentum",
-    keywords: ["spicy", "hot", "pepper", "taco", "thai", "cajun", "wings"],
+    id: "burgers",
+    label: "Burgers",
+    query: "burgers",
+    helper: "comfort, sear, no fuss",
+    keywords: ["burger", "smash", "cheese", "patty", "fries", "comfort"],
+    image: "/atmospheric/craving-burgers.jpg",
   },
   {
-    id: "cheap-filling",
-    label: "Cheap and filling",
-    query: "cheap filling food",
-    helper: "big value, no fuss",
-    keywords: ["cheap", "deal", "plate", "burger", "taco", "bbq", "sandwich"],
+    id: "ramen",
+    label: "Ramen",
+    query: "ramen",
+    helper: "warm, deep, slow sip",
+    keywords: ["ramen", "noodle", "broth", "tonkotsu", "miso", "asian"],
+    image: "/atmospheric/craving-ramen.jpg",
   },
   {
-    id: "date-night",
-    label: "Date night",
-    query: "date night restaurant",
-    helper: "worth sitting down for",
-    keywords: ["date", "wine", "cocktail", "seafood", "italian", "sushi", "steak"],
-  },
-  {
-    id: "fast-pickup",
-    label: "Fast pickup",
-    query: "fast pickup food",
-    helper: "quick, close, dependable",
-    keywords: ["pickup", "fast", "sandwich", "burger", "taco", "bowl", "pizza"],
-  },
-  {
-    id: "hidden-gem",
-    label: "Hidden gem",
-    query: "hidden gem restaurant",
-    helper: "local upside, less obvious",
-    keywords: ["local", "hidden", "gem", "family", "market", "pop-up"],
-  },
-  {
-    id: "healthy-good",
-    label: "Healthy but good",
-    query: "healthy food",
-    helper: "fresh without punishment",
-    keywords: ["healthy", "salad", "bowl", "fresh", "juice", "wrap", "grill"],
-  },
-  {
-    id: "late-night",
-    label: "Late-night",
-    query: "late night food",
-    helper: "open-now energy",
-    keywords: ["late", "night", "bar", "taco", "pizza", "wings", "burger"],
-  },
-  {
-    id: "something-new",
-    label: "Something new",
-    query: "new local food",
-    helper: "break the routine",
-    keywords: ["new", "special", "seasonal", "pop-up", "fusion", "fresh"],
-  },
-  {
-    id: "worth-driving",
-    label: "Worth driving for",
-    query: "worth driving for food",
-    helper: "higher upside, bigger payoff",
-    keywords: ["bbq", "seafood", "steak", "ramen", "sushi", "special", "chef"],
-  },
-  {
-    id: "kid-friendly",
-    label: "Kid-friendly",
-    query: "kid friendly restaurant",
+    id: "pizza",
+    label: "Pizza",
+    query: "pizza",
     helper: "easy win for the table",
-    keywords: ["kid", "family", "pizza", "burger", "chicken", "ice cream"],
+    keywords: ["pizza", "slice", "pepperoni", "italian", "wood", "neapolitan"],
+    image: "/atmospheric/craving-pizza.jpg",
   },
   {
-    id: "no-regrets",
-    label: "No regrets",
-    query: "best local food",
-    helper: "safe, satisfying, open",
-    keywords: ["popular", "favorite", "best", "burger", "taco", "bbq", "pizza"],
+    id: "drinks",
+    label: "Drinks",
+    query: "drinks",
+    helper: "bar energy, sip and stay",
+    keywords: ["bar", "cocktail", "wine", "beer", "drink", "lounge", "spritz"],
+    image: "/atmospheric/craving-drinks.jpg",
+  },
+  {
+    id: "dessert",
+    label: "Dessert",
+    query: "dessert",
+    helper: "sweet finish, late-night ok",
+    keywords: ["dessert", "ice cream", "cake", "pastry", "sweet", "chocolate"],
+    image: "/atmospheric/craving-dessert.jpg",
   },
 ];
 
@@ -2150,12 +2115,12 @@ function CravingCompass({
 
   return (
     <section className="px-5 pt-5 pb-7">
-      <div className="rounded-[1.65rem] overflow-hidden bg-[#180b05]/78 ring-1 ring-orange-300/38 backdrop-blur-md shadow-[0_18px_60px_rgba(0,0,0,0.38)]">
+      <div className="rounded-[1.65rem] overflow-hidden bg-[#180b05] ring-1 ring-orange-300/55 backdrop-blur-md shadow-[0_18px_60px_rgba(0,0,0,0.45)]">
         <div
           className="px-4 py-4 sm:px-5"
           style={{
             backgroundImage:
-              "radial-gradient(circle at 16% 6%, rgba(255,111,60,0.24), transparent 34%), radial-gradient(circle at 88% 4%, rgba(251,191,36,0.16), transparent 28%), linear-gradient(180deg, rgba(64,27,9,0.42), rgba(12,7,5,0.24))",
+              "radial-gradient(circle at 16% 6%, rgba(255,111,60,0.55), transparent 42%), radial-gradient(circle at 88% 4%, rgba(251,191,36,0.32), transparent 36%), linear-gradient(180deg, rgba(64,27,9,0.85), rgba(18,8,5,0.95))",
           }}
         >
           <div className="flex items-start justify-between gap-3">
@@ -2171,7 +2136,7 @@ function CravingCompass({
                 and one wildcard.
               </p>
             </div>
-            <span className="shrink-0 rounded-full bg-[#2a1308]/82 ring-1 ring-orange-300/35 px-3 py-1 text-[11px] font-semibold text-orange-100">
+            <span className="shrink-0 rounded-full bg-[#2a1308] ring-1 ring-orange-300/55 px-3 py-1 text-[11px] font-semibold text-orange-100">
               {signalLabel}
             </span>
           </div>
@@ -2180,7 +2145,7 @@ function CravingCompass({
             <button
               type="button"
               onClick={onRefreshLocation}
-              className="mt-3 w-full rounded-2xl bg-[#2a1308]/82 ring-1 ring-orange-300/35 px-4 py-3 text-left active:scale-[0.99]"
+              className="mt-3 w-full rounded-2xl bg-[#2a1308] ring-1 ring-orange-300/55 px-4 py-3 text-left active:scale-[0.99]"
             >
               <p className="text-white text-sm font-bold">Use my location</p>
               <p className="mt-1 text-white/65 text-xs">
@@ -2189,50 +2154,56 @@ function CravingCompass({
             </button>
           ) : null}
 
-          <div className="mt-4 rounded-[1.4rem] bg-[#0f0907]/62 ring-1 ring-orange-200/18 p-3">
-            <div className="grid grid-cols-[8.75rem_minmax(0,1fr)] items-center gap-3">
-              <div className="relative grid aspect-square place-items-center rounded-full bg-[#2a1308]/70 ring-1 ring-orange-300/28 shadow-[inset_0_0_50px_rgba(255,111,60,0.14)]">
-                <div className="absolute inset-[16%] rounded-full border border-orange-300/22" aria-hidden="true" />
-                <div className="absolute inset-[33%] rounded-full bg-[#fff3e4] shadow-[0_10px_24px_rgba(0,0,0,0.22)] ring-1 ring-orange-200/70" aria-hidden="true" />
-                <div className="absolute left-1/2 top-2 h-5 w-0.5 -translate-x-1/2 rounded-full bg-orange-300/70" aria-hidden="true" />
-                <div className="absolute bottom-2 left-1/2 h-5 w-0.5 -translate-x-1/2 rounded-full bg-orange-300/28" aria-hidden="true" />
-                <div className="absolute left-2 top-1/2 h-0.5 w-5 -translate-y-1/2 rounded-full bg-orange-300/28" aria-hidden="true" />
-                <div className="absolute right-2 top-1/2 h-0.5 w-5 -translate-y-1/2 rounded-full bg-orange-300/28" aria-hidden="true" />
-                <div className="relative z-10 max-w-[5.6rem] text-center">
-                  <Sparkles className="mx-auto mb-1 h-3.5 w-3.5 text-orange-600" aria-hidden="true" />
-                  <p className="text-xs font-black leading-tight text-[#2a1308]">
-                    Mood
-                  </p>
-                </div>
-              </div>
-              <div className="min-w-0">
-                <p className="text-xs font-semibold leading-relaxed text-orange-50/68">
-                  {selectedCraving.helper}
-                </p>
-                <div className="mt-3 overflow-x-auto atmo-hide-scrollbar">
-                  <div className="flex w-max gap-2 pr-1">
-                    {cravings.map((cat) => {
-                      const isActive = cat.id === selectedCraving.id;
-                      return (
-                        <button
-                          key={cat.id}
-                          type="button"
-                          onClick={() => onCravingSelect(cat.id)}
+          <div className="mt-4 rounded-[1.4rem] bg-[#0f0907] ring-1 ring-orange-300/35 p-3">
+            <p className="text-xs font-semibold leading-relaxed text-orange-100/85">
+              {selectedCraving.helper}
+            </p>
+            <div className="mt-3 overflow-x-auto atmo-hide-scrollbar">
+              <ul className="flex w-max items-start gap-3 pr-1" role="list">
+                {cravings.map((cat) => {
+                  const isActive = cat.id === selectedCraving.id;
+                  return (
+                    <li key={cat.id} className="shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => onCravingSelect(cat.id)}
+                        aria-label={`Pick ${cat.label}`}
+                        aria-pressed={isActive}
+                        className="group flex flex-col items-center gap-1.5 w-[60px] sm:w-[68px] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70 rounded-2xl active:scale-[0.96] transition-transform"
+                      >
+                        <span
                           className={[
-                            "shrink-0 rounded-full px-3 py-2 text-[11px] font-black leading-none ring-1 transition-transform active:scale-95",
+                            "h-[56px] w-[56px] sm:h-[64px] sm:w-[64px] rounded-full overflow-hidden bg-[#120805] transition-all",
                             isActive
-                              ? "bg-[#ff6f3c] text-white ring-white/35 shadow-[0_8px_20px_rgba(255,111,60,0.28)]"
-                              : "bg-[#fff3e4]/92 text-[#3a1908] ring-orange-200/50",
+                              ? "ring-2 ring-orange-400"
+                              : "ring-2 ring-orange-500/70 group-hover:ring-orange-300",
                           ].join(" ")}
-                          aria-pressed={isActive}
+                          style={{
+                            boxShadow: isActive
+                              ? "0 0 0 3px rgba(255,111,60,0.22), 0 0 22px rgba(255,140,60,0.70)"
+                              : "0 0 0 3px rgba(255,90,47,0.14), 0 0 18px rgba(255,90,47,0.45)",
+                          }}
+                        >
+                          <img
+                            src={cat.image}
+                            alt=""
+                            loading="lazy"
+                            className="h-full w-full object-cover"
+                          />
+                        </span>
+                        <span
+                          className={[
+                            "text-[11px] sm:text-xs font-semibold leading-none",
+                            isActive ? "text-orange-200" : "text-white/90",
+                          ].join(" ")}
                         >
                           {cat.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
             </div>
           </div>
 
@@ -2241,42 +2212,42 @@ function CravingCompass({
               <Link
                 key={pick.id}
                 href={pick.href}
-                className="block rounded-2xl bg-[#0f0907]/76 ring-1 ring-orange-200/22 px-3.5 py-3 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
+                className="block rounded-2xl bg-[#0f0907] ring-1 ring-orange-300/35 px-3.5 py-3 shadow-[0_8px_24px_rgba(0,0,0,0.35)] active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="text-[10px] font-black uppercase tracking-[0.16em] text-orange-200/70">
+                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-orange-300">
                       {pick.role}
                     </p>
                     <p className="mt-1 truncate text-base font-black text-white">
                       {pick.title}
                     </p>
-                    <p className="mt-0.5 truncate text-xs font-semibold text-orange-100/65">
+                    <p className="mt-0.5 truncate text-xs font-semibold text-orange-100/85">
                       {pick.subtitle}
                     </p>
                   </div>
-                  <span className="shrink-0 rounded-full bg-[#fff3e4] px-2.5 py-1 text-[11px] font-black text-orange-900 ring-1 ring-orange-200">
+                  <span className="shrink-0 rounded-full bg-[#ff6f3c] px-2.5 py-1 text-[11px] font-black text-white ring-1 ring-orange-200/60 shadow-[0_6px_14px_rgba(255,111,60,0.35)]">
                     {pick.meta}
                   </span>
                 </div>
-                <p className="mt-2 text-xs leading-relaxed text-white/66">
+                <p className="mt-2 text-xs leading-relaxed text-white/85">
                   {pick.reason}
                 </p>
               </Link>
             ))}
           </div>
 
-          <div className="mt-3 rounded-2xl bg-[#0f0907]/62 ring-1 ring-orange-200/18 p-3">
+          <div className="mt-3 rounded-2xl bg-[#0f0907] ring-1 ring-orange-300/35 p-3">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0">
-                <p className="text-[10px] uppercase tracking-[0.18em] text-orange-200/70 font-bold">
+                <p className="text-[10px] uppercase tracking-[0.18em] text-orange-300 font-bold">
                   {locationLabel}
                 </p>
                 <p className="mt-0.5 truncate text-white text-sm font-semibold">
                   {signalSummary || `${radiusMiles} mi discovery radius`}
                 </p>
               </div>
-              <div className="flex self-start rounded-full bg-black/25 p-1 ring-1 ring-white/10 sm:self-auto">
+              <div className="flex self-start rounded-full bg-[#1a0c06] p-1 ring-1 ring-orange-300/30 sm:self-auto">
                 {radiusOptions.map((radius) => {
                   const isActive = discoveryRadiusKm === radius;
                   return (
@@ -2287,8 +2258,8 @@ function CravingCompass({
                       className={[
                         "rounded-full px-2.5 py-1 text-[11px] font-bold transition-colors",
                         isActive
-                          ? "bg-orange-400 text-[#1b0b02]"
-                          : "text-white/62 hover:text-white",
+                          ? "bg-[#ff6f3c] text-white shadow-[0_4px_12px_rgba(255,111,60,0.45)]"
+                          : "text-orange-100/80 hover:text-white",
                       ].join(" ")}
                       aria-pressed={isActive}
                     >
@@ -2303,18 +2274,18 @@ function CravingCompass({
               <button
                 type="button"
                 onClick={onRefreshLocation}
-                className="shrink-0 inline-flex items-center gap-2 rounded-full bg-[#fff3e4] ring-1 ring-orange-300/45 text-[#2a1308] px-3 py-2 text-xs font-semibold active:scale-[0.98]"
+                className="shrink-0 inline-flex items-center gap-2 rounded-full bg-[#1a0c06] ring-1 ring-orange-300/55 text-orange-100 px-3 py-2 text-xs font-semibold active:scale-[0.98]"
               >
-                <Search className="h-3.5 w-3.5 text-orange-600" aria-hidden="true" />
+                <Search className="h-3.5 w-3.5 text-orange-300" aria-hidden="true" />
                 Refresh location
               </button>
               <button
                 type="button"
                 onClick={() => onSearchCraving(selectedCraving)}
-                className="min-w-0 flex-1 inline-flex items-center justify-center gap-1.5 rounded-full bg-white/[0.06] ring-1 ring-white/10 px-3 py-2 text-xs font-semibold text-white/82 active:scale-[0.98]"
+                className="min-w-0 flex-1 inline-flex items-center justify-center gap-1.5 rounded-full bg-[#ff6f3c] ring-1 ring-orange-200/60 px-3 py-2 text-xs font-black text-white shadow-[0_8px_20px_rgba(255,111,60,0.35)] active:scale-[0.98]"
               >
                 <span className="truncate">See every {selectedCraving.label.toLowerCase()} match</span>
-                <ChevronRight className="h-3.5 w-3.5 shrink-0 text-orange-200" aria-hidden="true" />
+                <ChevronRight className="h-3.5 w-3.5 shrink-0 text-white" aria-hidden="true" />
               </button>
             </div>
           </div>
