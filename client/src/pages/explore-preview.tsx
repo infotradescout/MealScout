@@ -562,7 +562,7 @@ function formatFreshnessTime(timestamp: string): { state: FreshnessState; label:
   }
   if (isToday) return { state: "fresh", label: "Updated today" };
   if (ageMinutes < 60 * 24 * 3) return { state: "aging", label: "Updated recently" };
-  return { state: "needs_update", label: "Needs update" };
+  return { state: "needs_update", label: "Updated recently" };
 }
 
 function isTodayDate(value?: string | null): boolean {
@@ -635,7 +635,7 @@ function getOperationalBadges(entityOrMeta: FreshnessMeta): string[] {
 
 function getFreshnessBadgeClass(meta: FreshnessMeta, label: string): string {
   const base = "rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ring-1";
-  if (label === "Needs update" || getFreshnessState(meta) === "needs_update") {
+  if (getFreshnessState(meta) === "needs_update") {
     return `${base} bg-amber-300/14 text-amber-100 ring-amber-200/20`;
   }
   if (getFreshnessState(meta) === "aging") {
@@ -2050,9 +2050,6 @@ export default function ExplorePreview() {
 
   /* --------- render --------- */
 
-  const goToCraving = (cat: CravingCategory) => {
-    navigate(`/search?q=${encodeURIComponent(cat.query)}`);
-  };
   const currentUserId = getCurrentUserId(user);
   const showQuickUpdateBar = isFoodOperator(user);
 
@@ -2520,7 +2517,6 @@ export default function ExplorePreview() {
               localActivityCount={localActivityCount}
               onRefreshLocation={requestLocation}
               onCravingSelect={setSelectedCravingId}
-              onSearchCraving={goToCraving}
             />
 
             {showQuickUpdateBar ? (
@@ -2772,7 +2768,6 @@ function CravingCompass({
   localActivityCount,
   onRefreshLocation,
   onCravingSelect,
-  onSearchCraving,
 }: {
   cravings: CravingCategory[];
   selectedCraving: CravingCategory;
@@ -2782,18 +2777,9 @@ function CravingCompass({
   localActivityCount: number;
   onRefreshLocation: () => void;
   onCravingSelect: (id: string) => void;
-  onSearchCraving: (craving: CravingCategory) => void;
 }) {
-  const [isSearchOpen, setIsSearchOpen] = useState(false);
   const hasLocation = locationStatus === "ready";
   const resultCount = boardItems.length;
-  const boardCounts = boardItems.reduce(
-    (counts, item) => {
-      counts[item.kind] += 1;
-      return counts;
-    },
-    { Menu: 0, Place: 0, Truck: 0, Deal: 0 } as Record<CravingBoardItem["kind"], number>,
-  );
   const topPick = boardItems[0] || null;
   const topPickDistance = useMemo(() => {
     if (!topPick?.meta) return null;
@@ -2844,15 +2830,9 @@ function CravingCompass({
       : [...topPickProofLabels];
     if (!bits.includes("Open now")) bits.push("Open now");
     if (!bits.includes("Nearby")) bits.push("Nearby");
-    return [...new Set(bits)].slice(0, 4);
+    return [...new Set(bits)].filter((label) => label !== "Open near you").slice(0, 3);
   }, [topPick, topPickFreshnessMeta, topPickProofLabels]);
 
-  const topPickBadges = useMemo(() => {
-    if (!topPick || !topPickFreshnessMeta) return [];
-    const badges = new Set<string>(getOperationalBadges(topPickFreshnessMeta));
-    if (topPickDistance) badges.add("Nearby");
-    return Array.from(badges).slice(0, 3);
-  }, [topPick, topPickDistance, topPickFreshnessMeta]);
   const topPickMenuHref =
     topPick && (topPick.kind === "Place" || topPick.kind === "Menu")
       ? `${topPick.href}?tab=menu`
@@ -2860,15 +2840,11 @@ function CravingCompass({
   const activityLabel =
     hasLocation
       ? resultCount > 0
-        ? `${resultCount} open options`
+        ? `${resultCount} open now`
         : localActivityCount > 0
           ? "Show more nearby"
         : "No exact hits yet"
       : "Location off";
-
-  useEffect(() => {
-    setIsSearchOpen(false);
-  }, [selectedCraving.id]);
 
   return (
     <section className="px-4 pt-4 pb-5">
@@ -2929,16 +2905,6 @@ function CravingCompass({
                     {topPick.title}
                   </p>
                   <p className="mt-1 text-sm text-white/75">{topPick.subtitle}</p>
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {topPickBadges.map((badge) => (
-                      <span
-                        key={badge}
-                        className={topPickFreshnessMeta ? getFreshnessBadgeClass(topPickFreshnessMeta, badge) : "rounded-full bg-[#fff4e1]/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-orange-100 ring-1 ring-orange-200/25"}
-                      >
-                        {badge}
-                      </span>
-                    ))}
-                  </div>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <Link
                       href={topPick.href}
@@ -3005,161 +2971,9 @@ function CravingCompass({
               </div>
             </div>
           </div>
-
-          <div className="mt-4 rounded-xl bg-[#130b08]/70 p-3 ring-1 ring-white/10">
-            <div className="flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-[10px] font-black uppercase tracking-[0.14em] text-[#e5b06f]/82">
-                  MORE OPTIONS
-                </p>
-                <p className="mt-1 truncate text-base font-black text-white">
-                  {selectedCraving.label}
-                </p>
-                <p className="mt-0.5 text-xs font-semibold leading-relaxed text-orange-100/62">
-                  {isSearchOpen
-                    ? "Review the options for this goal."
-                    : "Reviewing options keeps your choice clear."}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsSearchOpen((open) => !open)}
-                className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-full bg-[#fff3e4] px-3.5 py-2 text-xs font-black text-orange-950 ring-1 ring-orange-200 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
-                aria-expanded={isSearchOpen}
-              >
-                {isSearchOpen ? "Hide options" : "Show options"}
-              </button>
-            </div>
-
-            {isSearchOpen ? (
-              <div className="mt-3 border-t border-white/10 pt-3">
-                {boardItems.length > 0 ? (
-                  <>
-                    <div className="mb-2 flex flex-wrap gap-1.5">
-                      {(["Menu", "Place", "Truck", "Deal"] as const).map((kind) =>
-                        boardCounts[kind] > 0 ? (
-                          <span
-                            key={kind}
-                            className="rounded-full bg-white/[0.06] px-2 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-orange-100/72 ring-1 ring-white/10"
-                          >
-                            {kind} {boardCounts[kind]}
-                          </span>
-                        ) : null,
-                      )}
-                    </div>
-                    <div className="grid grid-cols-2 gap-2.5">
-                      {boardItems.map((item, index) => (
-                        <ScoutSearchResultCard
-                          key={item.id}
-                          item={item}
-                          fallbackImage={selectedCraving.image}
-                          featured={index === 0}
-                        />
-                      ))}
-                    </div>
-                  </>
-                ) : (
-                  <div className="rounded-xl bg-black/20 px-3 py-3 ring-1 ring-white/10">
-                    <p className="text-sm font-black text-white">
-                      No exact {selectedCraving.label.toLowerCase()} hits here yet.
-                    </p>
-                    <p className="mt-1 text-xs leading-relaxed text-white/62">
-                      Open the full search to widen the radius and pull more results.
-                    </p>
-                  </div>
-                )}
-
-                <button
-                  type="button"
-                  onClick={() => onSearchCraving(selectedCraving)}
-                  className="mt-3 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-full bg-[#ff7945] px-4 py-2 text-sm font-black text-white shadow-[0_10px_24px_rgba(255,111,60,0.22)] ring-1 ring-white/20 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
-                >
-                  Open full {selectedCraving.label.toLowerCase()} search
-                  <ChevronRight className="h-4 w-4" aria-hidden="true" />
-                </button>
-              </div>
-            ) : null}
-          </div>
         </div>
       </div>
     </section>
-  );
-}
-
-function ScoutSearchResultCard({
-  item,
-  fallbackImage,
-  featured,
-}: {
-  item: CravingBoardItem;
-  fallbackImage: string;
-  featured: boolean;
-}) {
-  const image = item.imageUrl || fallbackImage;
-  const badges = getOperationalBadges(
-    item.freshnessMeta || {
-      kind: item.kind,
-      meta: item.meta,
-      reason: item.reason,
-      hasDistance: Boolean(item.meta && getMetaDistance(item.meta)),
-    },
-  ).slice(0, featured ? 3 : 2);
-  return (
-    <Link
-      href={item.href}
-      className={[
-        "group block overflow-hidden rounded-xl bg-[#0d0705]/84 ring-1 ring-white/10 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70",
-        featured ? "col-span-2" : "",
-      ].join(" ")}
-    >
-      <div className={featured ? "relative h-32" : "relative h-20"}>
-        <img
-          src={image}
-          alt=""
-          className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-          loading="lazy"
-        />
-        <div
-          className="absolute inset-0"
-          style={{
-            backgroundImage:
-              "linear-gradient(180deg, rgba(0,0,0,0.08) 0%, rgba(0,0,0,0.84) 100%)",
-          }}
-          aria-hidden="true"
-        />
-        <div className="absolute left-2 top-2 rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.08em] text-orange-100 ring-1 ring-white/12">
-          {item.kind}
-        </div>
-        {item.meta ? (
-          <div className="absolute bottom-2 right-2 max-w-[70%] truncate rounded-full bg-[#fff3e4] px-2 py-0.5 text-[10px] font-black text-orange-950 ring-1 ring-orange-200">
-            {item.meta}
-          </div>
-        ) : null}
-      </div>
-      <div className={featured ? "px-3 py-2.5" : "px-2.5 py-2"}>
-        <p className="line-clamp-2 text-sm font-black leading-tight text-white">
-          {item.title}
-        </p>
-        <p className="mt-1 line-clamp-1 text-[11px] font-semibold leading-snug text-orange-100/64">
-          {item.subtitle}
-        </p>
-        {item.reason ? (
-          <p className="mt-1.5 line-clamp-2 text-[11px] leading-snug text-white/54">
-            {item.reason}
-          </p>
-        ) : null}
-        <div className="mt-2 flex flex-wrap gap-1">
-          {badges.map((badge) => (
-            <span
-              key={badge}
-              className={getFreshnessBadgeClass(item.freshnessMeta || { kind: item.kind }, badge)}
-            >
-              {badge}
-            </span>
-          ))}
-        </div>
-      </div>
-    </Link>
   );
 }
 
@@ -4753,7 +4567,7 @@ function ScoutMapHud({
             <div className="mt-3 flex flex-wrap gap-1.5 rounded-2xl bg-black/18 px-2.5 py-2 ring-1 ring-white/10">
               <MapFreshnessKey dotClassName="bg-emerald-300" label="Updated" />
               <MapFreshnessKey dotClassName="bg-orange-200" label="Older info" />
-              <MapFreshnessKey dotClassName="bg-amber-300" label="Needs update" />
+              <MapFreshnessKey dotClassName="bg-amber-300" label="Older info" />
             </div>
           </div>
         )}
