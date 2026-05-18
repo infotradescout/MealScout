@@ -270,7 +270,7 @@ const SCOUT_SEARCH_OPTIONS: CravingCategory[] = [
     image: "/atmospheric/craving-burgers.jpg",
   },
   {
-    id: "best-deal",
+    id: "deals-today",
     label: "Deals today",
     query: "deals",
     helper: "Local value without digging",
@@ -442,9 +442,9 @@ const DISCOVERY_LAYERS: Record<
     subtitle: "Freshly available dishes from nearby restaurants and trucks.",
   },
   foodTrucks: {
-    title: "Food Trucks Near You",
+    title: "Food Trucks Nearby",
     href: "/truck-discovery",
-    subtitle: "All nearby trucks that are broadcasting or ready to be discovered.",
+    subtitle: "Nearby trucks, live locations, and food you can get now.",
   },
   restaurants: {
     title: "Open Near You Now",
@@ -452,12 +452,12 @@ const DISCOVERY_LAYERS: Record<
     subtitle: "Open places, food trucks, deals, and menu updates near you today.",
   },
   deals: {
-    title: "Deals Near You",
+    title: "Deals Today",
     href: "/deals",
     subtitle: "Active offers from nearby restaurants, bars, and food trucks.",
   },
   events: {
-    title: "Busy Nearby",
+    title: "Happening Today",
     href: "/events",
     subtitle: "Events, pop-ups, and local food moments near you.",
   },
@@ -2506,8 +2506,11 @@ export default function ExplorePreview() {
                   <p className="mt-0.5 truncate text-[15px] font-extrabold text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.7)]">
                     {hasResolvedLocation ? shortLocation : "Nearby now"}
                   </p>
+                  <p className="mt-1 text-[11px] font-semibold text-white/66">
+                    Tap the map to explore nearby food
+                  </p>
                   {localActivityCount > 0 && (
-                    <p className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-bold text-orange-100 ring-1 ring-white/15 backdrop-blur-md">
+                    <p className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-bold text-white/72 ring-1 ring-white/15 backdrop-blur-md">
                       <span
                         aria-hidden="true"
                         className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(74,222,128,0.85)]"
@@ -2551,6 +2554,7 @@ export default function ExplorePreview() {
               daypartCopy={daypartSearchCopy}
               locationStatus={locationStatus}
               localActivityCount={localActivityCount}
+              hasLivePriorityInventory={liveTrucks.length + allDeals.length + visibleEvents.length > 0}
               onRefreshLocation={requestLocation}
               onCravingSelect={setSelectedCravingId}
             />
@@ -2559,22 +2563,7 @@ export default function ExplorePreview() {
               <QuickUpdateBar />
             ) : null}
 
-            <LocalActivityRail items={visibleLocalActivityItems} />
-
-            {/* OPEN NOW — broad live view across trucks, restaurants, bars, and public events. */}
-            <OpenNowSection
-              liveTrucks={liveTrucks}
-              liveTrucksLoading={liveTrucksLoading}
-              liveTrucksError={!!liveTrucksError}
-              events={visibleEvents}
-              deals={allDeals}
-              locationStatus={locationStatus}
-              onExpandMap={openScoutMap}
-              onSelectTruck={selectLiveTruck}
-              currentUserId={currentUserId}
-            />
-
-            {/* ── FOOD TRUCKS NEAR YOU ── */}
+            {/* ── FOOD TRUCKS NEARBY ── */}
             {showFoodTrucksSection && (
               <section className="pl-5 pr-0 pt-2 pb-10">
                 <SectionHeader
@@ -2598,6 +2587,61 @@ export default function ExplorePreview() {
               </section>
             )}
 
+            {/* OPEN NEAR YOU NOW — broad live view across trucks, restaurants, bars, and public events. */}
+            <OpenNowSection
+              liveTrucks={liveTrucks}
+              liveTrucksLoading={liveTrucksLoading}
+              liveTrucksError={!!liveTrucksError}
+              events={visibleEvents}
+              deals={allDeals}
+              locationStatus={locationStatus}
+              onExpandMap={openScoutMap}
+              onSelectTruck={selectLiveTruck}
+              currentUserId={currentUserId}
+            />
+
+            {/* ── DEALS TODAY ── */}
+            {showDealsSection && (
+              <section className="pl-5 pr-0 pt-2 pb-10">
+                <SectionHeader
+                  title={DISCOVERY_LAYERS.deals.title}
+                  linkHref={DISCOVERY_LAYERS.deals.href}
+                  subtitle={DISCOVERY_LAYERS.deals.subtitle}
+                />
+                <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
+                  <ul className="flex gap-4 pr-5" role="list">
+                    {allDeals.slice(0, 10).map((d) => (
+                      <li key={d.id} className="shrink-0 w-[230px] sm:w-[260px]">
+                        <DealCard deal={d} currentUserId={currentUserId} />
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </section>
+            )}
+
+            {/* ── HAPPENING TODAY ── */}
+            {showEventsSection && (
+              <section className="pl-5 pr-0 pt-2 pb-10">
+                <SectionHeader
+                  title={DISCOVERY_LAYERS.events.title}
+                  linkHref={DISCOVERY_LAYERS.events.href}
+                  subtitle={DISCOVERY_LAYERS.events.subtitle}
+                />
+                <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
+                  <ul className="flex gap-4 pr-5" role="list">
+                    {visibleEvents.slice(0, 8).map((e) => (
+                      <li key={e.id} className="shrink-0 w-[230px] sm:w-[260px]">
+                        <EventCard event={e} currentUserId={currentUserId} />
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </section>
+            )}
+
+            <LocalActivityRail items={visibleLocalActivityItems} />
+
             {/* ── NEW LOCAL MENU ITEMS ── */}
             {showMenuItemsSection && (
               <section className="pl-5 pr-0 pt-2 pb-10">
@@ -2618,7 +2662,7 @@ export default function ExplorePreview() {
               </section>
             )}
 
-            {/* ── NEARBY RESTAURANTS ── */}
+            {/* ── SUPPORTING LOCAL PLACES ── */}
             {showRestaurantsSection && (
               <section className="pl-5 pr-0 pt-2 pb-10">
                 <SectionHeader
@@ -2647,46 +2691,6 @@ export default function ExplorePreview() {
                     </ul>
                   </div>
                 )}
-              </section>
-            )}
-
-            {/* ── DEALS NEAR YOU ── */}
-            {showDealsSection && (
-              <section className="pl-5 pr-0 pt-2 pb-10">
-                <SectionHeader
-                  title={DISCOVERY_LAYERS.deals.title}
-                  linkHref={DISCOVERY_LAYERS.deals.href}
-                  subtitle={DISCOVERY_LAYERS.deals.subtitle}
-                />
-                <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
-                  <ul className="flex gap-4 pr-5" role="list">
-                    {allDeals.slice(0, 10).map((d) => (
-                      <li key={d.id} className="shrink-0 w-[230px] sm:w-[260px]">
-                        <DealCard deal={d} currentUserId={currentUserId} />
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </section>
-            )}
-
-            {/* ── HAPPENING TONIGHT ── */}
-            {showEventsSection && (
-              <section className="pl-5 pr-0 pt-2 pb-10">
-                <SectionHeader
-                  title={DISCOVERY_LAYERS.events.title}
-                  linkHref={DISCOVERY_LAYERS.events.href}
-                  subtitle={DISCOVERY_LAYERS.events.subtitle}
-                />
-                <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
-                  <ul className="flex gap-4 pr-5" role="list">
-                    {visibleEvents.slice(0, 8).map((e) => (
-                      <li key={e.id} className="shrink-0 w-[230px] sm:w-[260px]">
-                        <EventCard event={e} currentUserId={currentUserId} />
-                      </li>
-                    ))}
-                  </ul>
-                </div>
               </section>
             )}
 
@@ -2796,6 +2800,7 @@ function CravingCompass({
   daypartCopy,
   locationStatus,
   localActivityCount,
+  hasLivePriorityInventory,
   onRefreshLocation,
   onCravingSelect,
 }: {
@@ -2805,12 +2810,19 @@ function CravingCompass({
   daypartCopy: { title: string; body: string };
   locationStatus: "idle" | "requesting" | "ready" | "denied";
   localActivityCount: number;
+  hasLivePriorityInventory: boolean;
   onRefreshLocation: () => void;
   onCravingSelect: (id: string) => void;
 }) {
   const hasLocation = locationStatus === "ready";
   const resultCount = boardItems.length;
-  const topPick = boardItems[0] || null;
+  const hasPriorityFood = boardItems.some((item) => item.kind === "Truck" || item.kind === "Deal");
+  const firstPriorityItem = boardItems.find((item) => item.kind === "Truck" || item.kind === "Deal");
+  const rawTopPick = boardItems[0] || null;
+  const topPick =
+    rawTopPick?.kind === "Place" && hasLivePriorityInventory
+      ? firstPriorityItem || null
+      : rawTopPick;
   const topPickDistance = useMemo(() => {
     if (!topPick?.meta) return null;
     return getMetaDistance(topPick.meta);
@@ -2841,7 +2853,7 @@ function CravingCompass({
     const orderedIds = [
       "open-now",
       "quick-bite",
-      "best-deal",
+      "deals-today",
       "food-truck",
       "coffee-breakfast",
       "something-new",
@@ -2875,7 +2887,7 @@ function CravingCompass({
 
   return (
     <section className="px-4 pt-4 pb-5">
-      <div className="overflow-hidden rounded-[1.35rem] bg-[#21130e]/92 ring-1 ring-orange-200/25 shadow-[0_16px_46px_rgba(0,0,0,0.28)]">
+      <div className="overflow-hidden rounded-[1.35rem] bg-[#17100d]/92 ring-1 ring-white/10 shadow-[0_16px_46px_rgba(0,0,0,0.28)]">
         <div
           className="px-4 py-4"
           style={{
@@ -2888,19 +2900,19 @@ function CravingCompass({
               <h2 className="font-sans text-white text-lg font-black leading-tight">
                 Find food near you.
               </h2>
-              <p className="mt-1 text-orange-50/62 text-xs leading-relaxed">
+              <p className="mt-1 text-white/62 text-xs leading-relaxed">
                 Open restaurants, food trucks, and deals nearby.
               </p>
             </div>
             {hasLocation && activityLabel ? (
-              <span className="shrink-0 rounded-full bg-[#fff4e1]/10 ring-1 ring-orange-200/35 px-2.5 py-1 text-[11px] font-bold text-orange-100">
+              <span className="shrink-0 rounded-full bg-white/8 ring-1 ring-white/12 px-2.5 py-1 text-[11px] font-bold text-white/72">
                 {activityLabel}
               </span>
             ) : !hasLocation ? (
               <button
                 type="button"
                 onClick={onRefreshLocation}
-                className="shrink-0 rounded-full bg-[#fff3e4] px-2.5 py-1 text-[11px] font-black text-orange-900 ring-1 ring-orange-200 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
+                className="shrink-0 rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-black text-stone-900 ring-1 ring-white/40 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
               >
                 Use location
               </button>
@@ -2923,7 +2935,7 @@ function CravingCompass({
                       </span>
                     </div>
                   </div>
-                  <p className="mt-2 text-[10px] font-black uppercase tracking-[0.12em] text-[#f3b67a]">
+                  <p className="mt-2 text-[10px] font-black uppercase tracking-[0.12em] text-white/58">
                     {topPickProofBits.join(" · ")}
                   </p>
                   <p className="mt-1 text-base font-black text-white leading-tight">
@@ -2941,14 +2953,14 @@ function CravingCompass({
                     {topPickMenuHref ? (
                       <Link
                         href={topPickMenuHref}
-                        className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full bg-[#fff4e1]/12 px-4 py-2 text-sm font-black text-orange-100 ring-1 ring-orange-200/25 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
+                        className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full bg-white/8 px-4 py-2 text-sm font-black text-white/78 ring-1 ring-white/12 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
                       >
                         View menu
                       </Link>
                     ) : (
                       <Link
                         href={topPick.href}
-                        className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full bg-[#fff4e1]/12 px-4 py-2 text-sm font-black text-orange-100 ring-1 ring-orange-200/25 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
+                        className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full bg-white/8 px-4 py-2 text-sm font-black text-white/78 ring-1 ring-white/12 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
                       >
                         View details
                       </Link>
@@ -2958,7 +2970,7 @@ function CravingCompass({
           ) : null}
 
           <div className="mt-3">
-            <p className="mb-2 text-xs font-black uppercase tracking-[0.13em] text-[#ffcf9b]">
+            <p className="mb-2 text-xs font-black uppercase tracking-[0.13em] text-white/58">
               WHAT YOU&apos;RE LOOKING FOR
             </p>
                   <div className="overflow-x-auto atmo-hide-scrollbar">
@@ -2973,8 +2985,8 @@ function CravingCompass({
                     className={[
                       "min-h-9 shrink-0 rounded-full px-3 py-2 text-[11px] font-black leading-none ring-1 transition-colors active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/60",
                     isActive
-                      ? "bg-[#ff7945] text-white ring-white/35 shadow-[0_8px_18px_rgba(255,111,60,0.24)]"
-                        : "bg-[#fff4e1]/8 text-orange-50/78 ring-orange-200/25 hover:bg-[#fff4e1]/12 text-[10px] md:text-[11px]",
+                      ? "bg-white/14 text-white ring-white/24"
+                        : "bg-white/[0.05] text-white/62 ring-white/10 hover:bg-white/[0.08] text-[10px] md:text-[11px]",
                     ].join(" ")}
                     aria-pressed={isActive}
                   >
@@ -4206,7 +4218,7 @@ function OpenNowSection({
     return (
       <section className="pl-5 pr-0 pt-2 pb-10">
         <SectionHeader
-          title="Open Now"
+          title="Open Near You Now"
           linkHref="/truck-discovery"
           subtitle="Trucks, restaurants, bars, and pop-ups serving near you right now."
         />
@@ -4237,7 +4249,7 @@ function OpenNowSection({
     return (
       <section className="pl-5 pr-0 pt-2 pb-10">
         <SectionHeader
-          title="Open Now"
+          title="Open Near You Now"
           linkHref="/truck-discovery"
           subtitle={
             summaryBits.length > 0
@@ -4438,10 +4450,10 @@ function MapLayerToggles({
   compact: boolean;
 }) {
   const options: Array<{ id: MapLayerId; label: string; icon: React.ReactNode }> = [
-    { id: "openNow", label: "Open now", icon: <Flame className="h-3.5 w-3.5" aria-hidden="true" /> },
-    { id: "foodTrucks", label: "Food trucks", icon: <Utensils className="h-3.5 w-3.5" aria-hidden="true" /> },
-    { id: "deals", label: "Deals", icon: <Tag className="h-3.5 w-3.5" aria-hidden="true" /> },
-    { id: "happeningToday", label: "Happening today", icon: <CalendarDays className="h-3.5 w-3.5" aria-hidden="true" /> },
+    { id: "openNow", label: "Open", icon: <Flame className="h-3 w-3" aria-hidden="true" /> },
+    { id: "foodTrucks", label: "Trucks", icon: <Utensils className="h-3 w-3" aria-hidden="true" /> },
+    { id: "deals", label: "Deals", icon: <Tag className="h-3 w-3" aria-hidden="true" /> },
+    { id: "happeningToday", label: "Today", icon: <CalendarDays className="h-3 w-3" aria-hidden="true" /> },
   ];
 
   return (
@@ -4453,7 +4465,7 @@ function MapLayerToggles({
           : "top-[calc(env(safe-area-inset-top)+4.7rem)] sm:left-4 sm:right-auto sm:w-[360px]",
       ].join(" ")}
     >
-      <div className="flex w-max gap-1.5 rounded-full bg-[#120805]/72 p-1 text-[10px] font-black uppercase tracking-wide text-orange-50 ring-1 ring-orange-200/24 backdrop-blur-xl">
+      <div className="flex w-max gap-1 rounded-full bg-[#120805]/66 p-1 text-[10px] font-black uppercase tracking-wide text-white/70 ring-1 ring-white/12 backdrop-blur-xl">
         {options.map((option) => {
           const isActive = layers[option.id];
           return (
@@ -4462,10 +4474,10 @@ function MapLayerToggles({
               type="button"
               onClick={() => onToggle(option.id)}
               className={[
-                "inline-flex h-8 items-center gap-1.5 rounded-full px-2.5 transition-colors",
+                "inline-flex h-7 items-center gap-1 rounded-full px-2 transition-colors",
                 isActive
-                  ? "bg-orange-300 text-[#1a0d08]"
-                  : "bg-white/6 text-white/62 hover:bg-white/10 hover:text-white",
+                  ? "bg-white/14 text-white ring-1 ring-white/18"
+                  : "bg-transparent text-white/48 hover:bg-white/8 hover:text-white/76",
               ].join(" ")}
               aria-pressed={isActive}
             >
@@ -4581,7 +4593,6 @@ function ScoutMapHud({
             <div className="mt-3 flex flex-wrap gap-1.5 rounded-2xl bg-black/18 px-2.5 py-2 ring-1 ring-white/10">
               <MapFreshnessKey dotClassName="bg-emerald-300" label="Updated" />
               <MapFreshnessKey dotClassName="bg-orange-200" label="Older info" />
-              <MapFreshnessKey dotClassName="bg-amber-300" label="Older info" />
             </div>
           </div>
         )}
@@ -4872,4 +4883,5 @@ function HorizontalSkeletonRow({
     </div>
   );
 }
+
 
