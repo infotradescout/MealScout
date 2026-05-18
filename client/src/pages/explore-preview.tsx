@@ -384,6 +384,7 @@ type CravingBoardItem = {
   imageUrl?: string | null;
   meta?: string | null;
   reason?: string | null;
+  freshnessMeta?: FreshnessMeta;
   score: number;
 };
 
@@ -460,6 +461,136 @@ function getMetaDistance(meta: string): string | null {
   if (!match) return null;
   const value = match[1];
   return `${value} mi`;
+}
+
+type FreshnessState = "fresh" | "aging" | "needs_update" | "unknown";
+
+type FreshnessMeta = {
+  kind?: CravingBoardItem["kind"] | "event" | "restaurant" | "truck" | "deal" | "menu";
+  meta?: string | null;
+  reason?: string | null;
+  startsAt?: string | null;
+  startTime?: string | null;
+  updatedAt?: string | null;
+  lastUpdatedAt?: string | null;
+  confirmedAt?: string | null;
+  lastConfirmedAt?: string | null;
+  hasDeal?: boolean;
+  hasMenu?: boolean;
+  hasCommunityUpdate?: boolean;
+  hasDistance?: boolean;
+  isOpen?: boolean;
+  closesSoon?: boolean;
+};
+
+function readStringField(source: unknown, fields: string[]): string | null {
+  if (!source || typeof source !== "object") return null;
+  const record = source as Record<string, unknown>;
+  for (const field of fields) {
+    const value = record[field];
+    if (typeof value === "string" && value.trim().length > 0) return value;
+  }
+  return null;
+}
+
+function getKnownTimestamp(meta: FreshnessMeta): { value: string; type: "updated" | "confirmed" } | null {
+  const updated = meta.updatedAt || meta.lastUpdatedAt;
+  if (updated) return { value: updated, type: "updated" };
+  const confirmed = meta.confirmedAt || meta.lastConfirmedAt;
+  if (confirmed) return { value: confirmed, type: "confirmed" };
+  return null;
+}
+
+function formatFreshnessTime(timestamp: string): { state: FreshnessState; label: string } | null {
+  const time = new Date(timestamp).getTime();
+  if (!Number.isFinite(time)) return null;
+
+  const now = Date.now();
+  const ageMinutes = Math.max(0, Math.floor((now - time) / 60000));
+  const eventDate = new Date(time);
+  const today = new Date();
+  const isToday =
+    eventDate.getFullYear() === today.getFullYear() &&
+    eventDate.getMonth() === today.getMonth() &&
+    eventDate.getDate() === today.getDate();
+
+  if (ageMinutes < 60) {
+    return {
+      state: "fresh",
+      label: `Updated ${Math.max(1, ageMinutes)}m ago`,
+    };
+  }
+  if (isToday) return { state: "fresh", label: "Updated today" };
+  if (ageMinutes < 60 * 24 * 3) return { state: "aging", label: "Updated recently" };
+  return { state: "needs_update", label: "Needs update" };
+}
+
+function isTodayDate(value?: string | null): boolean {
+  if (!value) return false;
+  const time = new Date(value).getTime();
+  if (!Number.isFinite(time)) return false;
+  const date = new Date(time);
+  const today = new Date();
+  return (
+    date.getFullYear() === today.getFullYear() &&
+    date.getMonth() === today.getMonth() &&
+    date.getDate() === today.getDate()
+  );
+}
+
+function getFreshnessState(entityOrMeta: FreshnessMeta): FreshnessState {
+  const timestamp = getKnownTimestamp(entityOrMeta);
+  if (timestamp) return formatFreshnessTime(timestamp.value)?.state ?? "unknown";
+  if (entityOrMeta.isOpen || entityOrMeta.hasDeal || entityOrMeta.hasMenu || isTodayDate(entityOrMeta.startsAt || entityOrMeta.startTime)) {
+    return "fresh";
+  }
+  if (entityOrMeta.hasDistance || entityOrMeta.hasCommunityUpdate) return "unknown";
+  return "unknown";
+}
+
+function getFreshnessLabel(entityOrMeta: FreshnessMeta): string {
+  const timestamp = getKnownTimestamp(entityOrMeta);
+  if (timestamp) {
+    const formatted = formatFreshnessTime(timestamp.value);
+    if (formatted) {
+      if (timestamp.type === "confirmed" && formatted.label === "Updated today") return "Confirmed today";
+      if (timestamp.type === "confirmed" && formatted.label.startsWith("Updated ")) {
+        return formatted.label.replace("Updated", "Confirmed");
+      }
+      return formatted.label;
+    }
+  }
+
+  if (entityOrMeta.hasMenu || entityOrMeta.kind === "Menu" || entityOrMeta.kind === "menu") return "Menu updated";
+  if (entityOrMeta.hasDeal || entityOrMeta.kind === "Deal" || entityOrMeta.kind === "deal") return "Deal today";
+  if (entityOrMeta.kind === "Truck" || entityOrMeta.kind === "truck") return "Open now";
+  if (isTodayDate(entityOrMeta.startsAt || entityOrMeta.startTime)) return "Happening today";
+  if (entityOrMeta.isOpen) return "Open now";
+  if (entityOrMeta.hasDistance) return "Nearby now";
+  return "Open near you";
+}
+
+function getSourceLabel(entityOrMeta: FreshnessMeta): string | null {
+  if (entityOrMeta.hasCommunityUpdate) return "Community update";
+  if (entityOrMeta.hasMenu) return "Menu updated";
+  if (entityOrMeta.hasDeal) return "Deal today";
+  return null;
+}
+
+function getOperationalBadges(entityOrMeta: FreshnessMeta): string[] {
+  const labels = new Set<string>();
+  const freshnessLabel = getFreshnessLabel(entityOrMeta);
+  if (freshnessLabel) labels.add(freshnessLabel);
+  const sourceLabel = getSourceLabel(entityOrMeta);
+  if (sourceLabel) labels.add(sourceLabel);
+  if (entityOrMeta.closesSoon) labels.add("Closes soon");
+  if (entityOrMeta.kind === "Truck" || entityOrMeta.kind === "truck") labels.add("Food truck");
+  if (entityOrMeta.hasDeal || entityOrMeta.kind === "Deal" || entityOrMeta.kind === "deal") labels.add("Deal today");
+  if (entityOrMeta.hasMenu || entityOrMeta.kind === "Menu" || entityOrMeta.kind === "menu") labels.add("Menu updated");
+  if (entityOrMeta.isOpen) labels.add("Open now");
+  if (entityOrMeta.hasDistance) labels.add("Nearby");
+  if (isTodayDate(entityOrMeta.startsAt || entityOrMeta.startTime)) labels.add("Happening today");
+  return [...labels];
 }
 
 /* ============================================================
@@ -654,6 +785,13 @@ function buildCravingBoardItems({
       imageUrl: item.imageUrl,
       meta: formatMiles(item.distanceMiles) || item.cuisineType || "Menu",
       reason: getMenuItemSearchReason(item),
+      freshnessMeta: {
+        kind: "menu",
+        updatedAt: readStringField(item, ["updatedAt", "lastUpdatedAt"]),
+        confirmedAt: readStringField(item, ["confirmedAt", "lastConfirmedAt"]),
+        hasMenu: true,
+        hasDistance: typeof item.distanceMiles === "number",
+      },
       score,
     });
   }
@@ -668,6 +806,18 @@ function buildCravingBoardItems({
       imageUrl: getRestaurantImage(restaurant),
       meta: getRestaurantDistance(restaurant) || "Place",
       reason: getRestaurantSearchReason(restaurant),
+      freshnessMeta: {
+        kind: "restaurant",
+        updatedAt: readStringField(restaurant, ["updatedAt", "lastUpdatedAt"]),
+        confirmedAt: readStringField(restaurant, ["confirmedAt", "lastConfirmedAt"]),
+        hasDeal: Number(restaurant.activeDealsCount || restaurant.activeDealCount || 0) > 0,
+        hasCommunityUpdate:
+          Number(restaurant.communityActivityCount || 0) > 0 ||
+          Number(restaurant.recommendationCount || 0) > 0 ||
+          Number(restaurant.videoRecommendationCount || 0) > 0,
+        hasDistance: Boolean(getRestaurantDistance(restaurant)),
+        isOpen: true,
+      },
       score,
     });
   }
@@ -682,6 +832,14 @@ function buildCravingBoardItems({
       imageUrl: getTruckImage(truck),
       meta: [formatDistance(truck), formatWait(truck)].filter(Boolean).join(" / ") || "Open now",
       reason: "Open now",
+      freshnessMeta: {
+        kind: "truck",
+        updatedAt: readStringField(truck, ["updatedAt", "lastUpdatedAt"]),
+        confirmedAt: readStringField(truck, ["confirmedAt", "lastConfirmedAt"]),
+        hasDeal: Boolean(truck.activeDealCount && truck.activeDealCount > 0),
+        hasDistance: Boolean(formatDistance(truck)),
+        isOpen: true,
+      },
       score,
     });
   }
@@ -696,6 +854,12 @@ function buildCravingBoardItems({
       imageUrl: deal.imageUrl,
       meta: deal.discountText || "Deal",
       reason: "Deal today",
+      freshnessMeta: {
+        kind: "deal",
+        updatedAt: readStringField(deal, ["updatedAt", "lastUpdatedAt"]),
+        confirmedAt: readStringField(deal, ["confirmedAt", "lastConfirmedAt"]),
+        hasDeal: true,
+      },
       score,
     });
   }
@@ -2295,31 +2459,29 @@ function CravingCompass({
     if (!topPick?.meta) return null;
     return getMetaDistance(topPick.meta);
   }, [topPick]);
-  const topPickMetaSignals = useMemo(() => {
-    if (!topPick) return [] as string[];
-    const signals = new Set<string>();
-
-    if (topPick.kind === "Truck") signals.add("Food truck");
-    if (topPick.kind === "Deal") signals.add("Deal today");
-    if (topPick.kind === "Menu") signals.add("Menu updated");
-    if (topPickDistance) {
-      signals.add(`${topPickDistance} away`);
-      signals.add("Nearby");
-    }
-    if (topPick.kind === "Truck") signals.add("Food truck");
-
-    const source = `${topPick.meta || ""} ${topPick.reason || ""}`.toLowerCase();
-    if (/\btoday\b/.test(source)) signals.add("Happening today");
-    if (/(new|fresh|updated|menu updated)/.test(source)) signals.add("Menu updated");
-    if (/\btruck\b/.test(source)) signals.add("Food truck");
-    if (/(deal|discount|off|special|offer)/.test(source)) signals.add("Deal today");
-    if (/(open now|open for|serving now|currently open|open)/.test(source))
-      signals.add("Open now");
-    if (/(close|closing|closes soon)/.test(source)) signals.add("Closes soon");
-    if (/(quick|fast|lunch|bite)/.test(source)) signals.add("Quick bite");
-
-    return [...signals];
+  const topPickFreshnessMeta = useMemo<FreshnessMeta | null>(() => {
+    if (!topPick) return null;
+    return {
+      ...topPick.freshnessMeta,
+      kind: topPick.kind,
+      meta: topPick.meta,
+      reason: topPick.reason,
+      hasDeal: topPick.freshnessMeta?.hasDeal || topPick.kind === "Deal" || /deal|discount|off|special|offer/i.test(topPick.reason || ""),
+      hasMenu: topPick.freshnessMeta?.hasMenu || topPick.kind === "Menu" || /menu updated|new|fresh/i.test(topPick.reason || ""),
+      hasDistance: topPick.freshnessMeta?.hasDistance || Boolean(topPickDistance),
+      isOpen: topPick.freshnessMeta?.isOpen || topPick.kind === "Truck" || /open now|open for|serving now|currently open|open/i.test(`${topPick.meta || ""} ${topPick.reason || ""}`),
+      closesSoon: topPick.freshnessMeta?.closesSoon || /close|closing|closes soon/i.test(`${topPick.meta || ""} ${topPick.reason || ""}`),
+    };
   }, [topPick, topPickDistance]);
+  const topPickMetaSignals = useMemo(() => {
+    if (!topPick || !topPickFreshnessMeta) return [] as string[];
+    const labels = new Set<string>(getOperationalBadges(topPickFreshnessMeta));
+    if (topPickDistance) {
+      labels.add(`${topPickDistance} away`);
+    }
+    if (/quick|fast|lunch|bite/i.test(topPick.reason || "")) labels.add("Quick bite");
+    return [...labels];
+  }, [topPick, topPickDistance, topPickFreshnessMeta]);
   const orderedCravings = useMemo(() => {
     const orderedIds = [
       "open-now",
@@ -2337,24 +2499,20 @@ function CravingCompass({
 
   const topPickProofBits = useMemo(() => {
     if (!topPick) return ["Nearby now", "Happening today"];
-    const bits = [...topPickMetaSignals];
+    const bits = topPickFreshnessMeta
+      ? [getFreshnessLabel(topPickFreshnessMeta), ...topPickMetaSignals]
+      : [...topPickMetaSignals];
     if (!bits.includes("Open now")) bits.push("Open now");
     if (!bits.includes("Nearby")) bits.push("Nearby");
     return [...new Set(bits)].slice(0, 4);
-  }, [topPick, hasLocation, topPickMetaSignals]);
+  }, [topPick, topPickFreshnessMeta, topPickMetaSignals]);
 
   const topPickBadges = useMemo(() => {
-    if (!topPick) return [];
-    const badges = new Set<string>();
+    if (!topPick || !topPickFreshnessMeta) return [];
+    const badges = new Set<string>(getOperationalBadges(topPickFreshnessMeta));
     if (topPickDistance) badges.add("Nearby");
-    if (topPick.kind === "Truck") badges.add("Food truck");
-    if (topPickMetaSignals.includes("Deal today")) badges.add("Deal today");
-    if (topPickMetaSignals.includes("Open now")) badges.add("Open now");
-    if (topPickMetaSignals.includes("Menu updated")) badges.add("Menu updated");
-    if (topPickMetaSignals.includes("Closes soon")) badges.add("Closes soon");
-    if (topPickMetaSignals.includes("Food truck")) badges.add("Food truck");
     return Array.from(badges).slice(0, 3);
-  }, [topPick, topPickDistance, topPickMetaSignals]);
+  }, [topPick, topPickDistance, topPickFreshnessMeta]);
   const topPickMenuHref =
     topPick && (topPick.kind === "Place" || topPick.kind === "Menu")
       ? `${topPick.href}?tab=menu`
@@ -2608,6 +2766,14 @@ function ScoutSearchResultCard({
   featured: boolean;
 }) {
   const image = item.imageUrl || fallbackImage;
+  const badges = getOperationalBadges(
+    item.freshnessMeta || {
+      kind: item.kind,
+      meta: item.meta,
+      reason: item.reason,
+      hasDistance: Boolean(item.meta && getMetaDistance(item.meta)),
+    },
+  ).slice(0, featured ? 3 : 2);
   return (
     <Link
       href={item.href}
@@ -2652,6 +2818,16 @@ function ScoutSearchResultCard({
             {item.reason}
           </p>
         ) : null}
+        <div className="mt-2 flex flex-wrap gap-1">
+          {badges.map((badge) => (
+            <span
+              key={badge}
+              className="rounded-full bg-white/8 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-orange-100"
+            >
+              {badge}
+            </span>
+          ))}
+        </div>
       </div>
     </Link>
   );
@@ -2775,6 +2951,14 @@ function LiveTruckCard({ truck }: { truck: LiveTruckSummary }) {
   const wait = formatWait(truck);
   const vibe = getCrowdVibe(truck);
   const heroImage = truck.heroImageUrl || truck.imageUrl || truck.logoUrl;
+  const badges = getOperationalBadges({
+    kind: "truck",
+    updatedAt: readStringField(truck, ["updatedAt", "lastUpdatedAt"]),
+    confirmedAt: readStringField(truck, ["confirmedAt", "lastConfirmedAt"]),
+    hasDeal: Boolean(truck.activeDealCount && truck.activeDealCount > 0),
+    hasDistance: Boolean(distance),
+    isOpen: true,
+  }).slice(0, 3);
 
   return (
     <Link
@@ -2840,6 +3024,16 @@ function LiveTruckCard({ truck }: { truck: LiveTruckSummary }) {
           <p className="mt-1 text-white/75 text-xs">
             {[wait, distance].filter(Boolean).join(" • ") || "Open now"}
           </p>
+          <div className="mt-2 flex flex-wrap gap-1">
+            {badges.map((badge) => (
+              <span
+                key={badge}
+                className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-orange-100 ring-1 ring-white/10"
+              >
+                {badge}
+              </span>
+            ))}
+          </div>
         </div>
       </div>
     </Link>
@@ -2847,6 +3041,13 @@ function LiveTruckCard({ truck }: { truck: LiveTruckSummary }) {
 }
 
 function DealCard({ deal }: { deal: DealSummary }) {
+  const badges = getOperationalBadges({
+    kind: "deal",
+    updatedAt: readStringField(deal, ["updatedAt", "lastUpdatedAt"]),
+    confirmedAt: readStringField(deal, ["confirmedAt", "lastConfirmedAt"]),
+    hasDeal: true,
+  }).slice(0, 2);
+
   return (
     <Link
       href={`/deal/${deal.id}`}
@@ -2894,6 +3095,16 @@ function DealCard({ deal }: { deal: DealSummary }) {
               {deal.restaurantName}
             </p>
           )}
+          <div className="mt-2 flex flex-wrap gap-1">
+            {badges.map((badge) => (
+              <span
+                key={badge}
+                className="rounded-full bg-orange-300/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-orange-100 ring-1 ring-orange-200/20"
+              >
+                {badge}
+              </span>
+            ))}
+          </div>
         </div>
       </div>
     </Link>
@@ -2936,6 +3147,13 @@ function LocalMenuItemCard({
   const tags = Array.isArray(item.dietaryTags)
     ? item.dietaryTags.filter(Boolean).slice(0, 2)
     : [];
+  const badges = getOperationalBadges({
+    kind: "menu",
+    updatedAt: readStringField(item, ["updatedAt", "lastUpdatedAt"]),
+    confirmedAt: readStringField(item, ["confirmedAt", "lastConfirmedAt"]),
+    hasMenu: true,
+    hasDistance: Boolean(distLabel),
+  }).slice(0, 3);
 
   useEffect(() => {
     trackLocalMenuItemEngagement({
@@ -3035,12 +3253,16 @@ function LocalMenuItemCard({
             ))}
           </div>
         )}
-        {Array.isArray(item.discoveryReasons) &&
-          item.discoveryReasons.length > 0 && (
-            <p className="mt-2 text-[10px] font-semibold text-orange-200/70">
-              {item.discoveryReasons.slice(0, 2).join(" + ")}
-            </p>
-          )}
+        <div className="mt-2 flex flex-wrap gap-1">
+          {badges.map((badge) => (
+            <span
+              key={badge}
+              className="rounded-full bg-orange-300/12 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-orange-100"
+            >
+              {badge}
+            </span>
+          ))}
+        </div>
       </div>
     </Link>
   );
@@ -3058,6 +3280,13 @@ function EventCard({ event }: { event: EventSummary }) {
       })
     : "";
   const img = event.heroImageUrl || event.imageUrl;
+  const badges = getOperationalBadges({
+    kind: "event",
+    startsAt: event.startsAt,
+    startTime: event.startTime,
+    updatedAt: readStringField(event, ["updatedAt", "lastUpdatedAt"]),
+    confirmedAt: readStringField(event, ["confirmedAt", "lastConfirmedAt"]),
+  }).slice(0, 2);
   return (
     <Link
       href={`/event/${event.id}`}
@@ -3104,6 +3333,16 @@ function EventCard({ event }: { event: EventSummary }) {
               {startLabel}
             </p>
           )}
+          <div className="mt-2 flex flex-wrap gap-1">
+            {badges.map((badge) => (
+              <span
+                key={badge}
+                className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-orange-100 ring-1 ring-white/10"
+              >
+                {badge}
+              </span>
+            ))}
+          </div>
         </div>
       </div>
     </Link>
@@ -3207,11 +3446,17 @@ function NearbyRestaurantCard({
     communityActivityCount > 0 ? "active buzz" : null,
   ].filter((update): update is string => Boolean(update));
   const statusLabels = [
-    dealCount > 0 ? "Deal today" : null,
-    menuPreview.length > 0 ? "Menu updated" : null,
-    communityUpdates.length > 0 ? "Community update" : null,
-    distLabel ? "Nearby" : null,
-  ].filter((label): label is string => Boolean(label));
+    ...getOperationalBadges({
+      kind: "restaurant",
+      updatedAt: readStringField(restaurant, ["updatedAt", "lastUpdatedAt"]),
+      confirmedAt: readStringField(restaurant, ["confirmedAt", "lastConfirmedAt"]),
+      hasDeal: dealCount > 0,
+      hasMenu: menuPreview.length > 0,
+      hasCommunityUpdate: communityUpdates.length > 0,
+      hasDistance: Boolean(distLabel),
+      isOpen: true,
+    }),
+  ];
   const rankingReason =
     communityUpdates.length > 0
       ? `Community activity: ${communityUpdates.slice(0, 2).join(" + ")}`
@@ -4022,6 +4267,14 @@ function TruckCard({
     typeof wait === "number" && Number.isFinite(wait) && wait > 0
       ? `~${Math.round(wait)} min`
       : null;
+  const badges = getOperationalBadges({
+    kind: "truck",
+    updatedAt: readStringField(truck, ["updatedAt", "lastUpdatedAt"]),
+    confirmedAt: readStringField(truck, ["confirmedAt", "lastConfirmedAt"]),
+    hasDeal: Boolean(truck.activeDealCount && truck.activeDealCount > 0),
+    hasDistance: Boolean(distLabel),
+    isOpen: true,
+  }).slice(0, 3);
 
   return (
     <Link
@@ -4073,6 +4326,16 @@ function TruckCard({
           {distLabel && <span className="text-white/60 text-[11px]">{distLabel}</span>}
           {distLabel && waitLabel && <span className="text-white/30 text-[11px]">·</span>}
           {waitLabel && <span className="text-white/50 text-[11px]">{waitLabel} wait</span>}
+        </div>
+        <div className="mt-2 flex flex-wrap gap-1">
+          {badges.map((badge) => (
+            <span
+              key={badge}
+              className="rounded-full bg-white/8 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-orange-100"
+            >
+              {badge}
+            </span>
+          ))}
         </div>
       </div>
     </Link>
