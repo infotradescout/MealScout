@@ -25,7 +25,7 @@ import {
 } from "./utils/passwordPolicy";
 import { db } from "./db";
 import { emailSequenceSends, users } from "@shared/schema";
-import { eq, or, sql } from "drizzle-orm";
+import { and, eq, or, sql } from "drizzle-orm";
 import {
   ensureAffiliateTag,
   resolveAffiliateUserId,
@@ -280,7 +280,7 @@ export async function setupUnifiedAuth(app: Express) {
     req: any,
     welcomeLabel: string,
     intendedNextPath?: string | null,
-  ) => {
+  ): Promise<boolean> => {
     try {
       const verifyUrl =
         user.email && !user.emailVerified
@@ -294,23 +294,46 @@ export async function setupUnifiedAuth(app: Express) {
         user.userType === "admin";
 
       if (supportsWelcome) {
-        emailService
-          .sendWelcomeEmail(user, verifyUrl ?? undefined)
-          .catch((err) =>
-            console.error(`Failed to send ${welcomeLabel} welcome email:`, err),
-          );
-        return;
+        const ok = await emailService.sendWelcomeEmail(
+          user,
+          verifyUrl ?? undefined,
+        );
+        if (!ok) {
+          console.error(`Failed to send ${welcomeLabel} welcome email`, {
+            userId: user.id,
+            email: user.email,
+            userType: user.userType,
+          });
+        }
+        return ok;
       }
 
       if (verifyUrl) {
-        emailService
-          .sendEmailVerificationEmail(user, verifyUrl)
-          .catch((err) =>
-            console.error("Failed to send email verification:", err),
-          );
+        const ok = await emailService.sendEmailVerificationEmail(
+          user,
+          verifyUrl,
+        );
+        if (!ok) {
+          console.error("Failed to send email verification", {
+            userId: user.id,
+            email: user.email,
+            userType: user.userType,
+          });
+        }
+        return ok;
       }
+
+      console.warn("[auth] No account email sent for signup", {
+        userId: user.id,
+        email: user.email,
+        userType: user.userType,
+        hasVerifyUrl: Boolean(verifyUrl),
+        supportsWelcome,
+      });
+      return false;
     } catch (error) {
       console.error(`Failed to prepare ${welcomeLabel} welcome email:`, error);
+      return false;
     }
   };
 
@@ -364,6 +387,23 @@ export async function setupUnifiedAuth(app: Express) {
     return inserted.length > 0;
   };
 
+  const hasAccountCreationEmailReservation = async (
+    user: User,
+  ): Promise<boolean> => {
+    const existing = await db
+      .select({ id: emailSequenceSends.id })
+      .from(emailSequenceSends)
+      .where(
+        and(
+          eq(emailSequenceSends.userId, user.id),
+          eq(emailSequenceSends.sequence, "account_creation"),
+          eq(emailSequenceSends.step, 1),
+        ),
+      )
+      .limit(1);
+    return existing.length > 0;
+  };
+
   const sendAccountCreationEmails = async (
     user: User,
     req: any,
@@ -390,12 +430,7 @@ export async function setupUnifiedAuth(app: Express) {
         return;
       }
 
-      const reserved = await reserveAccountCreationEmail(user, {
-        signupMethod: params.signupMethod,
-        welcomeLabel: params.welcomeLabel,
-        source: "unified_auth",
-      });
-      if (!reserved) {
+      if (await hasAccountCreationEmailReservation(user)) {
         console.log("[auth] Account creation email already sent; skipping", {
           userId: user.id,
           signupMethod: params.signupMethod,
@@ -403,12 +438,25 @@ export async function setupUnifiedAuth(app: Express) {
         return;
       }
 
-      void sendWelcomeOrVerification(
+      const userEmailSent = await sendWelcomeOrVerification(
         user,
         req,
         params.welcomeLabel,
         params.intendedNextPath,
       );
+      if (!userEmailSent) {
+        console.error("[auth] Account creation email failed; not marking sent", {
+          userId: user.id,
+          email: user.email,
+          signupMethod: params.signupMethod,
+        });
+      } else {
+        await reserveAccountCreationEmail(user, {
+          signupMethod: params.signupMethod,
+          welcomeLabel: params.welcomeLabel,
+          source: "unified_auth",
+        });
+      }
       if (params.notifyAdmin === false) {
         return;
       }
