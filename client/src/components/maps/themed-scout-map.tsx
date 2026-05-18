@@ -56,7 +56,7 @@ const MINI_MAP_STYLE: StyleSpecification = {
       paint: {
         "raster-opacity": 1,
         "raster-brightness-min": 0.08,
-        "raster-brightness-max": 1.08,
+        "raster-brightness-max": 1,
         "raster-saturation": 0.14,
         "raster-contrast": 0.08,
       },

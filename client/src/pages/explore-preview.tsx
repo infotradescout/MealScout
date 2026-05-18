@@ -262,7 +262,7 @@ const CRAVING_CATEGORIES: CravingCategory[] = [
   },
 ];
 
-type CompassPickRole = "Reliable" | "Local Signal" | "Wildcard";
+type CompassPickRole = "Best Match" | "Menu Lead" | "Nearby Option";
 
 type CompassRecommendation = {
   id: string;
@@ -386,6 +386,42 @@ function scoreTextForCraving(text: string, craving: CravingCategory): number {
   );
 }
 
+function getRestaurantCravingScore(
+  restaurant: RestaurantSummary,
+  craving: CravingCategory,
+): number {
+  const text = `${getRestaurantName(restaurant)} ${restaurant.cuisineType || ""} ${restaurant.description || ""}`;
+  return scoreTextForCraving(text, craving);
+}
+
+function getTruckCravingScore(
+  truck: LiveTruckSummary,
+  craving: CravingCategory,
+): number {
+  const text = `${truck.name} ${truck.cuisineType || ""} ${truck.vibe || ""}`;
+  return scoreTextForCraving(text, craving);
+}
+
+function getMenuItemCravingScore(
+  item: LocalMenuItemFeedItem,
+  craving: CravingCategory,
+): number {
+  const text = `${item.name} ${item.description || ""} ${item.cuisineType || ""} ${(item.discoveryReasons || []).join(" ")}`;
+  return scoreTextForCraving(text, craving);
+}
+
+function getRestaurantDiscoveryReason(restaurant: RestaurantSummary): string {
+  const signals = [
+    Number(restaurant.favoriteCount || 0) > 0 ? "saved by locals" : null,
+    Number(restaurant.videoRecommendationCount || 0) > 0 ? "recent video recs" : null,
+    Number(restaurant.recommendationCount || 0) > 0 ? "community recs" : null,
+    Number(restaurant.activeDealsCount || restaurant.activeDealCount || 0) > 0 ? "active deal" : null,
+  ].filter(Boolean);
+  return signals.length > 0
+    ? `Local signal: ${signals.slice(0, 2).join(" + ")}.`
+    : "Nearby and active enough to keep on the board.";
+}
+
 function buildCompassRecommendations({
   craving,
   liveTrucks,
@@ -411,94 +447,130 @@ function buildCompassRecommendations({
     picks.push(pick);
   };
 
-  const rankedTrucks = [...liveTrucks].sort((a, b) => {
-    const aText = `${a.name} ${a.cuisineType || ""} ${a.vibe || ""}`;
-    const bText = `${b.name} ${b.cuisineType || ""} ${b.vibe || ""}`;
-    return (
-      scoreTextForCraving(bText, craving) - scoreTextForCraving(aText, craving) ||
-      (a.distanceMiles ?? 999) - (b.distanceMiles ?? 999)
-    );
-  });
-  const rankedRestaurants = [...restaurants].sort((a, b) => {
-    const aText = `${getRestaurantName(a)} ${a.cuisineType || ""} ${a.description || ""} ${a.homeRankingReason || ""}`;
-    const bText = `${getRestaurantName(b)} ${b.cuisineType || ""} ${b.description || ""} ${b.homeRankingReason || ""}`;
-    return (
-      scoreTextForCraving(bText, craving) - scoreTextForCraving(aText, craving) ||
+  const rankedTrucks = [...liveTrucks].sort(
+    (a, b) =>
+      getTruckCravingScore(b, craving) - getTruckCravingScore(a, craving) ||
+      (a.distanceMiles ?? 999) - (b.distanceMiles ?? 999),
+  );
+  const rankedRestaurants = [...restaurants].sort(
+    (a, b) =>
+      getRestaurantCravingScore(b, craving) - getRestaurantCravingScore(a, craving) ||
       (b.homeRankingScore ?? 0) - (a.homeRankingScore ?? 0) ||
-      (a.distanceMiles ?? 999) - (b.distanceMiles ?? 999)
-    );
-  });
-  const rankedMenuItems = [...menuItems].sort((a, b) => {
-    const aText = `${a.name} ${a.description || ""} ${a.cuisineType || ""} ${(a.discoveryReasons || []).join(" ")}`;
-    const bText = `${b.name} ${b.description || ""} ${b.cuisineType || ""} ${(b.discoveryReasons || []).join(" ")}`;
-    return (
-      scoreTextForCraving(bText, craving) - scoreTextForCraving(aText, craving) ||
+      (a.distanceMiles ?? 999) - (b.distanceMiles ?? 999),
+  );
+  const rankedMenuItems = [...menuItems].sort(
+    (a, b) =>
+      getMenuItemCravingScore(b, craving) - getMenuItemCravingScore(a, craving) ||
       (b.discoveryScore ?? 0) - (a.discoveryScore ?? 0) ||
-      (a.distanceMiles ?? 999) - (b.distanceMiles ?? 999)
-    );
-  });
+      (a.distanceMiles ?? 999) - (b.distanceMiles ?? 999),
+  );
 
-  const safeTruck = rankedTrucks[0];
-  const safeRestaurant = rankedRestaurants[0];
+  const matchedTrucks = rankedTrucks.filter((truck) => getTruckCravingScore(truck, craving) > 0);
+  const matchedRestaurants = rankedRestaurants.filter(
+    (restaurant) => getRestaurantCravingScore(restaurant, craving) > 0,
+  );
+  const matchedMenuItems = rankedMenuItems.filter(
+    (item) => getMenuItemCravingScore(item, craving) > 0,
+  );
+
+  const safeTruck = matchedTrucks[0];
+  const safeRestaurant = matchedRestaurants[0];
   if (safeTruck) {
     const wait = formatWait(safeTruck);
     const distance = formatDistance(safeTruck);
     addPick({
       id: `truck-${safeTruck.id}`,
-      role: "Reliable",
+      role: "Best Match",
       title: safeTruck.name,
       subtitle: safeTruck.cuisineType || "Live food truck",
       href: `/truck/${safeTruck.id}`,
       reason:
         [distance, wait].filter(Boolean).join(", ") ||
-        `Closest strong match for ${craving.label.toLowerCase()}, open now.`,
+        `Live nearby option for ${craving.label.toLowerCase()}.`,
       meta: "Open now",
     });
   } else if (safeRestaurant) {
     const distance = getRestaurantDistance(safeRestaurant);
     addPick({
       id: `restaurant-${safeRestaurant.id}`,
-      role: "Reliable",
+      role: "Best Match",
       title: getRestaurantName(safeRestaurant),
       subtitle: safeRestaurant.cuisineType || "Nearby restaurant",
       href: `/restaurant/${safeRestaurant.id}`,
       reason:
-        safeRestaurant.homeRankingReason ||
-        `Closest strong match for ${craving.label.toLowerCase()}${distance ? `, ${distance} away` : ""}.`,
+        `Matches ${craving.label.toLowerCase()}${distance ? ` within ${distance}` : ""}.`,
       meta: distance || "Nearby",
     });
   }
 
-  const scoutMenuItem = rankedMenuItems.find(
+  const scoutMenuItem = matchedMenuItems.find(
     (item) => !used.has(`menu-${item.id}`),
   );
-  const scoutRestaurant = rankedRestaurants.find(
+  const scoutRestaurant = matchedRestaurants.find(
     (restaurant) => !used.has(`restaurant-${restaurant.id}`),
   );
   if (scoutMenuItem) {
     addPick({
       id: `menu-${scoutMenuItem.id}`,
-      role: "Local Signal",
+      role: "Menu Lead",
       title: scoutMenuItem.name,
       subtitle: scoutMenuItem.restaurantName || "Local menu item",
       href: `/restaurant/${scoutMenuItem.restaurantId}`,
       reason:
         scoutMenuItem.discoveryReasons?.[0] ||
-        `A new ${craving.label.toLowerCase()} menu item open and nearby.`,
+        `Menu item that lines up with ${craving.label.toLowerCase()}.`,
       meta: formatMiles(scoutMenuItem.distanceMiles) || scoutMenuItem.cuisineType || "Fresh menu",
     });
   } else if (scoutRestaurant) {
     addPick({
       id: `restaurant-${scoutRestaurant.id}`,
-      role: "Local Signal",
+      role: "Menu Lead",
       title: getRestaurantName(scoutRestaurant),
       subtitle: scoutRestaurant.cuisineType || "Local restaurant",
       href: `/restaurant/${scoutRestaurant.id}`,
-      reason:
-        scoutRestaurant.homeRankingReason ||
-        "Open now and nearby, with quieter local buzz.",
-      meta: getRestaurantDistance(scoutRestaurant) || "Open now",
+      reason: getRestaurantDiscoveryReason(scoutRestaurant),
+      meta: getRestaurantDistance(scoutRestaurant) || "Local signal",
     });
+  }
+
+  const fallbackSearches: CompassRecommendation[] = [
+    {
+      id: "fallback-safe",
+      role: "Best Match",
+      title: craving.label,
+      subtitle: craving.helper,
+      href: `/search?q=${encodeURIComponent(craving.query)}`,
+      reason:
+        localSignalCount > 0
+          ? "Open search to see every nearby result for this craving."
+          : "No matching live signal yet. Search can widen the area.",
+      meta: "Search",
+    },
+    {
+      id: "fallback-scout",
+      role: "Menu Lead",
+      title: "Fresh menus",
+      subtitle: "New items nearby",
+      href: "/search",
+      reason: "New menu items are the cleanest way to find a real dish match.",
+      meta: "Menus",
+    },
+    {
+      id: "fallback-wildcard",
+      role: "Nearby Option",
+      title: "Tonight's deals",
+      subtitle: "Something different, on offer",
+      href: "/deals",
+      reason: "Check deals when the craving is flexible and price matters.",
+      meta: "Deals",
+    },
+  ];
+
+  if (!usedRoles.has("Best Match")) {
+    addPick(fallbackSearches[0]);
+  }
+  if (!usedRoles.has("Menu Lead")) {
+    addPick(fallbackSearches[1]);
   }
 
   const deal = deals[0];
@@ -509,69 +581,42 @@ function buildCompassRecommendations({
   if (deal) {
     addPick({
       id: `deal-${deal.id}`,
-      role: "Wildcard",
+      role: "Nearby Option",
       title: deal.title || "Nearby deal",
       subtitle: deal.restaurantName || "Deal near you",
       href: `/deal/${deal.id}`,
       reason:
         deal.description ||
-        "A deal worth switching lanes for if nothing else is calling you.",
+        "A nearby offer worth checking if you are open to changing direction.",
       meta: deal.discountText || "Deal",
     });
   } else if (wildcardTruck) {
     addPick({
       id: `truck-${wildcardTruck.id}`,
-      role: "Wildcard",
+      role: "Nearby Option",
       title: wildcardTruck.name,
       subtitle: wildcardTruck.cuisineType || "Live food truck",
       href: `/truck/${wildcardTruck.id}`,
-      reason: "Something different if you want to switch lanes tonight.",
+      reason:
+        getTruckCravingScore(wildcardTruck, craving) > 0
+          ? `Live nearby option that also matches ${craving.label.toLowerCase()}.`
+          : "Live nearby option if you are open to something different.",
       meta: formatDistance(wildcardTruck) || "Open now",
     });
   } else if (wildcardRestaurant) {
     addPick({
       id: `restaurant-${wildcardRestaurant.id}`,
-      role: "Wildcard",
+      role: "Nearby Option",
       title: getRestaurantName(wildcardRestaurant),
       subtitle: wildcardRestaurant.cuisineType || "Nearby restaurant",
       href: `/restaurant/${wildcardRestaurant.id}`,
-      reason: "Off the obvious path, still close enough to commit to.",
+      reason:
+        getRestaurantCravingScore(wildcardRestaurant, craving) > 0
+          ? `Nearby option that matches ${craving.label.toLowerCase()}.`
+          : "Nearby reliable spot if you are open to switching cuisines.",
       meta: getRestaurantDistance(wildcardRestaurant) || "Try it",
     });
   }
-
-  const fallbackSearches: CompassRecommendation[] = [
-    {
-      id: "fallback-safe",
-      role: "Reliable",
-      title: `All ${craving.label.toLowerCase()} nearby`,
-      subtitle: craving.helper,
-      href: `/search?q=${encodeURIComponent(craving.query)}`,
-      reason:
-        localSignalCount > 0
-          ? `Open the full ${craving.label.toLowerCase()} list across the radar tonight.`
-          : `Broaden the ${craving.label.toLowerCase()} search and let Scout keep sweeping.`,
-      meta: "Search",
-    },
-    {
-      id: "fallback-scout",
-      role: "Local Signal",
-      title: "New on local menus",
-      subtitle: "Fresh items, open now",
-      href: "/search",
-      reason: "New menu items nearby — a quieter pick worth a look.",
-      meta: "Menus",
-    },
-    {
-      id: "fallback-wildcard",
-      role: "Wildcard",
-      title: "Tonight's deals",
-      subtitle: "Something different, on offer",
-      href: "/deals",
-      reason: "A deal can break the tie when nothing obvious is calling.",
-      meta: "Deals",
-    },
-  ];
 
   for (const fallback of fallbackSearches) addPick(fallback);
   return picks.slice(0, 3);
@@ -1492,14 +1537,15 @@ export default function ExplorePreview() {
         description="Discover live food trucks, restaurants, and deals near you. MealScout puts the local food scene right in your hands."
       />
 
-      {/* Atmospheric page base — approved Atmospheric UI reference photo
-          with a soft vertical gradient so the scene reads through clearly
-          while content surfaces stay legible. */}
+      {/* Quiet page base. The food park photo was fighting the actual app
+          content, so keep the brand atmosphere subtle and let the controls
+          carry the experience. */}
       <div
         aria-hidden="true"
-        className="pointer-events-none fixed inset-0 -z-20 bg-cover bg-center bg-no-repeat bg-[#08060a]"
+        className="pointer-events-none fixed inset-0 -z-20 bg-[#08060a]"
         style={{
-          backgroundImage: `url('${SCOUT_BACKGROUND_IMAGE}')`,
+          backgroundImage:
+            "radial-gradient(90% 50% at 50% -8%, rgba(255,138,60,0.20) 0%, rgba(8,6,10,0) 58%), linear-gradient(180deg, #100906 0%, #070609 62%, #050507 100%)",
         }}
       />
       <div
@@ -1507,7 +1553,7 @@ export default function ExplorePreview() {
         className="pointer-events-none fixed inset-0 -z-10"
         style={{
           backgroundImage:
-            "radial-gradient(120% 70% at 50% 0%, rgba(255,138,60,0.18) 0%, rgba(10,6,4,0) 44%), linear-gradient(180deg, rgba(8,6,10,0.35) 0%, rgba(8,6,10,0.62) 42%, rgba(6,4,8,0.92) 100%)",
+            "linear-gradient(180deg, rgba(8,6,10,0.08) 0%, rgba(8,6,10,0.42) 100%)",
         }}
       />
 
@@ -1539,7 +1585,7 @@ export default function ExplorePreview() {
           }`}
           style={{
             height:
-              sheetState === "fullMap" ? "100dvh" : "clamp(264px, 40vh, 356px)",
+              sheetState === "fullMap" ? "100dvh" : "clamp(168px, 22vh, 204px)",
             transition: "height 320ms cubic-bezier(0.22,0.61,0.36,1)",
             touchAction: "auto",
             overscrollBehaviorY: "none",
@@ -1879,6 +1925,25 @@ export default function ExplorePreview() {
           <div
             className="relative z-10 mt-4"
           >
+            <CravingCompass
+              cravings={CRAVING_CATEGORIES}
+              selectedCraving={selectedCraving}
+              recommendations={compassRecommendations}
+              locationLabel={shortLocation}
+              locationStatus={locationStatus}
+              liveTruckCount={liveTrucks.length}
+              restaurantCount={nearbyRestaurants.length}
+              menuItemCount={localMenuItems.length}
+              dealCount={allDeals.length}
+              eventCount={visibleEvents.length}
+              localSignalCount={localSignalCount}
+              discoveryRadiusKm={discoveryRadiusKm}
+              onRadiusChange={updateDiscoveryRadiusKm}
+              onRefreshLocation={requestLocation}
+              onCravingSelect={setSelectedCravingId}
+              onSearchCraving={goToCraving}
+            />
+
             {/* OPEN NOW — broad live signal across trucks, restaurants, bars, and public events. */}
             <OpenNowSection
               liveTrucks={liveTrucks}
@@ -2006,37 +2071,15 @@ export default function ExplorePreview() {
               </section>
             )}
 
-            {/* ── CAN'T PICK? — Meal Radar (CravingCompass) ──
-                 The radar is a decision assistant, not the hero. Users meet
-                 it AFTER the map and the primary discovery feeds, when they
-                 still can't pick. Kept compact and on-brand. */}
-            <CravingCompass
-              cravings={CRAVING_CATEGORIES}
-              selectedCraving={selectedCraving}
-              recommendations={compassRecommendations}
-              locationLabel={shortLocation}
-              locationStatus={locationStatus}
-              liveTruckCount={liveTrucks.length}
-              restaurantCount={nearbyRestaurants.length}
-              menuItemCount={localMenuItems.length}
-              dealCount={allDeals.length}
-              eventCount={visibleEvents.length}
-              localSignalCount={localSignalCount}
-              discoveryRadiusKm={discoveryRadiusKm}
-              onRadiusChange={updateDiscoveryRadiusKm}
-              onRefreshLocation={requestLocation}
-              onCravingSelect={setSelectedCravingId}
-              onSearchCraving={goToCraving}
-            />
-
             {/* ── YOUR SAVED ── */}
-            <section className="px-5 pt-2 pb-12">
-              <SectionHeader
-                title={DISCOVERY_LAYERS.saved.title}
-                linkHref={DISCOVERY_LAYERS.saved.href}
-                subtitle={DISCOVERY_LAYERS.saved.subtitle}
-              />
-              {user && savedRestaurants.length > 0 ? (
+            {user ? (
+              <section className="px-5 pt-2 pb-12">
+                <SectionHeader
+                  title={DISCOVERY_LAYERS.saved.title}
+                  linkHref={DISCOVERY_LAYERS.saved.href}
+                  subtitle={DISCOVERY_LAYERS.saved.subtitle}
+                />
+                {savedRestaurants.length > 0 ? (
                 <div className="overflow-x-auto atmo-hide-scrollbar -mr-5">
                   <ul className="flex gap-3 pr-5" role="list" aria-label="Your saved restaurants">
                     {savedRestaurants.slice(0, 8).map((restaurant) => (
@@ -2068,20 +2111,19 @@ export default function ExplorePreview() {
                       <Bookmark className="h-5 w-5 text-orange-300" />
                     </span>
                     <div className="flex-1 min-w-0">
-                      <p className="text-white font-semibold">
-                        {user ? "No saved spots yet" : "Save your food map"}
+                        <p className="text-white font-semibold">
+                          No saved spots yet
                       </p>
                       <p className="text-white/60 text-sm mt-0.5">
-                        {user
-                          ? "Tap Save on restaurants worth coming back to."
-                          : "Sign in to keep restaurants, deals, and places you want to revisit."}
+                          Tap Save on restaurants worth coming back to.
                       </p>
                     </div>
                     <ChevronRight className="h-5 w-5 text-white/50" aria-hidden="true" />
                   </div>
                 </button>
               )}
-            </section>
+              </section>
+            ) : null}
           </div>
         )}
       </main>
@@ -2176,294 +2218,136 @@ function CravingCompass({
       : hasLocation
         ? "No nearby signal yet"
         : "Location off";
-
-  const radiusOptions = [5, 12, 25, 40];
-  const radiusMiles = Math.max(1, Math.round(discoveryRadiusKm * 0.621371));
-  const signalSummary = [
-    liveTruckCount > 0 ? `${liveTruckCount} live` : null,
-    restaurantCount > 0 ? `${restaurantCount} spots` : null,
-    menuItemCount > 0 ? `${menuItemCount} menus` : null,
-    dealCount > 0 ? `${dealCount} deals` : null,
-    eventCount > 0 ? `${eventCount} events` : null,
-  ]
-    .filter(Boolean)
-    .join(" / ");
-
-  const cravingCount = cravings.length;
-  const activeIndex = Math.max(
-    0,
-    cravings.findIndex((cat) => cat.id === selectedCraving.id),
-  );
-  // Active craving sits at the top of the dial; sweep rotates to face it.
-  const sweepAngle = (activeIndex / Math.max(cravingCount, 1)) * 360;
-  const emptyState =
-    !hasLocation
-      ? "Turn on location and Scout reads the menus, deals, and open spots within reach."
-      : localSignalCount === 0
-        ? "Nothing pinging yet. Scout is reading nearby menus and open spots."
-        : null;
+  const primaryPick = recommendations[0];
+  const secondaryPicks = recommendations.slice(1, 3);
+  void locationLabel;
+  void liveTruckCount;
+  void restaurantCount;
+  void menuItemCount;
+  void dealCount;
+  void eventCount;
+  void discoveryRadiusKm;
+  void onRadiusChange;
 
   return (
     <section className="px-4 pt-4 pb-5">
-      <div
-        className="rounded-[1.5rem] overflow-hidden ring-1 ring-white/10 bg-[#0b0808]/82 backdrop-blur-xl shadow-[0_22px_60px_rgba(0,0,0,0.6)]"
-        style={{
-          backgroundImage:
-            "radial-gradient(110% 80% at 12% 0%, rgba(255,140,60,0.18) 0%, rgba(0,0,0,0) 55%), radial-gradient(80% 60% at 92% 4%, rgba(251,191,36,0.10) 0%, rgba(0,0,0,0) 50%)",
-        }}
-      >
-        <div className="px-4 pt-4 pb-4">
-          <div className="flex items-start justify-between gap-3">
+      <div className="overflow-hidden rounded-[1.35rem] bg-[#21130e]/92 ring-1 ring-orange-200/25 shadow-[0_16px_46px_rgba(0,0,0,0.28)]">
+        <div
+          className="px-4 py-4"
+          style={{
+            backgroundImage:
+              "linear-gradient(180deg, rgba(77,38,18,0.38), rgba(22,12,9,0.12))",
+          }}
+        >
+          <div className="flex items-start justify-between gap-3 border-b border-white/10 pb-3">
             <div className="min-w-0">
-              <p className="text-[10px] uppercase tracking-[0.32em] text-orange-300/90 font-bold">
-                Can't pick?
-              </p>
-              <h2 className="mt-1 font-sans text-white text-[19px] font-extrabold leading-[1.15] tracking-tight">
-                Let Scout narrow it down.
+              <h2 className="font-sans text-white text-lg font-black leading-tight">
+                Pick a craving
               </h2>
+              <p className="mt-1 text-orange-50/62 text-xs leading-relaxed">
+                Exact matches first. Nearby alternatives are labeled clearly.
+              </p>
             </div>
-            <span className="shrink-0 inline-flex items-center gap-1.5 rounded-full bg-white/[0.06] ring-1 ring-white/10 px-2.5 py-1 text-[10px] font-semibold text-orange-100/90">
-              <span
-                className="h-1.5 w-1.5 rounded-full bg-orange-300 atmo-pulse-amber"
-                aria-hidden="true"
-              />
-              {signalLabel}
-            </span>
+            {hasLocation ? (
+              <span className="shrink-0 rounded-full bg-[#fff4e1]/10 ring-1 ring-orange-200/35 px-2.5 py-1 text-[11px] font-bold text-orange-100">
+                {signalLabel}
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={onRefreshLocation}
+                className="shrink-0 rounded-full bg-[#fff3e4] px-2.5 py-1 text-[11px] font-black text-orange-900 ring-1 ring-orange-200 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
+              >
+                Use location
+              </button>
+            )}
           </div>
 
-          {/* ── RADAR / COMPASS DIAL ─────────────────────────────────── */}
-          <div className="mt-3 flex justify-center">
-            <div
-              className="relative w-full max-w-[244px] aspect-square select-none"
-              role="group"
-              aria-label="Craving radar"
-            >
-              {/* Glow halo */}
-              <div
-                aria-hidden="true"
-                className="absolute inset-[10%] rounded-full"
-                style={{
-                  background:
-                    "radial-gradient(circle, rgba(255,140,60,0.28) 0%, rgba(255,90,47,0.10) 45%, rgba(0,0,0,0) 72%)",
-                  filter: "blur(2px)",
-                }}
-              />
-              {/* Concentric amber rings */}
-              <div
-                aria-hidden="true"
-                className="absolute inset-[6%] rounded-full border border-orange-400/35"
-              />
-              <div
-                aria-hidden="true"
-                className="absolute inset-[20%] rounded-full border border-orange-400/25"
-              />
-              <div
-                aria-hidden="true"
-                className="absolute inset-[34%] rounded-full border border-orange-400/20"
-              />
-              {/* Sweep beam — rotates to face the active craving */}
-              <div
-                aria-hidden="true"
-                className="absolute inset-0 transition-transform duration-500 ease-out"
-                style={{ transform: `rotate(${sweepAngle}deg)` }}
-              >
-                <div
-                  className="absolute left-1/2 top-1/2 h-1/2 w-1/2 origin-top-left"
-                  style={{
-                    background:
-                      "conic-gradient(from 270deg, rgba(255,140,60,0.55) 0deg, rgba(255,140,60,0.18) 22deg, rgba(0,0,0,0) 60deg)",
-                    transform: "rotate(-90deg)",
-                    borderTopLeftRadius: "100%",
-                  }}
-                />
-              </div>
-
-              {/* Center hub — active craving */}
-              <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center">
-                <div
-                  className="h-[64px] w-[64px] rounded-full overflow-hidden ring-1 ring-orange-300/80"
-                  style={{
-                    boxShadow:
-                      "0 0 0 4px rgba(255,111,60,0.16), 0 0 28px rgba(255,140,60,0.55), inset 0 0 18px rgba(0,0,0,0.5)",
-                  }}
-                >
-                  <img
-                    src={selectedCraving.image}
-                    alt=""
-                    className="h-full w-full object-cover"
-                  />
-                </div>
-                <p className="mt-1.5 text-[9px] uppercase tracking-[0.28em] text-orange-300/90 font-semibold">
-                  Locked on
-                </p>
-                <p className="text-white text-[13px] font-extrabold leading-tight tracking-tight">
-                  {selectedCraving.label}
-                </p>
-              </div>
-
-              {/* Orbiting craving buttons */}
-              {cravings.map((cat, i) => {
+          <div className="mt-3">
+            <p className="mb-2 text-xs font-semibold leading-relaxed text-orange-50/64">
+              {selectedCraving.helper}
+            </p>
+            <div className="overflow-x-auto atmo-hide-scrollbar">
+              <div className="flex w-max gap-2 pr-1">
+                {cravings.map((cat) => {
                 const isActive = cat.id === selectedCraving.id;
-                // Place index 0 at top (-90deg), then evenly around.
-                const angle = (i / cravingCount) * 360 - 90;
-                const radius = 44; // % of dial
-                const rad = (angle * Math.PI) / 180;
-                const x = 50 + radius * Math.cos(rad);
-                const y = 50 + radius * Math.sin(rad);
                 return (
                   <button
                     key={cat.id}
                     type="button"
                     onClick={() => onCravingSelect(cat.id)}
-                    aria-label={`Pick ${cat.label}`}
+                    className={[
+                      "min-h-9 shrink-0 rounded-full px-3 py-2 text-[11px] font-black leading-none ring-1 transition-colors active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/60",
+                      isActive
+                        ? "bg-[#ff7945] text-white ring-white/35 shadow-[0_8px_18px_rgba(255,111,60,0.24)]"
+                        : "bg-[#fff4e1]/8 text-orange-50/78 ring-orange-200/25 hover:bg-[#fff4e1]/12",
+                    ].join(" ")}
                     aria-pressed={isActive}
-                    className="absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70 rounded-full"
-                    style={{ left: `${x}%`, top: `${y}%` }}
                   >
-                    <span
-                      className={[
-                        "h-[34px] w-[34px] rounded-full overflow-hidden bg-[#120805] transition-all",
-                        isActive
-                          ? "ring-2 ring-orange-300 scale-110"
-                          : "ring-1 ring-white/15 hover:ring-orange-200/70",
-                      ].join(" ")}
-                      style={{
-                        boxShadow: isActive
-                          ? "0 0 0 3px rgba(255,111,60,0.22), 0 0 18px rgba(255,140,60,0.6)"
-                          : "0 0 10px rgba(0,0,0,0.55)",
-                      }}
-                    >
-                      <img
-                        src={cat.image}
-                        alt=""
-                        loading="lazy"
-                        className="h-full w-full object-cover"
-                      />
-                    </span>
-                    <span
-                      className={[
-                        "mt-1 text-[9px] font-semibold leading-none whitespace-nowrap",
-                        isActive ? "text-orange-200" : "text-white/75",
-                      ].join(" ")}
-                    >
-                      {cat.label}
-                    </span>
+                    {cat.label}
                   </button>
                 );
               })}
+              </div>
             </div>
           </div>
 
-          {!hasLocation ? (
-            <button
-              type="button"
-              onClick={onRefreshLocation}
-              className="mt-3 w-full rounded-2xl bg-white/[0.04] ring-1 ring-white/10 px-3.5 py-2.5 text-left active:scale-[0.99]"
-            >
-              <p className="text-white text-[13px] font-semibold leading-tight">
-                Share your location to sharpen the radar.
-              </p>
-              <p className="mt-0.5 text-white/55 text-[11px] leading-snug">
-                Scout reads trucks, tables, and deals within reach tonight.
-              </p>
-            </button>
-          ) : null}
-
-          {/* ── THREE PICKS ─────────────────────────────────────────── */}
-          <div className="mt-4 space-y-2">
-            {emptyState ? (
-              <div className="rounded-2xl bg-white/[0.04] ring-1 ring-white/10 px-3 py-2.5">
-                <p className="text-[9px] font-semibold uppercase tracking-[0.24em] text-orange-300/90">
-                  Sweeping
-                </p>
-                <p className="mt-0.5 text-white/85 text-[12px] font-medium leading-snug">
-                  {emptyState}
-                </p>
-              </div>
-            ) : null}
-            {recommendations.map((pick) => (
+          <div className="mt-4">
+            {primaryPick ? (
               <Link
-                key={pick.id}
-                href={pick.href}
-                className="block rounded-2xl bg-white/[0.05] ring-1 ring-white/10 px-3 py-2.5 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/60"
+                href={primaryPick.href}
+                className="block rounded-xl bg-[#130b08]/78 ring-1 ring-white/10 px-3.5 py-3 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="text-[9px] font-semibold uppercase tracking-[0.26em] text-orange-300/90">
-                      {pick.role}
+                    <p className="text-[10px] font-black uppercase tracking-[0.12em] text-[#e5b06f]/82">
+                      {primaryPick.role}
                     </p>
-                    <p className="mt-0.5 truncate text-[14px] font-extrabold tracking-tight text-white">
-                      {pick.title}
+                    <p className="mt-1 truncate text-base font-black text-white">
+                      {primaryPick.title}
                     </p>
-                    <p className="mt-0.5 truncate text-[11px] font-medium text-white/55">
-                      {pick.subtitle}
+                    <p className="mt-0.5 truncate text-xs font-semibold text-orange-100/65">
+                      {primaryPick.subtitle}
                     </p>
                   </div>
-                  <span className="shrink-0 rounded-full bg-[#ff6f3c]/15 px-2 py-0.5 text-[10px] font-bold text-orange-200 ring-1 ring-orange-300/40">
-                    {pick.meta}
+                  <span className="shrink-0 rounded-full bg-[#fff3e4] px-2.5 py-1 text-[11px] font-black text-orange-900 ring-1 ring-orange-200">
+                    {primaryPick.meta}
                   </span>
                 </div>
-                <p className="mt-1.5 text-[11px] leading-snug text-white/65 line-clamp-2">
-                  {pick.reason}
+                <p className="mt-2 text-xs leading-relaxed text-white/62">
+                  {primaryPick.reason}
                 </p>
               </Link>
-            ))}
-          </div>
+            ) : null}
 
-          {/* ── LOCATION + RADIUS ───────────────────────────────────── */}
-          <div className="mt-3 rounded-2xl bg-white/[0.04] ring-1 ring-white/10 p-2.5">
-            <div className="flex items-center justify-between gap-2">
-              <div className="min-w-0">
-                <p className="text-[9px] uppercase tracking-[0.26em] text-orange-300/90 font-semibold">
-                  {locationLabel}
-                </p>
-                <p className="mt-0.5 truncate text-white/85 text-[11px] font-medium">
-                  {signalSummary || `Scanning ${radiusMiles} mi around you`}
-                </p>
+            {secondaryPicks.length > 0 ? (
+              <div className="mt-2.5 grid grid-cols-2 gap-2.5">
+                {secondaryPicks.map((pick) => (
+                <Link
+                  key={pick.id}
+                  href={pick.href}
+                  className="block min-h-[126px] rounded-xl bg-[#130b08]/62 ring-1 ring-white/10 px-3 py-2.5 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
+                >
+                  <div className="flex h-full flex-col">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[10px] font-black uppercase tracking-[0.12em] text-[#e5b06f]/82">
+                        {pick.role}
+                      </p>
+                      <p className="mt-1 line-clamp-2 text-sm font-black leading-tight text-white">
+                        {pick.title}
+                      </p>
+                      <p className="mt-1 line-clamp-2 text-[11px] leading-snug text-white/58">
+                        {pick.subtitle}
+                      </p>
+                    </div>
+                    <span className="mt-2 w-fit rounded-full bg-[#fff3e4] px-2 py-0.5 text-[10px] font-black text-orange-900 ring-1 ring-orange-200">
+                      {pick.meta}
+                    </span>
+                  </div>
+                </Link>
+              ))}
               </div>
-              <div className="shrink-0 flex rounded-full bg-black/45 p-0.5 ring-1 ring-white/10">
-                {radiusOptions.map((radius) => {
-                  const isActive = discoveryRadiusKm === radius;
-                  return (
-                    <button
-                      key={radius}
-                      type="button"
-                      onClick={() => onRadiusChange(radius)}
-                      className={[
-                        "rounded-full px-2 py-0.5 text-[10px] font-bold transition-colors",
-                        isActive
-                          ? "bg-[#ff6f3c] text-white shadow-[0_3px_10px_rgba(255,111,60,0.45)]"
-                          : "text-orange-100/70 hover:text-white",
-                      ].join(" ")}
-                      aria-pressed={isActive}
-                    >
-                      {Math.round(radius * 0.621371)}mi
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="mt-2 flex items-center gap-2">
-              <button
-                type="button"
-                onClick={onRefreshLocation}
-                className="shrink-0 inline-flex items-center gap-1.5 rounded-full bg-white/[0.06] ring-1 ring-white/10 text-orange-100 px-2.5 py-1.5 text-[11px] font-semibold active:scale-[0.98]"
-              >
-                <Search className="h-3 w-3 text-orange-300" aria-hidden="true" />
-                Re-scan
-              </button>
-              <button
-                type="button"
-                onClick={() => onSearchCraving(selectedCraving)}
-                className="min-w-0 flex-1 inline-flex items-center justify-center gap-1 rounded-full bg-gradient-to-br from-[#ff8a3c] to-[#ff6f3c] ring-1 ring-orange-200/40 px-3 py-1.5 text-[11px] font-bold text-white shadow-[0_6px_16px_rgba(255,111,60,0.4)] active:scale-[0.98]"
-              >
-                <span className="truncate">
-                  All {selectedCraving.label.toLowerCase()} nearby
-                </span>
-                <ChevronRight className="h-3 w-3 shrink-0 text-white" aria-hidden="true" />
-              </button>
-            </div>
+            ) : null}
           </div>
         </div>
       </div>
@@ -2520,28 +2404,13 @@ function HeroMapFallback({
           pointerEvents: "none",
         }}
       />
-      <div className="max-w-[280px] text-center px-6">
-        <span
-          className="inline-flex h-12 w-12 rounded-full bg-orange-500/15 ring-1 ring-orange-300/40 items-center justify-center mb-3"
-          aria-hidden="true"
-        >
-          <MapPin className="h-5 w-5 text-orange-300" />
-        </span>
-        <p className="text-white font-semibold">
-          {reason === "no-key"
-            ? "Map unavailable in this preview."
-            : reason === "denied"
-              ? "Turn on location to load the live map."
-              : "Loading the live map…"}
-        </p>
-        <p className="text-white/70 text-sm mt-1">
-          {reason === "no-key"
-            ? "Configure VITE_GOOGLE_MAPS_WEB_API_KEY to enable the hero map."
-            : reason === "denied"
-              ? "MealScout uses your location only to show what's live around you."
-              : "Centering on your area now."}
-        </p>
-      </div>
+      <span className="sr-only">
+        {reason === "no-key"
+          ? "Map preview unavailable."
+          : reason === "denied"
+            ? "Turn on location for the live map."
+            : "Loading live map."}
+      </span>
     </div>
   );
 }
@@ -3359,8 +3228,6 @@ function OpenNowSection({
   onExpandMap: () => void;
   onSelectTruck: (truck: LiveTruckSummary) => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
-
   const todaysEvents = useMemo(() => {
     const now = new Date();
     const startOfTomorrow = new Date(now);
@@ -3448,92 +3315,12 @@ function OpenNowSection({
     );
   }
 
-  // Empty state — collapsed by default; "Why?" reveals broader CTAs.
-  const statusChip =
-    locationStatus === "denied"
-      ? "Location off"
-      : liveTrucksError
-        ? "Feed unavailable"
-        : "No public signal yet";
-
-  return (
-    <section className="px-5 pt-2 pb-5">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <h2 className="text-white text-xl sm:text-2xl font-bold">Open Now</h2>
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-orange-100/90 ring-1 ring-orange-300/45 text-orange-900 text-[11px] font-semibold">
-            <span className="h-1.5 w-1.5 rounded-full bg-orange-500" aria-hidden="true" />
-            {statusChip}
-          </span>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setExpanded((v) => !v)}
-            className="text-xs text-orange-200/70 hover:text-orange-100 transition-colors"
-            aria-expanded={expanded}
-          >
-            {expanded ? "Less" : "Why?"}
-          </button>
-          <Link
-            href="/truck-discovery"
-            className="text-sm text-orange-300 inline-flex items-center gap-1 font-medium"
-          >
-            See All <ChevronRight className="h-4 w-4" aria-hidden="true" />
-          </Link>
-        </div>
-      </div>
-      <p className="mt-2 text-white/55 text-xs leading-snug">
-        Trucks, restaurants, bars, and public events with current hours or
-        schedules will appear here as soon as they're broadcasting.
-      </p>
-
-      {expanded && (
-        <div className="mt-3 rounded-2xl bg-[#120805]/70 ring-1 ring-orange-300/25 px-4 py-3">
-          <p className="text-white/70 text-sm leading-relaxed">
-            {locationStatus === "denied"
-              ? "Turn on location so MealScout can show open trucks, restaurants, bars, and pop-ups near you in real time."
-              : liveTrucksError
-                ? "We couldn't reach the live feed. Pull down to refresh."
-                : "Listings show up here when a business publishes hours, a vendor schedules service, or an event goes live."}
-          </p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {locationStatus === "denied" ? (
-              <button
-                type="button"
-                onClick={onExpandMap}
-                className="inline-flex items-center gap-2 rounded-full bg-orange-500 px-3 py-2 text-xs font-black text-[#1b0b02] active:scale-[0.98]"
-              >
-                Open map
-                <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
-              </button>
-            ) : null}
-            <Link
-              href="/search"
-              className="inline-flex items-center gap-2 rounded-full bg-[#fff3e4] px-3 py-2 text-xs font-black text-[#2a1308] active:scale-[0.98]"
-            >
-              Find dinner
-              <Utensils className="h-3.5 w-3.5" aria-hidden="true" />
-            </Link>
-            <Link
-              href="/deals"
-              className="inline-flex items-center gap-2 rounded-full bg-orange-500/16 px-3 py-2 text-xs font-black text-orange-100 ring-1 ring-orange-300/30 active:scale-[0.98]"
-            >
-              Deals
-              <Tag className="h-3.5 w-3.5" aria-hidden="true" />
-            </Link>
-            <Link
-              href="/events"
-              className="inline-flex items-center gap-2 rounded-full bg-white/[0.06] px-3 py-2 text-xs font-black text-white/86 ring-1 ring-white/10 active:scale-[0.98]"
-            >
-              Tonight
-              <CalendarDays className="h-3.5 w-3.5 text-orange-300" aria-hidden="true" />
-            </Link>
-          </div>
-        </div>
-      )}
-    </section>
-  );
+  // No useful signal yet: keep the page focused on the craving picker instead
+  // of spending first-screen space explaining an empty feed.
+  void liveTrucksError;
+  void locationStatus;
+  void onExpandMap;
+  return null;
 }
 
 /* ============================================================
