@@ -195,18 +195,109 @@ interface RestaurantRelationshipSnapshot {
 type CravingCategory = {
   id: string;
   label: string;
-  image: string;
   query: string;
+  helper: string;
+  keywords: string[];
 };
 
 const CRAVING_CATEGORIES: CravingCategory[] = [
-  { id: "tacos",   label: "Tacos",   image: "/atmospheric/craving-tacos.jpg",   query: "tacos"   },
-  { id: "burgers", label: "Burgers", image: "/atmospheric/craving-burgers.jpg", query: "burgers" },
-  { id: "ramen",   label: "Ramen",   image: "/atmospheric/craving-ramen.jpg",   query: "ramen"   },
-  { id: "pizza",   label: "Pizza",   image: "/atmospheric/craving-pizza.jpg",   query: "pizza"   },
-  { id: "drinks",  label: "Drinks",  image: "/atmospheric/craving-drinks.jpg",  query: "drinks"  },
-  { id: "dessert", label: "Dessert", image: "/atmospheric/craving-dessert.jpg", query: "dessert" },
+  {
+    id: "comfort",
+    label: "Comfort",
+    query: "comfort food",
+    helper: "warm, familiar, low-risk",
+    keywords: ["comfort", "soul", "bbq", "burger", "pizza", "pasta", "chicken"],
+  },
+  {
+    id: "spicy",
+    label: "Spicy",
+    query: "spicy food",
+    helper: "heat, flavor, momentum",
+    keywords: ["spicy", "hot", "pepper", "taco", "thai", "cajun", "wings"],
+  },
+  {
+    id: "cheap-filling",
+    label: "Cheap and filling",
+    query: "cheap filling food",
+    helper: "big value, no fuss",
+    keywords: ["cheap", "deal", "plate", "burger", "taco", "bbq", "sandwich"],
+  },
+  {
+    id: "date-night",
+    label: "Date night",
+    query: "date night restaurant",
+    helper: "worth sitting down for",
+    keywords: ["date", "wine", "cocktail", "seafood", "italian", "sushi", "steak"],
+  },
+  {
+    id: "fast-pickup",
+    label: "Fast pickup",
+    query: "fast pickup food",
+    helper: "quick, close, dependable",
+    keywords: ["pickup", "fast", "sandwich", "burger", "taco", "bowl", "pizza"],
+  },
+  {
+    id: "hidden-gem",
+    label: "Hidden gem",
+    query: "hidden gem restaurant",
+    helper: "local upside, less obvious",
+    keywords: ["local", "hidden", "gem", "family", "market", "pop-up"],
+  },
+  {
+    id: "healthy-good",
+    label: "Healthy but good",
+    query: "healthy food",
+    helper: "fresh without punishment",
+    keywords: ["healthy", "salad", "bowl", "fresh", "juice", "wrap", "grill"],
+  },
+  {
+    id: "late-night",
+    label: "Late-night",
+    query: "late night food",
+    helper: "open-now energy",
+    keywords: ["late", "night", "bar", "taco", "pizza", "wings", "burger"],
+  },
+  {
+    id: "something-new",
+    label: "Something new",
+    query: "new local food",
+    helper: "break the routine",
+    keywords: ["new", "special", "seasonal", "pop-up", "fusion", "fresh"],
+  },
+  {
+    id: "worth-driving",
+    label: "Worth driving for",
+    query: "worth driving for food",
+    helper: "higher upside, bigger payoff",
+    keywords: ["bbq", "seafood", "steak", "ramen", "sushi", "special", "chef"],
+  },
+  {
+    id: "kid-friendly",
+    label: "Kid-friendly",
+    query: "kid friendly restaurant",
+    helper: "easy win for the table",
+    keywords: ["kid", "family", "pizza", "burger", "chicken", "ice cream"],
+  },
+  {
+    id: "no-regrets",
+    label: "No regrets",
+    query: "best local food",
+    helper: "safe, satisfying, open",
+    keywords: ["popular", "favorite", "best", "burger", "taco", "bbq", "pizza"],
+  },
 ];
+
+type CompassPickRole = "Safe Pick" | "Scout Pick" | "Wildcard";
+
+type CompassRecommendation = {
+  id: string;
+  role: CompassPickRole;
+  title: string;
+  subtitle: string;
+  href: string;
+  reason: string;
+  meta: string;
+};
 
 type DiscoveryLayerId =
   | "liveNow"
@@ -291,6 +382,222 @@ function formatDistance(truck: LiveTruckSummary): string | null {
     return `${asMiles.toFixed(asMiles < 10 ? 1 : 0)} mi`;
   }
   return null;
+}
+
+function formatMiles(value?: number | null): string | null {
+  if (typeof value !== "number" || !Number.isFinite(value)) return null;
+  return `${value.toFixed(value < 10 ? 1 : 0)} mi`;
+}
+
+function getRestaurantName(restaurant: RestaurantSummary): string {
+  return restaurant.businessName || restaurant.name || "Local spot";
+}
+
+function getRestaurantDistance(restaurant: RestaurantSummary): string | null {
+  if (typeof restaurant.distanceMiles === "number") {
+    return formatMiles(restaurant.distanceMiles);
+  }
+  if (typeof restaurant.distance === "number") {
+    return formatMiles(restaurant.distance * 0.621371);
+  }
+  return null;
+}
+
+function scoreTextForCraving(text: string, craving: CravingCategory): number {
+  const haystack = text.toLowerCase();
+  return craving.keywords.reduce(
+    (score, keyword) => score + (haystack.includes(keyword) ? 1 : 0),
+    0,
+  );
+}
+
+function buildCompassRecommendations({
+  craving,
+  liveTrucks,
+  restaurants,
+  menuItems,
+  deals,
+  localSignalCount,
+}: {
+  craving: CravingCategory;
+  liveTrucks: LiveTruckSummary[];
+  restaurants: RestaurantSummary[];
+  menuItems: LocalMenuItemFeedItem[];
+  deals: DealSummary[];
+  localSignalCount: number;
+}): CompassRecommendation[] {
+  const picks: CompassRecommendation[] = [];
+  const used = new Set<string>();
+  const addPick = (pick: CompassRecommendation | null) => {
+    if (!pick || used.has(pick.id) || picks.length >= 3) return;
+    used.add(pick.id);
+    picks.push(pick);
+  };
+
+  const rankedTrucks = [...liveTrucks].sort((a, b) => {
+    const aText = `${a.name} ${a.cuisineType || ""} ${a.vibe || ""}`;
+    const bText = `${b.name} ${b.cuisineType || ""} ${b.vibe || ""}`;
+    return (
+      scoreTextForCraving(bText, craving) - scoreTextForCraving(aText, craving) ||
+      (a.distanceMiles ?? 999) - (b.distanceMiles ?? 999)
+    );
+  });
+  const rankedRestaurants = [...restaurants].sort((a, b) => {
+    const aText = `${getRestaurantName(a)} ${a.cuisineType || ""} ${a.description || ""} ${a.homeRankingReason || ""}`;
+    const bText = `${getRestaurantName(b)} ${b.cuisineType || ""} ${b.description || ""} ${b.homeRankingReason || ""}`;
+    return (
+      scoreTextForCraving(bText, craving) - scoreTextForCraving(aText, craving) ||
+      (b.homeRankingScore ?? 0) - (a.homeRankingScore ?? 0) ||
+      (a.distanceMiles ?? 999) - (b.distanceMiles ?? 999)
+    );
+  });
+  const rankedMenuItems = [...menuItems].sort((a, b) => {
+    const aText = `${a.name} ${a.description || ""} ${a.cuisineType || ""} ${(a.discoveryReasons || []).join(" ")}`;
+    const bText = `${b.name} ${b.description || ""} ${b.cuisineType || ""} ${(b.discoveryReasons || []).join(" ")}`;
+    return (
+      scoreTextForCraving(bText, craving) - scoreTextForCraving(aText, craving) ||
+      (b.discoveryScore ?? 0) - (a.discoveryScore ?? 0) ||
+      (a.distanceMiles ?? 999) - (b.distanceMiles ?? 999)
+    );
+  });
+
+  const safeTruck = rankedTrucks[0];
+  const safeRestaurant = rankedRestaurants[0];
+  if (safeTruck) {
+    const wait = formatWait(safeTruck);
+    const distance = formatDistance(safeTruck);
+    addPick({
+      id: `truck-${safeTruck.id}`,
+      role: "Safe Pick",
+      title: safeTruck.name,
+      subtitle: safeTruck.cuisineType || "Live food truck",
+      href: `/truck/${safeTruck.id}`,
+      reason:
+        [distance, wait].filter(Boolean).join(", ") ||
+        `Best live match for ${craving.label.toLowerCase()}.`,
+      meta: "Open now",
+    });
+  } else if (safeRestaurant) {
+    const distance = getRestaurantDistance(safeRestaurant);
+    addPick({
+      id: `restaurant-${safeRestaurant.id}`,
+      role: "Safe Pick",
+      title: getRestaurantName(safeRestaurant),
+      subtitle: safeRestaurant.cuisineType || "Nearby restaurant",
+      href: `/restaurant/${safeRestaurant.id}`,
+      reason:
+        safeRestaurant.homeRankingReason ||
+        `Best reliable match for ${craving.label.toLowerCase()}${distance ? ` within ${distance}` : ""}.`,
+      meta: distance || "Nearby",
+    });
+  }
+
+  const scoutMenuItem = rankedMenuItems.find(
+    (item) => !used.has(`menu-${item.id}`),
+  );
+  const scoutRestaurant = rankedRestaurants.find(
+    (restaurant) => !used.has(`restaurant-${restaurant.id}`),
+  );
+  if (scoutMenuItem) {
+    addPick({
+      id: `menu-${scoutMenuItem.id}`,
+      role: "Scout Pick",
+      title: scoutMenuItem.name,
+      subtitle: scoutMenuItem.restaurantName || "Local menu item",
+      href: `/restaurant/${scoutMenuItem.restaurantId}`,
+      reason:
+        scoutMenuItem.discoveryReasons?.[0] ||
+        `Better upside for ${craving.label.toLowerCase()} than another generic search result.`,
+      meta: formatMiles(scoutMenuItem.distanceMiles) || scoutMenuItem.cuisineType || "Fresh menu",
+    });
+  } else if (scoutRestaurant) {
+    addPick({
+      id: `restaurant-${scoutRestaurant.id}`,
+      role: "Scout Pick",
+      title: getRestaurantName(scoutRestaurant),
+      subtitle: scoutRestaurant.cuisineType || "Local restaurant",
+      href: `/restaurant/${scoutRestaurant.id}`,
+      reason:
+        scoutRestaurant.homeRankingReason ||
+        "Less obvious than the safe pick, with stronger local upside.",
+      meta: getRestaurantDistance(scoutRestaurant) || "Local signal",
+    });
+  }
+
+  const deal = deals[0];
+  const wildcardTruck = rankedTrucks.find((truck) => !used.has(`truck-${truck.id}`));
+  const wildcardRestaurant = rankedRestaurants.find(
+    (restaurant) => !used.has(`restaurant-${restaurant.id}`),
+  );
+  if (deal) {
+    addPick({
+      id: `deal-${deal.id}`,
+      role: "Wildcard",
+      title: deal.title || "Nearby deal",
+      subtitle: deal.restaurantName || "Deal near you",
+      href: `/deal/${deal.id}`,
+      reason:
+        deal.description ||
+        "Unexpected value that still fits the mood and keeps dinner easy.",
+      meta: deal.discountText || "Deal",
+    });
+  } else if (wildcardTruck) {
+    addPick({
+      id: `truck-${wildcardTruck.id}`,
+      role: "Wildcard",
+      title: wildcardTruck.name,
+      subtitle: wildcardTruck.cuisineType || "Live food truck",
+      href: `/truck/${wildcardTruck.id}`,
+      reason: "A live nearby option with more surprise than the safest route.",
+      meta: formatDistance(wildcardTruck) || "Open now",
+    });
+  } else if (wildcardRestaurant) {
+    addPick({
+      id: `restaurant-${wildcardRestaurant.id}`,
+      role: "Wildcard",
+      title: getRestaurantName(wildcardRestaurant),
+      subtitle: wildcardRestaurant.cuisineType || "Nearby restaurant",
+      href: `/restaurant/${wildcardRestaurant.id}`,
+      reason: "Unexpected but still close enough to fit the craving.",
+      meta: getRestaurantDistance(wildcardRestaurant) || "Try it",
+    });
+  }
+
+  const fallbackSearches: CompassRecommendation[] = [
+    {
+      id: "fallback-safe",
+      role: "Safe Pick",
+      title: craving.label,
+      subtitle: craving.helper,
+      href: `/search?q=${encodeURIComponent(craving.query)}`,
+      reason:
+        localSignalCount > 0
+          ? "Search all nearby matches when you want the full board."
+          : "No live local signal yet, so Scout will widen into search.",
+      meta: "Search",
+    },
+    {
+      id: "fallback-scout",
+      role: "Scout Pick",
+      title: "Fresh menus",
+      subtitle: "New items nearby",
+      href: "/search",
+      reason: "Menu drops are the best place to find something that feels new.",
+      meta: "Menus",
+    },
+    {
+      id: "fallback-wildcard",
+      role: "Wildcard",
+      title: "Tonight's deals",
+      subtitle: "Value with a little luck",
+      href: "/deals",
+      reason: "A deal can break the tie when nothing obvious is calling you.",
+      meta: "Deals",
+    },
+  ];
+
+  for (const fallback of fallbackSearches) addPick(fallback);
+  return picks.slice(0, 3);
 }
 
 function formatWait(truck: LiveTruckSummary): string | null {
@@ -483,6 +790,8 @@ export default function ExplorePreview() {
   const [locationStatus, setLocationStatus] = useState<
     "idle" | "requesting" | "ready" | "denied"
   >("idle");
+  const [selectedCravingId, setSelectedCravingId] =
+    useState<string>("cheap-filling");
 
   const requestLocation = useCallback(() => {
     if (typeof navigator === "undefined" || !navigator.geolocation) {
@@ -1167,6 +1476,33 @@ export default function ExplorePreview() {
     allDeals.length +
     visibleEvents.length;
 
+  const selectedCraving = useMemo(() => {
+    return (
+      CRAVING_CATEGORIES.find((cat) => cat.id === selectedCravingId) ??
+      CRAVING_CATEGORIES[0]
+    );
+  }, [selectedCravingId]);
+
+  const compassRecommendations = useMemo(
+    () =>
+      buildCompassRecommendations({
+        craving: selectedCraving,
+        liveTrucks,
+        restaurants: nearbyRestaurants,
+        menuItems: localMenuItems,
+        deals: allDeals,
+        localSignalCount,
+      }),
+    [
+      allDeals,
+      liveTrucks,
+      localMenuItems,
+      localSignalCount,
+      nearbyRestaurants,
+      selectedCraving,
+    ],
+  );
+
   return (
     <>
       <SEOHead
@@ -1206,7 +1542,7 @@ export default function ExplorePreview() {
           }`}
           style={{
             height:
-              sheetState === "fullMap" ? "100dvh" : "clamp(190px, 30vh, 260px)",
+              sheetState === "fullMap" ? "100dvh" : "clamp(150px, 22vh, 210px)",
             transition: "height 320ms cubic-bezier(0.22,0.61,0.36,1)",
             touchAction: "auto",
             overscrollBehaviorY: "none",
@@ -1509,16 +1845,10 @@ export default function ExplorePreview() {
                 "inset 0 1px 0 rgba(255,255,255,0.08), 0 -18px 48px rgba(80,42,14,0.30)",
             }}
           >
-            {/* LIVE NOW — collapsed when empty, expanded when trucks are live */}
-            <LiveNowSection
-              liveTrucks={liveTrucks}
-              liveTrucksLoading={liveTrucksLoading}
-              liveTrucksError={!!liveTrucksError}
-              locationStatus={locationStatus}
-              onExpandMap={openScoutMap}
-            />
-
-            <LocalFoodDashboard
+            <CravingCompass
+              cravings={CRAVING_CATEGORIES}
+              selectedCraving={selectedCraving}
+              recommendations={compassRecommendations}
               locationLabel={shortLocation}
               locationStatus={locationStatus}
               liveTruckCount={liveTrucks.length}
@@ -1530,36 +1860,18 @@ export default function ExplorePreview() {
               discoveryRadiusKm={discoveryRadiusKm}
               onRadiusChange={updateDiscoveryRadiusKm}
               onRefreshLocation={requestLocation}
+              onCravingSelect={setSelectedCravingId}
+              onSearchCraving={goToCraving}
             />
 
-            {/* ── EXPLORE BY CRAVING ── */}
-            <section className="px-5 pt-2 pb-10">
-              <SectionHeader
-                title={DISCOVERY_LAYERS.cravings.title}
-                linkHref={DISCOVERY_LAYERS.cravings.href}
-                subtitle={DISCOVERY_LAYERS.cravings.subtitle}
-              />
-              <ul className="flex items-start justify-between gap-2 pb-2" role="list">
-                {CRAVING_CATEGORIES.map((cat) => (
-                  <li key={cat.id} className="shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => goToCraving(cat)}
-                      aria-label={`Explore ${cat.label}`}
-                      className="group flex flex-col items-center gap-2 w-[52px] sm:w-[64px] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70 rounded-2xl active:scale-[0.97] transition-transform"
-                    >
-                      <span
-                        className="h-[52px] w-[52px] sm:h-[64px] sm:w-[64px] rounded-full overflow-hidden ring-2 ring-orange-500/70 bg-[#120805]/60 group-hover:ring-orange-300 transition-all"
-                        style={{ boxShadow: "0 0 0 3px rgba(255,90,47,0.14), 0 0 18px rgba(255,90,47,0.45)" }}
-                      >
-                        <img src={cat.image} alt="" className="h-full w-full object-cover" loading="lazy" />
-                      </span>
-                      <span className="text-white text-[11px] sm:text-xs font-semibold">{cat.label}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </section>
+            {/* LIVE NOW — supporting signal, not the main decision model. */}
+            <LiveNowSection
+              liveTrucks={liveTrucks}
+              liveTrucksLoading={liveTrucksLoading}
+              liveTrucksError={!!liveTrucksError}
+              locationStatus={locationStatus}
+              onExpandMap={openScoutMap}
+            />
 
             {/* ── NEW LOCAL MENU ITEMS ── */}
             {showMenuItemsSection && (
@@ -1777,12 +2089,14 @@ function SectionHeader({
 }
 
 /* ============================================================
-   LOCAL FOOD DASHBOARD
-   A persistent dashboard strip so Scout still feels useful when
-   individual data sections are collapsed because there is no data.
+   CRAVING COMPASS
+   Scout's primary decision surface: mood first, three choices only.
    ============================================================ */
 
-function LocalFoodDashboard({
+function CravingCompass({
+  cravings,
+  selectedCraving,
+  recommendations,
   locationLabel,
   locationStatus,
   liveTruckCount,
@@ -1794,7 +2108,12 @@ function LocalFoodDashboard({
   discoveryRadiusKm,
   onRadiusChange,
   onRefreshLocation,
+  onCravingSelect,
+  onSearchCraving,
 }: {
+  cravings: CravingCategory[];
+  selectedCraving: CravingCategory;
+  recommendations: CompassRecommendation[];
   locationLabel: string;
   locationStatus: "idle" | "requesting" | "ready" | "denied";
   liveTruckCount: number;
@@ -1806,6 +2125,8 @@ function LocalFoodDashboard({
   discoveryRadiusKm: number;
   onRadiusChange: (value: number) => void;
   onRefreshLocation: () => void;
+  onCravingSelect: (id: string) => void;
+  onSearchCraving: (craving: CravingCategory) => void;
 }) {
   const hasLocation = locationStatus === "ready";
   const signalLabel =
@@ -1815,74 +2136,42 @@ function LocalFoodDashboard({
         ? "No live signal yet"
         : "Location off";
 
-  const actionLanes = [
-    {
-      label: "Live trucks",
-      count: liveTruckCount,
-      href: "/truck-discovery",
-      helper: liveTruckCount > 0 ? "Open now" : "Check nearby trucks",
-    },
-    {
-      label: "Find dinner",
-      count: restaurantCount,
-      href: "/search",
-      helper: restaurantCount > 0 ? "Nearby food spots" : "Browse all food",
-    },
-    {
-      label: "Hot deals",
-      count: dealCount,
-      href: "/deals",
-      helper: dealCount > 0 ? "Save money now" : "See available deals",
-    },
-    {
-      label: "Fresh menus",
-      count: menuItemCount,
-      href: DISCOVERY_LAYERS.menuItems.href,
-      helper: menuItemCount > 0 ? "New menu items" : "Explore menu drops",
-    },
-    {
-      label: "Tonight's events",
-      count: eventCount,
-      href: "/events",
-      helper: eventCount > 0 ? "Food events nearby" : "Find upcoming events",
-    },
-  ];
-
-  const featuredLanes = actionLanes.slice(0, 3);
-  const supportLanes = actionLanes.slice(3);
-  const hasAnythingLive = actionLanes.some((lane) => lane.count > 0);
-  const headline = !hasLocation
-    ? "Enable location so Scout can load your nearby food scene."
-    : hasAnythingLive
-      ? "Here is the fastest way to jump into what is happening near you right now."
-      : "Nothing is active yet. Widen radius or browse dinner, deals, and menus.";
-
   const radiusOptions = [5, 12, 25, 40];
   const radiusMiles = Math.max(1, Math.round(discoveryRadiusKm * 0.621371));
+  const signalSummary = [
+    liveTruckCount > 0 ? `${liveTruckCount} live` : null,
+    restaurantCount > 0 ? `${restaurantCount} spots` : null,
+    menuItemCount > 0 ? `${menuItemCount} menus` : null,
+    dealCount > 0 ? `${dealCount} deals` : null,
+    eventCount > 0 ? `${eventCount} events` : null,
+  ]
+    .filter(Boolean)
+    .join(" / ");
 
   return (
-    <section className="px-5 pt-2 pb-6">
-      <div className="rounded-[1.65rem] overflow-hidden bg-[#120805]/62 ring-1 ring-orange-300/35 backdrop-blur-md">
+    <section className="px-5 pt-5 pb-7">
+      <div className="rounded-[1.65rem] overflow-hidden bg-[#180b05]/78 ring-1 ring-orange-300/38 backdrop-blur-md shadow-[0_18px_60px_rgba(0,0,0,0.38)]">
         <div
-          className="px-4 py-4"
+          className="px-4 py-4 sm:px-5"
           style={{
             backgroundImage:
-              "radial-gradient(circle at 12% 0%, rgba(255,90,47,0.18), transparent 34%), radial-gradient(circle at 90% 12%, rgba(251,191,36,0.10), transparent 30%)",
+              "radial-gradient(circle at 16% 6%, rgba(255,111,60,0.24), transparent 34%), radial-gradient(circle at 88% 4%, rgba(251,191,36,0.16), transparent 28%), linear-gradient(180deg, rgba(64,27,9,0.42), rgba(12,7,5,0.24))",
           }}
         >
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="text-[10px] uppercase tracking-[0.2em] text-orange-200/75 font-bold">
-                What to eat right now
+                Craving Compass
               </p>
-              <h2 className="mt-1 text-white text-xl font-black leading-tight tracking-tight">
-                {locationLabel}
+              <h2 className="mt-1 font-sans text-white text-xl font-black leading-tight">
+                What did you actually want?
               </h2>
-              <p className="mt-1.5 text-white/68 text-xs leading-relaxed max-w-[32rem]">
-                {headline}
+              <p className="mt-1.5 text-orange-50/70 text-sm leading-relaxed max-w-[32rem]">
+                Pick a mood. Scout gives you three choices: safe, local upside,
+                and one wildcard.
               </p>
             </div>
-            <span className="shrink-0 rounded-full bg-[#2a1308]/80 ring-1 ring-orange-300/35 px-3 py-1 text-[11px] font-semibold text-orange-100">
+            <span className="shrink-0 rounded-full bg-[#2a1308]/82 ring-1 ring-orange-300/35 px-3 py-1 text-[11px] font-semibold text-orange-100">
               {signalLabel}
             </span>
           </div>
@@ -1900,40 +2189,94 @@ function LocalFoodDashboard({
             </button>
           ) : null}
 
-          <div className="mt-3 space-y-2.5">
-            {featuredLanes.map((lane, index) => (
-              <Link
-                key={lane.label}
-                href={lane.href}
-                className="flex items-center justify-between gap-3 rounded-2xl bg-[#0f0907]/72 ring-1 ring-orange-200/20 px-3.5 py-3 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
-              >
-                <div className="min-w-0">
-                  <p className="text-white text-sm font-black truncate">
-                    {index + 1}. {lane.label}
+          <div className="mt-4 rounded-[1.4rem] bg-[#0f0907]/62 ring-1 ring-orange-200/18 p-3">
+            <div className="grid grid-cols-[8.75rem_minmax(0,1fr)] items-center gap-3">
+              <div className="relative grid aspect-square place-items-center rounded-full bg-[#2a1308]/70 ring-1 ring-orange-300/28 shadow-[inset_0_0_50px_rgba(255,111,60,0.14)]">
+                <div className="absolute inset-[16%] rounded-full border border-orange-300/22" aria-hidden="true" />
+                <div className="absolute inset-[33%] rounded-full bg-[#fff3e4] shadow-[0_10px_24px_rgba(0,0,0,0.22)] ring-1 ring-orange-200/70" aria-hidden="true" />
+                <div className="absolute left-1/2 top-2 h-5 w-0.5 -translate-x-1/2 rounded-full bg-orange-300/70" aria-hidden="true" />
+                <div className="absolute bottom-2 left-1/2 h-5 w-0.5 -translate-x-1/2 rounded-full bg-orange-300/28" aria-hidden="true" />
+                <div className="absolute left-2 top-1/2 h-0.5 w-5 -translate-y-1/2 rounded-full bg-orange-300/28" aria-hidden="true" />
+                <div className="absolute right-2 top-1/2 h-0.5 w-5 -translate-y-1/2 rounded-full bg-orange-300/28" aria-hidden="true" />
+                <div className="relative z-10 max-w-[5.6rem] text-center">
+                  <Sparkles className="mx-auto mb-1 h-3.5 w-3.5 text-orange-600" aria-hidden="true" />
+                  <p className="text-xs font-black leading-tight text-[#2a1308]">
+                    Mood
                   </p>
-                  <p className="mt-0.5 text-white/62 text-xs truncate">{lane.helper}</p>
                 </div>
-                <div className="shrink-0 flex items-center gap-2">
-                  <span className="rounded-full bg-[#fff3e4] px-2 py-1 text-[11px] font-bold text-orange-900 ring-1 ring-orange-200">
-                    {lane.count}
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-semibold leading-relaxed text-orange-50/68">
+                  {selectedCraving.helper}
+                </p>
+                <div className="mt-3 overflow-x-auto atmo-hide-scrollbar">
+                  <div className="flex w-max gap-2 pr-1">
+                    {cravings.map((cat) => {
+                      const isActive = cat.id === selectedCraving.id;
+                      return (
+                        <button
+                          key={cat.id}
+                          type="button"
+                          onClick={() => onCravingSelect(cat.id)}
+                          className={[
+                            "shrink-0 rounded-full px-3 py-2 text-[11px] font-black leading-none ring-1 transition-transform active:scale-95",
+                            isActive
+                              ? "bg-[#ff6f3c] text-white ring-white/35 shadow-[0_8px_20px_rgba(255,111,60,0.28)]"
+                              : "bg-[#fff3e4]/92 text-[#3a1908] ring-orange-200/50",
+                          ].join(" ")}
+                          aria-pressed={isActive}
+                        >
+                          {cat.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-3 space-y-2.5">
+            {recommendations.map((pick) => (
+              <Link
+                key={pick.id}
+                href={pick.href}
+                className="block rounded-2xl bg-[#0f0907]/76 ring-1 ring-orange-200/22 px-3.5 py-3 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-black uppercase tracking-[0.16em] text-orange-200/70">
+                      {pick.role}
+                    </p>
+                    <p className="mt-1 truncate text-base font-black text-white">
+                      {pick.title}
+                    </p>
+                    <p className="mt-0.5 truncate text-xs font-semibold text-orange-100/65">
+                      {pick.subtitle}
+                    </p>
+                  </div>
+                  <span className="shrink-0 rounded-full bg-[#fff3e4] px-2.5 py-1 text-[11px] font-black text-orange-900 ring-1 ring-orange-200">
+                    {pick.meta}
                   </span>
-                  <ChevronRight className="h-4 w-4 text-orange-300" aria-hidden="true" />
                 </div>
+                <p className="mt-2 text-xs leading-relaxed text-white/66">
+                  {pick.reason}
+                </p>
               </Link>
             ))}
           </div>
 
           <div className="mt-3 rounded-2xl bg-[#0f0907]/62 ring-1 ring-orange-200/18 p-3">
-            <div className="flex items-center justify-between gap-3">
-              <div>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
                 <p className="text-[10px] uppercase tracking-[0.18em] text-orange-200/70 font-bold">
-                  Discovery radius
+                  {locationLabel}
                 </p>
-                <p className="mt-0.5 text-white text-sm font-semibold">
-                  {radiusMiles} mi around you
+                <p className="mt-0.5 truncate text-white text-sm font-semibold">
+                  {signalSummary || `${radiusMiles} mi discovery radius`}
                 </p>
               </div>
-              <div className="flex rounded-full bg-black/25 p-1 ring-1 ring-white/10">
+              <div className="flex self-start rounded-full bg-black/25 p-1 ring-1 ring-white/10 sm:self-auto">
                 {radiusOptions.map((radius) => {
                   const isActive = discoveryRadiusKm === radius;
                   return (
@@ -1965,27 +2308,14 @@ function LocalFoodDashboard({
                 <Search className="h-3.5 w-3.5 text-orange-600" aria-hidden="true" />
                 Refresh location
               </button>
-              <div className="min-w-0 flex-1 overflow-x-auto atmo-hide-scrollbar">
-                <div className="flex gap-2 pr-1">
-                  {supportLanes.length > 0 ? (
-                    supportLanes.map((lane) => (
-                      <Link
-                        key={`${lane.label}:${lane.href}`}
-                        href={lane.href}
-                        className="shrink-0 inline-flex items-center gap-1.5 rounded-full bg-white/[0.06] ring-1 ring-white/10 px-3 py-2 text-xs font-semibold text-white/82 active:scale-[0.98]"
-                      >
-                        {lane.label}
-                        <span className="text-orange-100/80">{lane.count}</span>
-                        <ChevronRight className="h-3.5 w-3.5 text-orange-200" aria-hidden="true" />
-                      </Link>
-                    ))
-                  ) : (
-                    <span className="inline-flex items-center rounded-full bg-white/[0.06] ring-1 ring-white/10 px-3 py-2 text-xs font-semibold text-white/62">
-                      All food lanes already shown above
-                    </span>
-                  )}
-                </div>
-              </div>
+              <button
+                type="button"
+                onClick={() => onSearchCraving(selectedCraving)}
+                className="min-w-0 flex-1 inline-flex items-center justify-center gap-1.5 rounded-full bg-white/[0.06] ring-1 ring-white/10 px-3 py-2 text-xs font-semibold text-white/82 active:scale-[0.98]"
+              >
+                <span className="truncate">See every {selectedCraving.label.toLowerCase()} match</span>
+                <ChevronRight className="h-3.5 w-3.5 shrink-0 text-orange-200" aria-hidden="true" />
+              </button>
             </div>
           </div>
         </div>
