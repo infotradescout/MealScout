@@ -388,6 +388,18 @@ type CravingBoardItem = {
   score: number;
 };
 
+type LocalActivityItem = {
+  id: string;
+  type: "menu_update" | "deal" | "truck" | "event" | "open" | "update";
+  title: string;
+  subtitle: string;
+  href: string;
+  entityId: string;
+  timeLabel?: string | null;
+  sourceLabel?: string | null;
+  freshnessMeta: FreshnessMeta;
+};
+
 type DiscoveryLayerId =
   | "liveNow"
   | "localBoard"
@@ -890,6 +902,171 @@ function buildCravingBoardItems({
       return b.score - a.score || kindRank[b.kind] - kindRank[a.kind];
     })
     .slice(0, 8);
+}
+
+function getFreshnessTimeLabel(meta: FreshnessMeta): string | null {
+  const timestamp = getKnownTimestamp(meta);
+  return timestamp ? getFreshnessLabel(meta) : null;
+}
+
+function formatEventStartLabel(event: EventSummary): string | null {
+  const raw = event.startsAt || event.startTime;
+  if (!raw) return null;
+  const time = new Date(raw).getTime();
+  if (!Number.isFinite(time)) return null;
+  return new Date(time).toLocaleString(undefined, {
+    weekday: "short",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function buildLocalActivityItems({
+  menuItems,
+  deals,
+  liveTrucks,
+  events,
+  restaurants,
+}: {
+  menuItems: LocalMenuItemFeedItem[];
+  deals: DealSummary[];
+  liveTrucks: LiveTruckSummary[];
+  events: EventSummary[];
+  restaurants: RestaurantSummary[];
+}): LocalActivityItem[] {
+  const items: LocalActivityItem[] = [];
+
+  for (const item of menuItems.slice(0, 4)) {
+    const distance = formatMiles(item.distanceMiles);
+    const freshnessMeta: FreshnessMeta = {
+      kind: "menu",
+      updatedAt: readStringField(item, ["updatedAt", "lastUpdatedAt"]),
+      confirmedAt: readStringField(item, ["confirmedAt", "lastConfirmedAt"]),
+      hasMenu: true,
+      hasDistance: Boolean(distance),
+    };
+    items.push({
+      id: `menu-${item.id}`,
+      type: "menu_update",
+      title: "Menu updated",
+      subtitle: [item.name, item.restaurantName, distance].filter(Boolean).join(" · "),
+      href: `/restaurant/${item.restaurantId}?tab=menu`,
+      entityId: String(item.id),
+      timeLabel: getFreshnessTimeLabel(freshnessMeta),
+      sourceLabel: getSourceLabel(freshnessMeta),
+      freshnessMeta,
+    });
+  }
+
+  for (const deal of deals.slice(0, 4)) {
+    const freshnessMeta: FreshnessMeta = {
+      kind: "deal",
+      updatedAt: readStringField(deal, ["updatedAt", "lastUpdatedAt"]),
+      confirmedAt: readStringField(deal, ["confirmedAt", "lastConfirmedAt"]),
+      hasDeal: true,
+    };
+    items.push({
+      id: `deal-${deal.id}`,
+      type: "deal",
+      title: "Deal today",
+      subtitle: [deal.title, deal.restaurantName || deal.discountText].filter(Boolean).join(" · "),
+      href: `/deal/${deal.id}`,
+      entityId: String(deal.id),
+      timeLabel: getFreshnessTimeLabel(freshnessMeta),
+      sourceLabel: getSourceLabel(freshnessMeta),
+      freshnessMeta,
+    });
+  }
+
+  for (const truck of liveTrucks.slice(0, 4)) {
+    const distance = formatDistance(truck);
+    const freshnessMeta: FreshnessMeta = {
+      kind: "truck",
+      updatedAt: readStringField(truck, ["updatedAt", "lastUpdatedAt"]),
+      confirmedAt: readStringField(truck, ["confirmedAt", "lastConfirmedAt"]),
+      hasDeal: Boolean(truck.activeDealCount && truck.activeDealCount > 0),
+      hasDistance: Boolean(distance),
+      isOpen: true,
+    };
+    items.push({
+      id: `truck-${truck.id}`,
+      type: "truck",
+      title: "Food truck nearby",
+      subtitle: [truck.name, truck.cuisineType, distance].filter(Boolean).join(" · "),
+      href: `/truck/${truck.id}`,
+      entityId: String(truck.id),
+      timeLabel: getFreshnessTimeLabel(freshnessMeta),
+      sourceLabel: getSourceLabel(freshnessMeta),
+      freshnessMeta,
+    });
+  }
+
+  for (const event of events.slice(0, 4)) {
+    const freshnessMeta: FreshnessMeta = {
+      kind: "event",
+      startsAt: event.startsAt,
+      startTime: event.startTime,
+      updatedAt: readStringField(event, ["updatedAt", "lastUpdatedAt"]),
+      confirmedAt: readStringField(event, ["confirmedAt", "lastConfirmedAt"]),
+    };
+    items.push({
+      id: `event-${event.id}`,
+      type: "event",
+      title: "Event today",
+      subtitle: [event.title || event.name, event.venueName || event.locationName, formatEventStartLabel(event)]
+        .filter(Boolean)
+        .join(" · "),
+      href: `/event/${event.id}`,
+      entityId: String(event.id),
+      timeLabel: getFreshnessTimeLabel(freshnessMeta),
+      sourceLabel: getSourceLabel(freshnessMeta),
+      freshnessMeta,
+    });
+  }
+
+  for (const restaurant of restaurants.slice(0, 4)) {
+    const distance = getRestaurantDistance(restaurant);
+    const freshnessMeta: FreshnessMeta = {
+      kind: "restaurant",
+      updatedAt: readStringField(restaurant, ["updatedAt", "lastUpdatedAt"]),
+      confirmedAt: readStringField(restaurant, ["confirmedAt", "lastConfirmedAt"]),
+      hasDeal: Number(restaurant.activeDealsCount || restaurant.activeDealCount || 0) > 0,
+      hasCommunityUpdate:
+        Number(restaurant.communityActivityCount || 0) > 0 ||
+        Number(restaurant.recommendationCount || 0) > 0 ||
+        Number(restaurant.videoRecommendationCount || 0) > 0,
+      hasDistance: Boolean(distance),
+      isOpen: true,
+    };
+    const timestamp = getKnownTimestamp(freshnessMeta);
+    const hasUpdateToday = Boolean(timestamp && isTodayDate(timestamp.value));
+    items.push({
+      id: `restaurant-${restaurant.id}`,
+      type: hasUpdateToday ? "update" : "open",
+      title: hasUpdateToday ? "Updated today" : "Open now",
+      subtitle: [getRestaurantName(restaurant), restaurant.cuisineType, distance].filter(Boolean).join(" · "),
+      href: `/restaurant/${restaurant.id}`,
+      entityId: String(restaurant.id),
+      timeLabel: getFreshnessTimeLabel(freshnessMeta),
+      sourceLabel: getSourceLabel(freshnessMeta),
+      freshnessMeta,
+    });
+  }
+
+  return items
+    .filter((item) => item.subtitle.trim().length > 0)
+    .sort((a, b) => {
+      const order: Record<LocalActivityItem["type"], number> = {
+        menu_update: 6,
+        deal: 5,
+        truck: 4,
+        event: 3,
+        open: 2,
+        update: 1,
+      };
+      return order[b.type] - order[a.type];
+    })
+    .slice(0, 10);
 }
 
 function formatWait(truck: LiveTruckSummary): string | null {
@@ -1870,6 +2047,18 @@ export default function ExplorePreview() {
     [allDeals, liveTrucks, localMenuItems, nearbyRestaurants, selectedCraving],
   );
 
+  const localActivityItems = useMemo(
+    () =>
+      buildLocalActivityItems({
+        menuItems: localMenuItems,
+        deals: allDeals,
+        liveTrucks,
+        events: visibleEvents,
+        restaurants: nearbyRestaurants,
+      }),
+    [allDeals, liveTrucks, localMenuItems, nearbyRestaurants, visibleEvents],
+  );
+
   return (
     <>
       <SEOHead
@@ -2282,6 +2471,8 @@ export default function ExplorePreview() {
               onCravingSelect={setSelectedCravingId}
               onSearchCraving={goToCraving}
             />
+
+            <LocalActivityRail items={localActivityItems} />
 
             {/* OPEN NOW — broad live signal across trucks, restaurants, bars, and public events. */}
             <OpenNowSection
@@ -2911,6 +3102,83 @@ function ScoutSearchResultCard({
           ))}
         </div>
       </div>
+    </Link>
+  );
+}
+
+function LocalActivityRail({ items }: { items: LocalActivityItem[] }) {
+  if (items.length === 0) return null;
+
+  return (
+    <section className="pl-5 pr-0 pt-1 pb-8">
+      <SectionHeader
+        title="Happening Nearby"
+        linkHref="/search"
+        subtitle="Open places, food trucks, deals, and menu updates near you today."
+      />
+      <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
+        <ul className="flex gap-3 pr-5" role="list" aria-label="Happening nearby">
+          {items.map((item) => (
+            <li key={item.id} className="shrink-0 w-[190px] sm:w-[220px]">
+              <LocalActivityCard item={item} />
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
+  );
+}
+
+function LocalActivityCard({ item }: { item: LocalActivityItem }) {
+  const icon =
+    item.type === "menu_update" ? (
+      <Utensils className="h-3.5 w-3.5" aria-hidden="true" />
+    ) : item.type === "deal" ? (
+      <Tag className="h-3.5 w-3.5" aria-hidden="true" />
+    ) : item.type === "truck" ? (
+      <Flame className="h-3.5 w-3.5" aria-hidden="true" />
+    ) : item.type === "event" ? (
+      <CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />
+    ) : (
+      <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
+    );
+  const badges = [
+    item.timeLabel,
+    item.sourceLabel,
+    ...getOperationalBadges(item.freshnessMeta),
+  ]
+    .filter((label): label is string => Boolean(label))
+    .filter((label, index, all) => all.indexOf(label) === index)
+    .slice(0, 2);
+
+  return (
+    <Link
+      href={item.href}
+      className="block rounded-2xl bg-[#120805]/56 p-3 text-white ring-1 ring-white/10 transition-colors hover:bg-[#1a0d08]/78 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
+    >
+      <div className="flex items-start gap-2.5">
+        <span className="mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-orange-300/14 text-orange-200 ring-1 ring-orange-200/20">
+          {icon}
+        </span>
+        <div className="min-w-0">
+          <p className="text-sm font-black leading-tight text-white">{item.title}</p>
+          <p className="mt-1 line-clamp-2 text-[11px] font-semibold leading-snug text-orange-100/64">
+            {item.subtitle}
+          </p>
+        </div>
+      </div>
+      {badges.length > 0 ? (
+        <div className="mt-2 flex flex-wrap gap-1">
+          {badges.map((badge) => (
+            <span
+              key={badge}
+              className="rounded-full bg-white/8 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-orange-100"
+            >
+              {badge}
+            </span>
+          ))}
+        </div>
+      ) : null}
     </Link>
   );
 }
