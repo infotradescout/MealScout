@@ -810,6 +810,11 @@ export default function ExplorePreview() {
     return locationName.split(",")[0] || locationName;
   }, [locationName]);
 
+  const hasResolvedLocation = useMemo(() => {
+    const trimmed = (locationName || "").trim();
+    return trimmed.length > 0 && trimmed.toLowerCase() !== "your area";
+  }, [locationName]);
+
   /* --------- live trucks --------- */
 
   const {
@@ -1530,18 +1535,18 @@ export default function ExplorePreview() {
           className={`relative overflow-hidden ${
             sheetState === "fullMap"
               ? "w-full bg-[#fff4d6]"
-              : "mx-4 mt-4 rounded-[1.75rem] ring-1 ring-white/10 bg-[#0d0a08]"
+              : "mx-4 mt-4 rounded-[1.85rem] ring-1 ring-orange-200/15 bg-[#0d0a08]"
           }`}
           style={{
             height:
-              sheetState === "fullMap" ? "100dvh" : "clamp(248px, 38vh, 340px)",
+              sheetState === "fullMap" ? "100dvh" : "clamp(264px, 40vh, 356px)",
             transition: "height 320ms cubic-bezier(0.22,0.61,0.36,1)",
             touchAction: "auto",
             overscrollBehaviorY: "none",
             boxShadow:
               sheetState === "fullMap"
                 ? undefined
-                : "0 22px 60px rgba(0,0,0,0.62), inset 0 0 0 1px rgba(255,255,255,0.05)",
+                : "0 28px 70px rgba(0,0,0,0.68), 0 4px 22px rgba(255,138,60,0.10), inset 0 0 0 1px rgba(255,180,110,0.10), inset 0 1px 0 rgba(255,220,170,0.10)",
           }}
         >
           {/* Scout map surfaces
@@ -1666,15 +1671,19 @@ export default function ExplorePreview() {
             ) : null}
           </div>
 
-          {/* Left-side gradient so headline reads cleanly. We KEEP the
-              right side (where user pin lives) clear of overlay. */}
+          {/* Premium overlay frame:
+              - Soft top vignette so the controls read cleanly without
+                covering important map labels.
+              - Subtle warm radial center keeps the surface feeling
+                MealScout, not raw Google.
+              - Light edge glow ties the frame together. */}
           {sheetState !== "fullMap" && (
             <div
               aria-hidden="true"
               className="absolute inset-0 pointer-events-none"
               style={{
                 backgroundImage:
-                  "linear-gradient(180deg, rgba(255,253,244,0.12) 0%, rgba(255,253,244,0.00) 44%, rgba(120,54,16,0.10) 100%), radial-gradient(circle at 50% 44%, rgba(255,168,86,0.12), transparent 22%)",
+                  "linear-gradient(180deg, rgba(8,5,2,0.42) 0%, rgba(8,5,2,0.08) 22%, rgba(8,5,2,0.00) 46%), radial-gradient(120% 60% at 50% 36%, rgba(255,168,86,0.10), transparent 55%)",
               }}
             />
           )}
@@ -1807,34 +1816,55 @@ export default function ExplorePreview() {
             />
           )}
 
-          {/* Pull bar indicator (default state) */}
+          {/* Map pedestal (default state)
+              ------------------------------
+              Branded location module footer. Conveys "this is YOUR
+              MealScout map" with a sharp eyebrow, the resolved place,
+              a live signal count, and an amber CTA. The gradient is a
+              true pedestal — strong at the bottom edge, clear higher
+              up so it never crowds important map labels. */}
           {sheetState === "default" && (
             <>
               <div
                 aria-hidden="true"
-                className="pointer-events-none absolute inset-x-0 bottom-0 h-2/3"
+                className="pointer-events-none absolute inset-x-0 bottom-0 h-[58%]"
                 style={{
                   background:
-                    "linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.45) 70%, rgba(0,0,0,0.7) 100%)",
+                    "linear-gradient(180deg, rgba(8,5,2,0) 0%, rgba(8,5,2,0.35) 48%, rgba(8,5,2,0.78) 88%, rgba(8,5,2,0.88) 100%)",
                 }}
               />
-              <div className="absolute bottom-3 left-3 right-3 z-20 flex items-end justify-between gap-2">
+              <div className="absolute bottom-3.5 left-3.5 right-3.5 z-20 flex items-end justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-[10px] font-black uppercase tracking-[0.22em] text-orange-200/90">
-                    Local food map
+                  <p className="text-[10px] font-black uppercase tracking-[0.24em] text-orange-300/95 drop-shadow-[0_1px_4px_rgba(0,0,0,0.5)]">
+                    {hasResolvedLocation ? "Open around" : "MealScout map"}
                   </p>
-                  <p className="mt-0.5 text-sm font-extrabold text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.65)]">
-                    {shortLocation}
+                  <p className="mt-0.5 truncate text-[15px] font-extrabold text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.7)]">
+                    {hasResolvedLocation ? shortLocation : "Nearby tonight"}
                   </p>
+                  {localSignalCount > 0 && (
+                    <p className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-bold text-orange-100 ring-1 ring-white/15 backdrop-blur-md">
+                      <span
+                        aria-hidden="true"
+                        className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(74,222,128,0.85)]"
+                      />
+                      {localSignalCount} open near you
+                    </p>
+                  )}
                 </div>
                 <button
                   type="button"
                   onClick={openScoutMap}
-                  className="shrink-0 inline-flex items-center gap-1.5 rounded-full bg-[#ff6f3c] px-3.5 py-2 text-xs font-black text-white shadow-[0_8px_22px_rgba(255,111,60,0.5)] ring-1 ring-orange-200/50"
+                  className="group shrink-0 inline-flex items-center gap-1.5 rounded-full px-4 py-2.5 text-xs font-black text-white ring-1 ring-amber-200/50 transition-transform active:scale-95"
+                  style={{
+                    backgroundImage:
+                      "linear-gradient(135deg, #ff8a3c 0%, #ff6f3c 55%, #f25a1f 100%)",
+                    boxShadow:
+                      "0 10px 26px rgba(255,111,60,0.5), inset 0 1px 0 rgba(255,221,179,0.45)",
+                  }}
                   aria-label="Open full map"
                 >
                   <Maximize2 className="h-3.5 w-3.5" aria-hidden="true" />
-                  Open map
+                  <span className="tracking-wide">Explore map</span>
                 </button>
               </div>
             </>
