@@ -409,9 +409,9 @@ const DISCOVERY_LAYERS: Record<
     subtitle: "Trucks, restaurants, bars, and pop-ups serving near you right now.",
   },
   localBoard: {
-    title: "Today's Food Board",
+    title: "Top Local Favorites",
     href: "/scout",
-    subtitle: "Your local dashboard for independent food discovery.",
+    subtitle: "Busy local spots, food trucks, deals, and menu updates near you.",
   },
   cravings: {
     title: "Explore by Craving",
@@ -419,9 +419,9 @@ const DISCOVERY_LAYERS: Record<
     subtitle: "Jump into local food by mood, not by chain category.",
   },
   trending: {
-    title: "Trending Now",
+    title: "Trending Nearby",
     href: "/trending",
-    subtitle: "Cuisines, dishes, videos, and local spots gaining momentum.",
+    subtitle: "What people are visiting, tasting, and sharing in your area.",
   },
   menuItems: {
     title: "New Local Menu Items",
@@ -444,7 +444,7 @@ const DISCOVERY_LAYERS: Record<
     subtitle: "Active offers from nearby restaurants, bars, and food trucks.",
   },
   events: {
-    title: "Happening Today",
+    title: "Busy Nearby",
     href: "/events",
     subtitle: "Events, pop-ups, and local food moments near you.",
   },
@@ -1594,7 +1594,7 @@ export default function ExplorePreview() {
   const nearbySectionUsesMixedSignals =
     liveTrucks.length + localMenuItems.length + allDeals.length + visibleEvents.length > 0;
   const nearbyRestaurantsTitle = nearbySectionUsesMixedSignals
-    ? "Best Nearby Right Now"
+    ? "Nearby Now"
     : DISCOVERY_LAYERS.restaurants.title;
   const nearbyRestaurantsSubtitle = nearbySectionUsesMixedSignals
     ? "Open places, food trucks, deals, and menu updates near you today."
@@ -2096,7 +2096,7 @@ export default function ExplorePreview() {
                   <HorizontalSkeletonRow count={3} width={200} />
                 ) : (
                   <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
-                    <ul className="flex gap-4 pr-5" role="list" aria-label="Best moves nearby">
+                    <ul className="flex gap-4 pr-5" role="list" aria-label="Nearby now">
                       {nearbyRestaurants.slice(0, 10).map((r) => (
                         <li key={r.id} className="shrink-0 w-[200px] sm:w-[220px]">
                           <NearbyRestaurantCard
@@ -2337,7 +2337,7 @@ function CravingCompass({
   }, [cravings]);
 
   const topPickProofBits = useMemo(() => {
-    if (!topPick) return ["Nearby", "Happening today"];
+    if (!topPick) return ["Nearby now", "Happening today"];
     const bits = [...topPickMetaSignals];
     if (!bits.includes("Open now")) bits.push("Open now");
     if (!bits.includes("Nearby")) bits.push("Nearby");
@@ -2365,7 +2365,7 @@ function CravingCompass({
       ? resultCount > 0
         ? `${resultCount} open options`
         : localSignalCount > 0
-          ? "Search wider"
+          ? "Show more nearby"
         : "No exact hits yet"
       : "Location off";
 
@@ -2386,10 +2386,10 @@ function CravingCompass({
           <div className="flex items-start justify-between gap-3 border-b border-white/10 pb-3">
             <div className="min-w-0">
               <h2 className="font-sans text-white text-lg font-black leading-tight">
-                Find your next food move.
+                Find food near you.
               </h2>
               <p className="mt-1 text-orange-50/62 text-xs leading-relaxed">
-                Open restaurants, food trucks, deals, and menu updates near you right now.
+                Open restaurants, food trucks, and deals nearby.
               </p>
             </div>
             {hasLocation ? (
@@ -2423,7 +2423,7 @@ function CravingCompass({
                     <div className="absolute inset-0 bg-gradient-to-t from-[#120805]/95 via-[#120805]/55 to-transparent" />
                     <div className="absolute left-3 top-3">
                       <span className="inline-flex rounded-full bg-black/65 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-white ring-1 ring-white/12">
-                        BEST OPTION RIGHT NOW
+                        OPEN RIGHT NOW
                       </span>
                     </div>
                   </div>
@@ -2531,7 +2531,7 @@ function CravingCompass({
                 <p className="mt-0.5 text-xs font-semibold leading-relaxed text-orange-100/62">
                   {isSearchOpen
                     ? "Review the options for this goal."
-                    : "Reviewing options keeps your move decision clear."}
+                    : "Reviewing options keeps your choice clear."}
                 </p>
               </div>
               <button
