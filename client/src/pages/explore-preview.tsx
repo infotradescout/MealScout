@@ -408,6 +408,18 @@ type LocalActivityItem = {
   freshnessMeta: FreshnessMeta;
 };
 
+type ScoutActivityMode = "high_activity" | "medium_activity" | "low_activity";
+
+type ScoutActivityInputs = {
+  servingTruckCount: number;
+  openRestaurantCount: number;
+  dealCount: number;
+  eventCount: number;
+  menuUpdateCount: number;
+  activityItemCount: number;
+  mapMarkerCount: number;
+};
+
 type DiscoveryLayerId =
   | "localBoard"
   | "cravings"
@@ -711,6 +723,60 @@ function getMapMarkerSubtitle(base: string | null | undefined, meta: FreshnessMe
     .slice(0, 2)
     .join(" · ");
   return [status, base].filter(Boolean).join(" · ") || undefined;
+}
+
+function getScoutActivityMode({
+  servingTruckCount,
+  openRestaurantCount,
+  dealCount,
+  eventCount,
+  menuUpdateCount,
+  activityItemCount,
+  mapMarkerCount,
+}: ScoutActivityInputs): ScoutActivityMode {
+  const activityScore =
+    servingTruckCount * 3 +
+    openRestaurantCount * 2 +
+    dealCount * 2 +
+    eventCount * 2 +
+    menuUpdateCount +
+    activityItemCount;
+
+  if (
+    activityScore >= 12 ||
+    mapMarkerCount >= 10 ||
+    (servingTruckCount >= 2 && dealCount + eventCount + openRestaurantCount >= 3)
+  ) {
+    return "high_activity";
+  }
+
+  if (
+    activityScore >= 3 ||
+    servingTruckCount > 0 ||
+    openRestaurantCount > 0 ||
+    dealCount > 0 ||
+    eventCount > 0
+  ) {
+    return "medium_activity";
+  }
+
+  return "low_activity";
+}
+
+function getActivityRailTitle(mode: ScoutActivityMode): string {
+  if (mode === "high_activity") return "Happening right now nearby";
+  if (mode === "medium_activity") return "Open and active nearby";
+  return "Worth checking out nearby";
+}
+
+function getActivityRailSubtitle(mode: ScoutActivityMode): string {
+  if (mode === "high_activity") {
+    return "Food trucks, open places, deals, events, and menu updates near you.";
+  }
+  if (mode === "medium_activity") {
+    return "A few real food options and updates close to you.";
+  }
+  return "Local places and upcoming food activity around you.";
 }
 
 function getRestaurantIdFromActivity(item: LocalActivityItem): string | null {
@@ -2147,6 +2213,27 @@ export default function ExplorePreview() {
       }),
     [allDeals, localMenuItems, restaurantsOpenNow, trucksServingNow, visibleEvents],
   );
+  const scoutActivityMode = useMemo(
+    () =>
+      getScoutActivityMode({
+        servingTruckCount: trucksServingNow.length,
+        openRestaurantCount: restaurantsOpenNow.length,
+        dealCount: allDeals.length,
+        eventCount: visibleEvents.length,
+        menuUpdateCount: localMenuItems.length,
+        activityItemCount: localActivityItems.length,
+        mapMarkerCount: filteredMapMarkers.filter((marker) => marker.kind !== "user").length,
+      }),
+    [
+      allDeals.length,
+      filteredMapMarkers,
+      localActivityItems.length,
+      localMenuItems.length,
+      restaurantsOpenNow.length,
+      trucksServingNow.length,
+      visibleEvents.length,
+    ],
+  );
   const visibleLocalActivityItems = useMemo(() => {
     const uniqueKeys = new Set<string>();
     const uniqueItems = localActivityItems.filter((item) => {
@@ -2155,8 +2242,8 @@ export default function ExplorePreview() {
       uniqueKeys.add(key);
       return true;
     });
-    return uniqueItems.length >= 2 ? uniqueItems : [];
-  }, [localActivityItems]);
+    return uniqueItems.length >= 2 && scoutActivityMode !== "low_activity" ? uniqueItems : [];
+  }, [localActivityItems, scoutActivityMode]);
   const localActivityRestaurantIds = useMemo(() => {
     return new Set(
       visibleLocalActivityItems
@@ -2457,6 +2544,7 @@ export default function ExplorePreview() {
           {sheetState === "default" && (
             <>
               <MapActivityPips
+                mode={scoutActivityMode}
                 truckCount={trucksServingNow.length}
                 restaurantCount={restaurantsOpenNow.length}
                 dealCount={allDeals.length}
@@ -2474,9 +2562,6 @@ export default function ExplorePreview() {
                 <div className="min-w-0">
                   <p className="truncate text-sm font-extrabold text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.7)]">
                     {hasResolvedLocation ? shortLocation : "Nearby now"}
-                  </p>
-                  <p className="mt-0.5 text-[11px] font-semibold text-white/62">
-                    Tap the map to explore nearby food
                   </p>
                 </div>
                 <button
@@ -2502,12 +2587,20 @@ export default function ExplorePreview() {
             className="relative z-10 mt-4"
           >
             <CravingCompass
+              mode={scoutActivityMode}
               daypartCopy={daypartSearchCopy}
               locationStatus={locationStatus}
               onRefreshLocation={requestLocation}
             />
 
-            <LocalActivityRail items={visibleLocalActivityItems} />
+            <LocalActivityRail mode={scoutActivityMode} items={visibleLocalActivityItems} />
+
+            {scoutActivityMode === "low_activity" &&
+            visibleLocalActivityItems.length === 0 &&
+            trucksServingNow.length === 0 &&
+            restaurantsOpenNow.length === 0 ? (
+              <QuietNearbyNotice />
+            ) : null}
 
             <FilterNearbyChips
               selectedCraving={selectedCraving}
@@ -2680,20 +2773,31 @@ function SectionHeader({
    ============================================================ */
 
 function CravingCompass({
+  mode,
   daypartCopy,
   locationStatus,
   onRefreshLocation,
 }: {
+  mode: ScoutActivityMode;
   daypartCopy: { title: string; body: string };
   locationStatus: "idle" | "requesting" | "ready" | "denied";
   onRefreshLocation: () => void;
 }) {
   const hasLocation = locationStatus === "ready";
+  const modeLabel =
+    mode === "high_activity"
+      ? "Food happening now"
+      : mode === "medium_activity"
+        ? "Food nearby now"
+        : "Explore local food";
 
   return (
     <section className="px-4 pt-4 pb-3">
       <div className="overflow-hidden rounded-[1.35rem] bg-[#17100d]/92 ring-1 ring-white/10 shadow-[0_16px_46px_rgba(0,0,0,0.28)]">
         <div className="px-4 py-4">
+          <p className="mb-2 text-[10px] font-black uppercase tracking-[0.16em] text-white/38">
+            {modeLabel}
+          </p>
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <h2 className="font-sans text-white text-lg font-black leading-tight">
@@ -2766,15 +2870,34 @@ function FilterNearbyChips({
   );
 }
 
-function LocalActivityRail({ items }: { items: LocalActivityItem[] }) {
+function QuietNearbyNotice() {
+  return (
+    <section className="px-4 pb-6">
+      <div className="rounded-2xl bg-white/[0.04] px-4 py-3 text-white ring-1 ring-white/10">
+        <p className="text-sm font-black">Nothing open nearby yet.</p>
+        <p className="mt-1 text-xs font-semibold leading-relaxed text-white/58">
+          Explore the map or check back later.
+        </p>
+      </div>
+    </section>
+  );
+}
+
+function LocalActivityRail({
+  mode,
+  items,
+}: {
+  mode: ScoutActivityMode;
+  items: LocalActivityItem[];
+}) {
   if (items.length === 0) return null;
 
   return (
     <section className="pl-5 pr-0 pt-1 pb-6">
       <SectionHeader
-        title="Happening right now nearby"
+        title={getActivityRailTitle(mode)}
         linkHref="/search"
-        subtitle="Food trucks, open places, deals, events, and menu updates near you."
+        subtitle={getActivityRailSubtitle(mode)}
       />
       <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
         <ul className="flex gap-3 pr-5" role="list" aria-label="Happening nearby">
@@ -4202,16 +4325,20 @@ function MapPlaceCard({
 }
 
 function MapActivityPips({
+  mode,
   truckCount,
   restaurantCount,
   dealCount,
   eventCount,
 }: {
+  mode: ScoutActivityMode;
   truckCount: number;
   restaurantCount: number;
   dealCount: number;
   eventCount: number;
 }) {
+  if (mode === "low_activity") return null;
+
   const pips = [
     truckCount > 0 ? { label: "Trucks", value: truckCount, className: "bg-orange-300" } : null,
     restaurantCount > 0 ? { label: "Open", value: restaurantCount, className: "bg-emerald-300" } : null,
