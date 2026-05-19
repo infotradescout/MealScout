@@ -1778,9 +1778,10 @@ export function registerHostRoutes(app: Express) {
         }
 
         // Create Stripe PaymentIntent.
-        // If the host has Stripe Connect payouts enabled, create a direct charge on their Connect account
-        // and collect the MealScout application fee. Otherwise, charge on the platform account so the
-        // booking can still go through (host payout will be handled later).
+        // Always create the intent on the platform account so the existing client Payment Element
+        // can confirm with the platform publishable key. When host payouts are ready, attach
+        // transfer_data.destination and application_fee_amount as a destination charge.
+        // Otherwise, charge on the platform and record host earnings for later payout.
         if (!stripe) {
           return res.status(500).json({ message: "Stripe is not configured" });
         }
@@ -1807,17 +1808,14 @@ export function registerHostRoutes(app: Express) {
             },
           };
 
-          // Only valid for Connect direct charges
           if (hostStripeAccountId) {
             intentParams.application_fee_amount = adjustedPlatformFeeCents;
+            intentParams.transfer_data = {
+              destination: hostStripeAccountId,
+            };
           }
 
-          paymentIntent = await stripe.paymentIntents.create(
-            intentParams,
-            hostStripeAccountId
-              ? { stripeAccount: hostStripeAccountId }
-              : undefined,
-          );
+          paymentIntent = await stripe.paymentIntents.create(intentParams);
         } catch (error: any) {
           // Best-effort release holds if Stripe fails.
           try {
