@@ -1179,12 +1179,33 @@ export function registerHostRoutes(app: Express) {
           durationSlots.length > 0 ? durationSlots : mealSlots
         ) as (typeof PARKING_PASS_SLOT_TYPES)[number][];
 
-        // Verify truck ownership
+        // Verify truck capability and type
         const truck = await storage.getRestaurant(truckId);
-        if (!truck || truck.ownerId !== userId) {
+        const hasManageParkingPass = await storage.verifyRestaurantOwnership(
+          truckId,
+          userId,
+          "manageParkingPass",
+        );
+        if (!truck || !hasManageParkingPass) {
+          console.warn("[parking-pass] rejected booking attempt", {
+            userId,
+            userType: req.user?.userType || null,
+            truckId,
+            truckIsFoodTruck: truck?.isFoodTruck ?? null,
+            hasManageParkingPass,
+            reason: !truck ? "truck_not_found" : "missing_manageParkingPass",
+          });
           return res.status(403).json({ message: "Not authorized" });
         }
         if (!truck.isFoodTruck) {
+          console.warn("[parking-pass] rejected booking attempt", {
+            userId,
+            userType: req.user?.userType || null,
+            truckId,
+            truckIsFoodTruck: truck.isFoodTruck,
+            hasManageParkingPass,
+            reason: "not_food_truck",
+          });
           return res.status(403).json({
             message:
               "Parking Pass bookings are only available for food trucks.",

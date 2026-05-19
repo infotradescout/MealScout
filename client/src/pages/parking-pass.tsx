@@ -368,6 +368,9 @@ const isParkingPassListingPublicVisible = (listing: ParkingPassListing) => {
   return true;
 };
 
+const isValidParkingPassTruck = (business: any): boolean =>
+  Boolean(business && business.isFoodTruck === true && business.id);
+
 const normalizeDollar = (value: string | number) => {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return 0;
@@ -606,6 +609,7 @@ export default function ParkingPassPage() {
     (isAdminOrStaff || Boolean(subscription?.hasAccess));
   const [isLoading, setIsLoading] = useState(true);
   const [passListings, setPassListings] = useState<ParkingPassListing[]>([]);
+  const [ownedFoodTrucks, setOwnedFoodTrucks] = useState<any[]>([]);
   const [truckId, setTruckId] = useState<string | null>(null);
   const [truck, setTruck] = useState<any | null>(null);
   const [socialLinks, setSocialLinks] = useState({
@@ -1270,7 +1274,9 @@ export default function ParkingPassPage() {
 
   useEffect(() => {
     if (!isAuthenticated) {
+      setOwnedFoodTrucks([]);
       setTruckId(null);
+      setTruck(null);
     }
   }, [isAuthenticated]);
 
@@ -1284,12 +1290,23 @@ export default function ParkingPassPage() {
           const truckRes = await fetch("/api/restaurants/my-restaurants");
           if (truckRes.ok) {
             const trucks = await truckRes.json();
-            if (!cancelled && Array.isArray(trucks) && trucks.length > 0) {
-              const foodTruck =
-                trucks.find((item: any) => item.isFoodTruck) || trucks[0];
-              setTruckId(foodTruck.id);
-              setTruck(foodTruck);
+            if (!cancelled) {
+              const validFoodTrucks = Array.isArray(trucks)
+                ? trucks.filter((item: any) => isValidParkingPassTruck(item))
+                : [];
+              setOwnedFoodTrucks(validFoodTrucks);
+              if (validFoodTrucks.length > 0) {
+                setTruckId(validFoodTrucks[0].id);
+                setTruck(validFoodTrucks[0]);
+              } else {
+                setTruckId(null);
+                setTruck(null);
+              }
             }
+          } else if (!cancelled) {
+            setOwnedFoodTrucks([]);
+            setTruckId(null);
+            setTruck(null);
           }
           const hostRes = await fetch("/api/hosts");
           if (hostRes.ok) {
@@ -2981,6 +2998,14 @@ export default function ParkingPassPage() {
   };
 
   const handleBookSelected = (listing: ParkingPassListing) => {
+    if (!canStartTruckCheckout) {
+      toast({
+        title: "Food truck profile required",
+        description: "Only food trucks can book Parking Pass spots.",
+        variant: "destructive",
+      });
+      return;
+    }
     const slotTypes = (selectedSlotsByListing[listing.id] || []).filter(
       (slot) =>
         isSlotBookableByTime(
@@ -3003,6 +3028,14 @@ export default function ParkingPassPage() {
   };
 
   const startCheckout = () => {
+    if (!hasFoodTruckBusiness || !truckId) {
+      toast({
+        title: "Food truck profile required",
+        description: "Only food trucks can book Parking Pass spots.",
+        variant: "destructive",
+      });
+      return;
+    }
     if (cartItems.length === 0) return;
     const [first, ...rest] = cartItems;
     setCheckoutQueue(rest);
@@ -3336,14 +3369,17 @@ export default function ParkingPassPage() {
     window.history.replaceState({}, "", url.toString());
   };
 
-  const isTruckViewUser =
-    canManageParkingPass && (!isAdminOrStaff || adminParkingMode !== "host");
-  const showHostParkingPass =
-    isAuthenticated &&
-    (hasHostProfile || isAdminOrStaff) &&
-    (!isAdminOrStaff || adminParkingMode !== "truck");
-  const canScheduleTab = Boolean(isTruckViewUser);
-  const canHostTab = Boolean(showHostParkingPass);
+  const hasFoodTruckBusiness = ownedFoodTrucks.length > 0;
+  const canUseTruckSide =
+    hasFoodTruckBusiness || (isAdminOrStaff && adminParkingMode === "truck");
+  const canUseHostSide =
+    hasHostProfile || (isAdminOrStaff && adminParkingMode === "host");
+  const isTruckViewUser = Boolean(canUseTruckSide);
+  const showHostParkingPass = isAuthenticated && canUseHostSide;
+  const canScheduleTab = Boolean(canUseTruckSide);
+  const canHostTab = Boolean(canUseHostSide);
+  const canStartTruckCheckout =
+    hasFoodTruckBusiness && Boolean(truckId) && canManageParkingPass;
   const availableTabs = useMemo(
     () =>
       [
@@ -3356,16 +3392,16 @@ export default function ParkingPassPage() {
 
   useEffect(() => {
     const preferred: "book" | "schedule" | "host" = canHostTab
-      ? isTruckViewUser
+      ? canUseTruckSide
         ? "book"
         : "host"
       : "book";
     if (!availableTabs.includes(topTab)) {
       setTopTab(preferred);
-    } else if (!isTruckViewUser && topTab === "schedule") {
+    } else if (!canUseTruckSide && topTab === "schedule") {
       setTopTab(preferred);
     }
-  }, [availableTabs, canHostTab, isTruckViewUser, topTab]);
+  }, [availableTabs, canHostTab, canUseTruckSide, topTab]);
   const normalizedCityQuery = cityQuery.trim().toLowerCase();
   const locationGroups = useMemo(() => {
     const byHost = new Map<string, ParkingPassLocationGroup>();
@@ -3682,29 +3718,6 @@ export default function ParkingPassPage() {
     }
     setActiveLocationKey(activeLocation.key);
   }, [activeLocation, activeLocationKey]);
-
-  if (
-    isAuthenticated &&
-    user &&
-    !canManageParkingPass &&
-    !hasHostProfile &&
-    !isLoading
-  ) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center px-4 text-center">
-        <h1 className="text-2xl font-bold mb-2">
-          Parking Pass is for food trucks only
-        </h1>
-        <p className="text-[color:var(--text-muted)] mb-4 max-w-md">
-          Restaurant and bar accounts can’t book parking pass slots. Switch to a
-          food truck profile to access Parking Pass.
-        </p>
-        <Button onClick={() => setLocation("/dashboard")}>
-          Back to Dashboard
-        </Button>
-      </div>
-    );
-  }
 
   const cartTotals = getCartTotals();
   const hasCartTotal = cartItems.length > 0 && cartTotals.totalCents > 0;
@@ -6278,6 +6291,14 @@ export default function ParkingPassPage() {
                   </a>
                 </div>
               )}
+              {!canStartTruckCheckout && (
+                <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-3 text-sm text-[color:var(--text-primary)]">
+                  <p className="font-semibold">Food truck profile required</p>
+                  <p className="text-xs text-[color:var(--text-muted)]">
+                    Only food trucks can book Parking Pass spots.
+                  </p>
+                </div>
+              )}
               <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                 <div>
                   <p className="text-lg font-semibold text-[color:var(--text-primary)] font-display">
@@ -6578,7 +6599,9 @@ export default function ParkingPassPage() {
                                   listingHasAvailability(listingForDate),
                                 );
                                 const canBook = Boolean(
-                                  paymentsReady && hasAvailability,
+                                  paymentsReady &&
+                                    hasAvailability &&
+                                    canStartTruckCheckout,
                                 );
 
                                 const pinPopup = (
@@ -6847,7 +6870,9 @@ export default function ParkingPassPage() {
                             listingHasAvailability(listingForDate),
                           );
                           const canBook = Boolean(
-                            paymentsReady && hasAvailability,
+                            paymentsReady &&
+                              hasAvailability &&
+                              canStartTruckCheckout,
                           );
                           const bookings = Array.isArray(
                             bookingListing?.bookings,
@@ -7145,7 +7170,9 @@ export default function ParkingPassPage() {
                           listingHasAvailability(listingForDate),
                         );
                         const canBook = Boolean(
-                          paymentsReady && hasAvailability,
+                          paymentsReady &&
+                            hasAvailability &&
+                            canStartTruckCheckout,
                         );
                         const bookings = Array.isArray(bookingListing?.bookings)
                           ? (bookingListing?.bookings ?? [])
@@ -7327,7 +7354,9 @@ export default function ParkingPassPage() {
                                   Includes a $10/day MealScout fee per host.
                                   Cleanup time is 30 minutes after the end time.
                                 </p>
-                                {isActive && listingForDate && (
+                                {isActive &&
+                                  listingForDate &&
+                                  canStartTruckCheckout && (
                                   <Button
                                     size="sm"
                                     type="button"
@@ -7372,7 +7401,7 @@ export default function ParkingPassPage() {
                 </div>
 
                 <div className="space-y-4 order-2 lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)] lg:overflow-y-auto lg:pr-1 lg:order-none">
-                  {cartItems.length > 0 && (
+                  {canStartTruckCheckout && cartItems.length > 0 && (
                     <div className="rounded-2xl pp-glass p-4 shadow-clean space-y-3">
                       <div className="flex items-center justify-between">
                         <div>
@@ -7675,24 +7704,26 @@ export default function ParkingPassPage() {
                                     Cleanup time is 30 minutes after the end
                                     time.
                                   </p>
-                                  <Button
-                                    size="sm"
-                                    type="button"
-                                    onClick={(event) => {
-                                      event.preventDefault();
-                                      event.stopPropagation();
-                                      handleBookSelected(activeListingForDate);
-                                    }}
-                                    disabled={
-                                      (
-                                        selectedSlotsByListing[
-                                          activeListingForDate.id
-                                        ] || []
-                                      ).length === 0
-                                    }
-                                  >
-                                    Add to cart
-                                  </Button>
+                                  {canStartTruckCheckout && (
+                                    <Button
+                                      size="sm"
+                                      type="button"
+                                      onClick={(event) => {
+                                        event.preventDefault();
+                                        event.stopPropagation();
+                                        handleBookSelected(activeListingForDate);
+                                      }}
+                                      disabled={
+                                        (
+                                          selectedSlotsByListing[
+                                            activeListingForDate.id
+                                          ] || []
+                                        ).length === 0
+                                      }
+                                    >
+                                      Add to cart
+                                    </Button>
+                                  )}
                                 </div>
                               )}
                             </>
@@ -7708,7 +7739,7 @@ export default function ParkingPassPage() {
                 </div>
               </div>
 
-              {hasCartTotal && (
+              {canStartTruckCheckout && hasCartTotal && (
                 <div className="fixed left-0 right-0 z-[1200] px-4 lg:hidden pointer-events-none bottom-[calc(4.75rem+env(safe-area-inset-bottom))]">
                   <div className="mx-auto max-w-md rounded-2xl pp-glass shadow-clean-lg p-3 flex items-center justify-between gap-3 pointer-events-auto">
                     <div className="min-w-0">
@@ -7737,7 +7768,10 @@ export default function ParkingPassPage() {
           )}
         </div>
 
-        {selectedListing && truckId && selectedSlotTypes.length > 0 && (
+        {selectedListing &&
+          hasFoodTruckBusiness &&
+          truckId &&
+          selectedSlotTypes.length > 0 && (
           <BookingPaymentModal
             open={paymentOpen}
             onOpenChange={setPaymentOpen}
