@@ -278,6 +278,14 @@ const SCOUT_SEARCH_OPTIONS: CravingCategory[] = [
     image: "/atmospheric/craving-pizza.jpg",
   },
   {
+    id: "today",
+    label: "Today",
+    query: "happening today",
+    helper: "Food activity happening today",
+    keywords: ["today", "event", "pop-up", "deal", "menu", "serving", "open"],
+    image: "/atmospheric/craving-tacos.jpg",
+  },
+  {
     id: "food-truck",
     label: "Food truck",
     query: "food truck",
@@ -450,7 +458,7 @@ const DISCOVERY_LAYERS: Record<
     subtitle: "Active offers from nearby restaurants, bars, and food trucks.",
   },
   events: {
-    title: "Happening Today",
+    title: "Events Today",
     href: "/events",
     subtitle: "Events, pop-ups, and local food moments near you.",
   },
@@ -1053,7 +1061,7 @@ function buildLocalActivityItems({
     items.push({
       id: `deal-${deal.id}`,
       type: "deal",
-      title: "Deal today",
+      title: "Deal posted",
       subtitle: [deal.title, deal.restaurantName || deal.discountText].filter(Boolean).join(" · "),
       href: `/deal/${deal.id}`,
       entityId: String(deal.id),
@@ -1076,7 +1084,7 @@ function buildLocalActivityItems({
     items.push({
       id: `truck-${truck.id}`,
       type: "truck",
-      title: "Food truck nearby",
+      title: "Serving now",
       subtitle: [truck.name, truck.cuisineType, distance].filter(Boolean).join(" · "),
       href: `/truck/${truck.id}`,
       entityId: String(truck.id),
@@ -1142,11 +1150,11 @@ function buildLocalActivityItems({
     .filter((item) => item.subtitle.trim().length > 0)
     .sort((a, b) => {
       const order: Record<LocalActivityItem["type"], number> = {
-        menu_update: 6,
-        deal: 5,
-        truck: 4,
+        truck: 6,
+        open: 5,
+        deal: 4,
         event: 3,
-        open: 2,
+        menu_update: 2,
         update: 1,
       };
       return order[b.type] - order[a.type];
@@ -2093,7 +2101,6 @@ export default function ExplorePreview() {
   );
 
   const showFoodTrucksSection = liveTrucksLoading || trucksServingNow.length > 0;
-  const showMenuItemsSection = localMenuItems.length > 0;
   const showRestaurantsSection =
     nearbyRestaurantsLoading || restaurantsOpenNow.length > 0;
   const showMoreFoodSection = moreFoodRestaurants.length > 0;
@@ -2449,6 +2456,12 @@ export default function ExplorePreview() {
           {/* Compact map footer. Keep the collapsed map mostly clear. */}
           {sheetState === "default" && (
             <>
+              <MapActivityPips
+                truckCount={trucksServingNow.length}
+                restaurantCount={restaurantsOpenNow.length}
+                dealCount={allDeals.length}
+                eventCount={visibleEvents.length}
+              />
               <div
                 aria-hidden="true"
                 className="pointer-events-none absolute inset-x-0 bottom-0 h-[58%]"
@@ -2489,14 +2502,15 @@ export default function ExplorePreview() {
             className="relative z-10 mt-4"
           >
             <CravingCompass
-              cravings={SCOUT_SEARCH_OPTIONS}
-              selectedCraving={selectedCraving}
-              boardItems={cravingBoardItems}
               daypartCopy={daypartSearchCopy}
               locationStatus={locationStatus}
-              localActivityCount={localActivityCount}
-              hasServingPriorityInventory={trucksServingNow.length + allDeals.length + visibleEvents.length > 0}
               onRefreshLocation={requestLocation}
+            />
+
+            <LocalActivityRail items={visibleLocalActivityItems} />
+
+            <FilterNearbyChips
+              selectedCraving={selectedCraving}
               onCravingSelect={setSelectedCravingId}
             />
 
@@ -2580,49 +2594,7 @@ export default function ExplorePreview() {
               </section>
             )}
 
-            <LocalActivityRail items={visibleLocalActivityItems} />
-
-            {/* ── NEW LOCAL MENU ITEMS ── */}
-            {showMenuItemsSection && (
-              <section className="pl-5 pr-0 pt-2 pb-10">
-                <SectionHeader
-                  title={DISCOVERY_LAYERS.menuItems.title}
-                  linkHref={DISCOVERY_LAYERS.menuItems.href}
-                  subtitle={DISCOVERY_LAYERS.menuItems.subtitle}
-                />
-                <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
-                  <ul className="flex gap-4 pr-5" role="list" aria-label="New local menu items">
-                    {localMenuItems.slice(0, 12).map((item, index) => (
-                      <li key={item.id} className="shrink-0 w-[210px] sm:w-[230px]">
-                        <LocalMenuItemCard item={item} position={index} currentUserId={currentUserId} />
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </section>
-            )}
-
-            {/* ── MORE FOOD NEARBY ── */}
-            {showMoreFoodSection && (
-              <section className="pl-5 pr-0 pt-2 pb-10">
-                <SectionHeader
-                  title="More Food Nearby"
-                  linkHref={DISCOVERY_LAYERS.restaurants.href}
-                  subtitle="Nearby trucks and restaurants without current open status."
-                />
-                <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
-                  <ul className="flex gap-4 pr-5" role="list" aria-label="More food nearby">
-                    {moreFoodRestaurants.slice(0, 10).map((r) => (
-                      <li key={`restaurant-${r.id}`} className="shrink-0 w-[200px] sm:w-[220px]">
-                        <SavedRestaurantCard restaurant={r} />
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </section>
-            )}
-
-            {/* ── HAPPENING TODAY ── */}
+            {/* ── EVENTS TODAY ── */}
             {showEventsSection && (
               <section className="pl-5 pr-0 pt-2 pb-10">
                 <SectionHeader
@@ -2635,6 +2607,26 @@ export default function ExplorePreview() {
                     {visibleEvents.slice(0, 8).map((e) => (
                       <li key={e.id} className="shrink-0 w-[230px] sm:w-[260px]">
                         <EventCard event={e} currentUserId={currentUserId} />
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </section>
+            )}
+
+            {/* ── MORE FOOD NEARBY ── */}
+            {showMoreFoodSection && (
+              <section className="pl-5 pr-0 pt-2 pb-10">
+                <SectionHeader
+                  title="More Nearby"
+                  linkHref={DISCOVERY_LAYERS.restaurants.href}
+                  subtitle="Nearby trucks and restaurants without current open status."
+                />
+                <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
+                  <ul className="flex gap-4 pr-5" role="list" aria-label="More nearby">
+                    {moreFoodRestaurants.slice(0, 10).map((r) => (
+                      <li key={`restaurant-${r.id}`} className="shrink-0 w-[200px] sm:w-[220px]">
+                        <SavedRestaurantCard restaurant={r} />
                       </li>
                     ))}
                   </ul>
@@ -2684,126 +2676,34 @@ function SectionHeader({
 }
 
 /* ============================================================
-   SCOUT SEARCH LAYER
-   Collapsed by default; expands into the local result board.
+   SCOUT HERO + FILTERS
    ============================================================ */
 
 function CravingCompass({
-  cravings,
-  selectedCraving,
-  boardItems,
   daypartCopy,
   locationStatus,
-  localActivityCount,
-  hasServingPriorityInventory,
   onRefreshLocation,
-  onCravingSelect,
 }: {
-  cravings: CravingCategory[];
-  selectedCraving: CravingCategory;
-  boardItems: CravingBoardItem[];
   daypartCopy: { title: string; body: string };
   locationStatus: "idle" | "requesting" | "ready" | "denied";
-  localActivityCount: number;
-  hasServingPriorityInventory: boolean;
   onRefreshLocation: () => void;
-  onCravingSelect: (id: string) => void;
 }) {
   const hasLocation = locationStatus === "ready";
-  const resultCount = boardItems.length;
-  const hasPriorityFood = boardItems.some((item) => item.kind === "Truck" || item.kind === "Deal");
-  const firstPriorityItem = boardItems.find((item) => item.kind === "Truck" || item.kind === "Deal");
-  const rawTopPick = boardItems[0] || null;
-  const topPick =
-    rawTopPick?.kind === "Place" && hasServingPriorityInventory
-      ? firstPriorityItem || null
-      : rawTopPick;
-  const topPickDistance = useMemo(() => {
-    if (!topPick?.meta) return null;
-    return getMetaDistance(topPick.meta);
-  }, [topPick]);
-  const topPickFreshnessMeta = useMemo<FreshnessMeta | null>(() => {
-    if (!topPick) return null;
-    return {
-      ...topPick.freshnessMeta,
-      kind: topPick.kind,
-      meta: topPick.meta,
-      reason: topPick.reason,
-      hasDeal: topPick.freshnessMeta?.hasDeal || topPick.kind === "Deal" || /deal|discount|off|special|offer/i.test(topPick.reason || ""),
-      hasMenu: topPick.freshnessMeta?.hasMenu || topPick.kind === "Menu" || /menu updated|new|fresh/i.test(topPick.reason || ""),
-      hasDistance: topPick.freshnessMeta?.hasDistance || Boolean(topPickDistance),
-      isOpen: topPick.freshnessMeta?.isOpen || topPick.kind === "Truck" || /open now|open for|serving now|currently open|open/i.test(`${topPick.meta || ""} ${topPick.reason || ""}`),
-      closesSoon: topPick.freshnessMeta?.closesSoon || /close|closing|closes soon/i.test(`${topPick.meta || ""} ${topPick.reason || ""}`),
-    };
-  }, [topPick, topPickDistance]);
-  const topPickProofLabels = useMemo(() => {
-    if (!topPick || !topPickFreshnessMeta) return [] as string[];
-    const labels = new Set<string>(getOperationalBadges(topPickFreshnessMeta));
-    if (topPickDistance) {
-      labels.add(`${topPickDistance} away`);
-    }
-    return [...labels];
-  }, [topPick, topPickDistance, topPickFreshnessMeta]);
-  const orderedCravings = useMemo(() => {
-    const orderedIds = [
-      "open-now",
-      "quick-bite",
-      "deals-today",
-      "food-truck",
-      "coffee-breakfast",
-      "something-new",
-    ];
-    const byId = new Map(cravings.map((cat) => [cat.id, cat]));
-    const ordered = orderedIds.map((id) => byId.get(id)).filter(Boolean) as CravingCategory[];
-    const orderedIdSet = new Set(orderedIds);
-    return [...ordered, ...cravings.filter((cat) => !orderedIdSet.has(cat.id))];
-  }, [cravings]);
-
-  const topPickProofBits = useMemo(() => {
-    if (!topPick) return ["Nearby now", "Happening today"];
-    const bits = topPickFreshnessMeta
-      ? [getFreshnessLabel(topPickFreshnessMeta), ...topPickProofLabels]
-      : [...topPickProofLabels];
-    if (!bits.includes("Open now") && topPick.kind !== "Truck") bits.push("Open now");
-    if (!bits.includes("Nearby")) bits.push("Nearby");
-    return [...new Set(bits)].filter((label) => label !== "Open near you").slice(0, 3);
-  }, [topPick, topPickFreshnessMeta, topPickProofLabels]);
-
-  const topPickMenuHref =
-    topPick && (topPick.kind === "Place" || topPick.kind === "Menu")
-      ? `${topPick.href}?tab=menu`
-      : null;
-  const activityLabel =
-    hasLocation
-      ? resultCount > 0
-        ? `${resultCount} open now`
-        : null
-      : "Location off";
 
   return (
-    <section className="px-4 pt-4 pb-5">
+    <section className="px-4 pt-4 pb-3">
       <div className="overflow-hidden rounded-[1.35rem] bg-[#17100d]/92 ring-1 ring-white/10 shadow-[0_16px_46px_rgba(0,0,0,0.28)]">
-        <div
-          className="px-4 py-4"
-          style={{
-            backgroundImage:
-              "linear-gradient(180deg, rgba(77,38,18,0.38), rgba(22,12,9,0.12))",
-          }}
-        >
-          <div className="flex items-start justify-between gap-3 border-b border-white/10 pb-3">
+        <div className="px-4 py-4">
+          <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <h2 className="font-sans text-white text-lg font-black leading-tight">
                 Find food near you.
               </h2>
               <p className="mt-1 text-white/62 text-xs leading-relaxed">
-                Open restaurants, food trucks, and deals nearby.
+                Food trucks, restaurants, deals, and events nearby.
               </p>
             </div>
-            {hasLocation && activityLabel ? (
-              <span className="shrink-0 rounded-full bg-white/8 ring-1 ring-white/12 px-2.5 py-1 text-[11px] font-bold text-white/72">
-                {activityLabel}
-              </span>
-            ) : !hasLocation ? (
+            {!hasLocation ? (
               <button
                 type="button"
                 onClick={onRefreshLocation}
@@ -2813,85 +2713,53 @@ function CravingCompass({
               </button>
             ) : null}
           </div>
-
           <span className="sr-only">{daypartCopy.body}</span>
-          {topPick ? (
-            <div className="mt-3 rounded-xl bg-[#130b08]/70 p-3 ring-1 ring-white/10">
-                  <div className="relative overflow-hidden rounded-xl bg-[#0d0705]/75">
-                    <img
-                      src={topPick.imageUrl || selectedCraving.image}
-                      alt=""
-                      className="h-20 w-full object-cover opacity-65"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-[#120805]/95 via-[#120805]/55 to-transparent" />
-                    <div className="absolute left-3 top-3">
-                      <span className="inline-flex rounded-full bg-black/65 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-white ring-1 ring-white/12">
-                        OPEN RIGHT NOW
-                      </span>
-                    </div>
-                  </div>
-                  <p className="mt-2 text-[10px] font-black uppercase tracking-[0.12em] text-white/58">
-                    {topPickProofBits.join(" · ")}
-                  </p>
-                  <p className="mt-1 text-base font-black text-white leading-tight">
-                    {topPick.title}
-                  </p>
-                  <p className="mt-1 text-sm text-white/75">{topPick.subtitle}</p>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <Link
-                      href={topPick.href}
-                      className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full bg-[#ff7945] px-4 py-2 text-sm font-black text-white shadow-[0_10px_24px_rgba(255,111,60,0.22)] ring-1 ring-white/20 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
-                    >
-                      Go now
-                      <ChevronRight className="h-4 w-4" aria-hidden="true" />
-                    </Link>
-                    {topPickMenuHref ? (
-                      <Link
-                        href={topPickMenuHref}
-                        className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full bg-white/8 px-4 py-2 text-sm font-black text-white/78 ring-1 ring-white/12 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
-                      >
-                        View menu
-                      </Link>
-                    ) : (
-                      <Link
-                        href={topPick.href}
-                        className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full bg-white/8 px-4 py-2 text-sm font-black text-white/78 ring-1 ring-white/12 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
-                      >
-                        View details
-                      </Link>
-                    )}
-                  </div>
-            </div>
-          ) : null}
+        </div>
+      </div>
+    </section>
+  );
+}
 
-          <div className="mt-3">
-            <p className="mb-2 text-xs font-black uppercase tracking-[0.13em] text-white/58">
-              WHAT YOU&apos;RE LOOKING FOR
-            </p>
-                  <div className="overflow-x-auto atmo-hide-scrollbar">
-                    <div className="flex w-max gap-2 pr-1">
-                {orderedCravings.map((cat) => {
-                const isActive = cat.id === selectedCraving.id;
-                return (
-                  <button
-                    key={cat.id}
-                    type="button"
-                    onClick={() => onCravingSelect(cat.id)}
-                    className={[
-                      "min-h-9 shrink-0 rounded-full px-3 py-2 text-[11px] font-black leading-none ring-1 transition-colors active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/60",
-                    isActive
-                      ? "bg-white/14 text-white ring-white/24"
-                        : "bg-white/[0.05] text-white/62 ring-white/10 hover:bg-white/[0.08] text-[10px] md:text-[11px]",
-                    ].join(" ")}
-                    aria-pressed={isActive}
-                  >
-                    {cat.label}
-                  </button>
-                );
-              })}
-              </div>
-            </div>
-          </div>
+function FilterNearbyChips({
+  selectedCraving,
+  onCravingSelect,
+}: {
+  selectedCraving: CravingCategory;
+  onCravingSelect: (id: string) => void;
+}) {
+  const filters = [
+    { id: "open-now", label: "Open" },
+    { id: "food-truck", label: "Trucks" },
+    { id: "deals-today", label: "Deals" },
+    { id: "today", label: "Today" },
+  ];
+
+  return (
+    <section className="px-4 pb-7">
+      <p className="mb-2 text-[11px] font-black uppercase tracking-[0.14em] text-white/48">
+        Filter nearby
+      </p>
+      <div className="overflow-x-auto atmo-hide-scrollbar">
+        <div className="flex w-max gap-2 pr-1">
+          {filters.map((filter) => {
+            const isActive = selectedCraving.id === filter.id;
+            return (
+              <button
+                key={filter.id}
+                type="button"
+                onClick={() => onCravingSelect(filter.id)}
+                className={[
+                  "min-h-8 shrink-0 rounded-full px-3 py-1.5 text-[11px] font-black ring-1 transition-colors active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/60",
+                  isActive
+                    ? "bg-[#ff7945] text-white ring-white/20"
+                    : "bg-white/[0.04] text-white/58 ring-white/10 hover:bg-white/[0.08] hover:text-white/78",
+                ].join(" ")}
+                aria-pressed={isActive}
+              >
+                {filter.label}
+              </button>
+            );
+          })}
         </div>
       </div>
     </section>
@@ -2902,11 +2770,11 @@ function LocalActivityRail({ items }: { items: LocalActivityItem[] }) {
   if (items.length === 0) return null;
 
   return (
-    <section className="pl-5 pr-0 pt-1 pb-8">
+    <section className="pl-5 pr-0 pt-1 pb-6">
       <SectionHeader
-        title="Happening Nearby"
+        title="Happening right now nearby"
         linkHref="/search"
-        subtitle="Open places, food trucks, deals, and menu updates near you today."
+        subtitle="Food trucks, open places, deals, events, and menu updates near you."
       />
       <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
         <ul className="flex gap-3 pr-5" role="list" aria-label="Happening nearby">
@@ -4329,6 +4197,41 @@ function MapPlaceCard({
           <Navigation2 className="h-4 w-4 text-orange-300" aria-hidden="true" />
         </a>
       </div>
+    </div>
+  );
+}
+
+function MapActivityPips({
+  truckCount,
+  restaurantCount,
+  dealCount,
+  eventCount,
+}: {
+  truckCount: number;
+  restaurantCount: number;
+  dealCount: number;
+  eventCount: number;
+}) {
+  const pips = [
+    truckCount > 0 ? { label: "Trucks", value: truckCount, className: "bg-orange-300" } : null,
+    restaurantCount > 0 ? { label: "Open", value: restaurantCount, className: "bg-emerald-300" } : null,
+    dealCount > 0 ? { label: "Deals", value: dealCount, className: "bg-lime-300" } : null,
+    eventCount > 0 ? { label: "Today", value: eventCount, className: "bg-amber-300" } : null,
+  ].filter((item): item is { label: string; value: number; className: string } => Boolean(item));
+
+  if (pips.length === 0) return null;
+
+  return (
+    <div className="pointer-events-none absolute left-3 top-3 z-20 flex max-w-[calc(100%-1.5rem)] flex-wrap gap-1.5">
+      {pips.slice(0, 4).map((pip) => (
+        <span
+          key={pip.label}
+          className="inline-flex items-center gap-1 rounded-full bg-[#120805]/68 px-2 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-white/82 ring-1 ring-white/12 backdrop-blur-md"
+        >
+          <span className={`h-1.5 w-1.5 rounded-full ${pip.className}`} aria-hidden="true" />
+          {pip.value} {pip.label}
+        </span>
+      ))}
     </div>
   );
 }
