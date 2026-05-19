@@ -2382,68 +2382,12 @@ export default function ExplorePreview() {
             />
           )}
 
-          {/* Top bar */}
-          {sheetState !== "fullMap" && (
-            <div
-              className="relative z-10 px-4 flex items-center gap-3"
-              style={{
-                paddingTop: "calc(env(safe-area-inset-top) + 0.75rem)",
-              }}
-            >
-              <Link
-                href="/profile"
-                aria-label="Open profile"
-                className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white/72 ring-1 ring-orange-200/60 backdrop-blur-md shadow-[0_8px_24px_rgba(154,72,18,0.16)]"
-              >
-                {user?.profileImageUrl ? (
-                  <img
-                    src={user.profileImageUrl}
-                    alt={firstName ? `${firstName}'s profile` : "Your profile"}
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  <UserIcon className="h-5 w-5 text-orange-700" aria-hidden="true" />
-                )}
-              </Link>
-
-              <button
-                type="button"
-                onClick={requestLocation}
-                className="inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-full bg-white/76 px-4 text-sm font-black text-orange-900 ring-1 ring-orange-200/60 backdrop-blur-md shadow-[0_8px_24px_rgba(154,72,18,0.14)] transition-transform active:scale-95"
-                aria-label={`Refresh location. Currently ${shortLocation}.`}
-              >
-                {locationStatus === "requesting" ? (
-                    <svg className="h-4 w-4 text-orange-600 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-                  </svg>
-                ) : (
-                  <MapPin className="h-4 w-4 text-orange-600" aria-hidden="true" />
-                )}
-                <span className="truncate max-w-[180px]">{shortLocation}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={openScoutMap}
-                aria-label="Expand map to fullscreen"
-                className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white/78 ring-1 ring-orange-200/70 backdrop-blur-md"
-                style={{ boxShadow: "0 8px 24px rgba(154,72,18,0.18)" }}
-              >
-                <Maximize2 className="h-5 w-5 text-orange-700" aria-hidden="true" />
-              </button>
-            </div>
+          {sheetState === "fullMap" && (
+            <MapLayerToggles
+              layers={activeMapLayers}
+              onToggle={toggleMapLayer}
+            />
           )}
-
-
-
-          <MapLayerToggles
-            layers={activeMapLayers}
-            onToggle={toggleMapLayer}
-            compact={sheetState !== "fullMap"}
-          />
-
-
 
           {/* Floating "Collapse" button (top-right) — visible in fullMap state. */}
           {sheetState === "fullMap" && (
@@ -2516,13 +2460,7 @@ export default function ExplorePreview() {
             />
           )}
 
-          {/* Map pedestal (default state)
-              ------------------------------
-              Branded location module footer. Conveys "this is YOUR
-              MealScout map" with a sharp eyebrow, the resolved place,
-              a nearby food count, and an amber CTA. The gradient is a
-              true pedestal — strong at the bottom edge, clear higher
-              up so it never crowds important map labels. */}
+          {/* Compact map footer. Keep the collapsed map mostly clear. */}
           {sheetState === "default" && (
             <>
               <div
@@ -2533,37 +2471,19 @@ export default function ExplorePreview() {
                     "linear-gradient(180deg, rgba(8,5,2,0) 0%, rgba(8,5,2,0.35) 48%, rgba(8,5,2,0.78) 88%, rgba(8,5,2,0.88) 100%)",
                 }}
               />
-              <div className="absolute bottom-3.5 left-3.5 right-3.5 z-20 flex items-end justify-between gap-3">
+              <div className="absolute bottom-3 left-3 right-3 z-20 flex items-end justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-[10px] font-black uppercase tracking-[0.24em] text-orange-300/95 drop-shadow-[0_1px_4px_rgba(0,0,0,0.5)]">
-                    {hasResolvedLocation ? "Open around" : "MealScout map"}
-                  </p>
-                  <p className="mt-0.5 truncate text-[15px] font-extrabold text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.7)]">
+                  <p className="truncate text-sm font-extrabold text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.7)]">
                     {hasResolvedLocation ? shortLocation : "Nearby now"}
                   </p>
-                  <p className="mt-1 text-[11px] font-semibold text-white/66">
+                  <p className="mt-0.5 text-[11px] font-semibold text-white/62">
                     Tap the map to explore nearby food
                   </p>
-                  {localActivityCount > 0 && (
-                    <p className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-bold text-white/72 ring-1 ring-white/15 backdrop-blur-md">
-                      <span
-                        aria-hidden="true"
-                        className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(74,222,128,0.85)]"
-                      />
-                      {localActivityCount} open near you
-                    </p>
-                  )}
                 </div>
                 <button
                   type="button"
                   onClick={openScoutMap}
-                  className="group shrink-0 inline-flex items-center gap-1.5 rounded-full px-4 py-2.5 text-xs font-black text-white ring-1 ring-amber-200/50 transition-transform active:scale-95"
-                  style={{
-                    backgroundImage:
-                      "linear-gradient(135deg, #ff8a3c 0%, #ff6f3c 55%, #f25a1f 100%)",
-                    boxShadow:
-                      "0 10px 26px rgba(255,111,60,0.5), inset 0 1px 0 rgba(255,221,179,0.45)",
-                  }}
+                  className="group shrink-0 inline-flex items-center gap-1.5 rounded-full bg-[#ff7945] px-3 py-2 text-xs font-black text-white ring-1 ring-white/20 transition-transform active:scale-95"
                   aria-label="Open full map"
                 >
                   <Maximize2 className="h-3.5 w-3.5" aria-hidden="true" />
@@ -4483,11 +4403,9 @@ function MapPlaceCard({
 function MapLayerToggles({
   layers,
   onToggle,
-  compact,
 }: {
   layers: MapLayerState;
   onToggle: (layer: MapLayerId) => void;
-  compact: boolean;
 }) {
   const options: Array<{ id: MapLayerId; label: string; icon: React.ReactNode }> = [
     { id: "openNow", label: "Open", icon: <Flame className="h-3 w-3" aria-hidden="true" /> },
@@ -4498,12 +4416,7 @@ function MapLayerToggles({
 
   return (
     <div
-      className={[
-        "absolute left-3 right-3 z-20 overflow-x-auto atmo-hide-scrollbar",
-        compact
-          ? "top-[calc(env(safe-area-inset-top)+4.4rem)]"
-          : "top-[calc(env(safe-area-inset-top)+4.7rem)] sm:left-4 sm:right-auto sm:w-[360px]",
-      ].join(" ")}
+      className="absolute left-3 right-3 top-[calc(env(safe-area-inset-top)+4.7rem)] z-20 overflow-x-auto atmo-hide-scrollbar sm:left-4 sm:right-auto sm:w-[360px]"
     >
       <div className="flex w-max gap-1 rounded-full bg-[#120805]/66 p-1 text-[10px] font-black uppercase tracking-wide text-white/70 ring-1 ring-white/12 backdrop-blur-xl">
         {options.map((option) => {
