@@ -269,6 +269,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     } else if (isAdmin || isStaff) {
       items.push(
         { path: "/scout", icon: Compass, label: "Scout" },
+        { path: "/food-truck-rush", icon: Truck, label: "Rush Game" },
         { path: "/video", icon: Clapperboard, label: "Video" },
         { path: "/events", icon: Calendar, label: "Events" },
         { path: "/admin/dashboard", icon: Shield, label: "Admin" },
