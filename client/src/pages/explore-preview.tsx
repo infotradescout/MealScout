@@ -765,7 +765,7 @@ function getScoutActivityMode({
 
 function getActivityRailTitle(mode: ScoutActivityMode): string {
   if (mode === "high_activity") return "Happening right now nearby";
-  if (mode === "medium_activity") return "Open and active nearby";
+  if (mode === "medium_activity") return "Open Near You";
   return "Worth checking out nearby";
 }
 
@@ -774,7 +774,7 @@ function getActivityRailSubtitle(mode: ScoutActivityMode): string {
     return "Food trucks, open places, deals, events, and menu updates near you.";
   }
   if (mode === "medium_activity") {
-    return "A few real food options and updates close to you.";
+    return "Open places, food trucks, deals, and updates close to you.";
   }
   return "Local places and upcoming food activity around you.";
 }
@@ -2257,6 +2257,48 @@ export default function ExplorePreview() {
     );
     return filtered.length > 0 ? filtered : restaurantsOpenNow;
   }, [localActivityRestaurantIds, restaurantsOpenNow]);
+  const isHighActivity = scoutActivityMode === "high_activity";
+  const isMediumActivity = scoutActivityMode === "medium_activity";
+  const isLowActivity = scoutActivityMode === "low_activity";
+  const compactMapHeight = isHighActivity
+    ? "clamp(260px, 38vh, 390px)"
+    : isMediumActivity
+      ? "clamp(220px, 31vh, 330px)"
+      : "clamp(220px, 30vh, 330px)";
+  const collapsedMapClass = isHighActivity
+    ? "mx-0 mt-0 rounded-b-[2.1rem] ring-1 ring-orange-200/12 bg-[#070707]"
+    : "mx-3 mt-3 rounded-[1.65rem] ring-1 ring-white/10 bg-[#0b0908]";
+  const railSectionClass = isHighActivity
+    ? "pl-4 pr-0 pt-1 pb-7"
+    : "pl-5 pr-0 pt-2 pb-10";
+  const compactRailSectionClass = isHighActivity
+    ? "pl-4 pr-0 pt-0 pb-5"
+    : "pl-5 pr-0 pt-1 pb-6";
+  const truckCardWidth = isHighActivity
+    ? "w-[176px] sm:w-[200px]"
+    : "w-[200px] sm:w-[220px]";
+  const standardCardWidth = isHighActivity
+    ? "w-[190px] sm:w-[210px]"
+    : "w-[200px] sm:w-[220px]";
+  const featureCardWidth = isHighActivity
+    ? "w-[210px] sm:w-[230px]"
+    : "w-[230px] sm:w-[260px]";
+  const restaurantsRailTitle = isMediumActivity
+    ? "Open Near You"
+    : nearbyRestaurantsTitle;
+  const restaurantsRailSubtitle = isMediumActivity
+    ? "Open restaurants and local places nearby."
+    : nearbyRestaurantsSubtitle;
+  const eventsRailTitle = isHighActivity
+    ? DISCOVERY_LAYERS.events.title
+    : "Upcoming Food Events";
+  const eventsRailSubtitle = isHighActivity
+    ? DISCOVERY_LAYERS.events.subtitle
+    : "Food events and pop-ups coming up nearby.";
+  const moreRailTitle = isLowActivity ? "Worth Checking Out" : "More Nearby";
+  const moreRailSubtitle = isLowActivity
+    ? "Local places and food options around you."
+    : "Nearby trucks and restaurants without current open status.";
 
   return (
     <>
@@ -2309,18 +2351,20 @@ export default function ExplorePreview() {
           className={`relative overflow-hidden ${
             sheetState === "fullMap"
               ? "w-full bg-[#fff4d6]"
-              : "mx-4 mt-4 rounded-[1.85rem] ring-1 ring-orange-200/15 bg-[#0d0a08]"
+              : collapsedMapClass
           }`}
           style={{
             height:
-              sheetState === "fullMap" ? "100dvh" : "clamp(168px, 22vh, 204px)",
+              sheetState === "fullMap" ? "100dvh" : compactMapHeight,
             transition: "height 320ms cubic-bezier(0.22,0.61,0.36,1)",
             touchAction: "auto",
             overscrollBehaviorY: "none",
             boxShadow:
               sheetState === "fullMap"
                 ? undefined
-                : "0 28px 70px rgba(0,0,0,0.68), 0 4px 22px rgba(255,138,60,0.10), inset 0 0 0 1px rgba(255,180,110,0.10), inset 0 1px 0 rgba(255,220,170,0.10)",
+                : isHighActivity
+                  ? "0 30px 82px rgba(0,0,0,0.74), 0 0 42px rgba(255,100,48,0.10), inset 0 -1px 0 rgba(255,220,170,0.12)"
+                  : "0 28px 70px rgba(0,0,0,0.68), 0 4px 22px rgba(255,138,60,0.08), inset 0 0 0 1px rgba(255,180,110,0.08)",
           }}
         >
           {/* Scout map surfaces
@@ -2593,9 +2637,11 @@ export default function ExplorePreview() {
               onRefreshLocation={requestLocation}
             />
 
-            <LocalActivityRail mode={scoutActivityMode} items={visibleLocalActivityItems} />
+            {isHighActivity ? (
+              <LocalActivityRail mode={scoutActivityMode} items={visibleLocalActivityItems} />
+            ) : null}
 
-            {scoutActivityMode === "low_activity" &&
+            {isLowActivity &&
             visibleLocalActivityItems.length === 0 &&
             trucksServingNow.length === 0 &&
             restaurantsOpenNow.length === 0 ? (
@@ -2608,20 +2654,21 @@ export default function ExplorePreview() {
             />
 
             {/* ── FOOD TRUCKS NEARBY ── */}
-            {showFoodTrucksSection && (
-              <section className="pl-5 pr-0 pt-2 pb-10">
+            {showFoodTrucksSection && !isMediumActivity && (
+              <section className={railSectionClass}>
                 <SectionHeader
                   title={DISCOVERY_LAYERS.foodTrucks.title}
                   linkHref={DISCOVERY_LAYERS.foodTrucks.href}
                   subtitle={DISCOVERY_LAYERS.foodTrucks.subtitle}
+                  itemCount={trucksServingNow.length}
                 />
                 {liveTrucksLoading && liveTrucks.length === 0 ? (
-                  <HorizontalSkeletonRow count={3} width={200} />
+                  <HorizontalSkeletonRow count={3} width={isHighActivity ? 176 : 200} />
                 ) : (
                   <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
                     <ul className="flex gap-4 pr-5" role="list" aria-label="Food trucks near you">
                       {trucksServingNow.slice(0, 12).map((t) => (
-                        <li key={t.id} className="shrink-0 w-[200px] sm:w-[220px]">
+                        <li key={t.id} className={`shrink-0 ${truckCardWidth}`}>
                           <TruckCard truck={t} onSelect={selectLiveTruck} currentUserId={currentUserId} />
                         </li>
                       ))}
@@ -2633,19 +2680,20 @@ export default function ExplorePreview() {
 
             {/* ── RESTAURANTS OPEN NOW ── */}
             {showRestaurantsSection && (
-              <section className="pl-5 pr-0 pt-2 pb-10">
+              <section className={railSectionClass}>
                 <SectionHeader
-                  title={nearbyRestaurantsTitle}
+                  title={restaurantsRailTitle}
                   linkHref={DISCOVERY_LAYERS.restaurants.href}
-                  subtitle={nearbyRestaurantsSubtitle}
+                  subtitle={restaurantsRailSubtitle}
+                  itemCount={visibleOpenRestaurants.length}
                 />
                 {nearbyRestaurantsLoading && visibleOpenRestaurants.length === 0 ? (
-                  <HorizontalSkeletonRow count={3} width={200} />
+                  <HorizontalSkeletonRow count={3} width={isHighActivity ? 190 : 200} />
                 ) : (
                   <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
                     <ul className="flex gap-4 pr-5" role="list" aria-label="Restaurants open now">
                       {visibleOpenRestaurants.slice(0, 10).map((r) => (
-                        <li key={r.id} className="shrink-0 w-[200px] sm:w-[220px]">
+                        <li key={r.id} className={`shrink-0 ${standardCardWidth}`}>
                           <NearbyRestaurantCard
                             restaurant={r}
                             menuPreview={
@@ -2663,22 +2711,47 @@ export default function ExplorePreview() {
               </section>
             )}
 
+            {showFoodTrucksSection && isMediumActivity && (
+              <section className={railSectionClass}>
+                <SectionHeader
+                  title={DISCOVERY_LAYERS.foodTrucks.title}
+                  linkHref={DISCOVERY_LAYERS.foodTrucks.href}
+                  subtitle={DISCOVERY_LAYERS.foodTrucks.subtitle}
+                  itemCount={trucksServingNow.length}
+                />
+                {liveTrucksLoading && liveTrucks.length === 0 ? (
+                  <HorizontalSkeletonRow count={3} width={200} />
+                ) : (
+                  <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
+                    <ul className="flex gap-4 pr-5" role="list" aria-label="Food trucks near you">
+                      {trucksServingNow.slice(0, 12).map((t) => (
+                        <li key={t.id} className={`shrink-0 ${truckCardWidth}`}>
+                          <TruckCard truck={t} onSelect={selectLiveTruck} currentUserId={currentUserId} />
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </section>
+            )}
+
             {showQuickUpdateBar ? (
               <QuickUpdateBar />
             ) : null}
 
             {/* ── DEALS TODAY ── */}
             {showDealsSection && (
-              <section className="pl-5 pr-0 pt-2 pb-10">
+              <section className={railSectionClass}>
                 <SectionHeader
                   title={DISCOVERY_LAYERS.deals.title}
                   linkHref={DISCOVERY_LAYERS.deals.href}
                   subtitle={DISCOVERY_LAYERS.deals.subtitle}
+                  itemCount={allDeals.length}
                 />
                 <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
                   <ul className="flex gap-4 pr-5" role="list">
                     {allDeals.slice(0, 10).map((d) => (
-                      <li key={d.id} className="shrink-0 w-[230px] sm:w-[260px]">
+                      <li key={d.id} className={`shrink-0 ${featureCardWidth}`}>
                         <DealCard deal={d} currentUserId={currentUserId} />
                       </li>
                     ))}
@@ -2688,17 +2761,18 @@ export default function ExplorePreview() {
             )}
 
             {/* ── EVENTS TODAY ── */}
-            {showEventsSection && (
-              <section className="pl-5 pr-0 pt-2 pb-10">
+            {showEventsSection && !isLowActivity && (
+              <section className={railSectionClass}>
                 <SectionHeader
-                  title={DISCOVERY_LAYERS.events.title}
+                  title={eventsRailTitle}
                   linkHref={DISCOVERY_LAYERS.events.href}
-                  subtitle={DISCOVERY_LAYERS.events.subtitle}
+                  subtitle={eventsRailSubtitle}
+                  itemCount={visibleEvents.length}
                 />
                 <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
                   <ul className="flex gap-4 pr-5" role="list">
                     {visibleEvents.slice(0, 8).map((e) => (
-                      <li key={e.id} className="shrink-0 w-[230px] sm:w-[260px]">
+                      <li key={e.id} className={`shrink-0 ${featureCardWidth}`}>
                         <EventCard event={e} currentUserId={currentUserId} />
                       </li>
                     ))}
@@ -2709,17 +2783,38 @@ export default function ExplorePreview() {
 
             {/* ── MORE FOOD NEARBY ── */}
             {showMoreFoodSection && (
-              <section className="pl-5 pr-0 pt-2 pb-10">
+              <section className={isLowActivity ? compactRailSectionClass : railSectionClass}>
                 <SectionHeader
-                  title="More Nearby"
+                  title={moreRailTitle}
                   linkHref={DISCOVERY_LAYERS.restaurants.href}
-                  subtitle="Nearby trucks and restaurants without current open status."
+                  subtitle={moreRailSubtitle}
+                  itemCount={moreFoodRestaurants.length}
                 />
                 <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
                   <ul className="flex gap-4 pr-5" role="list" aria-label="More nearby">
                     {moreFoodRestaurants.slice(0, 10).map((r) => (
-                      <li key={`restaurant-${r.id}`} className="shrink-0 w-[200px] sm:w-[220px]">
+                      <li key={`restaurant-${r.id}`} className={`shrink-0 ${standardCardWidth}`}>
                         <SavedRestaurantCard restaurant={r} />
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </section>
+            )}
+
+            {showEventsSection && isLowActivity && (
+              <section className={railSectionClass}>
+                <SectionHeader
+                  title={eventsRailTitle}
+                  linkHref={DISCOVERY_LAYERS.events.href}
+                  subtitle={eventsRailSubtitle}
+                  itemCount={visibleEvents.length}
+                />
+                <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
+                  <ul className="flex gap-4 pr-5" role="list">
+                    {visibleEvents.slice(0, 8).map((e) => (
+                      <li key={e.id} className={`shrink-0 ${featureCardWidth}`}>
+                        <EventCard event={e} currentUserId={currentUserId} />
                       </li>
                     ))}
                   </ul>
@@ -2743,23 +2838,29 @@ function SectionHeader({
   title,
   linkHref,
   subtitle,
+  itemCount,
 }: {
   title: string;
   linkHref: string;
   subtitle?: string;
+  itemCount?: number;
 }) {
+  const showLink = itemCount === undefined || itemCount > 1;
+
   return (
-    <div className="pr-5 mb-5">
+    <div className="pr-5 mb-4">
       <div className="flex items-end justify-between gap-3">
         <div className="min-w-0">
           <h2 className="truncate text-white text-xl sm:text-2xl font-black tracking-tight">{title}</h2>
         </div>
-        <Link
-          href={linkHref}
-          className="shrink-0 text-sm text-orange-200 inline-flex items-center gap-1.5 rounded-full bg-white/[0.04] px-3 py-1.5 ring-1 ring-white/10 font-semibold transition-colors hover:bg-white/[0.08]"
-        >
-          See All <ChevronRight className="h-4 w-4" aria-hidden="true" />
-        </Link>
+        {showLink ? (
+          <Link
+            href={linkHref}
+            className="shrink-0 text-sm text-orange-200 inline-flex items-center gap-1.5 rounded-full bg-white/[0.04] px-3 py-1.5 ring-1 ring-white/10 font-semibold transition-colors hover:bg-white/[0.08]"
+          >
+            See All <ChevronRight className="h-4 w-4" aria-hidden="true" />
+          </Link>
+        ) : null}
       </div>
       {subtitle ? (
         <p className="mt-1.5 text-xs sm:text-sm text-white/64 leading-relaxed">{subtitle}</p>
@@ -2792,9 +2893,15 @@ function CravingCompass({
         : "Explore local food";
 
   return (
-    <section className="px-4 pt-4 pb-3">
-      <div className="overflow-hidden rounded-[1.35rem] bg-[#17100d]/92 ring-1 ring-white/10 shadow-[0_16px_46px_rgba(0,0,0,0.28)]">
-        <div className="px-4 py-4">
+    <section className={mode === "high_activity" ? "px-4 pt-3 pb-2" : "px-4 pt-4 pb-3"}>
+      <div
+        className={
+          mode === "high_activity"
+            ? "px-1 py-2"
+            : "overflow-hidden rounded-[1.35rem] bg-[#17100d]/86 ring-1 ring-white/10 shadow-[0_16px_46px_rgba(0,0,0,0.24)]"
+        }
+      >
+        <div className={mode === "high_activity" ? "" : "px-4 py-4"}>
           <p className="mb-2 text-[10px] font-black uppercase tracking-[0.16em] text-white/38">
             {modeLabel}
           </p>
@@ -2874,9 +2981,9 @@ function QuietNearbyNotice() {
   return (
     <section className="px-4 pb-6">
       <div className="rounded-2xl bg-white/[0.04] px-4 py-3 text-white ring-1 ring-white/10">
-        <p className="text-sm font-black">Nothing open nearby yet.</p>
+        <p className="text-sm font-black">Quiet nearby right now</p>
         <p className="mt-1 text-xs font-semibold leading-relaxed text-white/58">
-          Explore the map or check back later.
+          Explore local places, upcoming events, and food options nearby.
         </p>
       </div>
     </section>
@@ -2891,18 +2998,20 @@ function LocalActivityRail({
   items: LocalActivityItem[];
 }) {
   if (items.length === 0) return null;
+  const isCompact = mode === "high_activity";
 
   return (
-    <section className="pl-5 pr-0 pt-1 pb-6">
+    <section className={isCompact ? "pl-4 pr-0 pt-0 pb-5" : "pl-5 pr-0 pt-1 pb-6"}>
       <SectionHeader
         title={getActivityRailTitle(mode)}
         linkHref="/search"
         subtitle={getActivityRailSubtitle(mode)}
+        itemCount={items.length}
       />
       <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
-        <ul className="flex gap-3 pr-5" role="list" aria-label="Happening nearby">
+        <ul className={`flex ${isCompact ? "gap-2.5" : "gap-3"} pr-5`} role="list" aria-label="Happening nearby">
           {items.map((item) => (
-            <li key={item.id} className="shrink-0 w-[190px] sm:w-[220px]">
+            <li key={item.id} className={`shrink-0 ${isCompact ? "w-[168px] sm:w-[194px]" : "w-[190px] sm:w-[220px]"}`}>
               <LocalActivityCard item={item} />
             </li>
           ))}
@@ -4033,10 +4142,6 @@ function SavedRestaurantCard({ restaurant }: { restaurant: RestaurantSummary }) 
           }}
           aria-hidden="true"
         />
-        <span className="absolute left-2.5 top-2.5 inline-flex items-center gap-1 rounded-full bg-orange-300 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-[#1a0d08]">
-          <Bookmark className="h-3 w-3" aria-hidden="true" />
-          Saved
-        </span>
       </div>
       <div className="px-3 py-3">
         <p className="truncate text-sm font-semibold text-white">{name}</p>
@@ -4349,11 +4454,21 @@ function MapActivityPips({
   if (pips.length === 0) return null;
 
   return (
-    <div className="pointer-events-none absolute left-3 top-3 z-20 flex max-w-[calc(100%-1.5rem)] flex-wrap gap-1.5">
+    <div
+      className={[
+        "pointer-events-none absolute left-3 top-3 z-20 flex max-w-[calc(100%-1.5rem)] flex-wrap",
+        mode === "high_activity" ? "gap-2" : "gap-1.5",
+      ].join(" ")}
+    >
       {pips.slice(0, 4).map((pip) => (
         <span
           key={pip.label}
-          className="inline-flex items-center gap-1 rounded-full bg-[#120805]/68 px-2 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-white/82 ring-1 ring-white/12 backdrop-blur-md"
+          className={[
+            "inline-flex items-center gap-1 rounded-full font-black uppercase tracking-[0.08em] text-white ring-1 backdrop-blur-md",
+            mode === "high_activity"
+              ? "bg-[#120805]/78 px-2.5 py-1.5 text-[10px] ring-white/16 shadow-[0_10px_24px_rgba(0,0,0,0.34)]"
+              : "bg-[#120805]/68 px-2 py-1 text-[10px] ring-white/12",
+          ].join(" ")}
         >
           <span className={`h-1.5 w-1.5 rounded-full ${pip.className}`} aria-hidden="true" />
           {pip.value} {pip.label}
