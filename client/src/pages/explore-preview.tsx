@@ -872,6 +872,17 @@ function getRestaurantDiscoveryReason(restaurant: RestaurantSummary): string {
     : "Open and nearby today.";
 }
 
+function getRestaurantCommunityScore(restaurant: RestaurantSummary): number {
+  return (
+    Number(restaurant.favoriteCount || 0) * 3 +
+    Number(restaurant.followCount || 0) * 2 +
+    Number(restaurant.recommendationCount || 0) * 4 +
+    Number(restaurant.videoRecommendationCount || 0) * 5 +
+    Number(restaurant.communityActivityCount || 0) * 4 +
+    Number(restaurant.activeDealsCount || restaurant.activeDealCount || 0) * 2
+  );
+}
+
 function getMenuItemSearchReason(item: LocalMenuItemFeedItem): string {
   if (item.discoveryReasons?.[0]) return "Menu updated";
   if (typeof item.discoveryScore === "number" && item.discoveryScore > 0) {
@@ -2169,7 +2180,6 @@ export default function ExplorePreview() {
   const showFoodTrucksSection = liveTrucksLoading || trucksServingNow.length > 0;
   const showRestaurantsSection =
     nearbyRestaurantsLoading || restaurantsOpenNow.length > 0;
-  const showMoreFoodSection = moreFoodRestaurants.length > 0;
   const showDealsSection = allDeals.length > 0;
   const showEventsSection = visibleEvents.length > 0;
   const localActivityCount =
@@ -2257,9 +2267,39 @@ export default function ExplorePreview() {
     );
     return filtered.length > 0 ? filtered : restaurantsOpenNow;
   }, [localActivityRestaurantIds, restaurantsOpenNow]);
+  const topLocalFavoriteRestaurants = useMemo(
+    () =>
+      nearbyRestaurants
+        .map((restaurant) => ({
+          restaurant,
+          score: getRestaurantCommunityScore(restaurant),
+        }))
+        .filter(({ score }) => score > 0)
+        .sort(
+          (a, b) =>
+            b.score - a.score ||
+            (a.restaurant.distanceMiles ?? a.restaurant.distance ?? 999) -
+              (b.restaurant.distanceMiles ?? b.restaurant.distance ?? 999),
+        )
+        .map(({ restaurant }) => restaurant),
+    [nearbyRestaurants],
+  );
+  const topLocalFavoriteIds = useMemo(
+    () => new Set(topLocalFavoriteRestaurants.map((restaurant) => String(restaurant.id))),
+    [topLocalFavoriteRestaurants],
+  );
   const isHighActivity = scoutActivityMode === "high_activity";
   const isMediumActivity = scoutActivityMode === "medium_activity";
   const isLowActivity = scoutActivityMode === "low_activity";
+  const visibleMoreFoodRestaurants = useMemo(() => {
+    if (!isLowActivity) return moreFoodRestaurants;
+    return moreFoodRestaurants.filter(
+      (restaurant) => !topLocalFavoriteIds.has(String(restaurant.id)),
+    );
+  }, [isLowActivity, moreFoodRestaurants, topLocalFavoriteIds]);
+  const showMoreFoodSection = visibleMoreFoodRestaurants.length > 0;
+  const showTopLocalFavoritesSection =
+    isLowActivity && topLocalFavoriteRestaurants.length > 0;
   const compactMapHeight = isHighActivity
     ? "clamp(260px, 38vh, 390px)"
     : isMediumActivity
@@ -2788,11 +2828,11 @@ export default function ExplorePreview() {
                   title={moreRailTitle}
                   linkHref={DISCOVERY_LAYERS.restaurants.href}
                   subtitle={moreRailSubtitle}
-                  itemCount={moreFoodRestaurants.length}
+                  itemCount={visibleMoreFoodRestaurants.length}
                 />
                 <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
                   <ul className="flex gap-4 pr-5" role="list" aria-label="More nearby">
-                    {moreFoodRestaurants.slice(0, 10).map((r) => (
+                    {visibleMoreFoodRestaurants.slice(0, 10).map((r) => (
                       <li key={`restaurant-${r.id}`} className={`shrink-0 ${standardCardWidth}`}>
                         <SavedRestaurantCard restaurant={r} />
                       </li>
@@ -2815,6 +2855,29 @@ export default function ExplorePreview() {
                     {visibleEvents.slice(0, 8).map((e) => (
                       <li key={e.id} className={`shrink-0 ${featureCardWidth}`}>
                         <EventCard event={e} currentUserId={currentUserId} />
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </section>
+            )}
+
+            {showTopLocalFavoritesSection && (
+              <section className={compactRailSectionClass}>
+                <SectionHeader
+                  title={DISCOVERY_LAYERS.localBoard.title}
+                  linkHref={DISCOVERY_LAYERS.localBoard.href}
+                  subtitle="Saved, followed, or shared by people nearby."
+                  itemCount={topLocalFavoriteRestaurants.length}
+                />
+                <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
+                  <ul className="flex gap-4 pr-5" role="list" aria-label="Top local favorites">
+                    {topLocalFavoriteRestaurants.slice(0, 10).map((restaurant) => (
+                      <li
+                        key={`local-favorite-${restaurant.id}`}
+                        className={`shrink-0 ${standardCardWidth}`}
+                      >
+                        <SavedRestaurantCard restaurant={restaurant} />
                       </li>
                     ))}
                   </ul>
