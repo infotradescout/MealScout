@@ -537,14 +537,15 @@ function FoodTruckRush() {
   }, [gameState, handleInteract, movePlayer]);
 
   const isAdminUser =
-    !authLoading &&
     !!user &&
     ["admin", "duper_admin", "super_admin"].includes(
       String(user.userType ?? ""),
     );
 
   useEffect(() => {
-    if (!authLoading && !isAdminUser) setLocation("/");
+    if (!authLoading && !isAdminUser) {
+      setLocation("/");
+    }
   }, [authLoading, isAdminUser, setLocation]);
 
   if (authLoading || !isAdminUser) {
@@ -595,20 +596,20 @@ function FoodTruckRush() {
         </section>
 
         {gameState === "ready" && (
-          <Card className="overflow-hidden rounded-lg border-subtle bg-[color:var(--bg-card)]">
+          <Card className="overflow-hidden rounded-lg border border-sky-500/30 bg-zinc-900/95">
             <CardContent className="grid gap-6 p-6 md:grid-cols-[1fr_0.85fr] md:items-center">
               <div>
-                <div className="mb-5 inline-flex h-16 w-16 items-center justify-center rounded-lg bg-orange-100 text-4xl ring-1 ring-orange-200">
+                <div className="mb-5 inline-flex h-16 w-16 items-center justify-center rounded-lg border border-amber-500/40 bg-zinc-800 text-4xl shadow-[0_0_24px_rgba(251,146,60,0.18)]">
                   🚚
                 </div>
                 <h2 className="text-2xl font-black sm:text-3xl">
                   Food Truck Rush
                 </h2>
-                <p className="mt-3 max-w-xl text-base font-medium text-[color:var(--text-secondary)]">
+                <p className="mt-3 max-w-xl text-base font-medium text-zinc-400">
                   Serve customers. Dodge problems. Build your streak.
                 </p>
                 <Button
-                  className="mt-6 w-full sm:w-auto"
+                  className="mt-6 w-full bg-amber-500 text-zinc-950 hover:bg-amber-400 sm:w-auto"
                   size="lg"
                   onClick={startGame}
                 >
@@ -616,22 +617,22 @@ function FoodTruckRush() {
                   Start Game
                 </Button>
               </div>
-              <div className="grid gap-3 rounded-lg border border-subtle bg-white/70 p-4 text-sm font-semibold text-[color:var(--text-secondary)]">
+              <div className="grid gap-3 rounded-lg border border-sky-500/30 bg-zinc-800/85 p-4 text-sm font-semibold text-zinc-300">
                 <div className="flex items-center justify-between gap-3">
                   <span>Customers</span>
-                  <span className="rounded-md bg-emerald-100 px-2 py-1 text-emerald-800">
+                  <span className="rounded-md border border-emerald-500/40 bg-emerald-500/15 px-2 py-1 text-emerald-300">
                     Serve
                   </span>
                 </div>
                 <div className="flex items-center justify-between gap-3">
                   <span>Prep / Inventory</span>
-                  <span className="rounded-md bg-sky-100 px-2 py-1 text-sky-800">
+                  <span className="rounded-md border border-sky-500/40 bg-sky-500/15 px-2 py-1 text-sky-300">
                     Restock
                   </span>
                 </div>
                 <div className="flex items-center justify-between gap-3">
                   <span>Operations / Event</span>
-                  <span className="rounded-md bg-orange-100 px-2 py-1 text-orange-800">
+                  <span className="rounded-md border border-amber-500/40 bg-amber-500/15 px-2 py-1 text-amber-300">
                     Handle
                   </span>
                 </div>
@@ -642,13 +643,13 @@ function FoodTruckRush() {
 
         {gameState === "playing" && (
           <section className="grid gap-4 lg:grid-cols-[1fr_18rem]">
-            <div className="rounded-lg border border-subtle bg-[color:var(--bg-card)] p-4 shadow-clean">
+            <div className="rounded-lg border border-sky-500/30 bg-zinc-900/95 p-4">
               <div
-                className="mb-4 h-2 overflow-hidden rounded-full bg-slate-200"
+                className="mb-4 h-2 overflow-hidden rounded-full bg-zinc-800"
                 aria-hidden="true"
               >
                 <div
-                  className="h-full rounded-full bg-[color:var(--action-primary)] transition-[width] duration-200"
+                  className="h-full rounded-full bg-amber-500 transition-[width] duration-200"
                   style={{ width: `${progressPercent}%` }}
                 />
               </div>
@@ -662,13 +663,13 @@ function FoodTruckRush() {
                   return (
                     <div
                       key={lane.id}
-                      className={`relative overflow-hidden rounded-lg border border-subtle bg-white/72 transition ring-offset-2 ${
+                      className={`relative overflow-hidden rounded-lg border border-sky-500/30 bg-[radial-gradient(circle_at_50%_10%,rgba(56,189,248,0.13),rgba(9,11,16,0.96)_62%)] transition ring-offset-2 ring-offset-zinc-950 ${
                         playerLane === lane.id
-                          ? "ring-2 ring-[color:var(--action-primary)]"
+                          ? "ring-2 ring-amber-400/90 shadow-[0_0_24px_rgba(251,146,60,0.25)]"
                           : ""
                       }`}
                     >
-                      <div className="absolute inset-x-2 top-2 z-10 flex items-center gap-2 rounded-md bg-white/85 px-2 py-1 text-[11px] font-bold text-[color:var(--text-secondary)] shadow-sm sm:text-xs">
+                      <div className="absolute inset-x-2 top-2 z-10 flex items-center gap-2 rounded-md border border-sky-500/30 bg-zinc-900/85 px-2 py-1 text-[11px] font-bold text-zinc-300 sm:text-xs">
                         <span
                           className={`h-2 w-2 rounded-full ${lane.tone}`}
                           aria-hidden="true"
@@ -676,7 +677,7 @@ function FoodTruckRush() {
                         <span className="truncate">{lane.title}</span>
                       </div>
 
-                      <div className="absolute inset-x-1 bottom-20 top-12 rounded-md border border-dashed border-slate-300/80" />
+                      <div className="absolute inset-x-1 bottom-20 top-12 rounded-md border border-dashed border-sky-500/30" />
 
                       {laneObjects.map((object) => {
                         const definition = objectDefinitions[object.kind];
@@ -695,8 +696,8 @@ function FoodTruckRush() {
                             key={object.id}
                             className={`absolute left-1/2 z-20 w-[calc(100%-0.75rem)] -translate-x-1/2 rounded-lg border px-2 py-2 text-center shadow-sm transition-[top] duration-100 ${
                               definition.hazard
-                                ? "border-red-200 bg-red-50 text-red-950"
-                                : "border-emerald-200 bg-white text-slate-950"
+                                ? "border-red-500/50 bg-red-950/70 text-red-100"
+                                : "border-emerald-500/50 bg-zinc-900/95 text-zinc-100"
                             }`}
                             style={{ top: `${topPosition}%` }}
                           >
@@ -714,14 +715,14 @@ function FoodTruckRush() {
                       })}
 
                       {playerLane === lane.id && (
-                        <div className="absolute inset-x-2 bottom-3 z-30 rounded-lg border border-orange-200 bg-orange-50 px-2 py-2 text-center shadow-md">
+                        <div className="absolute inset-x-2 bottom-3 z-30 rounded-lg border border-amber-500/45 bg-amber-500/15 px-2 py-2 text-center shadow-[0_0_18px_rgba(251,146,60,0.28)]">
                           <div
                             className="text-3xl leading-none"
                             aria-hidden="true"
                           >
                             🚚
                           </div>
-                          <div className="mt-1 text-[10px] font-black uppercase tracking-wide text-orange-900">
+                          <div className="mt-1 text-[10px] font-black uppercase tracking-wide text-amber-300">
                             Truck
                           </div>
                         </div>
@@ -733,26 +734,26 @@ function FoodTruckRush() {
             </div>
 
             <aside className="flex flex-col gap-3">
-              <div className="rounded-lg border border-subtle bg-[color:var(--bg-card)] p-4 shadow-clean">
-                <p className="text-xs font-bold uppercase tracking-[0.18em] text-[color:var(--text-muted)]">
+              <div className="rounded-lg border border-sky-500/30 bg-zinc-900/95 p-4">
+                <p className="text-xs font-bold uppercase tracking-[0.18em] text-zinc-400">
                   Rank Preview
                 </p>
-                <p className="mt-2 text-xl font-black">{rank.name}</p>
+                <p className="mt-2 text-xl font-black text-amber-300">{rank.name}</p>
               </div>
 
               <div
-                className="rounded-lg border border-subtle bg-[color:var(--bg-card)] p-4 shadow-clean"
+                className="rounded-lg border border-sky-500/30 bg-zinc-900/95 p-4"
                 aria-live="polite"
               >
-                <p className="text-xs font-bold uppercase tracking-[0.18em] text-[color:var(--text-muted)]">
+                <p className="text-xs font-bold uppercase tracking-[0.18em] text-zinc-400">
                   Last Action
                 </p>
-                <p className="mt-2 min-h-12 text-base font-black text-[color:var(--text-primary)]">
+                <p className="mt-2 min-h-12 text-base font-black text-zinc-100">
                   {lastMessage}
                 </p>
               </div>
 
-              <div className="hidden rounded-lg border border-subtle bg-white/80 p-4 text-sm font-semibold text-[color:var(--text-secondary)] shadow-clean md:block">
+              <div className="hidden rounded-lg border border-sky-500/30 bg-zinc-900/95 p-4 text-sm font-semibold text-zinc-300 md:block">
                 <p>
                   Desktop: A or Left Arrow moves left. D or Right Arrow moves
                   right. Space or Enter interacts.
@@ -777,7 +778,7 @@ function FoodTruckRush() {
                 type="button"
                 size="lg"
                 onClick={handleInteract}
-                className="h-14 text-base font-black"
+                className="h-14 bg-amber-500 text-base font-black text-zinc-950 hover:bg-amber-400"
               >
                 Interact / Serve
               </Button>
@@ -786,14 +787,14 @@ function FoodTruckRush() {
         )}
 
         {gameState === "finished" && (
-          <Card className="overflow-hidden rounded-lg border-subtle bg-[color:var(--bg-card)]">
+          <Card className="overflow-hidden rounded-lg border border-sky-500/30 bg-zinc-900/95">
             <CardContent className="grid gap-6 p-6 md:grid-cols-[0.9fr_1fr] md:items-center">
-              <div className="rounded-lg border border-subtle bg-white/80 p-5 text-center">
-                <p className="text-xs font-bold uppercase tracking-[0.18em] text-[color:var(--text-muted)]">
+              <div className="rounded-lg border border-sky-500/30 bg-zinc-800/90 p-5 text-center">
+                <p className="text-xs font-bold uppercase tracking-[0.18em] text-zinc-400">
                   Final Score
                 </p>
-                <p className="mt-2 text-6xl font-black leading-none">{score}</p>
-                <p className="mt-4 text-2xl font-black text-[color:var(--accent-text)]">
+                <p className="mt-2 text-6xl font-black leading-none text-amber-400">{score}</p>
+                <p className="mt-4 text-2xl font-black text-amber-300">
                   {rank.name}
                 </p>
               </div>
@@ -802,11 +803,15 @@ function FoodTruckRush() {
                 <h2 className="text-2xl font-black sm:text-3xl">
                   Rush complete
                 </h2>
-                <p className="mt-3 text-base font-semibold text-[color:var(--text-secondary)]">
+                <p className="mt-3 text-base font-semibold text-zinc-400">
                   {rank.copy}
                 </p>
                 <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-                  <Button type="button" onClick={startGame}>
+                  <Button
+                    type="button"
+                    onClick={startGame}
+                    className="bg-amber-500 text-zinc-950 hover:bg-amber-400"
+                  >
                     <RotateCcw aria-hidden="true" />
                     Play Again
                   </Button>
