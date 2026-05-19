@@ -353,14 +353,6 @@ export function BookingPaymentModal({
   };
 
   const initiateBooking = async () => {
-    if (!stripePromise) {
-      toast({
-        title: "Payments Unavailable",
-        description: "Stripe is not configured for this environment.",
-        variant: "destructive",
-      });
-      return;
-    }
     setIsLoading(true);
     try {
       const requestIdempotencyKey =
@@ -395,6 +387,15 @@ export function BookingPaymentModal({
       }
 
       const data = await res.json();
+      if (data?.bypassed) {
+        toast({
+          title: "Parking Pass Confirmed!",
+          description: "Your parking spot has been reserved.",
+        });
+        handleSuccess("confirmed");
+        return;
+      }
+
       if (cancelOnInitiateRef.current) {
         const intentId = String(data.paymentIntentId || "").trim();
         if (intentId) {
@@ -402,8 +403,17 @@ export function BookingPaymentModal({
         }
         return;
       }
-      setClientSecret(data.clientSecret);
-      setPaymentIntentId(data.paymentIntentId || null);
+      const nextClientSecret = String(data.clientSecret || "").trim();
+      const nextPaymentIntentId = String(data.paymentIntentId || "").trim();
+      if (!nextClientSecret || !nextPaymentIntentId) {
+        throw new Error("Payment setup did not return a client secret.");
+      }
+      if (!stripePromise) {
+        await cancelCheckout(nextPaymentIntentId);
+        throw new Error("Stripe is not configured for this environment.");
+      }
+      setClientSecret(nextClientSecret);
+      setPaymentIntentId(nextPaymentIntentId);
       setHostPaymentsReady(data.hostPaymentsReady !== false);
       setBookingData({
         totalCents: data.totalCents,
@@ -577,7 +587,7 @@ export function BookingPaymentModal({
                 type="button"
                 className="flex-1"
                 onClick={initiateBooking}
-                disabled={isLoading}
+                disabled={isLoading || isStripeConfigLoading}
               >
                 Continue
               </Button>
