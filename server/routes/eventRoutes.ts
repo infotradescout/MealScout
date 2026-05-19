@@ -2147,17 +2147,27 @@ export function registerEventRoutes(
     isRestaurantOwner,
     async (req: any, res) => {
       try {
-        const hasAccess = await hasBusinessDistributionAccess(req.user.id);
-        if (!hasAccess) {
-          return res.status(402).json({
-            message: "Premium subscription required for event access.",
-          });
-        }
-
         const { eventId } = req.params;
         const { truckId } = req.body;
+        const logContext = {
+          eventId,
+          userId: req.user?.id,
+          role: req.user?.userType || req.user?.role || null,
+          truckId: truckId || null,
+        };
+        const logBookingFailure = (
+          failureReason: string,
+          extra: Record<string, unknown> = {},
+        ) => {
+          console.warn("[event-booking] create failed", {
+            ...logContext,
+            failureReason,
+            ...extra,
+          });
+        };
 
         if (!truckId) {
+          logBookingFailure("missing_truck_id");
           return res.status(400).json({ message: "truckId is required" });
         }
 
@@ -2167,6 +2177,7 @@ export function registerEventRoutes(
           "manageParkingPass",
         );
         if (!ownsT) {
+          logBookingFailure("truck_ownership_failed");
           return res.status(403).json({ message: "You do not own that truck" });
         }
 
@@ -2176,26 +2187,33 @@ export function registerEventRoutes(
           .where(eq(events.id, eventId))
           .limit(1);
         if (!event) {
+          logBookingFailure("event_not_found");
           return res.status(404).json({ message: "Event not found" });
         }
         if (event.eventType !== "parking_pass") {
+          logBookingFailure("event_type_not_bookable", {
+            eventType: event.eventType,
+          });
           return res.status(400).json({
             message:
               "Paid checkout is only available for Parking Pass bookings",
           });
         }
         if (!event.requiresPayment) {
+          logBookingFailure("event_does_not_require_payment");
           return res.status(400).json({
             message:
               "This event does not require payment — use the interest flow instead",
           });
         }
         if (event.status !== "open") {
+          logBookingFailure("event_not_open", { status: event.status });
           return res
             .status(409)
             .json({ message: "Event is not available for booking" });
         }
         if (new Date(event.date) < new Date()) {
+          logBookingFailure("event_in_past", { eventDate: event.date });
           return res.status(400).json({ message: "Event has already passed" });
         }
 
@@ -2209,18 +2227,24 @@ export function registerEventRoutes(
           .where(eq(hosts.id, event.hostId))
           .limit(1);
         if (!host) {
+          logBookingFailure("host_not_found", { hostId: event.hostId });
           return res.status(500).json({ message: "Host not found" });
         }
-        if (!host.stripeConnectAccountId || !host.stripeChargesEnabled) {
-          return res
-            .status(422)
-            .json({ message: "Host has not completed payment setup" });
-        }
         if (!stripe) {
+          logBookingFailure("stripe_not_configured", { hostId: event.hostId });
           return res
             .status(503)
             .json({ message: "Payments not configured on server" });
         }
+        const hostPaymentsEnabled = Boolean(
+          host.stripeConnectAccountId &&
+            host.stripeChargesEnabled &&
+            host.stripePayoutsEnabled &&
+            host.stripeOnboardingCompleted,
+        );
+        const hostStripeAccountId = hostPaymentsEnabled
+          ? host.stripeConnectAccountId
+          : null;
 
         // Idempotency: check for existing booking
         const [existing] = await db
@@ -2235,11 +2259,13 @@ export function registerEventRoutes(
           .limit(1);
 
         if (existing?.status === "confirmed") {
+          logBookingFailure("already_confirmed", { bookingId: existing.id });
           return res
             .status(409)
             .json({ message: "This spot is already booked" });
         }
         if (existing?.status === "pending") {
+          logBookingFailure("pending_booking_exists", { bookingId: existing.id });
           return res
             .status(409)
             .json({ message: "A pending booking already exists" });
@@ -2257,6 +2283,10 @@ export function registerEventRoutes(
           );
         const confirmedCount = Number(countRow?.count ?? 0);
         if (confirmedCount >= event.maxTrucks) {
+          logBookingFailure("event_full", {
+            confirmedCount,
+            maxTrucks: event.maxTrucks,
+          });
           return res.status(409).json({ message: "Event is fully booked" });
         }
 
@@ -2271,31 +2301,40 @@ export function registerEventRoutes(
             platformFeeCents: PLATFORM_FEE,
             totalCents,
             status: "pending",
-            stripeApplicationFeeAmount: PLATFORM_FEE,
-            stripeTransferDestination: host.stripeConnectAccountId,
+            stripeApplicationFeeAmount: hostStripeAccountId ? PLATFORM_FEE : null,
+            stripeTransferDestination: hostStripeAccountId,
           })
           .returning();
 
-        // Create Stripe PaymentIntent (direct charge on host's Connect account)
+        // Create a platform PaymentIntent so the platform Payment Element can confirm it.
+        // If host payouts are ready, use a destination charge. If not, MealScout holds
+        // the funds on the platform and host payout can be handled later.
         let paymentIntent: Stripe.PaymentIntent;
         try {
-          paymentIntent = await stripe.paymentIntents.create(
-            {
-              amount: totalCents,
-              currency: "usd",
-              application_fee_amount: PLATFORM_FEE,
-              metadata: {
-                bookingId: booking.id,
-                eventId,
-                truckId,
-                userId: req.user.id,
-                hostPriceCents: hostPriceCents.toString(),
-                platformFeeCents: PLATFORM_FEE.toString(),
-                totalCents: totalCents.toString(),
-              },
+          const intentParams: Stripe.PaymentIntentCreateParams = {
+            amount: totalCents,
+            currency: "usd",
+            metadata: {
+              bookingId: booking.id,
+              eventId,
+              hostId: event.hostId,
+              truckId,
+              userId: req.user.id,
+              hostPriceCents: hostPriceCents.toString(),
+              platformFeeCents: PLATFORM_FEE.toString(),
+              totalCents: totalCents.toString(),
+              hostPaymentMode: hostStripeAccountId
+                ? "destination_charge"
+                : "platform_hold",
             },
-            { stripeAccount: host.stripeConnectAccountId },
-          );
+          };
+          if (hostStripeAccountId) {
+            intentParams.application_fee_amount = PLATFORM_FEE;
+            intentParams.transfer_data = {
+              destination: hostStripeAccountId,
+            };
+          }
+          paymentIntent = await stripe.paymentIntents.create(intentParams);
         } catch (stripeError: any) {
           // Roll back the pending booking if Stripe fails
           await db
@@ -2307,7 +2346,13 @@ export function registerEventRoutes(
               updatedAt: new Date(),
             })
             .where(eq(eventBookings.id, booking.id));
-          console.error("Stripe PaymentIntent creation failed:", stripeError);
+          console.error("[event-booking] Stripe PaymentIntent creation failed", {
+            ...logContext,
+            hostId: event.hostId,
+            bookingId: booking.id,
+            hostPaymentsEnabled,
+            failureReason: stripeError?.message || "stripe_create_failed",
+          });
           return res
             .status(502)
             .json({ message: "Payment setup failed, please try again" });
@@ -2325,14 +2370,23 @@ export function registerEventRoutes(
         res.json({
           bookingId: booking.id,
           clientSecret: paymentIntent.client_secret,
+          paymentIntentId: paymentIntent.id,
+          hostPaymentsReady: hostPaymentsEnabled,
           totalCents,
           breakdown: {
             hostPrice: hostPriceCents,
             platformFee: PLATFORM_FEE,
           },
         });
+        console.info("[event-booking] checkout created", {
+          ...logContext,
+          hostId: event.hostId,
+          bookingId: booking.id,
+          paymentIntentId: paymentIntent.id,
+          hostPaymentsEnabled,
+        });
       } catch (error: any) {
-        console.error("Error creating event booking:", error);
+        console.error("[event-booking] Error creating event booking:", error);
         res.status(500).json({ message: "Failed to create booking" });
       }
     },
@@ -2383,14 +2437,28 @@ export function registerEventRoutes(
           const hostStripeAccountId = booking.stripeTransferDestination;
           let intent: Stripe.PaymentIntent;
           try {
-            intent = await stripe.paymentIntents.retrieve(
-              booking.stripePaymentIntentId,
-              hostStripeAccountId
-                ? { stripeAccount: hostStripeAccountId }
-                : undefined,
-            );
+            try {
+              intent = await stripe.paymentIntents.retrieve(
+                booking.stripePaymentIntentId,
+              );
+            } catch (platformError: any) {
+              if (!hostStripeAccountId) throw platformError;
+              // Backward compatibility for any older direct-charge booking rows.
+              intent = await stripe.paymentIntents.retrieve(
+                booking.stripePaymentIntentId,
+                { stripeAccount: hostStripeAccountId },
+              );
+            }
           } catch (e: any) {
-            console.error("Error retrieving PaymentIntent:", e);
+            console.error("[event-booking] Error retrieving PaymentIntent:", {
+              bookingId,
+              userId: req.user?.id,
+              role: req.user?.userType || req.user?.role || null,
+              truckId: booking.truckId,
+              eventId: booking.eventId,
+              paymentIntentId: booking.stripePaymentIntentId,
+              failureReason: e?.message || "payment_intent_retrieve_failed",
+            });
             return res
               .status(502)
               .json({ message: "Could not verify payment" });

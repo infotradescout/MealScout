@@ -212,8 +212,13 @@ export function EventBookingModal({
         throw new Error(data?.message || "Failed to initiate booking");
       }
       const data = await res.json();
-      setClientSecret(data.clientSecret);
-      setBookingId(data.bookingId);
+      const nextClientSecret = String(data.clientSecret || "").trim();
+      const nextBookingId = String(data.bookingId || "").trim();
+      if (!nextClientSecret || !nextBookingId) {
+        throw new Error("Payment setup did not return checkout details.");
+      }
+      setClientSecret(nextClientSecret);
+      setBookingId(nextBookingId);
       setBookingData({
         totalCents: data.totalCents,
         breakdown: data.breakdown,
