@@ -408,8 +408,7 @@ type DiscoveryLayerId =
   | "foodTrucks"
   | "restaurants"
   | "deals"
-  | "events"
-  | "saved";
+  | "events";
 
 const DISCOVERY_LAYERS: Record<
   DiscoveryLayerId,
@@ -447,18 +446,13 @@ const DISCOVERY_LAYERS: Record<
   },
   deals: {
     title: "Deals Today",
-    href: "/deals",
+    href: "/scout",
     subtitle: "Active offers from nearby restaurants, bars, and food trucks.",
   },
   events: {
     title: "Happening Today",
     href: "/events",
     subtitle: "Events, pop-ups, and local food moments near you.",
-  },
-  saved: {
-    title: "Your Saved",
-    href: "/favorites",
-    subtitle: "Your personal shortlist for trucks, restaurants, deals, and places to revisit.",
   },
 };
 
@@ -1654,14 +1648,6 @@ export default function ExplorePreview() {
     recommendedRestaurantsData,
   ]);
 
-  const savedRestaurants = useMemo<RestaurantSummary[]>(() => {
-    return favoriteRestaurantsData
-      .map((favorite: any) => favorite?.restaurant)
-      .filter((restaurant: any): restaurant is RestaurantSummary =>
-        Boolean(restaurant?.id),
-      );
-  }, [favoriteRestaurantsData]);
-
   /* --------- nearby deals (location-aware) --------- */
 
   const { data: nearbyDealsData } = useQuery<DealSummary[]>({
@@ -2656,59 +2642,6 @@ export default function ExplorePreview() {
               </section>
             )}
 
-            {/* ── YOUR SAVED ── */}
-            {user ? (
-              <section className="px-5 pt-2 pb-12">
-                <SectionHeader
-                  title={DISCOVERY_LAYERS.saved.title}
-                  linkHref={DISCOVERY_LAYERS.saved.href}
-                  subtitle={DISCOVERY_LAYERS.saved.subtitle}
-                />
-                {savedRestaurants.length > 0 ? (
-                <div className="overflow-x-auto atmo-hide-scrollbar -mr-5">
-                  <ul className="flex gap-3 pr-5" role="list" aria-label="Your saved restaurants">
-                    {savedRestaurants.slice(0, 8).map((restaurant) => (
-                      <li key={restaurant.id} className="shrink-0 w-[210px]">
-                        <SavedRestaurantCard restaurant={restaurant} />
-                      </li>
-                    ))}
-                    <li className="shrink-0 w-[150px]">
-                      <button
-                        type="button"
-                        onClick={() => navigate("/favorites")}
-                        className="h-full min-h-[132px] w-full rounded-3xl bg-white/5 ring-1 ring-white/10 px-4 py-5 text-left hover:bg-white/8 transition-colors"
-                      >
-                        <Bookmark className="mb-4 h-5 w-5 text-orange-300" />
-                        <p className="text-sm font-semibold text-white">View all saved</p>
-                        <p className="mt-1 text-xs text-white/50">Restaurants and deals</p>
-                      </button>
-                    </li>
-                  </ul>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => navigate(user ? "/favorites" : "/login?redirect=/scout")}
-                  className="w-full text-left rounded-3xl bg-white/5 ring-1 ring-white/10 backdrop-blur-md p-5 hover:bg-white/8 transition-colors active:scale-[0.99]"
-                >
-                  <div className="flex items-center gap-4">
-                    <span className="h-12 w-12 rounded-full bg-orange-500/15 ring-1 ring-orange-300/40 flex items-center justify-center shrink-0" aria-hidden="true">
-                      <Bookmark className="h-5 w-5 text-orange-300" />
-                    </span>
-                    <div className="flex-1 min-w-0">
-                        <p className="text-white font-semibold">
-                          No saved spots yet
-                      </p>
-                      <p className="text-white/60 text-sm mt-0.5">
-                          Tap Save on restaurants worth coming back to.
-                      </p>
-                    </div>
-                    <ChevronRight className="h-5 w-5 text-white/50" aria-hidden="true" />
-                  </div>
-                </button>
-              )}
-              </section>
-            ) : null}
           </div>
         )}
       </main>

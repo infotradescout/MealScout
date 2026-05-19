@@ -22,12 +22,9 @@ import {
   Package,
   ShoppingCart,
   MoreHorizontal,
-  Heart,
-  Receipt,
   X,
   Compass,
   Bell,
-  Bookmark,
   Home,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
@@ -248,7 +245,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
           ? { path: "/supply/orders", icon: Package, label: "Orders" }
           : isFoodTruck || isRestaurantOwner || hasBusinessTeamAccess
             ? canManageDeals
-              ? { path: "/deal-creation", icon: Plus, label: "Deals" }
+              ? { path: "/deal-creation", icon: Plus, label: "Post Deal" }
               : {
                   path: "/restaurant-owner-dashboard",
                   icon: Store,
@@ -256,7 +253,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
                 }
             : isHost
               ? { path: "/events", icon: Calendar, label: "Events" }
-              : { path: "/favorites", icon: Bookmark, label: "Saved" };
+              : { path: "/alerts", icon: Bell, label: "Alerts" };
 
   // ── MORE sheet items (everything not in the 5-item bar) ──────────────────
   const buildMoreItems = (): NavItem[] => {
@@ -267,14 +264,12 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
         { path: "/", icon: Home, label: "Home" },
         { path: "/scout", icon: Compass, label: "Scout" },
         { path: "/video", icon: Clapperboard, label: "Video" },
-        { path: "/favorites", icon: Heart, label: "Saved" },
         { path: "/login", icon: User, label: "Log In" },
       );
     } else if (isAdmin || isStaff) {
       items.push(
         { path: "/scout", icon: Compass, label: "Scout" },
         { path: "/video", icon: Clapperboard, label: "Video" },
-        { path: "/favorites", icon: Heart, label: "Saved" },
         { path: "/events", icon: Calendar, label: "Events" },
         { path: "/admin/dashboard", icon: Shield, label: "Admin" },
         { path: "/staff", icon: Users, label: "Staff" },
@@ -285,7 +280,6 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
         },
         { path: "/host/dashboard", icon: Users, label: "Host" },
         { path: "/parking-pass", icon: ParkingSquare, label: "Parking" },
-        { path: "/deals/featured", icon: Receipt, label: "Featured Deals" },
         {
           path: "/admin/giveaway-wheel",
           icon: LayoutDashboard,
@@ -297,7 +291,6 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
       items.push(
         { path: "/scout", icon: Compass, label: "Scout" },
         { path: "/video", icon: Clapperboard, label: "Video" },
-        { path: "/favorites", icon: Heart, label: "Saved" },
         {
           path: "/event-coordinator/dashboard",
           icon: LayoutDashboard,
@@ -309,7 +302,6 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
       items.push(
         { path: "/scout", icon: Compass, label: "Scout" },
         { path: "/video", icon: Clapperboard, label: "Video" },
-        { path: "/favorites", icon: Heart, label: "Saved" },
         {
           path: "/supplier/dashboard",
           icon: LayoutDashboard,
@@ -321,7 +313,6 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
       items.push(
         { path: "/scout", icon: Compass, label: "Scout" },
         { path: "/video", icon: Clapperboard, label: "Video" },
-        { path: "/favorites", icon: Heart, label: "Saved" },
         { path: "/parking-pass", icon: ParkingSquare, label: "Parking" },
         { path: "/menu-builder", icon: Store, label: "Menu Builder" },
         { path: "/kitchen", icon: ChefHat, label: "Kitchen" },
@@ -336,7 +327,6 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
       items.push(
         { path: "/scout", icon: Compass, label: "Scout" },
         { path: "/video", icon: Clapperboard, label: "Video" },
-        { path: "/favorites", icon: Heart, label: "Saved" },
         { path: "/host/dashboard", icon: Users, label: "Host" },
         { path: "/parking-pass", icon: ParkingSquare, label: "Parking" },
         { path: "/share-hub", icon: Share2, label: "Share" },
@@ -347,9 +337,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
       items.push(
         { path: "/scout", icon: Compass, label: "Scout" },
         { path: "/video", icon: Clapperboard, label: "Video" },
-        { path: "/favorites", icon: Heart, label: "Saved" },
         { path: "/alerts", icon: Bell, label: "Alerts" },
-        { path: "/deals/featured", icon: Receipt, label: "Deals" },
         { path: "/share-hub", icon: Share2, label: "Share" },
         { path: "/profile", icon: User, label: "Profile" },
       );
@@ -377,8 +365,8 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     !userSpecificItem.path || userSpecificItem.path !== dashboardPath;
   const scoutExperienceItems: NavItem[] = [
     { path: "/scout", icon: Compass, label: "Scout" },
-    { path: "/favorites", icon: Heart, label: "Saved" },
-    { path: "/deals/featured", icon: Receipt, label: "Deals" },
+    { path: dashboardPath, icon: LayoutDashboard, label: "Dashboard" },
+    ...(userSpecificIsUnique ? [userSpecificItem] : []),
     { path: "/share-hub", icon: Share2, label: "Share" },
     { path: "/profile", icon: User, label: "Profile" },
   ];
@@ -394,16 +382,12 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
       ? scoutExperienceItems
       : defaultDesktopItems;
   const mobileSecondItem: NavItem =
-    isScoutExperience
-      ? { path: "/favorites", icon: Heart, label: "Saved" }
-      : { path: dashboardPath, icon: LayoutDashboard, label: "Dashboard" };
+    { path: dashboardPath, icon: LayoutDashboard, label: "Dashboard" };
   const mobileThirdItem: NavItem =
-    isScoutExperience
-      ? { path: "/deals/featured", icon: Receipt, label: "Deals" }
-      : userSpecificItem;
+    userSpecificItem;
   const showMobileThirdItem =
     Boolean(mobileThirdItem.path) &&
-    (isScoutExperience || userSpecificIsUnique);
+    userSpecificIsUnique;
 
   return (
     <>
