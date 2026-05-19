@@ -356,31 +356,21 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
   const moreItems = buildMoreItems();
   const isActive = (path: string) =>
     location === path || location.startsWith(`${path}/`);
-  const isScoutExperience = isActive("/scout");
 
-  // ── DESKTOP quick-action bar ─────────────────────────────────────────────
+  // ── SCOUT RAIL ───────────────────────────────────────────────────────────
+  // This is the global navigation model on every surface. Deals live inside
+  // Scout, while saved/favorites live on the user's dashboard.
   // Deduplicate: if userSpecificItem points to the same path as dashboardPath,
   // omit it to avoid two nav items going to the same destination.
   const userSpecificIsUnique =
     !userSpecificItem.path || userSpecificItem.path !== dashboardPath;
-  const scoutExperienceItems: NavItem[] = [
+  const scoutRailItems: NavItem[] = [
     { path: "/scout", icon: Compass, label: "Scout" },
     { path: dashboardPath, icon: LayoutDashboard, label: "Dashboard" },
     ...(userSpecificIsUnique ? [userSpecificItem] : []),
     { path: "/share-hub", icon: Share2, label: "Share" },
     { path: "/profile", icon: User, label: "Profile" },
   ];
-  const defaultDesktopItems: NavItem[] = [
-    { path: "/scout", icon: Compass, label: "Scout" },
-    { path: dashboardPath, icon: LayoutDashboard, label: "Dashboard" },
-    ...(userSpecificIsUnique ? [userSpecificItem] : []),
-    { path: "/share-hub", icon: Share2, label: "Share" },
-    { path: "/profile", icon: User, label: "Profile" },
-  ];
-  const desktopItems =
-    isScoutExperience
-      ? scoutExperienceItems
-      : defaultDesktopItems;
   const mobileSecondItem: NavItem =
     { path: dashboardPath, icon: LayoutDashboard, label: "Dashboard" };
   const mobileThirdItem: NavItem =
@@ -398,7 +388,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
       >
         <div className="rounded-2xl border border-white/5 bg-[#120805]/40 backdrop-blur-xl shadow-[0_8px_32px_rgba(0,0,0,0.4)] p-2">
           <div className="flex items-center gap-1">
-            {desktopItems.map((item) =>
+            {scoutRailItems.map((item) =>
               item.path ? (
                 <Link
                   key={item.path}
