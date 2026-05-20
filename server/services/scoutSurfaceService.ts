@@ -3,6 +3,7 @@ import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "../db";
 import { storage } from "../storage";
 import { isPublicBusinessVisible } from "../utils/publicBusinessVisibility";
+import { buildLocalRecommendations } from "./recommendationEngine";
 import {
   deals,
   restaurantFavorites,
@@ -32,6 +33,16 @@ type RecommendationSignals = {
   reactionScore: number;
   shareCount: number;
   activeDealCount: number;
+};
+
+type CandidateBucket = {
+  trucksServing: ScoutSurfaceCard[];
+  recommended: ScoutSurfaceCard[];
+  dealsToday: ScoutSurfaceCard[];
+  happeningToday: ScoutSurfaceCard[];
+  openNearYou: ScoutSurfaceCard[];
+  nearbyNow: ScoutSurfaceCard[];
+  moreNearby: ScoutSurfaceCard[];
 };
 
 const clamp = (value: number, min: number, max: number) =>
@@ -109,23 +120,94 @@ const isToday = (value: unknown): boolean => {
   );
 };
 
-const normalizeEntityType = (restaurant: any): ScoutSurfaceCard["entityType"] => {
-  const businessType = String(restaurant?.businessType || "")
-    .trim()
-    .toLowerCase();
-  if (businessType === "caterer") return "caterer";
-  if (businessType === "private_chef" || businessType === "private chef") {
-    return "private_chef";
-  }
-  if (restaurant?.isFoodTruck) return "truck";
-  return "restaurant";
-};
-
 const byScoreThenDistance = (a: ScoutSurfaceCard, b: ScoutSurfaceCard) => {
   if (a.score !== b.score) return b.score - a.score;
   const ad = typeof a.distanceMiles === "number" ? a.distanceMiles : Number.POSITIVE_INFINITY;
   const bd = typeof b.distanceMiles === "number" ? b.distanceMiles : Number.POSITIVE_INFINITY;
   return ad - bd;
+};
+
+const normalizeEntityType = (
+  entityType: string,
+  fallbackEntity?: any,
+): ScoutSurfaceCard["entityType"] => {
+  if (entityType === "truck") return "truck";
+  if (entityType === "restaurant") return "restaurant";
+  if (entityType === "deal") return "deal";
+  if (entityType === "event") return "event";
+  if (entityType === "host_spot") return "host_spot";
+  if (entityType === "caterer") return "caterer";
+  if (entityType === "private_chef") return "private_chef";
+  if (fallbackEntity?.isFoodTruck) return "truck";
+  return "restaurant";
+};
+
+const normalizeSource = (value: string): ScoutSurfaceCard["source"] => {
+  if (value === "recommendation") return "recommendation";
+  if (value === "community") return "community";
+  if (value === "deal") return "deal";
+  if (value === "event") return "event";
+  if (value === "host_spot") return "host_spot";
+  if (value === "truck_activity") return "truck_activity";
+  if (value === "restaurant_public") return "restaurant_public";
+  if (value === "local_activity") return "truck_activity";
+  if (value === "user_behavior") return "community";
+  return "community";
+};
+
+const normalizeAvailability = (
+  value: string,
+): ScoutSurfaceCard["availability"] => {
+  if (value === "serving_now") return "serving_now";
+  if (value === "open_now") return "open_now";
+  if (value === "deal_today") return "deal_today";
+  if (value === "event_today") return "event_today";
+  if (value === "upcoming") return "upcoming";
+  if (value === "nearby") return "nearby";
+  return "unknown";
+};
+
+const getStatusLabel = (
+  entityType: ScoutSurfaceCard["entityType"],
+  availability: ScoutSurfaceCard["availability"],
+) => {
+  if (entityType === "truck" && availability === "serving_now") return "Serving now";
+  if (availability === "open_now") return "Open now";
+  if (availability === "deal_today") return "Deal today";
+  if (availability === "event_today") return "Happening today";
+  if (availability === "upcoming") return "Upcoming";
+  return "Nearby";
+};
+
+const getCta = (card: ScoutSurfaceCard): ScoutSurfaceCard["cta"] => {
+  if (card.entityType === "deal") {
+    return { label: "View details", href: `/deal/${encodeURIComponent(card.entityId)}` };
+  }
+  if (card.entityType === "event") {
+    return { label: "View details", href: `/events/${encodeURIComponent(card.entityId)}` };
+  }
+  if (card.entityType === "host_spot") {
+    return { label: "Book spot", href: "/parking-pass" };
+  }
+  if (card.entityType === "truck") {
+    return { label: "View details", href: `/truck/${encodeURIComponent(card.entityId)}` };
+  }
+  return { label: "View menu", href: `/restaurant/${encodeURIComponent(card.entityId)}` };
+};
+
+const isRecommendationBacked = (card: ScoutSurfaceCard) => {
+  const metadata = (card.metadata || {}) as Record<string, unknown>;
+  const sourceDetail = String(metadata.sourceDetail || "");
+  const reasons = card.reasons || [];
+  if (card.source === "recommendation" || card.source === "community") return true;
+  if (sourceDetail.includes("private_behavior")) return true;
+  if (sourceDetail.includes("restaurant_signals")) return true;
+  if (sourceDetail.includes("active_deal_linked")) return true;
+  return reasons.some((reason) =>
+    /recommended by locals|local favorite|popular nearby|you follow this|you recommended this|one of your favorites/i.test(
+      reason,
+    ),
+  );
 };
 
 async function getRestaurantSignals(
@@ -310,7 +392,8 @@ export async function buildScoutSurface(
   const hasLocation = Number.isFinite(lat) && Number.isFinite(lng);
   const radiusKm = radiusMiles * 1.609344;
 
-  const [allRestaurants, activeDeals, upcomingEvents, liveTrucks] = await Promise.all([
+  const [allRestaurants, activeDeals, upcomingEvents, liveTrucks, localRecommendations] =
+    await Promise.all([
     storage.getAllRestaurants(),
     hasLocation
       ? storage.getNearbyDeals(Number(lat), Number(lng), radiusKm)
@@ -319,7 +402,16 @@ export async function buildScoutSurface(
     hasLocation
       ? storage.getLiveTrucksNearby(Number(lat), Number(lng), radiusKm)
       : Promise.resolve([]),
-  ]);
+    hasLocation
+      ? buildLocalRecommendations({
+          lat: Number(lat),
+          lng: Number(lng),
+          radiusKm,
+          limit: Math.max(limit, 40),
+          userId: input.userId || null,
+        })
+      : Promise.resolve([]),
+    ]);
 
   const restaurants = (Array.isArray(allRestaurants) ? allRestaurants : [])
     .filter((row: any) => row?.isActive)
@@ -334,15 +426,7 @@ export async function buildScoutSurface(
     .filter(Boolean);
   const recommendationSignals = await getRestaurantSignals(restaurantIds);
 
-  const cardPool: {
-    trucksServing: ScoutSurfaceCard[];
-    nearbyNow: ScoutSurfaceCard[];
-    recommended: ScoutSurfaceCard[];
-    dealsToday: ScoutSurfaceCard[];
-    happeningToday: ScoutSurfaceCard[];
-    openNearYou: ScoutSurfaceCard[];
-    moreNearby: ScoutSurfaceCard[];
-  } = {
+  const cardPool: CandidateBucket = {
     trucksServing: [],
     nearbyNow: [],
     recommended: [],
@@ -351,6 +435,56 @@ export async function buildScoutSurface(
     openNearYou: [],
     moreNearby: [],
   };
+
+  const recommendationCards: ScoutSurfaceCard[] = [];
+  for (const rec of Array.isArray(localRecommendations) ? localRecommendations : []) {
+    const entityType = normalizeEntityType(String(rec.entityType || ""));
+    const availability = normalizeAvailability(String(rec.availability || "unknown"));
+    const metadata = (rec.metadata || {}) as Record<string, unknown>;
+    const title =
+      String(metadata.name || metadata.title || "").trim() ||
+      (entityType === "deal" ? "Deal" : entityType === "event" ? "Event" : "Nearby place");
+    const subtitle =
+      typeof metadata.cuisineType === "string" && metadata.cuisineType.trim()
+        ? metadata.cuisineType.trim()
+        : undefined;
+    const statusLabel = rec.freshnessLabel || getStatusLabel(entityType, availability);
+    const source = normalizeSource(String(rec.source || ""));
+    const card: ScoutSurfaceCard = {
+      id: String(rec.id || `${entityType}:${String(rec.entityId || "")}`),
+      entityType,
+      entityId: String(rec.entityId || ""),
+      title,
+      subtitle,
+      imageUrl: null,
+      distanceMiles:
+        typeof rec.distanceMiles === "number" && Number.isFinite(rec.distanceMiles)
+          ? Number(rec.distanceMiles.toFixed(2))
+          : null,
+      statusLabel,
+      badges: dedupe([
+        statusLabel,
+        availability === "serving_now" ? "Serving now" : "",
+        availability === "open_now" ? "Open now" : "",
+        availability === "deal_today" ? "Deal today" : "",
+        availability === "event_today" ? "Today" : "",
+      ]),
+      reasons: dedupe(rec.reasons || []),
+      availability,
+      cta: {
+        label: "View details",
+        href: "#",
+      },
+      score: Number(rec.score || 0),
+      source,
+      metadata: {
+        ...metadata,
+        sourceDetail: String(metadata.sourceDetail || ""),
+      },
+    };
+    card.cta = getCta(card);
+    recommendationCards.push(card);
+  }
 
   for (const truck of Array.isArray(liveTrucks) ? liveTrucks : []) {
     const truckId = String((truck as any)?.id || "").trim();
@@ -428,7 +562,7 @@ export async function buildScoutSurface(
         activeDealCount: 0,
       } as RecommendationSignals);
 
-    const entityType = normalizeEntityType(restaurant);
+    const entityType = normalizeEntityType("", restaurant);
     const baseCard: ScoutSurfaceCard = {
       id: `${entityType}:${restaurantId}`,
       entityType,
@@ -672,6 +806,36 @@ export async function buildScoutSurface(
     cardPool[key].sort(byScoreThenDistance);
   }
 
+  for (const recCard of recommendationCards) {
+    if (!recCard.entityId) continue;
+    if (recCard.entityType === "truck" && recCard.availability === "serving_now") {
+      cardPool.trucksServing.push(recCard);
+      cardPool.nearbyNow.push(recCard);
+      continue;
+    }
+    if (recCard.entityType === "deal" || recCard.availability === "deal_today") {
+      cardPool.dealsToday.push(recCard);
+      continue;
+    }
+    if (recCard.entityType === "event" && recCard.availability === "event_today") {
+      cardPool.happeningToday.push(recCard);
+      continue;
+    }
+    if (isRecommendationBacked(recCard)) {
+      cardPool.recommended.push(recCard);
+    }
+    if (recCard.availability === "open_now") {
+      cardPool.openNearYou.push(recCard);
+      cardPool.nearbyNow.push(recCard);
+    } else if (recCard.availability === "nearby" || recCard.availability === "upcoming") {
+      cardPool.moreNearby.push(recCard);
+    }
+  }
+
+  for (const key of Object.keys(cardPool) as Array<keyof typeof cardPool>) {
+    cardPool[key].sort(byScoreThenDistance);
+  }
+
   const usedEntityKeys = new Set<string>();
   const pickUnique = (cards: ScoutSurfaceCard[], maxItems: number) => {
     const picked: ScoutSurfaceCard[] = [];
@@ -712,7 +876,10 @@ export async function buildScoutSurface(
   }
 
   {
-    const cards = pickUnique(cardPool.recommended, Math.min(6, Math.max(3, Math.floor(limit / 2))));
+    const cards = pickUnique(
+      cardPool.recommended.filter(isRecommendationBacked),
+      Math.min(6, Math.max(3, Math.floor(limit / 2))),
+    );
     const rail = section(
       "recommended-nearby",
       "Recommended Nearby",
@@ -794,15 +961,14 @@ export async function buildScoutSurface(
   }
 
   const totalCards = sections.reduce((sum, sectionRow) => sum + sectionRow.cards.length, 0);
-  const hasNowActivity =
-    cardPool.trucksServing.length > 0 ||
-    cardPool.nearbyNow.length > 0 ||
-    cardPool.happeningToday.length > 0;
-  const mode: ScoutSurfaceResponse["mode"] = totalCards < 3
-    ? "quiet"
-    : hasNowActivity
-      ? "activity"
-      : "discovery";
+  const activityScore =
+    cardPool.trucksServing.length * 2 +
+    cardPool.dealsToday.length * 1.5 +
+    cardPool.happeningToday.length * 1.5 +
+    cardPool.openNearYou.length +
+    cardPool.recommended.length;
+  const mode: ScoutSurfaceResponse["mode"] =
+    totalCards < 3 ? "quiet" : activityScore >= 8 ? "activity" : "discovery";
 
   const response: ScoutSurfaceResponse = {
     generatedAt: new Date().toISOString(),
