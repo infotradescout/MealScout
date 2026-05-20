@@ -26,6 +26,9 @@ import {
   Compass,
   Bell,
   Home,
+  MapPin,
+  Tag,
+  Bookmark,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -379,6 +382,14 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
   const showMobileThirdItem =
     Boolean(mobileThirdItem.path) &&
     userSpecificIsUnique;
+  const isScoutRoute = currentPath === "/scout";
+  const scoutMobileRailItems: NavItem[] = [
+    { path: "/scout", icon: Compass, label: "Scout" },
+    { path: "/map", icon: MapPin, label: "Map" },
+    { path: "/deals", icon: Tag, label: "Deals" },
+    { path: "/user-dashboard", icon: Bookmark, label: "Saved" },
+    { path: "/profile", icon: User, label: "You" },
+  ];
 
   return (
     <>
@@ -426,98 +437,125 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
                 "0 0 0 1px rgba(255,90,47,0.10), 0 18px 48px rgba(0,0,0,0.65)",
             }}
           >
-            {/* 1 — Scout (center raised) */}
-            <Link
-              href="/scout"
-              aria-label="Scout"
-              aria-current={isActive("/scout") ? "page" : undefined}
-              className="flex flex-col items-center justify-end gap-1 flex-1 min-w-0 h-full pb-1 transition-transform active:scale-95"
-            >
-              <span
-                className="flex h-12 w-12 items-center justify-center rounded-full bg-[#120805]/70 ring-2 ring-orange-500 -mt-6"
-                style={{
-                  boxShadow:
-                    "0 0 0 4px rgba(255,90,47,0.15), 0 0 24px rgba(255,90,47,0.35)",
-                }}
-                aria-hidden="true"
-              >
-                <Search className="h-5 w-5 text-orange-300" />
-              </span>
-              <span className="text-[11px] font-medium text-orange-300">
-                Scout
-              </span>
-            </Link>
-
-            {/* 2 — Scout-local secondary action, otherwise Dashboard */}
-            <Link
-              href={mobileSecondItem.path || "/scout"}
-              aria-label={mobileSecondItem.label}
-              aria-current={
-                mobileSecondItem.path && isActive(mobileSecondItem.path)
-                  ? "page"
-                  : undefined
-              }
-              className={`flex flex-col items-center justify-end gap-0.5 flex-1 min-w-0 h-full pb-2 transition-colors ${
-                mobileSecondItem.path && isActive(mobileSecondItem.path)
-                  ? "text-orange-300"
-                  : "text-white/70 hover:text-white"
-              }`}
-            >
-              <mobileSecondItem.icon className="h-5 w-5" aria-hidden="true" />
-              <span className="text-[11px] font-medium">
-                {mobileSecondItem.label}
-              </span>
-            </Link>
-
-            {/* 3 — Scout-local saved action, otherwise user-specific */}
-            {showMobileThirdItem && mobileThirdItem.path ? (
-              <Link
-                href={mobileThirdItem.path}
-                aria-label={mobileThirdItem.label}
-                aria-current={
-                  isActive(mobileThirdItem.path) ? "page" : undefined
-                }
-                className={`flex flex-col items-center justify-end gap-0.5 flex-1 min-w-0 h-full pb-2 transition-colors ${
-                  isActive(mobileThirdItem.path)
-                    ? "text-orange-300"
-                    : "text-white/70 hover:text-white"
-                }`}
-              >
-                <mobileThirdItem.icon className="h-5 w-5" aria-hidden="true" />
-                <span className="text-[11px] font-medium">
-                  {mobileThirdItem.label}
-                </span>
-              </Link>
-            ) : null}
-
-            {/* 4 — Share */}
-            <Link
-              href="/share-hub"
-              aria-label="Share"
-              aria-current={isActive("/share-hub") ? "page" : undefined}
-              className={`flex flex-col items-center justify-end gap-0.5 flex-1 min-w-0 h-full pb-2 transition-colors ${
-                isActive("/share-hub")
-                  ? "text-orange-300"
-                  : "text-white/70 hover:text-white"
-              }`}
-            >
-              <Share2 className="h-5 w-5" aria-hidden="true" />
-              <span className="text-[11px] font-medium">Share</span>
-            </Link>
-
-            {/* 5 — More */}
-            <button
-              type="button"
-              aria-label="More navigation options"
-              aria-expanded={moreOpen}
-              onClick={() => setMoreOpen((v) => !v)}
-              className={`flex flex-col items-center justify-end gap-0.5 flex-1 min-w-0 h-full pb-2 transition-colors ${
-                moreOpen ? "text-orange-300" : "text-white/70 hover:text-white"
-              }`}
-            >
-              <MoreHorizontal className="h-5 w-5" aria-hidden="true" />
-              <span className="text-[11px] font-medium">More</span>
-            </button>
+            {isScoutRoute ? (
+              scoutMobileRailItems.map((item, index) => {
+                const active = Boolean(item.path) && isActive(item.path!);
+                const isPrimary = index === 0;
+                return item.path ? (
+                  <Link
+                    key={item.path}
+                    href={item.path}
+                    aria-label={item.label}
+                    aria-current={active ? "page" : undefined}
+                    className={`flex flex-col items-center justify-end gap-0.5 flex-1 min-w-0 h-full transition-colors ${isPrimary ? "pb-1" : "pb-2"} ${
+                      active ? "text-orange-300" : "text-white/70 hover:text-white"
+                    }`}
+                  >
+                    {isPrimary ? (
+                      <span
+                        className="flex h-12 w-12 items-center justify-center rounded-full bg-[#120805]/70 ring-2 ring-orange-500 -mt-6"
+                        style={{
+                          boxShadow:
+                            "0 0 0 4px rgba(255,90,47,0.15), 0 0 24px rgba(255,90,47,0.35)",
+                        }}
+                        aria-hidden="true"
+                      >
+                        <item.icon className="h-5 w-5 text-orange-300" />
+                      </span>
+                    ) : (
+                      <item.icon className="h-5 w-5" aria-hidden="true" />
+                    )}
+                    <span className="text-[11px] font-medium">{item.label}</span>
+                  </Link>
+                ) : null;
+              })
+            ) : (
+              <>
+                <Link
+                  href="/scout"
+                  aria-label="Scout"
+                  aria-current={isActive("/scout") ? "page" : undefined}
+                  className="flex flex-col items-center justify-end gap-1 flex-1 min-w-0 h-full pb-1 transition-transform active:scale-95"
+                >
+                  <span
+                    className="flex h-12 w-12 items-center justify-center rounded-full bg-[#120805]/70 ring-2 ring-orange-500 -mt-6"
+                    style={{
+                      boxShadow:
+                        "0 0 0 4px rgba(255,90,47,0.15), 0 0 24px rgba(255,90,47,0.35)",
+                    }}
+                    aria-hidden="true"
+                  >
+                    <Search className="h-5 w-5 text-orange-300" />
+                  </span>
+                  <span className="text-[11px] font-medium text-orange-300">
+                    Scout
+                  </span>
+                </Link>
+                <Link
+                  href={mobileSecondItem.path || "/scout"}
+                  aria-label={mobileSecondItem.label}
+                  aria-current={
+                    mobileSecondItem.path && isActive(mobileSecondItem.path)
+                      ? "page"
+                      : undefined
+                  }
+                  className={`flex flex-col items-center justify-end gap-0.5 flex-1 min-w-0 h-full pb-2 transition-colors ${
+                    mobileSecondItem.path && isActive(mobileSecondItem.path)
+                      ? "text-orange-300"
+                      : "text-white/70 hover:text-white"
+                  }`}
+                >
+                  <mobileSecondItem.icon className="h-5 w-5" aria-hidden="true" />
+                  <span className="text-[11px] font-medium">
+                    {mobileSecondItem.label}
+                  </span>
+                </Link>
+                {showMobileThirdItem && mobileThirdItem.path ? (
+                  <Link
+                    href={mobileThirdItem.path}
+                    aria-label={mobileThirdItem.label}
+                    aria-current={
+                      isActive(mobileThirdItem.path) ? "page" : undefined
+                    }
+                    className={`flex flex-col items-center justify-end gap-0.5 flex-1 min-w-0 h-full pb-2 transition-colors ${
+                      isActive(mobileThirdItem.path)
+                        ? "text-orange-300"
+                        : "text-white/70 hover:text-white"
+                    }`}
+                  >
+                    <mobileThirdItem.icon className="h-5 w-5" aria-hidden="true" />
+                    <span className="text-[11px] font-medium">
+                      {mobileThirdItem.label}
+                    </span>
+                  </Link>
+                ) : null}
+                <Link
+                  href="/share-hub"
+                  aria-label="Share"
+                  aria-current={isActive("/share-hub") ? "page" : undefined}
+                  className={`flex flex-col items-center justify-end gap-0.5 flex-1 min-w-0 h-full pb-2 transition-colors ${
+                    isActive("/share-hub")
+                      ? "text-orange-300"
+                      : "text-white/70 hover:text-white"
+                  }`}
+                >
+                  <Share2 className="h-5 w-5" aria-hidden="true" />
+                  <span className="text-[11px] font-medium">Share</span>
+                </Link>
+                <button
+                  type="button"
+                  aria-label="More navigation options"
+                  aria-expanded={moreOpen}
+                  onClick={() => setMoreOpen((v) => !v)}
+                  className={`flex flex-col items-center justify-end gap-0.5 flex-1 min-w-0 h-full pb-2 transition-colors ${
+                    moreOpen ? "text-orange-300" : "text-white/70 hover:text-white"
+                  }`}
+                >
+                  <MoreHorizontal className="h-5 w-5" aria-hidden="true" />
+                  <span className="text-[11px] font-medium">More</span>
+                </button>
+              </>
+            )}
           </div>
         </div>
       </nav>

@@ -20,6 +20,7 @@ import {
   MessageCircle,
   Minimize2,
   Navigation2,
+  Search,
   Sparkles,
   Tag,
   TrendingUp,
@@ -2658,6 +2659,16 @@ export default function ExplorePreview() {
                   <span className="tracking-wide">Explore map</span>
                 </button>
               </div>
+              <div className="absolute left-3 right-3 bottom-16 z-20">
+                <Link
+                  href="/search"
+                  className="flex h-11 w-full items-center justify-between rounded-full bg-[#120805]/78 px-4 text-sm font-semibold text-white/74 ring-1 ring-white/14 backdrop-blur-xl shadow-[0_8px_24px_rgba(0,0,0,0.4)]"
+                  aria-label="Search food, trucks, deals, places"
+                >
+                  <span className="truncate">Search food, trucks, deals, places</span>
+                  <Search className="h-4 w-4 shrink-0 text-white/60" aria-hidden="true" />
+                </Link>
+              </div>
             </>
           )}
         </section>
@@ -2974,7 +2985,7 @@ function CravingCompass({
                 Find food near you.
               </h2>
               <p className="mt-1 text-white/62 text-xs leading-relaxed">
-                Food trucks, restaurants, deals, and events nearby.
+                Local food, recommended nearby.
               </p>
             </div>
             {!hasLocation ? (
@@ -4270,7 +4281,7 @@ function OpenNowSection({
     return (
       <section className="pl-5 pr-0 pt-2 pb-10">
         <SectionHeader
-          title="Open Near You Now"
+          title="Recommended Nearby"
           linkHref="/truck-discovery"
           subtitle="Trucks, restaurants, bars, and pop-ups serving near you right now."
         />
@@ -4301,7 +4312,7 @@ function OpenNowSection({
     return (
       <section className="pl-5 pr-0 pt-2 pb-10">
         <SectionHeader
-          title="Open Near You Now"
+          title="Recommended Nearby"
           linkHref="/truck-discovery"
           subtitle={
             summaryBits.length > 0
