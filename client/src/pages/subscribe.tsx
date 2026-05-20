@@ -41,6 +41,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { authUrl } from "@/lib/api";
+import PaymentBrowserGate from "@/components/payment-browser-gate";
+import { isPaymentHostileBrowser } from "@/lib/inAppBrowser";
 
 // Make sure to call `loadStripe` outside of a component's render to avoid
 // recreating the `Stripe` object on every render.
@@ -726,6 +728,7 @@ export default function Subscribe() {
       status: "selecting",
     },
   );
+  const hostileBrowser = isPaymentHostileBrowser();
 
   // Debug: Log auth status
   console.log("Subscribe page - Auth Status:", {
@@ -747,6 +750,13 @@ export default function Subscribe() {
   });
 
   const initializeSubscription = async () => {
+    if (hostileBrowser) {
+      setSubscriptionState({
+        status: "error",
+        error: "Open this page in Chrome or Safari to complete checkout.",
+      });
+      return;
+    }
     setSubscriptionState({ status: "initializing" });
 
     try {
@@ -1047,6 +1057,12 @@ export default function Subscribe() {
         {/* Show plan selection for new users or when changing plans */}
         {subscriptionState.status === "selecting" && !showManagement && (
           <div className="space-y-6">
+            {hostileBrowser ? (
+              <PaymentBrowserGate
+                currentUrl={window.location.href}
+                reason="Complete subscription checkout in Chrome or Safari."
+              />
+            ) : null}
             {/* If user has active subscription, show note about changing plans */}
             {hasActiveSubscription && (
               <Card className="bg-[color:var(--status-warning)]/10 border-[color:var(--status-warning)]/30 shadow-clean">
@@ -1139,6 +1155,13 @@ export default function Subscribe() {
 
         {subscriptionState.status === "requires_payment" &&
           subscriptionState.clientSecret && (
+            <>
+              {hostileBrowser ? (
+                <PaymentBrowserGate
+                  currentUrl={window.location.href}
+                  reason="Complete subscription checkout in Chrome or Safari."
+                />
+              ) : null}
             <Elements
               stripe={stripePromise}
               options={{ clientSecret: subscriptionState.clientSecret }}
@@ -1168,6 +1191,7 @@ export default function Subscribe() {
                 />
               </div>
             </Elements>
+            </>
           )}
 
         {subscriptionState.status === "error" && (

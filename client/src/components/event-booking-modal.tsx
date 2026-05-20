@@ -16,6 +16,8 @@ import {
 } from "@/components/ui/dialog";
 import { Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import PaymentBrowserGate from "@/components/payment-browser-gate";
+import { isPaymentHostileBrowser } from "@/lib/inAppBrowser";
 
 const stripePublicKey = import.meta.env.VITE_STRIPE_PUBLIC_KEY || "";
 const stripePromise = stripePublicKey ? loadStripe(stripePublicKey) : null;
@@ -185,10 +187,19 @@ export function EventBookingModal({
     totalCents: number;
     breakdown: { hostPrice: number; platformFee: number };
   } | null>(null);
+  const hostileBrowser = isPaymentHostileBrowser();
 
   const stage: "review" | "pay" = clientSecret ? "pay" : "review";
 
   const initiateBooking = async () => {
+    if (hostileBrowser) {
+      toast({
+        title: "Open in browser to continue",
+        description: "Checkout is blocked in this in-app browser.",
+        variant: "destructive",
+      });
+      return;
+    }
     if (!stripePromise) {
       toast({
         title: "Payments Unavailable",
@@ -306,18 +317,32 @@ export function EventBookingModal({
         </DialogHeader>
 
         {!clientSecret && !isLoading && (
-          <div className="flex gap-2 pt-2">
-            <Button
-              type="button"
-              variant="outline"
-              className="flex-1"
-              onClick={handleCancel}
-            >
-              Cancel
-            </Button>
-            <Button type="button" className="flex-1" onClick={initiateBooking}>
-              Continue to Payment
-            </Button>
+          <div className="space-y-3 pt-2">
+            {hostileBrowser ? (
+              <PaymentBrowserGate
+                currentUrl={window.location.href}
+                reason="Complete event checkout in Chrome or Safari."
+                compact
+              />
+            ) : null}
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1"
+                onClick={handleCancel}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                className="flex-1"
+                onClick={initiateBooking}
+                disabled={hostileBrowser}
+              >
+                Continue to Payment
+              </Button>
+            </div>
           </div>
         )}
 

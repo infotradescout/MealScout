@@ -16,6 +16,8 @@ import {
 } from "@/components/ui/dialog";
 import { Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import PaymentBrowserGate from "@/components/payment-browser-gate";
+import { isPaymentHostileBrowser } from "@/lib/inAppBrowser";
 
 const buildTimeStripePublicKey = import.meta.env.VITE_STRIPE_PUBLIC_KEY || "";
 const stripePromiseCache = new Map<string, ReturnType<typeof loadStripe>>();
@@ -282,6 +284,7 @@ export function BookingPaymentModal({
   const idempotencyKeyRef = useRef<string | null>(null);
   const stage: "review" | "pay" = clientSecret ? "pay" : "review";
   const stripePromise = getStripePromise(stripePublishableKey);
+  const hostileBrowser = isPaymentHostileBrowser();
 
   useEffect(() => {
     let cancelled = false;
@@ -353,6 +356,14 @@ export function BookingPaymentModal({
   };
 
   const initiateBooking = async () => {
+    if (hostileBrowser) {
+      toast({
+        title: "Open in browser to continue",
+        description: "Checkout is blocked in this in-app browser.",
+        variant: "destructive",
+      });
+      return;
+    }
     setIsLoading(true);
     try {
       const requestIdempotencyKey =
@@ -514,6 +525,14 @@ export function BookingPaymentModal({
         </DialogHeader>
 
         {!clientSecret && (
+          <>
+            {hostileBrowser ? (
+              <PaymentBrowserGate
+                currentUrl={window.location.href}
+                reason="Complete Parking Pass checkout in Chrome or Safari."
+                compact
+              />
+            ) : null}
           <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4 space-y-3">
             <div className="flex items-center justify-between gap-3">
               <div>
@@ -587,12 +606,13 @@ export function BookingPaymentModal({
                 type="button"
                 className="flex-1"
                 onClick={initiateBooking}
-                disabled={isLoading || isStripeConfigLoading}
+                disabled={isLoading || isStripeConfigLoading || hostileBrowser}
               >
                 Continue
               </Button>
             </div>
           </div>
+          </>
         )}
 
         {clientSecret ? (

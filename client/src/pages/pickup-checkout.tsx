@@ -26,6 +26,8 @@ import {
   Banknote,
 } from "lucide-react";
 import type { CartItem } from "./online-menu";
+import PaymentBrowserGate from "@/components/payment-browser-gate";
+import { isPaymentHostileBrowser } from "@/lib/inAppBrowser";
 
 const stripePublicKey = import.meta.env.VITE_STRIPE_PUBLIC_KEY || "";
 const stripePromise = stripePublicKey ? loadStripe(stripePublicKey) : null;
@@ -112,6 +114,7 @@ export default function CheckoutPage() {
     totalCents: number;
     feePaidByBusiness: boolean;
   } | null>(null);
+  const hostileBrowser = isPaymentHostileBrowser();
 
   useEffect(() => {
     const restaurantCart = getCart().filter(
@@ -175,6 +178,10 @@ export default function CheckoutPage() {
   const createOrder = async () => {
     if (!contact.name.trim()) {
       setOrderError("Please enter your name.");
+      return;
+    }
+    if (paymentMethod === "card" && hostileBrowser) {
+      setOrderError("Open this page in Chrome or Safari to complete card payment.");
       return;
     }
     setOrderError(null);
@@ -243,6 +250,15 @@ export default function CheckoutPage() {
         <Navigation />
         <div className="max-w-lg mx-auto px-4 py-8">
           <h1 className="text-2xl font-bold mb-6">Payment</h1>
+          {hostileBrowser ? (
+            <div className="mb-4">
+              <PaymentBrowserGate
+                currentUrl={window.location.href}
+                reason="Complete pickup checkout in Chrome or Safari."
+                compact
+              />
+            </div>
+          ) : null}
           <Card className="mb-4">
             <CardContent className="pt-4 pb-3">
               <div className="flex justify-between text-sm mb-1">
@@ -473,7 +489,12 @@ export default function CheckoutPage() {
         <Button
           className="w-full h-12 text-base"
           onClick={createOrder}
-          disabled={isCreating || !contact.name.trim() || !orderingEnabled}
+          disabled={
+            isCreating ||
+            !contact.name.trim() ||
+            !orderingEnabled ||
+            (paymentMethod === "card" && hostileBrowser)
+          }
         >
           {isCreating && <Loader2 className="w-5 h-5 mr-2 animate-spin" />}
           {paymentMethod === "cash"

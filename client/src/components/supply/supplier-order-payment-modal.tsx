@@ -6,6 +6,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
+import PaymentBrowserGate from "@/components/payment-browser-gate";
+import { isPaymentHostileBrowser } from "@/lib/inAppBrowser";
 
 const stripePublicKey = import.meta.env.VITE_STRIPE_PUBLIC_KEY || "";
 const stripePromise = stripePublicKey ? loadStripe(stripePublicKey) : null;
@@ -149,6 +151,7 @@ export function SupplierOrderPaymentModal(props: {
     platformBaseFeeCents: number;
     buyerProcessingFeeCents: number;
   } | null>(null);
+  const hostileBrowser = isPaymentHostileBrowser();
 
   useEffect(() => {
     if (!props.open) {
@@ -174,6 +177,10 @@ export function SupplierOrderPaymentModal(props: {
   }, [props.open, props.orderId, props, toast]);
 
   const startPayment = async (method: "ach" | "card") => {
+    if (hostileBrowser) {
+      setStartError("Open this page in Chrome or Safari to complete payment.");
+      return;
+    }
     setStartError(null);
     setIsLoading(true);
     try {
@@ -244,6 +251,13 @@ export function SupplierOrderPaymentModal(props: {
 
         {!clientSecret ? (
           <div className="space-y-4">
+            {hostileBrowser ? (
+              <PaymentBrowserGate
+                currentUrl={window.location.href}
+                reason="Complete supplier payment in Chrome or Safari."
+                compact
+              />
+            ) : null}
             <div className="rounded-lg border p-4 space-y-2 text-sm">
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Order total</span>
@@ -290,11 +304,11 @@ export function SupplierOrderPaymentModal(props: {
             ) : null}
 
             <div className="grid gap-2">
-              <Button className="h-auto justify-between gap-2 py-3 text-left" disabled={isLoading} onClick={() => startPayment("ach")}>
+              <Button className="h-auto justify-between gap-2 py-3 text-left" disabled={isLoading || hostileBrowser} onClick={() => startPayment("ach")}>
                 <span>Pay by bank transfer (ACH)</span>
                 <Badge variant="secondary">Recommended</Badge>
               </Button>
-              <Button variant="outline" className="h-auto py-3" disabled={isLoading} onClick={() => startPayment("card")}>
+              <Button variant="outline" className="h-auto py-3" disabled={isLoading || hostileBrowser} onClick={() => startPayment("card")}>
                 Pay by card
               </Button>
             </div>
