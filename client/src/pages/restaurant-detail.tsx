@@ -39,6 +39,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { ToastAction } from "@/components/ui/toast";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -56,7 +57,6 @@ type PublicRecommendation = {
   createdAt?: string;
   authorName: string;
   likeCount: number;
-  dislikeCount: number;
   shareCount: number;
   viewerReaction: "like" | "dislike" | null;
 };
@@ -76,6 +76,8 @@ export default function RestaurantDetailPage() {
   const { toast } = useToast();
   const [isSubmittingBooking, setIsSubmittingBooking] = useState(false);
   const [isSendingBusinessMessage, setIsSendingBusinessMessage] =
+    useState(false);
+  const [isSubmittingRecommendation, setIsSubmittingRecommendation] =
     useState(false);
   const [businessMessage, setBusinessMessage] = useState({
     name: "",
@@ -305,6 +307,7 @@ export default function RestaurantDetailPage() {
       return;
     }
     try {
+      const isNewReaction = current !== next;
       await apiRequest(
         "POST",
         `/api/recommendations/${recommendationId}/reaction`,
@@ -313,6 +316,17 @@ export default function RestaurantDetailPage() {
         },
       );
       await refetchRecommendations();
+      if (isNewReaction) {
+        toast({
+          title: "Thanks for the feedback",
+          description: "Want to add your own recommendation?",
+          action: (
+            <ToastAction altText="Recommend" onClick={() => void handleRecommend()}>
+              Recommend
+            </ToastAction>
+          ),
+        });
+      }
     } catch (error: any) {
       toast({
         title: "Could not save reaction",
@@ -346,8 +360,55 @@ export default function RestaurantDetailPage() {
         {},
       );
       await refetchRecommendations();
+      toast({
+        title: "Shared",
+        description: "Add a recommendation so locals know why it matters.",
+        action: (
+          <ToastAction altText="Recommend" onClick={() => void handleRecommend()}>
+            Recommend
+          </ToastAction>
+        ),
+      });
     } catch {
       // Ignore user-cancelled share actions.
+    }
+  };
+
+  const handleRecommend = async () => {
+    if (!user) {
+      window.location.href = "/login";
+      return;
+    }
+    if (!restaurantId || isSubmittingRecommendation) return;
+
+    try {
+      setIsSubmittingRecommendation(true);
+      const result = await apiRequest(
+        "POST",
+        `/api/restaurants/${restaurantId}/recommend`,
+        {},
+      );
+      const alreadyExists = Boolean((result as any)?.alreadyExists);
+      if (alreadyExists) {
+        toast({
+          title: "Already recommended",
+          description: "Thanks for supporting this place.",
+        });
+      } else {
+        toast({
+          title: "Recommendation added",
+          description: "Your recommendation helps locals choose.",
+        });
+      }
+      await refetchRecommendations();
+    } catch (error: any) {
+      toast({
+        title: "Could not add recommendation",
+        description: error?.message || "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmittingRecommendation(false);
     }
   };
 
@@ -1045,6 +1106,14 @@ export default function RestaurantDetailPage() {
             </span>
             <div className="flex items-center gap-2">
               <Badge variant="outline">{recommendationRows.length} total</Badge>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => void handleRecommend()}
+                disabled={isSubmittingRecommendation}
+              >
+                {isSubmittingRecommendation ? "Adding..." : "Recommend"}
+              </Button>
               {restaurantId && (
                 <FlagProfileContentDialog restaurantId={restaurantId} />
               )}
@@ -1105,8 +1174,7 @@ export default function RestaurantDetailPage() {
                             )
                           }
                         >
-                          <ThumbsDown className="w-3.5 h-3.5 mr-1" />
-                          {rec.dislikeCount}
+                          <ThumbsDown className="w-3.5 h-3.5" />
                         </Button>
                         <Button
                           size="sm"

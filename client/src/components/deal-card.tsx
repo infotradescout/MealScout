@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { ToastAction } from "@/components/ui/toast";
 import { Flame, Clock, Star, UserPlus } from "lucide-react";
 import { GoldenForkIcon } from "@/components/award-badges";
 import { apiRequest } from "@/lib/queryClient";
@@ -417,6 +418,15 @@ export default function DealCard({ deal, popularity = null }: DealCardProps) {
             text: shareText,
             url: shareUrl,
           });
+        toast({
+          title: "Shared",
+          description: "Add a recommendation so locals know why it matters.",
+          action: (
+            <ToastAction altText="Recommend" onClick={() => setShowRecommendModal(true)}>
+              Recommend
+            </ToastAction>
+          ),
+        });
         return;
       } catch (err) {
         console.debug("Web Share failed, falling back to modal", err);
@@ -581,6 +591,8 @@ export default function DealCard({ deal, popularity = null }: DealCardProps) {
     try {
       setRecommendSubmitting(true);
       setRecommendError("");
+      const shouldPromptAfterFavorite = favoriteSelection && !isRestaurantFavorite;
+      const shouldPromptAfterFollow = followSelection && !isRestaurantFollowed;
 
       // Sync follow state
       if (followSelection !== isRestaurantFollowed) {
@@ -621,6 +633,21 @@ export default function DealCard({ deal, popularity = null }: DealCardProps) {
         toast({
           title: isRestaurantFollowed ? "Following" : "Now following",
           description: "You'll get notified when new specials go live.",
+        });
+      }
+      if (!recommendSelection && (shouldPromptAfterFavorite || shouldPromptAfterFollow)) {
+        toast({
+          title: shouldPromptAfterFavorite
+            ? "Added to your favorites"
+            : "Following",
+          description: shouldPromptAfterFavorite
+            ? "Want to tell locals why?"
+            : "Help others know what to try.",
+          action: (
+            <ToastAction altText="Recommend" onClick={() => setShowRecommendModal(true)}>
+              Recommend
+            </ToastAction>
+          ),
         });
       }
     } catch (error) {

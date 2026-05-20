@@ -20,8 +20,16 @@ export type LocalRecommendation = {
   entityId: string;
   score: number;
   reasons: string[];
-  availability: string;
-  source: string;
+  availability:
+    | "serving_now"
+    | "open_now"
+    | "deal_today"
+    | "event_today"
+    | "available_today"
+    | "upcoming"
+    | "nearby"
+    | "unknown";
+  source: "community" | "user_behavior" | "operator_update" | "local_activity" | "system";
   distanceMiles?: number;
   freshnessLabel?: string;
   metadata?: Record<string, unknown>;
@@ -38,10 +46,14 @@ type BuildLocalRecommendationsInput = {
 type RestaurantSignalRow = {
   restaurantId: string;
   recommendationCount: number;
-  reactionCount: number;
+  recommendationLikeCount: number;
+  recommendationDislikeCount: number;
   shareCount: number;
   favoriteCount: number;
   followCount: number;
+  storyLikeCount: number;
+  storyCommentCount: number;
+  storyShareCount: number;
 };
 
 const clamp = (value: number, min: number, max: number) =>
@@ -98,7 +110,8 @@ async function getRestaurantSignals(): Promise<Map<string, RestaurantSignalRow>>
     reacts as (
       select
         rur.restaurant_id,
-        count(*)::int as reaction_count
+        count(*) filter (where lower(coalesce(rr.reaction_type, '')) in ('like', 'liked', 'upvote', 'thumbs_up', 'positive'))::int as recommendation_like_count,
+        count(*) filter (where lower(coalesce(rr.reaction_type, '')) in ('dislike', 'disliked', 'downvote', 'thumbs_down', 'negative'))::int as recommendation_dislike_count
       from recommendation_reactions rr
       inner join restaurant_user_recommendations rur on rur.id = rr.recommendation_id
       group by rur.restaurant_id
@@ -124,20 +137,37 @@ async function getRestaurantSignals(): Promise<Map<string, RestaurantSignalRow>>
         count(*)::int as follow_count
       from restaurant_follows rfo
       group by rfo.restaurant_id
+    ),
+    story_engagement as (
+      select
+        vs.restaurant_id,
+        coalesce(sum(vs.like_count), 0)::int as story_like_count,
+        coalesce(sum(vs.comment_count), 0)::int as story_comment_count,
+        coalesce(sum(vs.share_count), 0)::int as story_share_count
+      from video_stories vs
+      where vs.restaurant_id is not null
+        and vs.status = 'ready'
+        and vs.deleted_at is null
+      group by vs.restaurant_id
     )
     select
       r.id as "restaurantId",
       coalesce(recs.recommendation_count, 0) as "recommendationCount",
-      coalesce(reacts.reaction_count, 0) as "reactionCount",
+      coalesce(reacts.recommendation_like_count, 0) as "recommendationLikeCount",
+      coalesce(reacts.recommendation_dislike_count, 0) as "recommendationDislikeCount",
       coalesce(shares.share_count, 0) as "shareCount",
       coalesce(favs.favorite_count, 0) as "favoriteCount",
-      coalesce(follows.follow_count, 0) as "followCount"
+      coalesce(follows.follow_count, 0) as "followCount",
+      coalesce(story_engagement.story_like_count, 0) as "storyLikeCount",
+      coalesce(story_engagement.story_comment_count, 0) as "storyCommentCount",
+      coalesce(story_engagement.story_share_count, 0) as "storyShareCount"
     from restaurants r
     left join recs on recs.restaurant_id = r.id
     left join reacts on reacts.restaurant_id = r.id
     left join shares on shares.restaurant_id = r.id
     left join favs on favs.restaurant_id = r.id
     left join follows on follows.restaurant_id = r.id
+    left join story_engagement on story_engagement.restaurant_id = r.id
     where r.is_active = true
   `);
 
@@ -146,10 +176,14 @@ async function getRestaurantSignals(): Promise<Map<string, RestaurantSignalRow>>
     map.set(String(row.restaurantId), {
       restaurantId: String(row.restaurantId),
       recommendationCount: Number(row.recommendationCount || 0),
-      reactionCount: Number(row.reactionCount || 0),
+      recommendationLikeCount: Number(row.recommendationLikeCount || 0),
+      recommendationDislikeCount: Number(row.recommendationDislikeCount || 0),
       shareCount: Number(row.shareCount || 0),
       favoriteCount: Number(row.favoriteCount || 0),
       followCount: Number(row.followCount || 0),
+      storyLikeCount: Number(row.storyLikeCount || 0),
+      storyCommentCount: Number(row.storyCommentCount || 0),
+      storyShareCount: Number(row.storyShareCount || 0),
     });
   }
   return map;
@@ -158,10 +192,17 @@ async function getRestaurantSignals(): Promise<Map<string, RestaurantSignalRow>>
 async function getUserRestaurantSets(userId?: string | null): Promise<{
   follows: Set<string>;
   favorites: Set<string>;
+  recommendations: Set<string>;
 }> {
-  if (!userId) return { follows: new Set<string>(), favorites: new Set<string>() };
+  if (!userId) {
+    return {
+      follows: new Set<string>(),
+      favorites: new Set<string>(),
+      recommendations: new Set<string>(),
+    };
+  }
 
-  const [followsResult, favoritesResult] = await Promise.all([
+  const [followsResult, favoritesResult, recommendationsResult] = await Promise.all([
     db.execute(sql`
       select restaurant_id as "restaurantId"
       from restaurant_follows
@@ -170,6 +211,11 @@ async function getUserRestaurantSets(userId?: string | null): Promise<{
     db.execute(sql`
       select restaurant_id as "restaurantId"
       from restaurant_favorites
+      where user_id = ${userId}
+    `),
+    db.execute(sql`
+      select restaurant_id as "restaurantId"
+      from restaurant_user_recommendations
       where user_id = ${userId}
     `),
   ]);
@@ -182,6 +228,11 @@ async function getUserRestaurantSets(userId?: string | null): Promise<{
     ),
     favorites: new Set(
       toRows<{ restaurantId: string }>(favoritesResult).map((row) =>
+        String(row.restaurantId),
+      ),
+    ),
+    recommendations: new Set(
+      toRows<{ restaurantId: string }>(recommendationsResult).map((row) =>
         String(row.restaurantId),
       ),
     ),
@@ -217,6 +268,26 @@ const isTruckServingNow = (truck: any): boolean => {
   if (typeof explicit === "boolean") return explicit;
   return truck?.mobileOnline !== false;
 };
+
+function buildSignalSummary(
+  signals: Partial<RestaurantSignalRow> | undefined,
+  viewerState?: {
+    viewerFavorited?: boolean;
+    viewerFollows?: boolean;
+    viewerRecommended?: boolean;
+  },
+) {
+  return {
+    favoriteCount: Number(signals?.favoriteCount || 0),
+    followCount: Number(signals?.followCount || 0),
+    recommendationCount: Number(signals?.recommendationCount || 0),
+    recommendationLikeCount: Number(signals?.recommendationLikeCount || 0),
+    shareCount: Number(signals?.shareCount || 0),
+    viewerFavorited: Boolean(viewerState?.viewerFavorited),
+    viewerFollows: Boolean(viewerState?.viewerFollows),
+    viewerRecommended: Boolean(viewerState?.viewerRecommended),
+  };
+}
 
 export async function buildLocalRecommendations(
   input: BuildLocalRecommendationsInput,
@@ -276,22 +347,35 @@ export async function buildLocalRecommendations(
     const signals = restaurantSignals.get(restaurantId);
     const openNow = isRestaurantOpenNow(restaurant);
     const dealCount = Number(restaurant.activeDealsCount || restaurant.activeDealCount || 0);
+    const viewerFavorited = userSets.favorites.has(restaurantId);
+    const viewerFollows = userSets.follows.has(restaurantId);
+    const viewerRecommended = userSets.recommendations.has(restaurantId);
     const reasons = dedupeReasons([
+      viewerFavorited ? "One of your favorites" : "",
+      viewerRecommended ? "You recommended this" : "",
+      viewerFollows ? "You follow this" : "",
       openNow ? "Open now" : "",
       dealCount > 0 ? "Deal today" : "",
       (signals?.recommendationCount || 0) > 0 ? "Recommended by locals" : "",
+      (signals?.favoriteCount || 0) > 0 ? "Favorited by locals" : "",
+      (signals?.recommendationLikeCount || 0) > 0 ? "Liked by locals" : "",
       (signals?.favoriteCount || 0) + (signals?.followCount || 0) > 2 ? "Popular nearby" : "",
-      userSets.follows.has(restaurantId) ? "You follow this" : "",
-      userSets.favorites.has(restaurantId) ? "You saved this" : "",
     ]);
 
     const score =
-      (openNow ? 36 : 0) +
-      Math.min(18, (signals?.recommendationCount || 0) * 2) +
-      Math.min(12, (signals?.shareCount || 0) * 2 + (signals?.reactionCount || 0)) +
-      Math.min(18, (signals?.favoriteCount || 0) + (signals?.followCount || 0)) +
+      (openNow ? 22 : 0) +
+      Math.min(48, (signals?.favoriteCount || 0) * 12) +
+      Math.min(40, (signals?.recommendationCount || 0) * 8) +
+      Math.min(18, (signals?.recommendationLikeCount || 0) * 3) +
+      -Math.min(20, (signals?.recommendationDislikeCount || 0) * 4) +
+      Math.min(22, (signals?.shareCount || 0) * 4 + (signals?.storyShareCount || 0) * 2) +
+      Math.min(16, (signals?.followCount || 0) * 2) +
+      Math.min(10, ((signals?.storyLikeCount || 0) + (signals?.storyCommentCount || 0)) * 0.5) +
       Math.min(12, dealCount * 6) +
-      Math.max(0, 16 - distanceMiles * 2.2);
+      (viewerFavorited ? 36 : 0) +
+      (viewerRecommended ? 20 : 0) +
+      (viewerFollows ? 10 : 0) +
+      Math.max(0, 8 - distanceMiles * 0.8);
 
     recommendations.push({
       id: `restaurant:${restaurantId}`,
@@ -300,12 +384,18 @@ export async function buildLocalRecommendations(
       score,
       reasons: reasons.length > 0 ? reasons : ["Serving nearby"],
       availability: openNow ? "open_now" : "nearby",
-      source: "restaurant_signals",
+      source: "community",
       distanceMiles: Number(distanceMiles.toFixed(2)),
       freshnessLabel: openNow ? "Open now" : undefined,
       metadata: {
         name: restaurant.businessName || restaurant.name || "Restaurant",
         activeDealsCount: dealCount,
+        sourceDetail: "restaurant_signals_and_local_engagement",
+        signals: buildSignalSummary(signals, {
+          viewerFavorited,
+          viewerFollows,
+          viewerRecommended,
+        }),
       },
     });
   }
@@ -339,12 +429,14 @@ export async function buildLocalRecommendations(
       score,
       reasons,
       availability: servingNow ? "serving_now" : "nearby",
-      source: "live_trucks",
+      source: "local_activity",
       distanceMiles: Number(distanceMiles.toFixed(2)),
       freshnessLabel: servingNow ? "Serving now" : "Nearby",
       metadata: {
         name: truck.name || truck.businessName || "Food truck",
         cuisineType: truck.cuisineType || null,
+        sourceDetail: "live_truck_presence",
+        signals: buildSignalSummary(undefined),
       },
     });
   }
@@ -357,18 +449,36 @@ export async function buildLocalRecommendations(
     if (!restaurantId || !nearbyRestaurantSet.has(restaurantId)) continue;
 
     const reasons = dedupeReasons(["Deal today", "Open now"]);
+    const signals = restaurantSignals.get(restaurantId);
+    const viewerFavorited = userSets.favorites.has(restaurantId);
+    const viewerFollows = userSets.follows.has(restaurantId);
+    const viewerRecommended = userSets.recommendations.has(restaurantId);
+    if (viewerFavorited) reasons.unshift("One of your favorites");
+    else if ((signals?.favoriteCount || 0) > 0) reasons.push("Favorited by locals");
+    if (viewerFollows) reasons.push("You follow this");
+    if ((signals?.recommendationCount || 0) > 0) reasons.push("Recommended by locals");
     const score = 38 + Math.min(15, Number(deal.discountValue || 0));
     recommendations.push({
       id: `deal:${String(deal.id)}`,
       entityType: "deal",
       entityId: String(deal.id),
-      score,
+      score:
+        score +
+        (viewerFavorited ? 22 : 0) +
+        Math.min(18, Number(signals?.favoriteCount || 0) * 4) +
+        Math.min(12, Number(signals?.recommendationCount || 0) * 3),
       reasons,
-      availability: "active_today",
-      source: "active_deals",
+      availability: "deal_today",
+      source: "local_activity",
       metadata: {
         title: deal.title || "Deal",
         restaurantId,
+        sourceDetail: "active_deal_linked_to_restaurant_signals",
+        signals: buildSignalSummary(signals, {
+          viewerFavorited,
+          viewerFollows,
+          viewerRecommended,
+        }),
       },
     });
   }
@@ -392,13 +502,15 @@ export async function buildLocalRecommendations(
       entityId: eventId,
       score: 30 + Math.max(0, 12 - distanceMiles),
       reasons: eventReasons,
-      availability: "today",
-      source: "public_events",
+      availability: "event_today",
+      source: "operator_update",
       distanceMiles: Number(distanceMiles.toFixed(2)),
       freshnessLabel: "Happening today",
       metadata: {
         name: eventRow.name || "Event",
         hostId: String(eventRow.hostId || ""),
+        sourceDetail: "public_events_feed",
+        signals: buildSignalSummary(undefined),
       },
     });
 
@@ -409,13 +521,15 @@ export async function buildLocalRecommendations(
         entityId: String(eventRow.hostId),
         score: 24 + Math.max(0, 10 - distanceMiles),
         reasons: dedupeReasons(["Happening today", "Serving nearby"]),
-        availability: "bookable_today",
-        source: "parking_pass_events",
+        availability: "available_today",
+        source: "operator_update",
         distanceMiles: Number(distanceMiles.toFixed(2)),
         freshnessLabel: "Confirmed today",
         metadata: {
           hostName: eventRow.hostName || "Host location",
           eventId,
+          sourceDetail: "paid_event_slot",
+          signals: buildSignalSummary(undefined),
         },
       });
     }

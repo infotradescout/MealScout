@@ -1150,7 +1150,6 @@ export function registerRestaurantCoreRoutes(
           first_name: string | null;
           last_name: string | null;
           like_count: number;
-          dislike_count: number;
           share_count: number;
           viewer_reaction: string | null;
         }>`
@@ -1161,7 +1160,6 @@ export function registerRestaurantCoreRoutes(
             u.first_name,
             u.last_name,
             coalesce(sum(case rr.reaction_type when 'like' then 1 else 0 end), 0)::int as like_count,
-            coalesce(sum(case rr.reaction_type when 'dislike' then 1 else 0 end), 0)::int as dislike_count,
             coalesce(count(distinct rs.id), 0)::int as share_count,
             max(case when rr.user_id = ${viewerId} then rr.reaction_type else null end) as viewer_reaction
           from restaurant_user_recommendations rur
@@ -1185,7 +1183,6 @@ export function registerRestaurantCoreRoutes(
             String([row.first_name, row.last_name].filter(Boolean).join(" ").trim()) ||
             "Community Member",
           likeCount: Number(row.like_count) || 0,
-          dislikeCount: Number(row.dislike_count) || 0,
           shareCount: Number(row.share_count) || 0,
           viewerReaction:
             row.viewer_reaction === "like" || row.viewer_reaction === "dislike"
@@ -1266,7 +1263,6 @@ export function registerRestaurantCoreRoutes(
           success: true,
           reaction: reaction === "clear" ? null : reaction,
           likeCount: Number(summary.like_count) || 0,
-          dislikeCount: Number(summary.dislike_count) || 0,
         });
       } catch (error) {
         console.error("Error reacting to recommendation:", error);
