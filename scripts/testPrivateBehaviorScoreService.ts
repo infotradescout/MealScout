@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { computePrivateBehaviorScoreFromSignals } from "../server/services/privateBehaviorScoreService";
+import { computePrivateBehaviorScoreFromSignals } from "../server/services/privateBehaviorScoreModel";
 
 const now = new Date("2026-05-19T12:00:00.000Z");
 

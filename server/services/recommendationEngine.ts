@@ -30,7 +30,12 @@ export type LocalRecommendation = {
     | "upcoming"
     | "nearby"
     | "unknown";
-  source: "community" | "user_behavior" | "operator_update" | "local_activity" | "system";
+  source:
+    | "community"
+    | "user_behavior"
+    | "operator_update"
+    | "local_activity"
+    | "system";
   distanceMiles?: number;
   freshnessLabel?: string;
   metadata?: Record<string, unknown>;
@@ -93,13 +98,19 @@ const dedupeReasons = (reasons: string[]) =>
 
 const toRows = <T>(result: unknown): T[] => {
   if (Array.isArray(result)) return result as T[];
-  if (result && typeof result === "object" && Array.isArray((result as any).rows)) {
+  if (
+    result &&
+    typeof result === "object" &&
+    Array.isArray((result as any).rows)
+  ) {
     return (result as any).rows as T[];
   }
   return [];
 };
 
-async function getRestaurantSignals(): Promise<Map<string, RestaurantSignalRow>> {
+async function getRestaurantSignals(): Promise<
+  Map<string, RestaurantSignalRow>
+> {
   const result = await db.execute(sql`
     with recs as (
       select
@@ -203,23 +214,24 @@ async function getUserRestaurantSets(userId?: string | null): Promise<{
     };
   }
 
-  const [followsResult, favoritesResult, recommendationsResult] = await Promise.all([
-    db.execute(sql`
+  const [followsResult, favoritesResult, recommendationsResult] =
+    await Promise.all([
+      db.execute(sql`
       select restaurant_id as "restaurantId"
       from restaurant_follows
       where user_id = ${userId}
     `),
-    db.execute(sql`
+      db.execute(sql`
       select restaurant_id as "restaurantId"
       from restaurant_favorites
       where user_id = ${userId}
     `),
-    db.execute(sql`
+      db.execute(sql`
       select restaurant_id as "restaurantId"
       from restaurant_user_recommendations
       where user_id = ${userId}
     `),
-  ]);
+    ]);
 
   return {
     follows: new Set(
@@ -249,7 +261,10 @@ const isRestaurantOpenNow = (restaurant: any): boolean => {
   ].find((value) => typeof value === "boolean");
   if (typeof explicit === "boolean") return explicit;
   const status = String(
-    restaurant?.openStatus || restaurant?.status || restaurant?.hoursStatus || "",
+    restaurant?.openStatus ||
+      restaurant?.status ||
+      restaurant?.hoursStatus ||
+      "",
   )
     .trim()
     .toLowerCase();
@@ -278,41 +293,47 @@ export async function buildLocalRecommendations(
   const radiusKm = clamp(input.radiusKm, 1, 100);
   const limit = clamp(input.limit, 1, 80);
 
-  const [nearbyRestaurants, activeDeals, liveTrucks, publicEvents, restaurantSignals, userSets] =
-    await Promise.all([
-      storage.getNearbyRestaurants(lat, lng, radiusKm),
-      storage.getActiveDeals(),
-      storage.getLiveTrucksNearby(lat, lng, radiusKm),
-      db
-        .select({
-          id: events.id,
-          hostId: events.hostId,
-          name: events.name,
-          date: events.date,
-          startTime: events.startTime,
-          endTime: events.endTime,
-          status: events.status,
-          requiresPayment: events.requiresPayment,
-          updatedAt: events.updatedAt,
-          lastConfirmedAt: events.lastConfirmedAt,
-          bookedRestaurantId: events.bookedRestaurantId,
-          hostName: hosts.businessName,
-          hostLat: hosts.latitude,
-          hostLng: hosts.longitude,
-        })
-        .from(events)
-        .innerJoin(hosts, eq(events.hostId, hosts.id))
-        .where(
-          and(
-            isNotNull(events.hostId),
-            gte(events.date, new Date(Date.now() - 24 * 60 * 60 * 1000)),
-          ),
-        )
-        .orderBy(desc(events.updatedAt))
-        .limit(300),
-      getRestaurantSignals(),
-      getUserRestaurantSets(input.userId),
-    ]);
+  const [
+    nearbyRestaurants,
+    activeDeals,
+    liveTrucks,
+    publicEvents,
+    restaurantSignals,
+    userSets,
+  ] = await Promise.all([
+    storage.getNearbyRestaurants(lat, lng, radiusKm),
+    storage.getActiveDeals(),
+    storage.getLiveTrucksNearby(lat, lng, radiusKm),
+    db
+      .select({
+        id: events.id,
+        hostId: events.hostId,
+        name: events.name,
+        date: events.date,
+        startTime: events.startTime,
+        endTime: events.endTime,
+        status: events.status,
+        requiresPayment: events.requiresPayment,
+        updatedAt: events.updatedAt,
+        lastConfirmedAt: events.lastConfirmedAt,
+        bookedRestaurantId: events.bookedRestaurantId,
+        hostName: hosts.businessName,
+        hostLat: hosts.latitude,
+        hostLng: hosts.longitude,
+      })
+      .from(events)
+      .innerJoin(hosts, eq(events.hostId, hosts.id))
+      .where(
+        and(
+          isNotNull(events.hostId),
+          gte(events.date, new Date(Date.now() - 24 * 60 * 60 * 1000)),
+        ),
+      )
+      .orderBy(desc(events.updatedAt))
+      .limit(300),
+    getRestaurantSignals(),
+    getUserRestaurantSets(input.userId),
+  ]);
 
   const candidateRestaurantIds = Array.from(
     new Set(
@@ -341,22 +362,28 @@ export async function buildLocalRecommendations(
     if (latValue === null || lngValue === null) continue;
 
     const distanceMiles = milesBetween(lat, lng, latValue, lngValue);
-    if (!Number.isFinite(distanceMiles) || distanceMiles > radiusKm * 0.621371) continue;
+    if (!Number.isFinite(distanceMiles) || distanceMiles > radiusKm * 0.621371)
+      continue;
 
     const signals = restaurantSignals.get(restaurantId);
     const openNow = isRestaurantOpenNow(restaurant);
-    const dealCount = Number(restaurant.activeDealsCount || restaurant.activeDealCount || 0);
+    const dealCount = Number(
+      restaurant.activeDealsCount || restaurant.activeDealCount || 0,
+    );
     const viewerFavorited = userSets.favorites.has(restaurantId);
     const viewerFollows = userSets.follows.has(restaurantId);
     const viewerRecommended = userSets.recommendations.has(restaurantId);
     const privateBehavior = privateBehaviorByRestaurant.get(restaurantId);
     const privateBoost = Number(privateBehavior?.privateBoostScore || 0);
     const boostedByPrivateActivity = privateBoost >= 12;
-    const hasFreshMenuSignal = Number(privateBehavior?.freshnessActivityScore || 0) >= 10;
+    const hasFreshMenuSignal =
+      Number(privateBehavior?.freshnessActivityScore || 0) >= 10;
     const reasons = dedupeReasons([
       openNow ? "Open now" : "",
       dealCount > 0 ? "Deal today" : "",
-      viewerFavorited || (signals?.favoriteCount || 0) > 0 ? "Local favorite" : "",
+      viewerFavorited || (signals?.favoriteCount || 0) > 0
+        ? "Local favorite"
+        : "",
       (signals?.recommendationCount || 0) > 0 ? "Recommended by locals" : "",
       (signals?.favoriteCount || 0) +
         (signals?.followCount || 0) +
@@ -373,8 +400,15 @@ export async function buildLocalRecommendations(
       Math.min(36, (signals?.recommendationCount || 0) * 8) +
       Math.min(16, (signals?.recommendationLikeCount || 0) * 2.5) +
       Math.min(14, (signals?.followCount || 0) * 2) +
-      Math.min(16, (signals?.shareCount || 0) * 3 + (signals?.storyShareCount || 0) * 1.5) +
-      Math.min(10, ((signals?.storyLikeCount || 0) + (signals?.storyCommentCount || 0)) * 0.4) -
+      Math.min(
+        16,
+        (signals?.shareCount || 0) * 3 + (signals?.storyShareCount || 0) * 1.5,
+      ) +
+      Math.min(
+        10,
+        ((signals?.storyLikeCount || 0) + (signals?.storyCommentCount || 0)) *
+          0.4,
+      ) -
       Math.min(24, (signals?.recommendationDislikeCount || 0) * 4);
 
     const availabilityScore =
@@ -417,7 +451,8 @@ export async function buildLocalRecommendations(
     if (latValue === null || lngValue === null) continue;
 
     const distanceMiles = milesBetween(lat, lng, latValue, lngValue);
-    if (!Number.isFinite(distanceMiles) || distanceMiles > radiusKm * 0.621371) continue;
+    if (!Number.isFinite(distanceMiles) || distanceMiles > radiusKm * 0.621371)
+      continue;
 
     const servingNow = isTruckServingNow(truck);
     const privateBehavior = privateBehaviorByRestaurant.get(truckId);
@@ -428,7 +463,9 @@ export async function buildLocalRecommendations(
       servingNow ? "Open now" : "",
       Number(truck.activeDealCount || 0) > 0 ? "Deal today" : "",
       "Popular nearby",
-      Number(privateBehavior?.freshnessActivityScore || 0) >= 10 ? "Menu updated" : "",
+      Number(privateBehavior?.freshnessActivityScore || 0) >= 10
+        ? "Menu updated"
+        : "",
     ]);
 
     const score =
@@ -459,7 +496,9 @@ export async function buildLocalRecommendations(
   }
 
   const nearbyRestaurantSet = new Set(
-    (nearbyRestaurants as any[]).map((restaurant: any) => String(restaurant.id)),
+    (nearbyRestaurants as any[]).map((restaurant: any) =>
+      String(restaurant.id),
+    ),
   );
   for (const deal of activeDeals as any[]) {
     const restaurantId = String(deal.restaurantId || "");
@@ -476,8 +515,10 @@ export async function buildLocalRecommendations(
     if (viewerFavorited || (signals?.favoriteCount || 0) > 0) {
       reasons.unshift("Local favorite");
     }
-    if (viewerFollows || (signals?.followCount || 0) > 0) reasons.push("Popular nearby");
-    if ((signals?.recommendationCount || 0) > 0) reasons.push("Recommended by locals");
+    if (viewerFollows || (signals?.followCount || 0) > 0)
+      reasons.push("Popular nearby");
+    if ((signals?.recommendationCount || 0) > 0)
+      reasons.push("Recommended by locals");
     if (Number(privateBehavior?.freshnessActivityScore || 0) >= 10) {
       reasons.push("Menu updated");
     }
@@ -512,7 +553,8 @@ export async function buildLocalRecommendations(
     const hostLng = toFiniteNumber(eventRow.hostLng);
     if (hostLat === null || hostLng === null) continue;
     const distanceMiles = milesBetween(lat, lng, hostLat, hostLng);
-    if (!Number.isFinite(distanceMiles) || distanceMiles > radiusKm * 0.621371) continue;
+    if (!Number.isFinite(distanceMiles) || distanceMiles > radiusKm * 0.621371)
+      continue;
 
     const eventReasons = dedupeReasons([
       "Happening today",
@@ -559,7 +601,8 @@ export async function buildLocalRecommendations(
   recommendations.sort((a, b) => b.score - a.score);
   const deduped = new Map<string, LocalRecommendation>();
   for (const recommendation of recommendations) {
-    if (!deduped.has(recommendation.id)) deduped.set(recommendation.id, recommendation);
+    if (!deduped.has(recommendation.id))
+      deduped.set(recommendation.id, recommendation);
     if (deduped.size >= limit) break;
   }
   return Array.from(deduped.values()).slice(0, limit);
