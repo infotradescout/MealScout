@@ -4281,7 +4281,7 @@ function OpenNowSection({
     return (
       <section className="pl-5 pr-0 pt-2 pb-10">
         <SectionHeader
-          title="Recommended Nearby"
+          title="Nearby Now"
           linkHref="/truck-discovery"
           subtitle="Trucks, restaurants, bars, and pop-ups serving near you right now."
         />
@@ -4312,7 +4312,7 @@ function OpenNowSection({
     return (
       <section className="pl-5 pr-0 pt-2 pb-10">
         <SectionHeader
-          title="Recommended Nearby"
+          title="Nearby Now"
           linkHref="/truck-discovery"
           subtitle={
             summaryBits.length > 0

@@ -387,8 +387,12 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     { path: "/scout", icon: Compass, label: "Scout" },
     { path: "/map", icon: MapPin, label: "Map" },
     { path: "/deals", icon: Tag, label: "Deals" },
-    { path: "/user-dashboard", icon: Bookmark, label: "Saved" },
-    { path: "/profile", icon: User, label: "You" },
+    {
+      path: user ? "/user-dashboard" : dashboardPath,
+      icon: Bookmark,
+      label: "Saved",
+    },
+    { path: user ? "/profile" : "/login", icon: User, label: "You" },
   ];
 
   return (
