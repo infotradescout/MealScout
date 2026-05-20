@@ -1,0 +1,825 @@
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+
+import { db } from "../db";
+import { storage } from "../storage";
+import { isPublicBusinessVisible } from "../utils/publicBusinessVisibility";
+import {
+  deals,
+  restaurantFavorites,
+  restaurantFollows,
+  restaurantUserRecommendations,
+  videoStories,
+} from "@shared/schema";
+import type {
+  ScoutSurfaceCard,
+  ScoutSurfaceResponse,
+  ScoutSurfaceSection,
+} from "@shared/constants/scoutSurface";
+
+type BuildScoutSurfaceInput = {
+  lat?: number;
+  lng?: number;
+  radiusMiles: number;
+  limit: number;
+  userId?: string | null;
+};
+
+type RecommendationSignals = {
+  favoriteCount: number;
+  followCount: number;
+  recommendationCount: number;
+  videoRecommendationCount: number;
+  reactionScore: number;
+  shareCount: number;
+  activeDealCount: number;
+};
+
+const clamp = (value: number, min: number, max: number) =>
+  Math.max(min, Math.min(max, value));
+
+const toFinite = (value: unknown): number | null => {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Number.parseFloat(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
+};
+
+const milesBetween = (
+  lat1: number,
+  lng1: number,
+  lat2: number,
+  lng2: number,
+): number => {
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) *
+      Math.cos(toRad(lat2)) *
+      Math.sin(dLng / 2) *
+      Math.sin(dLng / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return 3958.7613 * c;
+};
+
+const dedupe = (items: string[]) =>
+  Array.from(new Set(items.map((item) => item.trim()).filter(Boolean)));
+
+const isRestaurantOpenNow = (restaurant: any): boolean => {
+  const explicit = [
+    restaurant?.isOpen,
+    restaurant?.openNow,
+    restaurant?.currentlyOpen,
+    restaurant?.isCurrentlyOpen,
+  ].find((value) => typeof value === "boolean");
+  if (typeof explicit === "boolean") return explicit;
+  const status = String(
+    restaurant?.openStatus || restaurant?.status || restaurant?.hoursStatus || "",
+  )
+    .trim()
+    .toLowerCase();
+  if (!status) return false;
+  return status.includes("open") && !status.includes("closed");
+};
+
+const isTruckServingNow = (truck: any): boolean => {
+  const explicit = [
+    truck?.isOpen,
+    truck?.openNow,
+    truck?.currentlyOpen,
+    truck?.isServing,
+    truck?.servingNow,
+    truck?.availableNow,
+  ].find((value) => typeof value === "boolean");
+  if (typeof explicit === "boolean") return explicit;
+  return truck?.mobileOnline !== false;
+};
+
+const isToday = (value: unknown): boolean => {
+  const date = value ? new Date(value as any) : null;
+  if (!date || Number.isNaN(date.getTime())) return false;
+  const now = new Date();
+  return (
+    now.getFullYear() === date.getFullYear() &&
+    now.getMonth() === date.getMonth() &&
+    now.getDate() === date.getDate()
+  );
+};
+
+const normalizeEntityType = (restaurant: any): ScoutSurfaceCard["entityType"] => {
+  const businessType = String(restaurant?.businessType || "")
+    .trim()
+    .toLowerCase();
+  if (businessType === "caterer") return "caterer";
+  if (businessType === "private_chef" || businessType === "private chef") {
+    return "private_chef";
+  }
+  if (restaurant?.isFoodTruck) return "truck";
+  return "restaurant";
+};
+
+const byScoreThenDistance = (a: ScoutSurfaceCard, b: ScoutSurfaceCard) => {
+  if (a.score !== b.score) return b.score - a.score;
+  const ad = typeof a.distanceMiles === "number" ? a.distanceMiles : Number.POSITIVE_INFINITY;
+  const bd = typeof b.distanceMiles === "number" ? b.distanceMiles : Number.POSITIVE_INFINITY;
+  return ad - bd;
+};
+
+async function getRestaurantSignals(
+  restaurantIds: string[],
+): Promise<Map<string, RecommendationSignals>> {
+  if (restaurantIds.length === 0) return new Map();
+
+  const [favoriteRows, followRows, recommendationRows, dealRows, videoRows] =
+    await Promise.all([
+      db
+        .select({
+          restaurantId: restaurantFavorites.restaurantId,
+          count: sql<number>`cast(count(*) as integer)`,
+        })
+        .from(restaurantFavorites)
+        .where(inArray(restaurantFavorites.restaurantId, restaurantIds))
+        .groupBy(restaurantFavorites.restaurantId),
+      db
+        .select({
+          restaurantId: restaurantFollows.restaurantId,
+          count: sql<number>`cast(count(*) as integer)`,
+        })
+        .from(restaurantFollows)
+        .where(inArray(restaurantFollows.restaurantId, restaurantIds))
+        .groupBy(restaurantFollows.restaurantId),
+      db
+        .select({
+          restaurantId: restaurantUserRecommendations.restaurantId,
+          count: sql<number>`cast(count(*) as integer)`,
+        })
+        .from(restaurantUserRecommendations)
+        .where(inArray(restaurantUserRecommendations.restaurantId, restaurantIds))
+        .groupBy(restaurantUserRecommendations.restaurantId),
+      db
+        .select({
+          restaurantId: deals.restaurantId,
+          count: sql<number>`cast(count(*) as integer)`,
+        })
+        .from(deals)
+        .where(and(eq(deals.isActive, true), inArray(deals.restaurantId, restaurantIds)))
+        .groupBy(deals.restaurantId),
+      db
+        .select({
+          restaurantId: videoStories.restaurantId,
+          count: sql<number>`cast(count(*) as integer)`,
+        })
+        .from(videoStories)
+        .where(
+          and(
+            inArray(videoStories.restaurantId, restaurantIds),
+            eq(videoStories.status, "ready"),
+            isNull(videoStories.deletedAt),
+          ),
+        )
+        .groupBy(videoStories.restaurantId),
+    ]);
+
+  const [reactionRows, shareRows] = await Promise.all([
+    db.execute(sql<{
+      restaurant_id: string;
+      score: number;
+    }>`
+      select
+        rur.restaurant_id,
+        cast(sum(case rr.reaction_type when 'like' then 1 when 'dislike' then -1 else 0 end) as integer) as score
+      from recommendation_reactions rr
+      inner join restaurant_user_recommendations rur on rur.id = rr.recommendation_id
+      where rur.restaurant_id = any(${restaurantIds}::text[])
+      group by rur.restaurant_id
+    `),
+    db.execute(sql<{
+      restaurant_id: string;
+      count: number;
+    }>`
+      select
+        rur.restaurant_id,
+        cast(count(*) as integer) as count
+      from recommendation_shares rs
+      inner join restaurant_user_recommendations rur on rur.id = rs.recommendation_id
+      where rur.restaurant_id = any(${restaurantIds}::text[])
+      group by rur.restaurant_id
+    `),
+  ]);
+
+  const map = new Map<string, RecommendationSignals>();
+  for (const id of restaurantIds) {
+    map.set(id, {
+      favoriteCount: 0,
+      followCount: 0,
+      recommendationCount: 0,
+      videoRecommendationCount: 0,
+      reactionScore: 0,
+      shareCount: 0,
+      activeDealCount: 0,
+    });
+  }
+
+  for (const row of favoriteRows as any[]) {
+    const key = String(row.restaurantId || "");
+    const target = map.get(key);
+    if (target) target.favoriteCount = Number(row.count || 0);
+  }
+  for (const row of followRows as any[]) {
+    const key = String(row.restaurantId || "");
+    const target = map.get(key);
+    if (target) target.followCount = Number(row.count || 0);
+  }
+  for (const row of recommendationRows as any[]) {
+    const key = String(row.restaurantId || "");
+    const target = map.get(key);
+    if (target) target.recommendationCount = Number(row.count || 0);
+  }
+  for (const row of dealRows as any[]) {
+    const key = String(row.restaurantId || "");
+    const target = map.get(key);
+    if (target) target.activeDealCount = Number(row.count || 0);
+  }
+  for (const row of videoRows as any[]) {
+    const key = String(row.restaurantId || "");
+    const target = map.get(key);
+    if (target) target.videoRecommendationCount = Number(row.count || 0);
+  }
+
+  const reactionItems = (reactionRows as any)?.rows || [];
+  for (const row of reactionItems) {
+    const key = String(row.restaurant_id || "");
+    const target = map.get(key);
+    if (target) target.reactionScore = Number(row.score || 0);
+  }
+
+  const shareItems = (shareRows as any)?.rows || [];
+  for (const row of shareItems) {
+    const key = String(row.restaurant_id || "");
+    const target = map.get(key);
+    if (target) target.shareCount = Number(row.count || 0);
+  }
+
+  return map;
+}
+
+const parseLatLng = (entity: any): { lat: number; lng: number } | null => {
+  const lat =
+    toFinite(entity?.lat) ??
+    toFinite(entity?.latitude) ??
+    toFinite(entity?.currentLatitude) ??
+    toFinite(entity?.hostLat);
+  const lng =
+    toFinite(entity?.lng) ??
+    toFinite(entity?.longitude) ??
+    toFinite(entity?.currentLongitude) ??
+    toFinite(entity?.hostLng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  return { lat: Number(lat), lng: Number(lng) };
+};
+
+const section = (
+  id: string,
+  title: string,
+  placement: ScoutSurfaceSection["placement"],
+  layout: ScoutSurfaceSection["layout"],
+  cards: ScoutSurfaceCard[],
+  subtitle?: string,
+): ScoutSurfaceSection | null => {
+  if (!cards.length) return null;
+  return {
+    id,
+    title,
+    placement,
+    layout,
+    subtitle,
+    cards,
+  };
+};
+
+export async function buildScoutSurface(
+  input: BuildScoutSurfaceInput,
+): Promise<ScoutSurfaceResponse> {
+  const radiusMiles = clamp(input.radiusMiles, 1, 50);
+  const limit = clamp(input.limit, 6, 120);
+  const lat = toFinite(input.lat);
+  const lng = toFinite(input.lng);
+  const hasLocation = Number.isFinite(lat) && Number.isFinite(lng);
+  const radiusKm = radiusMiles * 1.609344;
+
+  const [allRestaurants, activeDeals, upcomingEvents, liveTrucks] = await Promise.all([
+    storage.getAllRestaurants(),
+    hasLocation
+      ? storage.getNearbyDeals(Number(lat), Number(lng), radiusKm)
+      : storage.getActiveDeals(),
+    storage.getAllUpcomingEvents(),
+    hasLocation
+      ? storage.getLiveTrucksNearby(Number(lat), Number(lng), radiusKm)
+      : Promise.resolve([]),
+  ]);
+
+  const restaurants = (Array.isArray(allRestaurants) ? allRestaurants : [])
+    .filter((row: any) => row?.isActive)
+    .filter((row: any) => isPublicBusinessVisible(row));
+
+  const restaurantById = new Map(
+    restaurants.map((restaurant: any) => [String(restaurant.id), restaurant]),
+  );
+
+  const restaurantIds = restaurants
+    .map((restaurant: any) => String(restaurant.id || "").trim())
+    .filter(Boolean);
+  const recommendationSignals = await getRestaurantSignals(restaurantIds);
+
+  const cardPool: {
+    trucksServing: ScoutSurfaceCard[];
+    nearbyNow: ScoutSurfaceCard[];
+    recommended: ScoutSurfaceCard[];
+    dealsToday: ScoutSurfaceCard[];
+    happeningToday: ScoutSurfaceCard[];
+    openNearYou: ScoutSurfaceCard[];
+    moreNearby: ScoutSurfaceCard[];
+  } = {
+    trucksServing: [],
+    nearbyNow: [],
+    recommended: [],
+    dealsToday: [],
+    happeningToday: [],
+    openNearYou: [],
+    moreNearby: [],
+  };
+
+  for (const truck of Array.isArray(liveTrucks) ? liveTrucks : []) {
+    const truckId = String((truck as any)?.id || "").trim();
+    if (!truckId) continue;
+    const coords = parseLatLng(truck);
+    const distanceMiles = toFinite((truck as any)?.distanceMiles);
+    const servingNow = isTruckServingNow(truck);
+
+    const card: ScoutSurfaceCard = {
+      id: `truck:${truckId}`,
+      entityType: "truck",
+      entityId: truckId,
+      title: String((truck as any)?.name || "Food truck"),
+      subtitle: String((truck as any)?.cuisineType || "").trim() || undefined,
+      imageUrl: ((truck as any)?.coverImageUrl || (truck as any)?.logoUrl || null) as
+        | string
+        | null,
+      distanceMiles: Number.isFinite(distanceMiles) ? Number(distanceMiles?.toFixed(2)) : null,
+      statusLabel: servingNow ? "Serving now" : "Nearby",
+      badges: dedupe([
+        servingNow ? "Serving now" : "Nearby",
+        String((truck as any)?.city || "").trim(),
+      ]),
+      reasons: dedupe([
+        servingNow ? "Currently serving in your area" : "Close to your location",
+        distanceMiles !== null && Number.isFinite(distanceMiles)
+          ? `${Number(distanceMiles).toFixed(1)} mi away`
+          : "Available nearby",
+      ]),
+      availability: servingNow ? "serving_now" : "nearby",
+      cta: {
+        label: servingNow ? "Go now" : "View details",
+        href: `/truck/${encodeURIComponent(truckId)}`,
+      },
+      score: 90 - Math.min(40, Number(distanceMiles || 0) * 4),
+      source: "truck_activity",
+      metadata: coords ? { lat: coords.lat, lng: coords.lng } : undefined,
+    };
+
+    if (servingNow) {
+      cardPool.trucksServing.push(card);
+      cardPool.nearbyNow.push(card);
+    } else {
+      cardPool.moreNearby.push(card);
+    }
+  }
+
+  for (const restaurant of restaurants) {
+    const restaurantId = String((restaurant as any)?.id || "").trim();
+    if (!restaurantId) continue;
+    const coords = parseLatLng(restaurant);
+    const distanceMiles =
+      hasLocation && coords
+        ? milesBetween(Number(lat), Number(lng), coords.lat, coords.lng)
+        : null;
+    if (
+      hasLocation &&
+      typeof distanceMiles === "number" &&
+      Number.isFinite(distanceMiles) &&
+      distanceMiles > radiusMiles
+    ) {
+      continue;
+    }
+
+    const openNow = isRestaurantOpenNow(restaurant);
+    const signals =
+      recommendationSignals.get(restaurantId) ||
+      ({
+        favoriteCount: 0,
+        followCount: 0,
+        recommendationCount: 0,
+        videoRecommendationCount: 0,
+        reactionScore: 0,
+        shareCount: 0,
+        activeDealCount: 0,
+      } as RecommendationSignals);
+
+    const entityType = normalizeEntityType(restaurant);
+    const baseCard: ScoutSurfaceCard = {
+      id: `${entityType}:${restaurantId}`,
+      entityType,
+      entityId: restaurantId,
+      title: String((restaurant as any)?.name || "Restaurant"),
+      subtitle: String((restaurant as any)?.cuisineType || "").trim() || undefined,
+      imageUrl: ((restaurant as any)?.coverImageUrl || (restaurant as any)?.logoUrl || null) as
+        | string
+        | null,
+      distanceMiles:
+        typeof distanceMiles === "number" && Number.isFinite(distanceMiles)
+          ? Number(distanceMiles.toFixed(2))
+          : null,
+      statusLabel: openNow ? "Open now" : "Nearby",
+      badges: dedupe([
+        openNow ? "Open now" : "Nearby",
+        String((restaurant as any)?.city || "").trim(),
+        signals.activeDealCount > 0 ? "Deal today" : "",
+      ]),
+      reasons: dedupe([
+        openNow ? "Open and available now" : "Available nearby",
+        signals.activeDealCount > 0 ? "Has active deals today" : "",
+      ]),
+      availability: openNow ? "open_now" : "nearby",
+      cta: {
+        label: "View menu",
+        href: entityType === "truck"
+          ? `/truck/${encodeURIComponent(restaurantId)}`
+          : `/restaurant/${encodeURIComponent(restaurantId)}`,
+      },
+      score:
+        (openNow ? 70 : 45) +
+        Math.min(14, signals.activeDealCount * 3) +
+        Math.min(10, signals.favoriteCount + signals.followCount) +
+        Math.min(12, signals.recommendationCount + signals.videoRecommendationCount) -
+        Math.min(30, Number(distanceMiles || 0) * 2.5),
+      source: "restaurant_public",
+      metadata: coords ? { lat: coords.lat, lng: coords.lng } : undefined,
+    };
+
+    const recommendationBacking =
+      signals.recommendationCount > 0 ||
+      signals.videoRecommendationCount > 0 ||
+      signals.favoriteCount > 0 ||
+      signals.followCount > 0 ||
+      signals.reactionScore > 0 ||
+      signals.shareCount > 0;
+
+    if (openNow) {
+      cardPool.nearbyNow.push(baseCard);
+      cardPool.openNearYou.push(baseCard);
+    } else {
+      cardPool.moreNearby.push(baseCard);
+    }
+
+    if (recommendationBacking) {
+      const recommendationScore =
+        baseCard.score +
+        Math.min(16, signals.recommendationCount * 2 + signals.videoRecommendationCount * 2) +
+        Math.min(12, signals.favoriteCount + signals.followCount) +
+        Math.min(8, signals.shareCount + Math.max(0, signals.reactionScore));
+
+      cardPool.recommended.push({
+        ...baseCard,
+        id: `recommended:${restaurantId}`,
+        source:
+          signals.recommendationCount > 0 || signals.videoRecommendationCount > 0
+            ? "recommendation"
+            : "community",
+        reasons: dedupe([
+          signals.recommendationCount > 0 ? "Backed by local recommendations" : "",
+          signals.videoRecommendationCount > 0 ? "Backed by local videos" : "",
+          signals.favoriteCount > 0 ? "Saved by diners" : "",
+          signals.followCount > 0 ? "Followed by diners" : "",
+          signals.shareCount > 0 || signals.reactionScore > 0
+            ? "Strong community activity"
+            : "",
+        ]),
+        score: recommendationScore,
+      });
+    }
+  }
+
+  for (const deal of Array.isArray(activeDeals) ? activeDeals : []) {
+    const dealId = String((deal as any)?.id || "").trim();
+    const restaurantId = String((deal as any)?.restaurantId || "").trim();
+    if (!dealId || !restaurantId) continue;
+
+    const restaurant =
+      (deal as any)?.restaurant || restaurantById.get(restaurantId) || null;
+    const coords = parseLatLng(restaurant);
+    const distanceMiles =
+      hasLocation && coords
+        ? milesBetween(Number(lat), Number(lng), coords.lat, coords.lng)
+        : toFinite((deal as any)?.distance) !== null
+          ? Number(toFinite((deal as any)?.distance)!) * 0.621371
+          : null;
+
+    if (
+      hasLocation &&
+      typeof distanceMiles === "number" &&
+      Number.isFinite(distanceMiles) &&
+      distanceMiles > radiusMiles
+    ) {
+      continue;
+    }
+
+    const title = String((deal as any)?.title || "Deal").trim() || "Deal";
+    const subtitle = restaurant
+      ? String((restaurant as any)?.name || "").trim() || undefined
+      : undefined;
+
+    const card: ScoutSurfaceCard = {
+      id: `deal:${dealId}`,
+      entityType: "deal",
+      entityId: dealId,
+      title,
+      subtitle,
+      imageUrl: ((deal as any)?.imageUrl || null) as string | null,
+      distanceMiles:
+        typeof distanceMiles === "number" && Number.isFinite(distanceMiles)
+          ? Number(distanceMiles.toFixed(2))
+          : null,
+      statusLabel: "Deal today",
+      badges: dedupe([
+        "Deal today",
+        (deal as any)?.dealType ? String((deal as any).dealType) : "",
+      ]),
+      reasons: dedupe([
+        "Available right now",
+        subtitle ? `From ${subtitle}` : "Nearby option",
+      ]),
+      availability: "deal_today",
+      cta: {
+        label: "View details",
+        href: `/deal/${encodeURIComponent(dealId)}`,
+      },
+      score:
+        74 +
+        Math.min(15, Number((deal as any)?.discountValue || 0)) -
+        Math.min(24, Number(distanceMiles || 0) * 2),
+      source: "deal",
+      metadata: coords
+        ? { lat: coords.lat, lng: coords.lng, restaurantId }
+        : { restaurantId },
+    };
+
+    cardPool.dealsToday.push(card);
+  }
+
+  for (const event of Array.isArray(upcomingEvents) ? upcomingEvents : []) {
+    const eventId = String((event as any)?.id || "").trim();
+    if (!eventId) continue;
+    const host = (event as any)?.host || null;
+    const coords = parseLatLng(host);
+    if (!coords) continue;
+
+    const distanceMiles = hasLocation
+      ? milesBetween(Number(lat), Number(lng), coords.lat, coords.lng)
+      : null;
+
+    if (
+      hasLocation &&
+      typeof distanceMiles === "number" &&
+      Number.isFinite(distanceMiles) &&
+      distanceMiles > radiusMiles
+    ) {
+      continue;
+    }
+
+    const today = isToday((event as any)?.date);
+    const requiresPayment = Boolean((event as any)?.requiresPayment);
+
+    const baseEventCard: ScoutSurfaceCard = {
+      id: `event:${eventId}`,
+      entityType: "event",
+      entityId: eventId,
+      title: String((event as any)?.name || "Event"),
+      subtitle: String((host as any)?.businessName || "").trim() || undefined,
+      imageUrl: ((event as any)?.imageUrl || null) as string | null,
+      distanceMiles:
+        typeof distanceMiles === "number" && Number.isFinite(distanceMiles)
+          ? Number(distanceMiles.toFixed(2))
+          : null,
+      statusLabel: today ? "Happening today" : "Upcoming",
+      badges: dedupe([today ? "Today" : "Upcoming"]),
+      reasons: dedupe([
+        today ? "Scheduled for today" : "Upcoming local event",
+        (host as any)?.businessName ? `Hosted by ${(host as any).businessName}` : "",
+      ]),
+      availability: today ? "event_today" : "upcoming",
+      cta: {
+        label: "View details",
+        href: `/events/${encodeURIComponent(eventId)}`,
+      },
+      score: (today ? 72 : 54) - Math.min(18, Number(distanceMiles || 0) * 1.8),
+      source: "event",
+      metadata: { lat: coords.lat, lng: coords.lng },
+    };
+
+    if (today && !requiresPayment) {
+      cardPool.happeningToday.push(baseEventCard);
+      cardPool.nearbyNow.push(baseEventCard);
+    } else if (!today && !requiresPayment) {
+      cardPool.moreNearby.push(baseEventCard);
+    }
+
+    if (requiresPayment) {
+      const hostId = String((host as any)?.id || (event as any)?.hostId || "").trim();
+      if (!hostId) continue;
+      cardPool.moreNearby.push({
+        id: `host_spot:${hostId}:${eventId}`,
+        entityType: "host_spot",
+        entityId: hostId,
+        title: String((host as any)?.businessName || "Host spot"),
+        subtitle: String((event as any)?.name || "").trim() || undefined,
+        imageUrl: ((host as any)?.spotImageUrl || null) as string | null,
+        distanceMiles:
+          typeof distanceMiles === "number" && Number.isFinite(distanceMiles)
+            ? Number(distanceMiles.toFixed(2))
+            : null,
+        statusLabel: today ? "Happening today" : "Upcoming",
+        badges: dedupe(["Host spot", today ? "Today" : "Upcoming"]),
+        reasons: dedupe([
+          "Bookable host location",
+          today ? "Available today" : "Upcoming availability",
+        ]),
+        availability: today ? "event_today" : "upcoming",
+        cta: {
+          label: "Book spot",
+          href: `/parking-pass`,
+        },
+        score: (today ? 68 : 50) - Math.min(18, Number(distanceMiles || 0) * 2),
+        source: "host_spot",
+        metadata: { lat: coords.lat, lng: coords.lng, eventId },
+      });
+    }
+  }
+
+  for (const key of Object.keys(cardPool) as Array<keyof typeof cardPool>) {
+    cardPool[key].sort(byScoreThenDistance);
+  }
+
+  const usedEntityKeys = new Set<string>();
+  const pickUnique = (cards: ScoutSurfaceCard[], maxItems: number) => {
+    const picked: ScoutSurfaceCard[] = [];
+    for (const card of cards) {
+      const key = `${card.entityType}:${card.entityId}`;
+      if (usedEntityKeys.has(key)) continue;
+      usedEntityKeys.add(key);
+      picked.push(card);
+      if (picked.length >= maxItems) break;
+    }
+    return picked;
+  };
+
+  const sections: ScoutSurfaceSection[] = [];
+
+  if (cardPool.trucksServing.length > 0) {
+    const cards = pickUnique(cardPool.trucksServing, Math.min(8, limit));
+    const rail = section(
+      "trucks-serving-now",
+      "Trucks Serving Now",
+      "primary",
+      "hero_cards",
+      cards,
+      "Follow The Flavor",
+    );
+    if (rail) sections.push(rail);
+  } else if (cardPool.nearbyNow.length > 0) {
+    const cards = pickUnique(cardPool.nearbyNow, Math.min(8, limit));
+    const rail = section(
+      "nearby-now",
+      "Nearby Now",
+      "primary",
+      "hero_cards",
+      cards,
+      "Follow The Flavor",
+    );
+    if (rail) sections.push(rail);
+  }
+
+  {
+    const cards = pickUnique(cardPool.recommended, Math.min(6, Math.max(3, Math.floor(limit / 2))));
+    const rail = section(
+      "recommended-nearby",
+      "Recommended Nearby",
+      "secondary",
+      "horizontal_cards",
+      cards,
+    );
+    if (rail) sections.push(rail);
+  }
+
+  {
+    const cards = pickUnique(cardPool.dealsToday, Math.min(8, limit));
+    const rail = section(
+      "deals-today",
+      "Deals Today",
+      "secondary",
+      "compact_deals",
+      cards,
+    );
+    if (rail) sections.push(rail);
+  }
+
+  {
+    const cards = pickUnique(cardPool.happeningToday, Math.min(8, limit));
+    const rail = section(
+      "happening-today",
+      "Happening Today",
+      "supporting",
+      "horizontal_cards",
+      cards,
+    );
+    if (rail) sections.push(rail);
+  }
+
+  {
+    const cards = pickUnique(cardPool.openNearYou, Math.min(10, limit));
+    const rail = section(
+      "open-near-you",
+      "Open Near You",
+      "supporting",
+      "vertical_list",
+      cards,
+    );
+    if (rail) sections.push(rail);
+  }
+
+  {
+    const cards = pickUnique(cardPool.moreNearby, Math.min(12, limit));
+    const rail = section(
+      "more-nearby",
+      "More Nearby",
+      "lower",
+      "vertical_list",
+      cards,
+    );
+    if (rail) sections.push(rail);
+  }
+
+  const markerById = new Map<string, ScoutSurfaceResponse["map"]["markers"][number]>();
+  for (const sectionRow of sections) {
+    for (const card of sectionRow.cards) {
+      const latValue = toFinite((card.metadata as any)?.lat);
+      const lngValue = toFinite((card.metadata as any)?.lng);
+      if (!Number.isFinite(latValue) || !Number.isFinite(lngValue)) continue;
+
+      const markerId = `${card.entityType}:${card.entityId}`;
+      if (markerById.has(markerId)) continue;
+      markerById.set(markerId, {
+        id: markerId,
+        entityType: card.entityType,
+        entityId: card.entityId,
+        lat: Number(latValue),
+        lng: Number(lngValue),
+        label: card.title,
+        status: card.statusLabel || undefined,
+        source: card.source,
+      });
+    }
+  }
+
+  const totalCards = sections.reduce((sum, sectionRow) => sum + sectionRow.cards.length, 0);
+  const hasNowActivity =
+    cardPool.trucksServing.length > 0 ||
+    cardPool.nearbyNow.length > 0 ||
+    cardPool.happeningToday.length > 0;
+  const mode: ScoutSurfaceResponse["mode"] = totalCards < 3
+    ? "quiet"
+    : hasNowActivity
+      ? "activity"
+      : "discovery";
+
+  const response: ScoutSurfaceResponse = {
+    generatedAt: new Date().toISOString(),
+    mode,
+    map: {
+      markers: Array.from(markerById.values()),
+    },
+    sections,
+  };
+
+  if (hasLocation) {
+    response.location = {
+      lat: Number(lat),
+      lng: Number(lng),
+      radiusMiles,
+    };
+  }
+
+  return response;
+}

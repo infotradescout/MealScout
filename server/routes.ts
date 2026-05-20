@@ -23,6 +23,7 @@ import { registerGeoAdRoutes } from "./routes/geoAdRoutes";
 import { registerBookingRoutes } from "./routes/bookingRoutes";
 import { registerSupplierMarketplaceRoutes } from "./routes/supplierMarketplaceRoutes";
 import { registerSupplyScoutRoutes } from "./routes/supplyScoutRoutes";
+import { registerScoutSurfaceRoutes } from "./routes/scoutSurfaceRoutes";
 import { registerStaffRoutes } from "./staffRoutes";
 import { registerModerationRoutes } from "./moderationRoutes";
 import { validateRequiredEnvOnModuleLoad } from "./startup/envValidation";
@@ -146,6 +147,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   registerPublicSearchRoutes(app);
   registerRecommendationRoutes(app);
+  registerScoutSurfaceRoutes(app);
 
   registerSeoRoutes(app);
   registerHostInterestRoutes(app, {
