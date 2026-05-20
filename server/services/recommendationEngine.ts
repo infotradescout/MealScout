@@ -2,6 +2,7 @@ import { and, desc, eq, gte, isNotNull, sql } from "drizzle-orm";
 
 import { db } from "../db";
 import { storage } from "../storage";
+import { getPrivateBehaviorScoresForRestaurants } from "./privateBehaviorScoreService";
 import { events, hosts, restaurants } from "@shared/schema";
 
 export type RecommendationEntityType =
@@ -269,26 +270,6 @@ const isTruckServingNow = (truck: any): boolean => {
   return truck?.mobileOnline !== false;
 };
 
-function buildSignalSummary(
-  signals: Partial<RestaurantSignalRow> | undefined,
-  viewerState?: {
-    viewerFavorited?: boolean;
-    viewerFollows?: boolean;
-    viewerRecommended?: boolean;
-  },
-) {
-  return {
-    favoriteCount: Number(signals?.favoriteCount || 0),
-    followCount: Number(signals?.followCount || 0),
-    recommendationCount: Number(signals?.recommendationCount || 0),
-    recommendationLikeCount: Number(signals?.recommendationLikeCount || 0),
-    shareCount: Number(signals?.shareCount || 0),
-    viewerFavorited: Boolean(viewerState?.viewerFavorited),
-    viewerFollows: Boolean(viewerState?.viewerFollows),
-    viewerRecommended: Boolean(viewerState?.viewerRecommended),
-  };
-}
-
 export async function buildLocalRecommendations(
   input: BuildLocalRecommendationsInput,
 ): Promise<LocalRecommendation[]> {
@@ -333,6 +314,24 @@ export async function buildLocalRecommendations(
       getUserRestaurantSets(input.userId),
     ]);
 
+  const candidateRestaurantIds = Array.from(
+    new Set(
+      [
+        ...(nearbyRestaurants as any[]).map((restaurant: any) =>
+          String(restaurant?.id || "").trim(),
+        ),
+        ...(liveTrucks as any[]).map((truck: any) =>
+          String(truck?.id || "").trim(),
+        ),
+        ...(activeDeals as any[]).map((deal: any) =>
+          String(deal?.restaurantId || "").trim(),
+        ),
+      ].filter(Boolean),
+    ),
+  );
+  const privateBehaviorByRestaurant =
+    await getPrivateBehaviorScoresForRestaurants(candidateRestaurantIds);
+
   const recommendations: LocalRecommendation[] = [];
 
   for (const restaurant of nearbyRestaurants as any[]) {
@@ -350,32 +349,45 @@ export async function buildLocalRecommendations(
     const viewerFavorited = userSets.favorites.has(restaurantId);
     const viewerFollows = userSets.follows.has(restaurantId);
     const viewerRecommended = userSets.recommendations.has(restaurantId);
+    const privateBehavior = privateBehaviorByRestaurant.get(restaurantId);
+    const privateBoost = Number(privateBehavior?.privateBoostScore || 0);
+    const boostedByPrivateActivity = privateBoost >= 12;
+    const hasFreshMenuSignal = Number(privateBehavior?.freshnessActivityScore || 0) >= 10;
     const reasons = dedupeReasons([
-      viewerFavorited ? "One of your favorites" : "",
-      viewerRecommended ? "You recommended this" : "",
-      viewerFollows ? "You follow this" : "",
       openNow ? "Open now" : "",
       dealCount > 0 ? "Deal today" : "",
+      viewerFavorited || (signals?.favoriteCount || 0) > 0 ? "Local favorite" : "",
       (signals?.recommendationCount || 0) > 0 ? "Recommended by locals" : "",
-      (signals?.favoriteCount || 0) > 0 ? "Favorited by locals" : "",
-      (signals?.recommendationLikeCount || 0) > 0 ? "Liked by locals" : "",
-      (signals?.favoriteCount || 0) + (signals?.followCount || 0) > 2 ? "Popular nearby" : "",
+      (signals?.favoriteCount || 0) +
+        (signals?.followCount || 0) +
+        (signals?.shareCount || 0) +
+        (signals?.recommendationLikeCount || 0) >
+      2
+        ? "Popular nearby"
+        : "",
+      hasFreshMenuSignal ? "Menu updated" : "",
     ]);
 
+    const publicTrustScore =
+      Math.min(52, (signals?.favoriteCount || 0) * 11) +
+      Math.min(36, (signals?.recommendationCount || 0) * 8) +
+      Math.min(16, (signals?.recommendationLikeCount || 0) * 2.5) +
+      Math.min(14, (signals?.followCount || 0) * 2) +
+      Math.min(16, (signals?.shareCount || 0) * 3 + (signals?.storyShareCount || 0) * 1.5) +
+      Math.min(10, ((signals?.storyLikeCount || 0) + (signals?.storyCommentCount || 0)) * 0.4) -
+      Math.min(24, (signals?.recommendationDislikeCount || 0) * 4);
+
+    const availabilityScore =
+      (openNow ? 18 : 0) +
+      Math.min(12, dealCount * 5) +
+      (viewerFavorited ? 14 : 0) +
+      (viewerRecommended ? 9 : 0) +
+      (viewerFollows ? 5 : 0);
+
+    const distanceRefinement = Math.max(0, 7 - distanceMiles * 0.7);
+
     const score =
-      (openNow ? 22 : 0) +
-      Math.min(48, (signals?.favoriteCount || 0) * 12) +
-      Math.min(40, (signals?.recommendationCount || 0) * 8) +
-      Math.min(18, (signals?.recommendationLikeCount || 0) * 3) +
-      -Math.min(20, (signals?.recommendationDislikeCount || 0) * 4) +
-      Math.min(22, (signals?.shareCount || 0) * 4 + (signals?.storyShareCount || 0) * 2) +
-      Math.min(16, (signals?.followCount || 0) * 2) +
-      Math.min(10, ((signals?.storyLikeCount || 0) + (signals?.storyCommentCount || 0)) * 0.5) +
-      Math.min(12, dealCount * 6) +
-      (viewerFavorited ? 36 : 0) +
-      (viewerRecommended ? 20 : 0) +
-      (viewerFollows ? 10 : 0) +
-      Math.max(0, 8 - distanceMiles * 0.8);
+      publicTrustScore + availabilityScore + privateBoost + distanceRefinement;
 
     recommendations.push({
       id: `restaurant:${restaurantId}`,
@@ -384,18 +396,16 @@ export async function buildLocalRecommendations(
       score,
       reasons: reasons.length > 0 ? reasons : ["Serving nearby"],
       availability: openNow ? "open_now" : "nearby",
-      source: "community",
+      source: boostedByPrivateActivity ? "user_behavior" : "community",
       distanceMiles: Number(distanceMiles.toFixed(2)),
       freshnessLabel: openNow ? "Open now" : undefined,
       metadata: {
         name: restaurant.businessName || restaurant.name || "Restaurant",
         activeDealsCount: dealCount,
-        sourceDetail: "restaurant_signals_and_local_engagement",
-        signals: buildSignalSummary(signals, {
-          viewerFavorited,
-          viewerFollows,
-          viewerRecommended,
-        }),
+        boostedByPrivateActivity,
+        sourceDetail: boostedByPrivateActivity
+          ? "private_behavior"
+          : "public_trust",
       },
     });
   }
@@ -410,17 +420,22 @@ export async function buildLocalRecommendations(
     if (!Number.isFinite(distanceMiles) || distanceMiles > radiusKm * 0.621371) continue;
 
     const servingNow = isTruckServingNow(truck);
+    const privateBehavior = privateBehaviorByRestaurant.get(truckId);
+    const privateBoost = Number(privateBehavior?.privateBoostScore || 0);
+    const boostedByPrivateActivity = privateBoost >= 12;
     const reasons = dedupeReasons([
       servingNow ? "Serving nearby" : "",
       servingNow ? "Open now" : "",
       Number(truck.activeDealCount || 0) > 0 ? "Deal today" : "",
       "Popular nearby",
+      Number(privateBehavior?.freshnessActivityScore || 0) >= 10 ? "Menu updated" : "",
     ]);
 
     const score =
       (servingNow ? 46 : 22) +
       Math.min(12, Number(truck.activeDealCount || 0) * 6) +
-      Math.max(0, 18 - distanceMiles * 2.4);
+      Math.max(0, 18 - distanceMiles * 2.4) +
+      Math.round(privateBoost * 0.55);
 
     recommendations.push({
       id: `truck:${truckId}`,
@@ -429,14 +444,16 @@ export async function buildLocalRecommendations(
       score,
       reasons,
       availability: servingNow ? "serving_now" : "nearby",
-      source: "local_activity",
+      source: boostedByPrivateActivity ? "user_behavior" : "local_activity",
       distanceMiles: Number(distanceMiles.toFixed(2)),
       freshnessLabel: servingNow ? "Serving now" : "Nearby",
       metadata: {
         name: truck.name || truck.businessName || "Food truck",
         cuisineType: truck.cuisineType || null,
-        sourceDetail: "live_truck_presence",
-        signals: buildSignalSummary(undefined),
+        boostedByPrivateActivity,
+        sourceDetail: boostedByPrivateActivity
+          ? "private_behavior"
+          : "live_truck_presence",
       },
     });
   }
@@ -453,10 +470,17 @@ export async function buildLocalRecommendations(
     const viewerFavorited = userSets.favorites.has(restaurantId);
     const viewerFollows = userSets.follows.has(restaurantId);
     const viewerRecommended = userSets.recommendations.has(restaurantId);
-    if (viewerFavorited) reasons.unshift("One of your favorites");
-    else if ((signals?.favoriteCount || 0) > 0) reasons.push("Favorited by locals");
-    if (viewerFollows) reasons.push("You follow this");
+    const privateBehavior = privateBehaviorByRestaurant.get(restaurantId);
+    const privateBoost = Number(privateBehavior?.privateBoostScore || 0);
+    const boostedByPrivateActivity = privateBoost >= 12;
+    if (viewerFavorited || (signals?.favoriteCount || 0) > 0) {
+      reasons.unshift("Local favorite");
+    }
+    if (viewerFollows || (signals?.followCount || 0) > 0) reasons.push("Popular nearby");
     if ((signals?.recommendationCount || 0) > 0) reasons.push("Recommended by locals");
+    if (Number(privateBehavior?.freshnessActivityScore || 0) >= 10) {
+      reasons.push("Menu updated");
+    }
     const score = 38 + Math.min(15, Number(deal.discountValue || 0));
     recommendations.push({
       id: `deal:${String(deal.id)}`,
@@ -466,19 +490,18 @@ export async function buildLocalRecommendations(
         score +
         (viewerFavorited ? 22 : 0) +
         Math.min(18, Number(signals?.favoriteCount || 0) * 4) +
-        Math.min(12, Number(signals?.recommendationCount || 0) * 3),
+        Math.min(12, Number(signals?.recommendationCount || 0) * 3) +
+        Math.round(privateBoost * 0.45),
       reasons,
       availability: "deal_today",
-      source: "local_activity",
+      source: boostedByPrivateActivity ? "user_behavior" : "local_activity",
       metadata: {
         title: deal.title || "Deal",
         restaurantId,
-        sourceDetail: "active_deal_linked_to_restaurant_signals",
-        signals: buildSignalSummary(signals, {
-          viewerFavorited,
-          viewerFollows,
-          viewerRecommended,
-        }),
+        boostedByPrivateActivity,
+        sourceDetail: boostedByPrivateActivity
+          ? "private_behavior"
+          : "active_deal_linked_to_restaurant_signals",
       },
     });
   }
@@ -510,7 +533,6 @@ export async function buildLocalRecommendations(
         name: eventRow.name || "Event",
         hostId: String(eventRow.hostId || ""),
         sourceDetail: "public_events_feed",
-        signals: buildSignalSummary(undefined),
       },
     });
 
@@ -529,7 +551,6 @@ export async function buildLocalRecommendations(
           hostName: eventRow.hostName || "Host location",
           eventId,
           sourceDetail: "paid_event_slot",
-          signals: buildSignalSummary(undefined),
         },
       });
     }
