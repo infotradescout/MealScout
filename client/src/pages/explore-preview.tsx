@@ -32,6 +32,12 @@ import {
 import { useAuth } from "@/hooks/useAuth";
 import { getReverseGeocodedLocationName } from "@/utils/locationUtils";
 import { SEOHead } from "@/components/seo-head";
+import { ScoutMapHero } from "@/components/scout/ScoutMapHero";
+import { SceneOptionsBar as ScoutSceneOptionsBar } from "@/components/scout/SceneOptionsBar";
+import { ActiveScenePanel } from "@/components/scout/ActiveScenePanel";
+import { ActiveSceneIntro as ScoutActiveSceneIntro } from "@/components/scout/ActiveSceneIntro";
+import { ScoutSearchDock } from "@/components/scout/ScoutSearchDock";
+import { ScoutEmptyState as ScoutSceneEmptyState } from "@/components/scout/ScoutEmptyState";
 import {
   GoogleMapSurface,
   preloadGoogleMapsScript,
@@ -43,6 +49,7 @@ import type {
   MapBoundsLike,
 } from "@/components/maps/map-adapter.types";
 import mealScoutIcon from "@assets/meal-scout-icon.png";
+import type { ScoutSceneLane, ScoutSceneId } from "@/features/scout/scoutTypes";
 
 const ThemedScoutMap = lazy(() => import("@/components/maps/themed-scout-map"));
 
@@ -211,24 +218,7 @@ type CravingCategory = {
   image: string;
 };
 
-type ScoutSceneLaneId =
-  | "for_you"
-  | "community"
-  | "nearby_now"
-  | "food_trucks"
-  | "restaurants"
-  | "deals"
-  | "events"
-  | "new_menus"
-  | "late_night"
-  | "worth_discovering";
-
-type ScoutSceneLane = {
-  id: ScoutSceneLaneId;
-  label: string;
-  icon: "spark" | "community" | "nearby" | "truck" | "restaurant" | "deal" | "event" | "menu" | "late" | "discover";
-  cravingId: string;
-};
+type ScoutSceneLaneId = ScoutSceneId;
 
 const SCOUT_SCENE_LANES: ScoutSceneLane[] = [
   { id: "for_you", label: "For You", icon: "spark", cravingId: "something-new" },
@@ -242,6 +232,19 @@ const SCOUT_SCENE_LANES: ScoutSceneLane[] = [
   { id: "late_night", label: "Late Night", icon: "late", cravingId: "open-now" },
   { id: "worth_discovering", label: "Worth Discovering", icon: "discover", cravingId: "something-new" },
 ];
+
+function getSceneOptionIcon(icon: ScoutSceneLane["icon"]) {
+  if (icon === "spark") return <Compass className="h-3.5 w-3.5" aria-hidden="true" />;
+  if (icon === "community") return <Users className="h-3.5 w-3.5" aria-hidden="true" />;
+  if (icon === "nearby") return <Navigation2 className="h-3.5 w-3.5" aria-hidden="true" />;
+  if (icon === "truck") return <Flame className="h-3.5 w-3.5" aria-hidden="true" />;
+  if (icon === "restaurant") return <Utensils className="h-3.5 w-3.5" aria-hidden="true" />;
+  if (icon === "deal") return <Tag className="h-3.5 w-3.5" aria-hidden="true" />;
+  if (icon === "event") return <CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />;
+  if (icon === "menu") return <Bookmark className="h-3.5 w-3.5" aria-hidden="true" />;
+  if (icon === "late") return <CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />;
+  return <Heart className="h-3.5 w-3.5" aria-hidden="true" />;
+}
 
 type Daypart = "morning" | "lunch" | "afternoon" | "dinner" | "late";
 
@@ -2734,6 +2737,7 @@ export default function ExplorePreview() {
              Default: compact map accessory.
              Full map: interactive Google Map fills the viewport.
            ============================================================ */}
+        <ScoutMapHero>
         <section
           data-testid="scout-map-container"
           className={`relative overflow-hidden ${
@@ -3009,337 +3013,61 @@ export default function ExplorePreview() {
               </>
             )}
         </section>
+        </ScoutMapHero>
 
         {/* ============================================================
              LOWER SHEET — discovery sections. Hidden when fullMap.
              Touch-swipe handlers sit on a thin drag handle at the top.
            ============================================================ */}
         {sheetState !== "fullMap" && (
-          <div
-            className="relative z-10 mt-4"
-          >
-            <SceneOptionsBar
+          <ActiveScenePanel>
+            <ScoutSceneOptionsBar
+              lanes={SCOUT_SCENE_LANES}
               activeSceneLaneId={activeSceneLaneId}
               onSceneLaneSelect={handleSceneLaneChange}
+              renderIcon={getSceneOptionIcon}
             />
 
-            <ActiveSceneIntro laneId={activeSceneLaneId} />
+            <ScoutActiveSceneIntro laneId={activeSceneLaneId} />
+            <ActiveSceneContent
+              laneId={activeSceneLaneId}
+              sceneMixedFeedItems={sceneMixedFeedItems}
+              visibleMoreFoodRestaurants={visibleMoreFoodRestaurants}
+              topLocalFavoriteRestaurants={topLocalFavoriteRestaurants}
+              visibleTrucksServingNow={visibleTrucksServingNow}
+              visibleOpenRestaurants={visibleOpenRestaurants}
+              visibleDeals={visibleDeals}
+              visibleSceneEvents={visibleSceneEvents}
+              localMenuItems={localMenuItems}
+              openingLaterRestaurants={openingLaterRestaurants}
+              visibleLocalActivityItems={visibleLocalActivityItems}
+              scoutActivityMode={scoutActivityMode}
+              liveTrucksLoading={liveTrucksLoading}
+              nearbyRestaurantsLoading={nearbyRestaurantsLoading}
+              currentUserId={currentUserId}
+              isSignedIn={!!user}
+              selectLiveTruck={selectLiveTruck}
+              menuPreviewByRestaurantId={menuPreviewByRestaurantId}
+              restaurantRelationships={restaurantRelationships}
+              railSectionClass={railSectionClass}
+              compactRailSectionClass={compactRailSectionClass}
+              truckCardWidth={truckCardWidth}
+              standardCardWidth={standardCardWidth}
+              featureCardWidth={featureCardWidth}
+              laneFoodTrucksTitle={laneFoodTrucksTitle}
+              laneRestaurantsTitle={laneRestaurantsTitle}
+              laneDealsTitle={laneDealsTitle}
+              laneEventsTitle={laneEventsTitle}
+              laneMoreTitle={laneMoreTitle}
+              restaurantsRailSubtitle={restaurantsRailSubtitle}
+              eventsRailSubtitle={eventsRailSubtitle}
+              moreRailSubtitle={moreRailSubtitle}
+            />
 
-            <SceneMixedFeed items={sceneMixedFeedItems} />
-
-            {showForYouWorthFallback ? (
-              <section className={railSectionClass}>
-                <SectionHeader
-                  title="Worth Discovering"
-                  linkHref={DISCOVERY_LAYERS.restaurants.href}
-                  subtitle="New, quiet, or under-scouted spots nearby."
-                  itemCount={visibleMoreFoodRestaurants.length}
-                />
-                <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
-                  <ul className="flex gap-4 pr-5" role="list" aria-label="Worth discovering">
-                    {visibleMoreFoodRestaurants.slice(0, 10).map((r) => (
-                      <li key={`for-you-worth-${r.id}`} className={`shrink-0 ${standardCardWidth}`}>
-                        <SavedRestaurantCard restaurant={r} />
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </section>
-            ) : null}
-
-            {isHighActivity && sceneWantsNearbyNow ? (
-              <LocalActivityRail mode={scoutActivityMode} items={visibleLocalActivityItems} />
-            ) : null}
-
-            {isLowActivity &&
-            visibleLocalActivityItems.length === 0 &&
-            trucksServingNow.length === 0 &&
-            restaurantsOpenNow.length === 0 ? (
-              <QuietNearbyNotice />
-            ) : null}
-
-            {activeSceneLaneId !== "for_you" ? (
-              <FilterNearbyChips
-                selectedCraving={selectedCraving}
-                onCravingSelect={setSelectedCravingId}
-              />
-            ) : null}
-
-            {!laneHasContent ? (
-              <LaneEmptyState laneId={activeSceneLaneId} />
-            ) : null}
-
-            {/* ── FOOD TRUCKS NEARBY ── */}
-            {showFoodTrucksSection && sceneWantsFoodTrucks && !isMediumActivity && (
-              <section className={railSectionClass}>
-                <SectionHeader
-                  title={laneFoodTrucksTitle}
-                  linkHref={DISCOVERY_LAYERS.foodTrucks.href}
-                  subtitle={DISCOVERY_LAYERS.foodTrucks.subtitle}
-                  itemCount={visibleTrucksServingNow.length}
-                />
-                {liveTrucksLoading && liveTrucks.length === 0 ? (
-                  <HorizontalSkeletonRow count={3} width={isHighActivity ? 176 : 200} />
-                ) : (
-                  <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
-                    <ul className="flex gap-4 pr-5" role="list" aria-label="Food trucks near you">
-                      {visibleTrucksServingNow.slice(0, 12).map((t) => (
-                        <li key={t.id} className={`shrink-0 ${truckCardWidth}`}>
-                          <TruckCard truck={t} onSelect={selectLiveTruck} currentUserId={currentUserId} />
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </section>
-            )}
-
-            {/* ── RESTAURANTS OPEN NOW ── */}
-            {showRestaurantsSection && sceneWantsRestaurants && (
-              <section className={railSectionClass}>
-                <SectionHeader
-                  title={laneRestaurantsTitle}
-                  linkHref={DISCOVERY_LAYERS.restaurants.href}
-                  subtitle={restaurantsRailSubtitle}
-                  itemCount={visibleOpenRestaurants.length}
-                />
-                {nearbyRestaurantsLoading && visibleOpenRestaurants.length === 0 ? (
-                  <HorizontalSkeletonRow count={3} width={isHighActivity ? 190 : 200} />
-                ) : (
-                  <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
-                    <ul className="flex gap-4 pr-5" role="list" aria-label="Restaurants open now">
-                      {visibleOpenRestaurants.slice(0, 10).map((r) => (
-                        <li key={r.id} className={`shrink-0 ${standardCardWidth}`}>
-                          <NearbyRestaurantCard
-                            restaurant={r}
-                            menuPreview={
-                              menuPreviewByRestaurantId.get(String(r.id)) ?? []
-                            }
-                            isSignedIn={!!user}
-                            currentUserId={currentUserId}
-                            relationshipSnapshot={restaurantRelationships}
-                          />
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </section>
-            )}
-
-            {showFoodTrucksSection && sceneWantsFoodTrucks && isMediumActivity && (
-              <section className={railSectionClass}>
-                <SectionHeader
-                  title={laneFoodTrucksTitle}
-                  linkHref={DISCOVERY_LAYERS.foodTrucks.href}
-                  subtitle={DISCOVERY_LAYERS.foodTrucks.subtitle}
-                  itemCount={visibleTrucksServingNow.length}
-                />
-                {liveTrucksLoading && liveTrucks.length === 0 ? (
-                  <HorizontalSkeletonRow count={3} width={200} />
-                ) : (
-                  <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
-                    <ul className="flex gap-4 pr-5" role="list" aria-label="Food trucks near you">
-                      {visibleTrucksServingNow.slice(0, 12).map((t) => (
-                        <li key={t.id} className={`shrink-0 ${truckCardWidth}`}>
-                          <TruckCard truck={t} onSelect={selectLiveTruck} currentUserId={currentUserId} />
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </section>
-            )}
-
-            {showQuickUpdateBarForLane ? (
-              <QuickUpdateBar />
-            ) : null}
-
-            {sceneWantsNewMenus && localMenuItems.length > 0 ? (
-              <section className={railSectionClass}>
-                <SectionHeader
-                  title="New Menus"
-                  linkHref={DISCOVERY_LAYERS.menuItems.href}
-                  subtitle="Fresh menu items and recent local updates."
-                  itemCount={localMenuItems.length}
-                />
-                <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
-                  <ul className="flex gap-4 pr-5" role="list" aria-label="New menus">
-                    {localMenuItems.slice(0, 10).map((item, index) => (
-                      <li key={`menu-item-${item.id}`} className={`shrink-0 ${featureCardWidth}`}>
-                        <LocalMenuItemCard
-                          item={item}
-                          position={index}
-                          currentUserId={currentUserId}
-                        />
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </section>
-            ) : null}
-
-            {/* ── DEALS TODAY ── */}
-            {showDealsSection && sceneWantsDeals && (
-              <section className={railSectionClass}>
-                <SectionHeader
-                  title={laneDealsTitle}
-                  linkHref={DISCOVERY_LAYERS.deals.href}
-                  subtitle={DISCOVERY_LAYERS.deals.subtitle}
-                  itemCount={visibleDeals.length}
-                />
-                <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
-                  <ul className="flex gap-4 pr-5" role="list">
-                    {visibleDeals.slice(0, 10).map((d) => (
-                      <li key={d.id} className={`shrink-0 ${featureCardWidth}`}>
-                        <DealCard deal={d} currentUserId={currentUserId} />
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </section>
-            )}
-
-            {/* ── EVENTS TODAY ── */}
-            {showEventsSection && sceneWantsEvents && !isLowActivity && (
-              <section className={railSectionClass}>
-                <SectionHeader
-                  title={laneEventsTitle}
-                  linkHref={DISCOVERY_LAYERS.events.href}
-                  subtitle={eventsRailSubtitle}
-                  itemCount={visibleSceneEvents.length}
-                />
-                <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
-                  <ul className="flex gap-4 pr-5" role="list">
-                    {visibleSceneEvents.slice(0, 8).map((e) => (
-                      <li key={e.id} className={`shrink-0 ${featureCardWidth}`}>
-                        <EventCard event={e} currentUserId={currentUserId} />
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </section>
-            )}
-
-            {/* ── MORE FOOD NEARBY ── */}
-            {showMoreFoodSection && sceneWantsWorthDiscovering && !isLowActivity && !showForYouWorthFallback && (
-              <section className={isLowActivity ? compactRailSectionClass : railSectionClass}>
-                <SectionHeader
-                  title={laneMoreTitle}
-                  linkHref={DISCOVERY_LAYERS.restaurants.href}
-                  subtitle={moreRailSubtitle}
-                  itemCount={visibleMoreFoodRestaurants.length}
-                />
-                <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
-                  <ul className="flex gap-4 pr-5" role="list" aria-label="More nearby">
-                    {visibleMoreFoodRestaurants.slice(0, 10).map((r) => (
-                      <li key={`restaurant-${r.id}`} className={`shrink-0 ${standardCardWidth}`}>
-                        <SavedRestaurantCard restaurant={r} />
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </section>
-            )}
-
-            {showEventsSection && sceneWantsEvents && isLowActivity && (
-              <section className={railSectionClass}>
-                <SectionHeader
-                  title={laneEventsTitle}
-                  linkHref={DISCOVERY_LAYERS.events.href}
-                  subtitle={eventsRailSubtitle}
-                  itemCount={visibleSceneEvents.length}
-                />
-                <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
-                  <ul className="flex gap-4 pr-5" role="list">
-                    {visibleSceneEvents.slice(0, 8).map((e) => (
-                      <li key={e.id} className={`shrink-0 ${featureCardWidth}`}>
-                        <EventCard event={e} currentUserId={currentUserId} />
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </section>
-            )}
-
-            {showMoreFoodSection && sceneWantsWorthDiscovering && isLowActivity && !showForYouWorthFallback && (
-              <section className={compactRailSectionClass}>
-                <SectionHeader
-                  title="Worth Discovering"
-                  linkHref={DISCOVERY_LAYERS.restaurants.href}
-                  subtitle="New and under-scouted local food spots nearby."
-                  itemCount={visibleMoreFoodRestaurants.length}
-                />
-                <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
-                  <ul className="flex gap-4 pr-5" role="list" aria-label="Worth discovering">
-                    {visibleMoreFoodRestaurants.slice(0, 10).map((r) => (
-                      <li key={`restaurant-worth-${r.id}`} className={`shrink-0 ${standardCardWidth}`}>
-                        <SavedRestaurantCard restaurant={r} />
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </section>
-            )}
-
-            {isLowActivity &&
-            sceneWantsWorthDiscovering &&
-            openingLaterRestaurants.length > 0 ? (
-              <section className={compactRailSectionClass}>
-                <SectionHeader
-                  title="Opening Later"
-                  linkHref={DISCOVERY_LAYERS.restaurants.href}
-                  subtitle="Places nearby that are closed right now but worth checking soon."
-                  itemCount={openingLaterRestaurants.length}
-                />
-                <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
-                  <ul className="flex gap-4 pr-5" role="list" aria-label="Opening later">
-                    {openingLaterRestaurants.slice(0, 10).map((r) => (
-                      <li key={`restaurant-later-${r.id}`} className={`shrink-0 ${standardCardWidth}`}>
-                        <SavedRestaurantCard restaurant={r} />
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </section>
-            ) : null}
-
-            {showTopLocalFavoritesSection && sceneWantsCommunity && (
-              <section className={compactRailSectionClass}>
-                <SectionHeader
-                  title={DISCOVERY_LAYERS.localBoard.title}
-                  linkHref={DISCOVERY_LAYERS.localBoard.href}
-                  subtitle="Saved, followed, or shared by people nearby."
-                  itemCount={topLocalFavoriteRestaurants.length}
-                />
-                <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
-                  <ul className="flex gap-4 pr-5" role="list" aria-label="Top local favorites">
-                    {topLocalFavoriteRestaurants.slice(0, 10).map((restaurant) => (
-                      <li
-                        key={`local-favorite-${restaurant.id}`}
-                        className={`shrink-0 ${standardCardWidth}`}
-                      >
-                        <SavedRestaurantCard restaurant={restaurant} />
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </section>
-            )}
-
-          </div>
+          </ActiveScenePanel>
         )}
         {sheetState !== "fullMap" && (
-          <div className="fixed inset-x-4 z-40 md:mx-auto md:max-w-[608px]" style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 5.25rem)" }}>
-            <Link
-              href="/search"
-              className="flex h-12 w-full items-center justify-between rounded-full bg-[#0d0f15]/88 px-4 text-sm font-semibold text-white/85 ring-1 ring-orange-300/30 backdrop-blur-xl shadow-[0_14px_34px_rgba(0,0,0,0.42)]"
-              aria-label="Search food, places, trucks, events"
-            >
-              <span className="truncate">Search food, places, trucks, events</span>
-              <Search className="h-4 w-4 shrink-0 text-white/70" aria-hidden="true" />
-            </Link>
-          </div>
+          <ScoutSearchDock />
         )}
       </main>
 
@@ -3475,7 +3203,7 @@ function SceneOptionsBar({
   return (
     <section className="px-4 pb-4">
       <div ref={scrollerRef} className="overflow-x-auto atmo-hide-scrollbar pl-0.5">
-        <div className="flex w-max gap-2 pr-2">
+        <div className="flex w-max gap-1 pr-2">
           {SCOUT_SCENE_LANES.map((lane) => {
             const isActive = lane.id === activeSceneLaneId;
             return (
@@ -3484,7 +3212,7 @@ function SceneOptionsBar({
                 type="button"
                 onClick={() => onSceneLaneSelect(lane.id)}
                 className={[
-                  "inline-flex min-h-11 min-w-[88px] shrink-0 items-center justify-center gap-1.5 rounded-2xl px-2.5 py-2 text-[12px] font-bold ring-1 transition-colors active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/60",
+                  "inline-flex min-h-11 min-w-[76px] shrink-0 items-center justify-center gap-1 rounded-2xl px-2 py-2 text-[11px] font-bold ring-1 transition-colors active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/60",
                   isActive
                     ? "bg-[#ff7945] text-white ring-white/20 shadow-[0_10px_22px_rgba(255,121,69,0.28)]"
                     : "bg-[#11131a]/82 text-white/78 ring-white/12 hover:bg-[#171a23] hover:text-white",
@@ -3553,6 +3281,307 @@ function ActiveSceneIntro({ laneId }: { laneId: ScoutSceneLaneId }) {
         {activeCopy.subtitle}
       </p>
     </section>
+  );
+}
+
+function ActiveSceneContent({
+  laneId,
+  sceneMixedFeedItems,
+  visibleMoreFoodRestaurants,
+  topLocalFavoriteRestaurants,
+  visibleTrucksServingNow,
+  visibleOpenRestaurants,
+  visibleDeals,
+  visibleSceneEvents,
+  localMenuItems,
+  openingLaterRestaurants,
+  visibleLocalActivityItems,
+  scoutActivityMode,
+  liveTrucksLoading,
+  nearbyRestaurantsLoading,
+  currentUserId,
+  isSignedIn,
+  selectLiveTruck,
+  menuPreviewByRestaurantId,
+  restaurantRelationships,
+  railSectionClass,
+  compactRailSectionClass,
+  truckCardWidth,
+  standardCardWidth,
+  featureCardWidth,
+  laneFoodTrucksTitle,
+  laneRestaurantsTitle,
+  laneDealsTitle,
+  laneEventsTitle,
+  laneMoreTitle,
+  restaurantsRailSubtitle,
+  eventsRailSubtitle,
+  moreRailSubtitle,
+}: {
+  laneId: ScoutSceneLaneId;
+  sceneMixedFeedItems: CravingBoardItem[];
+  visibleMoreFoodRestaurants: RestaurantSummary[];
+  topLocalFavoriteRestaurants: RestaurantSummary[];
+  visibleTrucksServingNow: LiveTruckSummary[];
+  visibleOpenRestaurants: RestaurantSummary[];
+  visibleDeals: DealSummary[];
+  visibleSceneEvents: EventSummary[];
+  localMenuItems: LocalMenuItemFeedItem[];
+  openingLaterRestaurants: RestaurantSummary[];
+  visibleLocalActivityItems: LocalActivityItem[];
+  scoutActivityMode: ScoutActivityMode;
+  liveTrucksLoading: boolean;
+  nearbyRestaurantsLoading: boolean;
+  currentUserId?: string | null;
+  isSignedIn: boolean;
+  selectLiveTruck: (truck: LiveTruckSummary) => void;
+  menuPreviewByRestaurantId: Map<string, MenuPreviewItem[]>;
+  restaurantRelationships: RestaurantRelationshipSnapshot;
+  railSectionClass: string;
+  compactRailSectionClass: string;
+  truckCardWidth: string;
+  standardCardWidth: string;
+  featureCardWidth: string;
+  laneFoodTrucksTitle: string;
+  laneRestaurantsTitle: string;
+  laneDealsTitle: string;
+  laneEventsTitle: string;
+  laneMoreTitle: string;
+  restaurantsRailSubtitle?: string;
+  eventsRailSubtitle?: string;
+  moreRailSubtitle: string;
+}) {
+  if (laneId === "for_you") {
+    if (sceneMixedFeedItems.length > 0) {
+      return <SceneMixedFeed items={sceneMixedFeedItems} />;
+    }
+    if (visibleMoreFoodRestaurants.length > 0) {
+      return (
+        <section className={railSectionClass}>
+          <SectionHeader
+            title="Worth Discovering"
+            linkHref={DISCOVERY_LAYERS.restaurants.href}
+            subtitle="New, quiet, or under-scouted spots nearby."
+            itemCount={visibleMoreFoodRestaurants.length}
+          />
+          <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
+            <ul className="flex gap-4 pr-5" role="list" aria-label="Worth discovering">
+              {visibleMoreFoodRestaurants.slice(0, 10).map((r) => (
+                <li key={`for-you-worth-${r.id}`} className={`shrink-0 ${standardCardWidth}`}>
+                  <SavedRestaurantCard restaurant={r} />
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+      );
+    }
+    return <ScoutSceneEmptyState laneId="for_you" />;
+  }
+
+  if (laneId === "community") {
+    if (topLocalFavoriteRestaurants.length > 0) {
+      return (
+        <section className={compactRailSectionClass}>
+          <SectionHeader
+            title={DISCOVERY_LAYERS.localBoard.title}
+            linkHref={DISCOVERY_LAYERS.localBoard.href}
+            subtitle="Saved, followed, or shared by people nearby."
+            itemCount={topLocalFavoriteRestaurants.length}
+          />
+          <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
+            <ul className="flex gap-4 pr-5" role="list" aria-label="Top local favorites">
+              {topLocalFavoriteRestaurants.slice(0, 10).map((restaurant) => (
+                <li key={`local-favorite-${restaurant.id}`} className={`shrink-0 ${standardCardWidth}`}>
+                  <SavedRestaurantCard restaurant={restaurant} />
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+      );
+    }
+    return <ScoutSceneEmptyState laneId="community" />;
+  }
+
+  return (
+    <>
+      {laneId === "nearby_now" && visibleLocalActivityItems.length > 0 ? (
+        <LocalActivityRail mode={scoutActivityMode} items={visibleLocalActivityItems} />
+      ) : null}
+
+      {(laneId === "nearby_now" || laneId === "food_trucks") && (
+        <section className={railSectionClass}>
+          <SectionHeader
+            title={laneFoodTrucksTitle}
+            linkHref={DISCOVERY_LAYERS.foodTrucks.href}
+            subtitle={DISCOVERY_LAYERS.foodTrucks.subtitle}
+            itemCount={visibleTrucksServingNow.length}
+          />
+          {liveTrucksLoading && visibleTrucksServingNow.length === 0 ? (
+            <HorizontalSkeletonRow count={3} width={200} />
+          ) : (
+            <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
+              <ul className="flex gap-4 pr-5" role="list" aria-label="Food trucks near you">
+                {visibleTrucksServingNow.slice(0, 12).map((t) => (
+                  <li key={t.id} className={`shrink-0 ${truckCardWidth}`}>
+                    <TruckCard truck={t} onSelect={selectLiveTruck} currentUserId={currentUserId} />
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </section>
+      )}
+
+      {(laneId === "nearby_now" || laneId === "restaurants" || laneId === "late_night") && (
+        <section className={railSectionClass}>
+          <SectionHeader
+            title={laneRestaurantsTitle}
+            linkHref={DISCOVERY_LAYERS.restaurants.href}
+            subtitle={restaurantsRailSubtitle}
+            itemCount={visibleOpenRestaurants.length}
+          />
+          {nearbyRestaurantsLoading && visibleOpenRestaurants.length === 0 ? (
+            <HorizontalSkeletonRow count={3} width={200} />
+          ) : (
+            <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
+              <ul className="flex gap-4 pr-5" role="list" aria-label="Restaurants open now">
+                {visibleOpenRestaurants.slice(0, 10).map((r) => (
+                  <li key={r.id} className={`shrink-0 ${standardCardWidth}`}>
+                    <NearbyRestaurantCard
+                      restaurant={r}
+                      menuPreview={menuPreviewByRestaurantId.get(String(r.id)) ?? []}
+                      isSignedIn={isSignedIn}
+                      currentUserId={currentUserId}
+                      relationshipSnapshot={restaurantRelationships}
+                    />
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </section>
+      )}
+
+      {(laneId === "nearby_now" || laneId === "deals") && visibleDeals.length > 0 ? (
+        <section className={railSectionClass}>
+          <SectionHeader
+            title={laneDealsTitle}
+            linkHref={DISCOVERY_LAYERS.deals.href}
+            subtitle={DISCOVERY_LAYERS.deals.subtitle}
+            itemCount={visibleDeals.length}
+          />
+          <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
+            <ul className="flex gap-4 pr-5" role="list">
+              {visibleDeals.slice(0, 10).map((d) => (
+                <li key={d.id} className={`shrink-0 ${featureCardWidth}`}>
+                  <DealCard deal={d} currentUserId={currentUserId} />
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+      ) : null}
+
+      {(laneId === "nearby_now" || laneId === "events") && visibleSceneEvents.length > 0 ? (
+        <section className={railSectionClass}>
+          <SectionHeader
+            title={laneEventsTitle}
+            linkHref={DISCOVERY_LAYERS.events.href}
+            subtitle={eventsRailSubtitle}
+            itemCount={visibleSceneEvents.length}
+          />
+          <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
+            <ul className="flex gap-4 pr-5" role="list">
+              {visibleSceneEvents.slice(0, 8).map((e) => (
+                <li key={e.id} className={`shrink-0 ${featureCardWidth}`}>
+                  <EventCard event={e} currentUserId={currentUserId} />
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+      ) : null}
+
+      {laneId === "new_menus" && localMenuItems.length > 0 ? (
+        <section className={railSectionClass}>
+          <SectionHeader
+            title="New Menus"
+            linkHref={DISCOVERY_LAYERS.menuItems.href}
+            subtitle="Fresh menu items and recent local updates."
+            itemCount={localMenuItems.length}
+          />
+          <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
+            <ul className="flex gap-4 pr-5" role="list" aria-label="New menus">
+              {localMenuItems.slice(0, 10).map((item, index) => (
+                <li key={`menu-item-${item.id}`} className={`shrink-0 ${featureCardWidth}`}>
+                  <LocalMenuItemCard item={item} position={index} currentUserId={currentUserId} />
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+      ) : null}
+
+      {(laneId === "worth_discovering" || laneId === "late_night") && visibleMoreFoodRestaurants.length > 0 ? (
+        <section className={compactRailSectionClass}>
+          <SectionHeader
+            title={laneMoreTitle}
+            linkHref={DISCOVERY_LAYERS.restaurants.href}
+            subtitle={moreRailSubtitle}
+            itemCount={visibleMoreFoodRestaurants.length}
+          />
+          <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
+            <ul className="flex gap-4 pr-5" role="list" aria-label="Worth discovering">
+              {visibleMoreFoodRestaurants.slice(0, 10).map((r) => (
+                <li key={`restaurant-worth-${r.id}`} className={`shrink-0 ${standardCardWidth}`}>
+                  <SavedRestaurantCard restaurant={r} />
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+      ) : null}
+
+      {laneId === "late_night" && openingLaterRestaurants.length > 0 ? (
+        <section className={compactRailSectionClass}>
+          <SectionHeader
+            title="Opening Later"
+            linkHref={DISCOVERY_LAYERS.restaurants.href}
+            subtitle="Places nearby that are closed right now but worth checking soon."
+            itemCount={openingLaterRestaurants.length}
+          />
+          <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
+            <ul className="flex gap-4 pr-5" role="list" aria-label="Opening later">
+              {openingLaterRestaurants.slice(0, 10).map((r) => (
+                <li key={`restaurant-later-${r.id}`} className={`shrink-0 ${standardCardWidth}`}>
+                  <SavedRestaurantCard restaurant={r} />
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+      ) : null}
+
+      {((laneId === "food_trucks" && visibleTrucksServingNow.length === 0) ||
+        (laneId === "restaurants" && visibleOpenRestaurants.length === 0) ||
+        (laneId === "deals" && visibleDeals.length === 0) ||
+        (laneId === "events" && visibleSceneEvents.length === 0) ||
+        (laneId === "new_menus" && localMenuItems.length === 0) ||
+        (laneId === "late_night" &&
+          visibleOpenRestaurants.length === 0 &&
+          visibleMoreFoodRestaurants.length === 0) ||
+        (laneId === "worth_discovering" && visibleMoreFoodRestaurants.length === 0) ||
+        (laneId === "nearby_now" &&
+          visibleLocalActivityItems.length === 0 &&
+          visibleTrucksServingNow.length === 0 &&
+          visibleOpenRestaurants.length === 0 &&
+          visibleDeals.length === 0 &&
+          visibleSceneEvents.length === 0)) ? (
+        <ScoutSceneEmptyState laneId={laneId} />
+      ) : null}
+    </>
   );
 }
 
@@ -3635,7 +3664,7 @@ function SceneMixedFeedCard({ item }: { item: CravingBoardItem }) {
   );
 }
 
-function LaneEmptyState({ laneId }: { laneId: ScoutSceneLaneId }) {
+function ActiveSceneEmptyState({ laneId }: { laneId: ScoutSceneLaneId }) {
   const isForYou = laneId === "for_you";
   const title =
     isForYou
