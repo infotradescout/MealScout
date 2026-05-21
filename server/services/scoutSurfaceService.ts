@@ -45,6 +45,20 @@ type CandidateBucket = {
   moreNearby: ScoutSurfaceCard[];
 };
 
+type InitialBlendRule = {
+  broadLocalScene: number;
+  communityFavorites: number;
+  userSpecificRelevance: number;
+  newOrUnderScouted: number;
+};
+
+const INITIAL_SCOUT_BLEND: InitialBlendRule = {
+  broadLocalScene: 0.4,
+  communityFavorites: 0.3,
+  userSpecificRelevance: 0.2,
+  newOrUnderScouted: 0.1,
+};
+
 const clamp = (value: number, min: number, max: number) =>
   Math.max(min, Math.min(max, value));
 
@@ -208,6 +222,28 @@ const isRecommendationBacked = (card: ScoutSurfaceCard) => {
       reason,
     ),
   );
+};
+
+const isUserSpecificRecommendation = (card: ScoutSurfaceCard) => {
+  const reasons = card.reasons || [];
+  const metadata = (card.metadata || {}) as Record<string, unknown>;
+  const sourceDetail = String(metadata.sourceDetail || "");
+  if (sourceDetail.includes("viewer_")) return true;
+  return reasons.some((reason) =>
+    /one of your favorites|you follow this|you recommended this/i.test(reason),
+  );
+};
+
+const isUnderScoutedDiscovery = (card: ScoutSurfaceCard) => {
+  if (card.source !== "restaurant_public" && card.source !== "truck_activity") return false;
+  if (isRecommendationBacked(card)) return false;
+  const reasons = (card.reasons || []).map((reason) => reason.toLowerCase());
+  const hasHeavyMomentumReason = reasons.some((reason) =>
+    /recommended by locals|local favorite|popular nearby|strong community activity/i.test(
+      reason,
+    ),
+  );
+  return !hasHeavyMomentumReason;
 };
 
 async function getRestaurantSignals(
@@ -864,28 +900,99 @@ export async function buildScoutSurface(
     return picked;
   };
 
+  const pickBlend = (targetCount: number) => {
+    const clampCount = clamp(targetCount, 4, 12);
+    const broadTarget = Math.max(
+      1,
+      Math.round(clampCount * INITIAL_SCOUT_BLEND.broadLocalScene),
+    );
+    const communityTarget = Math.max(
+      1,
+      Math.round(clampCount * INITIAL_SCOUT_BLEND.communityFavorites),
+    );
+    const userTarget = Math.max(
+      1,
+      Math.round(clampCount * INITIAL_SCOUT_BLEND.userSpecificRelevance),
+    );
+    const discoveryTarget = Math.max(
+      1,
+      clampCount - broadTarget - communityTarget - userTarget,
+    );
+
+    const broadPool = [...cardPool.nearbyNow, ...cardPool.openNearYou].sort(
+      byScoreThenDistance,
+    );
+    const communityPool = cardPool.recommended
+      .filter(isRecommendationBacked)
+      .sort(byScoreThenDistance);
+    const userPool = communityPool
+      .filter(isUserSpecificRecommendation)
+      .sort(byScoreThenDistance);
+    const discoveryPool = [...cardPool.moreNearby, ...cardPool.openNearYou]
+      .filter(isUnderScoutedDiscovery)
+      .sort(byScoreThenDistance);
+
+    const localUsed = new Set<string>();
+    const addUnique = (from: ScoutSurfaceCard[], maxItems: number) => {
+      const picked: ScoutSurfaceCard[] = [];
+      for (const card of from) {
+        const key = `${card.entityType}:${card.entityId}`;
+        if (localUsed.has(key)) continue;
+        localUsed.add(key);
+        picked.push(card);
+        if (picked.length >= maxItems) break;
+      }
+      return picked;
+    };
+
+    const blended = [
+      ...addUnique(broadPool, broadTarget),
+      ...addUnique(communityPool, communityTarget),
+      ...addUnique(userPool, userTarget),
+      ...addUnique(discoveryPool, discoveryTarget),
+    ];
+
+    if (blended.length < clampCount) {
+      const fallbackPool = [
+        ...broadPool,
+        ...communityPool,
+        ...cardPool.trucksServing,
+        ...cardPool.dealsToday,
+        ...cardPool.happeningToday,
+        ...cardPool.moreNearby,
+      ].sort(byScoreThenDistance);
+      blended.push(...addUnique(fallbackPool, clampCount - blended.length));
+    }
+
+    return blended.slice(0, clampCount).sort(byScoreThenDistance);
+  };
+
   const sections: ScoutSurfaceSection[] = [];
+
+  {
+    const blendedCards = pickUnique(
+      pickBlend(Math.min(10, Math.max(6, Math.floor(limit * 0.6)))),
+      Math.min(10, Math.max(6, Math.floor(limit * 0.6))),
+    );
+    const rail = section(
+      "nearby-now",
+      "Nearby Now",
+      "primary",
+      "hero_cards",
+      blendedCards,
+      "Follow The Flavor",
+    );
+    if (rail) sections.push(rail);
+  }
 
   if (cardPool.trucksServing.length > 0) {
     const cards = pickUnique(cardPool.trucksServing, Math.min(8, limit));
     const rail = section(
       "trucks-serving-now",
       "Trucks Serving Now",
-      "primary",
-      "hero_cards",
+      "secondary",
+      "horizontal_cards",
       cards,
-      "Follow The Flavor",
-    );
-    if (rail) sections.push(rail);
-  } else if (cardPool.nearbyNow.length > 0) {
-    const cards = pickUnique(cardPool.nearbyNow, Math.min(8, limit));
-    const rail = section(
-      "nearby-now",
-      "Nearby Now",
-      "primary",
-      "hero_cards",
-      cards,
-      "Follow The Flavor",
     );
     if (rail) sections.push(rail);
   }
