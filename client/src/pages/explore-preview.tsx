@@ -2674,6 +2674,10 @@ export default function ExplorePreview() {
     (sceneWantsNewMenus && localMenuItems.length > 0) ||
     (sceneWantsWorthDiscovering && visibleMoreFoodRestaurants.length > 0) ||
     (sceneWantsCommunity && topLocalFavoriteRestaurants.length > 0);
+  const showForYouWorthFallback =
+    activeSceneLaneId === "for_you" &&
+    sceneMixedFeedItems.length === 0 &&
+    visibleMoreFoodRestaurants.length > 0;
   const collapsedMapSelectedMarker = useMemo(
     () =>
       sceneFilteredMapMarkers.find(
@@ -3023,6 +3027,26 @@ export default function ExplorePreview() {
 
             <SceneMixedFeed items={sceneMixedFeedItems} />
 
+            {showForYouWorthFallback ? (
+              <section className={railSectionClass}>
+                <SectionHeader
+                  title="Worth Discovering"
+                  linkHref={DISCOVERY_LAYERS.restaurants.href}
+                  subtitle="New, quiet, or under-scouted spots nearby."
+                  itemCount={visibleMoreFoodRestaurants.length}
+                />
+                <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
+                  <ul className="flex gap-4 pr-5" role="list" aria-label="Worth discovering">
+                    {visibleMoreFoodRestaurants.slice(0, 10).map((r) => (
+                      <li key={`for-you-worth-${r.id}`} className={`shrink-0 ${standardCardWidth}`}>
+                        <SavedRestaurantCard restaurant={r} />
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </section>
+            ) : null}
+
             {isHighActivity && sceneWantsNearbyNow ? (
               <LocalActivityRail mode={scoutActivityMode} items={visibleLocalActivityItems} />
             ) : null}
@@ -3198,7 +3222,7 @@ export default function ExplorePreview() {
             )}
 
             {/* ── MORE FOOD NEARBY ── */}
-            {showMoreFoodSection && sceneWantsWorthDiscovering && !isLowActivity && (
+            {showMoreFoodSection && sceneWantsWorthDiscovering && !isLowActivity && !showForYouWorthFallback && (
               <section className={isLowActivity ? compactRailSectionClass : railSectionClass}>
                 <SectionHeader
                   title={laneMoreTitle}
@@ -3238,7 +3262,7 @@ export default function ExplorePreview() {
               </section>
             )}
 
-            {showMoreFoodSection && sceneWantsWorthDiscovering && isLowActivity && (
+            {showMoreFoodSection && sceneWantsWorthDiscovering && isLowActivity && !showForYouWorthFallback && (
               <section className={compactRailSectionClass}>
                 <SectionHeader
                   title="Worth Discovering"
@@ -3431,6 +3455,10 @@ function SceneOptionsBar({
   activeSceneLaneId: ScoutSceneLaneId;
   onSceneLaneSelect: (laneId: ScoutSceneLaneId) => void;
 }) {
+  const scrollerRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    scrollerRef.current?.scrollTo({ left: 0, behavior: "auto" });
+  }, []);
   const getIcon = (icon: ScoutSceneLane["icon"]) => {
     if (icon === "spark") return <Compass className="h-3.5 w-3.5" aria-hidden="true" />;
     if (icon === "community") return <Users className="h-3.5 w-3.5" aria-hidden="true" />;
@@ -3446,7 +3474,7 @@ function SceneOptionsBar({
 
   return (
     <section className="px-4 pb-4">
-      <div className="overflow-x-auto atmo-hide-scrollbar">
+      <div ref={scrollerRef} className="overflow-x-auto atmo-hide-scrollbar pl-0.5">
         <div className="flex w-max gap-2 pr-2">
           {SCOUT_SCENE_LANES.map((lane) => {
             const isActive = lane.id === activeSceneLaneId;
@@ -3520,7 +3548,7 @@ function ActiveSceneIntro({ laneId }: { laneId: ScoutSceneLaneId }) {
   const activeCopy = laneCopy[laneId] ?? laneCopy.for_you;
   return (
     <section className="px-4 pb-3">
-      <h2 className="text-2xl font-bold tracking-tight text-white">{activeCopy.title}</h2>
+      <h2 className="font-sans text-2xl font-semibold tracking-tight text-white">{activeCopy.title}</h2>
       <p className="mt-1.5 text-sm leading-relaxed text-white/62">
         {activeCopy.subtitle}
       </p>
@@ -3760,9 +3788,9 @@ function QuietNearbyNotice() {
   return (
     <section className="px-4 pb-6">
       <div className="rounded-2xl bg-white/[0.04] px-4 py-3 text-white ring-1 ring-white/10">
-        <p className="text-sm font-black">Quiet nearby right now</p>
+        <p className="text-sm font-black">The local board is quiet right now.</p>
         <p className="mt-1 text-xs font-semibold leading-relaxed text-white/58">
-          Explore local places, upcoming events, and food options nearby.
+          Try Worth Discovering, New Menus, or widen your area.
         </p>
       </div>
     </section>
