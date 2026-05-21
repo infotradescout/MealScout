@@ -233,7 +233,7 @@ type ScoutSceneLane = {
 const SCOUT_SCENE_LANES: ScoutSceneLane[] = [
   { id: "for_you", label: "For You", icon: "spark", cravingId: "something-new" },
   { id: "community", label: "Community", icon: "community", cravingId: "something-new" },
-  { id: "nearby_now", label: "Nearby Now", icon: "nearby", cravingId: "open-now" },
+  { id: "nearby_now", label: "Today Around You", icon: "nearby", cravingId: "open-now" },
   { id: "food_trucks", label: "Food Trucks", icon: "truck", cravingId: "food-truck" },
   { id: "restaurants", label: "Restaurants", icon: "restaurant", cravingId: "sit-down" },
   { id: "deals", label: "Deals", icon: "deal", cravingId: "deals-today" },
@@ -3633,11 +3633,11 @@ function LaneEmptyState({ laneId }: { laneId: ScoutSceneLaneId }) {
     laneId === "community"
       ? "Explore nearby and save spots to help shape local favorites."
       : laneId === "deals"
-        ? "Try Nearby Now or New Menus for fresh local options."
+        ? "Try Today Around You or New Menus for fresh local options."
         : laneId === "food_trucks"
           ? "Try Restaurants, Events, or Worth Discovering."
           : laneId === "events"
-            ? "Check Nearby Now or Worth Discovering."
+            ? "Check Today Around You or Worth Discovering."
             : "Try another scene or widen your area.";
 
   return (
@@ -4968,7 +4968,7 @@ function OpenNowSection({
     return (
       <section className="pl-5 pr-0 pt-2 pb-10">
         <SectionHeader
-          title="Nearby Now"
+          title="Today Around You"
           linkHref="/truck-discovery"
           subtitle="Trucks, restaurants, bars, and pop-ups serving near you right now."
         />
@@ -4999,7 +4999,7 @@ function OpenNowSection({
     return (
       <section className="pl-5 pr-0 pt-2 pb-10">
         <SectionHeader
-          title="Nearby Now"
+          title="Today Around You"
           linkHref="/truck-discovery"
           subtitle={
             summaryBits.length > 0

@@ -976,11 +976,11 @@ export async function buildScoutSurface(
     );
     const rail = section(
       "nearby-now",
-      "Nearby Now",
+      "Today Around You",
       "primary",
       "hero_cards",
       blendedCards,
-      "Follow The Flavor",
+      undefined,
     );
     if (rail) sections.push(rail);
   }
