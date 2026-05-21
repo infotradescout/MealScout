@@ -563,6 +563,13 @@ type FreshnessMeta = {
 type MapLayerId = "openNow" | "foodTrucks" | "deals" | "happeningToday";
 
 type MapLayerState = Record<MapLayerId, boolean>;
+type ScoutSourceStatusKey =
+  | "trucks"
+  | "restaurants"
+  | "mapLocations"
+  | "deals"
+  | "events"
+  | "menus";
 
 function readStringField(source: unknown, fields: string[]): string | null {
   if (!source || typeof source !== "object") return null;
@@ -1571,6 +1578,24 @@ export default function ExplorePreview() {
     () => DAYPART_DEFAULT_INTENT[getDaypart()],
   );
   const [activeSceneLaneId, setActiveSceneLaneId] = useState<ScoutSceneLaneId>("for_you");
+  const [scoutSourceStatuses, setScoutSourceStatuses] = useState<
+    Record<ScoutSourceStatusKey, number | null>
+  >({
+    trucks: null,
+    restaurants: null,
+    mapLocations: null,
+    deals: null,
+    events: null,
+    menus: null,
+  });
+  const recordScoutSourceStatus = useCallback(
+    (key: ScoutSourceStatusKey, status: number) => {
+      setScoutSourceStatuses((current) =>
+        current[key] === status ? current : { ...current, [key]: status },
+      );
+    },
+    [],
+  );
   const userType = String((user as any)?.userType || "").toLowerCase();
   const normalizedUserType = String(userType || "").trim().toLowerCase();
   const userRoles = useMemo(() => {
@@ -1713,6 +1738,7 @@ export default function ExplorePreview() {
         `/api/trucks/live?lat=${resolvedScoutLocation.lat}&lng=${resolvedScoutLocation.lng}&radiusKm=${discoveryRadiusKm}`,
         { credentials: "include" },
       );
+      recordScoutSourceStatus("trucks", response.status);
       if (!response.ok) throw new Error("Failed to load trucks");
       return response.json();
     },
@@ -1774,6 +1800,7 @@ export default function ExplorePreview() {
       const response = await fetch(`/api/events/public`, {
         credentials: "include",
       });
+      recordScoutSourceStatus("events", response.status);
       if (!response.ok) return { events: [] };
       return response.json();
     },
@@ -1830,6 +1857,7 @@ export default function ExplorePreview() {
       const response = await fetch(`/api/map/locations?${params.toString()}`, {
         credentials: "include",
       });
+      recordScoutSourceStatus("mapLocations", response.status);
       if (!response.ok) return { hostLocations: [] };
       return response.json();
     },
@@ -1864,6 +1892,7 @@ export default function ExplorePreview() {
         `/api/restaurants/subscribed/${resolvedScoutLocation.lat}/${resolvedScoutLocation.lng}?radius=${discoveryRadiusKm}`,
         { credentials: "include" },
       );
+      recordScoutSourceStatus("restaurants", response.status);
       if (!response.ok) return [];
       return response.json();
     },
@@ -1930,6 +1959,7 @@ export default function ExplorePreview() {
         `/api/menus/local-items?lat=${resolvedScoutLocation.lat}&lng=${resolvedScoutLocation.lng}&radiusKm=${discoveryRadiusKm}&limit=24`,
         { credentials: "include" },
       );
+      recordScoutSourceStatus("menus", response.status);
       if (!response.ok) return [];
       const data = await response.json();
       return Array.isArray(data?.items) ? data.items : [];
@@ -2017,6 +2047,7 @@ export default function ExplorePreview() {
         `/api/deals/nearby/${resolvedScoutLocation.lat}/${resolvedScoutLocation.lng}?radius=${discoveryRadiusKm}`,
         { credentials: "include" },
       );
+      recordScoutSourceStatus("deals", response.status);
       if (!response.ok) return [];
       const data = await response.json();
       if (Array.isArray(data)) return data;
@@ -2247,6 +2278,53 @@ export default function ExplorePreview() {
     () => [...truckMarkers, ...restaurantMarkers, ...eventMarkers, ...hostMarkers, ...dealMarkers],
     [truckMarkers, restaurantMarkers, eventMarkers, hostMarkers, dealMarkers],
   );
+
+  const scoutDebugCounts = useMemo(() => {
+    const rawLiveTruckRows = Array.isArray(liveTrucksData)
+      ? liveTrucksData
+      : Array.isArray(liveTrucksData?.trucks)
+        ? liveTrucksData.trucks
+        : [];
+    const rawRestaurantRows = Array.isArray(nearbyRestaurantsData) ? nearbyRestaurantsData : [];
+    const rawHostRows = Array.isArray(mapLocationsData?.hostLocations) ? mapLocationsData.hostLocations : [];
+    const rawEventRows = Array.isArray(events) ? events : [];
+    const rawDealRows = Array.isArray(nearbyDeals) ? nearbyDeals : [];
+
+    const hasCoords = (row: unknown) =>
+      readNumberField(row, ["latitude", "lat", "venueLat", "restaurantLatitude", "locationLat"]) !== null &&
+      readNumberField(row, ["longitude", "lng", "venueLng", "restaurantLongitude", "locationLng"]) !== null;
+
+    const pinsByKind = allMapMarkers.reduce<Record<string, number>>((acc, marker) => {
+      acc[marker.kind] = (acc[marker.kind] || 0) + 1;
+      return acc;
+    }, {});
+
+    return {
+      trucksReturned: rawLiveTruckRows.length,
+      trucksMissingCoords: rawLiveTruckRows.filter((row) => !hasCoords(row)).length,
+      trucksShown: scoutTruckInventory.length,
+      restaurantsReturned: rawRestaurantRows.length,
+      restaurantsMissingCoords: rawRestaurantRows.filter((row) => !hasCoords(row)).length,
+      hostsReturned: rawHostRows.length,
+      hostsMissingCoords: rawHostRows.filter((row) => !hasCoords(row)).length,
+      hostsShown: visibleHosts.length,
+      eventsReturned: rawEventRows.length,
+      eventsMissingCoords: rawEventRows.filter((row) => !hasCoords(row)).length,
+      dealsReturned: rawDealRows.length,
+      dealsMissingCoords: rawDealRows.filter((row) => !hasCoords(row)).length,
+      mapPinsBuilt: allMapMarkers.length,
+      mapPinsByKind: pinsByKind,
+    };
+  }, [
+    allMapMarkers,
+    events,
+    liveTrucksData,
+    mapLocationsData,
+    nearbyDeals,
+    nearbyRestaurantsData,
+    scoutTruckInventory.length,
+    visibleHosts.length,
+  ]);
 
   const [activeMapLayers, setActiveMapLayers] = useState<MapLayerState>({
     openNow: true,
@@ -2811,19 +2889,33 @@ export default function ExplorePreview() {
   useEffect(() => {
     if (!showScoutPreviewDebug) return;
     console.info("[scout-preview-counts]", {
-      trucksReturned: scoutTruckInventory.length,
-      hostsReturned: visibleHosts.length,
-      eventsReturned: visibleEvents.length,
-      restaurantsReturned: nearbyRestaurants.length,
-      mapPinsBuilt: sceneFilteredMapMarkers.length,
+      ...scoutDebugCounts,
+      visibleScenePins: sceneFilteredMapMarkers.length,
+      statuses: scoutSourceStatuses,
     });
   }, [
-    nearbyRestaurants.length,
     sceneFilteredMapMarkers.length,
-    scoutTruckInventory.length,
+    scoutDebugCounts,
+    scoutSourceStatuses,
     showScoutPreviewDebug,
-    visibleEvents.length,
-    visibleHosts.length,
+  ]);
+  useEffect(() => {
+    if (!showScoutPreviewDebug) return;
+    const dropped = {
+      trucks: scoutDebugCounts.trucksMissingCoords,
+      restaurants: scoutDebugCounts.restaurantsMissingCoords,
+      hosts: scoutDebugCounts.hostsMissingCoords,
+      events: scoutDebugCounts.eventsMissingCoords,
+      deals: scoutDebugCounts.dealsMissingCoords,
+    };
+    const hasDrops = Object.values(dropped).some((count) => count > 0);
+    if (hasDrops) {
+      console.warn("[scout-preview-dropped-missing-coords]", dropped);
+    }
+  }, [
+    scoutDebugCounts,
+    sceneFilteredMapMarkers.length,
+    showScoutPreviewDebug,
   ]);
   const visibleLocalActivityItems = useMemo(() => {
     const uniqueKeys = new Set<string>();
@@ -3313,7 +3405,17 @@ export default function ExplorePreview() {
                   ) : null}
                   {showScoutPreviewDebug ? (
                     <p className="mb-1 text-[10px] font-bold text-white/75">
-                      preview eligible:{String(isScoutPreviewEligible)} city:{scoutPreviewCity || "none"} active:{String(isPensacolaScoutPreview)} loc:{resolvedScoutLocation ? `${resolvedScoutLocation.label} ${resolvedScoutLocation.lat.toFixed(4)},${resolvedScoutLocation.lng.toFixed(4)}` : "none"} trucks:{scoutTruckInventory.length} hosts:{visibleHosts.length} events:{visibleEvents.length} restaurants:{nearbyRestaurants.length} pins:{sceneFilteredMapMarkers.length}
+                      preview eligible:{String(isScoutPreviewEligible)} city:{scoutPreviewCity || "none"} active:{String(isPensacolaScoutPreview)} loc:{resolvedScoutLocation ? `${resolvedScoutLocation.label} ${resolvedScoutLocation.lat.toFixed(4)},${resolvedScoutLocation.lng.toFixed(4)}` : "none"} status[t:{scoutSourceStatuses.trucks ?? "-"} r:{scoutSourceStatuses.restaurants ?? "-"} h:{scoutSourceStatuses.mapLocations ?? "-"} d:{scoutSourceStatuses.deals ?? "-"} e:{scoutSourceStatuses.events ?? "-"}] counts[t:{scoutDebugCounts.trucksReturned} h:{scoutDebugCounts.hostsReturned} e:{scoutDebugCounts.eventsReturned} r:{scoutDebugCounts.restaurantsReturned} pins:{scoutDebugCounts.mapPinsBuilt}]
+                    </p>
+                  ) : null}
+                  {showScoutPreviewDebug &&
+                  (scoutDebugCounts.trucksMissingCoords > 0 ||
+                    scoutDebugCounts.hostsMissingCoords > 0 ||
+                    scoutDebugCounts.restaurantsMissingCoords > 0 ||
+                    scoutDebugCounts.eventsMissingCoords > 0 ||
+                    scoutDebugCounts.dealsMissingCoords > 0) ? (
+                    <p className="mb-1 text-[10px] font-semibold text-amber-200/85">
+                      dropped missing coords - trucks:{scoutDebugCounts.trucksMissingCoords} hosts:{scoutDebugCounts.hostsMissingCoords} restaurants:{scoutDebugCounts.restaurantsMissingCoords} events:{scoutDebugCounts.eventsMissingCoords} deals:{scoutDebugCounts.dealsMissingCoords}
                     </p>
                   ) : null}
                   <p className="truncate text-sm font-extrabold text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.7)]">
