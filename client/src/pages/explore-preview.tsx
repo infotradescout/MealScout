@@ -152,6 +152,24 @@ interface EventSummary {
 }
 
 type EventsResponse = { events?: EventSummary[] } | EventSummary[] | null;
+
+interface ScoutHostLocation {
+  id?: string | null;
+  hostId?: string | null;
+  businessName?: string | null;
+  name?: string | null;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  latitude?: number | string | null;
+  longitude?: number | string | null;
+}
+
+type MapLocationsResponse = {
+  hostLocations?: ScoutHostLocation[];
+  eventLocations?: unknown[];
+  supplierLocations?: unknown[];
+} | null;
 interface RestaurantSummary {
   id: string;
   businessName?: string | null;
@@ -843,6 +861,33 @@ function formatDistance(truck: LiveTruckSummary): string | null {
 function formatMiles(value?: number | null): string | null {
   if (typeof value !== "number" || !Number.isFinite(value)) return null;
   return `${value.toFixed(value < 10 ? 1 : 0)} mi`;
+}
+
+function readNumberField(source: unknown, fields: string[]): number | null {
+  if (!source || typeof source !== "object") return null;
+  const record = source as Record<string, unknown>;
+  for (const field of fields) {
+    const value = record[field];
+    const parsed = typeof value === "string" ? Number(value) : value;
+    if (typeof parsed === "number" && Number.isFinite(parsed)) return parsed;
+  }
+  return null;
+}
+
+function getBoundsForScoutLocation(
+  location: { lat: number; lng: number },
+  radiusKm: number,
+) {
+  const latDelta = radiusKm / 111.32;
+  const lngDelta =
+    radiusKm /
+    (111.32 * Math.max(Math.cos((location.lat * Math.PI) / 180), 0.2));
+  return {
+    north: location.lat + latDelta,
+    south: location.lat - latDelta,
+    east: location.lng + lngDelta,
+    west: location.lng - lngDelta,
+  };
 }
 
 function getDistanceMiles(
@@ -1753,6 +1798,59 @@ export default function ExplorePreview() {
     );
   }, [resolvedScoutCoords, discoveryRadiusKm, events]);
 
+  const mapBoundsForScout = useMemo(
+    () =>
+      resolvedScoutLocation
+        ? getBoundsForScoutLocation(resolvedScoutLocation, discoveryRadiusKm)
+        : null,
+    [resolvedScoutLocation, discoveryRadiusKm],
+  );
+
+  const { data: mapLocationsData } = useQuery<MapLocationsResponse>({
+    queryKey: mapBoundsForScout
+      ? [
+          "/api/map/locations",
+          mapBoundsForScout.north,
+          mapBoundsForScout.south,
+          mapBoundsForScout.east,
+          mapBoundsForScout.west,
+          discoveryRadiusKm,
+        ]
+      : ["/api/map/locations", "no-bounds"],
+    enabled: !!mapBoundsForScout,
+    queryFn: async () => {
+      if (!mapBoundsForScout) return { hostLocations: [] };
+      const params = new URLSearchParams({
+        north: String(mapBoundsForScout.north),
+        south: String(mapBoundsForScout.south),
+        east: String(mapBoundsForScout.east),
+        west: String(mapBoundsForScout.west),
+        zoom: "13",
+      });
+      const response = await fetch(`/api/map/locations?${params.toString()}`, {
+        credentials: "include",
+      });
+      if (!response.ok) return { hostLocations: [] };
+      return response.json();
+    },
+    staleTime: 45_000,
+    retry: false,
+  });
+
+  const visibleHosts = useMemo<ScoutHostLocation[]>(() => {
+    const rows = Array.isArray(mapLocationsData?.hostLocations)
+      ? mapLocationsData.hostLocations
+      : [];
+    return rows.filter((host) =>
+      isWithinScoutRadius(
+        resolvedScoutCoords,
+        readNumberField(host, ["latitude", "lat"]),
+        readNumberField(host, ["longitude", "lng"]),
+        discoveryRadiusKm,
+      ),
+    );
+  }, [discoveryRadiusKm, mapLocationsData, resolvedScoutCoords]);
+
   /* --------- nearby restaurants --------- */
 
   const { data: nearbyRestaurantsData, isLoading: nearbyRestaurantsLoading } = useQuery<RestaurantSummary[]>({
@@ -1944,14 +2042,56 @@ export default function ExplorePreview() {
     return merged;
   }, [nearbyDeals]);
 
+  const fallbackTruckBusinesses = useMemo<LiveTruckSummary[]>(
+    () =>
+      nearbyRestaurants
+        .filter((restaurant) =>
+          readBooleanField(restaurant, ["isFoodTruck", "foodTruck", "isTruck"]) === true,
+        )
+        .map((restaurant) => ({
+          id: String(restaurant.id),
+          name: getRestaurantName(restaurant),
+          cuisineType: restaurant.cuisineType ?? null,
+          imageUrl:
+            restaurant.imageUrl ?? restaurant.coverImageUrl ?? restaurant.heroImageUrl ?? restaurant.logoUrl ?? null,
+          coverImageUrl: restaurant.coverImageUrl ?? restaurant.heroImageUrl ?? restaurant.imageUrl ?? null,
+          logoUrl: restaurant.logoUrl ?? null,
+          city: restaurant.city ?? null,
+          state: restaurant.state ?? null,
+          address: restaurant.address ?? null,
+          latitude: restaurant.latitude ?? restaurant.lat ?? null,
+          longitude: restaurant.longitude ?? restaurant.lng ?? null,
+          distanceMiles: restaurant.distanceMiles ?? null,
+          distance:
+            typeof restaurant.distance === "number"
+              ? restaurant.distance
+              : typeof restaurant.distanceMiles === "number"
+                ? restaurant.distanceMiles * 1.609344
+                : null,
+          mobileOnline: false,
+          activeDealCount: Number(restaurant.activeDealsCount || restaurant.activeDealCount || 0),
+        })),
+    [nearbyRestaurants],
+  );
+
+  const scoutTruckInventory = useMemo(() => {
+    const byId = new Map<string, LiveTruckSummary>();
+    liveTrucks.forEach((truck) => byId.set(String(truck.id), truck));
+    fallbackTruckBusinesses.forEach((truck) => {
+      if (!byId.has(String(truck.id))) byId.set(String(truck.id), truck);
+    });
+    return Array.from(byId.values());
+  }, [fallbackTruckBusinesses, liveTrucks]);
+
   /* --------- markers for the hero map --------- */
 
   const truckMarkers = useMemo<MapAdapterMarker[]>(() => {
-    return liveTrucks
+    return scoutTruckInventory
       .map((t) => {
         const lat = t.latitude ?? t.lat;
         const lng = t.longitude ?? t.lng;
         if (typeof lat !== "number" || typeof lng !== "number") return null;
+        const isServing = isTruckServingNow(t);
         return {
           id: String(t.id),
           sourceId: String(t.id),
@@ -1965,22 +2105,22 @@ export default function ExplorePreview() {
             confirmedAt: readStringField(t, ["confirmedAt", "lastConfirmedAt"]),
             hasDeal: Boolean(t.activeDealCount && t.activeDealCount > 0),
             hasDistance: Boolean(formatDistance(t)),
-            isOpen: true,
+            isOpen: isServing,
           }),
           color: getMapMarkerColor({
             kind: "truck",
             hasDeal: Boolean(t.activeDealCount && t.activeDealCount > 0),
-            isOpen: true,
+            isOpen: isServing,
           }),
         } as MapAdapterMarker;
       })
       .filter((m): m is MapAdapterMarker => m !== null);
-  }, [liveTrucks]);
+  }, [scoutTruckInventory]);
   const liveTruckById = useMemo(() => {
     const map = new Map<string, LiveTruckSummary>();
-    for (const truck of liveTrucks) map.set(String(truck.id), truck);
+    for (const truck of scoutTruckInventory) map.set(String(truck.id), truck);
     return map;
-  }, [liveTrucks]);
+  }, [scoutTruckInventory]);
 
   const restaurantMarkers = useMemo<MapAdapterMarker[]>(() => {
     return nearbyRestaurants
@@ -2043,10 +2183,69 @@ export default function ExplorePreview() {
       .filter((m): m is MapAdapterMarker => m !== null);
   }, [visibleEvents]);
 
+  const hostMarkers = useMemo<MapAdapterMarker[]>(() => {
+    return visibleHosts
+      .map((host) => {
+        const lat = readNumberField(host, ["latitude", "lat"]);
+        const lng = readNumberField(host, ["longitude", "lng"]);
+        if (lat === null || lng === null) return null;
+        return {
+          id: `host-${host.hostId || host.id}`,
+          sourceId: String(host.hostId || host.id || ""),
+          kind: "parking" as const,
+          lat,
+          lng,
+          title: host.businessName || host.name || "Host location",
+          subtitle: getMapMarkerSubtitle("Host", {
+            kind: "event",
+            updatedAt: readStringField(host, ["updatedAt", "lastUpdatedAt"]),
+            confirmedAt: readStringField(host, ["confirmedAt", "lastConfirmedAt"]),
+          }),
+          color: "#f59e0b",
+        } as MapAdapterMarker;
+      })
+      .filter((m): m is MapAdapterMarker => Boolean(m && m.sourceId));
+  }, [visibleHosts]);
+
+  const dealMarkers = useMemo<MapAdapterMarker[]>(() => {
+    return nearbyDeals
+      .map((deal) => {
+        const lat = readNumberField(deal, [
+          "latitude",
+          "lat",
+          "restaurantLatitude",
+          "restaurantLat",
+          "locationLat",
+        ]);
+        const lng = readNumberField(deal, [
+          "longitude",
+          "lng",
+          "restaurantLongitude",
+          "restaurantLng",
+          "locationLng",
+        ]);
+        if (lat === null || lng === null) return null;
+        return {
+          id: `deal-${deal.id}`,
+          sourceId: String(deal.id),
+          kind: "deal" as const,
+          lat,
+          lng,
+          title: deal.title || "Deal today",
+          subtitle: getMapMarkerSubtitle(deal.restaurantName || "Nearby", {
+            kind: "deal",
+            hasDeal: true,
+          }),
+          color: "#fb923c",
+        } as MapAdapterMarker;
+      })
+      .filter((m): m is MapAdapterMarker => Boolean(m));
+  }, [nearbyDeals]);
+
   // Combined markers for the full Google Map view
   const allMapMarkers = useMemo<MapAdapterMarker[]>(
-    () => [...truckMarkers, ...restaurantMarkers, ...eventMarkers],
-    [truckMarkers, restaurantMarkers, eventMarkers],
+    () => [...truckMarkers, ...restaurantMarkers, ...eventMarkers, ...hostMarkers, ...dealMarkers],
+    [truckMarkers, restaurantMarkers, eventMarkers, hostMarkers, dealMarkers],
   );
 
   const [activeMapLayers, setActiveMapLayers] = useState<MapLayerState>({
@@ -2060,6 +2259,8 @@ export default function ExplorePreview() {
     return allMapMarkers.filter((marker) => {
       if (marker.kind === "truck") return activeMapLayers.foodTrucks && activeMapLayers.openNow;
       if (marker.kind === "event") return activeMapLayers.happeningToday;
+      if (marker.kind === "parking") return activeMapLayers.happeningToday;
+      if (marker.kind === "deal") return activeMapLayers.deals;
       if (marker.kind === "restaurant") {
         const restaurant = nearbyRestaurants.find((item) => String(item.id) === String(marker.sourceId));
         const hasDeal = Boolean(
@@ -2076,21 +2277,21 @@ export default function ExplorePreview() {
   const sceneFilteredMapMarkers = useMemo<MapAdapterMarker[]>(() => {
     if (activeSceneLaneId === "for_you") return filteredMapMarkers;
     if (activeSceneLaneId === "community")
-      return filteredMapMarkers.filter((marker) => marker.kind === "restaurant" || marker.kind === "truck");
+      return filteredMapMarkers.filter((marker) => marker.kind === "restaurant" || marker.kind === "truck" || marker.kind === "parking");
     if (activeSceneLaneId === "nearby_now")
-      return filteredMapMarkers.filter((marker) => marker.kind === "truck" || marker.kind === "restaurant");
+      return filteredMapMarkers.filter((marker) => marker.kind === "truck" || marker.kind === "restaurant" || marker.kind === "parking");
     if (activeSceneLaneId === "food_trucks")
       return filteredMapMarkers.filter((marker) => marker.kind === "truck");
     if (activeSceneLaneId === "restaurants")
       return filteredMapMarkers.filter((marker) => marker.kind === "restaurant");
     if (activeSceneLaneId === "deals")
-      return filteredMapMarkers.filter((marker) => marker.kind === "restaurant");
+      return filteredMapMarkers.filter((marker) => marker.kind === "restaurant" || marker.kind === "deal");
     if (activeSceneLaneId === "events")
-      return filteredMapMarkers.filter((marker) => marker.kind === "event");
+      return filteredMapMarkers.filter((marker) => marker.kind === "event" || marker.kind === "parking");
     if (activeSceneLaneId === "new_menus")
       return filteredMapMarkers.filter((marker) => marker.kind === "restaurant" || marker.kind === "truck");
     if (activeSceneLaneId === "late_night")
-      return filteredMapMarkers.filter((marker) => marker.kind === "restaurant" || marker.kind === "event");
+      return filteredMapMarkers.filter((marker) => marker.kind === "restaurant" || marker.kind === "event" || marker.kind === "parking");
     if (activeSceneLaneId === "worth_discovering")
       return filteredMapMarkers.filter((marker) => marker.kind === "restaurant" || marker.kind === "truck");
     return filteredMapMarkers;
@@ -2291,7 +2492,7 @@ export default function ExplorePreview() {
         }
         navigate(`/truck/${marker.sourceId}`);
       }
-      else if (marker.kind === "restaurant" || marker.kind === "event") {
+      else if (marker.kind === "restaurant" || marker.kind === "event" || marker.kind === "parking" || marker.kind === "deal") {
         setSelectedLiveTruck(null);
         setSelectedMapMarker(marker);
         setMapCenter({ lat: marker.lat, lng: marker.lng });
@@ -2406,8 +2607,12 @@ export default function ExplorePreview() {
   const currentUserId = getCurrentUserId(user);
   const showQuickUpdateBar = isFoodOperator(user);
   const trucksServingNow = useMemo(
-    () => liveTrucks.filter(isTruckServingNow),
-    [liveTrucks],
+    () => scoutTruckInventory.filter(isTruckServingNow),
+    [scoutTruckInventory],
+  );
+  const trucksNearByStatus = useMemo(
+    () => scoutTruckInventory.filter((truck) => !isTruckServingNow(truck)),
+    [scoutTruckInventory],
   );
   const restaurantsOpenNow = useMemo(
     () => nearbyRestaurants.filter((restaurant) => getRestaurantOpenState(restaurant) === "open"),
@@ -2418,11 +2623,12 @@ export default function ExplorePreview() {
     [nearbyRestaurants],
   );
 
-  const showFoodTrucksSection = liveTrucksLoading || trucksServingNow.length > 0;
+  const showFoodTrucksSection =
+    liveTrucksLoading || trucksServingNow.length > 0 || trucksNearByStatus.length > 0;
   const showRestaurantsSection =
     nearbyRestaurantsLoading || restaurantsOpenNow.length > 0;
   const showDealsSection = allDeals.length > 0;
-  const showEventsSection = visibleEvents.length > 0;
+  const showEventsSection = visibleEvents.length > 0 || visibleHosts.length > 0;
   const sceneWantsCommunity =
     activeSceneLaneId === "community" || activeSceneLaneId === "for_you";
   const sceneWantsNearbyNow =
@@ -2446,11 +2652,12 @@ export default function ExplorePreview() {
     activeSceneLaneId === "for_you" ||
     activeSceneLaneId === "new_menus";
   const localActivityCount =
-    liveTrucks.length +
+    scoutTruckInventory.length +
     localMenuItems.length +
     nearbyRestaurants.length +
     allDeals.length +
-    visibleEvents.length;
+    visibleEvents.length +
+    visibleHosts.length;
   const nearbyRestaurantsTitle = DISCOVERY_LAYERS.restaurants.title;
   const nearbyRestaurantsSubtitle = DISCOVERY_LAYERS.restaurants.subtitle;
 
@@ -2601,6 +2808,23 @@ export default function ExplorePreview() {
       visibleEvents.length,
     ],
   );
+  useEffect(() => {
+    if (!showScoutPreviewDebug) return;
+    console.info("[scout-preview-counts]", {
+      trucksReturned: scoutTruckInventory.length,
+      hostsReturned: visibleHosts.length,
+      eventsReturned: visibleEvents.length,
+      restaurantsReturned: nearbyRestaurants.length,
+      mapPinsBuilt: sceneFilteredMapMarkers.length,
+    });
+  }, [
+    nearbyRestaurants.length,
+    sceneFilteredMapMarkers.length,
+    scoutTruckInventory.length,
+    showScoutPreviewDebug,
+    visibleEvents.length,
+    visibleHosts.length,
+  ]);
   const visibleLocalActivityItems = useMemo(() => {
     const uniqueKeys = new Set<string>();
     const uniqueItems = localActivityItems.filter((item) => {
@@ -2630,8 +2854,10 @@ export default function ExplorePreview() {
     const filtered = trucksServingNow.filter(
       (truck) => !featuredTruckIds.has(String(truck.id)),
     );
-    return filtered.length > 0 ? filtered : trucksServingNow;
-  }, [featuredTruckIds, trucksServingNow]);
+    if (filtered.length > 0) return filtered;
+    if (trucksServingNow.length > 0) return trucksServingNow;
+    return trucksNearByStatus;
+  }, [featuredTruckIds, trucksNearByStatus, trucksServingNow]);
   const visibleDeals = useMemo(() => {
     const filtered = allDeals.filter((deal) => !featuredDealIds.has(String(deal.id)));
     return filtered.length > 0 ? filtered : allDeals;
@@ -3087,7 +3313,7 @@ export default function ExplorePreview() {
                   ) : null}
                   {showScoutPreviewDebug ? (
                     <p className="mb-1 text-[10px] font-bold text-white/75">
-                      preview eligible:{String(isScoutPreviewEligible)} city:{scoutPreviewCity || "none"} active:{String(isPensacolaScoutPreview)} loc:{resolvedScoutLocation ? `${resolvedScoutLocation.label} ${resolvedScoutLocation.lat.toFixed(4)},${resolvedScoutLocation.lng.toFixed(4)}` : "none"}
+                      preview eligible:{String(isScoutPreviewEligible)} city:{scoutPreviewCity || "none"} active:{String(isPensacolaScoutPreview)} loc:{resolvedScoutLocation ? `${resolvedScoutLocation.label} ${resolvedScoutLocation.lat.toFixed(4)},${resolvedScoutLocation.lng.toFixed(4)}` : "none"} trucks:{scoutTruckInventory.length} hosts:{visibleHosts.length} events:{visibleEvents.length} restaurants:{nearbyRestaurants.length} pins:{sceneFilteredMapMarkers.length}
                     </p>
                   ) : null}
                   <p className="truncate text-sm font-extrabold text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.7)]">
@@ -3132,6 +3358,7 @@ export default function ExplorePreview() {
               visibleOpenRestaurants={visibleOpenRestaurants}
               visibleDeals={visibleDeals}
               visibleSceneEvents={visibleSceneEvents}
+              visibleHosts={visibleHosts}
               localMenuItems={localMenuItems}
               openingLaterRestaurants={openingLaterRestaurants}
               visibleLocalActivityItems={visibleLocalActivityItems}
@@ -3387,6 +3614,7 @@ function ActiveSceneContent({
   visibleOpenRestaurants,
   visibleDeals,
   visibleSceneEvents,
+  visibleHosts,
   localMenuItems,
   openingLaterRestaurants,
   visibleLocalActivityItems,
@@ -3420,6 +3648,7 @@ function ActiveSceneContent({
   visibleOpenRestaurants: RestaurantSummary[];
   visibleDeals: DealSummary[];
   visibleSceneEvents: EventSummary[];
+  visibleHosts: ScoutHostLocation[];
   localMenuItems: LocalMenuItemFeedItem[];
   openingLaterRestaurants: RestaurantSummary[];
   visibleLocalActivityItems: LocalActivityItem[];
@@ -3655,6 +3884,26 @@ function ActiveSceneContent({
         </section>
       ) : null}
 
+      {(laneId === "nearby_now" || laneId === "events") && visibleHosts.length > 0 ? (
+        <section className={compactRailSectionClass}>
+          <SectionHeader
+            title="Event Hosts Nearby"
+            linkHref="/parking-pass"
+            subtitle="Host and event locations with real map coordinates."
+            itemCount={visibleHosts.length}
+          />
+          <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
+            <ul className="flex gap-4 pr-5" role="list" aria-label="Event hosts nearby">
+              {visibleHosts.slice(0, 10).map((host) => (
+                <li key={`host-${host.hostId || host.id}`} className={`shrink-0 ${standardCardWidth}`}>
+                  <HostLocationCard host={host} />
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+      ) : null}
+
       {laneId === "new_menus" && localMenuItems.length > 0 ? (
         <section className={railSectionClass}>
           <SectionHeader
@@ -3718,7 +3967,7 @@ function ActiveSceneContent({
       {((laneId === "food_trucks" && visibleTrucksServingNow.length === 0) ||
         (laneId === "restaurants" && visibleOpenRestaurants.length === 0) ||
         (laneId === "deals" && visibleDeals.length === 0) ||
-        (laneId === "events" && visibleSceneEvents.length === 0) ||
+        (laneId === "events" && visibleSceneEvents.length === 0 && visibleHosts.length === 0) ||
         (laneId === "new_menus" && localMenuItems.length === 0) ||
         (laneId === "late_night" &&
           visibleOpenRestaurants.length === 0 &&
@@ -3729,7 +3978,8 @@ function ActiveSceneContent({
           visibleTrucksServingNow.length === 0 &&
           visibleOpenRestaurants.length === 0 &&
           visibleDeals.length === 0 &&
-          visibleSceneEvents.length === 0)) ? (
+          visibleSceneEvents.length === 0 &&
+          visibleHosts.length === 0)) ? (
         <ScoutSceneEmptyState laneId={laneId} />
       ) : null}
     </>
@@ -3812,6 +4062,44 @@ function SceneMixedFeedCard({ item }: { item: CravingBoardItem }) {
         View
       </span>
     </Link>
+  );
+}
+
+function HostLocationCard({ host }: { host: ScoutHostLocation }) {
+  const hostName = host.businessName || host.name || "Host location";
+  const area = [host.city, host.state].filter(Boolean).join(", ");
+  const lat = readNumberField(host, ["latitude", "lat"]);
+  const lng = readNumberField(host, ["longitude", "lng"]);
+  const routeUrl =
+    typeof lat === "number" && typeof lng === "number"
+      ? `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`
+      : null;
+  const hostId = String(host.hostId || host.id || "").trim();
+  const hostHref = hostId ? `/parking-pass?hostId=${encodeURIComponent(hostId)}` : "/parking-pass";
+  return (
+    <div className="rounded-2xl overflow-hidden bg-white/5 ring-1 ring-white/10 p-3">
+      <p className="text-[10px] font-black uppercase tracking-[0.12em] text-orange-200/75">Host</p>
+      <p className="mt-1 truncate text-sm font-semibold text-white">{hostName}</p>
+      <p className="mt-0.5 truncate text-xs text-white/65">{area || "Nearby location"}</p>
+      <div className="mt-2 flex items-center gap-2">
+        <Link
+          href={hostHref}
+          className="rounded-full bg-orange-500 px-2.5 py-1 text-[10px] font-bold text-[#160904]"
+        >
+          View Host
+        </Link>
+        {routeUrl ? (
+          <a
+            href={routeUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="rounded-full bg-white/10 px-2.5 py-1 text-[10px] font-bold text-white ring-1 ring-white/20"
+          >
+            Route
+          </a>
+        ) : null}
+      </div>
+    </div>
   );
 }
 
@@ -3989,12 +4277,20 @@ function CollapsedMapPinCard({
       ? `/truck/${marker.sourceId}`
       : marker.kind === "restaurant"
         ? `/restaurant/${marker.sourceId}`
+        : marker.kind === "deal"
+          ? "/deals-featured"
+        : marker.kind === "parking"
+          ? `/parking-pass?hostId=${encodeURIComponent(String(marker.sourceId))}`
         : "/events";
   const status =
     marker.kind === "truck"
       ? "Food truck"
       : marker.kind === "restaurant"
         ? "Open place"
+        : marker.kind === "deal"
+          ? "Deal today"
+        : marker.kind === "parking"
+          ? "Event host"
         : "Event";
   const computedDistance =
     userLocation &&
@@ -4337,6 +4633,18 @@ function LiveTruckCard({
   };
   const badges = getOperationalBadges(freshnessMeta).slice(0, 3);
   const canEdit = isOwnedByCurrentUser(truck, currentUserId);
+  const truckStatusLabel = (() => {
+    if (isTruckServingNow(truck)) return "Posted up now";
+    const status = readStringField(truck, ["serviceStatus", "status", "operatingStatus"]);
+    if (status) {
+      const normalized = status.toLowerCase();
+      if (normalized.includes("scheduled")) return "Scheduled";
+      if (normalized.includes("claim")) return "Claimed truck";
+      if (normalized.includes("serving area")) return "Serving area";
+    }
+    return "Serving area";
+  })();
+  const truckStatusClass = isTruckServingNow(truck) ? "bg-red-500/90" : "bg-amber-500/90";
   const actions = canEdit
     ? [
         {
@@ -5433,14 +5741,26 @@ function MapPlaceCard({
   const destination =
     marker.kind === "restaurant"
       ? `/restaurant/${marker.sourceId}`
+      : marker.kind === "deal"
+        ? "/deals-featured"
+      : marker.kind === "parking"
+        ? `/parking-pass?hostId=${encodeURIComponent(String(marker.sourceId))}`
       : "/events";
   const label =
     marker.kind === "restaurant"
       ? "Food spot"
+      : marker.kind === "deal"
+        ? "Deal today"
+      : marker.kind === "parking"
+        ? "Event Host"
       : "Local event";
   const action =
     marker.kind === "restaurant"
       ? "Open profile"
+      : marker.kind === "deal"
+        ? "View deal"
+      : marker.kind === "parking"
+        ? "View host"
       : "See events";
   const originParam = userLocation ? `&origin=${userLocation.lat},${userLocation.lng}` : "";
   const directionsUrl = `https://www.google.com/maps/dir/?api=1${originParam}&destination=${marker.lat},${marker.lng}&travelmode=driving`;
@@ -5816,7 +6136,17 @@ function MapEdgeIndicators({
               <span className="text-orange-300">
                 {edge === "left" ? "‹" : edge === "right" ? "›" : edge === "top" ? "⌃" : "⌄"}
               </span>
-              <span>{marker.kind === "truck" ? "Truck" : marker.kind === "restaurant" ? "Food" : "Event"}</span>
+              <span>
+                {marker.kind === "truck"
+                  ? "Truck"
+                  : marker.kind === "restaurant"
+                    ? "Food"
+                    : marker.kind === "deal"
+                      ? "Deal"
+                    : marker.kind === "parking"
+                      ? "Host"
+                      : "Event"}
+              </span>
             </button>
           ))}
         </div>
@@ -5863,6 +6193,18 @@ function TruckCard({
   };
   const badges = getOperationalBadges(freshnessMeta).slice(0, 3);
   const canEdit = isOwnedByCurrentUser(truck, currentUserId);
+  const truckStatusLabel = (() => {
+    if (isTruckServingNow(truck)) return "Posted up now";
+    const status = readStringField(truck, ["serviceStatus", "status", "operatingStatus"]);
+    if (status) {
+      const normalized = status.toLowerCase();
+      if (normalized.includes("scheduled")) return "Scheduled";
+      if (normalized.includes("claim")) return "Claimed truck";
+      if (normalized.includes("serving area")) return "Serving area";
+    }
+    return "Serving area";
+  })();
+  const truckStatusClass = isTruckServingNow(truck) ? "bg-red-500/90" : "bg-amber-500/90";
   const actions = canEdit
     ? [
         {
@@ -5908,8 +6250,10 @@ function TruckCard({
           aria-hidden="true"
         />
         {/* Serving badge */}
-        <span className="absolute top-2.5 left-2.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide text-white bg-red-500/90 shadow">
-          <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse" aria-hidden="true" />Serving now</span>
+        <span className={`absolute top-2.5 left-2.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide text-white shadow ${truckStatusClass}`}>
+          <span className={`h-1.5 w-1.5 rounded-full bg-white ${isTruckServingNow(truck) ? "animate-pulse" : ""}`} aria-hidden="true" />
+          {truckStatusLabel}
+        </span>
         {truck.activeDealCount && truck.activeDealCount > 0 ? (
           <span className="absolute top-2.5 right-2.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide text-white bg-orange-600 shadow">
             <Tag className="h-2.5 w-2.5" aria-hidden="true" />

@@ -18,6 +18,7 @@ import {
   ChefHat,
   Package,
   ShoppingCart,
+  Tag,
   MoreHorizontal,
   X,
   Compass,
@@ -344,8 +345,19 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
       );
     } else {
       items.push(
-        { path: "/admin/dashboard", icon: Shield, label: "Dashboard" },
+        { path: "/admin/dashboard", icon: Shield, label: "Admin Dashboard" },
         { path: "/staff", icon: Users, label: "Staff" },
+        { path: "/admin/control-center", icon: Shield, label: "Control Center" },
+        { path: "/admin/geo/heatmap", icon: BarChart3, label: "Geo Heatmap" },
+        { path: "/admin/dashboard?tab=restaurants", icon: Store, label: "Businesses" },
+        { path: "/admin/dashboard?tab=trucks", icon: Truck, label: "Food Trucks" },
+        { path: "/admin/dashboard?tab=hosts", icon: ParkingSquare, label: "Hosts" },
+        { path: "/admin/dashboard?tab=events", icon: Calendar, label: "Events" },
+        { path: "/parking-pass", icon: ParkingSquare, label: "Parking Pass" },
+        { path: "/deal-creation", icon: Tag, label: "Deals" },
+        { path: "/orders", icon: ShoppingCart, label: "Orders" },
+        { path: "/admin/dashboard?tab=users", icon: UserPlus, label: "Users" },
+        { path: "/admin/giveaway-wheel", icon: Clapperboard, label: "Giveaway Wheel" },
         { path: "/profile", icon: User, label: "Profile" },
       );
     }
