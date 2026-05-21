@@ -3019,7 +3019,7 @@ export default function ExplorePreview() {
               onSceneLaneSelect={handleSceneLaneChange}
             />
 
-            <TodayAroundYouIntro laneId={activeSceneLaneId} />
+            <ActiveSceneIntro laneId={activeSceneLaneId} />
 
             <SceneMixedFeed items={sceneMixedFeedItems} />
 
@@ -3474,7 +3474,7 @@ function SceneOptionsBar({
   );
 }
 
-function TodayAroundYouIntro({ laneId }: { laneId: ScoutSceneLaneId }) {
+function ActiveSceneIntro({ laneId }: { laneId: ScoutSceneLaneId }) {
   const laneCopy: Record<ScoutSceneLaneId, { title: string; subtitle: string }> = {
     for_you: {
       title: "For You",
