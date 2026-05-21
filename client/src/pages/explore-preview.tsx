@@ -1574,8 +1574,7 @@ export default function ExplorePreview() {
     [resolvedScoutLocation],
   );
   const showScoutPreviewDebug =
-    process.env.NODE_ENV !== "production" &&
-    (isScoutPreviewEligible || scoutPreviewCity.length > 0);
+    isScoutPreviewEligible && scoutPreviewCity.length > 0;
 
   useEffect(() => {
     if (!showScoutPreviewDebug) return;
@@ -1592,6 +1591,14 @@ export default function ExplorePreview() {
     scoutPreviewCity,
     showScoutPreviewDebug,
   ]);
+
+  useEffect(() => {
+    if (!isPensacolaScoutPreview || !previewCoords) return;
+    setCoords(previewCoords);
+    setLocationName("Pensacola");
+    setLocationStatus("ready");
+    setMapCenter(previewCoords);
+  }, [isPensacolaScoutPreview, previewCoords]);
 
   const requestLocation = useCallback(() => {
     if (isPensacolaScoutPreview && previewCoords) {
