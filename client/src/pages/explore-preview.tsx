@@ -1504,7 +1504,7 @@ function shiftCenterForRightQuadrant(
 
 export default function ExplorePreview() {
   const { user } = useAuth();
-  const [, navigate] = useWouterLocation();
+  const [location, navigate] = useWouterLocation();
 
   const firstName =
     typeof user?.name === "string" && user.name.trim().length > 0
@@ -1526,8 +1526,27 @@ export default function ExplorePreview() {
     () => DAYPART_DEFAULT_INTENT[getDaypart()],
   );
   const [activeSceneLaneId, setActiveSceneLaneId] = useState<ScoutSceneLaneId>("for_you");
+  const userType = String((user as any)?.userType || "").toLowerCase();
+  const isScoutPreviewEligible = userType === "super_admin" || userType === "admin" || userType === "duper_admin";
+  const scoutPreviewCity = useMemo(() => {
+    const query = location.includes("?") ? location.slice(location.indexOf("?") + 1) : "";
+    const params = new URLSearchParams(query);
+    const raw = (params.get("scoutPreview") || params.get("previewCity") || "").trim().toLowerCase();
+    return raw;
+  }, [location]);
+  const isPensacolaScoutPreview = isScoutPreviewEligible && scoutPreviewCity === "pensacola";
+  const previewCoords = useMemo(
+    () => (isPensacolaScoutPreview ? { lat: 30.4213, lng: -87.2169 } : null),
+    [isPensacolaScoutPreview],
+  );
 
   const requestLocation = useCallback(() => {
+    if (isPensacolaScoutPreview && previewCoords) {
+      setCoords(previewCoords);
+      setLocationName("Pensacola");
+      setLocationStatus("ready");
+      return;
+    }
     if (typeof navigator === "undefined" || !navigator.geolocation) {
       setLocationStatus("denied");
       return;
@@ -1547,7 +1566,7 @@ export default function ExplorePreview() {
       },
       { timeout: 10000, maximumAge: 0 },
     );
-  }, []);
+  }, [isPensacolaScoutPreview, previewCoords]);
 
   // Auto-request on mount
   useEffect(() => {
@@ -2893,7 +2912,7 @@ export default function ExplorePreview() {
               className="absolute inset-0 pointer-events-none"
               style={{
                 backgroundImage:
-                  "linear-gradient(180deg, rgba(8,5,2,0.42) 0%, rgba(8,5,2,0.08) 22%, rgba(8,5,2,0.00) 46%), radial-gradient(120% 60% at 50% 36%, rgba(255,168,86,0.10), transparent 55%)",
+                  "linear-gradient(180deg, rgba(11,8,6,0.62) 0%, rgba(10,7,5,0.22) 26%, rgba(8,6,10,0.04) 54%, rgba(8,6,10,0.58) 100%), radial-gradient(110% 64% at 50% 42%, rgba(255,136,70,0.18), rgba(255,136,70,0.00) 60%), radial-gradient(100% 50% at 50% -8%, rgba(255,111,46,0.12), rgba(255,111,46,0) 56%)",
               }}
             />
           )}
@@ -2979,6 +2998,11 @@ export default function ExplorePreview() {
           {/* Compact map footer. Keep the collapsed map mostly clear. */}
           {sheetState === "default" && (
             <>
+              <div className="absolute left-3 top-3 z-20">
+                <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-[#100c0a]/80 ring-1 ring-orange-200/35 backdrop-blur-xl shadow-[0_10px_24px_rgba(0,0,0,0.42)]">
+                  <img src={mealScoutIcon} alt="MealScout" className="h-6 w-6 object-contain" />
+                </span>
+              </div>
               <MapActivityPips
                 mode={scoutActivityMode}
                 truckCount={trucksServingNow.length}
@@ -2996,6 +3020,11 @@ export default function ExplorePreview() {
               />
               <div className="absolute bottom-3 left-3 right-3 z-20 flex items-end justify-between gap-3">
                 <div className="min-w-0">
+                  {isPensacolaScoutPreview ? (
+                    <p className="mb-1 inline-flex rounded-full bg-orange-500/18 px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.12em] text-orange-100 ring-1 ring-orange-200/28">
+                      Admin preview
+                    </p>
+                  ) : null}
                   <p className="truncate text-sm font-extrabold text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.7)]">
                     {hasResolvedLocation ? shortLocation : "Nearby now"}
                   </p>
@@ -3357,22 +3386,79 @@ function ActiveSceneContent({
     }
     if (visibleMoreFoodRestaurants.length > 0) {
       return (
-        <section className={railSectionClass}>
+        <section className="px-4 pb-6">
           <SectionHeader
             title="Worth Discovering"
             linkHref={DISCOVERY_LAYERS.restaurants.href}
             subtitle="New, quiet, or under-scouted spots nearby."
             itemCount={visibleMoreFoodRestaurants.length}
           />
-          <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
-            <ul className="flex gap-4 pr-5" role="list" aria-label="Worth discovering">
-              {visibleMoreFoodRestaurants.slice(0, 10).map((r) => (
-                <li key={`for-you-worth-${r.id}`} className={`shrink-0 ${standardCardWidth}`}>
-                  <SavedRestaurantCard restaurant={r} />
+          <ul className="space-y-2.5" role="list" aria-label="Worth discovering">
+            {visibleMoreFoodRestaurants.slice(0, 8).map((restaurant) => {
+              const name = getRestaurantName(restaurant);
+              const cuisine = restaurant.cuisineType || "Local food";
+              const location = [restaurant.neighborhood, restaurant.city].filter(Boolean).join(" · ");
+              const label =
+                restaurant.activeDealsCount || restaurant.activeDealCount
+                  ? "Open now nearby"
+                  : "Under-scouted";
+              const lat =
+                typeof restaurant.latitude === "number"
+                  ? restaurant.latitude
+                  : typeof restaurant.lat === "number"
+                    ? restaurant.lat
+                    : null;
+              const lng =
+                typeof restaurant.longitude === "number"
+                  ? restaurant.longitude
+                  : typeof restaurant.lng === "number"
+                    ? restaurant.lng
+                    : null;
+              const routeUrl =
+                typeof lat === "number" && typeof lng === "number"
+                  ? `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`
+                  : null;
+              return (
+                <li key={`for-you-worth-${restaurant.id}`}>
+                  <div className="rounded-2xl bg-[#101219]/82 p-3 ring-1 ring-white/12">
+                    <p className="truncate text-base font-semibold text-white">{name}</p>
+                    <p className="mt-0.5 truncate text-xs text-white/65">
+                      {cuisine}{location ? ` · ${location}` : ""}
+                    </p>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <span className="rounded-full bg-orange-300/14 px-2 py-1 text-[10px] font-bold text-orange-100 ring-1 ring-orange-200/25">
+                        {label}
+                      </span>
+                      <Link
+                        href={`/restaurant/${restaurant.id}`}
+                        className="rounded-full bg-white/10 px-2.5 py-1 text-[10px] font-bold text-white ring-1 ring-white/20"
+                      >
+                        View
+                      </Link>
+                      {routeUrl ? (
+                        <a
+                          href={routeUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="rounded-full bg-white/10 px-2.5 py-1 text-[10px] font-bold text-white ring-1 ring-white/20"
+                        >
+                          Route
+                        </a>
+                      ) : null}
+                      {isSignedIn ? (
+                        <Link
+                          href={`/restaurant/${restaurant.id}`}
+                          className="rounded-full bg-white/10 px-2.5 py-1 text-[10px] font-bold text-white ring-1 ring-white/20"
+                        >
+                          Save
+                        </Link>
+                      ) : null}
+                    </div>
+                  </div>
                 </li>
-              ))}
-            </ul>
-          </div>
+              );
+            })}
+          </ul>
         </section>
       );
     }

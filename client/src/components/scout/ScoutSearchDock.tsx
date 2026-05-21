@@ -1,4 +1,5 @@
 import { Link } from "wouter";
+import { Search } from "lucide-react";
 
 export function ScoutSearchDock() {
   return (
@@ -9,7 +10,7 @@ export function ScoutSearchDock() {
         aria-label="Search food, places, trucks, events"
       >
         <span className="truncate">Search food, places, trucks, events</span>
-        <span className="h-4 w-4 shrink-0 text-white/70" aria-hidden="true">⌕</span>
+        <Search className="h-4 w-4 shrink-0 text-white/70" aria-hidden="true" />
       </Link>
     </div>
   );
