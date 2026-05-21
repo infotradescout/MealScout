@@ -842,6 +842,22 @@ function formatMiles(value?: number | null): string | null {
   return `${value.toFixed(value < 10 ? 1 : 0)} mi`;
 }
 
+function getDistanceMiles(
+  a: { lat: number; lng: number },
+  b: { lat: number; lng: number },
+): number {
+  const toRad = (value: number) => (value * Math.PI) / 180;
+  const earthRadiusMiles = 3958.8;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const lat1 = toRad(a.lat);
+  const lat2 = toRad(b.lat);
+  const hav =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  return 2 * earthRadiusMiles * Math.asin(Math.min(1, Math.sqrt(hav)));
+}
+
 function getRestaurantName(restaurant: RestaurantSummary): string {
   return restaurant.businessName || restaurant.name || "Local spot";
 }
@@ -2370,8 +2386,6 @@ export default function ExplorePreview() {
     }
   }, []);
 
-  const daypartSearchCopy = DAYPART_SEARCH_COPY[currentDaypart];
-
   const cravingBoardItems = useMemo(
     () =>
       buildCravingBoardItems({
@@ -2586,10 +2600,10 @@ export default function ExplorePreview() {
     (isLowActivity || activeSceneLaneId === "community") &&
     topLocalFavoriteRestaurants.length > 0;
   const compactMapHeight = isHighActivity
-    ? "clamp(260px, 38vh, 390px)"
+    ? "clamp(300px, 35vh, 440px)"
     : isMediumActivity
-      ? "clamp(220px, 31vh, 330px)"
-      : "clamp(220px, 30vh, 330px)";
+      ? "clamp(280px, 33vh, 420px)"
+      : "clamp(270px, 31vh, 390px)";
   const collapsedMapClass = isHighActivity
     ? "mx-0 mt-0 rounded-b-[2.1rem] ring-1 ring-orange-200/12 bg-[#070707]"
     : "mx-3 mt-3 rounded-[1.65rem] ring-1 ring-white/10 bg-[#0b0908]";
@@ -2637,8 +2651,6 @@ export default function ExplorePreview() {
       activeSceneLaneId === "food_trucks" ||
       activeSceneLaneId === "restaurants" ||
       activeSceneLaneId === "deals");
-  const activeSceneLabel =
-    SCOUT_SCENE_LANES.find((lane) => lane.id === activeSceneLaneId)?.label || "For You";
   const compactMapSceneHint =
     activeSceneLaneId === "food_trucks"
       ? "Truck activity nearby"
@@ -2662,35 +2674,16 @@ export default function ExplorePreview() {
     (sceneWantsNewMenus && localMenuItems.length > 0) ||
     (sceneWantsWorthDiscovering && visibleMoreFoodRestaurants.length > 0) ||
     (sceneWantsCommunity && topLocalFavoriteRestaurants.length > 0);
-  const sceneOptionCounts = useMemo<Record<ScoutSceneLaneId, number>>(
-    () => ({
-      for_you: sceneMixedFeedItems.length,
-      community: topLocalFavoriteRestaurants.length,
-      nearby_now:
-        visibleLocalActivityItems.length +
-        visibleOpenRestaurants.length +
-        visibleTrucksServingNow.length,
-      food_trucks: visibleTrucksServingNow.length,
-      restaurants: visibleOpenRestaurants.length,
-      deals: visibleDeals.length,
-      events: visibleSceneEvents.length,
-      new_menus: localMenuItems.length,
-      late_night: visibleSceneEvents.length + visibleOpenRestaurants.length,
-      worth_discovering: visibleMoreFoodRestaurants.length,
-    }),
-    [
-      localMenuItems.length,
-      sceneMixedFeedItems.length,
-      topLocalFavoriteRestaurants.length,
-      visibleDeals.length,
-      visibleSceneEvents.length,
-      visibleLocalActivityItems.length,
-      visibleMoreFoodRestaurants.length,
-      visibleOpenRestaurants.length,
-      visibleTrucksServingNow.length,
-    ],
+  const collapsedMapSelectedMarker = useMemo(
+    () =>
+      sceneFilteredMapMarkers.find(
+        (marker) =>
+          marker.kind !== "user" &&
+          Number.isFinite(marker.lat) &&
+          Number.isFinite(marker.lng),
+      ) ?? null,
+    [sceneFilteredMapMarkers],
   );
-
   return (
     <>
       <SEOHead
@@ -2722,14 +2715,14 @@ export default function ExplorePreview() {
         className={`relative z-10 ${
           sheetState === "fullMap"
             ? ""
-            : "pb-40 md:mx-auto md:max-w-[640px] md:min-h-screen"
+            : "pb-44 md:mx-auto md:max-w-[640px] md:min-h-screen"
         }`}
         style={{
           overscrollBehaviorY: "none",
           paddingBottom:
             sheetState === "fullMap"
               ? undefined
-              : "calc(7.5rem + env(safe-area-inset-bottom, 0px))",
+              : "calc(8.5rem + env(safe-area-inset-bottom, 0px))",
         }}
       >
         {/* ============================================================
@@ -2741,7 +2734,7 @@ export default function ExplorePreview() {
           data-testid="scout-map-container"
           className={`relative overflow-hidden ${
             sheetState === "fullMap"
-              ? "w-full bg-[#fff4d6]"
+              ? "w-full bg-[#06070b]"
               : collapsedMapClass
           }`}
           style={{
@@ -2785,8 +2778,8 @@ export default function ExplorePreview() {
                       markers={sceneFilteredMapMarkers}
                       showRoadTrafficLayer={false}
                       userLocation={coords}
-                      isNightTheme={false}
-                      interactive={false}
+                      isNightTheme={true}
+                      interactive={true}
                       onBoundsChanged={handleMapBoundsChanged}
                       onZoomChanged={handleMapZoomChanged}
                       onCenterChanged={handleMapCenterChanged}
@@ -2839,7 +2832,7 @@ export default function ExplorePreview() {
                     markers={sceneFilteredMapMarkers}
                     showRoadTrafficLayer={false}
                     userLocation={coords}
-                    isNightTheme={false}
+                      isNightTheme={true}
                     onBoundsChanged={handleMapBoundsChanged}
                     onZoomChanged={handleMapZoomChanged}
                     onCenterChanged={handleMapCenterChanged}
@@ -2995,9 +2988,6 @@ export default function ExplorePreview() {
               />
               <div className="absolute bottom-3 left-3 right-3 z-20 flex items-end justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="truncate text-[10px] font-black uppercase tracking-[0.12em] text-orange-100/70 drop-shadow-[0_2px_10px_rgba(0,0,0,0.7)]">
-                    {activeSceneLabel}
-                  </p>
                   <p className="truncate text-sm font-extrabold text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.7)]">
                     {hasResolvedLocation ? shortLocation : "Nearby now"}
                   </p>
@@ -3005,28 +2995,15 @@ export default function ExplorePreview() {
                     {compactMapSceneHint}
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={openScoutMap}
-                  className="group shrink-0 inline-flex items-center gap-1.5 rounded-full bg-[#ff7945] px-3 py-2 text-xs font-black text-white ring-1 ring-white/20 transition-transform active:scale-95"
-                  aria-label="Open full map"
-                >
-                  <Maximize2 className="h-3.5 w-3.5" aria-hidden="true" />
-                  <span className="tracking-wide">Explore map</span>
-                </button>
               </div>
-              <div className="absolute left-3 right-3 bottom-16 z-20">
-                <Link
-                  href="/search"
-                  className="flex h-11 w-full items-center justify-between rounded-full bg-[#120805]/78 px-4 text-sm font-semibold text-white/74 ring-1 ring-white/14 backdrop-blur-xl shadow-[0_8px_24px_rgba(0,0,0,0.4)]"
-                  aria-label="Search food, places, trucks, events"
-                >
-                  <span className="truncate">Search food, places, trucks, events</span>
-                  <Search className="h-4 w-4 shrink-0 text-white/60" aria-hidden="true" />
-                </Link>
-              </div>
-            </>
-          )}
+              {collapsedMapSelectedMarker ? (
+                <CollapsedMapPinCard
+                  marker={collapsedMapSelectedMarker}
+                  userLocation={coords}
+                />
+              ) : null}
+              </>
+            )}
         </section>
 
         {/* ============================================================
@@ -3040,14 +3017,6 @@ export default function ExplorePreview() {
             <SceneOptionsBar
               activeSceneLaneId={activeSceneLaneId}
               onSceneLaneSelect={handleSceneLaneChange}
-              counts={sceneOptionCounts}
-            />
-
-            <CravingCompass
-              mode={scoutActivityMode}
-              daypartCopy={daypartSearchCopy}
-              locationStatus={locationStatus}
-              onRefreshLocation={requestLocation}
             />
 
             <TodayAroundYouIntro laneId={activeSceneLaneId} />
@@ -3065,10 +3034,12 @@ export default function ExplorePreview() {
               <QuietNearbyNotice />
             ) : null}
 
-            <FilterNearbyChips
-              selectedCraving={selectedCraving}
-              onCravingSelect={setSelectedCravingId}
-            />
+            {activeSceneLaneId !== "for_you" ? (
+              <FilterNearbyChips
+                selectedCraving={selectedCraving}
+                onCravingSelect={setSelectedCravingId}
+              />
+            ) : null}
 
             {!laneHasContent ? (
               <LaneEmptyState laneId={activeSceneLaneId} />
@@ -3332,11 +3303,18 @@ export default function ExplorePreview() {
               </section>
             )}
 
-            <ExploreSceneTiles
-              activeSceneLaneId={activeSceneLaneId}
-              onSceneLaneSelect={handleSceneLaneChange}
-            />
-
+          </div>
+        )}
+        {sheetState !== "fullMap" && (
+          <div className="fixed inset-x-4 z-40 md:mx-auto md:max-w-[608px]" style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 5.25rem)" }}>
+            <Link
+              href="/search"
+              className="flex h-12 w-full items-center justify-between rounded-full bg-[#0d0f15]/88 px-4 text-sm font-semibold text-white/85 ring-1 ring-orange-300/30 backdrop-blur-xl shadow-[0_14px_34px_rgba(0,0,0,0.42)]"
+              aria-label="Search food, places, trucks, events"
+            >
+              <span className="truncate">Search food, places, trucks, events</span>
+              <Search className="h-4 w-4 shrink-0 text-white/70" aria-hidden="true" />
+            </Link>
           </div>
         )}
       </main>
@@ -3449,11 +3427,9 @@ function CravingCompass({
 function SceneOptionsBar({
   activeSceneLaneId,
   onSceneLaneSelect,
-  counts,
 }: {
   activeSceneLaneId: ScoutSceneLaneId;
   onSceneLaneSelect: (laneId: ScoutSceneLaneId) => void;
-  counts: Record<ScoutSceneLaneId, number>;
 }) {
   const getIcon = (icon: ScoutSceneLane["icon"]) => {
     if (icon === "spark") return <Compass className="h-3.5 w-3.5" aria-hidden="true" />;
@@ -3471,7 +3447,7 @@ function SceneOptionsBar({
   return (
     <section className="px-4 pb-4">
       <div className="overflow-x-auto atmo-hide-scrollbar">
-        <div className="flex w-max gap-2 pr-1">
+        <div className="flex w-max gap-2 pr-2">
           {SCOUT_SCENE_LANES.map((lane) => {
             const isActive = lane.id === activeSceneLaneId;
             return (
@@ -3480,27 +3456,15 @@ function SceneOptionsBar({
                 type="button"
                 onClick={() => onSceneLaneSelect(lane.id)}
                 className={[
-                  "inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-2xl px-3 py-2 text-[12px] font-bold ring-1 transition-colors active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/60",
+                  "inline-flex min-h-11 min-w-[88px] shrink-0 items-center justify-center gap-1.5 rounded-2xl px-2.5 py-2 text-[12px] font-bold ring-1 transition-colors active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/60",
                   isActive
-                    ? "bg-[#ff7945] text-white ring-white/20"
-                    : "bg-white/[0.04] text-white/66 ring-white/10 hover:bg-white/[0.08] hover:text-white",
+                    ? "bg-[#ff7945] text-white ring-white/20 shadow-[0_10px_22px_rgba(255,121,69,0.28)]"
+                    : "bg-[#11131a]/82 text-white/78 ring-white/12 hover:bg-[#171a23] hover:text-white",
                 ].join(" ")}
                 aria-pressed={isActive}
               >
                 {getIcon(lane.icon)}
-                <span>{lane.label}</span>
-                {counts[lane.id] > 0 ? (
-                  <span
-                    className={[
-                      "ml-1 rounded-full px-1.5 py-0.5 text-[10px] font-black",
-                      isActive
-                        ? "bg-white/18 text-white"
-                        : "bg-white/12 text-white/80",
-                    ].join(" ")}
-                  >
-                    {counts[lane.id]}
-                  </span>
-                ) : null}
+                <span className="whitespace-nowrap">{lane.label}</span>
               </button>
             );
           })}
@@ -3511,29 +3475,54 @@ function SceneOptionsBar({
 }
 
 function TodayAroundYouIntro({ laneId }: { laneId: ScoutSceneLaneId }) {
-  const subtitle =
-    laneId === "community"
-      ? "What locals are saving, sharing, and visiting nearby."
-      : laneId === "food_trucks"
-        ? "Food trucks posted up nearby, with current status and quick actions."
-        : laneId === "restaurants"
-          ? "Open restaurants and menu highlights near your location."
-          : laneId === "deals"
-            ? "Active local deals and value picks available right now."
-            : laneId === "events"
-              ? "Food-related events and local happenings around you."
-              : laneId === "new_menus"
-                ? "Fresh menu updates and new dishes added nearby."
-                : laneId === "late_night"
-                  ? "Late options, open spots, and after-hours food nearby."
-                  : laneId === "worth_discovering"
-                    ? "New and under-scouted local spots worth checking out."
-                    : "A live mix of what locals love, what's open, what's new, and what's nearby.";
+  const laneCopy: Record<ScoutSceneLaneId, { title: string; subtitle: string }> = {
+    for_you: {
+      title: "For You",
+      subtitle: "Local favorites, open spots, new menus, and places worth finding.",
+    },
+    community: {
+      title: "Community",
+      subtitle: "What locals are saving, sharing, and coming back to.",
+    },
+    nearby_now: {
+      title: "Nearby",
+      subtitle: "Food, drinks, events, and trucks close to you.",
+    },
+    food_trucks: {
+      title: "Food Trucks",
+      subtitle: "Trucks posted up, scheduled, or serving nearby.",
+    },
+    restaurants: {
+      title: "Restaurants",
+      subtitle: "Open tables, local kitchens, and menu highlights.",
+    },
+    deals: {
+      title: "Deals",
+      subtitle: "Active offers from nearby spots.",
+    },
+    events: {
+      title: "Events",
+      subtitle: "Food, music, pop-ups, and things happening around town.",
+    },
+    new_menus: {
+      title: "New Menus",
+      subtitle: "Fresh dishes and menu updates from local spots.",
+    },
+    late_night: {
+      title: "Late Night",
+      subtitle: "Places still serving after hours.",
+    },
+    worth_discovering: {
+      title: "Worth Discovering",
+      subtitle: "New, quiet, or under-scouted spots nearby.",
+    },
+  };
+  const activeCopy = laneCopy[laneId] ?? laneCopy.for_you;
   return (
     <section className="px-4 pb-3">
-      <h2 className="text-3xl font-black tracking-tight text-white">Nearby</h2>
+      <h2 className="text-2xl font-bold tracking-tight text-white">{activeCopy.title}</h2>
       <p className="mt-1.5 text-sm leading-relaxed text-white/62">
-        {subtitle}
+        {activeCopy.subtitle}
       </p>
     </section>
   );
@@ -3619,7 +3608,11 @@ function SceneMixedFeedCard({ item }: { item: CravingBoardItem }) {
 }
 
 function LaneEmptyState({ laneId }: { laneId: ScoutSceneLaneId }) {
+  const isForYou = laneId === "for_you";
   const title =
+    isForYou
+      ? "The local board is quiet right now."
+      :
     laneId === "community"
       ? "Community activity is still building here."
       : laneId === "deals"
@@ -3630,6 +3623,9 @@ function LaneEmptyState({ laneId }: { laneId: ScoutSceneLaneId }) {
             ? "No food events nearby right now."
             : "Nothing strong here yet.";
   const body =
+    isForYou
+      ? "Try Nearby, Worth Discovering, or widen your area."
+      :
     laneId === "community"
       ? "Explore nearby and save spots to help shape local favorites."
       : laneId === "deals"
@@ -3645,6 +3641,28 @@ function LaneEmptyState({ laneId }: { laneId: ScoutSceneLaneId }) {
       <div className="rounded-2xl bg-white/[0.04] px-4 py-3 text-white ring-1 ring-white/10">
         <p className="text-sm font-black">{title}</p>
         <p className="mt-1 text-xs font-semibold leading-relaxed text-white/58">{body}</p>
+        {isForYou ? (
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Link
+              href="/search"
+              className="rounded-full bg-[#ff7945] px-3 py-1.5 text-[11px] font-black text-white ring-1 ring-white/20"
+            >
+              Widen Area
+            </Link>
+            <Link
+              href="/search?q=worth%20discovering"
+              className="rounded-full bg-white/[0.06] px-3 py-1.5 text-[11px] font-black text-white/90 ring-1 ring-white/16"
+            >
+              Worth Discovering
+            </Link>
+            <Link
+              href="/search?q=new%20menus"
+              className="rounded-full bg-white/[0.06] px-3 py-1.5 text-[11px] font-black text-white/90 ring-1 ring-white/16"
+            >
+              New Menus
+            </Link>
+          </div>
+        ) : null}
       </div>
     </section>
   );
@@ -3748,6 +3766,70 @@ function QuietNearbyNotice() {
         </p>
       </div>
     </section>
+  );
+}
+
+function CollapsedMapPinCard({
+  marker,
+  userLocation,
+}: {
+  marker: MapAdapterMarker;
+  userLocation?: { lat: number; lng: number } | null;
+}) {
+  const destination =
+    marker.kind === "truck"
+      ? `/truck/${marker.sourceId}`
+      : marker.kind === "restaurant"
+        ? `/restaurant/${marker.sourceId}`
+        : "/events";
+  const status =
+    marker.kind === "truck"
+      ? "Food truck"
+      : marker.kind === "restaurant"
+        ? "Open place"
+        : "Event";
+  const computedDistance =
+    userLocation &&
+    Number.isFinite(marker.lat) &&
+    Number.isFinite(marker.lng)
+      ? formatMiles(getDistanceMiles(userLocation, { lat: marker.lat, lng: marker.lng }))
+      : null;
+  const originParam = userLocation ? `&origin=${userLocation.lat},${userLocation.lng}` : "";
+  const directionsUrl = `https://www.google.com/maps/dir/?api=1${originParam}&destination=${marker.lat},${marker.lng}&travelmode=driving`;
+
+  return (
+    <div
+      className="absolute left-3 right-3 bottom-16 z-20 rounded-2xl bg-[#0f1017]/88 px-3 py-3 text-white ring-1 ring-white/14 backdrop-blur-xl"
+      style={{ boxShadow: "0 16px 36px rgba(0,0,0,0.48)" }}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[10px] font-black uppercase tracking-[0.14em] text-orange-200/80">
+            {status}
+          </p>
+          <p className="truncate text-base font-black">{marker.title || "Nearby place"}</p>
+          <p className="truncate text-xs text-white/70">
+            {computedDistance ? `${computedDistance} away` : "Nearby"}
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <Link
+            href={destination}
+            className="rounded-xl bg-[#ff7945] px-3 py-1.5 text-xs font-black text-white ring-1 ring-white/20"
+          >
+            View
+          </Link>
+          <a
+            href={directionsUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="rounded-xl bg-white/10 px-3 py-1.5 text-xs font-black text-white ring-1 ring-white/14"
+          >
+            Route
+          </a>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -3915,7 +3997,7 @@ function HeroMapFallback({
       className="absolute inset-0 flex items-center justify-center"
       style={{
         background:
-          "linear-gradient(135deg, #080a0f 0%, #0f1117 40%, #080a0f 100%)",
+          "linear-gradient(140deg, #070a10 0%, #0e1320 40%, #070a10 100%)",
         animation: "heroAtmosphere 8s ease-in-out infinite",
       }}
     >
@@ -3938,6 +4020,18 @@ function HeroMapFallback({
         }
       `}</style>
       {/* Subtle noise grain overlay */}
+      <div
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          inset: 0,
+          backgroundImage:
+            "linear-gradient(rgba(255,255,255,0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.06) 1px, transparent 1px)",
+          backgroundSize: "42px 42px, 42px 42px",
+          opacity: 0.35,
+          pointerEvents: "none",
+        }}
+      />
       <div
         aria-hidden="true"
         style={{
