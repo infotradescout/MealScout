@@ -144,7 +144,6 @@ interface EventSummary {
 }
 
 type EventsResponse = { events?: EventSummary[] } | EventSummary[] | null;
-
 interface RestaurantSummary {
   id: string;
   businessName?: string | null;
