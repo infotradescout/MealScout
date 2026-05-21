@@ -265,6 +265,11 @@ async function getRestaurantSignals(
         .groupBy(videoStories.restaurantId),
     ]);
 
+  const restaurantIdSqlList = sql.join(
+    restaurantIds.map((id) => sql`${id}`),
+    sql`, `,
+  );
+
   const [reactionRows, shareRows] = await Promise.all([
     db.execute(sql<{
       restaurant_id: string;
@@ -275,7 +280,7 @@ async function getRestaurantSignals(
         cast(sum(case rr.reaction_type when 'like' then 1 when 'dislike' then -1 else 0 end) as integer) as score
       from recommendation_reactions rr
       inner join restaurant_user_recommendations rur on rur.id = rr.recommendation_id
-      where rur.restaurant_id = any(${restaurantIds}::text[])
+      where rur.restaurant_id in (${restaurantIdSqlList})
       group by rur.restaurant_id
     `),
     db.execute(sql<{
@@ -287,7 +292,7 @@ async function getRestaurantSignals(
         cast(count(*) as integer) as count
       from recommendation_shares rs
       inner join restaurant_user_recommendations rur on rur.id = rs.recommendation_id
-      where rur.restaurant_id = any(${restaurantIds}::text[])
+      where rur.restaurant_id in (${restaurantIdSqlList})
       group by rur.restaurant_id
     `),
   ]);
@@ -424,7 +429,17 @@ export async function buildScoutSurface(
   const restaurantIds = restaurants
     .map((restaurant: any) => String(restaurant.id || "").trim())
     .filter(Boolean);
-  const recommendationSignals = await getRestaurantSignals(restaurantIds);
+  const recommendationSignals = await (async () => {
+    try {
+      return await getRestaurantSignals(restaurantIds);
+    } catch (error) {
+      console.warn(
+        "[scout/surface] recommendation signal aggregation failed; continuing without extra signal rollups",
+        error,
+      );
+      return new Map<string, RecommendationSignals>();
+    }
+  })();
 
   const cardPool: CandidateBucket = {
     trucksServing: [],

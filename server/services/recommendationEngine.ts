@@ -350,8 +350,17 @@ export async function buildLocalRecommendations(
       ].filter(Boolean),
     ),
   );
-  const privateBehaviorByRestaurant =
-    await getPrivateBehaviorScoresForRestaurants(candidateRestaurantIds);
+  const privateBehaviorByRestaurant = await (async () => {
+    try {
+      return await getPrivateBehaviorScoresForRestaurants(candidateRestaurantIds);
+    } catch (error) {
+      console.warn(
+        "[recommendations/local] private behavior score lookup failed; continuing without private boosts",
+        error,
+      );
+      return new Map();
+    }
+  })();
 
   const recommendations: LocalRecommendation[] = [];
 

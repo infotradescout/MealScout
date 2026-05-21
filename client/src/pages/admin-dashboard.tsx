@@ -35,6 +35,7 @@ import {
   Calendar,
   CreditCard,
   UserMinus,
+  ExternalLink,
 } from "lucide-react";
 import { Link } from "wouter";
 import QuickDashboardAccess from "@/components/quick-dashboard-access";
@@ -2246,6 +2247,15 @@ export default function AdminDashboard() {
     enabled: !!adminUser && selectedTab === "users",
   });
 
+  const openAdminUserProfile = (userId: string, inNewTab = false) => {
+    const href = `/admin/dashboard?tab=users&focusUser=${encodeURIComponent(userId)}`;
+    if (inNewTab) {
+      window.open(href, "_blank", "noopener,noreferrer");
+      return;
+    }
+    window.location.assign(href);
+  };
+
   const userById = useMemo(() => {
     const map = new Map<string, any>();
     for (const u of users) {
@@ -2268,6 +2278,34 @@ export default function AdminDashboard() {
       JSON.stringify(briefStatus),
     );
   }, [briefStatus]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const requestedTab = String(params.get("tab") || "").trim();
+    if (requestedTab) {
+      setSelectedTab(requestedTab);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (selectedTab !== "users") return;
+    if (!Array.isArray(users) || users.length === 0) return;
+
+    const url = new URL(window.location.href);
+    const focusUserId = String(url.searchParams.get("focusUser") || "").trim();
+    if (!focusUserId) return;
+
+    const matchedUser = users.find((entry: any) => String(entry?.id) === focusUserId);
+    if (!matchedUser) return;
+
+    setSelectedUser(matchedUser);
+    setUserDetailsOpen(true);
+
+    url.searchParams.delete("focusUser");
+    window.history.replaceState({}, "", url.toString());
+  }, [selectedTab, users]);
   const { data: lisaMarketIntel } = useQuery<any>({
     queryKey: ["/api/admin/lisa/market-intel", "dashboard-tab"],
     queryFn: async () => {
@@ -8328,6 +8366,15 @@ export default function AdminDashboard() {
                           <Eye className="w-4 h-4 mr-1" />
                           Details
                         </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => openAdminUserProfile(user.id, true)}
+                          data-testid={`button-open-user-profile-${user.id}`}
+                        >
+                          <ExternalLink className="w-4 h-4 mr-1" />
+                          Open
+                        </Button>
                         {!isStaff && (
                           <div className="flex items-center gap-2">
                             <Switch
@@ -8932,6 +8979,30 @@ export default function AdminDashboard() {
                   <Users className="w-4 h-4 mr-2" />
                   BASIC INFORMATION
                 </h3>
+                <div className="mb-3 flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => openAdminUserProfile(selectedUser.id, true)}
+                  >
+                    <ExternalLink className="w-4 h-4 mr-1" />
+                    Open profile in new tab
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={async () => {
+                      const href = `${window.location.origin}/admin/dashboard?tab=users&focusUser=${encodeURIComponent(selectedUser.id)}`;
+                      await navigator.clipboard.writeText(href);
+                      toast({
+                        title: "Profile link copied",
+                        description: "Direct user profile link copied for admin access.",
+                      });
+                    }}
+                  >
+                    Copy profile link
+                  </Button>
+                </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <p className="text-xs text-muted-foreground">Full Name</p>
@@ -9663,8 +9734,24 @@ export default function AdminDashboard() {
                           key={restaurant.id}
                           className="border rounded-lg p-3 bg-muted/30 space-y-3"
                         >
-                          <div className="text-sm font-medium">
-                            {restaurant.name}
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <div className="text-sm font-medium">
+                              {restaurant.name}
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              <Link href={`/restaurant/${restaurant.id}`}>
+                                <Button size="sm" variant="outline">
+                                  View details
+                                </Button>
+                              </Link>
+                              <Link
+                                href={`/menu-builder?restaurantId=${encodeURIComponent(restaurant.id)}&src=admin-user`}
+                              >
+                                <Button size="sm" variant="outline">
+                                  Edit menu
+                                </Button>
+                              </Link>
+                            </div>
                           </div>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <input
