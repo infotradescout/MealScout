@@ -1527,7 +1527,23 @@ export default function ExplorePreview() {
   );
   const [activeSceneLaneId, setActiveSceneLaneId] = useState<ScoutSceneLaneId>("for_you");
   const userType = String((user as any)?.userType || "").toLowerCase();
-  const isScoutPreviewEligible = userType === "super_admin" || userType === "admin" || userType === "duper_admin";
+  const normalizedUserType = String(userType || "").trim().toLowerCase();
+  const userRoles = useMemo(() => {
+    const roles = new Set<string>();
+    const rawRoles = (user as { roles?: unknown } | null | undefined)?.roles;
+    if (Array.isArray(rawRoles)) {
+      rawRoles.forEach((role) => {
+        const normalized = String(role || "").trim().toLowerCase();
+        if (normalized) roles.add(normalized);
+      });
+    }
+    if (normalizedUserType) roles.add(normalizedUserType);
+    return roles;
+  }, [normalizedUserType, user]);
+  const isScoutPreviewEligible =
+    userRoles.has("super_admin") ||
+    userRoles.has("admin") ||
+    userRoles.has("duper_admin");
   const scoutPreviewCity = useMemo(() => {
     const query = location.includes("?") ? location.slice(location.indexOf("?") + 1) : "";
     const params = new URLSearchParams(query);
@@ -1539,6 +1555,43 @@ export default function ExplorePreview() {
     () => (isPensacolaScoutPreview ? { lat: 30.4213, lng: -87.2169 } : null),
     [isPensacolaScoutPreview],
   );
+  const resolvedScoutLocation = useMemo(
+    () =>
+      coords
+        ? {
+            label: locationName || "Your area",
+            lat: coords.lat,
+            lng: coords.lng,
+          }
+        : null,
+    [coords, locationName],
+  );
+  const resolvedScoutCoords = useMemo(
+    () =>
+      resolvedScoutLocation
+        ? { lat: resolvedScoutLocation.lat, lng: resolvedScoutLocation.lng }
+        : null,
+    [resolvedScoutLocation],
+  );
+  const showScoutPreviewDebug =
+    process.env.NODE_ENV !== "production" &&
+    (isScoutPreviewEligible || scoutPreviewCity.length > 0);
+
+  useEffect(() => {
+    if (!showScoutPreviewDebug) return;
+    console.info("[scout-preview-debug]", {
+      isScoutPreviewEligible,
+      scoutPreviewCity,
+      isPensacolaScoutPreview,
+      resolvedScoutLocation,
+    });
+  }, [
+    isPensacolaScoutPreview,
+    isScoutPreviewEligible,
+    resolvedScoutLocation,
+    scoutPreviewCity,
+    showScoutPreviewDebug,
+  ]);
 
   const requestLocation = useCallback(() => {
     if (isPensacolaScoutPreview && previewCoords) {
@@ -1598,14 +1651,14 @@ export default function ExplorePreview() {
     isLoading: liveTrucksLoading,
     isError: liveTrucksError,
   } = useQuery<LiveTrucksResponse>({
-    queryKey: coords
-      ? ["/api/trucks/live", coords.lat, coords.lng, discoveryRadiusKm]
+    queryKey: resolvedScoutLocation
+      ? ["/api/trucks/live", resolvedScoutLocation.lat, resolvedScoutLocation.lng, discoveryRadiusKm]
       : ["/api/trucks/live", "no-location"],
-    enabled: !!coords,
+    enabled: !!resolvedScoutLocation,
     queryFn: async () => {
-      if (!coords) return { trucks: [] };
+      if (!resolvedScoutLocation) return { trucks: [] };
       const response = await fetch(
-        `/api/trucks/live?lat=${coords.lat}&lng=${coords.lng}&radiusKm=${discoveryRadiusKm}`,
+        `/api/trucks/live?lat=${resolvedScoutLocation.lat}&lng=${resolvedScoutLocation.lng}&radiusKm=${discoveryRadiusKm}`,
         { credentials: "include" },
       );
       if (!response.ok) throw new Error("Failed to load trucks");
@@ -1630,14 +1683,14 @@ export default function ExplorePreview() {
             ? truck.distance
             : null;
       return isWithinScoutRadius(
-        coords,
+        resolvedScoutCoords,
         truck.latitude ?? truck.lat,
         truck.longitude ?? truck.lng,
         discoveryRadiusKm,
         fallbackKm,
       );
     });
-  }, [coords, discoveryRadiusKm, liveTrucksData]);
+  }, [resolvedScoutCoords, discoveryRadiusKm, liveTrucksData]);
 
   /* --------- featured deals --------- */
 
@@ -1664,7 +1717,7 @@ export default function ExplorePreview() {
 
   const { data: eventsData } = useQuery<EventsResponse>({
     queryKey: ["/api/events/public"],
-    enabled: !!coords,
+    enabled: !!resolvedScoutLocation,
     queryFn: async () => {
       const response = await fetch(`/api/events/public`, {
         credentials: "include",
@@ -1685,25 +1738,25 @@ export default function ExplorePreview() {
   const visibleEvents = useMemo<EventSummary[]>(() => {
     return events.filter((event) =>
       isWithinScoutRadius(
-        coords,
+        resolvedScoutCoords,
         event.latitude ?? event.lat ?? event.venueLat,
         event.longitude ?? event.lng ?? event.venueLng,
         discoveryRadiusKm,
       ),
     );
-  }, [coords, discoveryRadiusKm, events]);
+  }, [resolvedScoutCoords, discoveryRadiusKm, events]);
 
   /* --------- nearby restaurants --------- */
 
   const { data: nearbyRestaurantsData, isLoading: nearbyRestaurantsLoading } = useQuery<RestaurantSummary[]>({
-    queryKey: coords
-      ? ["/api/restaurants/subscribed", coords.lat, coords.lng, discoveryRadiusKm]
+    queryKey: resolvedScoutLocation
+      ? ["/api/restaurants/subscribed", resolvedScoutLocation.lat, resolvedScoutLocation.lng, discoveryRadiusKm]
       : ["/api/restaurants/subscribed", "no-location"],
-    enabled: !!coords,
+    enabled: !!resolvedScoutLocation,
     queryFn: async () => {
-      if (!coords) return [];
+      if (!resolvedScoutLocation) return [];
       const response = await fetch(
-        `/api/restaurants/subscribed/${coords.lat}/${coords.lng}?radius=${discoveryRadiusKm}`,
+        `/api/restaurants/subscribed/${resolvedScoutLocation.lat}/${resolvedScoutLocation.lng}?radius=${discoveryRadiusKm}`,
         { credentials: "include" },
       );
       if (!response.ok) return [];
@@ -1723,14 +1776,14 @@ export default function ExplorePreview() {
             ? restaurant.distance
             : null;
       return isWithinScoutRadius(
-        coords,
+        resolvedScoutCoords,
         restaurant.latitude ?? restaurant.lat,
         restaurant.longitude ?? restaurant.lng,
         discoveryRadiusKm,
         fallbackKm,
       );
     });
-  }, [coords, discoveryRadiusKm, nearbyRestaurantsData]);
+  }, [resolvedScoutCoords, discoveryRadiusKm, nearbyRestaurantsData]);
 
   const restaurantMenuPreviewQueries = useQueries({
     queries: nearbyRestaurants.slice(0, 8).map((restaurant) => ({
@@ -1762,14 +1815,14 @@ export default function ExplorePreview() {
   }, [nearbyRestaurants, restaurantMenuPreviewQueries]);
 
   const { data: localMenuItemsData = [] } = useQuery<LocalMenuItemFeedItem[]>({
-    queryKey: coords
-      ? ["/api/menus/local-items", coords.lat, coords.lng, discoveryRadiusKm]
+    queryKey: resolvedScoutLocation
+      ? ["/api/menus/local-items", resolvedScoutLocation.lat, resolvedScoutLocation.lng, discoveryRadiusKm]
       : ["/api/menus/local-items", "no-location"],
-    enabled: !!coords,
+    enabled: !!resolvedScoutLocation,
     queryFn: async () => {
-      if (!coords) return [];
+      if (!resolvedScoutLocation) return [];
       const response = await fetch(
-        `/api/menus/local-items?lat=${coords.lat}&lng=${coords.lng}&radiusKm=${discoveryRadiusKm}&limit=24`,
+        `/api/menus/local-items?lat=${resolvedScoutLocation.lat}&lng=${resolvedScoutLocation.lng}&radiusKm=${discoveryRadiusKm}&limit=24`,
         { credentials: "include" },
       );
       if (!response.ok) return [];
@@ -1849,14 +1902,14 @@ export default function ExplorePreview() {
   /* --------- nearby deals (location-aware) --------- */
 
   const { data: nearbyDealsData } = useQuery<DealSummary[]>({
-    queryKey: coords
-      ? ["/api/deals/nearby", coords.lat, coords.lng, discoveryRadiusKm]
+    queryKey: resolvedScoutLocation
+      ? ["/api/deals/nearby", resolvedScoutLocation.lat, resolvedScoutLocation.lng, discoveryRadiusKm]
       : ["/api/deals/nearby", "no-location"],
-    enabled: !!coords,
+    enabled: !!resolvedScoutLocation,
     queryFn: async () => {
-      if (!coords) return [];
+      if (!resolvedScoutLocation) return [];
       const response = await fetch(
-        `/api/deals/nearby/${coords.lat}/${coords.lng}?radius=${discoveryRadiusKm}`,
+        `/api/deals/nearby/${resolvedScoutLocation.lat}/${resolvedScoutLocation.lng}?radius=${discoveryRadiusKm}`,
         { credentials: "include" },
       );
       if (!response.ok) return [];
@@ -3023,6 +3076,11 @@ export default function ExplorePreview() {
                   {isPensacolaScoutPreview ? (
                     <p className="mb-1 inline-flex rounded-full bg-orange-500/18 px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.12em] text-orange-100 ring-1 ring-orange-200/28">
                       Admin preview
+                    </p>
+                  ) : null}
+                  {showScoutPreviewDebug ? (
+                    <p className="mb-1 text-[10px] font-bold text-white/75">
+                      preview eligible:{String(isScoutPreviewEligible)} city:{scoutPreviewCity || "none"} active:{String(isPensacolaScoutPreview)} loc:{resolvedScoutLocation ? `${resolvedScoutLocation.label} ${resolvedScoutLocation.lat.toFixed(4)},${resolvedScoutLocation.lng.toFixed(4)}` : "none"}
                     </p>
                   ) : null}
                   <p className="truncate text-sm font-extrabold text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.7)]">
