@@ -2,17 +2,14 @@ import { useState, useEffect, useRef, type ComponentType } from "react";
 import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import {
-  Search,
   User,
   Store,
-  Plus,
   BarChart3,
   UserPlus,
   Clapperboard,
   Bug,
   Shield,
   Users,
-  UtensilsCrossed,
   Calendar,
   LayoutDashboard,
   ParkingSquare,
@@ -24,11 +21,6 @@ import {
   MoreHorizontal,
   X,
   Compass,
-  Bell,
-  Home,
-  MapPin,
-  Tag,
-  Bookmark,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -41,7 +33,6 @@ type NavItem = {
   label: string;
   onClick?: () => void;
   isBug?: boolean;
-  testId?: string;
 };
 
 type NavigationProps = {
@@ -80,12 +71,10 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     }
   });
 
-  // Close more sheet on route change
   useEffect(() => {
     setMoreOpen(false);
   }, [location]);
 
-  // Close more sheet on outside click
   useEffect(() => {
     if (!moreOpen) return;
     const handler = (e: MouseEvent) => {
@@ -135,7 +124,6 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     }
   };
 
-  // Role checks
   const isRestaurantOwner = user?.userType === "restaurant_owner";
   const isFoodTruck = user?.userType === "food_truck";
   const isSupplier = user?.userType === "supplier";
@@ -162,12 +150,8 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
   });
 
   const hasBusinessTeamAccess = Boolean(businessAccess?.hasAnyAccess);
-  const canManageDeals =
-    isAdmin ||
-    isStaff ||
-    isRestaurantOwner ||
-    isFoodTruck ||
-    businessAccess?.permissions?.manageDeals === true;
+  const isBusinessOperator =
+    isFoodTruck || isRestaurantOwner || hasBusinessTeamAccess;
 
   const [isHost, setIsHost] = useState(false);
   useEffect(() => {
@@ -194,8 +178,6 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     };
   }, [user?.id]);
 
-  // Hide nav on giveaway wheel page — record mode and fullscreen are handled
-  // inside the wheel itself; the global nav must not overlay the wheel canvas.
   const isWheelPage = location.startsWith("/admin/giveaway-wheel");
   const [isDocFullscreen, setIsDocFullscreen] = useState(false);
   const [isScoutMapFullscreen, setIsScoutMapFullscreen] = useState(false);
@@ -211,205 +193,191 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
       );
     update();
     const observer = new MutationObserver(update);
-    observer.observe(document.body, { attributes: true, attributeFilter: ["class"] });
+    observer.observe(document.body, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
     return () => observer.disconnect();
   }, []);
+
   if (isGlobalScope && !user && currentPath === "/") return null;
   if (isWheelPage || isDocFullscreen || isScoutMapFullscreen) return null;
-
   if (!isGlobalScope && !showLocalNav) return null;
 
-  // ── DASHBOARD path per role ──────────────────────────────────────────────
   const dashboardPath = !user
     ? "/customer-signup"
-    : isAdmin
-      ? "/admin/dashboard"
-      : isStaff
-        ? "/staff"
+    : "/dashboard";
+
+  const lane: "guest" | "admin_staff" | "event" | "supplier" | "food_truck" | "restaurant" | "host" | "customer" =
+    !user
+      ? "guest"
+      : isAdmin || isStaff
+        ? "admin_staff"
         : isEventCoordinator
-          ? "/event-coordinator/dashboard"
+          ? "event"
           : isSupplier
-            ? "/supplier/dashboard"
-            : isFoodTruck || isRestaurantOwner || hasBusinessTeamAccess
-              ? "/restaurant-owner-dashboard"
-              : isHost
-                ? "/host/dashboard"
-                : "/user-dashboard";
+            ? "supplier"
+            : isFoodTruck
+              ? "food_truck"
+              : isRestaurantOwner || hasBusinessTeamAccess
+                ? "restaurant"
+                : isHost
+                  ? "host"
+                  : "customer";
 
-  // ── USER-SPECIFIC slot (3rd item in desktop bar) ─────────────────────────
-  // This must be a DIFFERENT destination from dashboardPath to avoid duplicates.
-  const userSpecificItem: NavItem = !user
-    ? { path: "/customer-signup", icon: UserPlus, label: "Join" }
-    : isAdmin || isStaff
-      ? { path: "/admin/control-center", icon: Shield, label: "Control" }
-      : isEventCoordinator
-        ? { path: "/events", icon: Calendar, label: "Events" }
-        : isSupplier
-          ? { path: "/supply/orders", icon: Package, label: "Orders" }
-          : isFoodTruck || isRestaurantOwner || hasBusinessTeamAccess
-            ? canManageDeals
-              ? { path: "/deal-creation", icon: Plus, label: "Post Deal" }
-              : {
-                  path: "/restaurant-owner-dashboard",
-                  icon: Store,
-                  label: "Business",
-                }
-            : isHost
-              ? { path: "/events", icon: Calendar, label: "Events" }
-              : { path: "/alerts", icon: Bell, label: "Alerts" };
+  const primarySlotsByLane: Record<typeof lane, NavItem[]> = {
+    guest: [
+      { path: "/video", icon: Clapperboard, label: "Video" },
+      { path: "/events", icon: Calendar, label: "Events" },
+      { path: "/customer-signup", icon: UserPlus, label: "Join" },
+    ],
+    customer: [
+      { path: "/video", icon: Clapperboard, label: "Video" },
+      { path: "/events", icon: Calendar, label: "Events" },
+      { path: dashboardPath, icon: LayoutDashboard, label: "Dashboard" },
+    ],
+    food_truck: [
+      { path: "/parking-pass", icon: ParkingSquare, label: "Parking" },
+      { path: "/orders", icon: ShoppingCart, label: "Orders" },
+      { path: "/kitchen", icon: ChefHat, label: "Kitchen" },
+    ],
+    restaurant: [
+      { path: "/orders", icon: ShoppingCart, label: "Orders" },
+      { path: "/kitchen", icon: ChefHat, label: "Kitchen" },
+      { path: dashboardPath, icon: LayoutDashboard, label: "Dashboard" },
+    ],
+    host: [
+      { path: "/parking-pass", icon: ParkingSquare, label: "Parking" },
+      { path: "/video", icon: Clapperboard, label: "Video" },
+      { path: dashboardPath, icon: LayoutDashboard, label: "Dashboard" },
+    ],
+    event: [
+      { path: "/events", icon: Calendar, label: "Events" },
+      {
+        path: "/event-coordinator/dashboard?tab=requests",
+        icon: Package,
+        label: "Requests",
+      },
+      { path: dashboardPath, icon: LayoutDashboard, label: "Dashboard" },
+    ],
+    supplier: [
+      { path: "/supply/orders", icon: ShoppingCart, label: "Orders" },
+      { path: "/suppliers", icon: Package, label: "Products" },
+      { path: dashboardPath, icon: LayoutDashboard, label: "Dashboard" },
+    ],
+    admin_staff: [
+      { path: dashboardPath, icon: LayoutDashboard, label: "Dashboard" },
+      { path: "/admin/control-center", icon: Shield, label: "Control" },
+      {
+        path: isAdmin ? "/admin/geo/heatmap" : "/staff",
+        icon: BarChart3,
+        label: isAdmin ? "Reports" : "Staff",
+      },
+    ],
+  };
 
-  // ── MORE sheet items (everything not in the 5-item bar) ──────────────────
+  const basePrimary = primarySlotsByLane[lane];
+  const sixSlotNav: NavItem[] = [
+    { path: "/scout", icon: Compass, label: "Scout" },
+    basePrimary[0],
+    basePrimary[1],
+    basePrimary[2],
+    { path: "/share-hub", icon: Share2, label: "Share" },
+    { icon: MoreHorizontal, label: "More", onClick: () => setMoreOpen((v) => !v) },
+  ];
+
+  const dedupeByPath = (items: NavItem[]) => {
+    const seen = new Set<string>();
+    return items.filter((item) => {
+      if (!item.path) return true;
+      if (seen.has(item.path)) return false;
+      seen.add(item.path);
+      return true;
+    });
+  };
+
   const buildMoreItems = (): NavItem[] => {
     const items: NavItem[] = [];
 
-    if (!user) {
+    if (lane === "guest") {
       items.push(
-        { path: "/", icon: Home, label: "Home" },
-        { path: "/scout", icon: Compass, label: "Scout" },
-        { path: "/video", icon: Clapperboard, label: "Video" },
         { path: "/login", icon: User, label: "Log In" },
+        { path: "/customer-signup", icon: UserPlus, label: "Join" },
       );
-    } else if (isAdmin || isStaff) {
+    } else if (lane === "customer") {
       items.push(
-        { path: "/scout", icon: Compass, label: "Scout" },
-        { path: "/food-truck-rush", icon: Truck, label: "Rush Game" },
-        { path: "/video", icon: Clapperboard, label: "Video" },
+        { path: "/profile", icon: User, label: "Profile" },
+      );
+    } else if (lane === "food_truck") {
+      items.push(
+        { path: dashboardPath, icon: LayoutDashboard, label: "Dashboard" },
+        { path: "/parking-pass", icon: ParkingSquare, label: "Schedule" },
         { path: "/events", icon: Calendar, label: "Events" },
-        { path: "/admin/dashboard", icon: Shield, label: "Admin" },
-        { path: "/staff", icon: Users, label: "Staff" },
-        {
-          path: "/restaurant-owner-dashboard",
-          icon: Store,
-          label: "Restaurant",
-        },
-        { path: "/host/dashboard", icon: Users, label: "Host" },
-        { path: "/parking-pass", icon: ParkingSquare, label: "Parking" },
-        {
-          path: "/admin/giveaway-wheel",
-          icon: LayoutDashboard,
-          label: "Giveaway Wheel",
-        },
-        { path: "/profile", icon: User, label: "Profile" },
-      );
-    } else if (isEventCoordinator) {
-      items.push(
-        { path: "/scout", icon: Compass, label: "Scout" },
-        { path: "/video", icon: Clapperboard, label: "Video" },
-        {
-          path: "/event-coordinator/dashboard",
-          icon: LayoutDashboard,
-          label: "Dashboard",
-        },
-        { path: "/profile", icon: User, label: "Profile" },
-      );
-    } else if (isSupplier) {
-      items.push(
-        { path: "/scout", icon: Compass, label: "Scout" },
-        { path: "/video", icon: Clapperboard, label: "Video" },
-        {
-          path: "/supplier/dashboard",
-          icon: LayoutDashboard,
-          label: "Dashboard",
-        },
-        { path: "/profile", icon: User, label: "Profile" },
-      );
-    } else if (isFoodTruck || isRestaurantOwner || hasBusinessTeamAccess) {
-      items.push(
-        { path: "/scout", icon: Compass, label: "Scout" },
-        { path: "/video", icon: Clapperboard, label: "Video" },
-        { path: "/parking-pass", icon: ParkingSquare, label: "Parking" },
-        { path: "/menu-builder", icon: Store, label: "Menu Builder" },
-        { path: "/kitchen", icon: ChefHat, label: "Kitchen" },
-        { path: "/orders", icon: ShoppingCart, label: "Orders" },
+        { path: "/suppliers", icon: Truck, label: "Suppliers" },
         { path: "/subscribe", icon: BarChart3, label: "Subscription" },
-        { path: "/events", icon: Calendar, label: "Events" },
-        { path: "/suppliers", icon: Truck, label: "Supplies" },
-        { path: "/share-hub", icon: Share2, label: "Share" },
+        { path: "/restaurant-owner-dashboard", icon: BarChart3, label: "Reports" },
         { path: "/profile", icon: User, label: "Profile" },
       );
-    } else if (isHost) {
+    } else if (lane === "restaurant") {
       items.push(
-        { path: "/scout", icon: Compass, label: "Scout" },
+        { path: "/events", icon: Calendar, label: "Events" },
+        { path: "/suppliers", icon: Truck, label: "Suppliers" },
+        { path: "/subscribe", icon: BarChart3, label: "Subscription" },
+        { path: "/restaurant-owner-dashboard", icon: BarChart3, label: "Reports" },
+        { path: "/profile", icon: User, label: "Profile" },
+      );
+    } else if (lane === "host") {
+      items.push(
+        { path: "/events", icon: Calendar, label: "Events" },
+        { path: "/profile", icon: User, label: "Profile" },
+      );
+    } else if (lane === "event") {
+      items.push(
         { path: "/video", icon: Clapperboard, label: "Video" },
-        { path: "/host/dashboard", icon: Users, label: "Host" },
-        { path: "/parking-pass", icon: ParkingSquare, label: "Parking" },
-        { path: "/share-hub", icon: Share2, label: "Share" },
+        { path: "/profile", icon: User, label: "Profile" },
+      );
+    } else if (lane === "supplier") {
+      items.push(
+        { path: "/events", icon: Calendar, label: "Events" },
+        { path: "/supplier/dashboard", icon: BarChart3, label: "Reports" },
         { path: "/profile", icon: User, label: "Profile" },
       );
     } else {
-      // Regular customer
       items.push(
-        { path: "/scout", icon: Compass, label: "Scout" },
-        { path: "/video", icon: Clapperboard, label: "Video" },
-        { path: "/alerts", icon: Bell, label: "Alerts" },
-        { path: "/share-hub", icon: Share2, label: "Share" },
+        { path: "/admin/dashboard", icon: Shield, label: "Dashboard" },
+        { path: "/staff", icon: Users, label: "Staff" },
         { path: "/profile", icon: User, label: "Profile" },
       );
     }
 
     items.push({
-      label: isReporting ? "Sending…" : "Report Bug",
+      label: isReporting ? "Sending..." : "Report Bug",
       icon: Bug,
       onClick: handleBugReport,
       isBug: true,
     });
 
-    return items;
+    return dedupeByPath(items);
   };
 
   const moreItems = buildMoreItems();
   const isActive = (path: string) =>
-    location === path || location.startsWith(`${path}/`);
-
-  // ── SCOUT RAIL ───────────────────────────────────────────────────────────
-  // This is the global navigation model on every surface. Deals live inside
-  // Scout, while saved/favorites live on the user's dashboard.
-  // Deduplicate: if userSpecificItem points to the same path as dashboardPath,
-  // omit it to avoid two nav items going to the same destination.
-  const userSpecificIsUnique =
-    !userSpecificItem.path || userSpecificItem.path !== dashboardPath;
-  const scoutRailItems: NavItem[] = [
-    { path: "/scout", icon: Compass, label: "Scout" },
-    { path: dashboardPath, icon: LayoutDashboard, label: "Dashboard" },
-    ...(userSpecificIsUnique ? [userSpecificItem] : []),
-    { path: "/share-hub", icon: Share2, label: "Share" },
-    { path: "/profile", icon: User, label: "Profile" },
-  ];
-  const mobileSecondItem: NavItem =
-    { path: dashboardPath, icon: LayoutDashboard, label: "Dashboard" };
-  const mobileThirdItem: NavItem =
-    userSpecificItem;
-  const showMobileThirdItem =
-    Boolean(mobileThirdItem.path) &&
-    userSpecificIsUnique;
-  const isScoutRoute = currentPath === "/scout";
-  const scoutMobileRailItems: NavItem[] = [
-    { path: "/scout", icon: Compass, label: "Scout" },
-    { path: "/map", icon: MapPin, label: "Map" },
-    { path: "/deals", icon: Tag, label: "Deals" },
-    {
-      path: user ? "/user-dashboard" : dashboardPath,
-      icon: Bookmark,
-      label: "Saved",
-    },
-    { path: user ? "/profile" : "/login", icon: User, label: "You" },
-  ];
+    location === path || location.startsWith(`${path}/`) || location.startsWith(`${path}?`);
 
   return (
     <>
-      {/* Desktop top-right pill */}
       <div
         data-nav-root={scope}
         className="hidden lg:block fixed top-6 right-6 z-50"
       >
         <div className="rounded-2xl border border-white/5 bg-[#120805]/40 backdrop-blur-xl shadow-[0_8px_32px_rgba(0,0,0,0.4)] p-2">
           <div className="flex items-center gap-1">
-            {scoutRailItems.map((item) =>
+            {sixSlotNav.map((item, idx) =>
               item.path ? (
                 <Link
-                  key={item.path}
+                  key={`${item.path}-${idx}`}
                   href={item.path}
-                  className={`inline-flex h-11 items-center gap-2 rounded-xl px-4 text-sm font-bold transition-all ${
+                  className={`inline-flex h-11 items-center gap-2 rounded-xl px-3 text-sm font-bold transition-all ${
                     isActive(item.path)
                       ? "bg-primary text-[#1a0d08] shadow-[0_0_20px_rgba(255,90,47,0.4)]"
                       : "text-white/60 hover:text-white hover:bg-white/5"
@@ -421,13 +389,30 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
                     {item.label}
                   </span>
                 </Link>
-              ) : null,
+              ) : (
+                <button
+                  key={`more-${idx}`}
+                  type="button"
+                  aria-label={item.label}
+                  aria-expanded={moreOpen}
+                  onClick={item.onClick}
+                  className={`inline-flex h-11 items-center gap-2 rounded-xl px-3 text-sm font-bold transition-all ${
+                    moreOpen
+                      ? "bg-primary text-[#1a0d08] shadow-[0_0_20px_rgba(255,90,47,0.4)]"
+                      : "text-white/60 hover:text-white hover:bg-white/5"
+                  }`}
+                >
+                  <item.icon className="h-4 w-4" />
+                  <span className="hidden lg:inline uppercase tracking-wider text-[11px]">
+                    {item.label}
+                  </span>
+                </button>
+              ),
             )}
           </div>
         </div>
       </div>
 
-      {/* Mobile bottom nav */}
       <nav
         aria-label="Primary navigation"
         className="fixed left-0 right-0 z-[1100] lg:hidden"
@@ -435,19 +420,20 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
       >
         <div className="mx-auto max-w-md px-4">
           <div
-            className="relative flex items-end justify-between gap-1 h-[68px] px-3 rounded-full bg-[#120805]/65 backdrop-blur-xl ring-1 ring-white/10"
+            className="relative flex items-end justify-between gap-1 h-[68px] px-2 rounded-full bg-[#120805]/65 backdrop-blur-xl ring-1 ring-white/10"
             style={{
               boxShadow:
                 "0 0 0 1px rgba(255,90,47,0.10), 0 18px 48px rgba(0,0,0,0.65)",
             }}
           >
-            {isScoutRoute ? (
-              scoutMobileRailItems.map((item, index) => {
-                const active = Boolean(item.path) && isActive(item.path!);
-                const isPrimary = index === 0;
-                return item.path ? (
+            {sixSlotNav.map((item, index) => {
+              const isPrimary = index === 0;
+              const active = item.path ? isActive(item.path) : moreOpen;
+
+              if (item.path) {
+                return (
                   <Link
-                    key={item.path}
+                    key={`${item.path}-${index}`}
                     href={item.path}
                     aria-label={item.label}
                     aria-current={active ? "page" : undefined}
@@ -457,7 +443,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
                   >
                     {isPrimary ? (
                       <span
-                        className="flex h-12 w-12 items-center justify-center rounded-full bg-[#120805]/70 ring-2 ring-orange-500 -mt-6"
+                        className="flex h-11 w-11 items-center justify-center rounded-full bg-[#120805]/70 ring-2 ring-orange-500 -mt-5"
                         style={{
                           boxShadow:
                             "0 0 0 4px rgba(255,90,47,0.15), 0 0 24px rgba(255,90,47,0.35)",
@@ -469,115 +455,42 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
                     ) : (
                       <item.icon className="h-5 w-5" aria-hidden="true" />
                     )}
-                    <span className="text-[11px] font-medium">{item.label}</span>
+                    <span className="text-[10px] font-medium truncate max-w-full">{item.label}</span>
                   </Link>
-                ) : null;
-              })
-            ) : (
-              <>
-                <Link
-                  href="/scout"
-                  aria-label="Scout"
-                  aria-current={isActive("/scout") ? "page" : undefined}
-                  className="flex flex-col items-center justify-end gap-1 flex-1 min-w-0 h-full pb-1 transition-transform active:scale-95"
-                >
-                  <span
-                    className="flex h-12 w-12 items-center justify-center rounded-full bg-[#120805]/70 ring-2 ring-orange-500 -mt-6"
-                    style={{
-                      boxShadow:
-                        "0 0 0 4px rgba(255,90,47,0.15), 0 0 24px rgba(255,90,47,0.35)",
-                    }}
-                    aria-hidden="true"
-                  >
-                    <Search className="h-5 w-5 text-orange-300" />
-                  </span>
-                  <span className="text-[11px] font-medium text-orange-300">
-                    Scout
-                  </span>
-                </Link>
-                <Link
-                  href={mobileSecondItem.path || "/scout"}
-                  aria-label={mobileSecondItem.label}
-                  aria-current={
-                    mobileSecondItem.path && isActive(mobileSecondItem.path)
-                      ? "page"
-                      : undefined
-                  }
-                  className={`flex flex-col items-center justify-end gap-0.5 flex-1 min-w-0 h-full pb-2 transition-colors ${
-                    mobileSecondItem.path && isActive(mobileSecondItem.path)
-                      ? "text-orange-300"
-                      : "text-white/70 hover:text-white"
-                  }`}
-                >
-                  <mobileSecondItem.icon className="h-5 w-5" aria-hidden="true" />
-                  <span className="text-[11px] font-medium">
-                    {mobileSecondItem.label}
-                  </span>
-                </Link>
-                {showMobileThirdItem && mobileThirdItem.path ? (
-                  <Link
-                    href={mobileThirdItem.path}
-                    aria-label={mobileThirdItem.label}
-                    aria-current={
-                      isActive(mobileThirdItem.path) ? "page" : undefined
-                    }
-                    className={`flex flex-col items-center justify-end gap-0.5 flex-1 min-w-0 h-full pb-2 transition-colors ${
-                      isActive(mobileThirdItem.path)
-                        ? "text-orange-300"
-                        : "text-white/70 hover:text-white"
-                    }`}
-                  >
-                    <mobileThirdItem.icon className="h-5 w-5" aria-hidden="true" />
-                    <span className="text-[11px] font-medium">
-                      {mobileThirdItem.label}
-                    </span>
-                  </Link>
-                ) : null}
-                <Link
-                  href="/share-hub"
-                  aria-label="Share"
-                  aria-current={isActive("/share-hub") ? "page" : undefined}
-                  className={`flex flex-col items-center justify-end gap-0.5 flex-1 min-w-0 h-full pb-2 transition-colors ${
-                    isActive("/share-hub")
-                      ? "text-orange-300"
-                      : "text-white/70 hover:text-white"
-                  }`}
-                >
-                  <Share2 className="h-5 w-5" aria-hidden="true" />
-                  <span className="text-[11px] font-medium">Share</span>
-                </Link>
+                );
+              }
+
+              return (
                 <button
+                  key={`more-${index}`}
                   type="button"
-                  aria-label="More navigation options"
+                  aria-label={item.label}
                   aria-expanded={moreOpen}
-                  onClick={() => setMoreOpen((v) => !v)}
+                  onClick={item.onClick}
                   className={`flex flex-col items-center justify-end gap-0.5 flex-1 min-w-0 h-full pb-2 transition-colors ${
                     moreOpen ? "text-orange-300" : "text-white/70 hover:text-white"
                   }`}
                 >
-                  <MoreHorizontal className="h-5 w-5" aria-hidden="true" />
-                  <span className="text-[11px] font-medium">More</span>
+                  <item.icon className="h-5 w-5" aria-hidden="true" />
+                  <span className="text-[10px] font-medium">{item.label}</span>
                 </button>
-              </>
-            )}
+              );
+            })}
           </div>
         </div>
       </nav>
 
-      {/* More slide-up sheet */}
       {moreOpen && (
         <div
-          className="fixed inset-0 z-[1090] lg:hidden"
+          className="fixed inset-0 z-[1090]"
           aria-modal="true"
           role="dialog"
           aria-label="More options"
         >
-          {/* Backdrop */}
           <div
             className="absolute inset-0 bg-[#120805]/60 backdrop-blur-sm"
             onClick={() => setMoreOpen(false)}
           />
-          {/* Sheet */}
           <div
             ref={sheetRef}
             className="absolute left-0 right-0 bottom-[calc(env(safe-area-inset-bottom)+5.5rem)] mx-4 rounded-3xl bg-[#120805]/80 backdrop-blur-2xl border border-white/10 shadow-[0_-16px_48px_rgba(0,0,0,0.7)] overflow-hidden"

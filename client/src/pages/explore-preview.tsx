@@ -13,6 +13,7 @@ import {
   Bookmark,
   CalendarDays,
   ChevronRight,
+  Compass,
   Flame,
   Heart,
   MapPin,
@@ -21,9 +22,9 @@ import {
   Minimize2,
   Navigation2,
   Search,
-  Sparkles,
   Tag,
   TrendingUp,
+  Users,
   Utensils,
   User as UserIcon,
 } from "lucide-react";
@@ -210,6 +211,38 @@ type CravingCategory = {
   image: string;
 };
 
+type ScoutSceneLaneId =
+  | "for_you"
+  | "community"
+  | "nearby_now"
+  | "food_trucks"
+  | "restaurants"
+  | "deals"
+  | "events"
+  | "new_menus"
+  | "late_night"
+  | "worth_discovering";
+
+type ScoutSceneLane = {
+  id: ScoutSceneLaneId;
+  label: string;
+  icon: "spark" | "community" | "nearby" | "truck" | "restaurant" | "deal" | "event" | "menu" | "late" | "discover";
+  cravingId: string;
+};
+
+const SCOUT_SCENE_LANES: ScoutSceneLane[] = [
+  { id: "for_you", label: "For You", icon: "spark", cravingId: "something-new" },
+  { id: "community", label: "Community", icon: "community", cravingId: "something-new" },
+  { id: "nearby_now", label: "Nearby Now", icon: "nearby", cravingId: "open-now" },
+  { id: "food_trucks", label: "Food Trucks", icon: "truck", cravingId: "food-truck" },
+  { id: "restaurants", label: "Restaurants", icon: "restaurant", cravingId: "sit-down" },
+  { id: "deals", label: "Deals", icon: "deal", cravingId: "deals-today" },
+  { id: "events", label: "Events", icon: "event", cravingId: "today" },
+  { id: "new_menus", label: "New Menus", icon: "menu", cravingId: "something-new" },
+  { id: "late_night", label: "Late Night", icon: "late", cravingId: "open-now" },
+  { id: "worth_discovering", label: "Worth Discovering", icon: "discover", cravingId: "something-new" },
+];
+
 type Daypart = "morning" | "lunch" | "afternoon" | "dinner" | "late";
 
 function getDaypart(date = new Date()): Daypart {
@@ -385,10 +418,13 @@ const SCOUT_SEARCH_OPTIONS: CravingCategory[] = [
 
 type CravingBoardItem = {
   id: string;
-  kind: "Menu" | "Place" | "Truck" | "Deal";
+  kind: "Menu" | "Place" | "Truck" | "Deal" | "Event";
   title: string;
   subtitle: string;
   href: string;
+  restaurantId?: string | null;
+  truckId?: string | null;
+  dealId?: string | null;
   imageUrl?: string | null;
   meta?: string | null;
   reason?: string | null;
@@ -924,12 +960,14 @@ function buildCravingBoardItems({
   restaurants,
   menuItems,
   deals,
+  events,
 }: {
   craving: CravingCategory;
   liveTrucks: LiveTruckSummary[];
   restaurants: RestaurantSummary[];
   menuItems: LocalMenuItemFeedItem[];
   deals: DealSummary[];
+  events: EventSummary[];
 }): CravingBoardItem[] {
   const used = new Set<string>();
   const addPick = (items: CravingBoardItem[], pick: CravingBoardItem | null) => {
@@ -975,6 +1013,16 @@ function buildCravingBoardItems({
     .filter(({ score }) => score > 0)
     .sort((a, b) => b.score - a.score);
 
+  const rankedEvents = events
+    .map((event) => {
+      const title = event.title || event.name || "";
+      const subtitle = [event.venueName, event.locationName].filter(Boolean).join(" ");
+      const score = scoreTextForCraving(`${title} ${subtitle}`, craving);
+      return { event, score };
+    })
+    .filter(({ score }) => score > 0)
+    .sort((a, b) => b.score - a.score);
+
   const items: CravingBoardItem[] = [];
 
   for (const { item, score } of rankedMenuItems.slice(0, 4)) {
@@ -984,6 +1032,7 @@ function buildCravingBoardItems({
       title: item.name,
       subtitle: item.restaurantName || item.cuisineType || "Local menu item",
       href: `/restaurant/${item.restaurantId}`,
+      restaurantId: String(item.restaurantId),
       imageUrl: item.imageUrl,
       meta: formatMiles(item.distanceMiles) || item.cuisineType || "Menu",
       reason: getMenuItemSearchReason(item),
@@ -1005,6 +1054,7 @@ function buildCravingBoardItems({
       title: getRestaurantName(restaurant),
       subtitle: restaurant.cuisineType || restaurant.description || "Local restaurant",
       href: `/restaurant/${restaurant.id}`,
+      restaurantId: String(restaurant.id),
       imageUrl: getRestaurantImage(restaurant),
       meta: getRestaurantDistance(restaurant) || "Place",
       reason: getRestaurantSearchReason(restaurant),
@@ -1031,6 +1081,7 @@ function buildCravingBoardItems({
       title: truck.name,
       subtitle: truck.cuisineType || "Food truck",
       href: `/truck/${truck.id}`,
+      truckId: String(truck.id),
       imageUrl: getTruckImage(truck),
       meta: [formatDistance(truck), formatWait(truck)].filter(Boolean).join(" / ") || "Serving now",
       reason: "Serving now",
@@ -1053,6 +1104,7 @@ function buildCravingBoardItems({
       title: deal.title || "Nearby deal",
       subtitle: deal.restaurantName || deal.description || "Local offer",
       href: `/deal/${deal.id}`,
+      dealId: String(deal.id),
       imageUrl: deal.imageUrl,
       meta: deal.discountText || "Deal",
       reason: "Deal today",
@@ -1066,9 +1118,31 @@ function buildCravingBoardItems({
     });
   }
 
+  for (const { event, score } of rankedEvents.slice(0, 2)) {
+    addPick(items, {
+      id: `event-${event.id}`,
+      kind: "Event",
+      title: event.title || event.name || "Nearby event",
+      subtitle: [event.venueName || event.locationName, formatEventStartLabel(event)]
+        .filter(Boolean)
+        .join(" · "),
+      href: `/events/${event.id}`,
+      imageUrl: event.imageUrl || event.heroImageUrl || null,
+      meta: formatEventStartLabel(event) || "Event",
+      reason: "Happening today",
+      freshnessMeta: {
+        kind: "event",
+        startsAt: event.startsAt,
+        startTime: event.startTime,
+        updatedAt: readStringField(event, ["updatedAt", "lastUpdatedAt"]),
+      },
+      score,
+    });
+  }
+
   return items
     .sort((a, b) => {
-      const kindRank = { Menu: 4, Place: 3, Truck: 2, Deal: 1 };
+      const kindRank = { Menu: 5, Place: 4, Truck: 3, Deal: 2, Event: 1 };
       return b.score - a.score || kindRank[b.kind] - kindRank[a.kind];
     })
     .slice(0, 8);
@@ -1432,6 +1506,7 @@ export default function ExplorePreview() {
   const [selectedCravingId, setSelectedCravingId] = useState<string>(
     () => DAYPART_DEFAULT_INTENT[getDaypart()],
   );
+  const [activeSceneLaneId, setActiveSceneLaneId] = useState<ScoutSceneLaneId>("for_you");
 
   const requestLocation = useCallback(() => {
     if (typeof navigator === "undefined" || !navigator.geolocation) {
@@ -1900,12 +1975,80 @@ export default function ExplorePreview() {
     });
   }, [activeMapLayers, allMapMarkers, nearbyRestaurants]);
 
+  const sceneFilteredMapMarkers = useMemo<MapAdapterMarker[]>(() => {
+    if (activeSceneLaneId === "for_you") return filteredMapMarkers;
+    if (activeSceneLaneId === "community")
+      return filteredMapMarkers.filter((marker) => marker.kind === "restaurant" || marker.kind === "truck");
+    if (activeSceneLaneId === "nearby_now")
+      return filteredMapMarkers.filter((marker) => marker.kind === "truck" || marker.kind === "restaurant");
+    if (activeSceneLaneId === "food_trucks")
+      return filteredMapMarkers.filter((marker) => marker.kind === "truck");
+    if (activeSceneLaneId === "restaurants")
+      return filteredMapMarkers.filter((marker) => marker.kind === "restaurant");
+    if (activeSceneLaneId === "deals")
+      return filteredMapMarkers.filter((marker) => marker.kind === "restaurant");
+    if (activeSceneLaneId === "events")
+      return filteredMapMarkers.filter((marker) => marker.kind === "event");
+    if (activeSceneLaneId === "new_menus")
+      return filteredMapMarkers.filter((marker) => marker.kind === "restaurant" || marker.kind === "truck");
+    if (activeSceneLaneId === "late_night")
+      return filteredMapMarkers.filter((marker) => marker.kind === "restaurant" || marker.kind === "event");
+    if (activeSceneLaneId === "worth_discovering")
+      return filteredMapMarkers.filter((marker) => marker.kind === "restaurant" || marker.kind === "truck");
+    return filteredMapMarkers;
+  }, [activeSceneLaneId, filteredMapMarkers]);
+
   const toggleMapLayer = useCallback((layer: MapLayerId) => {
     setActiveMapLayers((current) => ({
       ...current,
       [layer]: !current[layer],
     }));
   }, []);
+
+  useEffect(() => {
+    if (activeSceneLaneId === "food_trucks") {
+      setActiveMapLayers({
+        openNow: true,
+        foodTrucks: true,
+        deals: false,
+        happeningToday: false,
+      });
+      return;
+    }
+    if (activeSceneLaneId === "restaurants") {
+      setActiveMapLayers({
+        openNow: true,
+        foodTrucks: false,
+        deals: true,
+        happeningToday: false,
+      });
+      return;
+    }
+    if (activeSceneLaneId === "deals") {
+      setActiveMapLayers({
+        openNow: false,
+        foodTrucks: false,
+        deals: true,
+        happeningToday: false,
+      });
+      return;
+    }
+    if (activeSceneLaneId === "events" || activeSceneLaneId === "late_night") {
+      setActiveMapLayers({
+        openNow: false,
+        foodTrucks: false,
+        deals: false,
+        happeningToday: true,
+      });
+      return;
+    }
+    setActiveMapLayers({
+      openNow: true,
+      foodTrucks: true,
+      deals: true,
+      happeningToday: true,
+    });
+  }, [activeSceneLaneId]);
 
   /* --------- map state --------- */
 
@@ -2182,6 +2325,28 @@ export default function ExplorePreview() {
     nearbyRestaurantsLoading || restaurantsOpenNow.length > 0;
   const showDealsSection = allDeals.length > 0;
   const showEventsSection = visibleEvents.length > 0;
+  const sceneWantsCommunity =
+    activeSceneLaneId === "community" || activeSceneLaneId === "for_you";
+  const sceneWantsNearbyNow =
+    activeSceneLaneId === "nearby_now" || activeSceneLaneId === "for_you";
+  const sceneWantsFoodTrucks =
+    activeSceneLaneId === "food_trucks" || activeSceneLaneId === "for_you";
+  const sceneWantsRestaurants =
+    activeSceneLaneId === "restaurants" ||
+    activeSceneLaneId === "for_you" ||
+    activeSceneLaneId === "nearby_now";
+  const sceneWantsDeals =
+    activeSceneLaneId === "deals" || activeSceneLaneId === "for_you";
+  const sceneWantsEvents =
+    activeSceneLaneId === "events" ||
+    activeSceneLaneId === "for_you" ||
+    activeSceneLaneId === "late_night";
+  const sceneWantsNewMenus =
+    activeSceneLaneId === "new_menus" || activeSceneLaneId === "for_you";
+  const sceneWantsWorthDiscovering =
+    activeSceneLaneId === "worth_discovering" ||
+    activeSceneLaneId === "for_you" ||
+    activeSceneLaneId === "new_menus";
   const localActivityCount =
     liveTrucks.length +
     localMenuItems.length +
@@ -2197,6 +2362,13 @@ export default function ExplorePreview() {
       SCOUT_SEARCH_OPTIONS[0]
     );
   }, [selectedCravingId]);
+  const handleSceneLaneChange = useCallback((laneId: ScoutSceneLaneId) => {
+    setActiveSceneLaneId(laneId);
+    const lane = SCOUT_SCENE_LANES.find((entry) => entry.id === laneId);
+    if (lane) {
+      setSelectedCravingId(lane.cravingId);
+    }
+  }, []);
 
   const daypartSearchCopy = DAYPART_SEARCH_COPY[currentDaypart];
 
@@ -2208,8 +2380,97 @@ export default function ExplorePreview() {
         restaurants: restaurantsOpenNow,
         menuItems: localMenuItems,
         deals: allDeals,
+        events: visibleEvents,
       }),
-    [allDeals, localMenuItems, restaurantsOpenNow, selectedCraving, trucksServingNow],
+    [allDeals, localMenuItems, restaurantsOpenNow, selectedCraving, trucksServingNow, visibleEvents],
+  );
+  const sceneMixedFeedItems = useMemo(() => {
+    const items = cravingBoardItems;
+    if (activeSceneLaneId === "for_you") {
+      const pickByKind = (kind: CravingBoardItem["kind"]) =>
+        items.find((item) => item.kind === kind) || null;
+      const picks: CravingBoardItem[] = [];
+      const add = (candidate: CravingBoardItem | null) => {
+        if (!candidate) return;
+        if (picks.some((entry) => entry.id === candidate.id)) return;
+        picks.push(candidate);
+      };
+      // Balanced first-screen mix: trucks, places, menu, deal, event, and discovery.
+      add(pickByKind("Truck"));
+      add(pickByKind("Place"));
+      add(pickByKind("Menu"));
+      add(pickByKind("Deal"));
+      add(pickByKind("Event"));
+      const discoveryPlace = items.find(
+        (item) =>
+          item.kind === "Place" &&
+          /new|under|fresh|updated|quiet/i.test(String(item.reason || "")),
+      );
+      add(discoveryPlace || null);
+      if (picks.length < 7) {
+        for (const candidate of items) {
+          add(candidate);
+          if (picks.length >= 7) break;
+        }
+      }
+      return picks.slice(0, 7);
+    }
+    if (activeSceneLaneId === "food_trucks") {
+      return items.filter((item) => item.kind === "Truck" || item.kind === "Deal").slice(0, 7);
+    }
+    if (activeSceneLaneId === "restaurants") {
+      return items.filter((item) => item.kind === "Place" || item.kind === "Menu").slice(0, 7);
+    }
+    if (activeSceneLaneId === "deals") {
+      return items.filter((item) => item.kind === "Deal" || item.kind === "Place").slice(0, 7);
+    }
+    if (activeSceneLaneId === "events") {
+      return items.filter((item) => item.kind === "Event" || item.kind === "Place").slice(0, 7);
+    }
+    if (activeSceneLaneId === "new_menus") {
+      return items.filter((item) => item.kind === "Menu" || item.kind === "Place").slice(0, 7);
+    }
+    if (activeSceneLaneId === "worth_discovering") {
+      return items.filter((item) => item.kind === "Place" || item.kind === "Truck").slice(0, 7);
+    }
+    return items.slice(0, 7);
+  }, [activeSceneLaneId, cravingBoardItems]);
+  const featuredRestaurantIds = useMemo(
+    () =>
+      new Set(
+        sceneMixedFeedItems
+          .map((item) => item.restaurantId)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    [sceneMixedFeedItems],
+  );
+  const featuredTruckIds = useMemo(
+    () =>
+      new Set(
+        sceneMixedFeedItems
+          .map((item) => item.truckId)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    [sceneMixedFeedItems],
+  );
+  const featuredDealIds = useMemo(
+    () =>
+      new Set(
+        sceneMixedFeedItems
+          .map((item) => item.dealId)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    [sceneMixedFeedItems],
+  );
+  const featuredEventIds = useMemo(
+    () =>
+      new Set(
+        sceneMixedFeedItems
+          .filter((item) => item.kind === "Event")
+          .map((item) => item.id.replace(/^event-/, ""))
+          .filter(Boolean),
+      ),
+    [sceneMixedFeedItems],
   );
 
   const localActivityItems = useMemo(
@@ -2232,11 +2493,11 @@ export default function ExplorePreview() {
         eventCount: visibleEvents.length,
         menuUpdateCount: localMenuItems.length,
         activityItemCount: localActivityItems.length,
-        mapMarkerCount: filteredMapMarkers.filter((marker) => marker.kind !== "user").length,
+        mapMarkerCount: sceneFilteredMapMarkers.filter((marker) => marker.kind !== "user").length,
       }),
     [
       allDeals.length,
-      filteredMapMarkers,
+      sceneFilteredMapMarkers,
       localActivityItems.length,
       localMenuItems.length,
       restaurantsOpenNow.length,
@@ -2263,10 +2524,26 @@ export default function ExplorePreview() {
   }, [visibleLocalActivityItems]);
   const visibleOpenRestaurants = useMemo(() => {
     const filtered = restaurantsOpenNow.filter(
-      (restaurant) => !localActivityRestaurantIds.has(String(restaurant.id)),
+      (restaurant) =>
+        !localActivityRestaurantIds.has(String(restaurant.id)) &&
+        !featuredRestaurantIds.has(String(restaurant.id)),
     );
     return filtered.length > 0 ? filtered : restaurantsOpenNow;
-  }, [localActivityRestaurantIds, restaurantsOpenNow]);
+  }, [featuredRestaurantIds, localActivityRestaurantIds, restaurantsOpenNow]);
+  const visibleTrucksServingNow = useMemo(() => {
+    const filtered = trucksServingNow.filter(
+      (truck) => !featuredTruckIds.has(String(truck.id)),
+    );
+    return filtered.length > 0 ? filtered : trucksServingNow;
+  }, [featuredTruckIds, trucksServingNow]);
+  const visibleDeals = useMemo(() => {
+    const filtered = allDeals.filter((deal) => !featuredDealIds.has(String(deal.id)));
+    return filtered.length > 0 ? filtered : allDeals;
+  }, [allDeals, featuredDealIds]);
+  const visibleSceneEvents = useMemo(() => {
+    const filtered = visibleEvents.filter((event) => !featuredEventIds.has(String(event.id)));
+    return filtered.length > 0 ? filtered : visibleEvents;
+  }, [featuredEventIds, visibleEvents]);
   const topLocalFavoriteRestaurants = useMemo(
     () =>
       nearbyRestaurants
@@ -2297,9 +2574,17 @@ export default function ExplorePreview() {
       (restaurant) => !topLocalFavoriteIds.has(String(restaurant.id)),
     );
   }, [isLowActivity, moreFoodRestaurants, topLocalFavoriteIds]);
+  const openingLaterRestaurants = useMemo(
+    () =>
+      visibleMoreFoodRestaurants.filter(
+        (restaurant) => getRestaurantOpenState(restaurant) === "closed",
+      ),
+    [visibleMoreFoodRestaurants],
+  );
   const showMoreFoodSection = visibleMoreFoodRestaurants.length > 0;
   const showTopLocalFavoritesSection =
-    isLowActivity && topLocalFavoriteRestaurants.length > 0;
+    (isLowActivity || activeSceneLaneId === "community") &&
+    topLocalFavoriteRestaurants.length > 0;
   const compactMapHeight = isHighActivity
     ? "clamp(260px, 38vh, 390px)"
     : isMediumActivity
@@ -2339,11 +2624,77 @@ export default function ExplorePreview() {
   const moreRailSubtitle = isLowActivity
     ? "Local places and food options around you."
     : "Nearby trucks and restaurants without current open status.";
+  const laneFoodTrucksTitle = activeSceneLaneId === "food_trucks" ? "Food Trucks Nearby" : DISCOVERY_LAYERS.foodTrucks.title;
+  const laneRestaurantsTitle = activeSceneLaneId === "restaurants" ? "Restaurants Nearby" : restaurantsRailTitle;
+  const laneDealsTitle = activeSceneLaneId === "deals" ? "Deals Today" : DISCOVERY_LAYERS.deals.title;
+  const laneEventsTitle =
+    activeSceneLaneId === "events" ? "Happening Today" : eventsRailTitle;
+  const laneMoreTitle =
+    activeSceneLaneId === "worth_discovering" ? "Worth Discovering" : moreRailTitle;
+  const showQuickUpdateBarForLane =
+    showQuickUpdateBar &&
+    (activeSceneLaneId === "for_you" ||
+      activeSceneLaneId === "food_trucks" ||
+      activeSceneLaneId === "restaurants" ||
+      activeSceneLaneId === "deals");
+  const activeSceneLabel =
+    SCOUT_SCENE_LANES.find((lane) => lane.id === activeSceneLaneId)?.label || "For You";
+  const compactMapSceneHint =
+    activeSceneLaneId === "food_trucks"
+      ? "Truck activity nearby"
+      : activeSceneLaneId === "restaurants"
+        ? "Open restaurants nearby"
+        : activeSceneLaneId === "deals"
+          ? "Active deals nearby"
+          : activeSceneLaneId === "events"
+            ? "Food events nearby"
+            : activeSceneLaneId === "new_menus"
+              ? "Fresh menu updates nearby"
+              : activeSceneLaneId === "worth_discovering"
+                ? "New and under-scouted spots nearby"
+                : "Tap the map to explore nearby food";
+  const laneHasContent =
+    sceneMixedFeedItems.length > 0 ||
+    (sceneWantsFoodTrucks && visibleTrucksServingNow.length > 0) ||
+    (sceneWantsRestaurants && visibleOpenRestaurants.length > 0) ||
+    (sceneWantsDeals && visibleDeals.length > 0) ||
+    (sceneWantsEvents && visibleSceneEvents.length > 0) ||
+    (sceneWantsNewMenus && localMenuItems.length > 0) ||
+    (sceneWantsWorthDiscovering && visibleMoreFoodRestaurants.length > 0) ||
+    (sceneWantsCommunity && topLocalFavoriteRestaurants.length > 0);
+  const sceneOptionCounts = useMemo<Record<ScoutSceneLaneId, number>>(
+    () => ({
+      for_you: sceneMixedFeedItems.length,
+      community: topLocalFavoriteRestaurants.length,
+      nearby_now:
+        visibleLocalActivityItems.length +
+        visibleOpenRestaurants.length +
+        visibleTrucksServingNow.length,
+      food_trucks: visibleTrucksServingNow.length,
+      restaurants: visibleOpenRestaurants.length,
+      deals: visibleDeals.length,
+      events: visibleSceneEvents.length,
+      new_menus: localMenuItems.length,
+      late_night: visibleSceneEvents.length + visibleOpenRestaurants.length,
+      worth_discovering: visibleMoreFoodRestaurants.length,
+    }),
+    [
+      localMenuItems.length,
+      sceneMixedFeedItems.length,
+      topLocalFavoriteRestaurants.length,
+      visibleDeals.length,
+      visibleSceneEvents.length,
+      visibleLocalActivityItems.length,
+      visibleMoreFoodRestaurants.length,
+      visibleOpenRestaurants.length,
+      visibleTrucksServingNow.length,
+    ],
+  );
 
   return (
     <>
       <SEOHead
-        title="Scout | MealScout — Follow The Flavor."
+        title="Scout | MealScout"
         description="Discover food trucks, restaurants, and deals near you. MealScout puts the local food scene right in your hands."
       />
 
@@ -2431,7 +2782,7 @@ export default function ExplorePreview() {
                       mapId={effectiveGoogleMapsMapId || undefined}
                       center={mapCenter}
                       zoom={13}
-                      markers={filteredMapMarkers}
+                      markers={sceneFilteredMapMarkers}
                       showRoadTrafficLayer={false}
                       userLocation={coords}
                       isNightTheme={false}
@@ -2447,7 +2798,7 @@ export default function ExplorePreview() {
                   <Suspense fallback={<HeroMapFallback reason="loading" />}>
                     <ThemedScoutMap
                       userLocation={coords}
-                      markers={filteredMapMarkers}
+                      markers={sceneFilteredMapMarkers}
                       zoom={13}
                       onMarkerTap={handlePreviewMarkerTap}
                     />
@@ -2485,7 +2836,7 @@ export default function ExplorePreview() {
                     mapId={effectiveGoogleMapsMapId || undefined}
                     center={mapCenter}
                     zoom={mapZoom}
-                    markers={filteredMapMarkers}
+                    markers={sceneFilteredMapMarkers}
                     showRoadTrafficLayer={false}
                     userLocation={coords}
                     isNightTheme={false}
@@ -2508,7 +2859,7 @@ export default function ExplorePreview() {
                     <Suspense fallback={<HeroMapFallback reason="loading" />}>
                       <ThemedScoutMap
                         userLocation={coords}
-                        markers={filteredMapMarkers}
+                        markers={sceneFilteredMapMarkers}
                         zoom={13}
                         interactive={true}
                         onMarkerTap={handlePreviewMarkerTap}
@@ -2606,7 +2957,7 @@ export default function ExplorePreview() {
 
           {sheetState === "fullMap" && mapBounds && (
             <MapEdgeIndicators
-              markers={filteredMapMarkers}
+              markers={sceneFilteredMapMarkers}
               bounds={mapBounds}
               center={mapCenter || coords}
               selectedId={selectedLiveTruck ? String(selectedLiveTruck.id) : selectedMapMarker?.id || null}
@@ -2644,8 +2995,14 @@ export default function ExplorePreview() {
               />
               <div className="absolute bottom-3 left-3 right-3 z-20 flex items-end justify-between gap-3">
                 <div className="min-w-0">
+                  <p className="truncate text-[10px] font-black uppercase tracking-[0.12em] text-orange-100/70 drop-shadow-[0_2px_10px_rgba(0,0,0,0.7)]">
+                    {activeSceneLabel}
+                  </p>
                   <p className="truncate text-sm font-extrabold text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.7)]">
                     {hasResolvedLocation ? shortLocation : "Nearby now"}
+                  </p>
+                  <p className="truncate text-[11px] font-semibold text-white/65 drop-shadow-[0_2px_10px_rgba(0,0,0,0.7)]">
+                    {compactMapSceneHint}
                   </p>
                 </div>
                 <button
@@ -2662,9 +3019,9 @@ export default function ExplorePreview() {
                 <Link
                   href="/search"
                   className="flex h-11 w-full items-center justify-between rounded-full bg-[#120805]/78 px-4 text-sm font-semibold text-white/74 ring-1 ring-white/14 backdrop-blur-xl shadow-[0_8px_24px_rgba(0,0,0,0.4)]"
-                  aria-label="Search food, trucks, deals, places"
+                  aria-label="Search food, places, trucks, events"
                 >
-                  <span className="truncate">Search food, trucks, deals, places</span>
+                  <span className="truncate">Search food, places, trucks, events</span>
                   <Search className="h-4 w-4 shrink-0 text-white/60" aria-hidden="true" />
                 </Link>
               </div>
@@ -2680,6 +3037,12 @@ export default function ExplorePreview() {
           <div
             className="relative z-10 mt-4"
           >
+            <SceneOptionsBar
+              activeSceneLaneId={activeSceneLaneId}
+              onSceneLaneSelect={handleSceneLaneChange}
+              counts={sceneOptionCounts}
+            />
+
             <CravingCompass
               mode={scoutActivityMode}
               daypartCopy={daypartSearchCopy}
@@ -2687,7 +3050,11 @@ export default function ExplorePreview() {
               onRefreshLocation={requestLocation}
             />
 
-            {isHighActivity ? (
+            <TodayAroundYouIntro laneId={activeSceneLaneId} />
+
+            <SceneMixedFeed items={sceneMixedFeedItems} />
+
+            {isHighActivity && sceneWantsNearbyNow ? (
               <LocalActivityRail mode={scoutActivityMode} items={visibleLocalActivityItems} />
             ) : null}
 
@@ -2703,21 +3070,25 @@ export default function ExplorePreview() {
               onCravingSelect={setSelectedCravingId}
             />
 
+            {!laneHasContent ? (
+              <LaneEmptyState laneId={activeSceneLaneId} />
+            ) : null}
+
             {/* ── FOOD TRUCKS NEARBY ── */}
-            {showFoodTrucksSection && !isMediumActivity && (
+            {showFoodTrucksSection && sceneWantsFoodTrucks && !isMediumActivity && (
               <section className={railSectionClass}>
                 <SectionHeader
-                  title={DISCOVERY_LAYERS.foodTrucks.title}
+                  title={laneFoodTrucksTitle}
                   linkHref={DISCOVERY_LAYERS.foodTrucks.href}
                   subtitle={DISCOVERY_LAYERS.foodTrucks.subtitle}
-                  itemCount={trucksServingNow.length}
+                  itemCount={visibleTrucksServingNow.length}
                 />
                 {liveTrucksLoading && liveTrucks.length === 0 ? (
                   <HorizontalSkeletonRow count={3} width={isHighActivity ? 176 : 200} />
                 ) : (
                   <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
                     <ul className="flex gap-4 pr-5" role="list" aria-label="Food trucks near you">
-                      {trucksServingNow.slice(0, 12).map((t) => (
+                      {visibleTrucksServingNow.slice(0, 12).map((t) => (
                         <li key={t.id} className={`shrink-0 ${truckCardWidth}`}>
                           <TruckCard truck={t} onSelect={selectLiveTruck} currentUserId={currentUserId} />
                         </li>
@@ -2729,10 +3100,10 @@ export default function ExplorePreview() {
             )}
 
             {/* ── RESTAURANTS OPEN NOW ── */}
-            {showRestaurantsSection && (
+            {showRestaurantsSection && sceneWantsRestaurants && (
               <section className={railSectionClass}>
                 <SectionHeader
-                  title={restaurantsRailTitle}
+                  title={laneRestaurantsTitle}
                   linkHref={DISCOVERY_LAYERS.restaurants.href}
                   subtitle={restaurantsRailSubtitle}
                   itemCount={visibleOpenRestaurants.length}
@@ -2761,20 +3132,20 @@ export default function ExplorePreview() {
               </section>
             )}
 
-            {showFoodTrucksSection && isMediumActivity && (
+            {showFoodTrucksSection && sceneWantsFoodTrucks && isMediumActivity && (
               <section className={railSectionClass}>
                 <SectionHeader
-                  title={DISCOVERY_LAYERS.foodTrucks.title}
+                  title={laneFoodTrucksTitle}
                   linkHref={DISCOVERY_LAYERS.foodTrucks.href}
                   subtitle={DISCOVERY_LAYERS.foodTrucks.subtitle}
-                  itemCount={trucksServingNow.length}
+                  itemCount={visibleTrucksServingNow.length}
                 />
                 {liveTrucksLoading && liveTrucks.length === 0 ? (
                   <HorizontalSkeletonRow count={3} width={200} />
                 ) : (
                   <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
                     <ul className="flex gap-4 pr-5" role="list" aria-label="Food trucks near you">
-                      {trucksServingNow.slice(0, 12).map((t) => (
+                      {visibleTrucksServingNow.slice(0, 12).map((t) => (
                         <li key={t.id} className={`shrink-0 ${truckCardWidth}`}>
                           <TruckCard truck={t} onSelect={selectLiveTruck} currentUserId={currentUserId} />
                         </li>
@@ -2785,22 +3156,46 @@ export default function ExplorePreview() {
               </section>
             )}
 
-            {showQuickUpdateBar ? (
+            {showQuickUpdateBarForLane ? (
               <QuickUpdateBar />
             ) : null}
 
-            {/* ── DEALS TODAY ── */}
-            {showDealsSection && (
+            {sceneWantsNewMenus && localMenuItems.length > 0 ? (
               <section className={railSectionClass}>
                 <SectionHeader
-                  title={DISCOVERY_LAYERS.deals.title}
+                  title="New Menus"
+                  linkHref={DISCOVERY_LAYERS.menuItems.href}
+                  subtitle="Fresh menu items and recent local updates."
+                  itemCount={localMenuItems.length}
+                />
+                <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
+                  <ul className="flex gap-4 pr-5" role="list" aria-label="New menus">
+                    {localMenuItems.slice(0, 10).map((item, index) => (
+                      <li key={`menu-item-${item.id}`} className={`shrink-0 ${featureCardWidth}`}>
+                        <LocalMenuItemCard
+                          item={item}
+                          position={index}
+                          currentUserId={currentUserId}
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </section>
+            ) : null}
+
+            {/* ── DEALS TODAY ── */}
+            {showDealsSection && sceneWantsDeals && (
+              <section className={railSectionClass}>
+                <SectionHeader
+                  title={laneDealsTitle}
                   linkHref={DISCOVERY_LAYERS.deals.href}
                   subtitle={DISCOVERY_LAYERS.deals.subtitle}
-                  itemCount={allDeals.length}
+                  itemCount={visibleDeals.length}
                 />
                 <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
                   <ul className="flex gap-4 pr-5" role="list">
-                    {allDeals.slice(0, 10).map((d) => (
+                    {visibleDeals.slice(0, 10).map((d) => (
                       <li key={d.id} className={`shrink-0 ${featureCardWidth}`}>
                         <DealCard deal={d} currentUserId={currentUserId} />
                       </li>
@@ -2811,17 +3206,17 @@ export default function ExplorePreview() {
             )}
 
             {/* ── EVENTS TODAY ── */}
-            {showEventsSection && !isLowActivity && (
+            {showEventsSection && sceneWantsEvents && !isLowActivity && (
               <section className={railSectionClass}>
                 <SectionHeader
-                  title={eventsRailTitle}
+                  title={laneEventsTitle}
                   linkHref={DISCOVERY_LAYERS.events.href}
                   subtitle={eventsRailSubtitle}
-                  itemCount={visibleEvents.length}
+                  itemCount={visibleSceneEvents.length}
                 />
                 <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
                   <ul className="flex gap-4 pr-5" role="list">
-                    {visibleEvents.slice(0, 8).map((e) => (
+                    {visibleSceneEvents.slice(0, 8).map((e) => (
                       <li key={e.id} className={`shrink-0 ${featureCardWidth}`}>
                         <EventCard event={e} currentUserId={currentUserId} />
                       </li>
@@ -2832,10 +3227,10 @@ export default function ExplorePreview() {
             )}
 
             {/* ── MORE FOOD NEARBY ── */}
-            {showMoreFoodSection && (
+            {showMoreFoodSection && sceneWantsWorthDiscovering && !isLowActivity && (
               <section className={isLowActivity ? compactRailSectionClass : railSectionClass}>
                 <SectionHeader
-                  title={moreRailTitle}
+                  title={laneMoreTitle}
                   linkHref={DISCOVERY_LAYERS.restaurants.href}
                   subtitle={moreRailSubtitle}
                   itemCount={visibleMoreFoodRestaurants.length}
@@ -2852,17 +3247,17 @@ export default function ExplorePreview() {
               </section>
             )}
 
-            {showEventsSection && isLowActivity && (
+            {showEventsSection && sceneWantsEvents && isLowActivity && (
               <section className={railSectionClass}>
                 <SectionHeader
-                  title={eventsRailTitle}
+                  title={laneEventsTitle}
                   linkHref={DISCOVERY_LAYERS.events.href}
                   subtitle={eventsRailSubtitle}
-                  itemCount={visibleEvents.length}
+                  itemCount={visibleSceneEvents.length}
                 />
                 <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
                   <ul className="flex gap-4 pr-5" role="list">
-                    {visibleEvents.slice(0, 8).map((e) => (
+                    {visibleSceneEvents.slice(0, 8).map((e) => (
                       <li key={e.id} className={`shrink-0 ${featureCardWidth}`}>
                         <EventCard event={e} currentUserId={currentUserId} />
                       </li>
@@ -2872,7 +3267,49 @@ export default function ExplorePreview() {
               </section>
             )}
 
-            {showTopLocalFavoritesSection && (
+            {showMoreFoodSection && sceneWantsWorthDiscovering && isLowActivity && (
+              <section className={compactRailSectionClass}>
+                <SectionHeader
+                  title="Worth Discovering"
+                  linkHref={DISCOVERY_LAYERS.restaurants.href}
+                  subtitle="New and under-scouted local food spots nearby."
+                  itemCount={visibleMoreFoodRestaurants.length}
+                />
+                <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
+                  <ul className="flex gap-4 pr-5" role="list" aria-label="Worth discovering">
+                    {visibleMoreFoodRestaurants.slice(0, 10).map((r) => (
+                      <li key={`restaurant-worth-${r.id}`} className={`shrink-0 ${standardCardWidth}`}>
+                        <SavedRestaurantCard restaurant={r} />
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </section>
+            )}
+
+            {isLowActivity &&
+            sceneWantsWorthDiscovering &&
+            openingLaterRestaurants.length > 0 ? (
+              <section className={compactRailSectionClass}>
+                <SectionHeader
+                  title="Opening Later"
+                  linkHref={DISCOVERY_LAYERS.restaurants.href}
+                  subtitle="Places nearby that are closed right now but worth checking soon."
+                  itemCount={openingLaterRestaurants.length}
+                />
+                <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
+                  <ul className="flex gap-4 pr-5" role="list" aria-label="Opening later">
+                    {openingLaterRestaurants.slice(0, 10).map((r) => (
+                      <li key={`restaurant-later-${r.id}`} className={`shrink-0 ${standardCardWidth}`}>
+                        <SavedRestaurantCard restaurant={r} />
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </section>
+            ) : null}
+
+            {showTopLocalFavoritesSection && sceneWantsCommunity && (
               <section className={compactRailSectionClass}>
                 <SectionHeader
                   title={DISCOVERY_LAYERS.localBoard.title}
@@ -2894,6 +3331,11 @@ export default function ExplorePreview() {
                 </div>
               </section>
             )}
+
+            <ExploreSceneTiles
+              activeSceneLaneId={activeSceneLaneId}
+              onSceneLaneSelect={handleSceneLaneChange}
+            />
 
           </div>
         )}
@@ -2984,7 +3426,7 @@ function CravingCompass({
                 Find food near you.
               </h2>
               <p className="mt-1 text-white/62 text-xs leading-relaxed">
-                Local food, recommended nearby.
+                Open restaurants, food trucks, and deals nearby.
               </p>
             </div>
             {!hasLocation ? (
@@ -2999,6 +3441,252 @@ function CravingCompass({
           </div>
           <span className="sr-only">{daypartCopy.body}</span>
         </div>
+      </div>
+    </section>
+  );
+}
+
+function SceneOptionsBar({
+  activeSceneLaneId,
+  onSceneLaneSelect,
+  counts,
+}: {
+  activeSceneLaneId: ScoutSceneLaneId;
+  onSceneLaneSelect: (laneId: ScoutSceneLaneId) => void;
+  counts: Record<ScoutSceneLaneId, number>;
+}) {
+  const getIcon = (icon: ScoutSceneLane["icon"]) => {
+    if (icon === "spark") return <Compass className="h-3.5 w-3.5" aria-hidden="true" />;
+    if (icon === "community") return <Users className="h-3.5 w-3.5" aria-hidden="true" />;
+    if (icon === "nearby") return <Navigation2 className="h-3.5 w-3.5" aria-hidden="true" />;
+    if (icon === "truck") return <Flame className="h-3.5 w-3.5" aria-hidden="true" />;
+    if (icon === "restaurant") return <Utensils className="h-3.5 w-3.5" aria-hidden="true" />;
+    if (icon === "deal") return <Tag className="h-3.5 w-3.5" aria-hidden="true" />;
+    if (icon === "event") return <CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />;
+    if (icon === "menu") return <Bookmark className="h-3.5 w-3.5" aria-hidden="true" />;
+    if (icon === "late") return <CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />;
+    return <Heart className="h-3.5 w-3.5" aria-hidden="true" />;
+  };
+
+  return (
+    <section className="px-4 pb-4">
+      <div className="overflow-x-auto atmo-hide-scrollbar">
+        <div className="flex w-max gap-2 pr-1">
+          {SCOUT_SCENE_LANES.map((lane) => {
+            const isActive = lane.id === activeSceneLaneId;
+            return (
+              <button
+                key={lane.id}
+                type="button"
+                onClick={() => onSceneLaneSelect(lane.id)}
+                className={[
+                  "inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-2xl px-3 py-2 text-[12px] font-bold ring-1 transition-colors active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/60",
+                  isActive
+                    ? "bg-[#ff7945] text-white ring-white/20"
+                    : "bg-white/[0.04] text-white/66 ring-white/10 hover:bg-white/[0.08] hover:text-white",
+                ].join(" ")}
+                aria-pressed={isActive}
+              >
+                {getIcon(lane.icon)}
+                <span>{lane.label}</span>
+                {counts[lane.id] > 0 ? (
+                  <span
+                    className={[
+                      "ml-1 rounded-full px-1.5 py-0.5 text-[10px] font-black",
+                      isActive
+                        ? "bg-white/18 text-white"
+                        : "bg-white/12 text-white/80",
+                    ].join(" ")}
+                  >
+                    {counts[lane.id]}
+                  </span>
+                ) : null}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function TodayAroundYouIntro({ laneId }: { laneId: ScoutSceneLaneId }) {
+  const subtitle =
+    laneId === "community"
+      ? "What locals are saving, sharing, and visiting nearby."
+      : laneId === "food_trucks"
+        ? "Food trucks posted up nearby, with current status and quick actions."
+        : laneId === "restaurants"
+          ? "Open restaurants and menu highlights near your location."
+          : laneId === "deals"
+            ? "Active local deals and value picks available right now."
+            : laneId === "events"
+              ? "Food-related events and local happenings around you."
+              : laneId === "new_menus"
+                ? "Fresh menu updates and new dishes added nearby."
+                : laneId === "late_night"
+                  ? "Late options, open spots, and after-hours food nearby."
+                  : laneId === "worth_discovering"
+                    ? "New and under-scouted local spots worth checking out."
+                    : "A live mix of what locals love, what's open, what's new, and what's nearby.";
+  return (
+    <section className="px-4 pb-3">
+      <h2 className="text-3xl font-black tracking-tight text-white">Today Around You</h2>
+      <p className="mt-1.5 text-sm leading-relaxed text-white/62">
+        {subtitle}
+      </p>
+    </section>
+  );
+}
+
+function SceneMixedFeed({ items }: { items: CravingBoardItem[] }) {
+  if (items.length === 0) return null;
+  return (
+    <section className="px-4 pb-4">
+      <ul className="space-y-2.5" role="list" aria-label="Today around you feed">
+        {items.map((item) => (
+          <li key={item.id}>
+            <SceneMixedFeedCard item={item} />
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function SceneMixedFeedCard({ item }: { item: CravingBoardItem }) {
+  const kindColor =
+    item.kind === "Truck"
+      ? "text-purple-300"
+      : item.kind === "Menu"
+        ? "text-amber-300"
+      : item.kind === "Deal"
+          ? "text-lime-300"
+          : item.kind === "Event"
+            ? "text-sky-300"
+          : "text-orange-300";
+  const badge =
+    item.kind === "Truck"
+      ? "Food truck"
+      : item.kind === "Menu"
+        ? "Menu item"
+      : item.kind === "Deal"
+          ? "Deal today"
+          : item.kind === "Event"
+            ? "Event today"
+          : "Restaurant";
+  const freshnessMeta = item.freshnessMeta || { kind: "restaurant" as const };
+  const badges = [item.reason, ...getOperationalBadges(freshnessMeta)]
+    .filter((label): label is string => Boolean(label))
+    .filter((label, index, all) => all.indexOf(label) === index)
+    .slice(0, 1);
+
+  return (
+    <Link
+      href={item.href}
+      className="flex items-center gap-3 rounded-2xl bg-[#120805]/56 px-3 py-2.5 text-white ring-1 ring-white/10 transition-colors hover:bg-[#1a0d08]/78 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
+    >
+      <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-white/6 ring-1 ring-white/10">
+        {item.imageUrl ? (
+          <img src={item.imageUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center">
+            <Utensils className="h-5 w-5 text-orange-200/70" aria-hidden="true" />
+          </div>
+        )}
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className={`text-[11px] font-black uppercase tracking-wide ${kindColor}`}>{badge}</p>
+        <p className="truncate text-xl font-semibold leading-tight">{item.title}</p>
+        <p className="truncate text-sm text-white/70">{item.subtitle}</p>
+        <div className="mt-1 flex flex-wrap items-center gap-2">
+          {item.meta ? <span className="text-xs font-semibold text-white/64">{item.meta}</span> : null}
+          {badges.map((label) => (
+            <span
+              key={`${item.id}-${label}`}
+              className={getFreshnessBadgeClass(freshnessMeta, label)}
+            >
+              {label}
+            </span>
+          ))}
+        </div>
+      </div>
+      <span className="rounded-full bg-[#fff4e1]/10 px-3 py-1 text-xs font-black text-orange-100 ring-1 ring-orange-200/24">
+        View
+      </span>
+    </Link>
+  );
+}
+
+function LaneEmptyState({ laneId }: { laneId: ScoutSceneLaneId }) {
+  const title =
+    laneId === "community"
+      ? "Community activity is still building here."
+      : laneId === "deals"
+        ? "No active deals nearby right now."
+        : laneId === "food_trucks"
+          ? "No trucks posted up nearby right now."
+          : laneId === "events"
+            ? "No food events nearby right now."
+            : "Nothing strong here yet.";
+  const body =
+    laneId === "community"
+      ? "Explore nearby and save spots to help shape local favorites."
+      : laneId === "deals"
+        ? "Try Nearby Now or New Menus for fresh local options."
+        : laneId === "food_trucks"
+          ? "Try Restaurants, Events, or Worth Discovering."
+          : laneId === "events"
+            ? "Check Nearby Now or Worth Discovering."
+            : "Try another scene or widen your area.";
+
+  return (
+    <section className="px-4 pb-4">
+      <div className="rounded-2xl bg-white/[0.04] px-4 py-3 text-white ring-1 ring-white/10">
+        <p className="text-sm font-black">{title}</p>
+        <p className="mt-1 text-xs font-semibold leading-relaxed text-white/58">{body}</p>
+      </div>
+    </section>
+  );
+}
+
+function ExploreSceneTiles({
+  activeSceneLaneId,
+  onSceneLaneSelect,
+}: {
+  activeSceneLaneId: ScoutSceneLaneId;
+  onSceneLaneSelect: (laneId: ScoutSceneLaneId) => void;
+}) {
+  const lowerTiles = SCOUT_SCENE_LANES.filter((lane) =>
+    ["community", "food_trucks", "restaurants", "deals", "events", "new_menus", "late_night", "worth_discovering"].includes(
+      lane.id,
+    ),
+  );
+
+  return (
+    <section className="px-4 pb-10">
+      <h3 className="mb-2 text-xs font-black uppercase tracking-[0.14em] text-white/44">
+        Explore the scene
+      </h3>
+      <div className="grid grid-cols-2 gap-2.5">
+        {lowerTiles.map((lane) => {
+          const active = lane.id === activeSceneLaneId;
+          return (
+            <button
+              key={lane.id}
+              type="button"
+              onClick={() => onSceneLaneSelect(lane.id)}
+              className={[
+                "rounded-2xl px-3 py-2.5 text-left text-sm font-bold ring-1 transition-colors",
+                active
+                  ? "bg-[#ff7945] text-white ring-white/20"
+                  : "bg-white/[0.04] text-white/78 ring-white/10 hover:bg-white/[0.08]",
+              ].join(" ")}
+            >
+              {lane.label}
+            </button>
+          );
+        })}
       </div>
     </section>
   );
@@ -4164,7 +4852,7 @@ function NearbyRestaurantCard({
             }`}
             aria-pressed={isRecommended}
           >
-            <Sparkles className="h-3 w-3" aria-hidden="true" />
+            <Heart className="h-3 w-3" aria-hidden="true" />
             {isRecommended ? "Supported" : "Support"}
           </button>
         </div>
