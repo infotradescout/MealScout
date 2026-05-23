@@ -211,7 +211,7 @@ function FeedCard({
 /* ─── main component ─── */
 export default function ScoutPrototype() {
   const { user } = useAuth();
-  const [, navigate] = useWouterLocation();
+  const [routePath, navigate] = useWouterLocation();
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<L.Map | null>(null);
   const [activeScene, setActiveScene] = useState("for_you");
@@ -228,16 +228,37 @@ export default function ScoutPrototype() {
   const scoutDockBottom = `calc(env(safe-area-inset-bottom) + ${GLOBAL_NAV_HEIGHT}px)`;
   const feedBottomClearance = `calc(env(safe-area-inset-bottom) + ${GLOBAL_NAV_HEIGHT + SCOUT_SCENE_RAIL_HEIGHT + SCOUT_SEARCH_DOCK_HEIGHT + SCOUT_DOCK_GAP + 28}px)`;
 
+  const scoutPreviewCity = useMemo(() => {
+    if (typeof window === "undefined") return "";
+    const params = new URLSearchParams(window.location.search);
+    return (params.get("scoutPreview") || params.get("previewCity") || "")
+      .trim()
+      .toLowerCase();
+  }, [routePath]);
+  const isAdminPreviewEligible = useMemo(() => {
+    const userType = String(user?.userType || "").toLowerCase();
+    return ["super_admin", "duper_admin", "admin", "staff"].includes(userType);
+  }, [user?.userType]);
+  const isPensacolaScoutPreview =
+    isAdminPreviewEligible && scoutPreviewCity === "pensacola";
+
   /* ─── location ─── */
   const location = useMemo(() => {
+    if (isPensacolaScoutPreview) {
+      return { lat: 30.4213, lng: -87.2169, label: "Pensacola" };
+    }
     if (deviceCoords) return { lat: deviceCoords.lat, lng: deviceCoords.lng, label: locationName };
     // Default to Pensacola downtown
     return { lat: 30.4213, lng: -87.2169, label: "Pensacola" };
-  }, [deviceCoords, locationName]);
+  }, [deviceCoords, locationName, isPensacolaScoutPreview]);
 
   /* Global nav suppression removed - we want the real nav visible at the bottom */
 
   useEffect(() => {
+    if (isPensacolaScoutPreview) {
+      setLocationName("Pensacola");
+      return;
+    }
     if (!navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
       (pos) => {
@@ -249,7 +270,7 @@ export default function ScoutPrototype() {
       () => { /* use default Pensacola */ },
       { timeout: 8000 }
     );
-  }, []);
+  }, [isPensacolaScoutPreview]);
 
   /* ─── API queries ─── */
   const { data: trucksRaw = [] } = useQuery<Truck[]>({
@@ -410,6 +431,13 @@ export default function ScoutPrototype() {
 
     return () => { map.current?.remove(); map.current = null; };
   }, []);
+
+  useEffect(() => {
+    if (!map.current) return;
+    map.current.setView([location.lat, location.lng], map.current.getZoom(), {
+      animate: false,
+    });
+  }, [location.lat, location.lng]);
 
   /* ─── map pins update when data changes ─── */
   useEffect(() => {
