@@ -428,14 +428,14 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
       <nav
         aria-label="Primary navigation"
         className="fixed left-0 right-0 z-[1100] lg:hidden"
-        style={{ bottom: "calc(env(safe-area-inset-bottom) + 1rem)" }}
+        style={{ bottom: "calc(env(safe-area-inset-bottom) + 0.65rem)" }}
       >
-        <div className="mx-auto max-w-md px-4">
+        <div className="mx-auto max-w-md px-3">
           <div
-            className="relative flex items-end justify-between gap-1 h-[68px] px-2 rounded-full bg-[#120805]/65 backdrop-blur-xl ring-1 ring-white/10"
+            className="relative flex items-end justify-between gap-1 h-[60px] px-1.5 rounded-[20px] bg-[#120805]/74 backdrop-blur-2xl ring-1 ring-white/10"
             style={{
               boxShadow:
-                "0 0 0 1px rgba(255,90,47,0.10), 0 18px 48px rgba(0,0,0,0.65)",
+                "0 0 0 1px rgba(255,90,47,0.12), 0 14px 34px rgba(0,0,0,0.62)",
             }}
           >
             {sixSlotNav.map((item, index) => {
@@ -449,25 +449,25 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
                     href={item.path}
                     aria-label={item.label}
                     aria-current={active ? "page" : undefined}
-                    className={`flex flex-col items-center justify-end gap-0.5 flex-1 min-w-0 h-full transition-colors ${isPrimary ? "pb-1" : "pb-2"} ${
+                    className={`flex flex-col items-center justify-end gap-0.5 flex-1 min-w-0 h-full transition-colors ${isPrimary ? "pb-0.5" : "pb-1.5"} ${
                       active ? "text-orange-300" : "text-white/70 hover:text-white"
                     }`}
                   >
                     {isPrimary ? (
                       <span
-                        className="flex h-11 w-11 items-center justify-center rounded-full bg-[#120805]/70 ring-2 ring-orange-500 -mt-5"
+                        className="flex h-9 w-9 items-center justify-center rounded-full bg-[#120805]/72 ring-2 ring-orange-500 -mt-3.5"
                         style={{
                           boxShadow:
-                            "0 0 0 4px rgba(255,90,47,0.15), 0 0 24px rgba(255,90,47,0.35)",
+                            "0 0 0 3px rgba(255,90,47,0.14), 0 0 16px rgba(255,90,47,0.3)",
                         }}
                         aria-hidden="true"
                       >
-                        <item.icon className="h-5 w-5 text-orange-300" />
+                        <item.icon className="h-4.5 w-4.5 text-orange-300" />
                       </span>
                     ) : (
-                      <item.icon className="h-5 w-5" aria-hidden="true" />
+                      <item.icon className="h-4.5 w-4.5" aria-hidden="true" />
                     )}
-                    <span className="text-[10px] font-medium truncate max-w-full">{item.label}</span>
+                    <span className="text-[9px] font-medium truncate max-w-full leading-none">{item.label}</span>
                   </Link>
                 );
               }
@@ -479,12 +479,12 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
                   aria-label={item.label}
                   aria-expanded={moreOpen}
                   onClick={item.onClick}
-                  className={`flex flex-col items-center justify-end gap-0.5 flex-1 min-w-0 h-full pb-2 transition-colors ${
+                  className={`flex flex-col items-center justify-end gap-0.5 flex-1 min-w-0 h-full pb-1.5 transition-colors ${
                     moreOpen ? "text-orange-300" : "text-white/70 hover:text-white"
                   }`}
                 >
-                  <item.icon className="h-5 w-5" aria-hidden="true" />
-                  <span className="text-[10px] font-medium">{item.label}</span>
+                  <item.icon className="h-4.5 w-4.5" aria-hidden="true" />
+                  <span className="text-[9px] font-medium leading-none">{item.label}</span>
                 </button>
               );
             })}
