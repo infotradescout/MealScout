@@ -170,6 +170,27 @@ type MapLocationsResponse = {
   eventLocations?: unknown[];
   supplierLocations?: unknown[];
 } | null;
+
+type ScoutParkingInventoryItem = {
+  id: string;
+  hostId: string | null;
+  parkingPassId: string | null;
+  occurrenceId: string | null;
+  title: string;
+  hostName: string;
+  lat: number | null;
+  lng: number | null;
+  city: string | null;
+  state: string | null;
+  address: string | null;
+  availableDateLabel: string | null;
+  priceLabel: string | null;
+  capacityLabel: string | null;
+  bookingMode: "bookable" | "requestable" | "view_only";
+  routeUrl: string | null;
+  viewUrl: string;
+  manageUrl: string;
+};
 interface RestaurantSummary {
   id: string;
   businessName?: string | null;
@@ -567,6 +588,7 @@ type ScoutSourceStatusKey =
   | "trucks"
   | "restaurants"
   | "mapLocations"
+  | "parkingPass"
   | "deals"
   | "events"
   | "menus";
@@ -895,6 +917,12 @@ function getBoundsForScoutLocation(
     east: location.lng + lngDelta,
     west: location.lng - lngDelta,
   };
+}
+
+function formatPriceCentsLabel(value: unknown): string | null {
+  const cents = Number(value);
+  if (!Number.isFinite(cents) || cents <= 0) return null;
+  return `$${(cents / 100).toFixed(cents % 100 === 0 ? 0 : 2)}`;
 }
 
 function getDistanceMiles(
@@ -1584,6 +1612,7 @@ export default function ExplorePreview() {
     trucks: null,
     restaurants: null,
     mapLocations: null,
+    parkingPass: null,
     deals: null,
     events: null,
     menus: null,
@@ -1614,6 +1643,14 @@ export default function ExplorePreview() {
     userRoles.has("super_admin") ||
     userRoles.has("admin") ||
     userRoles.has("duper_admin");
+  const isAdminFamilyUser =
+    userRoles.has("super_admin") ||
+    userRoles.has("admin") ||
+    userRoles.has("duper_admin") ||
+    userRoles.has("staff");
+  const isTruckVendorUser =
+    userRoles.has("food_truck") || userRoles.has("restaurant_owner");
+  const canSeeParkingPassOps = isTruckVendorUser || isAdminFamilyUser;
   const scoutPreviewCity = useMemo(() => {
     if (typeof window === "undefined") return "";
     const params = new URLSearchParams(window.location.search);
@@ -1907,6 +1944,133 @@ export default function ExplorePreview() {
       ),
     );
   }, [discoveryRadiusKm, mapLocationsData, resolvedScoutCoords]);
+
+  const { data: parkingPassData } = useQuery<any[]>({
+    queryKey: ["/api/parking-pass", resolvedScoutLocation?.lat, resolvedScoutLocation?.lng, discoveryRadiusKm],
+    enabled: !!resolvedScoutLocation && canSeeParkingPassOps,
+    queryFn: async () => {
+      const response = await fetch("/api/parking-pass", {
+        credentials: "include",
+      });
+      recordScoutSourceStatus("parkingPass", response.status);
+      if (!response.ok) return [];
+      const data = await response.json();
+      return Array.isArray(data) ? data : [];
+    },
+    staleTime: 45_000,
+    retry: false,
+  });
+
+  const parkingInventoryItems = useMemo<ScoutParkingInventoryItem[]>(() => {
+    if (!canSeeParkingPassOps) return [];
+    const rows = Array.isArray(parkingPassData) ? parkingPassData : [];
+    const normalized = rows
+      .map((row) => {
+        const host = (row?.host || {}) as Record<string, unknown>;
+        const lat =
+          readNumberField(host, ["latitude", "lat"]) ??
+          readNumberField(row, ["hostLatitude", "latitude", "lat"]);
+        const lng =
+          readNumberField(host, ["longitude", "lng"]) ??
+          readNumberField(row, ["hostLongitude", "longitude", "lng"]);
+        const hostIdRaw = readStringField(host, ["id", "hostId"]) || readStringField(row, ["hostId"]);
+        const hostId = hostIdRaw ? String(hostIdRaw) : null;
+        if (
+          !isWithinScoutRadius(
+            resolvedScoutCoords,
+            lat,
+            lng,
+            discoveryRadiusKm,
+          )
+        ) {
+          return null;
+        }
+        const hostName =
+          readStringField(host, ["businessName", "name"]) ||
+          readStringField(row, ["hostBusinessName", "hostName", "name"]) ||
+          "Host location";
+        const city = readStringField(host, ["city"]) || readStringField(row, ["hostCity", "city"]);
+        const state = readStringField(host, ["state"]) || readStringField(row, ["hostState", "state"]);
+        const address = readStringField(host, ["address"]) || readStringField(row, ["hostAddress", "address"]);
+        const priceLabel =
+          formatPriceCentsLabel((row as any)?.dailyPriceCents) ||
+          formatPriceCentsLabel((row as any)?.lunchPriceCents) ||
+          formatPriceCentsLabel((row as any)?.dinnerPriceCents) ||
+          formatPriceCentsLabel((row as any)?.breakfastPriceCents) ||
+          null;
+        const availableSpots = Number((row as any)?.availableSpotNumbers?.length ?? (row as any)?.availableSpots ?? NaN);
+        const capacityLabel = Number.isFinite(availableSpots)
+          ? `${Math.max(0, availableSpots)} spots open`
+          : null;
+        const requiresApproval = readBooleanField(row, ["requiresApproval", "approvalRequired"]) === true;
+        const bookingMode: ScoutParkingInventoryItem["bookingMode"] =
+          availableSpots > 0 ? (requiresApproval ? "requestable" : "bookable") : "view_only";
+        const routeUrl =
+          typeof lat === "number" && typeof lng === "number"
+            ? `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`
+            : null;
+        const occurrenceId = readStringField(row, ["id", "eventId", "occurrenceId"]) || `${hostId || "host"}-parking`;
+        const parkingPassId = readStringField(row, ["seriesId", "parkingPassId", "listingId"]) || occurrenceId;
+        return {
+          id: `parking-${occurrenceId}`,
+          hostId,
+          parkingPassId: parkingPassId ? String(parkingPassId) : null,
+          occurrenceId: occurrenceId ? String(occurrenceId) : null,
+          title: readStringField(row, ["name", "title"]) || "Parking Pass spot",
+          hostName,
+          lat,
+          lng,
+          city: city || null,
+          state: state || null,
+          address: address || null,
+          availableDateLabel: readStringField(row, ["date", "startsAt"]) || null,
+          priceLabel,
+          capacityLabel,
+          bookingMode,
+          routeUrl,
+          viewUrl: hostId ? `/parking-pass?hostId=${encodeURIComponent(hostId)}` : "/parking-pass",
+          manageUrl: hostId
+            ? `/host-dashboard?src=scout&hostId=${encodeURIComponent(hostId)}`
+            : "/host-dashboard",
+        } satisfies ScoutParkingInventoryItem;
+      })
+      .filter((item): item is ScoutParkingInventoryItem => Boolean(item));
+    const grouped = new Map<string, ScoutParkingInventoryItem>();
+    const bookingRank = (mode: ScoutParkingInventoryItem["bookingMode"]) =>
+      mode === "bookable" ? 3 : mode === "requestable" ? 2 : 1;
+    const dateScore = (value: string | null) => {
+      if (!value) return Number.MAX_SAFE_INTEGER;
+      const dt = Date.parse(value);
+      return Number.isFinite(dt) ? dt : Number.MAX_SAFE_INTEGER;
+    };
+    for (const item of normalized) {
+      const key = [
+        item.hostId || "",
+        item.address?.toLowerCase() || "",
+        item.city?.toLowerCase() || "",
+        item.state?.toLowerCase() || "",
+      ]
+        .filter(Boolean)
+        .join("|");
+      const existing = grouped.get(key);
+      if (!existing) {
+        grouped.set(key, item);
+        continue;
+      }
+      const existingRank = bookingRank(existing.bookingMode);
+      const candidateRank = bookingRank(item.bookingMode);
+      if (candidateRank > existingRank) {
+        grouped.set(key, item);
+        continue;
+      }
+      if (candidateRank === existingRank) {
+        if (dateScore(item.availableDateLabel) < dateScore(existing.availableDateLabel)) {
+          grouped.set(key, item);
+        }
+      }
+    }
+    return Array.from(grouped.values());
+  }, [canSeeParkingPassOps, discoveryRadiusKm, parkingPassData, resolvedScoutCoords]);
 
   /* --------- nearby restaurants --------- */
 
@@ -2244,6 +2408,7 @@ export default function ExplorePreview() {
   }, [visibleEvents]);
 
   const hostMarkers = useMemo<MapAdapterMarker[]>(() => {
+    if (!canSeeParkingPassOps) return [];
     return visibleHosts
       .map((host) => {
         const lat = readNumberField(host, ["latitude", "lat"]);
@@ -2265,7 +2430,29 @@ export default function ExplorePreview() {
         } as MapAdapterMarker;
       })
       .filter((m): m is MapAdapterMarker => Boolean(m && m.sourceId));
-  }, [visibleHosts]);
+  }, [canSeeParkingPassOps, visibleHosts]);
+
+  const parkingPassMarkers = useMemo<MapAdapterMarker[]>(() => {
+    if (!canSeeParkingPassOps) return [];
+    return parkingInventoryItems
+      .map((item) => {
+        if (typeof item.lat !== "number" || typeof item.lng !== "number") return null;
+        return {
+          id: `parking-pass-${item.id}`,
+          sourceId: String(item.hostId || item.id),
+          kind: "parking" as const,
+          lat: item.lat,
+          lng: item.lng,
+          title: item.hostName,
+          subtitle: getMapMarkerSubtitle(item.priceLabel || item.capacityLabel || "Host spot", {
+            kind: "event",
+            hasDistance: true,
+          }),
+          color: "#f59e0b",
+        } as MapAdapterMarker;
+      })
+      .filter((m): m is MapAdapterMarker => Boolean(m));
+  }, [canSeeParkingPassOps, parkingInventoryItems]);
 
   const dealMarkers = useMemo<MapAdapterMarker[]>(() => {
     return nearbyDeals
@@ -2304,8 +2491,8 @@ export default function ExplorePreview() {
 
   // Combined markers for the full Google Map view
   const allMapMarkers = useMemo<MapAdapterMarker[]>(
-    () => [...truckMarkers, ...restaurantMarkers, ...eventMarkers, ...hostMarkers, ...dealMarkers],
-    [truckMarkers, restaurantMarkers, eventMarkers, hostMarkers, dealMarkers],
+    () => [...truckMarkers, ...restaurantMarkers, ...eventMarkers, ...hostMarkers, ...parkingPassMarkers, ...dealMarkers],
+    [truckMarkers, restaurantMarkers, eventMarkers, hostMarkers, parkingPassMarkers, dealMarkers],
   );
 
   const scoutDebugCounts = useMemo(() => {
@@ -2318,6 +2505,7 @@ export default function ExplorePreview() {
     const rawHostRows = Array.isArray(mapLocationsData?.hostLocations) ? mapLocationsData.hostLocations : [];
     const rawEventRows = Array.isArray(events) ? events : [];
     const rawDealRows = Array.isArray(nearbyDeals) ? nearbyDeals : [];
+    const rawParkingRows = Array.isArray(parkingPassData) ? parkingPassData : [];
 
     const hasCoords = (row: unknown) =>
       readNumberField(row, ["latitude", "lat", "venueLat", "restaurantLatitude", "locationLat"]) !== null &&
@@ -2341,6 +2529,8 @@ export default function ExplorePreview() {
       eventsMissingCoords: rawEventRows.filter((row) => !hasCoords(row)).length,
       dealsReturned: rawDealRows.length,
       dealsMissingCoords: rawDealRows.filter((row) => !hasCoords(row)).length,
+      parkingReturned: rawParkingRows.length,
+      parkingShown: parkingInventoryItems.length,
       mapPinsBuilt: allMapMarkers.length,
       mapPinsByKind: pinsByKind,
     };
@@ -2351,6 +2541,8 @@ export default function ExplorePreview() {
     mapLocationsData,
     nearbyDeals,
     nearbyRestaurantsData,
+    parkingInventoryItems.length,
+    parkingPassData,
     scoutTruckInventory.length,
     visibleHosts.length,
   ]);
@@ -2735,7 +2927,9 @@ export default function ExplorePreview() {
   const showRestaurantsSection =
     nearbyRestaurantsLoading || restaurantsOpenNow.length > 0;
   const showDealsSection = allDeals.length > 0;
-  const showEventsSection = visibleEvents.length > 0 || visibleHosts.length > 0;
+  const showEventsSection =
+    visibleEvents.length > 0 ||
+    (canSeeParkingPassOps && (visibleHosts.length > 0 || parkingInventoryItems.length > 0));
   const sceneWantsCommunity =
     activeSceneLaneId === "community" || activeSceneLaneId === "for_you";
   const sceneWantsNearbyNow =
@@ -2764,7 +2958,7 @@ export default function ExplorePreview() {
     nearbyRestaurants.length +
     allDeals.length +
     visibleEvents.length +
-    visibleHosts.length;
+    (canSeeParkingPassOps ? visibleHosts.length + parkingInventoryItems.length : 0);
   const nearbyRestaurantsTitle = DISCOVERY_LAYERS.restaurants.title;
   const nearbyRestaurantsSubtitle = DISCOVERY_LAYERS.restaurants.subtitle;
 
@@ -2936,6 +3130,7 @@ export default function ExplorePreview() {
       hosts: scoutDebugCounts.hostsMissingCoords,
       events: scoutDebugCounts.eventsMissingCoords,
       deals: scoutDebugCounts.dealsMissingCoords,
+      parking: Math.max(0, scoutDebugCounts.parkingReturned - scoutDebugCounts.parkingShown),
     };
     const hasDrops = Object.values(dropped).some((count) => count > 0);
     if (hasDrops) {
@@ -3434,7 +3629,7 @@ export default function ExplorePreview() {
                   ) : null}
                   {showScoutPreviewDebug ? (
                     <p className="mb-1 text-[10px] font-bold text-white/75">
-                      preview eligible:{String(isScoutPreviewEligible)} city:{scoutPreviewCity || "none"} active:{String(isPensacolaScoutPreview)} source:{resolvedScoutLocation?.source || "none"} loc:{resolvedScoutLocation ? `${resolvedScoutLocation.label} ${resolvedScoutLocation.lat.toFixed(4)},${resolvedScoutLocation.lng.toFixed(4)}` : "none"} status[t:{scoutSourceStatuses.trucks ?? "-"} r:{scoutSourceStatuses.restaurants ?? "-"} h:{scoutSourceStatuses.mapLocations ?? "-"} d:{scoutSourceStatuses.deals ?? "-"} e:{scoutSourceStatuses.events ?? "-"}] counts[t:{scoutDebugCounts.trucksReturned} h:{scoutDebugCounts.hostsReturned} e:{scoutDebugCounts.eventsReturned} r:{scoutDebugCounts.restaurantsReturned} pins:{scoutDebugCounts.mapPinsBuilt}]
+                      preview eligible:{String(isScoutPreviewEligible)} city:{scoutPreviewCity || "none"} active:{String(isPensacolaScoutPreview)} source:{resolvedScoutLocation?.source || "none"} loc:{resolvedScoutLocation ? `${resolvedScoutLocation.label} ${resolvedScoutLocation.lat.toFixed(4)},${resolvedScoutLocation.lng.toFixed(4)}` : "none"} status[t:{scoutSourceStatuses.trucks ?? "-"} r:{scoutSourceStatuses.restaurants ?? "-"} h:{scoutSourceStatuses.mapLocations ?? "-"} p:{scoutSourceStatuses.parkingPass ?? "-"} d:{scoutSourceStatuses.deals ?? "-"} e:{scoutSourceStatuses.events ?? "-"}] counts[t:{scoutDebugCounts.trucksReturned} h:{scoutDebugCounts.hostsReturned} p:{scoutDebugCounts.parkingReturned} e:{scoutDebugCounts.eventsReturned} r:{scoutDebugCounts.restaurantsReturned} pins:{scoutDebugCounts.mapPinsBuilt}]
                     </p>
                   ) : null}
                   {showScoutPreviewDebug &&
@@ -3442,9 +3637,10 @@ export default function ExplorePreview() {
                     scoutDebugCounts.hostsMissingCoords > 0 ||
                     scoutDebugCounts.restaurantsMissingCoords > 0 ||
                     scoutDebugCounts.eventsMissingCoords > 0 ||
-                    scoutDebugCounts.dealsMissingCoords > 0) ? (
+                    scoutDebugCounts.dealsMissingCoords > 0 ||
+                    scoutDebugCounts.parkingReturned > scoutDebugCounts.parkingShown) ? (
                     <p className="mb-1 text-[10px] font-semibold text-amber-200/85">
-                      dropped missing coords - trucks:{scoutDebugCounts.trucksMissingCoords} hosts:{scoutDebugCounts.hostsMissingCoords} restaurants:{scoutDebugCounts.restaurantsMissingCoords} events:{scoutDebugCounts.eventsMissingCoords} deals:{scoutDebugCounts.dealsMissingCoords}
+                      dropped missing coords - trucks:{scoutDebugCounts.trucksMissingCoords} hosts:{scoutDebugCounts.hostsMissingCoords} restaurants:{scoutDebugCounts.restaurantsMissingCoords} events:{scoutDebugCounts.eventsMissingCoords} deals:{scoutDebugCounts.dealsMissingCoords} parking:{Math.max(0, scoutDebugCounts.parkingReturned - scoutDebugCounts.parkingShown)}
                     </p>
                   ) : null}
                   <p className="truncate text-sm font-extrabold text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.7)]">
@@ -3490,6 +3686,7 @@ export default function ExplorePreview() {
               visibleDeals={visibleDeals}
               visibleSceneEvents={visibleSceneEvents}
               visibleHosts={visibleHosts}
+              parkingInventoryItems={parkingInventoryItems}
               localMenuItems={localMenuItems}
               openingLaterRestaurants={openingLaterRestaurants}
               visibleLocalActivityItems={visibleLocalActivityItems}
@@ -3498,6 +3695,9 @@ export default function ExplorePreview() {
               nearbyRestaurantsLoading={nearbyRestaurantsLoading}
               currentUserId={currentUserId}
               isSignedIn={!!user}
+              isAdminFamilyUser={isAdminFamilyUser}
+              isTruckVendorUser={isTruckVendorUser}
+              canSeeParkingPassOps={canSeeParkingPassOps}
               selectLiveTruck={selectLiveTruck}
               menuPreviewByRestaurantId={menuPreviewByRestaurantId}
               restaurantRelationships={restaurantRelationships}
@@ -3746,6 +3946,7 @@ function ActiveSceneContent({
   visibleDeals,
   visibleSceneEvents,
   visibleHosts,
+  parkingInventoryItems,
   localMenuItems,
   openingLaterRestaurants,
   visibleLocalActivityItems,
@@ -3754,6 +3955,9 @@ function ActiveSceneContent({
   nearbyRestaurantsLoading,
   currentUserId,
   isSignedIn,
+  isAdminFamilyUser,
+  isTruckVendorUser,
+  canSeeParkingPassOps,
   selectLiveTruck,
   menuPreviewByRestaurantId,
   restaurantRelationships,
@@ -3780,6 +3984,7 @@ function ActiveSceneContent({
   visibleDeals: DealSummary[];
   visibleSceneEvents: EventSummary[];
   visibleHosts: ScoutHostLocation[];
+  parkingInventoryItems: ScoutParkingInventoryItem[];
   localMenuItems: LocalMenuItemFeedItem[];
   openingLaterRestaurants: RestaurantSummary[];
   visibleLocalActivityItems: LocalActivityItem[];
@@ -3788,6 +3993,9 @@ function ActiveSceneContent({
   nearbyRestaurantsLoading: boolean;
   currentUserId?: string | null;
   isSignedIn: boolean;
+  isAdminFamilyUser: boolean;
+  isTruckVendorUser: boolean;
+  canSeeParkingPassOps: boolean;
   selectLiveTruck: (truck: LiveTruckSummary) => void;
   menuPreviewByRestaurantId: Map<string, MenuPreviewItem[]>;
   restaurantRelationships: RestaurantRelationshipSnapshot;
@@ -3807,7 +4015,35 @@ function ActiveSceneContent({
 }) {
   if (laneId === "for_you") {
     if (sceneMixedFeedItems.length > 0) {
-      return <SceneMixedFeed items={sceneMixedFeedItems} />;
+      return (
+        <>
+          <SceneMixedFeed items={sceneMixedFeedItems} />
+          {canSeeParkingPassOps && parkingInventoryItems.length > 0 ? (
+            <section className={compactRailSectionClass}>
+              <SectionHeader
+                title="Host Spots Nearby"
+                linkHref="/parking-pass"
+                subtitle="Bookable and requestable host spots in your area."
+                itemCount={parkingInventoryItems.length}
+              />
+              <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
+                <ul className="flex gap-4 pr-5" role="list" aria-label="Host spots nearby">
+                  {parkingInventoryItems.slice(0, 10).map((item) => (
+                    <li key={item.id} className={`shrink-0 ${standardCardWidth}`}>
+                      <ScoutParkingSpotCard
+                        item={item}
+                        isSignedIn={isSignedIn}
+                        isAdminFamilyUser={isAdminFamilyUser}
+                        isTruckVendorUser={isTruckVendorUser}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </section>
+          ) : null}
+        </>
+      );
     }
     if (visibleMoreFoodRestaurants.length > 0) {
       return (
@@ -3921,6 +4157,33 @@ function ActiveSceneContent({
         <LocalActivityRail mode={scoutActivityMode} items={visibleLocalActivityItems} />
       ) : null}
 
+      {canSeeParkingPassOps &&
+      (laneId === "nearby_now" || laneId === "food_trucks" || laneId === "events") &&
+      parkingInventoryItems.length > 0 ? (
+        <section className={compactRailSectionClass}>
+          <SectionHeader
+            title="Host Spots Nearby"
+            linkHref="/parking-pass"
+            subtitle="Bookable and requestable host spots in your area."
+            itemCount={parkingInventoryItems.length}
+          />
+          <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
+            <ul className="flex gap-4 pr-5" role="list" aria-label="Host spots nearby">
+              {parkingInventoryItems.slice(0, 12).map((item) => (
+                <li key={item.id} className={`shrink-0 ${standardCardWidth}`}>
+                  <ScoutParkingSpotCard
+                    item={item}
+                    isSignedIn={isSignedIn}
+                    isAdminFamilyUser={isAdminFamilyUser}
+                    isTruckVendorUser={isTruckVendorUser}
+                  />
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+      ) : null}
+
       {(laneId === "nearby_now" || laneId === "food_trucks") && (
         <section className={railSectionClass}>
           <SectionHeader
@@ -4015,7 +4278,7 @@ function ActiveSceneContent({
         </section>
       ) : null}
 
-      {(laneId === "nearby_now" || laneId === "events") && visibleHosts.length > 0 ? (
+      {canSeeParkingPassOps && (laneId === "nearby_now" || laneId === "events") && visibleHosts.length > 0 ? (
         <section className={compactRailSectionClass}>
           <SectionHeader
             title="Event Hosts Nearby"
@@ -4098,7 +4361,7 @@ function ActiveSceneContent({
       {((laneId === "food_trucks" && visibleTrucksServingNow.length === 0) ||
         (laneId === "restaurants" && visibleOpenRestaurants.length === 0) ||
         (laneId === "deals" && visibleDeals.length === 0) ||
-        (laneId === "events" && visibleSceneEvents.length === 0 && visibleHosts.length === 0) ||
+        (laneId === "events" && visibleSceneEvents.length === 0 && visibleHosts.length === 0 && parkingInventoryItems.length === 0) ||
         (laneId === "new_menus" && localMenuItems.length === 0) ||
         (laneId === "late_night" &&
           visibleOpenRestaurants.length === 0 &&
@@ -4110,7 +4373,8 @@ function ActiveSceneContent({
           visibleOpenRestaurants.length === 0 &&
           visibleDeals.length === 0 &&
           visibleSceneEvents.length === 0 &&
-          visibleHosts.length === 0)) ? (
+          visibleHosts.length === 0 &&
+          parkingInventoryItems.length === 0)) ? (
         <ScoutSceneEmptyState laneId={laneId} />
       ) : null}
     </>
@@ -4228,6 +4492,96 @@ function HostLocationCard({ host }: { host: ScoutHostLocation }) {
           >
             Route
           </a>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function ScoutParkingSpotCard({
+  item,
+  isSignedIn,
+  isAdminFamilyUser,
+  isTruckVendorUser,
+}: {
+  item: ScoutParkingInventoryItem;
+  isSignedIn: boolean;
+  isAdminFamilyUser: boolean;
+  isTruckVendorUser: boolean;
+}) {
+  const place = [item.city, item.state].filter(Boolean).join(", ");
+  const statusLabel =
+    item.bookingMode === "bookable"
+      ? "Bookable"
+      : item.bookingMode === "requestable"
+        ? "Request spot"
+        : "View only";
+  const primaryCta = isAdminFamilyUser
+    ? { label: "Manage Host", href: item.manageUrl }
+    : isTruckVendorUser
+      ? item.bookingMode === "bookable"
+        ? { label: "Book Spot", href: item.viewUrl }
+        : item.bookingMode === "requestable"
+          ? { label: "Request Spot", href: item.viewUrl }
+          : { label: "View Host", href: item.viewUrl }
+      : { label: "View Host", href: item.viewUrl };
+
+  return (
+    <div className="rounded-2xl overflow-hidden bg-white/5 ring-1 ring-white/10 p-3">
+      <p className="text-[10px] font-black uppercase tracking-[0.12em] text-orange-200/75">
+        Parking Pass
+      </p>
+      <p className="mt-1 truncate text-sm font-semibold text-white">{item.hostName}</p>
+      <p className="mt-0.5 truncate text-xs text-white/65">
+        {place || item.address || "Nearby host spot"}
+      </p>
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        <span className="rounded-full bg-orange-300/14 px-2 py-1 text-[10px] font-bold text-orange-100 ring-1 ring-orange-200/25">
+          {statusLabel}
+        </span>
+        {item.priceLabel ? (
+          <span className="rounded-full bg-white/10 px-2 py-1 text-[10px] font-bold text-white ring-1 ring-white/20">
+            {item.priceLabel}
+          </span>
+        ) : null}
+        {item.capacityLabel ? (
+          <span className="rounded-full bg-white/10 px-2 py-1 text-[10px] font-bold text-white ring-1 ring-white/20">
+            {item.capacityLabel}
+          </span>
+        ) : null}
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <Link
+          href={primaryCta.href}
+          className="rounded-full bg-orange-500 px-2.5 py-1 text-[10px] font-bold text-[#160904]"
+        >
+          {primaryCta.label}
+        </Link>
+        {isAdminFamilyUser ? (
+          <Link
+            href={`/parking-pass?hostId=${encodeURIComponent(item.hostId || "")}&tab=bookings`}
+            className="rounded-full bg-white/10 px-2.5 py-1 text-[10px] font-bold text-white ring-1 ring-white/20"
+          >
+            View Bookings
+          </Link>
+        ) : null}
+        {item.routeUrl ? (
+          <a
+            href={item.routeUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="rounded-full bg-white/10 px-2.5 py-1 text-[10px] font-bold text-white ring-1 ring-white/20"
+          >
+            Route
+          </a>
+        ) : null}
+        {isSignedIn && !isAdminFamilyUser && !isTruckVendorUser ? (
+          <Link
+            href={item.viewUrl}
+            className="rounded-full bg-white/10 px-2.5 py-1 text-[10px] font-bold text-white ring-1 ring-white/20"
+          >
+            Save
+          </Link>
         ) : null}
       </div>
     </div>

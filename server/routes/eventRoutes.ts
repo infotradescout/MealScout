@@ -616,6 +616,36 @@ export function registerEventRoutes(
     };
     parkingPassPublicFeedLastGood = { payload: enhancedEvents };
 
+    const summaryUniqueHostIds = new Set<string>();
+    const summaryUniqueParkingPassIds = new Set<string>();
+    const summaryUniqueOccurrenceIds = new Set<string>();
+    const summaryUniqueDates = new Set<string>();
+    const summaryUniqueLocations = new Set<string>();
+    let summaryMinDate: string | null = null;
+    let summaryMaxDate: string | null = null;
+    for (const row of enhancedEvents) {
+      const hostId = String(row?.host?.id || row?.hostId || "").trim();
+      if (hostId) summaryUniqueHostIds.add(hostId);
+      const parkingPassId = String(row?.seriesId || row?.id || "").trim();
+      if (parkingPassId) summaryUniqueParkingPassIds.add(parkingPassId);
+      const occurrenceId = String(row?.id || row?.occurrenceId || "").trim();
+      if (occurrenceId) summaryUniqueOccurrenceIds.add(occurrenceId);
+      const dateValue = String(row?.date || "").trim();
+      if (dateValue) {
+        summaryUniqueDates.add(dateValue);
+        if (!summaryMinDate || dateValue < summaryMinDate) summaryMinDate = dateValue;
+        if (!summaryMaxDate || dateValue > summaryMaxDate) summaryMaxDate = dateValue;
+      }
+      const locKey = [
+        String(row?.host?.address || row?.hostAddress || "").trim().toLowerCase(),
+        String(row?.host?.city || row?.hostCity || row?.city || "").trim().toLowerCase(),
+        String(row?.host?.state || row?.hostState || row?.state || "").trim().toLowerCase(),
+      ]
+        .filter(Boolean)
+        .join("|");
+      if (locKey) summaryUniqueLocations.add(locKey);
+    }
+
     const totalMs = Date.now() - startedAt;
     if (totalMs > 750 || process.env.PARKING_PASS_FEED_DEBUG === "true") {
       console.info("[parking-pass] public feed build timing", {
@@ -624,6 +654,15 @@ export function registerEventRoutes(
         occurrences: occurrences.length,
         legacy: legacyEvents.length,
         returned: enhancedEvents.length,
+        summary: {
+          returnedRows: enhancedEvents.length,
+          uniqueHostIds: summaryUniqueHostIds.size,
+          uniqueParkingPassIds: summaryUniqueParkingPassIds.size,
+          uniqueOccurrenceIds: summaryUniqueOccurrenceIds.size,
+          uniqueDates: summaryUniqueDates.size,
+          uniqueLocations: summaryUniqueLocations.size,
+          dateRange: { start: summaryMinDate, end: summaryMaxDate },
+        },
       });
     }
 
