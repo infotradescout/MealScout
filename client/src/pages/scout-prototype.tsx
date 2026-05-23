@@ -241,12 +241,12 @@ export default function ScoutPrototype() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [submittedQuery, setSubmittedQuery] = useState("");
-  const GLOBAL_NAV_HEIGHT = 78;
+  const GLOBAL_NAV_HEIGHT = 58;
   const SCOUT_SCENE_RAIL_HEIGHT = 50;
   const SCOUT_SEARCH_DOCK_HEIGHT = 46;
-  const SCOUT_DOCK_GAP = 6;
+  const SCOUT_DOCK_GAP = 0;
   const scoutDockBottom = `calc(env(safe-area-inset-bottom) + ${GLOBAL_NAV_HEIGHT}px)`;
-  const feedBottomClearance = `calc(env(safe-area-inset-bottom) + ${GLOBAL_NAV_HEIGHT + SCOUT_SCENE_RAIL_HEIGHT + SCOUT_SEARCH_DOCK_HEIGHT + SCOUT_DOCK_GAP + 28}px)`;
+  const feedBottomClearance = `calc(env(safe-area-inset-bottom) + ${GLOBAL_NAV_HEIGHT + SCOUT_SCENE_RAIL_HEIGHT + SCOUT_SEARCH_DOCK_HEIGHT + SCOUT_DOCK_GAP + 18}px)`;
 
   const scoutPreviewCity = useMemo(() => {
     if (typeof window === "undefined") return "";
@@ -732,7 +732,7 @@ export default function ScoutPrototype() {
               </div>
             </section>
           )}
-          <div className="rounded-xl border border-white/8 bg-[#0f0d0b]/88 backdrop-blur-xl shadow-[0_-4px_12px_rgba(0,0,0,0.3)]">
+          <div className="rounded-t-[14px] rounded-b-none border border-b-0 border-white/8 bg-[#0f0d0b]/94 backdrop-blur-xl">
             <div className="flex gap-1.5 overflow-x-auto no-scrollbar px-2 py-1.5">
               {EXPLORE_TILES.map(tile => {
                 const count = tileCounts[tile.id as keyof typeof tileCounts] || tile.count;
@@ -759,7 +759,7 @@ export default function ScoutPrototype() {
           <button
             type="button"
             onClick={() => setSearchOpen(true)}
-            className="mt-1 flex h-[44px] w-full items-center gap-2 rounded-xl border border-white/10 bg-[#0f0d0b]/90 px-3.5 text-left text-[13px] font-semibold text-white/88 shadow-[0_8px_18px_rgba(0,0,0,0.34)] backdrop-blur-xl"
+            className="mt-0 flex h-[44px] w-full items-center gap-2 rounded-none border-x border-t border-white/10 bg-[#0f0d0b]/94 px-3.5 text-left text-[13px] font-semibold text-white/88"
             aria-label="Search food, places, trucks, events"
           >
             <Search size={16} className="text-orange-400 shrink-0" />
