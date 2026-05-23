@@ -428,14 +428,13 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
       <nav
         aria-label="Primary navigation"
         className="fixed left-0 right-0 z-[1100] lg:hidden"
-        style={{ bottom: "calc(env(safe-area-inset-bottom) + 0.55rem)" }}
+        style={{ bottom: 0 }}
       >
-        <div className="mx-auto max-w-md px-3">
+        <div className="w-full px-0">
           <div
-            className="relative flex items-end justify-between gap-1 h-[58px] px-1.5 rounded-[18px] bg-[#120805]/72 backdrop-blur-2xl ring-1 ring-white/8"
+            className="relative flex items-end justify-between gap-1 h-[58px] px-1.5 rounded-none border-t border-orange-500/20 bg-[#0b0b0b] pb-[env(safe-area-inset-bottom)]"
             style={{
-              boxShadow:
-                "0 0 0 1px rgba(255,90,47,0.09), 0 12px 30px rgba(0,0,0,0.58)",
+              boxShadow: "0 -8px 22px rgba(0,0,0,0.42)",
             }}
           >
             {sixSlotNav.map((item, index) => {
