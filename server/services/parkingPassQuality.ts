@@ -110,7 +110,7 @@ const firstFiniteNumber = (
 };
 
 const SUSPICIOUS_TEST_TOKEN =
-  /\b(test|asdf|qwer|dummy|sample|temp|fake|placeholder)\b/i;
+  /\b(test|asdf|qwer|dummy|sample|temp|fake|placeholder|smoketest|smoke[-_\s]?test|smoke[-_\s]?host)\b/i;
 const SUSPICIOUS_PRIVATE_HOST_NAME =
   /^(my|our)\s+(house|home|place)$|^(home|house|residence|personal residence)$/i;
 const LONG_GIBBERISH_TOKEN = /^[a-z0-9]{16,}$/i;
