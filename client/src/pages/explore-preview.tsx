@@ -1565,11 +1565,11 @@ export default function ExplorePreview() {
 
   /* --------- location --------- */
 
-  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [deviceCoords, setDeviceCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [discoveryRadiusKm, setDiscoveryRadiusKm] = useState<number>(() =>
     readDiscoveryRadiusKm(),
   );
-  const [locationName, setLocationName] = useState<string>("Your area");
+  const [deviceLocationName, setDeviceLocationName] = useState<string>("Your area");
   const [locationStatus, setLocationStatus] = useState<
     "idle" | "requesting" | "ready" | "denied"
   >("idle");
@@ -1622,20 +1622,32 @@ export default function ExplorePreview() {
       .toLowerCase();
   }, [location]);
   const isPensacolaScoutPreview = isScoutPreviewEligible && scoutPreviewCity === "pensacola";
-  const previewCoords = useMemo(
-    () => (isPensacolaScoutPreview ? { lat: 30.4213, lng: -87.2169 } : null),
+  const previewLocation = useMemo(
+    () =>
+      isPensacolaScoutPreview
+        ? { label: "Pensacola", lat: 30.4213, lng: -87.2169, source: "admin_preview" as const }
+        : null,
     [isPensacolaScoutPreview],
   );
+  const manualSelectedLocation = null;
+  const savedLocation = null;
+  const fallbackLocation = null;
   const resolvedScoutLocation = useMemo(
-    () =>
-      coords
-        ? {
-            label: locationName || "Your area",
-            lat: coords.lat,
-            lng: coords.lng,
-          }
-        : null,
-    [coords, locationName],
+    () => {
+      if (previewLocation) return previewLocation;
+      if (manualSelectedLocation) return manualSelectedLocation;
+      if (deviceCoords) {
+        return {
+          label: deviceLocationName || "Your area",
+          lat: deviceCoords.lat,
+          lng: deviceCoords.lng,
+          source: "device" as const,
+        };
+      }
+      if (savedLocation) return savedLocation;
+      return fallbackLocation;
+    },
+    [deviceCoords, deviceLocationName, previewLocation],
   );
   const resolvedScoutCoords = useMemo(
     () =>
@@ -1683,17 +1695,13 @@ export default function ExplorePreview() {
   }, [isPensacolaScoutPreview, isScoutPreviewEligible, location, normalizedUserType]);
 
   useEffect(() => {
-    if (!isPensacolaScoutPreview || !previewCoords) return;
-    setCoords(previewCoords);
-    setLocationName("Pensacola");
+    if (!isPensacolaScoutPreview || !previewLocation) return;
     setLocationStatus("ready");
-    setMapCenter(previewCoords);
-  }, [isPensacolaScoutPreview, previewCoords]);
+    setMapCenter({ lat: previewLocation.lat, lng: previewLocation.lng });
+  }, [isPensacolaScoutPreview, previewLocation]);
 
   const requestLocation = useCallback(() => {
-    if (isPensacolaScoutPreview && previewCoords) {
-      setCoords(previewCoords);
-      setLocationName("Pensacola");
+    if (isPensacolaScoutPreview && previewLocation) {
       setLocationStatus("ready");
       return;
     }
@@ -1705,10 +1713,11 @@ export default function ExplorePreview() {
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const { latitude, longitude } = position.coords;
-        setCoords({ lat: latitude, lng: longitude });
+        if (isPensacolaScoutPreview) return;
+        setDeviceCoords({ lat: latitude, lng: longitude });
         setLocationStatus("ready");
         getReverseGeocodedLocationName(latitude, longitude, (name) => {
-          if (name) setLocationName(name);
+          if (name && !isPensacolaScoutPreview) setDeviceLocationName(name);
         }).catch(() => {});
       },
       () => {
@@ -1716,7 +1725,7 @@ export default function ExplorePreview() {
       },
       { timeout: 10000, maximumAge: 0 },
     );
-  }, [isPensacolaScoutPreview, previewCoords]);
+  }, [isPensacolaScoutPreview, previewLocation]);
 
   // Auto-request on mount
   useEffect(() => {
@@ -1732,14 +1741,14 @@ export default function ExplorePreview() {
   }, []);
 
   const shortLocation = useMemo(() => {
-    if (!locationName) return "Your area";
-    return locationName.split(",")[0] || locationName;
-  }, [locationName]);
+    if (!resolvedScoutLocation?.label) return "Your area";
+    return resolvedScoutLocation.label.split(",")[0] || resolvedScoutLocation.label;
+  }, [resolvedScoutLocation]);
 
   const hasResolvedLocation = useMemo(() => {
-    const trimmed = (locationName || "").trim();
+    const trimmed = (resolvedScoutLocation?.label || "").trim();
     return trimmed.length > 0 && trimmed.toLowerCase() !== "your area";
-  }, [locationName]);
+  }, [resolvedScoutLocation]);
 
   /* --------- trucks --------- */
 
@@ -2496,13 +2505,13 @@ export default function ExplorePreview() {
   const hasMapKey = effectiveGoogleMapsApiKey.length > 0;
 
   const openScoutMap = useCallback(() => {
-    if (coords) {
-      setMapCenter(coords);
+    if (resolvedScoutCoords) {
+      setMapCenter(resolvedScoutCoords);
     }
     setHasOpenedFullMap(true);
     setGoogleMapFailed(false);
     setSheetState("fullMap");
-  }, [coords]);
+  }, [resolvedScoutCoords]);
 
   const collapseScoutMap = useCallback(() => {
     setSheetState("default");
@@ -2548,9 +2557,9 @@ export default function ExplorePreview() {
 
   // When we first get coords, set the map center to the right-quadrant offset.
   useEffect(() => {
-    if (!coords || userPushedMapRef.current) return;
-    setMapCenter(shiftCenterForRightQuadrant(coords.lat, coords.lng, HERO_ZOOM));
-  }, [coords]);
+    if (!resolvedScoutCoords || userPushedMapRef.current) return;
+    setMapCenter(shiftCenterForRightQuadrant(resolvedScoutCoords.lat, resolvedScoutCoords.lng, HERO_ZOOM));
+  }, [resolvedScoutCoords]);
 
   const handleMapBoundsChanged = useCallback((bounds: MapBoundsLike) => {
     setMapBounds(bounds);
@@ -2570,14 +2579,14 @@ export default function ExplorePreview() {
       if (truckCoords) {
         setMapCenter(truckCoords);
         setMapZoom(16);
-      } else if (coords) {
-        setMapCenter(coords);
+      } else if (resolvedScoutCoords) {
+        setMapCenter(resolvedScoutCoords);
       }
       setHasOpenedFullMap(true);
       setGoogleMapFailed(false);
       setSheetState("fullMap");
     },
-    [coords],
+    [resolvedScoutCoords],
   );
   const handleMarkerTap = useCallback(
     (marker: MapAdapterMarker) => {
@@ -3192,7 +3201,7 @@ export default function ExplorePreview() {
                 zIndex: 0,
               }}
             >
-              {coords ? (
+              {resolvedScoutCoords ? (
                 hasMapKey && !googleMapFailed && mapCenter ? (
                   <MapErrorBoundary>
                     <GoogleMapSurface
@@ -3202,7 +3211,7 @@ export default function ExplorePreview() {
                       zoom={13}
                       markers={sceneFilteredMapMarkers}
                       showRoadTrafficLayer={false}
-                      userLocation={coords}
+                      userLocation={resolvedScoutCoords}
                       isNightTheme={true}
                       interactive={true}
                       onBoundsChanged={handleMapBoundsChanged}
@@ -3215,7 +3224,7 @@ export default function ExplorePreview() {
                 ) : (
                   <Suspense fallback={<HeroMapFallback reason="loading" />}>
                     <ThemedScoutMap
-                      userLocation={coords}
+                      userLocation={resolvedScoutCoords}
                       markers={sceneFilteredMapMarkers}
                       zoom={13}
                       onMarkerTap={handlePreviewMarkerTap}
@@ -3237,7 +3246,7 @@ export default function ExplorePreview() {
                 - Used for full interactive pan/zoom/tap-pin exploration.
                 - Collapsed preview uses the same styled map family above.
             */}
-            {sheetState === "fullMap" && hasMapKey && !googleMapFailed && coords && mapCenter ? (
+            {sheetState === "fullMap" && hasMapKey && !googleMapFailed && resolvedScoutCoords && mapCenter ? (
               <div
                 ref={googleMapContainerRef}
                 data-testid="scout-interactive-map"
@@ -3256,7 +3265,7 @@ export default function ExplorePreview() {
                     zoom={mapZoom}
                     markers={sceneFilteredMapMarkers}
                     showRoadTrafficLayer={false}
-                    userLocation={coords}
+                    userLocation={resolvedScoutCoords}
                       isNightTheme={true}
                     onBoundsChanged={handleMapBoundsChanged}
                     onZoomChanged={handleMapZoomChanged}
@@ -3266,17 +3275,17 @@ export default function ExplorePreview() {
                   />
                 </MapErrorBoundary>
               </div>
-            ) : sheetState === "fullMap" && (googleMapFailed || !hasMapKey || !coords || !mapCenter) ? (
+            ) : sheetState === "fullMap" && (googleMapFailed || !hasMapKey || !resolvedScoutCoords || !mapCenter) ? (
               <div
                 data-testid="scout-interactive-map"
                 className="absolute inset-0"
                 style={{ zIndex: 1 }}
               >
-                {coords ? (
+                {resolvedScoutCoords ? (
                   <>
                     <Suspense fallback={<HeroMapFallback reason="loading" />}>
                       <ThemedScoutMap
-                        userLocation={coords}
+                        userLocation={resolvedScoutCoords}
                         markers={sceneFilteredMapMarkers}
                         zoom={13}
                         interactive={true}
@@ -3349,8 +3358,8 @@ export default function ExplorePreview() {
               discoveryRadiusKm={discoveryRadiusKm}
               onRadiusChange={updateDiscoveryRadiusKm}
               onRecenter={() => {
-                if (coords) {
-                  setMapCenter(coords);
+                if (resolvedScoutCoords) {
+                  setMapCenter(resolvedScoutCoords);
                   setMapZoom(14);
                 }
               }}
@@ -3360,7 +3369,7 @@ export default function ExplorePreview() {
           {sheetState === "fullMap" && selectedLiveTruck && (
             <LiveTruckMapCard
               truck={selectedLiveTruck}
-              userLocation={coords}
+              userLocation={resolvedScoutCoords}
               onClose={() => setSelectedLiveTruck(null)}
             />
           )}
@@ -3368,7 +3377,7 @@ export default function ExplorePreview() {
           {sheetState === "fullMap" && selectedMapMarker && (
             <MapPlaceCard
               marker={selectedMapMarker}
-              userLocation={coords}
+              userLocation={resolvedScoutCoords}
               onClose={() => setSelectedMapMarker(null)}
             />
           )}
@@ -3377,7 +3386,7 @@ export default function ExplorePreview() {
             <MapEdgeIndicators
               markers={sceneFilteredMapMarkers}
               bounds={mapBounds}
-              center={mapCenter || coords}
+              center={mapCenter || resolvedScoutCoords}
               selectedId={selectedLiveTruck ? String(selectedLiveTruck.id) : selectedMapMarker?.id || null}
               onSelect={(marker) => {
                 setMapCenter({ lat: marker.lat, lng: marker.lng });
@@ -3425,7 +3434,7 @@ export default function ExplorePreview() {
                   ) : null}
                   {showScoutPreviewDebug ? (
                     <p className="mb-1 text-[10px] font-bold text-white/75">
-                      preview eligible:{String(isScoutPreviewEligible)} city:{scoutPreviewCity || "none"} active:{String(isPensacolaScoutPreview)} loc:{resolvedScoutLocation ? `${resolvedScoutLocation.label} ${resolvedScoutLocation.lat.toFixed(4)},${resolvedScoutLocation.lng.toFixed(4)}` : "none"} status[t:{scoutSourceStatuses.trucks ?? "-"} r:{scoutSourceStatuses.restaurants ?? "-"} h:{scoutSourceStatuses.mapLocations ?? "-"} d:{scoutSourceStatuses.deals ?? "-"} e:{scoutSourceStatuses.events ?? "-"}] counts[t:{scoutDebugCounts.trucksReturned} h:{scoutDebugCounts.hostsReturned} e:{scoutDebugCounts.eventsReturned} r:{scoutDebugCounts.restaurantsReturned} pins:{scoutDebugCounts.mapPinsBuilt}]
+                      preview eligible:{String(isScoutPreviewEligible)} city:{scoutPreviewCity || "none"} active:{String(isPensacolaScoutPreview)} source:{resolvedScoutLocation?.source || "none"} loc:{resolvedScoutLocation ? `${resolvedScoutLocation.label} ${resolvedScoutLocation.lat.toFixed(4)},${resolvedScoutLocation.lng.toFixed(4)}` : "none"} status[t:{scoutSourceStatuses.trucks ?? "-"} r:{scoutSourceStatuses.restaurants ?? "-"} h:{scoutSourceStatuses.mapLocations ?? "-"} d:{scoutSourceStatuses.deals ?? "-"} e:{scoutSourceStatuses.events ?? "-"}] counts[t:{scoutDebugCounts.trucksReturned} h:{scoutDebugCounts.hostsReturned} e:{scoutDebugCounts.eventsReturned} r:{scoutDebugCounts.restaurantsReturned} pins:{scoutDebugCounts.mapPinsBuilt}]
                     </p>
                   ) : null}
                   {showScoutPreviewDebug &&
@@ -3449,7 +3458,7 @@ export default function ExplorePreview() {
               {collapsedMapSelectedMarker ? (
                 <CollapsedMapPinCard
                   marker={collapsedMapSelectedMarker}
-                  userLocation={coords}
+                  userLocation={resolvedScoutCoords}
                 />
               ) : null}
               </>
@@ -6439,6 +6448,9 @@ function HorizontalSkeletonRow({
     </div>
   );
 }
+
+
+
 
 
 
