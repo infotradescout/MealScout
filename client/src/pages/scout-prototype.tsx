@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MapPin, Heart, Navigation2, Search, Star, Clock, Utensils, DollarSign, Music, Sparkles, Award, AlertCircle, X } from 'lucide-react';
+import { MapPin, Heart, Navigation2, Search, Star, Clock, Utensils, DollarSign, Music, Sparkles, Award, AlertCircle, X, Bell, User, Compass, Filter, Bookmark } from 'lucide-react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -11,144 +11,54 @@ const customStyles = `
   }
   .custom-map-pin { background: none !important; border: none !important; }
   .user-location-pin { background: none !important; border: none !important; }
-  .custom-scrollbar::-webkit-scrollbar { width: 4px; }
-  .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-  .custom-scrollbar::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
-  .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #444; }
+  .custom-scrollbar::-webkit-scrollbar { width: 0px; background: transparent; }
+  .leaflet-container { background: #0d0d0d !important; }
+  .leaflet-popup-content-wrapper { background: transparent !important; border: none !important; box-shadow: none !important; padding: 0 !important; }
+  .leaflet-popup-tip-container { display: none !important; }
+  .leaflet-popup-content { margin: 0 !important; width: auto !important; }
 `;
 
 interface FeedItem {
   id: string;
-  type: 'food_truck' | 'dish' | 'restaurant' | 'deal' | 'event' | 'new_menu' | 'worth_discovering';
+  type: 'FOOD TRUCK' | 'DISH' | 'RESTAURANT' | 'DEAL' | 'EVENT' | 'NEW MENU' | 'WORTH DISCOVERING';
+  typeColor: string;
   image: string;
   title: string;
   subtitle: string;
-  distance: number;
-  status?: string;
-  statusColor?: string;
   tag?: string;
   tagColor?: string;
-  saved?: boolean;
-}
-
-interface MapPinData {
-  id: string;
-  lat: number;
-  lng: number;
-  type: string;
-  title: string;
-  subtitle: string;
-  image: string;
-  distance: number;
-  status: string;
+  distance: string;
+  hasRoute?: boolean;
 }
 
 const ScoutPrototype: React.FC = () => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<L.Map | null>(null);
-  const [activeCategory, setActiveCategory] = useState('for-you');
-  const [selectedPin, setSelectedPin] = useState<MapPinData | null>(null);
-  const [feedItems, setFeedItems] = useState<FeedItem[]>([
-    {
-      id: '1',
-      type: 'food_truck',
-      image: 'https://images.unsplash.com/photo-1565299585323-38d6b0865b47?w=300&h=300&fit=crop',
-      title: 'Taco Bandito',
-      subtitle: 'Mexican • Posted up 11a–3p',
-      distance: 0.3,
-      status: 'Posted up now',
-      statusColor: 'text-purple-400',
-      tag: 'FOOD TRUCK',
-      tagColor: 'bg-purple-900 text-purple-300',
-    },
-    {
-      id: '2',
-      type: 'dish',
-      image: 'https://images.unsplash.com/photo-1621996346565-e3dbc646d9a9?w=300&h=300&fit=crop',
-      title: 'Cacio e Pepe',
-      subtitle: 'Vinci Italian Kitchen • Italian',
-      distance: 0.6,
-      tag: 'DISH',
-      tagColor: 'bg-orange-900 text-orange-300',
-      status: 'Locals love this',
-      statusColor: 'text-orange-400',
-    },
-    {
-      id: '3',
-      type: 'restaurant',
-      image: 'https://images.unsplash.com/photo-1517248135467-4d71bcdd2167?w=300&h=300&fit=crop',
-      title: 'Riverbend Café',
-      subtitle: 'Café • Breakfast, Lunch',
-      distance: 0.8,
-      status: 'Open now',
-      statusColor: 'text-green-400',
-      tag: 'RESTAURANT',
-      tagColor: 'bg-orange-900 text-orange-300',
-    },
-    {
-      id: '4',
-      type: 'deal',
-      image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=300&h=300&fit=crop',
-      title: 'Burger + Fries',
-      subtitle: 'Station House • 20% off',
-      distance: 1.1,
-      status: 'Deal ends soon',
-      statusColor: 'text-green-400',
-      tag: 'DEAL',
-      tagColor: 'bg-green-900 text-green-300',
-    },
-    {
-      id: '5',
-      type: 'event',
-      image: 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=300&h=300&fit=crop',
-      title: 'Live Music: Jordan Rivers',
-      subtitle: 'The Green Room • Tonight 8PM',
-      distance: 0.9,
-      status: 'Happening tonight',
-      statusColor: 'text-blue-400',
-      tag: 'EVENT',
-      tagColor: 'bg-blue-900 text-blue-300',
-    },
-    {
-      id: '6',
-      type: 'new_menu',
-      image: 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=300&h=300&fit=crop',
-      title: 'Strawberry Basque Cheesecake',
-      subtitle: 'Sweet Science • New this week',
-      distance: 0.7,
-      status: 'New menu item',
-      statusColor: 'text-pink-400',
-      tag: 'NEW MENU',
-      tagColor: 'bg-pink-900 text-pink-300',
-    },
-    {
-      id: '7',
-      type: 'worth_discovering',
-      image: 'https://images.unsplash.com/photo-1555939594-58d7cb561404?w=300&h=300&fit=crop',
-      title: "Mama Jean's Kitchen",
-      subtitle: 'Soul Food • Newly added',
-      distance: 1.2,
-      status: 'New to MealScout',
-      statusColor: 'text-yellow-400',
-      tag: 'WORTH DISCOVERING',
-      tagColor: 'bg-yellow-900 text-yellow-300',
-    },
-  ]);
+  const [activeCategory, setActiveCategory] = useState('For You');
 
   const categories = [
-    { id: 'for-you', label: 'For You', icon: '✨' },
-    { id: 'community', label: 'Community', icon: '👥' },
-    { id: 'nearby', label: 'Nearby Now', icon: '📍' },
-    { id: 'trucks', label: 'Food Trucks', icon: '🚚' },
-    { id: 'restaurants', label: 'Restaurants', icon: '🍽️' },
-    { id: 'deals', label: 'Deals', icon: '🏷️' },
-    { id: 'events', label: 'Events', icon: '📅' },
-    { id: 'menus', label: 'New Menus', icon: '📋' },
-    { id: 'late-night', label: 'Late Night', icon: '🌙' },
-    { id: 'worth', label: 'Worth Discovering', icon: '⭐' },
+    { name: 'For You', icon: <Sparkles size={16} /> },
+    { name: 'Community', icon: <User size={16} /> },
+    { name: 'Nearby Now', icon: <Navigation2 size={16} /> },
+    { name: 'Food Trucks', icon: <Utensils size={16} /> },
+    { name: 'Restaurants', icon: <Utensils size={16} /> },
+    { name: 'Deals', icon: <DollarSign size={16} /> },
+    { name: 'Events', icon: <Clock size={16} /> },
+    { name: 'New Menus', icon: <Star size={16} /> },
+    { name: 'Late Night', icon: <Clock size={16} /> },
+    { name: 'Worth Discovering', icon: <Award size={16} /> },
   ];
 
-  // Initialize map
+  const feedItems: FeedItem[] = [
+    { id: '1', type: 'FOOD TRUCK', typeColor: '#9333ea', image: 'https://images.unsplash.com/photo-1565299585323-38d6b0865b47?w=400&h=400&fit=crop', title: 'Taco Bandito', subtitle: 'Mexican • Posted up 11a-3p', tag: 'Posted up now', tagColor: '#9333ea', distance: '0.3 mi' },
+    { id: '2', type: 'DISH', typeColor: '#ff5c00', image: 'https://images.unsplash.com/photo-1473093226795-af9932fe5856?w=400&h=400&fit=crop', title: 'Cacio e Pepe', subtitle: 'Vinci Italian Kitchen • Italian', tag: 'Locals love this', tagColor: '#ff5c00', distance: '0.6 mi' },
+    { id: '3', type: 'RESTAURANT', typeColor: '#ff5c00', image: 'https://images.unsplash.com/photo-1517248135467-4d71bcdd2167?w=400&h=400&fit=crop', title: 'Riverbend Café', subtitle: 'Café • Breakfast, Lunch • Open now', tag: 'Open now', tagColor: '#10b981', distance: '0.8 mi', hasRoute: true },
+    { id: '4', type: 'DEAL', typeColor: '#10b981', image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=400&h=400&fit=crop', title: 'Burger + Fries', subtitle: 'Station House • 20% off', tag: 'Deal ends soon', tagColor: '#10b981', distance: '1.1 mi' },
+    { id: '5', type: 'EVENT', typeColor: '#3b82f6', image: 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=400&h=400&fit=crop', title: 'Live Music: Jordan Rivers', subtitle: 'The Green Room • Tonight 8PM', tag: 'Happening tonight', tagColor: '#3b82f6', distance: '0.9 mi' },
+    { id: '6', type: 'NEW MENU', typeColor: '#ec4899', image: 'https://images.unsplash.com/photo-1533134242443-d4fd215305ad?w=400&h=400&fit=crop', title: 'Strawberry Basque Cheesecake', subtitle: 'Sweet Science • New this week', tag: 'New menu item', tagColor: '#ec4899', distance: '0.7 mi' },
+    { id: '7', type: 'WORTH DISCOVERING', typeColor: '#eab308', image: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=400&h=400&fit=crop', title: "Mama Jean's Kitchen", subtitle: 'Soul Food • Newly added', tag: 'New to MealScout', tagColor: '#eab308', distance: '1.2 mi', hasRoute: true },
+  ];
+
   useEffect(() => {
     if (!mapContainer.current) return;
 
@@ -157,200 +67,213 @@ const ScoutPrototype: React.FC = () => {
       attributionControl: false
     }).setView([40.7128, -74.0060], 14);
 
-    // Dark theme tiles
     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
       maxZoom: 19,
     }).addTo(map.current);
 
-    // Add sample pins
-    const pins: MapPinData[] = [
-      { id: '1', lat: 40.7128, lng: -74.0060, type: 'truck', title: 'Taco Bandito', subtitle: 'Mexican', image: 'https://images.unsplash.com/photo-1565299585323-38d6b0865b47?w=100&h=100&fit=crop', distance: 0.3, status: 'Open' },
-      { id: '2', lat: 40.7180, lng: -74.0020, type: 'restaurant', title: 'Riverbend Café', subtitle: 'Café', image: 'https://images.unsplash.com/photo-1517248135467-4d71bcdd2167?w=100&h=100&fit=crop', distance: 0.8, status: 'Open' },
-      { id: '3', lat: 40.7100, lng: -74.0100, type: 'event', title: 'Live Music', subtitle: 'The Green Room', image: 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=100&h=100&fit=crop', distance: 0.9, status: 'Tonight' },
+    // Custom pins based on target design
+    const pins = [
+      { lat: 40.718, lng: -74.008, color: '#9333ea', icon: '🚚' },
+      { lat: 40.715, lng: -74.002, color: '#ff5c00', icon: '🍽️' },
+      { lat: 40.712, lng: -74.010, color: '#3b82f6', icon: '🎸' },
+      { lat: 40.720, lng: -74.005, color: '#10b981', icon: '🔥' },
+      { lat: 40.708, lng: -74.004, color: '#eab308', icon: '⭐' },
     ];
 
-    pins.forEach(pin => {
-      const iconColor = pin.type === 'truck' ? '#ff5c00' : pin.type === 'event' ? '#9333ea' : '#ff5c00';
+    pins.forEach(p => {
       const icon = L.divIcon({
         className: 'custom-map-pin',
-        html: `<div style="background-color: ${iconColor}; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; border: 2px solid rgba(255,255,255,0.2); box-shadow: 0 0 15px ${iconColor}44;">
-                <div style="font-size: 18px;">${pin.type === 'truck' ? '🚚' : pin.type === 'event' ? '🎸' : '🍽️'}</div>
+        html: `<div style="background-color: ${p.color}; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 2px solid rgba(255,255,255,0.3); box-shadow: 0 0 15px ${p.color}66;">
+                <span style="font-size: 14px;">${p.icon}</span>
                </div>`,
-        iconSize: [36, 36],
-        iconAnchor: [18, 18]
+        iconSize: [32, 32],
+        iconAnchor: [16, 16]
       });
-
-      const marker = L.marker([pin.lat, pin.lng], { icon }).addTo(map.current!);
-      marker.on('click', () => setSelectedPin(pin));
+      L.marker([p.lat, p.lng], { icon }).addTo(map.current!);
     });
 
-    // Add user location
+    // User location
     const userIcon = L.divIcon({
       className: 'user-location-pin',
-      html: `<div style="background-color: #3b82f6; width: 20px; height: 20px; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 20px #3b82f688;">
-                <div style="position: absolute; top: -10px; left: -10px; right: -10px; bottom: -10px; border-radius: 50%; background-color: #3b82f622; animation: pulse 2s infinite;"></div>
+      html: `<div style="background-color: #3b82f6; width: 18px; height: 18px; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 20px #3b82f6aa;">
+                <div style="position: absolute; top: -8px; left: -8px; right: -8px; bottom: -8px; border-radius: 50%; background-color: #3b82f633; animation: pulse 2s infinite;"></div>
              </div>`,
-      iconSize: [20, 20],
-      iconAnchor: [10, 10]
+      iconSize: [18, 18],
+      iconAnchor: [9, 9]
     });
     L.marker([40.7128, -74.0060], { icon: userIcon }).addTo(map.current);
 
-    return () => {
-      if (map.current) {
-        map.current.remove();
-      }
-    };
+    // Sample popup
+    const popupIcon = L.divIcon({
+      className: 'custom-map-pin',
+      html: `
+        <div style="background: #1a1a1a; border: 1px solid #ff5c00; border-radius: 16px; padding: 12px; width: 220px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); position: relative;">
+          <div style="display: flex; gap: 10px; margin-bottom: 12px;">
+            <img src="https://images.unsplash.com/photo-1565299585323-38d6b0865b47?w=100&h=100&fit=crop" style="width: 50px; height: 50px; border-radius: 8px; object-fit: cover;" />
+            <div>
+              <div style="font-size: 9px; font-weight: 800; color: #ff5c00; text-transform: uppercase;">DISH</div>
+              <div style="font-size: 14px; font-weight: 700; color: white;">Brisket Tacos</div>
+              <div style="font-size: 10px; color: #888;">Smok'd BBQ</div>
+              <div style="font-size: 10px; color: #10b981; display: flex; align-items: center; gap: 2px;">
+                <span style="color: #ff5c00;">⭐</span> Most loved nearby
+              </div>
+              <div style="font-size: 10px; color: #888;">0.4 mi • <span style="color: #10b981;">Open</span></div>
+            </div>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button style="flex: 1; background: #ff5c00; color: white; border: none; border-radius: 8px; padding: 6px; font-size: 11px; font-weight: 700;">View</button>
+            <button style="flex: 1; background: #2a2a2a; color: white; border: 1px solid #444; border-radius: 8px; padding: 6px; font-size: 11px; font-weight: 700;">Route</button>
+          </div>
+          <div style="position: absolute; top: 8px; right: 8px; color: #888; font-size: 12px;">✕</div>
+          <div style="position: absolute; bottom: -10px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 10px solid transparent; border-right: 10px solid transparent; border-top: 10px solid #1a1a1a;"></div>
+        </div>
+      `,
+      iconSize: [220, 100],
+      iconAnchor: [110, 110]
+    });
+    L.marker([40.716, -73.998], { icon: popupIcon }).addTo(map.current);
+
+    return () => { map.current?.remove(); };
   }, []);
 
-  const toggleSave = (id: string) => {
-    setFeedItems(feedItems.map(item => 
-      item.id === id ? { ...item, saved: !item.saved } : item
-    ));
-  };
-
   return (
-    <div className="h-screen w-full bg-[#0d0d0d] text-white flex flex-col overflow-hidden">
+    <div className="h-screen w-full bg-[#0d0d0d] text-white flex flex-col overflow-hidden font-sans">
       <style>{customStyles}</style>
+      
       {/* Header */}
-      <div className="flex items-center justify-between p-4 bg-[#1a1a1a] border-b border-[#333]">
+      <div className="flex items-center justify-between px-4 py-3 z-10">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-orange-600 rounded-full flex items-center justify-center text-sm font-bold">🍴</div>
-          <span className="text-lg font-bold">MealScout</span>
+          <div className="w-9 h-9 bg-[#ff5c00] rounded-full flex items-center justify-center border-2 border-white/10 shadow-lg shadow-orange-900/20">
+            <Utensils size={18} className="text-white" />
+          </div>
+          <span className="text-xl font-bold tracking-tight">MealScout</span>
         </div>
-        <div className="flex items-center gap-3">
-          <button className="relative">
-            <AlertCircle size={24} />
-            <div className="absolute top-0 right-0 w-2 h-2 bg-orange-600 rounded-full"></div>
-          </button>
-          <button>
-            <Navigation2 size={24} />
-          </button>
+        <div className="flex items-center gap-4">
+          <div className="relative">
+            <Bell size={22} className="text-white/80" />
+            <div className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-[#ff5c00] rounded-full border-2 border-[#0d0d0d]"></div>
+          </div>
+          <div className="w-8 h-8 rounded-full bg-white/10 border border-white/20 flex items-center justify-center">
+            <User size={18} className="text-white/80" />
+          </div>
         </div>
       </div>
 
       {/* Map Section */}
-      <div className="relative flex-1 overflow-hidden">
-        <div ref={mapContainer} className="w-full h-full" />
-        
-        {/* Selected Pin Popup */}
-        {selectedPin && (
-          <div className="absolute bottom-20 left-4 right-4 bg-[#1a1a1a] rounded-lg p-4 border border-orange-600 shadow-lg z-50">
-            <div className="flex gap-3">
-              <img src={selectedPin.image} alt={selectedPin.title} className="w-16 h-16 rounded object-cover" />
-              <div className="flex-1">
-                <h3 className="font-bold text-white">{selectedPin.title}</h3>
-                <p className="text-sm text-gray-400">{selectedPin.subtitle}</p>
-                <p className="text-xs text-orange-400 mt-1">{selectedPin.distance} mi • {selectedPin.status}</p>
-              </div>
-              <button onClick={() => setSelectedPin(null)} className="text-gray-400 hover:text-white">
-                <X size={20} />
-              </button>
-            </div>
-            <div className="flex gap-2 mt-3">
-              <button className="flex-1 bg-orange-600 hover:bg-orange-700 text-white py-2 rounded font-semibold text-sm">View</button>
-              <button className="flex-1 bg-[#333] hover:bg-[#444] text-white py-2 rounded font-semibold text-sm">Route</button>
-            </div>
-          </div>
-        )}
+      <div className="relative h-[40vh] w-full">
+        <div ref={mapContainer} className="h-full w-full" />
+        <div className="absolute top-4 right-4 flex flex-col gap-2">
+          <button className="w-10 h-10 bg-[#1a1a1a]/80 backdrop-blur-md rounded-full flex items-center justify-center border border-white/10 text-white/80 shadow-xl">
+            <Navigation2 size={20} />
+          </button>
+          <button className="w-10 h-10 bg-[#1a1a1a]/80 backdrop-blur-md rounded-full flex items-center justify-center border border-white/10 text-white/80 shadow-xl">
+            <MapPin size={20} />
+          </button>
+        </div>
+        <div className="absolute top-4 left-4">
+           <div className="bg-[#1a1a1a]/80 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10 text-[10px] font-black uppercase tracking-widest text-white/60">Riverfront</div>
+        </div>
+        <div className="absolute top-4 left-1/2 -translate-x-1/2">
+           <div className="bg-[#1a1a1a]/80 backdrop-blur-md px-4 py-1.5 rounded-full border border-white/10 text-[10px] font-black uppercase tracking-widest text-white/60">Downtown</div>
+        </div>
       </div>
 
-      {/* Category Filter Bar */}
-      <div className="bg-[#1a1a1a] border-t border-[#333] overflow-x-auto">
-        <div className="flex gap-2 p-3 min-w-max">
-          {categories.map(cat => (
-            <button
-              key={cat.id}
-              onClick={() => setActiveCategory(cat.id)}
-              className={`px-4 py-2 rounded-full whitespace-nowrap text-sm font-semibold transition-all ${
-                activeCategory === cat.id
-                  ? 'bg-orange-600 text-white'
-                  : 'bg-[#333] text-gray-300 hover:bg-[#444]'
-              }`}
-            >
-              {cat.icon} {cat.label}
-            </button>
+      {/* Category Filter */}
+      <div className="flex overflow-x-auto px-4 py-4 gap-3 no-scrollbar z-10 bg-[#0d0d0d]">
+        {categories.map(cat => (
+          <button
+            key={cat.name}
+            onClick={() => setActiveCategory(cat.name)}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl whitespace-nowrap transition-all duration-300 border ${
+              activeCategory === cat.name 
+                ? 'bg-[#ff5c00] border-[#ff5c00] shadow-lg shadow-orange-900/30 text-white' 
+                : 'bg-[#1a1a1a] border-white/5 text-white/60 hover:border-white/20'
+            }`}
+          >
+            <span className={activeCategory === cat.name ? 'text-white' : 'text-orange-500'}>{cat.icon}</span>
+            <span className="text-xs font-bold tracking-tight">{cat.name}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Feed Section */}
+      <div className="flex-1 overflow-y-auto px-4 pb-32 custom-scrollbar">
+        <div className="flex items-center justify-between mb-4 mt-2">
+          <div>
+            <h2 className="text-xl font-black uppercase tracking-tighter leading-none mb-1">Today Around You</h2>
+            <p className="text-[11px] leading-tight text-gray-400 font-medium">A live mix of what locals love, what's open, what's new, and what's nearby.</p>
+          </div>
+          <button className="text-orange-500 font-bold text-xs uppercase tracking-wider">See all</button>
+        </div>
+
+        <div className="space-y-3">
+          {feedItems.map(item => (
+            <div key={item.id} className="flex gap-3 bg-[#1a1a1a] rounded-2xl p-3 border border-white/5 group hover:border-orange-500/30 transition-all duration-300">
+              <div className="relative w-24 h-24 shrink-0">
+                <img src={item.image} className="w-full h-full object-cover rounded-xl" alt={item.title} />
+              </div>
+              <div className="flex-1 flex flex-col justify-center min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-[9px] font-black tracking-widest uppercase" style={{ color: item.typeColor }}>{item.type}</span>
+                  {item.tag && (
+                    <span className="px-1.5 py-0.5 rounded-full text-[8px] font-bold" style={{ backgroundColor: `${item.tagColor}15`, color: item.tagColor }}>{item.tag}</span>
+                  )}
+                </div>
+                <h3 className="text-sm font-bold text-white truncate mb-0.5">{item.title}</h3>
+                <p className="text-[10px] text-gray-500 font-medium truncate mb-2">{item.subtitle}</p>
+                <div className="flex items-center justify-between mt-auto">
+                  <span className="text-[10px] font-bold text-gray-400">{item.distance}</span>
+                  <div className="flex items-center gap-3">
+                    <button className="text-[10px] font-black text-orange-500 uppercase tracking-widest">View</button>
+                    {item.hasRoute && (
+                      <button className="bg-orange-500 text-white text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-lg">Route</button>
+                    )}
+                    <Bookmark size={16} className="text-gray-600 hover:text-orange-500 transition-colors" />
+                  </div>
+                </div>
+              </div>
+            </div>
           ))}
         </div>
       </div>
 
-      {/* Feed Section */}
-      <div className="flex-1 overflow-y-auto bg-[#0d0d0d] custom-scrollbar">
-        <div className="p-4">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="text-xl font-black uppercase tracking-tighter leading-none mb-1">Today Around You</h2>
-              <p className="text-[11px] leading-tight text-gray-400 font-medium">A live mix of what locals love, what's open, what's new, and what's nearby.</p>
-            </div>
-            <div className="flex flex-col items-end">
-              <button className="text-orange-500 font-bold text-xs uppercase tracking-wider">See all →</button>
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            {feedItems.map(item => (
-              <div key={item.id} className="flex gap-3 bg-[#1a1a1a] rounded-lg p-3 border border-[#333] hover:border-orange-600 transition-colors">
-                <img src={item.image} alt={item.title} className="w-24 h-24 rounded object-cover flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className={`text-xs font-bold px-2 py-1 rounded ${item.tagColor}`}>{item.tag}</span>
-                  </div>
-                  <h3 className="font-bold text-white truncate">{item.title}</h3>
-                  <p className="text-xs text-gray-400 truncate">{item.subtitle}</p>
-                  <div className="flex items-center justify-between mt-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-gray-400">{item.distance} mi</span>
-                      {item.status && <span className={`text-xs font-semibold ${item.statusColor}`}>{item.status}</span>}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button className="text-orange-600 hover:text-orange-500 text-sm font-semibold">View</button>
-                      <button onClick={() => toggleSave(item.id)} className={`${item.saved ? 'text-orange-600' : 'text-gray-500'} hover:text-orange-600`}>
-                        <Heart size={16} fill={item.saved ? 'currentColor' : 'none'} />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
       {/* Bottom Search Bar */}
-      <div className="bg-[#1a1a1a] border-t border-[#333] p-3">
-        <div className="flex items-center gap-2 bg-[#333] rounded-full px-4 py-2 border border-orange-600">
-          <Sparkles size={20} className="text-orange-600" />
-          <input
-            type="text"
-            placeholder="Ask Scout... tacos near me, live music, food trucks"
-            className="flex-1 bg-transparent text-sm text-white placeholder-gray-500 outline-none"
+      <div className="fixed bottom-24 left-4 right-4 z-50">
+        <div className="relative bg-[#1a1a1a]/90 backdrop-blur-xl border border-orange-500/30 rounded-full py-3 px-5 flex items-center gap-3 shadow-2xl shadow-black/50">
+          <Sparkles size={18} className="text-orange-500" />
+          <input 
+            type="text" 
+            placeholder="Ask Scout... tacos near me, live music, food trucks" 
+            className="bg-transparent border-none outline-none text-[11px] font-medium text-white/80 placeholder:text-white/30 flex-1"
           />
-          <Search size={20} className="text-orange-600" />
+          <Filter size={18} className="text-orange-500" />
         </div>
       </div>
 
       {/* Bottom Navigation */}
-      <div className="bg-[#1a1a1a]/80 backdrop-blur-lg border-t border-[#333] flex items-center justify-around py-3 px-1 rounded-t-3xl shadow-2xl z-50">
+      <div className="fixed bottom-0 left-0 right-0 bg-[#0d0d0d]/95 backdrop-blur-xl border-t border-white/5 flex items-center justify-around py-4 px-2 z-50">
         <button className="flex flex-col items-center gap-1 text-orange-500">
-          <div className="bg-orange-500/20 p-2 rounded-full shadow-[0_0_15px_rgba(255,92,0,0.3)]">
-            <Navigation2 size={20} className="rotate-45" />
-          </div>
-          <span className="text-[10px] font-bold uppercase tracking-widest">Scout</span>
+          <Compass size={22} />
+          <span className="text-[9px] font-black uppercase tracking-widest">Scout</span>
         </button>
-        <button className="flex flex-col items-center gap-1 text-gray-500 hover:text-white">
+        <button className="flex flex-col items-center gap-1 text-white/40 hover:text-white/80 transition-colors">
           <Search size={22} />
-          <span className="text-[10px] font-bold uppercase tracking-widest">Discover</span>
+          <span className="text-[9px] font-black uppercase tracking-widest">Discover</span>
         </button>
-        <button className="flex flex-col items-center gap-1 text-gray-500 hover:text-white">
+        <button className="flex flex-col items-center gap-1 text-white/40 hover:text-white/80 transition-colors">
           <Heart size={22} />
-          <span className="text-[10px] font-bold uppercase tracking-widest">Saved</span>
+          <span className="text-[9px] font-black uppercase tracking-widest">Saved</span>
         </button>
-        <button className="flex flex-col items-center gap-1 text-gray-500 hover:text-white">
-          <AlertCircle size={22} />
-          <span className="text-[10px] font-bold uppercase tracking-widest">Alerts</span>
+        <button className="flex flex-col items-center gap-1 text-white/40 hover:text-white/80 transition-colors">
+          <div className="relative">
+            <Bell size={22} />
+            <div className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-[#ff5c00] rounded-full border-2 border-[#0d0d0d]"></div>
+          </div>
+          <span className="text-[9px] font-black uppercase tracking-widest">Alerts</span>
         </button>
-        <button className="flex flex-col items-center gap-1 text-gray-500 hover:text-white">
-          <Star size={22} />
-          <span className="text-[10px] font-bold uppercase tracking-widest">Profile</span>
+        <button className="flex flex-col items-center gap-1 text-white/40 hover:text-white/80 transition-colors">
+          <User size={22} />
+          <span className="text-[9px] font-black uppercase tracking-widest">Profile</span>
         </button>
       </div>
     </div>
