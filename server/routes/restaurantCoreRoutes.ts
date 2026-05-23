@@ -1488,6 +1488,18 @@ export function registerRestaurantCoreRoutes(
           ...req.body,
           restaurantId,
         });
+        const normalizedDocuments = Array.isArray(verificationData.documents)
+          ? verificationData.documents
+              .map((doc) => (typeof doc === "string" ? doc.trim() : ""))
+              .filter((doc) => doc.length > 0)
+          : [];
+        if (normalizedDocuments.length === 0) {
+          return res.status(400).json({
+            message:
+              "Please upload at least one verification document before submitting.",
+          });
+        }
+        verificationData.documents = normalizedDocuments;
 
         const documentValidation = validateDocuments(
           verificationData.documents,

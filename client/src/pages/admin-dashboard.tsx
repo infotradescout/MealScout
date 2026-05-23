@@ -8575,7 +8575,15 @@ export default function AdminDashboard() {
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {verificationRequests.map((request: any) => (
+                    {verificationRequests.map((request: any) => {
+                      const documentCount = Array.isArray(request.documents)
+                        ? request.documents.filter(
+                            (doc: unknown) =>
+                              typeof doc === "string" && doc.trim().length > 0,
+                          ).length
+                        : 0;
+                      const missingDocuments = documentCount === 0;
+                      return (
                       <div key={request.id} className="border rounded-lg p-4">
                         <div className="flex items-start justify-between mb-3">
                           <div>
@@ -8615,10 +8623,10 @@ export default function AdminDashboard() {
                             {new Date(request.submittedAt).toLocaleDateString()}
                           </p>
                           {request.documents &&
-                            request.documents.length > 0 && (
+                            documentCount > 0 && (
                               <div>
                                 <p className="text-sm font-medium mb-2">
-                                  Documents ({request.documents.length}):
+                                  Documents ({documentCount}):
                                 </p>
                                 <div className="flex flex-wrap gap-2">
                                   {request.documents.map(
@@ -8651,6 +8659,11 @@ export default function AdminDashboard() {
                                 </div>
                               </div>
                             )}
+                          {missingDocuments && (
+                            <div className="rounded-md border border-destructive/40 bg-destructive/10 p-2 text-sm text-destructive">
+                              Missing verification documents. Reject and ask the business to resubmit with files.
+                            </div>
+                          )}
                         </div>
 
                         {request.rejectionReason && (
@@ -8672,7 +8685,7 @@ export default function AdminDashboard() {
                               onClick={() =>
                                 approveVerification.mutate(request.id)
                               }
-                              disabled={approveVerification.isPending}
+                              disabled={approveVerification.isPending || missingDocuments}
                               data-testid={`button-approve-verification-${request.id}`}
                               className="flex items-center space-x-1"
                             >
@@ -8703,7 +8716,7 @@ export default function AdminDashboard() {
                           </div>
                         )}
                       </div>
-                    ))}
+                    )})}
                   </div>
                 )}
               </CardContent>
