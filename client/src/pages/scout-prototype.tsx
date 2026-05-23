@@ -279,9 +279,10 @@ export default function ScoutPrototype() {
     }
   }, [scoutPreviewCity, isAdminPreviewEligible]);
 
+  // Admin lane is hard-locked to Pensacola for Scout prototype consistency.
   const isPensacolaScoutPreview =
-    scoutPreviewCity === "pensacola" &&
-    (isAdminPreviewEligible || adminPreviewLocked);
+    isAdminPreviewEligible ||
+    (scoutPreviewCity === "pensacola" && adminPreviewLocked);
   const resolvedLocationLabel = isPensacolaScoutPreview
     ? "Pensacola"
     : locationName;
