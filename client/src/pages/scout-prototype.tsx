@@ -237,8 +237,22 @@ export default function ScoutPrototype() {
   }, [routePath]);
   const isAdminPreviewEligible = useMemo(() => {
     const userType = String(user?.userType || "").toLowerCase();
-    return ["super_admin", "duper_admin", "admin", "staff"].includes(userType);
-  }, [user?.userType]);
+    const rolesRaw = (user as { roles?: unknown } | null | undefined)?.roles;
+    const roles = new Set<string>();
+    if (Array.isArray(rolesRaw)) {
+      rolesRaw.forEach((role) => {
+        const normalized = String(role || "").trim().toLowerCase();
+        if (normalized) roles.add(normalized);
+      });
+    }
+    return (
+      ["super_admin", "duper_admin", "admin", "staff"].includes(userType) ||
+      roles.has("super_admin") ||
+      roles.has("duper_admin") ||
+      roles.has("admin") ||
+      roles.has("staff")
+    );
+  }, [user]);
   const isPensacolaScoutPreview =
     isAdminPreviewEligible && scoutPreviewCity === "pensacola";
 
