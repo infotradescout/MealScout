@@ -301,6 +301,14 @@ export default function ScoutPrototype() {
     return { lat: 30.4213, lng: -87.2169, label: "Pensacola" };
   }, [deviceCoords, resolvedLocationLabel, isPensacolaScoutPreview]);
 
+  const recenterMapToLocation = useCallback(() => {
+    if (!map.current) return;
+    map.current.invalidateSize({ pan: false, animate: false });
+    map.current.setView([location.lat, location.lng], map.current.getZoom(), {
+      animate: false,
+    });
+  }, [location.lat, location.lng]);
+
   /* Global nav suppression removed - we want the real nav visible at the bottom */
 
   useEffect(() => {
@@ -495,15 +503,31 @@ export default function ScoutPrototype() {
       maxZoom: 19,
     }).addTo(map.current);
 
+    // Give Leaflet one frame after mount to measure and center correctly.
+    requestAnimationFrame(() => {
+      recenterMapToLocation();
+    });
+
     return () => { map.current?.remove(); map.current = null; };
-  }, []);
+  }, [recenterMapToLocation]);
 
   useEffect(() => {
-    if (!map.current) return;
-    map.current.setView([location.lat, location.lng], map.current.getZoom(), {
-      animate: false,
-    });
-  }, [location.lat, location.lng]);
+    recenterMapToLocation();
+  }, [recenterMapToLocation]);
+
+  useEffect(() => {
+    const onResize = () => {
+      recenterMapToLocation();
+    };
+    window.addEventListener("resize", onResize);
+    window.addEventListener("orientationchange", onResize);
+    window.addEventListener("focus", onResize);
+    return () => {
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("orientationchange", onResize);
+      window.removeEventListener("focus", onResize);
+    };
+  }, [recenterMapToLocation]);
 
   /* ─── map pins update when data changes ─── */
   useEffect(() => {
