@@ -546,7 +546,7 @@ export default function ScoutPrototype() {
 
 
       {/* ── Explore the Scene — fixed above global nav ── */}
-      <div className="fixed left-0 right-0 z-[1050] bg-[#0d0d0d]/95 backdrop-blur-xl border-t border-white/8 shadow-[0_-8px_24px_rgba(0,0,0,0.5)]" style={{ bottom: "calc(env(safe-area-inset-bottom) + 5.5rem)" }}>
+      <div className="fixed left-0 right-0 z-[1050] bg-[#0d0d0d]/95 backdrop-blur-xl border-t border-white/8 shadow-[0_-8px_24px_rgba(0,0,0,0.5)]" style={{ bottom: "calc(env(safe-area-inset-bottom) + 6rem)" }}>
         <div className="flex gap-2 overflow-x-auto no-scrollbar px-3 pt-2 pb-2">
           {EXPLORE_TILES.map(tile => {
             const count = tileCounts[tile.id as keyof typeof tileCounts] || tile.count;
@@ -605,8 +605,6 @@ export default function ScoutPrototype() {
         )}
       </div>
 
-      {/* ── Global Navigation ── */}
-      <Navigation />
     </div>
   );
 }
