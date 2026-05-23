@@ -225,6 +225,12 @@ export default function ScoutPrototype() {
     return { lat: 30.4213, lng: -87.2169, label: "Pensacola" };
   }, [deviceCoords, locationName]);
 
+  /* ─── suppress global nav on this page ─── */
+  useEffect(() => {
+    document.body.classList.add("mealscout-map-fullscreen");
+    return () => document.body.classList.remove("mealscout-map-fullscreen");
+  }, []);
+
   useEffect(() => {
     if (!navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
