@@ -732,8 +732,8 @@ export default function ScoutPrototype() {
               </div>
             </section>
           )}
-          <div className="rounded-t-[14px] rounded-b-none border border-b-0 border-white/8 bg-[#0f0d0b]/94 backdrop-blur-xl">
-            <div className="flex gap-1.5 overflow-x-auto no-scrollbar px-2 py-1.5">
+          <div className="overflow-hidden rounded-t-2xl rounded-b-none border border-b-0 border-white/8 bg-[#0f0d0b]/95 backdrop-blur-xl">
+            <div className="flex gap-1.5 overflow-x-auto no-scrollbar px-2 py-2">
               {EXPLORE_TILES.map(tile => {
                 const count = tileCounts[tile.id as keyof typeof tileCounts] || tile.count;
                 return (
@@ -759,7 +759,7 @@ export default function ScoutPrototype() {
           <button
             type="button"
             onClick={() => setSearchOpen(true)}
-            className="mt-0 flex h-[44px] w-full items-center gap-2 rounded-none border-x border-t border-white/10 bg-[#0f0d0b]/94 px-3.5 text-left text-[13px] font-semibold text-white/88"
+            className="mt-0 flex h-[46px] w-full items-center gap-2 rounded-none border-0 border-t border-white/8 bg-[#0f0d0b]/95 px-4 text-left text-[13px] font-semibold text-white/88"
             aria-label="Search food, places, trucks, events"
           >
             <Search size={16} className="text-orange-400 shrink-0" />
