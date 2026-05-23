@@ -218,10 +218,12 @@ export default function ScoutPrototype() {
   const [deviceCoords, setDeviceCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [locationName, setLocationName] = useState("Pensacola");
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
-  const navOffset = "calc(env(safe-area-inset-bottom) + 4.9rem)";
-  const searchDockHeight = 56;
-  const sceneDockHeight = 84;
-  const feedBottomClearance = `calc(env(safe-area-inset-bottom) + ${searchDockHeight + sceneDockHeight + 112}px)`;
+  const GLOBAL_NAV_HEIGHT = 78;
+  const SCOUT_SCENE_RAIL_HEIGHT = 76;
+  const SCOUT_SEARCH_DOCK_HEIGHT = 56;
+  const SCOUT_DOCK_GAP = 10;
+  const scoutDockBottom = `calc(env(safe-area-inset-bottom) + ${GLOBAL_NAV_HEIGHT}px)`;
+  const feedBottomClearance = `calc(env(safe-area-inset-bottom) + ${GLOBAL_NAV_HEIGHT + SCOUT_SCENE_RAIL_HEIGHT + SCOUT_SEARCH_DOCK_HEIGHT + SCOUT_DOCK_GAP + 48}px)`;
 
   /* ─── location ─── */
   const location = useMemo(() => {
@@ -547,49 +549,43 @@ export default function ScoutPrototype() {
         </div>
       </div>
 
-      {/* ── Explore the Scene — directly above search dock ── */}
-      <div
-        className="fixed left-0 right-0 z-[1050] bg-[#0d0d0d]/95 backdrop-blur-xl border-t border-white/8 shadow-[0_-8px_24px_rgba(0,0,0,0.5)]"
-        style={{ bottom: `calc(${navOffset} + ${searchDockHeight}px)` }}
-      >
-        <div className="flex gap-1.5 overflow-x-auto no-scrollbar px-3 pt-2 pb-2">
-          {EXPLORE_TILES.map(tile => {
-            const count = tileCounts[tile.id as keyof typeof tileCounts] || tile.count;
-            return (
-              <button
-                key={tile.id}
-                onClick={() => setActiveScene(tile.id)}
-                className={`shrink-0 flex flex-col items-center text-center rounded-xl px-1.5 py-1.5 border transition-all duration-200 w-[62px] ${
-                  activeScene === tile.id
-                    ? "bg-[#1e1e1e] border-orange-500/40"
-                    : "bg-[#161616] border-white/5 hover:border-orange-500/20"
-                }`}
-              >
-                <div className="w-8 h-8 rounded-lg flex items-center justify-center mb-1" style={{ backgroundColor: `${tile.color}20` }}>
-                  <span style={{ color: tile.color }}>{tile.icon}</span>
-                </div>
-                <span className="text-[7px] font-black text-white leading-tight w-full truncate">{tile.label}</span>
-                {count && <span className="text-[7px] font-bold mt-0.5" style={{ color: tile.color }}>{count}</span>}
-              </button>
-            );
-          })}
+      {/* ── Unified Scout bottom control dock ── */}
+      <div className="fixed inset-x-0 z-[1000] pointer-events-none" style={{ bottom: scoutDockBottom }}>
+        <div className="mx-auto w-full max-w-[480px] px-3 pointer-events-auto">
+          <div className="rounded-t-2xl border border-b-0 border-white/8 bg-[#0d0d0d]/95 backdrop-blur-xl shadow-[0_-8px_24px_rgba(0,0,0,0.5)]">
+            <div className="flex gap-1.5 overflow-x-auto no-scrollbar px-3 pt-2 pb-2">
+              {EXPLORE_TILES.map(tile => {
+                const count = tileCounts[tile.id as keyof typeof tileCounts] || tile.count;
+                return (
+                  <button
+                    key={tile.id}
+                    onClick={() => setActiveScene(tile.id)}
+                    className={`shrink-0 flex flex-col items-center text-center rounded-xl px-1.5 py-1.5 border transition-all duration-200 w-[62px] ${
+                      activeScene === tile.id
+                        ? "bg-[#1e1e1e] border-orange-500/40"
+                        : "bg-[#161616] border-white/5 hover:border-orange-500/20"
+                    }`}
+                  >
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center mb-1" style={{ backgroundColor: `${tile.color}20` }}>
+                      <span style={{ color: tile.color }}>{tile.icon}</span>
+                    </div>
+                    <span className="text-[7px] font-black text-white leading-tight w-full truncate">{tile.label}</span>
+                    {count && <span className="text-[7px] font-bold mt-0.5" style={{ color: tile.color }}>{count}</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => navigate("/search")}
+            className="mt-0 flex h-12 w-full items-center gap-2 rounded-b-2xl border border-orange-500/35 bg-[#0f0f0f]/95 px-4 text-left text-sm font-semibold text-white/88 shadow-[0_10px_30px_rgba(0,0,0,0.45)] backdrop-blur-xl"
+            aria-label="Search food, places, trucks, events"
+          >
+            <Search size={18} className="text-orange-400 shrink-0" />
+            <span className="truncate">Search food, places, trucks, events</span>
+          </button>
         </div>
-      </div>
-
-      {/* ── Search Dock — fixed directly above global nav ── */}
-      <div
-        className="fixed left-0 right-0 z-[1060] px-4"
-        style={{ bottom: navOffset }}
-      >
-        <button
-          type="button"
-          onClick={() => navigate("/search")}
-          className="mx-auto flex h-12 w-full max-w-[620px] items-center gap-2 rounded-2xl border border-orange-500/35 bg-[#0f0f0f]/95 px-4 text-left text-sm font-semibold text-white/88 shadow-[0_10px_30px_rgba(0,0,0,0.45)] backdrop-blur-xl"
-          aria-label="Search food, places, trucks, events"
-        >
-          <Search size={18} className="text-orange-400 shrink-0" />
-          <span className="truncate">Search food, places, trucks, events</span>
-        </button>
       </div>
 
       {/* ── Feed ── */}
