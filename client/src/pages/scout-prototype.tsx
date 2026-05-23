@@ -230,34 +230,6 @@ const ScoutPrototype: React.FC = () => {
           <button className="text-orange-500 font-bold text-xs uppercase tracking-wider shrink-0 ml-3">See all</button>
         </div>
 
-        {/* ── Explore the Scene grid ── */}
-        <div className="mb-5">
-          <h3 className="text-base font-black uppercase tracking-tighter mb-3">Explore the Scene</h3>
-          <div className="grid grid-cols-4 gap-2">
-            {[
-              { label: 'Community', sub: 'Top saves & local picks', count: '87 new', icon: <User size={18} />, color: '#9333ea' },
-              { label: 'Food Trucks', sub: 'Posted up near you', count: '6 now', icon: <Truck size={18} />, color: '#ff5c00' },
-              { label: 'Restaurants', sub: 'Open now & nearby', count: '42 open', icon: <Utensils size={18} />, color: '#ff5c00' },
-              { label: 'Deals', sub: 'Active deals near you', count: '18 today', icon: <DollarSign size={18} />, color: '#10b981' },
-              { label: 'Events', sub: 'Happening tonight', count: '7 tonight', icon: <Clock size={18} />, color: '#3b82f6' },
-              { label: 'New Menus', sub: 'Fresh menu updates', count: '12 new', icon: <Star size={18} />, color: '#ec4899' },
-              { label: 'Late Night', sub: 'Open late near you', count: '15 open', icon: <Clock size={18} />, color: '#6366f1' },
-              { label: 'Worth Discovering', sub: 'New, nearby & under-scouted', count: '28 to try', icon: <Award size={18} />, color: '#eab308' },
-            ].map(tile => (
-              <button
-                key={tile.label}
-                className="flex flex-col items-center text-center bg-[#1a1a1a] rounded-2xl p-2.5 border border-white/5 hover:border-orange-500/30 transition-all duration-300 gap-1.5"
-              >
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-0.5" style={{ backgroundColor: `${tile.color}22` }}>
-                  <span style={{ color: tile.color }}>{tile.icon}</span>
-                </div>
-                <span className="text-[10px] font-black text-white leading-tight">{tile.label}</span>
-                <span className="text-[8px] text-gray-500 leading-tight">{tile.sub}</span>
-                <span className="text-[9px] font-bold mt-0.5" style={{ color: tile.color }}>{tile.count}</span>
-              </button>
-            ))}
-          </div>
-        </div>
 
         <div className="space-y-3">
           {feedItems.map(item => (
@@ -322,16 +294,34 @@ const ScoutPrototype: React.FC = () => {
         </div>
       </div>
 
-      {/* ── Bottom Search Bar ── */}
-      <div className="fixed bottom-[70px] left-4 right-4 z-50">
-        <div className="bg-[#1a1a1a]/90 backdrop-blur-xl border border-orange-500/30 rounded-full py-3 px-5 flex items-center gap-3 shadow-2xl shadow-black/50">
-          <Sparkles size={17} className="text-orange-500 shrink-0" />
-          <input
-            type="text"
-            placeholder="Scout it — tacos near me, live music, food trucks..."
-            className="bg-transparent border-none outline-none text-[11px] font-medium text-white/80 placeholder:text-white/30 flex-1"
-          />
-          <Filter size={17} className="text-orange-500 shrink-0" />
+      {/* ── Explore the Scene — fixed horizontal scroll row above bottom nav ── */}
+      <div className="fixed bottom-[62px] left-0 right-0 z-50 bg-[#0d0d0d]/95 backdrop-blur-xl border-t border-white/5">
+        <div className="px-3 py-2">
+          <p className="text-[9px] font-black uppercase tracking-widest text-white/30 mb-2 px-1">Explore the Scene</p>
+          <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+            {[
+              { label: 'Community', sub: 'Top saves & local picks', count: '87 new', icon: <User size={16} />, color: '#9333ea' },
+              { label: 'Food Trucks', sub: 'Posted up near you', count: '6 now', icon: <Truck size={16} />, color: '#ff5c00' },
+              { label: 'Restaurants', sub: 'Open now & nearby', count: '42 open', icon: <Utensils size={16} />, color: '#ff5c00' },
+              { label: 'Deals', sub: 'Active deals near you', count: '18 today', icon: <DollarSign size={16} />, color: '#10b981' },
+              { label: 'Events', sub: 'Happening tonight', count: '7 tonight', icon: <Clock size={16} />, color: '#3b82f6' },
+              { label: 'New Menus', sub: 'Fresh menu updates', count: '12 new', icon: <Star size={16} />, color: '#ec4899' },
+              { label: 'Late Night', sub: 'Open late near you', count: '15 open', icon: <Clock size={16} />, color: '#6366f1' },
+              { label: 'Worth Discovering', sub: 'New, nearby & under-scouted', count: '28 to try', icon: <Award size={16} />, color: '#eab308' },
+            ].map(tile => (
+              <button
+                key={tile.label}
+                className="shrink-0 flex flex-col items-center text-center bg-[#1a1a1a] rounded-2xl px-3 py-2.5 border border-white/5 hover:border-orange-500/30 transition-all duration-300 gap-1 w-[80px]"
+              >
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${tile.color}22` }}>
+                  <span style={{ color: tile.color }}>{tile.icon}</span>
+                </div>
+                <span className="text-[9px] font-black text-white leading-tight mt-0.5">{tile.label}</span>
+                <span className="text-[7px] text-gray-500 leading-tight">{tile.sub}</span>
+                <span className="text-[8px] font-bold" style={{ color: tile.color }}>{tile.count}</span>
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
