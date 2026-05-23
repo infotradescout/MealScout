@@ -218,6 +218,7 @@ export default function ScoutPrototype() {
   const [deviceCoords, setDeviceCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [locationName, setLocationName] = useState("Pensacola");
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
+  const [adminPreviewLocked, setAdminPreviewLocked] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [submittedQuery, setSubmittedQuery] = useState("");
@@ -253,8 +254,15 @@ export default function ScoutPrototype() {
       roles.has("staff")
     );
   }, [user]);
+  useEffect(() => {
+    if (scoutPreviewCity === "pensacola" && isAdminPreviewEligible) {
+      setAdminPreviewLocked(true);
+    }
+  }, [scoutPreviewCity, isAdminPreviewEligible]);
+
   const isPensacolaScoutPreview =
-    isAdminPreviewEligible && scoutPreviewCity === "pensacola";
+    scoutPreviewCity === "pensacola" &&
+    (isAdminPreviewEligible || adminPreviewLocked);
 
   /* ─── location ─── */
   const location = useMemo(() => {
