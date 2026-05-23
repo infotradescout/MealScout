@@ -3039,13 +3039,13 @@ export default function ExplorePreview() {
     (isLowActivity || activeSceneLaneId === "community") &&
     topLocalFavoriteRestaurants.length > 0;
   const compactMapHeight = isHighActivity
-    ? "clamp(300px, 35vh, 440px)"
+    ? "clamp(360px, 42vh, 520px)"
     : isMediumActivity
-      ? "clamp(280px, 33vh, 420px)"
-      : "clamp(270px, 31vh, 390px)";
+      ? "clamp(340px, 40vh, 500px)"
+      : "clamp(320px, 38vh, 460px)";
   const collapsedMapClass = isHighActivity
-    ? "mx-0 mt-0 rounded-b-[2.1rem] ring-1 ring-orange-200/12 bg-[#070707]"
-    : "mx-3 mt-3 rounded-[1.65rem] ring-1 ring-white/10 bg-[#0b0908]";
+    ? "mx-0 mt-0 rounded-b-[2rem] ring-1 ring-orange-200/14 bg-[#070707]"
+    : "mx-0 mt-0 rounded-b-[1.8rem] ring-1 ring-white/12 bg-[#0b0908]";
   const railSectionClass = isHighActivity
     ? "pl-4 pr-0 pt-1 pb-7"
     : "pl-5 pr-0 pt-2 pb-10";

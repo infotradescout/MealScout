@@ -18,9 +18,9 @@ export function SceneOptionsBar({
   }, []);
 
   return (
-    <section className="px-4 pb-4">
+    <section className="px-3 pb-3 pt-1">
       <div ref={scrollerRef} className="overflow-x-auto atmo-hide-scrollbar pl-0.5">
-        <div className="flex w-max gap-1 pr-2">
+        <div className="flex w-max gap-2 pr-2">
           {lanes.map((lane) => {
             const isActive = lane.id === activeSceneLaneId;
             return (
@@ -29,10 +29,10 @@ export function SceneOptionsBar({
                 type="button"
                 onClick={() => onSceneLaneSelect(lane.id)}
                 className={[
-                  "inline-flex min-h-10 min-w-[72px] shrink-0 items-center justify-center gap-1 rounded-2xl px-2 py-2 text-[11px] font-bold ring-1 transition-colors active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/60",
+                  "inline-flex min-h-10 min-w-[78px] shrink-0 items-center justify-center gap-1.5 rounded-xl px-2 py-2 text-[11px] font-semibold ring-1 transition-colors active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/60",
                   isActive
-                    ? "bg-[#ff7945] text-white ring-white/20 shadow-[0_10px_22px_rgba(255,121,69,0.28)]"
-                    : "bg-[#11131a]/82 text-white/78 ring-white/12 hover:bg-[#171a23] hover:text-white",
+                    ? "bg-[#ff6a2d] text-white ring-orange-200/35 shadow-[0_14px_28px_rgba(255,106,45,0.30)]"
+                    : "bg-[#121317]/85 text-white/80 ring-white/10 hover:bg-[#171a23] hover:text-white",
                 ].join(" ")}
                 aria-pressed={isActive}
               >
