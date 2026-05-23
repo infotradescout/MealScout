@@ -10,6 +10,7 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { useAuth } from "@/hooks/useAuth";
 import { getReverseGeocodedLocationName } from "@/utils/locationUtils";
+import { Navigation } from "@/components/navigation";
 
 /* ─── styles ─── */
 const customStyles = `
@@ -608,9 +609,8 @@ export default function ScoutPrototype() {
         )}
       </div>
 
-
-
-
+      {/* ── Global Navigation ── */}
+      <Navigation />
     </div>
   );
 }
