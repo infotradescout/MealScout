@@ -219,7 +219,7 @@ export default function ScoutPrototype() {
   const [locationName, setLocationName] = useState("Pensacola");
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const GLOBAL_NAV_HEIGHT = 78;
-  const SCOUT_SCENE_RAIL_HEIGHT = 48;
+  const SCOUT_SCENE_RAIL_HEIGHT = 50;
   const SCOUT_SEARCH_DOCK_HEIGHT = 46;
   const SCOUT_DOCK_GAP = 6;
   const scoutDockBottom = `calc(env(safe-area-inset-bottom) + ${GLOBAL_NAV_HEIGHT}px)`;
@@ -552,7 +552,7 @@ export default function ScoutPrototype() {
       {/* ── Unified Scout bottom control dock ── */}
       <div className="fixed inset-x-0 z-[1000] pointer-events-none" style={{ bottom: scoutDockBottom }}>
         <div className="mx-auto w-full max-w-[480px] px-3 pointer-events-auto">
-          <div className="rounded-t-2xl border border-b-0 border-white/8 bg-[#0d0d0d]/95 backdrop-blur-xl shadow-[0_-8px_24px_rgba(0,0,0,0.5)]">
+          <div className="rounded-t-2xl border border-b-0 border-white/6 bg-[#0f0d0b]/92 backdrop-blur-2xl shadow-[0_-8px_20px_rgba(0,0,0,0.42)]">
             <div className="flex gap-1.5 overflow-x-auto no-scrollbar px-2.5 py-1.5">
               {EXPLORE_TILES.map(tile => {
                 const count = tileCounts[tile.id as keyof typeof tileCounts] || tile.count;
@@ -560,10 +560,10 @@ export default function ScoutPrototype() {
                   <button
                     key={tile.id}
                     onClick={() => setActiveScene(tile.id)}
-                    className={`shrink-0 inline-flex items-center gap-1.5 rounded-full px-2 py-1 border transition-all duration-200 min-w-[76px] h-8 ${
+                    className={`shrink-0 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 border transition-all duration-200 min-w-[84px] h-8 ${
                       activeScene === tile.id
-                        ? "bg-[#1e1e1e] border-orange-500/45"
-                        : "bg-[#161616] border-white/5 hover:border-orange-500/20"
+                        ? "bg-[#1f1a15] border-orange-500/35 text-orange-200"
+                        : "bg-[#171412] border-white/5 hover:border-orange-500/18"
                     }`}
                   >
                     <div className="w-4 h-4 flex items-center justify-center shrink-0" style={{ color: tile.color }}>
@@ -579,7 +579,7 @@ export default function ScoutPrototype() {
           <button
             type="button"
             onClick={() => navigate("/search")}
-            className="mt-0 flex h-[46px] w-full items-center gap-2 rounded-b-2xl border border-orange-500/35 bg-[#0f0f0f]/95 px-3.5 text-left text-[13px] font-semibold text-white/88 shadow-[0_10px_30px_rgba(0,0,0,0.45)] backdrop-blur-xl"
+            className="mt-0 flex h-[45px] w-full items-center gap-2 rounded-b-2xl border border-orange-500/22 bg-[#0f0d0b]/92 px-3.5 text-left text-[13px] font-semibold text-white/88 shadow-[0_10px_24px_rgba(0,0,0,0.4)] backdrop-blur-2xl"
             aria-label="Search food, places, trucks, events"
           >
             <Search size={16} className="text-orange-400 shrink-0" />

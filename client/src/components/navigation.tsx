@@ -428,14 +428,14 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
       <nav
         aria-label="Primary navigation"
         className="fixed left-0 right-0 z-[1100] lg:hidden"
-        style={{ bottom: "calc(env(safe-area-inset-bottom) + 0.65rem)" }}
+        style={{ bottom: "calc(env(safe-area-inset-bottom) + 0.55rem)" }}
       >
         <div className="mx-auto max-w-md px-3">
           <div
-            className="relative flex items-end justify-between gap-1 h-[60px] px-1.5 rounded-[20px] bg-[#120805]/74 backdrop-blur-2xl ring-1 ring-white/10"
+            className="relative flex items-end justify-between gap-1 h-[58px] px-1.5 rounded-[18px] bg-[#120805]/72 backdrop-blur-2xl ring-1 ring-white/8"
             style={{
               boxShadow:
-                "0 0 0 1px rgba(255,90,47,0.12), 0 14px 34px rgba(0,0,0,0.62)",
+                "0 0 0 1px rgba(255,90,47,0.09), 0 12px 30px rgba(0,0,0,0.58)",
             }}
           >
             {sixSlotNav.map((item, index) => {
@@ -449,16 +449,16 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
                     href={item.path}
                     aria-label={item.label}
                     aria-current={active ? "page" : undefined}
-                    className={`flex flex-col items-center justify-end gap-0.5 flex-1 min-w-0 h-full transition-colors ${isPrimary ? "pb-0.5" : "pb-1.5"} ${
+                    className={`flex flex-col items-center justify-end gap-0.5 flex-1 min-w-0 h-full transition-colors ${isPrimary ? "pb-0.5" : "pb-1"} ${
                       active ? "text-orange-300" : "text-white/70 hover:text-white"
                     }`}
                   >
                     {isPrimary ? (
                       <span
-                        className="flex h-9 w-9 items-center justify-center rounded-full bg-[#120805]/72 ring-2 ring-orange-500 -mt-3.5"
+                        className="flex h-8.5 w-8.5 items-center justify-center rounded-full bg-[#120805]/70 ring-[1.5px] ring-orange-500/90 -mt-3"
                         style={{
                           boxShadow:
-                            "0 0 0 3px rgba(255,90,47,0.14), 0 0 16px rgba(255,90,47,0.3)",
+                            "0 0 0 2px rgba(255,90,47,0.13), 0 0 12px rgba(255,90,47,0.26)",
                         }}
                         aria-hidden="true"
                       >
@@ -479,7 +479,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
                   aria-label={item.label}
                   aria-expanded={moreOpen}
                   onClick={item.onClick}
-                  className={`flex flex-col items-center justify-end gap-0.5 flex-1 min-w-0 h-full pb-1.5 transition-colors ${
+                  className={`flex flex-col items-center justify-end gap-0.5 flex-1 min-w-0 h-full pb-1 transition-colors ${
                     moreOpen ? "text-orange-300" : "text-white/70 hover:text-white"
                   }`}
                 >
