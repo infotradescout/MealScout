@@ -218,6 +218,9 @@ export default function ScoutPrototype() {
   const [deviceCoords, setDeviceCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [locationName, setLocationName] = useState("Pensacola");
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [submittedQuery, setSubmittedQuery] = useState("");
   const GLOBAL_NAV_HEIGHT = 78;
   const SCOUT_SCENE_RAIL_HEIGHT = 50;
   const SCOUT_SEARCH_DOCK_HEIGHT = 46;
@@ -491,6 +494,13 @@ export default function ScoutPrototype() {
 
   /* ─── empty state ─── */
   const isEmpty = feedItems.length === 0;
+  const quickSearchChips = ["Burgers", "Tacos", "Food Trucks", "Deals", "Events", "Late Night"];
+  const handleSearchSubmit = () => {
+    const q = searchQuery.trim();
+    if (!q) return;
+    setSubmittedQuery(q);
+    setSearchOpen(false);
+  };
 
   return (
     <div className="h-screen w-full bg-[#0d0d0d] text-white flex flex-col overflow-hidden font-sans">
@@ -552,6 +562,55 @@ export default function ScoutPrototype() {
       {/* ── Unified Scout bottom control dock ── */}
       <div className="fixed inset-x-0 z-[1000] pointer-events-none" style={{ bottom: scoutDockBottom }}>
         <div className="w-full px-0 pointer-events-auto">
+          {searchOpen && (
+            <section
+              className="mx-2 mb-2 rounded-2xl border border-white/10 bg-[#0f0d0b]/96 px-3 py-3 shadow-[0_-12px_24px_rgba(0,0,0,0.45)] backdrop-blur-2xl"
+              aria-label="Scout search sheet"
+            >
+              <div className="flex items-center gap-2">
+                <Search size={16} className="text-orange-400 shrink-0" />
+                <input
+                  autoFocus
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleSearchSubmit();
+                  }}
+                  placeholder="Search food, places, trucks, events"
+                  className="h-9 flex-1 rounded-xl border border-white/10 bg-[#171412] px-3 text-sm text-white outline-none placeholder:text-white/40 focus:border-orange-400/45"
+                />
+                <button
+                  type="button"
+                  onClick={() => setSearchOpen(false)}
+                  className="h-9 rounded-xl border border-white/10 bg-[#171412] px-3 text-xs font-semibold text-white/80 hover:text-white"
+                >
+                  Close
+                </button>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {quickSearchChips.map((chip) => (
+                  <button
+                    key={chip}
+                    type="button"
+                    onClick={() => setSearchQuery(chip)}
+                    className="h-7 rounded-full border border-white/10 bg-[#171412] px-2.5 text-[11px] font-medium text-white/80 hover:border-orange-500/30 hover:text-white"
+                  >
+                    {chip}
+                  </button>
+                ))}
+              </div>
+              <div className="mt-2 flex justify-end">
+                <button
+                  type="button"
+                  onClick={handleSearchSubmit}
+                  disabled={!searchQuery.trim()}
+                  className="h-8 rounded-lg border border-orange-500/30 bg-[#1d130d] px-3 text-xs font-semibold text-orange-200 disabled:opacity-45"
+                >
+                  Search
+                </button>
+              </div>
+            </section>
+          )}
           <div className="rounded-t-[14px] border border-b-0 border-white/6 bg-[#0f0d0b]/92 backdrop-blur-2xl shadow-[0_-8px_20px_rgba(0,0,0,0.42)]">
             <div className="flex gap-1.5 overflow-x-auto no-scrollbar px-2.5 py-1.5">
               {EXPLORE_TILES.map(tile => {
@@ -578,7 +637,7 @@ export default function ScoutPrototype() {
           </div>
           <button
             type="button"
-            onClick={() => navigate("/search")}
+            onClick={() => setSearchOpen(true)}
             className="mt-0 flex h-[45px] w-full items-center gap-2 rounded-b-[14px] border border-orange-500/22 bg-[#0f0d0b]/92 px-3.5 text-left text-[13px] font-semibold text-white/88 shadow-[0_10px_24px_rgba(0,0,0,0.4)] backdrop-blur-2xl"
             aria-label="Search food, places, trucks, events"
           >
@@ -590,6 +649,33 @@ export default function ScoutPrototype() {
 
       {/* ── Feed ── */}
       <div className="flex-1 overflow-y-auto px-4 no-scrollbar" style={{ paddingBottom: feedBottomClearance }}>
+        {submittedQuery.trim().length > 0 && (
+          <section className="mb-3 mt-3 rounded-2xl border border-white/8 bg-[#151210] px-4 py-3">
+            <h3 className="text-sm font-bold text-white">Results for "{submittedQuery}"</h3>
+            <p className="mt-1 text-xs text-white/70">
+              Local matches will include places, dishes, trucks, deals, and events.
+            </p>
+            <div className="mt-2 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchOpen(true);
+                  setSearchQuery(submittedQuery);
+                }}
+                className="h-8 rounded-lg border border-white/12 bg-[#1a1714] px-3 text-xs font-semibold text-white/85"
+              >
+                Refine
+              </button>
+              <button
+                type="button"
+                onClick={() => map.current?.setView([location.lat, location.lng], 14)}
+                className="h-8 rounded-lg border border-orange-500/28 bg-[#1d130d] px-3 text-xs font-semibold text-orange-200"
+              >
+                View map
+              </button>
+            </div>
+          </section>
+        )}
         {/* Section header */}
         <div className="flex items-center justify-between mb-3 mt-3">
           <div>
