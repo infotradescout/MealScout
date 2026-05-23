@@ -551,7 +551,7 @@ export default function ScoutPrototype() {
 
       {/* ── Unified Scout bottom control dock ── */}
       <div className="fixed inset-x-0 z-[1000] pointer-events-none" style={{ bottom: scoutDockBottom }}>
-        <div className="mx-auto w-full max-w-[480px] px-1.5 pointer-events-auto">
+        <div className="w-full px-0 pointer-events-auto">
           <div className="rounded-t-[14px] border border-b-0 border-white/6 bg-[#0f0d0b]/92 backdrop-blur-2xl shadow-[0_-8px_20px_rgba(0,0,0,0.42)]">
             <div className="flex gap-1.5 overflow-x-auto no-scrollbar px-2.5 py-1.5">
               {EXPLORE_TILES.map(tile => {
