@@ -218,7 +218,7 @@ const ScoutPrototype: React.FC = () => {
 
 
       {/* ── Feed Section ── */}
-      <div className="flex-1 overflow-y-auto px-4 pb-36 no-scrollbar">
+      <div className="flex-1 overflow-y-auto px-4 pb-[160px] no-scrollbar">
         {/* Section header */}
         <div className="flex items-center justify-between mb-3 mt-2">
           <div>
@@ -294,34 +294,30 @@ const ScoutPrototype: React.FC = () => {
         </div>
       </div>
 
-      {/* ── Explore the Scene — fixed horizontal scroll row above bottom nav ── */}
-      <div className="fixed bottom-[62px] left-0 right-0 z-50 bg-[#0d0d0d]/95 backdrop-blur-xl border-t border-white/5">
-        <div className="px-3 py-2">
-          <p className="text-[9px] font-black uppercase tracking-widest text-white/30 mb-2 px-1">Explore the Scene</p>
-          <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
-            {[
-              { label: 'Community', sub: 'Top saves & local picks', count: '87 new', icon: <User size={16} />, color: '#9333ea' },
-              { label: 'Food Trucks', sub: 'Posted up near you', count: '6 now', icon: <Truck size={16} />, color: '#ff5c00' },
-              { label: 'Restaurants', sub: 'Open now & nearby', count: '42 open', icon: <Utensils size={16} />, color: '#ff5c00' },
-              { label: 'Deals', sub: 'Active deals near you', count: '18 today', icon: <DollarSign size={16} />, color: '#10b981' },
-              { label: 'Events', sub: 'Happening tonight', count: '7 tonight', icon: <Clock size={16} />, color: '#3b82f6' },
-              { label: 'New Menus', sub: 'Fresh menu updates', count: '12 new', icon: <Star size={16} />, color: '#ec4899' },
-              { label: 'Late Night', sub: 'Open late near you', count: '15 open', icon: <Clock size={16} />, color: '#6366f1' },
-              { label: 'Worth Discovering', sub: 'New, nearby & under-scouted', count: '28 to try', icon: <Award size={16} />, color: '#eab308' },
-            ].map(tile => (
-              <button
-                key={tile.label}
-                className="shrink-0 flex flex-col items-center text-center bg-[#1a1a1a] rounded-2xl px-3 py-2.5 border border-white/5 hover:border-orange-500/30 transition-all duration-300 gap-1 w-[80px]"
-              >
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${tile.color}22` }}>
-                  <span style={{ color: tile.color }}>{tile.icon}</span>
-                </div>
-                <span className="text-[9px] font-black text-white leading-tight mt-0.5">{tile.label}</span>
-                <span className="text-[7px] text-gray-500 leading-tight">{tile.sub}</span>
-                <span className="text-[8px] font-bold" style={{ color: tile.color }}>{tile.count}</span>
-              </button>
-            ))}
-          </div>
+      {/* ── Explore the Scene — fixed single-row horizontal scroll above bottom nav ── */}
+      <div className="fixed bottom-[62px] left-0 right-0 z-50 bg-[#111]/95 backdrop-blur-xl border-t border-white/5">
+        <div className="flex gap-2 overflow-x-auto no-scrollbar px-3 py-2.5">
+          {[
+            { label: 'Community', count: '87 new', icon: <User size={15} />, color: '#9333ea' },
+            { label: 'Food Trucks', count: '6 now', icon: <Truck size={15} />, color: '#ff5c00' },
+            { label: 'Restaurants', count: '42 open', icon: <Utensils size={15} />, color: '#ff5c00' },
+            { label: 'Deals', count: '18 today', icon: <DollarSign size={15} />, color: '#10b981' },
+            { label: 'Events', count: '7 tonight', icon: <Clock size={15} />, color: '#3b82f6' },
+            { label: 'New Menus', count: '12 new', icon: <Star size={15} />, color: '#ec4899' },
+            { label: 'Late Night', count: '15 open', icon: <Clock size={15} />, color: '#6366f1' },
+            { label: 'Worth Discovering', count: '28 to try', icon: <Award size={15} />, color: '#eab308' },
+          ].map(tile => (
+            <button
+              key={tile.label}
+              className="shrink-0 flex flex-col items-center text-center bg-[#1a1a1a] rounded-xl px-2.5 py-2 border border-white/5 hover:border-orange-500/30 transition-all duration-200 gap-1.5 min-w-[68px]"
+            >
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${tile.color}22` }}>
+                <span style={{ color: tile.color }}>{tile.icon}</span>
+              </div>
+              <span className="text-[8px] font-black text-white leading-tight w-full">{tile.label}</span>
+              <span className="text-[8px] font-bold leading-none" style={{ color: tile.color }}>{tile.count}</span>
+            </button>
+          ))}
         </div>
       </div>
 
