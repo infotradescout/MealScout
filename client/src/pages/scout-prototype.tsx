@@ -295,27 +295,27 @@ const ScoutPrototype: React.FC = () => {
       </div>
 
       {/* ── Explore the Scene — fixed single-row horizontal scroll above bottom nav ── */}
-      <div className="fixed bottom-[62px] left-0 right-0 z-50 bg-[#111]/95 backdrop-blur-xl border-t border-white/5">
-        <div className="flex gap-2 overflow-x-auto no-scrollbar px-3 py-2.5">
+      <div className="fixed bottom-[62px] left-0 right-0 z-50 bg-[#0d0d0d] border-t border-white/8">
+        <div className="flex gap-2 overflow-x-auto no-scrollbar px-3 pt-2.5 pb-3">
           {[
-            { label: 'Community', count: '87 new', icon: <User size={15} />, color: '#9333ea' },
-            { label: 'Food Trucks', count: '6 now', icon: <Truck size={15} />, color: '#ff5c00' },
-            { label: 'Restaurants', count: '42 open', icon: <Utensils size={15} />, color: '#ff5c00' },
-            { label: 'Deals', count: '18 today', icon: <DollarSign size={15} />, color: '#10b981' },
-            { label: 'Events', count: '7 tonight', icon: <Clock size={15} />, color: '#3b82f6' },
-            { label: 'New Menus', count: '12 new', icon: <Star size={15} />, color: '#ec4899' },
-            { label: 'Late Night', count: '15 open', icon: <Clock size={15} />, color: '#6366f1' },
-            { label: 'Worth Discovering', count: '28 to try', icon: <Award size={15} />, color: '#eab308' },
+            { label: 'Community', count: '87 new', icon: <User size={20} />, color: '#9333ea' },
+            { label: 'Food Trucks', count: '6 now', icon: <Truck size={20} />, color: '#ff5c00' },
+            { label: 'Restaurants', count: '42 open', icon: <Utensils size={20} />, color: '#ff5c00' },
+            { label: 'Deals', count: '18 today', icon: <DollarSign size={20} />, color: '#10b981' },
+            { label: 'Events', count: '7 tonight', icon: <Clock size={20} />, color: '#3b82f6' },
+            { label: 'New Menus', count: '12 new', icon: <Star size={20} />, color: '#ec4899' },
+            { label: 'Late Night', count: '15 open', icon: <Clock size={20} />, color: '#6366f1' },
+            { label: 'Worth Discovering', count: '28 to try', icon: <Award size={20} />, color: '#eab308' },
           ].map(tile => (
             <button
               key={tile.label}
-              className="shrink-0 flex flex-col items-center text-center bg-[#1a1a1a] rounded-xl px-2.5 py-2 border border-white/5 hover:border-orange-500/30 transition-all duration-200 gap-1.5 min-w-[68px]"
+              className="shrink-0 flex flex-col items-center text-center rounded-2xl p-3 border border-white/5 hover:border-orange-500/20 transition-all duration-200 w-[76px] bg-[#161616]"
             >
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${tile.color}22` }}>
+              <div className="w-11 h-11 rounded-xl flex items-center justify-center mb-2" style={{ backgroundColor: `${tile.color}20` }}>
                 <span style={{ color: tile.color }}>{tile.icon}</span>
               </div>
-              <span className="text-[8px] font-black text-white leading-tight w-full">{tile.label}</span>
-              <span className="text-[8px] font-bold leading-none" style={{ color: tile.color }}>{tile.count}</span>
+              <span className="text-[9px] font-black text-white leading-tight mb-1 w-full">{tile.label}</span>
+              <span className="text-[9px] font-bold" style={{ color: tile.color }}>{tile.count}</span>
             </button>
           ))}
         </div>
