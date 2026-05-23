@@ -218,7 +218,7 @@ const ScoutPrototype: React.FC = () => {
       </div>
 
       {/* ── Map — 45vh ── */}
-      <div className="relative shrink-0" style={{ height: '45vh' }}>
+      <div className="relative shrink-0" style={{ height: '25vh' }}>
         <div ref={mapContainer} className="h-full w-full" />
         {/* Map controls */}
         <div className="absolute top-4 right-4 flex flex-col gap-2 z-[400]">
@@ -345,7 +345,7 @@ const ScoutPrototype: React.FC = () => {
           <Sparkles size={17} className="text-orange-500 shrink-0" />
           <input
             type="text"
-            placeholder="Scout tacos near me, live music, food trucks..."
+            placeholder="Scout it — tacos near me, live music, food trucks..."
             className="bg-transparent border-none outline-none text-[11px] font-medium text-white/80 placeholder:text-white/30 flex-1"
           />
           <Filter size={17} className="text-orange-500 shrink-0" />
