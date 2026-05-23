@@ -3,6 +3,20 @@ import { MapPin, Heart, Navigation2, Search, Star, Clock, Utensils, DollarSign, 
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
+const customStyles = `
+  @keyframes pulse {
+    0% { transform: scale(1); opacity: 0.8; }
+    50% { transform: scale(1.5); opacity: 0.2; }
+    100% { transform: scale(1); opacity: 0.8; }
+  }
+  .custom-map-pin { background: none !important; border: none !important; }
+  .user-location-pin { background: none !important; border: none !important; }
+  .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+  .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+  .custom-scrollbar::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #444; }
+`;
+
 interface FeedItem {
   id: string;
   type: 'food_truck' | 'dish' | 'restaurant' | 'deal' | 'event' | 'new_menu' | 'worth_discovering';
@@ -138,11 +152,13 @@ const ScoutPrototype: React.FC = () => {
   useEffect(() => {
     if (!mapContainer.current) return;
 
-    map.current = L.map(mapContainer.current).setView([40.7128, -74.0060], 14);
+    map.current = L.map(mapContainer.current, {
+      zoomControl: false,
+      attributionControl: false
+    }).setView([40.7128, -74.0060], 14);
 
     // Dark theme tiles
     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      attribution: '© OpenStreetMap contributors © CARTO',
       maxZoom: 19,
     }).addTo(map.current);
 
@@ -156,8 +172,12 @@ const ScoutPrototype: React.FC = () => {
     pins.forEach(pin => {
       const iconColor = pin.type === 'truck' ? '#ff5c00' : pin.type === 'event' ? '#9333ea' : '#ff5c00';
       const icon = L.divIcon({
-        html: `<div style="background-color: ${iconColor}; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 16px; border: 2px solid #1f2937;">🍽️</div>`,
-        iconSize: [32, 32],
+        className: 'custom-map-pin',
+        html: `<div style="background-color: ${iconColor}; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; border: 2px solid rgba(255,255,255,0.2); box-shadow: 0 0 15px ${iconColor}44;">
+                <div style="font-size: 18px;">${pin.type === 'truck' ? '🚚' : pin.type === 'event' ? '🎸' : '🍽️'}</div>
+               </div>`,
+        iconSize: [36, 36],
+        iconAnchor: [18, 18]
       });
 
       const marker = L.marker([pin.lat, pin.lng], { icon }).addTo(map.current!);
@@ -166,8 +186,12 @@ const ScoutPrototype: React.FC = () => {
 
     // Add user location
     const userIcon = L.divIcon({
-      html: `<div style="background-color: #3b82f6; width: 24px; height: 24px; border-radius: 50%; border: 3px solid white; box-shadow: 0 0 0 2px #3b82f6;"></div>`,
-      iconSize: [24, 24],
+      className: 'user-location-pin',
+      html: `<div style="background-color: #3b82f6; width: 20px; height: 20px; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 20px #3b82f688;">
+                <div style="position: absolute; top: -10px; left: -10px; right: -10px; bottom: -10px; border-radius: 50%; background-color: #3b82f622; animation: pulse 2s infinite;"></div>
+             </div>`,
+      iconSize: [20, 20],
+      iconAnchor: [10, 10]
     });
     L.marker([40.7128, -74.0060], { icon: userIcon }).addTo(map.current);
 
@@ -186,6 +210,7 @@ const ScoutPrototype: React.FC = () => {
 
   return (
     <div className="h-screen w-full bg-[#0d0d0d] text-white flex flex-col overflow-hidden">
+      <style>{customStyles}</style>
       {/* Header */}
       <div className="flex items-center justify-between p-4 bg-[#1a1a1a] border-b border-[#333]">
         <div className="flex items-center gap-2">
@@ -249,14 +274,16 @@ const ScoutPrototype: React.FC = () => {
       </div>
 
       {/* Feed Section */}
-      <div className="flex-1 overflow-y-auto bg-[#0d0d0d]">
+      <div className="flex-1 overflow-y-auto bg-[#0d0d0d] custom-scrollbar">
         <div className="p-4">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="text-2xl font-bold">Today Around You</h2>
-              <p className="text-sm text-gray-400">A live mix of what locals love, what's open, what's new, and what's nearby.</p>
+              <h2 className="text-xl font-black uppercase tracking-tighter leading-none mb-1">Today Around You</h2>
+              <p className="text-[11px] leading-tight text-gray-400 font-medium">A live mix of what locals love, what's open, what's new, and what's nearby.</p>
             </div>
-            <button className="text-orange-600 font-semibold text-sm">See all →</button>
+            <div className="flex flex-col items-end">
+              <button className="text-orange-500 font-bold text-xs uppercase tracking-wider">See all →</button>
+            </div>
           </div>
 
           <div className="space-y-3">
@@ -302,26 +329,28 @@ const ScoutPrototype: React.FC = () => {
       </div>
 
       {/* Bottom Navigation */}
-      <div className="bg-[#1a1a1a] border-t border-[#333] flex items-center justify-around p-3">
-        <button className="flex flex-col items-center gap-1 text-orange-600">
-          <Utensils size={24} />
-          <span className="text-xs font-semibold">Scout</span>
+      <div className="bg-[#1a1a1a]/80 backdrop-blur-lg border-t border-[#333] flex items-center justify-around py-3 px-1 rounded-t-3xl shadow-2xl z-50">
+        <button className="flex flex-col items-center gap-1 text-orange-500">
+          <div className="bg-orange-500/20 p-2 rounded-full shadow-[0_0_15px_rgba(255,92,0,0.3)]">
+            <Navigation2 size={20} className="rotate-45" />
+          </div>
+          <span className="text-[10px] font-bold uppercase tracking-widest">Scout</span>
         </button>
-        <button className="flex flex-col items-center gap-1 text-gray-400 hover:text-white">
-          <Search size={24} />
-          <span className="text-xs font-semibold">Discover</span>
+        <button className="flex flex-col items-center gap-1 text-gray-500 hover:text-white">
+          <Search size={22} />
+          <span className="text-[10px] font-bold uppercase tracking-widest">Discover</span>
         </button>
-        <button className="flex flex-col items-center gap-1 text-gray-400 hover:text-white">
-          <Heart size={24} />
-          <span className="text-xs font-semibold">Saved</span>
+        <button className="flex flex-col items-center gap-1 text-gray-500 hover:text-white">
+          <Heart size={22} />
+          <span className="text-[10px] font-bold uppercase tracking-widest">Saved</span>
         </button>
-        <button className="flex flex-col items-center gap-1 text-gray-400 hover:text-white">
-          <AlertCircle size={24} />
-          <span className="text-xs font-semibold">Alerts</span>
+        <button className="flex flex-col items-center gap-1 text-gray-500 hover:text-white">
+          <AlertCircle size={22} />
+          <span className="text-[10px] font-bold uppercase tracking-widest">Alerts</span>
         </button>
-        <button className="flex flex-col items-center gap-1 text-gray-400 hover:text-white">
-          <Star size={24} />
-          <span className="text-xs font-semibold">Profile</span>
+        <button className="flex flex-col items-center gap-1 text-gray-500 hover:text-white">
+          <Star size={22} />
+          <span className="text-[10px] font-bold uppercase tracking-widest">Profile</span>
         </button>
       </div>
     </div>
