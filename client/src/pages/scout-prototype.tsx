@@ -226,11 +226,7 @@ export default function ScoutPrototype() {
     return { lat: 30.4213, lng: -87.2169, label: "Pensacola" };
   }, [deviceCoords, locationName]);
 
-  /* ─── suppress global nav on this page ─── */
-  useEffect(() => {
-    document.body.classList.add("mealscout-map-fullscreen");
-    return () => document.body.classList.remove("mealscout-map-fullscreen");
-  }, []);
+  /* Global nav suppression removed - we want the real nav visible at the bottom */
 
   useEffect(() => {
     if (!navigator.geolocation) return;
@@ -550,7 +546,7 @@ export default function ScoutPrototype() {
 
 
       {/* ── Explore the Scene — fixed above global nav ── */}
-      <div className="fixed left-0 right-0 z-[1050] bg-[#0d0d0d]/95 backdrop-blur-xl border-t border-white/8" style={{ bottom: "calc(env(safe-area-inset-bottom) + 5rem)" }}>
+      <div className="fixed left-0 right-0 z-[1050] bg-[#0d0d0d]/95 backdrop-blur-xl border-t border-white/8 shadow-[0_-8px_24px_rgba(0,0,0,0.5)]" style={{ bottom: "calc(env(safe-area-inset-bottom) + 5.5rem)" }}>
         <div className="flex gap-2 overflow-x-auto no-scrollbar px-3 pt-2 pb-2">
           {EXPLORE_TILES.map(tile => {
             const count = tileCounts[tile.id as keyof typeof tileCounts] || tile.count;
@@ -576,7 +572,7 @@ export default function ScoutPrototype() {
       </div>
 
       {/* ── Feed ── */}
-      <div className="flex-1 overflow-y-auto px-4 pb-[160px] no-scrollbar">
+      <div className="flex-1 overflow-y-auto px-4 pb-[220px] no-scrollbar">
         {/* Section header */}
         <div className="flex items-center justify-between mb-3 mt-3">
           <div>
