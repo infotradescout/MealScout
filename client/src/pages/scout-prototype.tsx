@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useMemo, useCallback } from "react";
+import Navigation from "@/components/navigation";
 import { Link, useLocation as useWouterLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -618,32 +619,8 @@ export default function ScoutPrototype() {
         </div>
       </div>
 
-      {/* ── Bottom Navigation ── */}
-      <div className="fixed bottom-0 left-0 right-0 bg-[#0d0d0d]/95 backdrop-blur-xl border-t border-white/5 flex items-center justify-around py-3 px-2 z-50">
-        <Link href="/scout" className="flex flex-col items-center gap-1 text-orange-500">
-          <Compass size={22} />
-          <span className="text-[9px] font-black uppercase tracking-widest">Scout</span>
-        </Link>
-        <Link href="/search" className="flex flex-col items-center gap-1 text-white/40 hover:text-white/80 transition-colors">
-          <Search size={22} />
-          <span className="text-[9px] font-black uppercase tracking-widest">Discover</span>
-        </Link>
-        <Link href="/favorites" className="flex flex-col items-center gap-1 text-white/40 hover:text-white/80 transition-colors">
-          <Heart size={22} />
-          <span className="text-[9px] font-black uppercase tracking-widest">Saved</span>
-        </Link>
-        <Link href="/alerts" className="flex flex-col items-center gap-1 text-white/40 hover:text-white/80 transition-colors">
-          <div className="relative">
-            <Bell size={22} />
-            <div className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-orange-500 rounded-full border-2 border-[#0d0d0d]" />
-          </div>
-          <span className="text-[9px] font-black uppercase tracking-widest">Alerts</span>
-        </Link>
-        <Link href="/profile" className="flex flex-col items-center gap-1 text-white/40 hover:text-white/80 transition-colors">
-          <User size={22} />
-          <span className="text-[9px] font-black uppercase tracking-widest">Profile</span>
-        </Link>
-      </div>
+      {/* ── Global Navigation ── */}
+      <Navigation />
     </div>
   );
 }
