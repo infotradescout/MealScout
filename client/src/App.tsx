@@ -115,6 +115,13 @@ const ParkingPassPage = lazy(() => import("@/pages/parking-pass"));
 const ParkingPassManage = lazy(() => import("@/pages/parking-pass-manage"));
 const StatusPage = lazy(() => import("@/pages/status"));
 const HostSignup = lazy(() => import("@/pages/host-signup"));
+const ForRestaurantsPage = lazy(() => import("@/pages/for-restaurants"));
+const ForBarsPage = lazy(() => import("@/pages/for-bars"));
+const ForHostsPage = lazy(() => import("@/pages/for-hosts"));
+const ForEventsPage = lazy(() => import("@/pages/for-events"));
+const HostLocationPartnerPage = lazy(
+  () => import("@/pages/host-location-partner"),
+);
 const HostDashboard = lazy(() => import("@/pages/host-dashboard"));
 const EventCoordinatorDashboard = lazy(
   () => import("@/pages/event-coordinator-dashboard"),
@@ -197,6 +204,11 @@ const publicRoutePrefixes = [
   "/contact",
   "/install",
   "/host-signup",
+  "/for-restaurants",
+  "/for-bars",
+  "/for-hosts",
+  "/for-events",
+  "/host-location-partner",
   "/hiring",
   "/jobs",
   "/private-chefs",
@@ -364,6 +376,14 @@ function Router() {
             <Route path="/contact" component={Contact} />
             <Route path="/install" component={InstallApp} />
             <Route path="/host-signup" component={HostSignup} />
+            <Route path="/for-restaurants" component={ForRestaurantsPage} />
+            <Route path="/for-bars" component={ForBarsPage} />
+            <Route path="/for-hosts" component={ForHostsPage} />
+            <Route path="/for-events" component={ForEventsPage} />
+            <Route
+              path="/host-location-partner"
+              component={HostLocationPartnerPage}
+            />
             <Route path="/hiring" component={HiringPage} />
             <Route path="/jobs" component={HiringPage} />
             <Route path="/private-chefs" component={HiringPage} />
@@ -553,6 +573,14 @@ function Router() {
             <Route path="/contact" component={Contact} />
             <Route path="/install" component={InstallApp} />
             <Route path="/host-signup" component={HostSignup} />
+            <Route path="/for-restaurants" component={ForRestaurantsPage} />
+            <Route path="/for-bars" component={ForBarsPage} />
+            <Route path="/for-hosts" component={ForHostsPage} />
+            <Route path="/for-events" component={ForEventsPage} />
+            <Route
+              path="/host-location-partner"
+              component={HostLocationPartnerPage}
+            />
             <Route path="/events" component={EventsRouter} />
             <Route path="/events/public" component={EventsPage} />
             <Route path="/event/:slug" component={EventDetailPage} />
