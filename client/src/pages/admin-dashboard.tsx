@@ -36,6 +36,7 @@ import {
   CreditCard,
   UserMinus,
   ExternalLink,
+  MessageSquare,
 } from "lucide-react";
 import { Link } from "wouter";
 import QuickDashboardAccess from "@/components/quick-dashboard-access";
@@ -4989,6 +4990,48 @@ export default function AdminDashboard() {
     },
   });
 
+  const sendIndividualAdminMessage = useMutation({
+    mutationFn: async ({
+      userId,
+      subject,
+      body,
+    }: {
+      userId: string;
+      subject: string;
+      body: string;
+    }) => {
+      const res = await fetch("/api/admin/users/message", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          recipientIds: [userId],
+          filters: {},
+          subject,
+          body,
+        }),
+      });
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.message || "Failed to send user message");
+      }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Message sent",
+        description: `Sent ${data.sent} message${data.sent === 1 ? "" : "s"}.`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Send failed",
+        description: error.message || "Unable to send message.",
+        variant: "destructive",
+      });
+    },
+  });
+
   // Update user type
   const updateUserType = useMutation({
     mutationFn: async ({
@@ -8354,6 +8397,32 @@ export default function AdminDashboard() {
                             Send Monthly Link
                           </Button>
                         </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={async () => {
+                            const subject = window
+                              .prompt("Message subject", "")
+                              ?.trim();
+                            if (!subject) return;
+                            const body = window
+                              .prompt("Message body", "")
+                              ?.trim();
+                            if (!body) return;
+                            await sendIndividualAdminMessage.mutateAsync({
+                              userId: user.id,
+                              subject,
+                              body,
+                            });
+                          }}
+                          disabled={
+                            sendIndividualAdminMessage.isPending || !user.email
+                          }
+                          data-testid={`button-message-user-${user.id}`}
+                        >
+                          <MessageSquare className="w-4 h-4 mr-1" />
+                          Message
+                        </Button>
                         <Button
                           size="sm"
                           variant="outline"

@@ -563,7 +563,10 @@ export function registerAdminCoreOpsRoutes(app: Express) {
     },
   );
 
-  const buildAdminMessageRecipients = async (filters: Record<string, any>) => {
+  const buildAdminMessageRecipients = async (
+    filters: Record<string, any>,
+    explicitRecipientIds?: string[],
+  ) => {
     const allUsers = await storage.getAllUsers();
     const restaurantRows = await db
       .select({
@@ -612,6 +615,15 @@ export function registerAdminCoreOpsRoutes(app: Express) {
     const optInOnly = filters.optInOnly !== false;
 
     let skippedOptOut = 0;
+    const explicitSet =
+      Array.isArray(explicitRecipientIds) && explicitRecipientIds.length > 0
+        ? new Set(
+            explicitRecipientIds
+              .map((value) => String(value || "").trim())
+              .filter(Boolean),
+          )
+        : null;
+
     const recipients = allUsers
       .map((user: any) => {
         const businesses = restaurantsByOwner.get(user.id) || [];
@@ -619,6 +631,7 @@ export function registerAdminCoreOpsRoutes(app: Express) {
         return { user, businesses, defaultAddress };
       })
       .filter(({ user, businesses, defaultAddress }) => {
+        if (explicitSet && !explicitSet.has(String(user.id || ""))) return false;
         if (excludeInternal && isAdminUserType(user.userType)) return false;
         if (excludeInternal && user.userType === "staff") return false;
         if (hasEmailOnly && !user.email) return false;
@@ -694,8 +707,12 @@ export function registerAdminCoreOpsRoutes(app: Express) {
         if (!isAdminUserType(req.user?.userType)) {
           return res.status(403).json({ message: "Admin access required" });
         }
+        const recipientIds = Array.isArray(req.body?.recipientIds)
+          ? req.body.recipientIds
+          : undefined;
         const { recipients, skippedOptOut } = await buildAdminMessageRecipients(
           req.body?.filters || {},
+          recipientIds,
         );
         res.json({
           count: recipients.length,
@@ -731,8 +748,12 @@ export function registerAdminCoreOpsRoutes(app: Express) {
           });
         }
 
+        const recipientIds = Array.isArray(req.body?.recipientIds)
+          ? req.body.recipientIds
+          : undefined;
         const { recipients, skippedOptOut } = await buildAdminMessageRecipients(
           req.body?.filters || {},
+          recipientIds,
         );
         const maxRecipients = parseAdminBroadcastMaxRecipients(
           process.env.ADMIN_BROADCAST_MAX_RECIPIENTS,
