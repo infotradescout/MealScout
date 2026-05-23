@@ -1615,10 +1615,11 @@ export default function ExplorePreview() {
     userRoles.has("admin") ||
     userRoles.has("duper_admin");
   const scoutPreviewCity = useMemo(() => {
-    const query = location.includes("?") ? location.slice(location.indexOf("?") + 1) : "";
-    const params = new URLSearchParams(query);
-    const raw = (params.get("scoutPreview") || params.get("previewCity") || "").trim().toLowerCase();
-    return raw;
+    if (typeof window === "undefined") return "";
+    const params = new URLSearchParams(window.location.search);
+    return (params.get("scoutPreview") || params.get("previewCity") || "")
+      .trim()
+      .toLowerCase();
   }, [location]);
   const isPensacolaScoutPreview = isScoutPreviewEligible && scoutPreviewCity === "pensacola";
   const previewCoords = useMemo(
@@ -1661,6 +1662,25 @@ export default function ExplorePreview() {
     scoutPreviewCity,
     showScoutPreviewDebug,
   ]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const requestedPreview = (params.get("scoutPreview") || params.get("previewCity") || "")
+      .trim()
+      .toLowerCase();
+    if (
+      requestedPreview === "pensacola" &&
+      isScoutPreviewEligible &&
+      !isPensacolaScoutPreview
+    ) {
+      console.warn("[scout-preview-warning] pensacola requested but inactive", {
+        requestedPreview,
+        isScoutPreviewEligible,
+        userType: normalizedUserType,
+      });
+    }
+  }, [isPensacolaScoutPreview, isScoutPreviewEligible, location, normalizedUserType]);
 
   useEffect(() => {
     if (!isPensacolaScoutPreview || !previewCoords) return;
