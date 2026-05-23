@@ -628,7 +628,7 @@ export default function ScoutPrototype() {
       <header className="flex items-center justify-between px-4 py-3 bg-[#0d0d0d] border-b border-white/5 shrink-0 z-30">
         <div className="flex items-center">
           <img
-            src="/brand/logo-mark-512.png"
+            src="/brand/meal-scout-icon.png"
             alt="MealScout"
             className="h-8 w-8 object-contain"
             loading="eager"
