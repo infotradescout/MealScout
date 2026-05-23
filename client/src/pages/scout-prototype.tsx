@@ -89,7 +89,7 @@ const ScoutPrototype: React.FC = () => {
     },
     {
       id: '3', type: 'RESTAURANT', typeColor: '#ff5c00',
-      image: 'https://images.unsplash.com/photo-1517248135467-4d71bcdd2167?w=400&h=400&fit=crop',
+      image: 'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=400&h=400&fit=crop',
       title: 'Riverbend Café', subtitle: 'Café • Breakfast, Lunch • Open now',
       tag: 'Open now', tagColor: '#10b981', distance: '0.8 mi', showRoute: true,
     },
@@ -162,34 +162,7 @@ const ScoutPrototype: React.FC = () => {
     });
     L.marker([40.7128, -74.006], { icon: userIcon }).addTo(map.current);
 
-    // Popup card (static marker)
-    const popupIcon = L.divIcon({
-      className: 'custom-map-pin',
-      html: `
-        <div style="background:#1a1a1a;border:1px solid #ff5c00;border-radius:16px;padding:12px;width:220px;box-shadow:0 10px 25px rgba(0,0,0,0.55);position:relative;">
-          <div style="display:flex;gap:10px;margin-bottom:10px;">
-            <img src="https://images.unsplash.com/photo-1565299585323-38d6b0865b47?w=100&h=100&fit=crop"
-                 style="width:48px;height:48px;border-radius:8px;object-fit:cover;" />
-            <div>
-              <div style="font-size:9px;font-weight:800;color:#ff5c00;text-transform:uppercase;letter-spacing:0.08em;">DISH</div>
-              <div style="font-size:13px;font-weight:700;color:white;line-height:1.2;">Brisket Tacos</div>
-              <div style="font-size:10px;color:#888;margin-top:1px;">Smok'd BBQ</div>
-              <div style="font-size:10px;color:#10b981;margin-top:2px;">&#9733; Most loved nearby</div>
-              <div style="font-size:10px;color:#888;margin-top:1px;">0.4 mi &middot; <span style="color:#10b981;">Open</span></div>
-            </div>
-          </div>
-          <div style="display:flex;gap:8px;">
-            <button style="flex:1;background:#ff5c00;color:white;border:none;border-radius:8px;padding:6px;font-size:11px;font-weight:700;cursor:pointer;">View</button>
-            <button style="flex:1;background:#2a2a2a;color:white;border:1px solid #444;border-radius:8px;padding:6px;font-size:11px;font-weight:700;cursor:pointer;">Route</button>
-          </div>
-          <div style="position:absolute;top:8px;right:10px;color:#666;font-size:13px;cursor:pointer;line-height:1;">&times;</div>
-          <div style="position:absolute;bottom:-9px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:9px solid transparent;border-right:9px solid transparent;border-top:9px solid #1a1a1a;"></div>
-        </div>
-      `,
-      iconSize: [220, 110],
-      iconAnchor: [110, 120],
-    });
-    L.marker([40.716, -73.998], { icon: popupIcon }).addTo(map.current);
+    // No static popup card — popup overflows the map container
 
     return () => { map.current?.remove(); };
   }, []);
@@ -217,8 +190,8 @@ const ScoutPrototype: React.FC = () => {
         </div>
       </div>
 
-      {/* ── Map — 45vh ── */}
-      <div className="relative shrink-0" style={{ height: '25vh' }}>
+      {/* ── Map — 25vh ── */}
+      <div className="relative shrink-0 overflow-hidden" style={{ height: '25vh' }}>
         <div ref={mapContainer} className="h-full w-full" />
         {/* Map controls */}
         <div className="absolute top-4 right-4 flex flex-col gap-2 z-[400]">
