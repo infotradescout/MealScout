@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState, useMemo, useCallback } from "react";
-import Navigation from "@/components/navigation";
 import { Link, useLocation as useWouterLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -564,7 +563,7 @@ export default function ScoutPrototype() {
       </div>
 
       {/* ── Feed ── */}
-      <div className="flex-1 overflow-y-auto px-4 pb-[170px] no-scrollbar">
+      <div className="flex-1 overflow-y-auto px-4 pb-[100px] no-scrollbar">
         {/* Section header */}
         <div className="flex items-center justify-between mb-3 mt-3">
           <div>
@@ -598,7 +597,7 @@ export default function ScoutPrototype() {
       </div>
 
       {/* ── Explore the Scene — fixed single-row scroll above bottom nav ── */}
-      <div className="fixed left-0 right-0 z-50 bg-[#0d0d0d] border-t border-white/8" style={{ bottom: "62px" }}>
+      <div className="fixed left-0 right-0 z-50 bg-[#0d0d0d] border-t border-white/8" style={{ bottom: "0px" }}>
         <div className="flex gap-2 overflow-x-auto no-scrollbar px-3 pt-2.5 pb-2.5">
           {EXPLORE_TILES.map(tile => {
             const count = tileCounts[tile.id as keyof typeof tileCounts] || tile.count;
@@ -619,8 +618,7 @@ export default function ScoutPrototype() {
         </div>
       </div>
 
-      {/* ── Global Navigation ── */}
-      <Navigation />
+
     </div>
   );
 }
