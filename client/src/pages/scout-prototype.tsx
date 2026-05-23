@@ -545,29 +545,11 @@ export default function ScoutPrototype() {
 
 
 
-      {/* ── Search + Explore Bar — fixed above global nav ── */}
-      <div className="fixed left-0 right-0 z-[1050] flex flex-col gap-1.5 pointer-events-none" style={{ bottom: "calc(env(safe-area-inset-bottom) + 6.5rem)" }}>
-        {/* Search Bar */}
-        <div className="px-4 pointer-events-auto">
-          <Link href="/search" className="flex items-center gap-3 px-4 h-9 bg-[#1a1a1a]/90 backdrop-blur-xl rounded-full border border-white/10 shadow-2xl group transition-all hover:bg-[#222]/90 hover:border-orange-500/30">
-            <div className="w-4 h-4 flex items-center justify-center">
-              <div className="w-3.5 h-3.5 rounded-full border-2 border-orange-500/40 relative">
-                <div className="absolute top-1 left-1 w-0.5 h-0.5 bg-orange-500/60 rounded-full animate-pulse" />
-              </div>
-            </div>
-            <span className="text-[11px] font-medium text-white/40 group-hover:text-white/60 transition-colors truncate">
-              Scout it — tacos near me, live music, food trucks...
-            </span>
-            <div className="ml-auto flex items-center gap-2">
-              <div className="w-px h-3 bg-white/10" />
-              <Tag size={12} className="text-orange-500/60" />
-            </div>
-          </Link>
-        </div>
-
+      {/* ── Explore + Search Bar — fixed above global nav ── */}
+      <div className="fixed left-0 right-0 z-[1050] flex flex-col gap-1.5 pointer-events-none" style={{ bottom: "calc(env(safe-area-inset-bottom) + 6rem)" }}>
         {/* Explore Tiles */}
         <div className="bg-[#0d0d0d]/95 backdrop-blur-xl border-t border-white/8 shadow-[0_-8px_24px_rgba(0,0,0,0.5)] pointer-events-auto">
-          <div className="flex gap-1.5 overflow-x-auto no-scrollbar px-3 pt-1 pb-1">
+          <div className="flex gap-1.5 overflow-x-auto no-scrollbar px-3 pt-1 pb-1.5">
             {EXPLORE_TILES.map(tile => {
               const count = tileCounts[tile.id as keyof typeof tileCounts] || tile.count;
               return (
@@ -589,6 +571,24 @@ export default function ScoutPrototype() {
               );
             })}
           </div>
+        </div>
+
+        {/* Search Bar */}
+        <div className="px-4 pointer-events-auto pb-1">
+          <Link href="/search" className="flex items-center gap-3 px-4 h-9 bg-[#1a1a1a]/90 backdrop-blur-xl rounded-full border border-white/10 shadow-2xl group transition-all hover:bg-[#222]/90 hover:border-orange-500/30">
+            <div className="w-4 h-4 flex items-center justify-center">
+              <div className="w-3.5 h-3.5 rounded-full border-2 border-orange-500/40 relative">
+                <div className="absolute top-1 left-1 w-0.5 h-0.5 bg-orange-500/60 rounded-full animate-pulse" />
+              </div>
+            </div>
+            <span className="text-[11px] font-medium text-white/40 group-hover:text-white/60 transition-colors truncate">
+              Scout it — tacos near me, live music, food trucks...
+            </span>
+            <div className="ml-auto flex items-center gap-2">
+              <div className="w-px h-3 bg-white/10" />
+              <Tag size={12} className="text-orange-500/60" />
+            </div>
+          </Link>
         </div>
       </div>
 
