@@ -218,6 +218,10 @@ export default function ScoutPrototype() {
   const [deviceCoords, setDeviceCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [locationName, setLocationName] = useState("Pensacola");
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
+  const navOffset = "calc(env(safe-area-inset-bottom) + 4.9rem)";
+  const searchDockHeight = 56;
+  const sceneDockHeight = 84;
+  const feedBottomClearance = `calc(env(safe-area-inset-bottom) + ${searchDockHeight + sceneDockHeight + 112}px)`;
 
   /* ─── location ─── */
   const location = useMemo(() => {
@@ -543,29 +547,29 @@ export default function ScoutPrototype() {
         </div>
       </div>
 
-      {/* ── Explore the Scene — fixed above search dock ── */}
+      {/* ── Explore the Scene — directly above search dock ── */}
       <div
         className="fixed left-0 right-0 z-[1050] bg-[#0d0d0d]/95 backdrop-blur-xl border-t border-white/8 shadow-[0_-8px_24px_rgba(0,0,0,0.5)]"
-        style={{ bottom: "calc(env(safe-area-inset-bottom) + 9.85rem)" }}
+        style={{ bottom: `calc(${navOffset} + ${searchDockHeight}px)` }}
       >
-        <div className="flex gap-2 overflow-x-auto no-scrollbar px-3 pt-2 pb-2">
+        <div className="flex gap-1.5 overflow-x-auto no-scrollbar px-3 pt-2 pb-2">
           {EXPLORE_TILES.map(tile => {
             const count = tileCounts[tile.id as keyof typeof tileCounts] || tile.count;
             return (
               <button
                 key={tile.id}
                 onClick={() => setActiveScene(tile.id)}
-                className={`shrink-0 flex flex-col items-center text-center rounded-xl px-2 py-2 border transition-all duration-200 w-[64px] ${
+                className={`shrink-0 flex flex-col items-center text-center rounded-xl px-1.5 py-1.5 border transition-all duration-200 w-[62px] ${
                   activeScene === tile.id
                     ? "bg-[#1e1e1e] border-orange-500/40"
                     : "bg-[#161616] border-white/5 hover:border-orange-500/20"
                 }`}
               >
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center mb-1" style={{ backgroundColor: `${tile.color}20` }}>
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center mb-1" style={{ backgroundColor: `${tile.color}20` }}>
                   <span style={{ color: tile.color }}>{tile.icon}</span>
                 </div>
-                <span className="text-[8px] font-black text-white leading-tight w-full truncate">{tile.label}</span>
-                {count && <span className="text-[8px] font-bold mt-0.5" style={{ color: tile.color }}>{count}</span>}
+                <span className="text-[7px] font-black text-white leading-tight w-full truncate">{tile.label}</span>
+                {count && <span className="text-[7px] font-bold mt-0.5" style={{ color: tile.color }}>{count}</span>}
               </button>
             );
           })}
@@ -575,7 +579,7 @@ export default function ScoutPrototype() {
       {/* ── Search Dock — fixed directly above global nav ── */}
       <div
         className="fixed left-0 right-0 z-[1060] px-4"
-        style={{ bottom: "calc(env(safe-area-inset-bottom) + 5.35rem)" }}
+        style={{ bottom: navOffset }}
       >
         <button
           type="button"
@@ -589,7 +593,7 @@ export default function ScoutPrototype() {
       </div>
 
       {/* ── Feed ── */}
-      <div className="flex-1 overflow-y-auto px-4 pb-[320px] no-scrollbar">
+      <div className="flex-1 overflow-y-auto px-4 no-scrollbar" style={{ paddingBottom: feedBottomClearance }}>
         {/* Section header */}
         <div className="flex items-center justify-between mb-3 mt-3">
           <div>
@@ -620,6 +624,7 @@ export default function ScoutPrototype() {
             ))}
           </div>
         )}
+        <div aria-hidden="true" className="h-8" />
       </div>
 
     </div>
