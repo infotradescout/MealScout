@@ -545,34 +545,55 @@ export default function ScoutPrototype() {
 
 
 
-      {/* ── Explore the Scene — fixed above global nav ── */}
-      <div className="fixed left-0 right-0 z-[1050] bg-[#0d0d0d]/95 backdrop-blur-xl border-t border-white/8 shadow-[0_-8px_24px_rgba(0,0,0,0.5)]" style={{ bottom: "calc(env(safe-area-inset-bottom) + 6rem)" }}>
-        <div className="flex gap-2 overflow-x-auto no-scrollbar px-3 pt-2 pb-2">
-          {EXPLORE_TILES.map(tile => {
-            const count = tileCounts[tile.id as keyof typeof tileCounts] || tile.count;
-            return (
-              <button
-                key={tile.id}
-                onClick={() => setActiveScene(tile.id)}
-                className={`shrink-0 flex flex-col items-center text-center rounded-xl px-2.5 py-2 border transition-all duration-200 w-[68px] ${
-                  activeScene === tile.id
-                    ? "bg-[#1e1e1e] border-orange-500/40"
-                    : "bg-[#161616] border-white/5 hover:border-orange-500/20"
-                }`}
-              >
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center mb-1" style={{ backgroundColor: `${tile.color}20` }}>
-                  <span style={{ color: tile.color }}>{tile.icon}</span>
-                </div>
-                <span className="text-[8px] font-black text-white leading-tight w-full truncate">{tile.label}</span>
-                {count && <span className="text-[8px] font-bold mt-0.5" style={{ color: tile.color }}>{count}</span>}
-              </button>
-            );
-          })}
+      {/* ── Search + Explore Bar — fixed above global nav ── */}
+      <div className="fixed left-0 right-0 z-[1050] flex flex-col gap-2 pointer-events-none" style={{ bottom: "calc(env(safe-area-inset-bottom) + 5.5rem)" }}>
+        {/* Search Bar */}
+        <div className="px-4 pointer-events-auto">
+          <Link href="/search" className="flex items-center gap-3 px-4 h-11 bg-[#1a1a1a]/90 backdrop-blur-xl rounded-full border border-white/10 shadow-2xl group transition-all hover:bg-[#222]/90 hover:border-orange-500/30">
+            <div className="w-5 h-5 flex items-center justify-center">
+              <div className="w-4 h-4 rounded-full border-2 border-orange-500/40 relative">
+                <div className="absolute top-1.5 left-1.5 w-1 h-1 bg-orange-500/60 rounded-full animate-pulse" />
+              </div>
+            </div>
+            <span className="text-[13px] font-medium text-white/40 group-hover:text-white/60 transition-colors truncate">
+              Scout it — tacos near me, live music, food trucks...
+            </span>
+            <div className="ml-auto flex items-center gap-2">
+              <div className="w-px h-4 bg-white/10" />
+              <Tag size={14} className="text-orange-500/60" />
+            </div>
+          </Link>
+        </div>
+
+        {/* Explore Tiles */}
+        <div className="bg-[#0d0d0d]/95 backdrop-blur-xl border-t border-white/8 shadow-[0_-8px_24px_rgba(0,0,0,0.5)] pointer-events-auto">
+          <div className="flex gap-2 overflow-x-auto no-scrollbar px-3 pt-1.5 pb-1.5">
+            {EXPLORE_TILES.map(tile => {
+              const count = tileCounts[tile.id as keyof typeof tileCounts] || tile.count;
+              return (
+                <button
+                  key={tile.id}
+                  onClick={() => setActiveScene(tile.id)}
+                  className={`shrink-0 flex flex-col items-center text-center rounded-lg px-2 py-1.5 border transition-all duration-200 w-[62px] ${
+                    activeScene === tile.id
+                      ? "bg-[#1e1e1e] border-orange-500/40"
+                      : "bg-[#161616] border-white/5 hover:border-orange-500/20"
+                  }`}
+                >
+                  <div className="w-7 h-7 rounded-lg flex items-center justify-center mb-0.5" style={{ backgroundColor: `${tile.color}20` }}>
+                    <span className="scale-75" style={{ color: tile.color }}>{tile.icon}</span>
+                  </div>
+                  <span className="text-[7px] font-black text-white leading-tight w-full truncate">{tile.label}</span>
+                  {count && <span className="text-[7px] font-bold mt-0.5" style={{ color: tile.color }}>{count}</span>}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 
       {/* ── Feed ── */}
-      <div className="flex-1 overflow-y-auto px-4 pb-[220px] no-scrollbar">
+      <div className="flex-1 overflow-y-auto px-4 pb-[260px] no-scrollbar">
         {/* Section header */}
         <div className="flex items-center justify-between mb-3 mt-3">
           <div>
