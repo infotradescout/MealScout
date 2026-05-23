@@ -546,30 +546,36 @@ export default function ScoutPrototype() {
         </div>
       </div>
 
-      {/* ── Scene lane bar ── */}
-      <div className="flex overflow-x-auto px-3 py-2.5 gap-2 no-scrollbar bg-[#0d0d0d] border-b border-white/5 shrink-0 z-20">
-        {SCENE_LANES.map(lane => {
-          const isActive = activeScene === lane.id;
-          return (
-            <button
-              key={lane.id}
-              onClick={() => setActiveScene(lane.id)}
-              className={`shrink-0 inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-[11px] font-semibold whitespace-nowrap border transition-all duration-200 ${
-                isActive
-                  ? "bg-[#ff5c00] border-orange-500/50 text-white shadow-[0_8px_20px_rgba(255,92,0,0.25)]"
-                  : "bg-[#161616] border-white/5 text-white/60 hover:text-white hover:border-white/15"
-              }`}
-              aria-pressed={isActive}
-            >
-              <span style={{ color: isActive ? "white" : lane.color }}>{lane.icon}</span>
-              {lane.label}
-            </button>
-          );
-        })}
+
+
+      {/* ── Explore the Scene — fixed above global nav ── */}
+      <div className="fixed left-0 right-0 z-[1050] bg-[#0d0d0d]/95 backdrop-blur-xl border-t border-white/8" style={{ bottom: "calc(env(safe-area-inset-bottom) + 5rem)" }}>
+        <div className="flex gap-2 overflow-x-auto no-scrollbar px-3 pt-2 pb-2">
+          {EXPLORE_TILES.map(tile => {
+            const count = tileCounts[tile.id as keyof typeof tileCounts] || tile.count;
+            return (
+              <button
+                key={tile.id}
+                onClick={() => setActiveScene(tile.id)}
+                className={`shrink-0 flex flex-col items-center text-center rounded-xl px-2.5 py-2 border transition-all duration-200 w-[68px] ${
+                  activeScene === tile.id
+                    ? "bg-[#1e1e1e] border-orange-500/40"
+                    : "bg-[#161616] border-white/5 hover:border-orange-500/20"
+                }`}
+              >
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center mb-1" style={{ backgroundColor: `${tile.color}20` }}>
+                  <span style={{ color: tile.color }}>{tile.icon}</span>
+                </div>
+                <span className="text-[8px] font-black text-white leading-tight w-full truncate">{tile.label}</span>
+                {count && <span className="text-[8px] font-bold mt-0.5" style={{ color: tile.color }}>{count}</span>}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* ── Feed ── */}
-      <div className="flex-1 overflow-y-auto px-4 pb-[100px] no-scrollbar">
+      <div className="flex-1 overflow-y-auto px-4 pb-[160px] no-scrollbar">
         {/* Section header */}
         <div className="flex items-center justify-between mb-3 mt-3">
           <div>
