@@ -124,13 +124,6 @@ const TruckDiscovery = lazy(() => import("@/pages/truck-discovery"));
 const EventsPage = lazy(() => import("@/pages/events"));
 const EventsRouter = lazy(() => import("@/pages/events-router"));
 const EventDetailPage = lazy(() => import("@/pages/event-detail"));
-const ForRestaurants = lazy(() => import("@/pages/for-restaurants"));
-const ForBars = lazy(() => import("@/pages/for-bars"));
-const ForHosts = lazy(() => import("@/pages/for-hosts"));
-const HostLocationPartnerPage = lazy(
-  () => import("@/pages/host-location-partner"),
-);
-const ForEvents = lazy(() => import("@/pages/for-events"));
 const VideoPage = lazy(() => import("@/pages/video"));
 const VideoDetailPage = lazy(() => import("@/pages/video-detail"));
 const ChangePassword = lazy(() => import("@/pages/change-password"));
@@ -204,11 +197,6 @@ const publicRoutePrefixes = [
   "/contact",
   "/install",
   "/host-signup",
-  "/for-restaurants",
-  "/for-bars",
-  "/for-hosts",
-  "/host-location-partner",
-  "/for-events",
   "/hiring",
   "/jobs",
   "/private-chefs",
@@ -376,14 +364,6 @@ function Router() {
             <Route path="/contact" component={Contact} />
             <Route path="/install" component={InstallApp} />
             <Route path="/host-signup" component={HostSignup} />
-            <Route path="/for-restaurants" component={ForRestaurants} />
-            <Route path="/for-bars" component={ForBars} />
-            <Route path="/for-hosts" component={ForHosts} />
-            <Route
-              path="/host-location-partner"
-              component={HostLocationPartnerPage}
-            />
-            <Route path="/for-events" component={ForEvents} />
             <Route path="/hiring" component={HiringPage} />
             <Route path="/jobs" component={HiringPage} />
             <Route path="/private-chefs" component={HiringPage} />
@@ -465,14 +445,6 @@ function Router() {
               component={EventCoordinatorDashboard}
             />
             <Route path="/truck-discovery" component={TruckDiscovery} />
-            <Route path="/for-restaurants" component={ForRestaurants} />
-            <Route path="/for-bars" component={ForBars} />
-            <Route path="/for-hosts" component={ForHosts} />
-            <Route
-              path="/host-location-partner"
-              component={HostLocationPartnerPage}
-            />
-            <Route path="/for-events" component={ForEvents} />
             <Route path="/hiring" component={HiringPage} />
             <Route path="/jobs" component={HiringPage} />
             <Route path="/private-chefs" component={HiringPage} />
