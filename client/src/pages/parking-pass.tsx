@@ -6394,7 +6394,7 @@ export default function ParkingPassPage() {
                         variant={viewMode === "map" ? "default" : "outline"}
                         onClick={() => setViewMode("map")}
                       >
-                        Map view
+                        Map
                       </Button>
                       <Button
                         size="sm"
@@ -6402,7 +6402,7 @@ export default function ParkingPassPage() {
                         variant={viewMode === "list" ? "default" : "outline"}
                         onClick={() => setViewMode("list")}
                       >
-                        List view
+                        List
                       </Button>
                     </div>
                     <Button
@@ -6414,7 +6414,7 @@ export default function ParkingPassPage() {
                       disabled={viewMode !== "map"}
                       className="w-full sm:hidden"
                     >
-                      Scout heat
+                      Activity heat
                     </Button>
                   </div>
 
@@ -6429,7 +6429,7 @@ export default function ParkingPassPage() {
                     viewMode === "map" && fallbackHostPins.length > 0 ? (
                       <div className="space-y-3">
                         <div className="rounded-2xl pp-glass shadow-clean overflow-hidden">
-                          <div className="relative h-[360px] w-full bg-slate-100/60 lg:h-[min(68vh,640px)] xl:h-[min(72vh,720px)]">
+                          <div className="relative h-[430px] w-full bg-slate-100/60 lg:h-[min(68vh,640px)] xl:h-[min(72vh,720px)]">
                             <GoogleMapPicker
                               center={fallbackMapCenter}
                               zoom={13}
@@ -6504,15 +6504,14 @@ export default function ParkingPassPage() {
                     ) : (
                       <div className="space-y-3">
                         <div className="rounded-2xl pp-glass-muted p-6 text-center text-sm text-slate-700">
-                          No bookable parking pass spots are available right
-                          now.
+                          No available spots right now. Try another date or area.
                         </div>
                       </div>
                     )
                   ) : viewMode === "map" ? (
                     <div className="space-y-3">
                       <div className="rounded-2xl pp-glass shadow-clean overflow-hidden">
-                        <div className="relative h-[360px] w-full bg-slate-100/60 lg:h-[min(68vh,640px)] xl:h-[min(72vh,720px)]">
+                        <div className="relative h-[430px] w-full bg-slate-100/60 lg:h-[min(68vh,640px)] xl:h-[min(72vh,720px)]">
                           <GoogleMapPicker
                             center={mapCenter}
                             zoom={13}
@@ -6869,6 +6868,13 @@ export default function ParkingPassPage() {
                             listingForDate &&
                             listingHasAvailability(listingForDate),
                           );
+                          const bookingModeLabel = canStartTruckCheckout
+                            ? hasAvailability && listingForDate?.status === "open"
+                              ? "Bookable"
+                              : listingForDate
+                                ? "Requestable"
+                                : "View only"
+                            : "View only";
                           const canBook = Boolean(
                             paymentsReady &&
                               hasAvailability &&
@@ -6880,6 +6886,13 @@ export default function ParkingPassPage() {
                             ? (bookingListing?.bookings ?? [])
                             : [];
                           const isActive = activeLocation?.key === group.key;
+                          const groupCoords =
+                            parkingCoords[group.key] ||
+                            getLocationCoords(group.host) ||
+                            null;
+                          const routeUrl = groupCoords
+                            ? `https://www.google.com/maps/dir/?api=1&destination=${groupCoords.lat},${groupCoords.lng}&travelmode=driving`
+                            : null;
                           const shareDate = displayListing
                             ? getListingDateKey(displayListing.date)
                             : selectedDate;
@@ -6921,16 +6934,29 @@ export default function ParkingPassPage() {
                                       : "No dates listed"}
                                   </div>
                                 </div>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    focusLocation(group.key, true);
-                                  }}
-                                >
-                                  View
-                                </Button>
+                                <div className="flex items-center gap-2">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      focusLocation(group.key, true);
+                                    }}
+                                  >
+                                    View Host
+                                  </Button>
+                                  {routeUrl ? (
+                                    <a
+                                      href={routeUrl}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="inline-flex h-8 items-center rounded-md border border-[color:var(--border-subtle)] px-3 text-xs font-medium text-[color:var(--text-primary)]"
+                                      onClick={(event) => event.stopPropagation()}
+                                    >
+                                      Route
+                                    </a>
+                                  ) : null}
+                                </div>
                               </div>
                               {groupDateKeys.length > 1 && (
                                 <div className="flex items-center justify-between gap-2">
@@ -6959,6 +6985,21 @@ export default function ParkingPassPage() {
                                 </div>
                               )}
                               <div className="text-xs text-slate-700 space-y-1">
+                                <div className="mb-1 flex flex-wrap items-center gap-1.5">
+                                  <span className="rounded-full pp-chip px-2 py-0.5 text-[10px] font-semibold">
+                                    {bookingModeLabel}
+                                  </span>
+                                  {displayListing?.maxTrucks ? (
+                                    <span className="rounded-full pp-chip px-2 py-0.5 text-[10px] font-semibold">
+                                      Capacity {displayListing.maxTrucks}
+                                    </span>
+                                  ) : null}
+                                  {slotOptions.length > 0 ? (
+                                    <span className="rounded-full pp-chip px-2 py-0.5 text-[10px] font-semibold">
+                                      {`From $${(((slotOptions[0]?.priceCents || 0) + getFeeCentsForSlots([slotOptions[0]?.type || "daily"])) / 100).toFixed(2)}`}
+                                    </span>
+                                  ) : null}
+                                </div>
                                 <p>{group.host.address}</p>
                                 {displayListing && (
                                   <p>
@@ -7078,7 +7119,7 @@ export default function ParkingPassPage() {
                                       }}
                                       disabled={selectedSlots.length === 0}
                                     >
-                                      Add to cart
+                                      Book Spot
                                       {selectedTotalWithFee > 0 && (
                                         <span className="ml-2 text-xs">
                                           $
@@ -7091,18 +7132,38 @@ export default function ParkingPassPage() {
                                   )}
                                 </div>
                               ) : (
-                                <p className="text-[11px] text-[color:var(--text-muted)]">
-                                  {listingForDate
-                                    ? "Fully booked."
-                                    : "No open dates right now."}
-                                </p>
+                                <div className="flex items-center justify-between gap-3">
+                                  <p className="text-[11px] text-[color:var(--text-muted)]">
+                                    {listingForDate
+                                      ? "Fully booked."
+                                      : "No open dates right now."}
+                                  </p>
+                                  {canStartTruckCheckout && (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      type="button"
+                                      onClick={(event) => {
+                                        event.preventDefault();
+                                        event.stopPropagation();
+                                        toast({
+                                          title: "Request Spot",
+                                          description:
+                                            "Use View Host to request this location.",
+                                        });
+                                      }}
+                                    >
+                                      Request Spot
+                                    </Button>
+                                  )}
+                                </div>
                               )}
                             </div>
                           );
                         })}
                         {filteredLocations.length === 0 && (
                           <div className="rounded-2xl pp-glass-muted p-6 text-center text-sm text-slate-700">
-                            No locations match that search.
+                            No host spots match that search.
                           </div>
                         )}
                       </div>
@@ -7169,6 +7230,13 @@ export default function ParkingPassPage() {
                           listingForDate &&
                           listingHasAvailability(listingForDate),
                         );
+                        const bookingModeLabel = canStartTruckCheckout
+                          ? hasAvailability && listingForDate?.status === "open"
+                            ? "Bookable"
+                            : listingForDate
+                              ? "Requestable"
+                              : "View only"
+                          : "View only";
                         const canBook = Boolean(
                           paymentsReady &&
                             hasAvailability &&
@@ -7178,6 +7246,13 @@ export default function ParkingPassPage() {
                           ? (bookingListing?.bookings ?? [])
                           : [];
                         const isActive = activeLocation?.key === group.key;
+                        const groupCoords =
+                          parkingCoords[group.key] ||
+                          getLocationCoords(group.host) ||
+                          null;
+                        const routeUrl = groupCoords
+                          ? `https://www.google.com/maps/dir/?api=1&destination=${groupCoords.lat},${groupCoords.lng}&travelmode=driving`
+                          : null;
                         const shareDate = displayListing
                           ? getListingDateKey(displayListing.date)
                           : selectedDate;
@@ -7205,18 +7280,43 @@ export default function ParkingPassPage() {
                                 : "border-[color:var(--border-subtle)] pp-glass-muted hover:opacity-95"
                             }`}
                           >
-                            <div className="flex items-center justify-between">
-                              <span className="text-[15px] font-semibold text-orange-500 font-display">
-                                {group.host.businessName}
-                              </span>
-                              <span className="text-xs text-[color:var(--text-muted)]">
-                                {displayListing
-                                  ? format(
-                                      new Date(displayListing.date),
-                                      "EEE, MMM d",
-                                    )
-                                  : "No dates listed"}
-                              </span>
+                            <div className="flex items-center justify-between gap-2">
+                              <div>
+                                <span className="text-[15px] font-semibold text-orange-500 font-display">
+                                  {group.host.businessName}
+                                </span>
+                                <p className="text-xs text-[color:var(--text-muted)]">
+                                  {displayListing
+                                    ? format(
+                                        new Date(displayListing.date),
+                                        "EEE, MMM d",
+                                      )
+                                    : "No dates listed"}
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    focusLocation(group.key, true);
+                                  }}
+                                >
+                                  View Host
+                                </Button>
+                                {routeUrl ? (
+                                  <a
+                                    href={routeUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="inline-flex h-8 items-center rounded-md border border-[color:var(--border-subtle)] px-3 text-xs font-medium text-[color:var(--text-primary)]"
+                                    onClick={(event) => event.stopPropagation()}
+                                  >
+                                    Route
+                                  </a>
+                                ) : null}
+                              </div>
                             </div>
                             {groupDateKeys.length > 1 && (
                               <div className="flex items-center justify-between gap-2 pt-1">
@@ -7245,6 +7345,21 @@ export default function ParkingPassPage() {
                               </div>
                             )}
                             <div className="text-xs text-slate-700">
+                              <div className="mb-1 flex flex-wrap items-center gap-1.5">
+                                <span className="rounded-full pp-chip px-2 py-0.5 text-[10px] font-semibold">
+                                  {bookingModeLabel}
+                                </span>
+                                {displayListing?.maxTrucks ? (
+                                  <span className="rounded-full pp-chip px-2 py-0.5 text-[10px] font-semibold">
+                                    Capacity {displayListing.maxTrucks}
+                                  </span>
+                                ) : null}
+                                {slotOptions.length > 0 ? (
+                                  <span className="rounded-full pp-chip px-2 py-0.5 text-[10px] font-semibold">
+                                    {`From $${(((slotOptions[0]?.priceCents || 0) + getFeeCentsForSlots([slotOptions[0]?.type || "daily"])) / 100).toFixed(2)}`}
+                                  </span>
+                                ) : null}
+                              </div>
                               <p>{group.host.address}</p>
                               {(group.host.city || group.host.state) && (
                                 <p>
@@ -7369,7 +7484,7 @@ export default function ParkingPassPage() {
                                       !canBook || selectedSlots.length === 0
                                     }
                                   >
-                                    Add to cart
+                                    Book Spot
                                     {selectedTotalWithFee > 0 && (
                                       <span className="ml-2 text-xs">
                                         $
@@ -7382,18 +7497,38 @@ export default function ParkingPassPage() {
                                 )}
                               </div>
                             ) : (
-                              <p className="text-[11px] text-[color:var(--text-muted)]">
-                                {listingForDate
-                                  ? "Fully booked."
-                                  : "No open dates right now."}
-                              </p>
+                              <div className="flex items-center justify-between gap-3">
+                                <p className="text-[11px] text-[color:var(--text-muted)]">
+                                  {listingForDate
+                                    ? "Fully booked."
+                                    : "No open dates right now."}
+                                </p>
+                                {canStartTruckCheckout && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    type="button"
+                                    onClick={(event) => {
+                                      event.preventDefault();
+                                      event.stopPropagation();
+                                      toast({
+                                        title: "Request Spot",
+                                        description:
+                                          "Use View Host to request this location.",
+                                      });
+                                    }}
+                                  >
+                                    Request Spot
+                                  </Button>
+                                )}
+                              </div>
                             )}
                           </div>
                         );
                       })}
                       {filteredLocations.length === 0 && (
                         <div className="rounded-2xl pp-glass-muted p-6 text-center text-sm text-slate-700">
-                          No locations match that search.
+                          No host spots match that search.
                         </div>
                       )}
                     </div>
@@ -7721,7 +7856,7 @@ export default function ParkingPassPage() {
                                         ).length === 0
                                       }
                                     >
-                                      Add to cart
+                                      Book Spot
                                     </Button>
                                   )}
                                 </div>
@@ -7797,3 +7932,4 @@ export default function ParkingPassPage() {
     </div>
   );
 }
+
