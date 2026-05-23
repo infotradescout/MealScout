@@ -596,27 +596,7 @@ export default function ScoutPrototype() {
         )}
       </div>
 
-      {/* ── Explore the Scene — fixed single-row scroll above bottom nav ── */}
-      <div className="fixed left-0 right-0 z-50 bg-[#0d0d0d] border-t border-white/8" style={{ bottom: "0px" }}>
-        <div className="flex gap-2 overflow-x-auto no-scrollbar px-3 pt-2.5 pb-2.5">
-          {EXPLORE_TILES.map(tile => {
-            const count = tileCounts[tile.id as keyof typeof tileCounts] || tile.count;
-            return (
-              <Link
-                key={tile.id}
-                href={tile.href}
-                className="shrink-0 flex flex-col items-center text-center rounded-xl px-2.5 py-2 border border-white/5 hover:border-orange-500/20 transition-all duration-200 w-[72px] bg-[#161616]"
-              >
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-1.5" style={{ backgroundColor: `${tile.color}20` }}>
-                  <span style={{ color: tile.color }}>{tile.icon}</span>
-                </div>
-                <span className="text-[8px] font-black text-white leading-tight w-full">{tile.label}</span>
-                {count && <span className="text-[8px] font-bold mt-0.5" style={{ color: tile.color }}>{count}</span>}
-              </Link>
-            );
-          })}
-        </div>
-      </div>
+
 
 
     </div>
