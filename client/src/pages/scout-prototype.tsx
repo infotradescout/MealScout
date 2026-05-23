@@ -149,6 +149,25 @@ function imgSrc(r: { coverImageUrl?: string | null; heroImageUrl?: string | null
   return r.coverImageUrl || r.heroImageUrl || r.imageUrl || null;
 }
 
+function distanceMilesBetween(
+  aLat: number,
+  aLng: number,
+  bLat: number,
+  bLng: number,
+): number {
+  const toRad = (v: number) => (v * Math.PI) / 180;
+  const R = 3958.8;
+  const dLat = toRad(bLat - aLat);
+  const dLng = toRad(bLng - aLng);
+  const s1 = Math.sin(dLat / 2);
+  const s2 = Math.sin(dLng / 2);
+  const aa =
+    s1 * s1 +
+    Math.cos(toRad(aLat)) * Math.cos(toRad(bLat)) * s2 * s2;
+  const c = 2 * Math.atan2(Math.sqrt(aa), Math.sqrt(1 - aa));
+  return R * c;
+}
+
 /* ─── feed card ─── */
 function FeedCard({
   type, typeColor, image, title, subtitle, tag, tagColor,
@@ -263,16 +282,24 @@ export default function ScoutPrototype() {
   const isPensacolaScoutPreview =
     scoutPreviewCity === "pensacola" &&
     (isAdminPreviewEligible || adminPreviewLocked);
+  const resolvedLocationLabel = isPensacolaScoutPreview
+    ? "Pensacola"
+    : locationName;
 
   /* ─── location ─── */
   const location = useMemo(() => {
     if (isPensacolaScoutPreview) {
       return { lat: 30.4213, lng: -87.2169, label: "Pensacola" };
     }
-    if (deviceCoords) return { lat: deviceCoords.lat, lng: deviceCoords.lng, label: locationName };
+    if (deviceCoords)
+      return {
+        lat: deviceCoords.lat,
+        lng: deviceCoords.lng,
+        label: resolvedLocationLabel,
+      };
     // Default to Pensacola downtown
     return { lat: 30.4213, lng: -87.2169, label: "Pensacola" };
-  }, [deviceCoords, locationName, isPensacolaScoutPreview]);
+  }, [deviceCoords, resolvedLocationLabel, isPensacolaScoutPreview]);
 
   /* Global nav suppression removed - we want the real nav visible at the bottom */
 
@@ -340,8 +367,25 @@ export default function ScoutPrototype() {
   });
 
   /* ─── derived counts for tiles ─── */
-  const trucks = trucksRaw.slice(0, 20);
-  const restaurants = restaurantsRaw.slice(0, 20);
+  const filterByResolvedLocation = useCallback(
+    <T extends { latitude?: number | null; longitude?: number | null; lat?: number | null; lng?: number | null; distanceMiles?: number | null }>(
+      items: T[],
+    ) => {
+      return items.filter((item) => {
+        const lat = item.latitude ?? item.lat;
+        const lng = item.longitude ?? item.lng;
+        if (lat == null || lng == null) return true;
+        if (typeof item.distanceMiles === "number" && item.distanceMiles > 40)
+          return false;
+        const d = distanceMilesBetween(location.lat, location.lng, lat, lng);
+        return d <= 40;
+      });
+    },
+    [location.lat, location.lng],
+  );
+
+  const trucks = filterByResolvedLocation(trucksRaw).slice(0, 20);
+  const restaurants = filterByResolvedLocation(restaurantsRaw).slice(0, 20);
   const deals = dealsRaw.slice(0, 10);
   const events = eventsRaw.slice(0, 10);
 
@@ -604,7 +648,7 @@ export default function ScoutPrototype() {
         {/* Location label */}
         <div className="absolute bottom-3 left-3 z-[400]">
           <div className="bg-[#0d0d0d]/80 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 text-[10px] font-black uppercase tracking-widest text-white/70">
-            {location.label}
+            {resolvedLocationLabel}
           </div>
         </div>
       </div>
