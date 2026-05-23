@@ -345,7 +345,7 @@ const ScoutPrototype: React.FC = () => {
           <Sparkles size={17} className="text-orange-500 shrink-0" />
           <input
             type="text"
-            placeholder="Ask Scout... tacos near me, live music, food trucks"
+            placeholder="Scout tacos near me, live music, food trucks..."
             className="bg-transparent border-none outline-none text-[11px] font-medium text-white/80 placeholder:text-white/30 flex-1"
           />
           <Filter size={17} className="text-orange-500 shrink-0" />
