@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   Bookmark, Bell, Compass, Search, Heart, User,
   Navigation2, MapPin, Truck, Utensils, DollarSign,
-  Clock, Star, Award, Flame, CalendarDays, Tag,
+  Clock, Star, Award, Flame, CalendarDays, Tag, UtensilsCrossed,
 } from "lucide-react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -628,7 +628,7 @@ export default function ScoutPrototype() {
       <header className="flex items-center justify-between px-4 py-3 bg-[#0d0d0d] border-b border-white/5 shrink-0 z-30">
         <div className="flex items-center">
           <div className="h-8 w-8 rounded-full bg-[#ff5c00] flex items-center justify-center shadow-[0_0_0_1px_rgba(255,255,255,0.08)]">
-            <Utensils size={14} className="text-white" />
+            <UtensilsCrossed size={14} className="text-white" />
           </div>
         </div>
         <div className="flex items-center gap-3">
