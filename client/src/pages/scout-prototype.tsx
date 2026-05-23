@@ -602,11 +602,13 @@ export default function ScoutPrototype() {
 
       {/* ── Header ── */}
       <header className="flex items-center justify-between px-4 py-3 bg-[#0d0d0d] border-b border-white/5 shrink-0 z-30">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 bg-orange-500 rounded-xl flex items-center justify-center shrink-0">
-            <Utensils size={16} className="text-white" />
-          </div>
-          <span className="text-base font-black tracking-tight">MealScout</span>
+        <div className="flex items-center">
+          <img
+            src="/brand/logo-mark-512.png"
+            alt="MealScout"
+            className="h-8 w-8 rounded-lg object-cover"
+            loading="eager"
+          />
         </div>
         <div className="flex items-center gap-3">
           <Link href="/alerts" className="relative">
