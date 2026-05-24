@@ -101,6 +101,109 @@ const countBy = <T extends string>(values: T[]) =>
   );
 
 export function registerPublicDiscoveryRoutes(app: Express) {
+  app.get("/api/public/resolve/:entity/:slug", async (req, res) => {
+    try {
+      const entity = String(req.params.entity || "").toLowerCase().trim();
+      const slugOrId = String(req.params.slug || "").trim();
+      if (!entity || !slugOrId) {
+        return res.status(400).json({ exists: false, reason: "invalid_request" });
+      }
+
+      const extractId = (value: string) => {
+        const marker = value.lastIndexOf("--");
+        if (marker >= 0) return value.slice(marker + 2);
+        const uuid = value.match(
+          /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i,
+        );
+        return uuid?.[0] || value;
+      };
+      const idHint = extractId(slugOrId);
+      const safeBase = resolvePublicBaseUrl();
+
+      if (["restaurant", "truck", "bar"].includes(entity)) {
+        let row: any = await storage.getRestaurant(idHint);
+        if (!row || !row.isActive) {
+          const allRows = (await storage.getAllRestaurants()).filter(
+            (candidate: any) => Boolean(candidate?.isActive),
+          );
+          const slugKey = toSlug(slugOrId.replace(/--[0-9a-f-]{36}$/i, ""));
+          row = allRows.find((candidate: any) => toSlug(candidate?.name) === slugKey);
+        }
+        if (!row) {
+          return res.status(404).json({ exists: false, reason: "not_found" });
+        }
+
+        const rowSlug = toSlug(row.name) || String(row.id);
+        const routeEntity =
+          entity === "truck"
+            ? "truck"
+            : entity === "bar"
+              ? "bar"
+              : row.isFoodTruck || row.businessType === "food_truck"
+                ? "truck"
+                : row.businessType === "bar"
+                  ? "bar"
+                  : "restaurant";
+        const canonicalPath = `/p/${routeEntity}/${row.id}/${rowSlug}`;
+        return res.json({
+          exists: true,
+          entityType: routeEntity,
+          id: String(row.id),
+          slug: rowSlug,
+          canonicalUrl: `${safeBase}${canonicalPath}`,
+        });
+      }
+
+      if (["host", "location"].includes(entity)) {
+        let row: any = await storage.getHost(idHint);
+        if (!row) {
+          const hostRows = await db.select().from(hosts);
+          const slugKey = toSlug(slugOrId.replace(/--[0-9a-f-]{36}$/i, ""));
+          row = hostRows.find(
+            (candidate: any) => toSlug(candidate?.businessName) === slugKey,
+          );
+        }
+        if (!row) {
+          return res.status(404).json({ exists: false, reason: "not_found" });
+        }
+        const rowSlug = toSlug(row.businessName) || String(row.id);
+        const canonicalPath = `/p/location/${row.id}/${rowSlug}`;
+        return res.json({
+          exists: true,
+          entityType: "location",
+          id: String(row.id),
+          slug: rowSlug,
+          canonicalUrl: `${safeBase}${canonicalPath}`,
+        });
+      }
+
+      if (entity === "supplier") {
+        const [row] = await db
+          .select()
+          .from(suppliers)
+          .where(and(eq(suppliers.id, idHint), eq(suppliers.isActive, true)))
+          .limit(1);
+        if (!row) {
+          return res.status(404).json({ exists: false, reason: "not_found" });
+        }
+        const rowSlug = toSlug(row.businessName) || String(row.id);
+        const canonicalPath = `/p/supplier/${row.id}/${rowSlug}`;
+        return res.json({
+          exists: true,
+          entityType: "supplier",
+          id: String(row.id),
+          slug: rowSlug,
+          canonicalUrl: `${safeBase}${canonicalPath}`,
+        });
+      }
+
+      return res.status(400).json({ exists: false, reason: "unsupported_entity" });
+    } catch (error) {
+      console.error("Error resolving public profile slug:", error);
+      res.status(500).json({ exists: false, reason: "server_error" });
+    }
+  });
+
   app.get("/api/public/canonical/:entity/:id", async (req, res) => {
     try {
       const entity = String(req.params.entity || "").toLowerCase().trim();
@@ -416,6 +519,106 @@ export function registerPublicDiscoveryRoutes(app: Express) {
       }
 
       const baseUrl = resolvePublicBaseUrl();
+
+      if (entity === "truck") {
+        const row = await storage.getRestaurant(id);
+        if (
+          !row ||
+          !row.isActive ||
+          !(row.isFoodTruck || row.businessType === "food_truck")
+        ) {
+          return res.status(404).json({ message: "Profile not found" });
+        }
+        const ownerUser = await storage.getUser(row.ownerId);
+        const profileSettings = (ownerUser?.publicProfileSettings || {}) as any;
+        const showAddress = profileSettings.showAddress !== false;
+        const showContact = profileSettings.showContact !== false;
+        const mapped = toPublicTruckProfile({
+          row,
+          baseUrl,
+          showAddress,
+          showContact,
+        });
+        return res.json({
+          ...mapped,
+          entity: "restaurant",
+          title: mapped.displayName,
+          subtitle: mapped.serviceType || "Food Truck",
+          address: mapped.addressPublicLabel,
+          phone: mapped.phonePublic,
+          imageUrl: mapped.coverImageUrl || mapped.logoUrl,
+          profilePath: `/p/truck/${mapped.id}/${mapped.slug}`,
+          canonicalUrl: mapped.seo.canonicalUrl,
+          websiteUrl: mapped.websiteUrl,
+          profileSettings,
+          social: mapped.socialLinks,
+        });
+      }
+
+      if (entity === "bar") {
+        const row = await storage.getRestaurant(id);
+        if (!row || !row.isActive || row.businessType !== "bar") {
+          return res.status(404).json({ message: "Profile not found" });
+        }
+        const ownerUser = await storage.getUser(row.ownerId);
+        const profileSettings = (ownerUser?.publicProfileSettings || {}) as any;
+        const showAddress = profileSettings.showAddress !== false;
+        const showContact = profileSettings.showContact !== false;
+        const mapped = toPublicBarProfile({
+          row,
+          baseUrl,
+          showAddress,
+          showContact,
+        });
+        return res.json({
+          ...mapped,
+          entity: "restaurant",
+          title: mapped.displayName,
+          subtitle: mapped.serviceType || "Bar",
+          address: mapped.addressPublicLabel,
+          phone: mapped.phonePublic,
+          imageUrl: mapped.coverImageUrl || mapped.logoUrl,
+          profilePath: `/p/bar/${mapped.id}/${mapped.slug}`,
+          canonicalUrl: mapped.seo.canonicalUrl,
+          websiteUrl: mapped.websiteUrl,
+          profileSettings,
+          social: mapped.socialLinks,
+        });
+      }
+
+      if (entity === "location") {
+        const row = await storage.getHost(id);
+        if (!row) {
+          return res.status(404).json({ message: "Profile not found" });
+        }
+        const ownerUser = await storage.getUser(row.userId);
+        const profileSettings = (ownerUser?.publicProfileSettings || {}) as any;
+        const showAddress = profileSettings.showAddress !== false;
+        const showContact = profileSettings.showContact !== false;
+        const mapped = toPublicLocationProfile({
+          row,
+          baseUrl,
+          showAddress,
+          showContact,
+        });
+        return res.json({
+          ...mapped,
+          entity: "host",
+          title: mapped.displayName,
+          subtitle:
+            row.locationType === "event_coordinator"
+              ? "Event Coordinator"
+              : "Host Location",
+          address: mapped.addressPublicLabel,
+          phone: showContact ? String(row.contactPhone || "").trim() || null : null,
+          imageUrl: mapped.spotImageUrl || mapped.coverImageUrl || mapped.logoUrl,
+          profilePath: `/p/location/${mapped.id}/${mapped.slug}`,
+          canonicalUrl: mapped.seo.canonicalUrl,
+          websiteUrl: mapped.websiteUrl,
+          profileSettings,
+          social: mapped.socialLinks,
+        });
+      }
 
       if (entity === "restaurant") {
         const row = await storage.getRestaurant(id);

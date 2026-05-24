@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "wouter";
 import type { ReactNode } from "react";
+import type { PublicCta } from "@shared/publicProfiles";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,10 +18,16 @@ type PublicProfile = {
   city?: string | null;
   state?: string | null;
   phone?: string | null;
-  websiteUrl?: string | null;
   imageUrl?: string | null;
   canonicalUrl: string;
   profilePath: string;
+  cta?: PublicCta[];
+  seo?: {
+    canonicalUrl?: string | null;
+    seoTitle?: string | null;
+    seoDescription?: string | null;
+    ogImageUrl?: string | null;
+  };
   profileSettings?: {
     templatePreset?: "classic" | "story" | "bold" | "minimal";
     theme?: "sunset" | "slate" | "forest" | "amber";
@@ -29,11 +36,8 @@ type PublicProfile = {
     heroLayout?: "center" | "left" | "split";
     heroTitle?: string;
     heroSubtitle?: string;
-    ctaLabel?: string;
-    ctaUrl?: string;
     about?: string;
     highlights?: string[];
-    featuredLinks?: Array<{ label: string; url: string }>;
     galleryUrls?: string[];
     sectionOrder?: Array<
       "about" | "highlights" | "links" | "gallery" | "contact" | "location" | "metrics"
@@ -110,13 +114,17 @@ export default function PublicProfilePage() {
   const heroSubtitle = profile.heroSubtitle || data.subtitle || data.description || "";
   const about = profile.about || data.description || "";
   const highlights = Array.isArray(profile.highlights) ? profile.highlights : [];
-  const featuredLinks = Array.isArray(profile.featuredLinks) ? profile.featuredLinks : [];
   const galleryUrls = Array.isArray(profile.galleryUrls) ? profile.galleryUrls : [];
-  const ctaLabel = profile.ctaLabel || (data.websiteUrl ? "Visit website" : "");
-  const ctaUrl = profile.ctaUrl || data.websiteUrl || "";
+  const safeCtas = (Array.isArray(data.cta) ? data.cta : []).filter(
+    (cta) => cta && cta.safe,
+  );
+  const heroCta = safeCtas[0] || null;
 
-  const title = `${data.title} | ${labelByEntity[data.entity] || "Public Profile"} | MealScout`;
+  const title =
+    data.seo?.seoTitle ||
+    `${data.title} | ${labelByEntity[data.entity] || "Public Profile"} | MealScout`;
   const description =
+    data.seo?.seoDescription ||
     data.description ||
     `${data.title} on MealScout. View profile details, location info, and business links.`;
 
@@ -130,7 +138,7 @@ export default function PublicProfilePage() {
           : "Restaurant",
     name: data.title,
     description,
-    url: data.canonicalUrl,
+    url: data.seo?.canonicalUrl || data.canonicalUrl,
     telephone: data.phone || undefined,
     image: data.imageUrl || undefined,
     address: locationLine
@@ -215,27 +223,7 @@ export default function PublicProfilePage() {
       </div>
     ) : null,
   );
-  sections.set(
-    "links",
-    featuredLinks.length > 0 ? (
-      <div>
-        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Links</h2>
-        <div className="grid gap-2">
-          {featuredLinks.map((link, idx) => (
-            <a
-              key={`${link.url}-${idx}`}
-              href={link.url}
-              target="_blank"
-              rel="noreferrer noopener"
-              className="rounded-md border px-3 py-2 text-sm hover:bg-muted"
-            >
-              {link.label}
-            </a>
-          ))}
-        </div>
-      </div>
-    ) : null,
-  );
+  sections.set("links", null);
   sections.set(
     "gallery",
     galleryUrls.length > 0 ? (
@@ -268,9 +256,9 @@ export default function PublicProfilePage() {
       <SEOHead
         title={title}
         description={description}
-        canonicalUrl={data.canonicalUrl}
+        canonicalUrl={data.seo?.canonicalUrl || data.canonicalUrl}
         ogType="profile"
-        ogImage={data.imageUrl || "/og-default.jpg"}
+        ogImage={data.seo?.ogImageUrl || data.imageUrl || "/og-default.jpg"}
         schemaData={schemaData}
       />
 
@@ -287,15 +275,15 @@ export default function PublicProfilePage() {
                 <p className="mt-2 max-w-2xl text-sm text-white/85">{heroSubtitle}</p>
               ) : null}
             </div>
-            {ctaLabel && ctaUrl ? (
+            {heroCta?.label && heroCta?.href ? (
               <div className={resolvedHeroLayout === "split" ? "md:justify-self-end" : "mt-5"}>
                 <a
-                  href={ctaUrl}
-                  target="_blank"
-                  rel="noreferrer noopener"
+                  href={heroCta.href}
+                  target={heroCta.type === "internal" || heroCta.type === "phone" ? undefined : "_blank"}
+                  rel={heroCta.type === "internal" || heroCta.type === "phone" ? undefined : "noreferrer noopener"}
                   className="inline-flex items-center rounded-md border border-white/40 bg-white/10 px-4 py-2 text-sm font-medium backdrop-blur hover:bg-white/20"
                 >
-                  {ctaLabel}
+                  {heroCta.label}
                 </a>
               </div>
             ) : null}
@@ -306,17 +294,28 @@ export default function PublicProfilePage() {
           <CardTitle className="text-2xl">{data.title}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
-          {data.websiteUrl ? (
-            <div className="flex items-center gap-2 text-sm">
-              <Globe className="h-4 w-4 text-muted-foreground" />
-              <a
-                href={data.websiteUrl}
-                target="_blank"
-                rel="noreferrer noopener"
-                className="text-primary underline"
-              >
-                {data.websiteUrl}
-              </a>
+          {safeCtas.length > 1 ? (
+            <div className="grid gap-2">
+              {safeCtas.slice(1).map((cta, idx) => (
+                <a
+                  key={`${cta.href}-${idx}`}
+                  href={cta.href}
+                  target={
+                    cta.type === "internal" || cta.type === "phone"
+                      ? undefined
+                      : "_blank"
+                  }
+                  rel={
+                    cta.type === "internal" || cta.type === "phone"
+                      ? undefined
+                      : "noreferrer noopener"
+                  }
+                  className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-muted"
+                >
+                  <Globe className="h-4 w-4 text-muted-foreground" />
+                  <span>{cta.label}</span>
+                </a>
+              ))}
             </div>
           ) : null}
 
