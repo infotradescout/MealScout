@@ -267,29 +267,89 @@ function LocationTruckOptionsSection({
     ? tonightData!.trucks!
     : [];
 
-  const cards = useMemo(() => {
-    const byId = new Map<
-      string,
-      {
-        truck: LocationDiscoveryTruck;
-        status: "here_now" | "tonight";
-      }
-    >();
-
-    for (const truck of nowTrucks) {
-      byId.set(String(truck.id), { truck, status: "here_now" });
-    }
-    for (const truck of tonightTrucks) {
-      const id = String(truck.id);
-      if (!byId.has(id)) {
-        byId.set(id, { truck, status: "tonight" });
-      }
-    }
-    return Array.from(byId.values());
+  const tonightOnly = useMemo(() => {
+    const nowIds = new Set(nowTrucks.map((truck) => String(truck.id)));
+    return tonightTrucks.filter((truck) => !nowIds.has(String(truck.id)));
   }, [nowTrucks, tonightTrucks]);
 
-  const hasCards = cards.length > 0;
+  const hasCards = nowTrucks.length > 0 || tonightOnly.length > 0;
   const loading = nowLoading || tonightLoading;
+  const featuredCurrent = nowTrucks.length > 0 ? nowTrucks[0] : null;
+  const remainingCurrent = nowTrucks.length > 1 ? nowTrucks.slice(1) : [];
+
+  const renderTruckCard = (
+    truck: LocationDiscoveryTruck,
+    status: "here_now" | "tonight",
+    key: string,
+    featured = false,
+  ) => {
+    const image = truck.coverImageUrl || truck.logoUrl || truck.imageUrl || null;
+    const scheduleLabel = formatScheduleLabel(truck);
+    return (
+      <div
+        key={key}
+        className={
+          featured
+            ? "rounded-xl border border-orange-400/35 bg-[linear-gradient(140deg,#20130d_0%,#17110d_55%,#120f0d_100%)] p-3"
+            : "rounded-xl border border-white/10 bg-black/20 p-3"
+        }
+      >
+        <div className="flex gap-3">
+          <div className="h-16 w-16 flex-none overflow-hidden rounded-lg bg-[#1a1714]">
+            {image ? (
+              <img
+                src={image}
+                alt={truck.name}
+                className="h-full w-full object-cover"
+                loading="lazy"
+              />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center text-xs font-semibold text-white/75">
+                {String(truck.name || "Truck").slice(0, 2).toUpperCase()}
+              </div>
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-semibold text-white">{truck.name}</p>
+            {truck.cuisineType ? (
+              <p className="truncate text-xs text-white/70">{truck.cuisineType}</p>
+            ) : null}
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <Badge variant="secondary">
+                {status === "here_now" ? "Here now" : "Tonight"}
+              </Badge>
+              {scheduleLabel ? (
+                <Badge variant="outline" className="border-white/15 text-white/80">
+                  {scheduleLabel}
+                </Badge>
+              ) : null}
+            </div>
+          </div>
+        </div>
+        <div className="mt-3 flex items-center gap-2">
+          {truck.truckPath ? (
+            <a
+              href={truck.truckPath}
+              className="inline-flex items-center rounded-md bg-orange-500 px-3 py-1.5 text-xs font-semibold text-black hover:bg-orange-400"
+            >
+              View
+            </a>
+          ) : null}
+          {locationLine(profile) ? (
+            <a
+              href={`https://maps.google.com/?q=${encodeURIComponent(String(locationLine(profile) || ""))}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 rounded-md border border-white/20 px-3 py-1.5 text-xs text-white/90 hover:bg-white/10"
+            >
+              <Route className="h-3.5 w-3.5" />
+              Route
+            </a>
+          ) : null}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <Card className="border-white/10 bg-[#0f0d0b]">
@@ -304,72 +364,39 @@ function LocationTruckOptionsSection({
         ) : null}
 
         {!loading && hasCards ? (
-          <div className="space-y-3">
-            {cards.map(({ truck, status }) => {
-              const image =
-                truck.coverImageUrl || truck.logoUrl || truck.imageUrl || null;
-              const scheduleLabel = formatScheduleLabel(truck);
-              return (
-                <div
-                  key={`${status}:${truck.id}`}
-                  className="flex gap-3 rounded-xl border border-white/10 bg-black/25 p-3"
-                >
-                  <div className="h-16 w-16 flex-none overflow-hidden rounded-lg bg-[#1a1714]">
-                    {image ? (
-                      <img
-                        src={image}
-                        alt={truck.name}
-                        className="h-full w-full object-cover"
-                        loading="lazy"
-                      />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center text-xs font-semibold text-white/75">
-                        {String(truck.name || "Truck").slice(0, 2).toUpperCase()}
-                      </div>
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-white">
-                      {truck.name}
-                    </p>
-                    {truck.cuisineType ? (
-                      <p className="truncate text-xs text-white/70">{truck.cuisineType}</p>
-                    ) : null}
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <Badge variant="secondary">
-                        {status === "here_now" ? "Here now" : "Tonight"}
-                      </Badge>
-                      {scheduleLabel ? (
-                        <Badge variant="outline" className="border-white/15 text-white/80">
-                          {scheduleLabel}
-                        </Badge>
-                      ) : null}
-                    </div>
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    {truck.truckPath ? (
-                      <a
-                        href={truck.truckPath}
-                        className="inline-flex items-center rounded-md bg-orange-500 px-2.5 py-1.5 text-xs font-semibold text-black hover:bg-orange-400"
-                      >
-                        View
-                      </a>
-                    ) : null}
-                    {locationLine(profile) ? (
-                      <a
-                        href={`https://maps.google.com/?q=${encodeURIComponent(String(locationLine(profile) || ""))}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 rounded-md border border-white/20 px-2.5 py-1.5 text-xs text-white/90 hover:bg-white/10"
-                      >
-                        <Route className="h-3.5 w-3.5" />
-                        Route
-                      </a>
-                    ) : null}
-                  </div>
+          <div className="space-y-4">
+            {featuredCurrent ? (
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-orange-200/90">
+                  Happening now
+                </p>
+                {renderTruckCard(featuredCurrent, "here_now", `featured:${featuredCurrent.id}`, true)}
+              </div>
+            ) : null}
+            {remainingCurrent.length > 0 ? (
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-white/65">
+                  Here now
+                </p>
+                <div className="space-y-2">
+                  {remainingCurrent.map((truck) =>
+                    renderTruckCard(truck, "here_now", `now:${truck.id}`),
+                  )}
                 </div>
-              );
-            })}
+              </div>
+            ) : null}
+            {tonightOnly.length > 0 ? (
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-white/65">
+                  Tonight
+                </p>
+                <div className="space-y-2">
+                  {tonightOnly.map((truck) =>
+                    renderTruckCard(truck, "tonight", `tonight:${truck.id}`),
+                  )}
+                </div>
+              </div>
+            ) : null}
           </div>
         ) : null}
 
@@ -398,8 +425,19 @@ function LocationMapSection({ profile }: { profile: PublicLocationProfile }) {
       </CardHeader>
       <CardContent className="space-y-3">
         {hasCoords ? (
-          <div className="rounded-lg border border-white/10 bg-black/20 p-3 text-sm text-white/75">
-            Coordinates available for this location.
+          <div className="rounded-xl border border-white/10 bg-gradient-to-br from-[#17120f] to-[#0f0d0b] p-3">
+            <div className="mb-3 flex items-center justify-between">
+              <p className="text-sm font-medium text-white">Map preview</p>
+              <Badge variant="outline" className="border-white/20 text-white/70">
+                {profile.latitude?.toFixed(4)}, {profile.longitude?.toFixed(4)}
+              </Badge>
+            </div>
+            <div className="rounded-lg border border-white/10 bg-black/20 p-3">
+              <div className="mb-2 h-16 rounded-md bg-[linear-gradient(135deg,#1b1713_0%,#13100d_55%,#100f0d_100%)]" />
+              <p className="text-xs text-white/70">
+                Nearby streets and food activity around this location.
+              </p>
+            </div>
           </div>
         ) : (
           <div className="rounded-lg border border-white/10 bg-black/20 p-3 text-sm text-white/75">
@@ -539,17 +577,17 @@ function GalleryStrip({ profile }: { profile: PublicRestaurantProfile }) {
   return (
     <Card className="border-white/10 bg-[#0f0d0b]">
       <CardHeader>
-        <CardTitle className="text-xl text-white">Gallery</CardTitle>
+        <CardTitle className="text-base font-semibold text-white/90">Gallery</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="flex gap-3 overflow-x-auto pb-1">
+        <div className="flex gap-2.5 overflow-x-auto pb-1">
           {images.map((image, idx) => (
             <img
               key={`${image.url}-${idx}`}
               src={image.url}
               alt={`${profile.displayName} ${idx + 1}`}
               loading="lazy"
-              className="h-28 w-40 flex-none rounded-lg object-cover"
+              className="h-24 w-36 flex-none rounded-md object-cover"
             />
           ))}
         </div>
