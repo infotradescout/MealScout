@@ -1,67 +1,399 @@
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "wouter";
-import type { ReactNode } from "react";
-import type { PublicCta } from "@shared/publicProfiles";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import type {
+  PublicCta,
+  PublicLocationProfile,
+  PublicRestaurantProfile,
+  PublicSupplierProfile,
+} from "@shared/publicProfiles";
+import { SEOHead } from "@/components/seo-head";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { MapPin, Phone, Globe, Store } from "lucide-react";
-import { SEOHead } from "@/components/seo-head";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Clock3,
+  ExternalLink,
+  MapPin,
+  MenuSquare,
+  Phone,
+  Star,
+  Truck,
+} from "lucide-react";
 
-type PublicProfile = {
-  entity: "restaurant" | "host" | "supplier";
-  id: string;
-  title: string;
-  subtitle?: string | null;
-  description?: string | null;
-  address?: string | null;
-  city?: string | null;
-  state?: string | null;
-  phone?: string | null;
-  imageUrl?: string | null;
-  canonicalUrl: string;
-  profilePath: string;
-  cta?: PublicCta[];
-  seo?: {
-    canonicalUrl?: string | null;
-    seoTitle?: string | null;
-    seoDescription?: string | null;
-    ogImageUrl?: string | null;
-  };
-  profileSettings?: {
-    templatePreset?: "classic" | "story" | "bold" | "minimal";
-    theme?: "sunset" | "slate" | "forest" | "amber";
-    accentColor?: string;
-    fontFamily?: "system" | "serif" | "display" | "mono";
-    heroLayout?: "center" | "left" | "split";
-    heroTitle?: string;
-    heroSubtitle?: string;
-    about?: string;
-    highlights?: string[];
-    galleryUrls?: string[];
-    sectionOrder?: Array<
-      "about" | "highlights" | "links" | "gallery" | "contact" | "location" | "metrics"
-    >;
-    showAddress?: boolean;
-    showContact?: boolean;
-    showHours?: boolean;
-    hideProfileBadge?: boolean;
-  };
-  metrics?: {
-    activeProductCount?: number;
-  };
-  social?: {
-    instagramUrl?: string | null;
-    facebookPageUrl?: string | null;
-    xUrl?: string | null;
-  };
-};
+type PublicProfilePayload =
+  | (PublicRestaurantProfile & {
+      entity: "restaurant";
+      title: string;
+      subtitle: string | null;
+      imageUrl: string | null;
+      profilePath: string;
+      canonicalUrl: string;
+      phone: string | null;
+    })
+  | (PublicLocationProfile & {
+      entity: "host";
+      title: string;
+      subtitle: string | null;
+      imageUrl: string | null;
+      profilePath: string;
+      canonicalUrl: string;
+      phone: string | null;
+    })
+  | (PublicSupplierProfile & {
+      entity: "supplier";
+      title: string;
+      subtitle: string | null;
+      imageUrl: string | null;
+      profilePath: string;
+      canonicalUrl: string;
+      phone: string | null;
+      metrics?: {
+        activeProductCount?: number;
+      };
+    });
 
-const labelByEntity: Record<string, string> = {
-  restaurant: "Restaurant Profile",
-  host: "Host Profile",
-  supplier: "Supplier Profile",
-};
+const DEFAULT_IMAGE = "/og-default.jpg";
+
+const asSafeCtas = (ctas: PublicCta[] | undefined) =>
+  (Array.isArray(ctas) ? ctas : []).filter((cta) => Boolean(cta?.safe && cta?.href));
+
+const ctaTarget = (cta: PublicCta) =>
+  cta.type === "internal" || cta.type === "phone" ? undefined : "_blank";
+
+const ctaRel = (cta: PublicCta) =>
+  cta.type === "internal" || cta.type === "phone" ? undefined : "noopener noreferrer";
+
+const pickPrimaryCta = (ctas: PublicCta[]) =>
+  ctas.find((cta) => cta.type === "map") ||
+  ctas.find((cta) => cta.type === "internal") ||
+  ctas[0] ||
+  null;
+
+const locationLine = (profile: { addressPublicLabel?: string | null; city?: string | null; state?: string | null }) =>
+  profile.addressPublicLabel ||
+  [profile.city, profile.state].filter(Boolean).join(", ") ||
+  null;
+
+const phoneLine = (profile: PublicProfilePayload) =>
+  profile.entity === "supplier"
+    ? profile.phonePublic
+    : profile.entity === "restaurant"
+      ? profile.phonePublic
+      : profile.phone || null;
+
+const renderCtaButton = (cta: PublicCta, variant: "default" | "outline", key: string) => (
+  <a
+    key={key}
+    href={cta.href}
+    target={ctaTarget(cta)}
+    rel={ctaRel(cta)}
+    className={
+      variant === "default"
+        ? "inline-flex items-center rounded-md bg-orange-500 px-4 py-2 text-sm font-semibold text-black hover:bg-orange-400"
+        : "inline-flex items-center rounded-md border border-white/20 px-4 py-2 text-sm font-semibold text-white hover:bg-white/10"
+    }
+  >
+    {cta.label}
+  </a>
+);
+
+function HeroBlock({ profile, safeCtas }: { profile: PublicProfilePayload; safeCtas: PublicCta[] }) {
+  const primary = pickPrimaryCta(safeCtas);
+  const secondary = safeCtas.find((cta) => cta !== primary) || null;
+  const heroImage =
+    profile.entity === "host"
+      ? profile.spotImageUrl || profile.coverImageUrl || profile.logoUrl || profile.imageUrl
+      : profile.entity === "restaurant"
+        ? profile.coverImageUrl || profile.logoUrl || profile.imageUrl
+        : profile.logoUrl || profile.imageUrl;
+
+  return (
+    <section className="overflow-hidden rounded-2xl border border-white/10 bg-[#0f0d0b]">
+      <div
+        className="h-44 w-full bg-cover bg-center md:h-56"
+        style={{
+          backgroundImage: `linear-gradient(180deg, rgba(0,0,0,.2), rgba(0,0,0,.8)), url('${heroImage || DEFAULT_IMAGE}')`,
+        }}
+      />
+      <div className="space-y-3 p-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant="outline" className="border-orange-400/50 text-orange-200">
+            {profile.profileType === "location"
+              ? "Location"
+              : profile.profileType === "truck"
+                ? "Food Truck"
+                : profile.profileType === "bar"
+                  ? "Bar"
+                  : profile.profileType === "supplier"
+                    ? "Supplier"
+                    : "Restaurant"}
+          </Badge>
+          {profile.entity === "restaurant" && profile.openStatus ? (
+            <Badge variant="secondary">{profile.openStatus}</Badge>
+          ) : null}
+        </div>
+        <h1 className="text-3xl font-bold tracking-tight text-white">{profile.displayName}</h1>
+        <p className="text-sm text-white/80">
+          {profile.entity === "host"
+            ? "Food trucks, pop-ups, and local eats here"
+            : profile.entity === "restaurant"
+              ? "Open near you, menu updates, and local favorites."
+              : "Local supply and support for nearby food businesses."}
+        </p>
+        <div className="flex flex-wrap items-center gap-3 text-sm text-white/75">
+          {locationLine(profile) ? (
+            <span className="inline-flex items-center gap-1">
+              <MapPin className="h-4 w-4" />
+              {locationLine(profile)}
+            </span>
+          ) : null}
+          {phoneLine(profile) ? (
+            <span className="inline-flex items-center gap-1">
+              <Phone className="h-4 w-4" />
+              {phoneLine(profile)}
+            </span>
+          ) : null}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {primary ? renderCtaButton(primary, "default", "primary") : null}
+          {secondary ? renderCtaButton(secondary, "outline", "secondary") : null}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function LocationNowSection({ profile }: { profile: PublicLocationProfile }) {
+  const now = Number(profile.foodTrucksNow || 0);
+  const tonight = Number(profile.foodTrucksTonight || 0);
+  const upcoming = Number(profile.upcomingFoodTruckSlots || 0);
+  const hasAny = now > 0 || tonight > 0 || upcoming > 0;
+
+  return (
+    <Card className="border-white/10 bg-[#0f0d0b]">
+      <CardHeader>
+        <CardTitle className="text-xl text-white">Food here now</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {hasAny ? (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="rounded-lg border border-white/10 bg-black/20 p-3">
+              <p className="text-xs uppercase tracking-wide text-white/60">Trucks here now</p>
+              <p className="mt-1 text-2xl font-semibold text-white">{now}</p>
+            </div>
+            <div className="rounded-lg border border-white/10 bg-black/20 p-3">
+              <p className="text-xs uppercase tracking-wide text-white/60">Trucks tonight</p>
+              <p className="mt-1 text-2xl font-semibold text-white">{tonight}</p>
+            </div>
+            <div className="rounded-lg border border-white/10 bg-black/20 p-3">
+              <p className="text-xs uppercase tracking-wide text-white/60">Upcoming</p>
+              <p className="mt-1 text-2xl font-semibold text-white">{upcoming}</p>
+            </div>
+          </div>
+        ) : (
+          <div className="rounded-lg border border-white/10 bg-black/20 p-4 text-sm text-white/75">
+            No trucks listed right now. Check back soon.
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function LocationMapSection({ profile }: { profile: PublicLocationProfile }) {
+  const hasCoords =
+    typeof profile.latitude === "number" && typeof profile.longitude === "number";
+  const mapHref = hasCoords
+    ? `https://maps.google.com/?q=${profile.latitude},${profile.longitude}`
+    : null;
+
+  return (
+    <Card className="border-white/10 bg-[#0f0d0b]">
+      <CardHeader>
+        <CardTitle className="text-xl text-white">Map and directions</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {hasCoords ? (
+          <div className="rounded-lg border border-white/10 bg-black/20 p-3 text-sm text-white/75">
+            Coordinates available for this location.
+          </div>
+        ) : (
+          <div className="rounded-lg border border-white/10 bg-black/20 p-3 text-sm text-white/75">
+            Map coordinates are not available yet.
+          </div>
+        )}
+        {locationLine(profile) ? <p className="text-sm text-white/80">{locationLine(profile)}</p> : null}
+        {mapHref ? (
+          <a
+            href={mapHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-sm font-medium text-orange-300 hover:text-orange-200"
+          >
+            Get directions <ExternalLink className="h-3.5 w-3.5" />
+          </a>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+function LocationAmenitiesSection({ profile }: { profile: PublicLocationProfile }) {
+  const amenities = Array.isArray(profile.amenities) ? profile.amenities : [];
+  const notes = profile.publicRules || profile.publicParkingSummary;
+  if (amenities.length === 0 && !notes) return null;
+  return (
+    <Card className="border-white/10 bg-[#0f0d0b]">
+      <CardHeader>
+        <CardTitle className="text-xl text-white">Amenities and notes</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {amenities.length > 0 ? (
+          <div className="flex flex-wrap gap-2">
+            {amenities.map((item) => (
+              <Badge key={item} variant="outline" className="border-white/20 text-white/80">
+                {item}
+              </Badge>
+            ))}
+          </div>
+        ) : null}
+        {notes ? <p className="text-sm text-white/75">{notes}</p> : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+function RestaurantSignals({ profile }: { profile: PublicRestaurantProfile }) {
+  const signals: string[] = [];
+  if (profile.openStatus) signals.push(profile.openStatus);
+  if (profile.deals.totalActive > 0) signals.push("Deal today");
+  if (profile.menuUrl || profile.featuredMenuItems.length > 0) signals.push("Menu available");
+  if (profile.profileType === "truck" && profile.truckSchedule?.nextWindowLabel) {
+    signals.push("Truck schedule available");
+  }
+  if (profile.recommendations.total > 0) signals.push("Local favorite");
+
+  return (
+    <Card className="border-white/10 bg-[#0f0d0b]">
+      <CardHeader>
+        <CardTitle className="text-xl text-white">Why go now</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {signals.length > 0 ? (
+          <div className="flex flex-wrap gap-2">
+            {signals.map((signal) => (
+              <Badge key={signal} variant="secondary">
+                {signal}
+              </Badge>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-white/75">Worth checking out nearby.</p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function RestaurantHighlights({ profile }: { profile: PublicRestaurantProfile }) {
+  return (
+    <Card className="border-white/10 bg-[#0f0d0b]">
+      <CardHeader>
+        <CardTitle className="text-xl text-white">Menu, deals, and highlights</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {profile.featuredMenuItems.length > 0 ? (
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-white/90">Featured menu items</p>
+            <div className="flex flex-wrap gap-2">
+              {profile.featuredMenuItems.map((item) => (
+                <Badge key={item} variant="outline" className="border-white/20 text-white/80">
+                  {item}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        ) : null}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="rounded-lg border border-white/10 bg-black/20 p-3">
+            <p className="text-xs uppercase tracking-wide text-white/60">Deals</p>
+            <p className="mt-1 text-2xl font-semibold text-white">{profile.deals.totalActive}</p>
+          </div>
+          <div className="rounded-lg border border-white/10 bg-black/20 p-3">
+            <p className="text-xs uppercase tracking-wide text-white/60">Recommendations</p>
+            <p className="mt-1 text-2xl font-semibold text-white">{profile.recommendations.total}</p>
+          </div>
+          <div className="rounded-lg border border-white/10 bg-black/20 p-3">
+            <p className="text-xs uppercase tracking-wide text-white/60">Reviews</p>
+            <p className="mt-1 text-2xl font-semibold text-white">{profile.reviewSummary.count}</p>
+          </div>
+        </div>
+        {profile.menuUrl ? (
+          <a
+            href={profile.menuUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-sm font-medium text-orange-300 hover:text-orange-200"
+          >
+            View menu <MenuSquare className="h-4 w-4" />
+          </a>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+function RestaurantSchedule({ profile }: { profile: PublicRestaurantProfile }) {
+  return (
+    <Card className="border-white/10 bg-[#0f0d0b]">
+      <CardHeader>
+        <CardTitle className="text-xl text-white">Hours and schedule</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-2 text-sm text-white/80">
+        {profile.hours ? (
+          <p className="inline-flex items-center gap-1">
+            <Clock3 className="h-4 w-4" />
+            {profile.hours}
+          </p>
+        ) : (
+          <p>Hours will be posted soon.</p>
+        )}
+        {profile.profileType === "truck" && profile.truckSchedule ? (
+          <p className="inline-flex items-center gap-1">
+            <Truck className="h-4 w-4" />
+            {profile.truckSchedule.nextWindowLabel || "Schedule available"}
+          </p>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+function RestaurantSocial({ profile, safeCtas }: { profile: PublicRestaurantProfile; safeCtas: PublicCta[] }) {
+  const extraCtas = safeCtas.filter((cta) => cta.type !== "map").slice(0, 4);
+  return (
+    <Card className="border-white/10 bg-[#0f0d0b]">
+      <CardHeader>
+        <CardTitle className="text-xl text-white">Reviews, socials, and contact</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="text-sm text-white/80">
+          <p className="inline-flex items-center gap-1">
+            <Star className="h-4 w-4" />
+            {profile.reviewSummary.count} reviews
+            {typeof profile.reviewSummary.rating === "number"
+              ? ` · ${profile.reviewSummary.rating.toFixed(1)} avg`
+              : ""}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {extraCtas.map((cta, idx) => renderCtaButton(cta, "outline", `${cta.href}-${idx}`))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 export default function PublicProfilePage() {
   const { profileType, profileId } = useParams<{
@@ -69,27 +401,27 @@ export default function PublicProfilePage() {
     profileId: string;
   }>();
 
-  const { data, isLoading } = useQuery<PublicProfile>({
+  const { data, isLoading } = useQuery<PublicProfilePayload>({
     queryKey: ["/api/public/profiles", profileType, profileId],
     enabled: !!profileType && !!profileId,
     queryFn: async () => {
       const res = await fetch(
         `/api/public/profiles/${encodeURIComponent(String(profileType || ""))}/${encodeURIComponent(String(profileId || ""))}`,
       );
-      if (!res.ok) {
-        throw new Error("Profile not found");
-      }
+      if (!res.ok) throw new Error("Profile not found");
       return res.json();
     },
   });
 
+  const safeCtas = useMemo(() => asSafeCtas(data?.cta), [data?.cta]);
+
   if (isLoading) {
-    return <div className="mx-auto max-w-3xl px-4 py-10">Loading profile...</div>;
+    return <div className="mx-auto max-w-4xl px-4 py-10">Loading profile...</div>;
   }
 
   if (!data) {
     return (
-      <div className="mx-auto max-w-3xl px-4 py-10">
+      <div className="mx-auto max-w-4xl px-4 py-10">
         <h1 className="text-2xl font-semibold">Profile not found</h1>
         <div className="mt-4">
           <Link href="/">
@@ -100,232 +432,69 @@ export default function PublicProfilePage() {
     );
   }
 
-  const locationLine = [data.address, data.city, data.state].filter(Boolean).join(", ");
-  const profile = data.profileSettings || {};
-  const presetDefaults =
-    profile.templatePreset === "story"
-      ? { theme: "forest", heroLayout: "split", fontFamily: "serif" }
-      : profile.templatePreset === "bold"
-        ? { theme: "amber", heroLayout: "center", fontFamily: "display" }
-        : profile.templatePreset === "minimal"
-          ? { theme: "slate", heroLayout: "left", fontFamily: "system" }
-          : { theme: "sunset", heroLayout: "left", fontFamily: "system" };
-  const heroTitle = profile.heroTitle || data.title;
-  const heroSubtitle = profile.heroSubtitle || data.subtitle || data.description || "";
-  const about = profile.about || data.description || "";
-  const highlights = Array.isArray(profile.highlights) ? profile.highlights : [];
-  const galleryUrls = Array.isArray(profile.galleryUrls) ? profile.galleryUrls : [];
-  const safeCtas = (Array.isArray(data.cta) ? data.cta : []).filter(
-    (cta) => cta && cta.safe,
-  );
-  const heroCta = safeCtas[0] || null;
-
-  const title =
-    data.seo?.seoTitle ||
-    `${data.title} | ${labelByEntity[data.entity] || "Public Profile"} | MealScout`;
+  const title = data.seo?.seoTitle || `${data.displayName} on MealScout`;
   const description =
     data.seo?.seoDescription ||
     data.description ||
-    `${data.title} on MealScout. View profile details, location info, and business links.`;
-
-  const schemaData = {
-    "@context": "https://schema.org",
-    "@type":
-      data.entity === "supplier"
-        ? "Organization"
-        : data.entity === "host"
-          ? "LocalBusiness"
-          : "Restaurant",
-    name: data.title,
-    description,
-    url: data.seo?.canonicalUrl || data.canonicalUrl,
-    telephone: data.phone || undefined,
-    image: data.imageUrl || undefined,
-    address: locationLine
-      ? {
-          "@type": "PostalAddress",
-          streetAddress: data.address || undefined,
-          addressLocality: data.city || undefined,
-          addressRegion: data.state || undefined,
-        }
-      : undefined,
-  };
-
-  const resolvedTheme = profile.theme || presetDefaults.theme;
-  const resolvedHeroLayout = profile.heroLayout || presetDefaults.heroLayout;
-  const resolvedFontFamily = profile.fontFamily || presetDefaults.fontFamily;
-  const themePalette =
-    resolvedTheme === "forest"
-      ? { bg: "from-emerald-900 to-emerald-700", panel: "bg-emerald-950/70", chip: "bg-emerald-400/20 text-emerald-100" }
-      : resolvedTheme === "slate"
-        ? { bg: "from-slate-900 to-slate-700", panel: "bg-slate-950/70", chip: "bg-slate-300/20 text-slate-100" }
-        : resolvedTheme === "amber"
-          ? { bg: "from-amber-900 to-amber-700", panel: "bg-amber-950/70", chip: "bg-amber-300/20 text-amber-100" }
-          : { bg: "from-rose-900 to-orange-700", panel: "bg-rose-950/70", chip: "bg-rose-300/20 text-rose-100" };
-  const accentStyle = profile.accentColor
-    ? ({ borderColor: profile.accentColor, color: profile.accentColor } as any)
-    : undefined;
-  const fontClass =
-    resolvedFontFamily === "serif"
-      ? "font-serif"
-      : resolvedFontFamily === "mono"
-        ? "font-mono"
-        : resolvedFontFamily === "display"
-          ? "font-[Georgia]"
-          : "font-sans";
-  const heroLayoutClass =
-    resolvedHeroLayout === "center"
-      ? "text-center"
-      : resolvedHeroLayout === "split"
-        ? "grid gap-2 md:grid-cols-2 md:items-end"
-        : "text-left";
-
-  const sections = new Map<string, ReactNode>();
-  sections.set("about", about ? <p className="text-base leading-relaxed">{about}</p> : null);
-  sections.set(
-    "location",
-    locationLine ? (
-      <div className="flex items-start gap-2 text-sm">
-        <MapPin className="mt-0.5 h-4 w-4 text-muted-foreground" />
-        <span>{locationLine}</span>
-      </div>
-    ) : null,
-  );
-  sections.set(
-    "contact",
-    data.phone ? (
-      <div className="flex items-center gap-2 text-sm">
-        <Phone className="h-4 w-4 text-muted-foreground" />
-        <span>{data.phone}</span>
-      </div>
-    ) : null,
-  );
-  sections.set(
-    "metrics",
-    data.entity === "supplier" && typeof data.metrics?.activeProductCount === "number" ? (
-      <div className="text-sm text-muted-foreground">
-        Active products: <span className="font-medium text-foreground">{data.metrics.activeProductCount}</span>
-      </div>
-    ) : null,
-  );
-  sections.set(
-    "highlights",
-    highlights.length > 0 ? (
-      <div>
-        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Highlights</h2>
-        <div className="flex flex-wrap gap-2">
-          {highlights.map((item, idx) => (
-            <Badge key={`${item}-${idx}`} variant="outline" style={accentStyle}>
-              {item}
-            </Badge>
-          ))}
-        </div>
-      </div>
-    ) : null,
-  );
-  sections.set("links", null);
-  sections.set(
-    "gallery",
-    galleryUrls.length > 0 ? (
-      <div>
-        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Gallery</h2>
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-          {galleryUrls.map((url, idx) => (
-            <img
-              key={`${url}-${idx}`}
-              src={url}
-              alt={`${data.title} gallery ${idx + 1}`}
-              className="h-28 w-full rounded-md object-cover"
-              loading="lazy"
-            />
-          ))}
-        </div>
-      </div>
-    ) : null,
-  );
-  const defaultOrder = ["about", "location", "contact", "metrics", "highlights", "links", "gallery"];
-  const order = Array.isArray(profile.sectionOrder) && profile.sectionOrder.length > 0
-    ? profile.sectionOrder
-    : defaultOrder;
-  const renderedSections = order
-    .map((key) => sections.get(key))
-    .filter(Boolean);
+    "Find local food activity, menus, deals, and nearby places on MealScout.";
+  const canonicalUrl = data.seo?.canonicalUrl || data.canonicalUrl;
+  const ogImage =
+    data.seo?.ogImageUrl ||
+    (data.entity === "host"
+      ? data.spotImageUrl || data.coverImageUrl || data.logoUrl
+      : data.entity === "restaurant"
+        ? data.coverImageUrl || data.logoUrl
+        : data.logoUrl) ||
+    DEFAULT_IMAGE;
 
   return (
-    <div className={`mx-auto max-w-3xl px-4 py-8 ${fontClass}`}>
+    <div className="min-h-screen bg-[#070605]">
       <SEOHead
         title={title}
         description={description}
-        canonicalUrl={data.seo?.canonicalUrl || data.canonicalUrl}
+        canonicalUrl={canonicalUrl}
         ogType="profile"
-        ogImage={data.seo?.ogImageUrl || data.imageUrl || "/og-default.jpg"}
-        schemaData={schemaData}
+        ogImage={ogImage}
       />
 
-      <Card className="overflow-hidden">
-        <div className={`bg-gradient-to-br ${themePalette.bg} p-8 text-white`}>
-          <div className={`mb-3 flex items-center gap-2 ${profile.hideProfileBadge ? "hidden" : ""}`}>
-            <Store className="h-5 w-5" />
-            <Badge className={themePalette.chip}>{labelByEntity[data.entity] || "Public Profile"}</Badge>
-          </div>
-          <div className={heroLayoutClass}>
-            <div>
-              <h1 className="text-4xl font-bold tracking-tight">{heroTitle}</h1>
-              {heroSubtitle ? (
-                <p className="mt-2 max-w-2xl text-sm text-white/85">{heroSubtitle}</p>
+      <div className="mx-auto max-w-5xl space-y-6 px-4 py-8">
+        <HeroBlock profile={data} safeCtas={safeCtas} />
+
+        {data.entity === "host" ? (
+          <>
+            <LocationNowSection profile={data} />
+            <LocationMapSection profile={data} />
+            <LocationAmenitiesSection profile={data} />
+            <Card className="border-white/10 bg-[#0f0d0b]">
+              <CardHeader>
+                <CardTitle className="text-xl text-white">Local discovery</CardTitle>
+              </CardHeader>
+              <CardContent className="text-sm text-white/75">
+                Nearby food activity and event links will appear here when available.
+              </CardContent>
+            </Card>
+          </>
+        ) : data.entity === "restaurant" ? (
+          <>
+            <RestaurantSignals profile={data} />
+            <RestaurantHighlights profile={data} />
+            <RestaurantSchedule profile={data} />
+            <RestaurantSocial profile={data} safeCtas={safeCtas} />
+          </>
+        ) : (
+          <Card className="border-white/10 bg-[#0f0d0b]">
+            <CardHeader>
+              <CardTitle className="text-xl text-white">Supplier profile</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm text-white/80">
+              {data.description ? <p>{data.description}</p> : null}
+              {typeof data.metrics?.activeProductCount === "number" ? (
+                <p>Active products: {data.metrics.activeProductCount}</p>
               ) : null}
-            </div>
-            {heroCta?.label && heroCta?.href ? (
-              <div className={resolvedHeroLayout === "split" ? "md:justify-self-end" : "mt-5"}>
-                <a
-                  href={heroCta.href}
-                  target={heroCta.type === "internal" || heroCta.type === "phone" ? undefined : "_blank"}
-                  rel={heroCta.type === "internal" || heroCta.type === "phone" ? undefined : "noreferrer noopener"}
-                  className="inline-flex items-center rounded-md border border-white/40 bg-white/10 px-4 py-2 text-sm font-medium backdrop-blur hover:bg-white/20"
-                >
-                  {heroCta.label}
-                </a>
-              </div>
-            ) : null}
-          </div>
-        </div>
-
-        <CardHeader>
-          <CardTitle className="text-2xl">{data.title}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {safeCtas.length > 1 ? (
-            <div className="grid gap-2">
-              {safeCtas.slice(1).map((cta, idx) => (
-                <a
-                  key={`${cta.href}-${idx}`}
-                  href={cta.href}
-                  target={
-                    cta.type === "internal" || cta.type === "phone"
-                      ? undefined
-                      : "_blank"
-                  }
-                  rel={
-                    cta.type === "internal" || cta.type === "phone"
-                      ? undefined
-                      : "noreferrer noopener"
-                  }
-                  className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-muted"
-                >
-                  <Globe className="h-4 w-4 text-muted-foreground" />
-                  <span>{cta.label}</span>
-                </a>
-              ))}
-            </div>
-          ) : null}
-
-          {renderedSections}
-
-          <div className="border-t pt-4 text-xs text-muted-foreground">
-            Permanent profile link: {data.canonicalUrl}
-          </div>
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
+        )}
+      </div>
     </div>
   );
 }

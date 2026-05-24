@@ -111,8 +111,8 @@ export default function LocationDiscoveryPage() {
             <Button variant="outline" asChild>
               <a href={`${baseLocationPath}/food-trucks-tonight`}>Tonight</a>
             </Button>
-            <Button asChild>
-              <a href="/parking-pass">Book a spot</a>
+            <Button variant="ghost" asChild>
+              <Link href={baseLocationPath}>Location profile</Link>
             </Button>
           </div>
         </div>
