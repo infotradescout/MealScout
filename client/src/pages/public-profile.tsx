@@ -821,12 +821,58 @@ function GalleryStrip({ profile }: { profile: PublicRestaurantProfile }) {
 
 function RestaurantSchedule({ profile }: { profile: PublicRestaurantProfile }) {
   const hasHours = Boolean(String(profile.hours || "").trim());
-  const truckWindow =
-    profile.profileType === "truck" ? String(profile.truckSchedule?.nextWindowLabel || "").trim() : "";
-  const upcomingCount =
-    profile.profileType === "truck" ? Number(profile.truckSchedule?.upcomingCount || 0) : 0;
-  const hasTruckSchedule = Boolean(truckWindow) || upcomingCount > 0;
+  const schedule = profile.profileType === "truck" ? profile.truckSchedule : null;
+  const currentStop = schedule?.currentStop || null;
+  const todayStop = schedule?.todayStop || null;
+  const nextStop = schedule?.nextStop || null;
+  const upcomingStops = Array.isArray(schedule?.upcomingStops)
+    ? schedule!.upcomingStops.slice(0, 6)
+    : [];
+  const hasTruckSchedule =
+    Boolean(currentStop) ||
+    Boolean(todayStop) ||
+    Boolean(nextStop) ||
+    upcomingStops.length > 0 ||
+    Boolean(String(schedule?.nextWindowLabel || "").trim()) ||
+    Number(schedule?.upcomingCount || 0) > 0;
   if (!hasHours && !hasTruckSchedule) return null;
+
+  const stopRow = (
+    label: string,
+    stop: NonNullable<typeof currentStop>,
+    emphasize = false,
+  ) => (
+    <div
+      className={
+        emphasize
+          ? "rounded-lg border border-orange-400/35 bg-[#1b120d] p-3"
+          : "rounded-lg border border-white/10 bg-black/20 p-3"
+      }
+    >
+      <p className="text-xs font-semibold uppercase tracking-wide text-white/65">{label}</p>
+      <p className="mt-1 text-sm font-semibold text-white">
+        {stop.locationName || stop.addressPublicLabel || "Location update"}
+      </p>
+      <p className="text-xs text-white/70">
+        {[stop.date, stop.timeWindowLabel].filter(Boolean).join(" · ")}
+      </p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {stop.status ? <Badge variant="secondary">{String(stop.status).replace(/_/g, " ")}</Badge> : null}
+        {stop.directionsUrl ? (
+          <a
+            href={stop.directionsUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 rounded-md border border-white/20 px-2.5 py-1 text-xs text-white/85 hover:bg-white/10"
+          >
+            <Route className="h-3.5 w-3.5" />
+            Get directions
+          </a>
+        ) : null}
+      </div>
+    </div>
+  );
+
   return (
     <Card className="border-white/10 bg-[#0f0d0b]">
       <CardHeader>
@@ -840,10 +886,43 @@ function RestaurantSchedule({ profile }: { profile: PublicRestaurantProfile }) {
           </p>
         ) : null}
         {profile.profileType === "truck" && hasTruckSchedule ? (
-          <p className="inline-flex items-center gap-1">
-            <Truck className="h-4 w-4" />
-            {truckWindow || `${upcomingCount} upcoming stops`}
-          </p>
+          <div className="space-y-3">
+            {schedule?.statusLabel ? (
+              <Badge variant="outline" className="border-orange-300/35 text-orange-200">
+                {schedule.statusLabel}
+              </Badge>
+            ) : null}
+            {currentStop ? stopRow("Here now", currentStop, true) : null}
+            {!currentStop && todayStop ? stopRow("Today's stop", todayStop) : null}
+            {!currentStop && !todayStop && nextStop ? stopRow("Next stop", nextStop) : null}
+            {upcomingStops.length > 0 ? (
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-white/65">
+                  Upcoming schedule
+                </p>
+                <div className="space-y-2">
+                  {upcomingStops.map((stop, index) => (
+                    <div
+                      key={`${stop.stopId || stop.date || "stop"}:${index}`}
+                      className="rounded-lg border border-white/10 bg-black/20 p-2.5"
+                    >
+                      <p className="text-sm font-medium text-white">
+                        {stop.locationName || stop.addressPublicLabel || "Scheduled stop"}
+                      </p>
+                      <p className="text-xs text-white/70">
+                        {[stop.date, stop.timeWindowLabel].filter(Boolean).join(" · ")}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+            {schedule?.notice ? (
+              <div className="rounded-md border border-white/10 bg-black/20 p-2.5 text-xs text-white/80">
+                {schedule.notice}
+              </div>
+            ) : null}
+          </div>
         ) : null}
       </CardContent>
     </Card>

@@ -67,8 +67,48 @@ export type PublicMenuSection = {
 };
 
 export type PublicTruckScheduleSummary = {
+  status:
+    | "scheduled"
+    | "here_now"
+    | "completed"
+    | "canceled"
+    | "moved"
+    | "sold_out"
+    | "closed_early"
+    | "unknown";
+  statusLabel: string | null;
+  lastUpdatedAt: string | null;
+  notice: string | null;
+  currentStop: PublicTruckScheduleStop | null;
+  todayStop: PublicTruckScheduleStop | null;
+  nextStop: PublicTruckScheduleStop | null;
+  upcomingStops: PublicTruckScheduleStop[];
   nextWindowLabel: string | null;
   upcomingCount: number;
+};
+
+export type PublicTruckScheduleStop = {
+  stopId: string | null;
+  date: string | null;
+  startTime: string | null;
+  endTime: string | null;
+  timeWindowLabel: string | null;
+  locationName: string | null;
+  addressPublicLabel: string | null;
+  city: string | null;
+  state: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  hostProfilePath: string | null;
+  directionsUrl: string | null;
+  status:
+    | "scheduled"
+    | "here_now"
+    | "completed"
+    | "canceled"
+    | "moved"
+    | "sold_out"
+    | "closed_early";
 };
 
 export type PublicRestaurantProfile = {

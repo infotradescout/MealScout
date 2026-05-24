@@ -218,8 +218,30 @@ export function toPublicRestaurantProfile(input: {
     truckSchedule:
       profileType === "truck"
         ? {
-            nextWindowLabel: nextWindowLabelValue || null,
-            upcomingCount: Math.max(0, upcomingCountValue || 0),
+            status: String(row?.truckSchedule?.status || "unknown") as any,
+            statusLabel:
+              String(row?.truckSchedule?.statusLabel || "").trim() || null,
+            lastUpdatedAt:
+              String(row?.truckSchedule?.lastUpdatedAt || "").trim() || null,
+            notice: String(row?.truckSchedule?.notice || "").trim() || null,
+            currentStop: row?.truckSchedule?.currentStop || null,
+            todayStop: row?.truckSchedule?.todayStop || null,
+            nextStop: row?.truckSchedule?.nextStop || null,
+            upcomingStops: Array.isArray(row?.truckSchedule?.upcomingStops)
+              ? row.truckSchedule.upcomingStops
+              : [],
+            nextWindowLabel:
+              String(row?.truckSchedule?.nextWindowLabel || "").trim() ||
+              nextWindowLabelValue ||
+              null,
+            upcomingCount: Math.max(
+              0,
+              Number(
+                row?.truckSchedule?.upcomingCount ??
+                  upcomingCountValue ??
+                  0,
+              ) || 0,
+            ),
           }
         : null,
     cta: ctas,

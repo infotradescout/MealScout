@@ -1,5 +1,5 @@
 import type { Express } from "express";
-import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 
 import { db } from "../db";
 import { storage } from "../storage";
@@ -18,6 +18,7 @@ import {
   socialPostQueue,
   supplierProducts,
   suppliers,
+  truckManualSchedules,
   videoStories,
 } from "@shared/schema";
 import {
@@ -106,6 +107,289 @@ const countBy = <T extends string>(values: T[]) =>
 
 const sendPublicJson = <T>(res: any, payload: T) =>
   res.json(assertPublicResponseSafe(payload));
+
+const toDateOnly = (value: Date) => {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const buildHostProfilePath = (hostId: string | null, hostName: string | null) => {
+  const safeId = String(hostId || "").trim();
+  if (!safeId) return null;
+  const slug = toSlug(hostName || "") || safeId;
+  return `/p/location/${safeId}/${slug}`;
+};
+
+const buildDirectionsUrl = (input: {
+  latitude: number | null;
+  longitude: number | null;
+  addressPublicLabel: string | null;
+}) => {
+  if (
+    typeof input.latitude === "number" &&
+    Number.isFinite(input.latitude) &&
+    typeof input.longitude === "number" &&
+    Number.isFinite(input.longitude)
+  ) {
+    return `https://maps.google.com/?q=${input.latitude},${input.longitude}`;
+  }
+  if (input.addressPublicLabel) {
+    return `https://maps.google.com/?q=${encodeURIComponent(input.addressPublicLabel)}`;
+  }
+  return null;
+};
+
+const classifyTruckStopStatus = (input: {
+  startsAt: Date;
+  endsAt: Date;
+  now: Date;
+  sourceStatus?: string | null;
+}) => {
+  const sourceStatus = String(input.sourceStatus || "").trim().toLowerCase();
+  if (sourceStatus.includes("cancel")) return "canceled" as const;
+  if (sourceStatus.includes("sold_out")) return "sold_out" as const;
+  if (sourceStatus.includes("closed_early")) return "closed_early" as const;
+  if (sourceStatus.includes("move")) return "moved" as const;
+  if (input.now >= input.startsAt && input.now <= input.endsAt) return "here_now" as const;
+  if (input.now > input.endsAt) return "completed" as const;
+  return "scheduled" as const;
+};
+
+const buildPublicTruckSchedulePayload = async (restaurantId: string) => {
+  const now = new Date();
+  const todayStart = new Date(now);
+  todayStart.setHours(0, 0, 0, 0);
+  const horizonEnd = new Date(todayStart);
+  horizonEnd.setDate(horizonEnd.getDate() + 14);
+
+  const eventStops = await db
+    .select({
+      stopId: events.id,
+      date: events.date,
+      startTime: events.startTime,
+      endTime: events.endTime,
+      sourceStatus: events.status,
+      locationName: hosts.businessName,
+      address: hosts.address,
+      city: hosts.city,
+      state: hosts.state,
+      latitude: hosts.latitude,
+      longitude: hosts.longitude,
+      hostId: hosts.id,
+      hostName: hosts.businessName,
+      updatedAt: events.updatedAt,
+      lastConfirmedAt: events.lastConfirmedAt,
+    })
+    .from(events)
+    .innerJoin(hosts, eq(events.hostId, hosts.id))
+    .where(
+      and(
+        eq(events.bookedRestaurantId, restaurantId),
+        gte(events.date, todayStart),
+        lte(events.date, horizonEnd),
+      ),
+    );
+
+  const manualStops = await db
+    .select({
+      stopId: truckManualSchedules.id,
+      date: truckManualSchedules.date,
+      startTime: truckManualSchedules.startTime,
+      endTime: truckManualSchedules.endTime,
+      sourceStatus: sql<string>`'scheduled'`,
+      locationName: truckManualSchedules.locationName,
+      address: truckManualSchedules.address,
+      city: truckManualSchedules.city,
+      state: truckManualSchedules.state,
+      latitude: sql<number | null>`null`,
+      longitude: sql<number | null>`null`,
+      hostId: sql<string | null>`null`,
+      hostName: sql<string | null>`null`,
+      updatedAt: truckManualSchedules.updatedAt,
+      lastConfirmedAt: truckManualSchedules.lastConfirmedAt,
+      notice: truckManualSchedules.notes,
+    })
+    .from(truckManualSchedules)
+    .where(
+      and(
+        eq(truckManualSchedules.truckId, restaurantId),
+        eq(truckManualSchedules.isPublic, true),
+        gte(truckManualSchedules.date, todayStart),
+        lte(truckManualSchedules.date, horizonEnd),
+      ),
+    );
+
+  const allStops = [...eventStops, ...manualStops]
+    .map((row: any) => {
+      const date = row.date ? new Date(row.date) : null;
+      if (!date) return null;
+      const startRaw = String(row.startTime || "").trim();
+      const endRaw = String(row.endTime || "").trim();
+      const startDate = new Date(date);
+      const endDate = new Date(date);
+      if (/^\d{1,2}:\d{2}/.test(startRaw)) {
+        const [h, m] = startRaw.split(":").map(Number);
+        startDate.setHours(h || 0, m || 0, 0, 0);
+      } else {
+        startDate.setHours(0, 0, 0, 0);
+      }
+      if (/^\d{1,2}:\d{2}/.test(endRaw)) {
+        const [h, m] = endRaw.split(":").map(Number);
+        endDate.setHours(h || 0, m || 0, 0, 0);
+      } else {
+        endDate.setHours(23, 59, 0, 0);
+      }
+      if (endDate < startDate) {
+        endDate.setDate(endDate.getDate() + 1);
+      }
+      const status = classifyTruckStopStatus({
+        startsAt: startDate,
+        endsAt: endDate,
+        now,
+        sourceStatus: row.sourceStatus,
+      });
+      const addressPublicLabel = [row.address, row.city, row.state]
+        .map((value) => String(value || "").trim())
+        .filter(Boolean)
+        .join(", ");
+      const locationName = String(row.locationName || "").trim() || null;
+      const latitude =
+        row.latitude != null && Number.isFinite(Number(row.latitude))
+          ? Number(row.latitude)
+          : null;
+      const longitude =
+        row.longitude != null && Number.isFinite(Number(row.longitude))
+          ? Number(row.longitude)
+          : null;
+      return {
+        stopId: String(row.stopId || "").trim() || null,
+        date: toDateOnly(date),
+        startTime: startRaw || null,
+        endTime: endRaw || null,
+        timeWindowLabel:
+          startRaw && endRaw ? `${startRaw} - ${endRaw}` : startRaw || endRaw || null,
+        locationName,
+        addressPublicLabel: addressPublicLabel || null,
+        city: String(row.city || "").trim() || null,
+        state: String(row.state || "").trim() || null,
+        latitude,
+        longitude,
+        hostProfilePath: buildHostProfilePath(
+          String(row.hostId || "").trim() || null,
+          String(row.hostName || "").trim() || null,
+        ),
+        directionsUrl: buildDirectionsUrl({
+          latitude,
+          longitude,
+          addressPublicLabel: addressPublicLabel || null,
+        }),
+        status,
+        startsAt: startDate,
+        endsAt: endDate,
+        updatedAt: row.updatedAt ? new Date(row.updatedAt) : null,
+        lastConfirmedAt: row.lastConfirmedAt ? new Date(row.lastConfirmedAt) : null,
+        notice: String(row.notice || "").trim() || null,
+      };
+    })
+    .filter(Boolean)
+    .sort((a: any, b: any) => a.startsAt.getTime() - b.startsAt.getTime()) as Array<any>;
+
+  const currentStop = allStops.find((stop) => stop.status === "here_now") || null;
+  const todayKey = toDateOnly(now);
+  const todayStop =
+    allStops.find((stop) => stop.date === todayKey && stop.status !== "completed") || null;
+  const nextStop =
+    allStops.find((stop) => stop.startsAt.getTime() > now.getTime()) || null;
+  const upcomingStops = allStops
+    .filter((stop) => stop !== currentStop)
+    .slice(0, 8)
+    .map((stop) => ({
+      stopId: stop.stopId,
+      date: stop.date,
+      startTime: stop.startTime,
+      endTime: stop.endTime,
+      timeWindowLabel: stop.timeWindowLabel,
+      locationName: stop.locationName,
+      addressPublicLabel: stop.addressPublicLabel,
+      city: stop.city,
+      state: stop.state,
+      latitude: stop.latitude,
+      longitude: stop.longitude,
+      hostProfilePath: stop.hostProfilePath,
+      directionsUrl: stop.directionsUrl,
+      status: stop.status,
+    }));
+
+  const latestTouch = allStops
+    .map((stop) => stop.lastConfirmedAt || stop.updatedAt || stop.startsAt)
+    .filter((value): value is Date => value instanceof Date)
+    .sort((a, b) => b.getTime() - a.getTime())[0];
+
+  const notice =
+    allStops.find(
+      (stop) =>
+        stop.notice ||
+        stop.status === "canceled" ||
+        stop.status === "moved" ||
+        stop.status === "sold_out" ||
+        stop.status === "closed_early",
+    )?.notice ||
+    null;
+
+  const topStatus =
+    currentStop?.status ||
+    todayStop?.status ||
+    nextStop?.status ||
+    (allStops.length > 0 ? "scheduled" : "unknown");
+
+  const statusLabelMap: Record<string, string> = {
+    here_now: "Here now",
+    scheduled: "Scheduled",
+    completed: "Completed",
+    canceled: "Canceled",
+    moved: "Moved",
+    sold_out: "Sold out",
+    closed_early: "Closed early",
+    unknown: "No schedule posted",
+  };
+
+  const compactStop = (stop: any) =>
+    stop
+      ? {
+          stopId: stop.stopId,
+          date: stop.date,
+          startTime: stop.startTime,
+          endTime: stop.endTime,
+          timeWindowLabel: stop.timeWindowLabel,
+          locationName: stop.locationName,
+          addressPublicLabel: stop.addressPublicLabel,
+          city: stop.city,
+          state: stop.state,
+          latitude: stop.latitude,
+          longitude: stop.longitude,
+          hostProfilePath: stop.hostProfilePath,
+          directionsUrl: stop.directionsUrl,
+          status: stop.status,
+        }
+      : null;
+
+  return {
+    truckSchedule: {
+      status: topStatus,
+      statusLabel: statusLabelMap[topStatus] || "Scheduled",
+      lastUpdatedAt: latestTouch ? latestTouch.toISOString() : null,
+      notice,
+      currentStop: compactStop(currentStop),
+      todayStop: compactStop(todayStop),
+      nextStop: compactStop(nextStop),
+      upcomingStops,
+      nextWindowLabel: nextStop?.timeWindowLabel || todayStop?.timeWindowLabel || null,
+      upcomingCount: upcomingStops.length,
+    },
+  };
+};
 
 const buildPublicMenuPayload = async (restaurantId: string) => {
   const menuRows = await db
@@ -696,11 +980,15 @@ export function registerPublicDiscoveryRoutes(app: Express) {
         const profileSettings = (ownerUser?.publicProfileSettings || {}) as any;
         const showAddress = profileSettings.showAddress !== false;
         const showContact = profileSettings.showContact !== false;
-        const menuPayload = await buildPublicMenuPayload(String(row.id));
+        const [menuPayload, schedulePayload] = await Promise.all([
+          buildPublicMenuPayload(String(row.id)),
+          buildPublicTruckSchedulePayload(String(row.id)),
+        ]);
         const mapped = toPublicTruckProfile({
           row: {
             ...row,
             ...menuPayload,
+            ...schedulePayload,
           },
           baseUrl,
           showAddress,
@@ -800,12 +1088,16 @@ export function registerPublicDiscoveryRoutes(app: Express) {
         const profileSettings = (ownerUser?.publicProfileSettings || {}) as any;
         const showAddress = profileSettings.showAddress !== false;
         const showContact = profileSettings.showContact !== false;
-        const menuPayload = await buildPublicMenuPayload(String(row.id));
+        const [menuPayload, schedulePayload] = await Promise.all([
+          buildPublicMenuPayload(String(row.id)),
+          buildPublicTruckSchedulePayload(String(row.id)),
+        ]);
         if (row.isFoodTruck || row.businessType === "food_truck") {
           const mapped = toPublicTruckProfile({
             row: {
               ...row,
               ...menuPayload,
+              ...schedulePayload,
             },
             baseUrl,
             showAddress,

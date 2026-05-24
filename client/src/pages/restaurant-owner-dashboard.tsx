@@ -1768,6 +1768,13 @@ export default function RestaurantOwnerDashboard() {
             (currentRestaurant as any).hours ||
             (currentRestaurant as any).schedulePublished,
           );
+          const hasTruckScheduleSignals = Boolean(
+            (currentRestaurant as any).currentStop ||
+            (currentRestaurant as any).todayStop ||
+            (currentRestaurant as any).nextStop ||
+            Number((currentRestaurant as any).upcomingStopCount || 0) > 0 ||
+            Number((currentRestaurant as any).truckScheduleCount || 0) > 0,
+          );
           const hasDeal = (stats?.activeDeals || 0) > 0;
           const hasEvents = Boolean((currentRestaurant as any).eventsEnabled);
           const isVerifiedProfile = Boolean((currentRestaurant as any).isVerified);
@@ -1824,7 +1831,7 @@ export default function RestaurantOwnerDashboard() {
               ? [
                   {
                     label: "Truck schedule complete",
-                    done: hasSchedule,
+                    done: hasSchedule || hasTruckScheduleSignals,
                     href: "/restaurant-owner-dashboard?setup=schedule&truck=1",
                   },
                 ]
