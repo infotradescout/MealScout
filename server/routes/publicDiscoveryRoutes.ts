@@ -480,6 +480,118 @@ const buildPublicDealsPayload = async (restaurantId: string, row?: any) => {
   };
 };
 
+const classifyPublicEventType = (eventTypeRaw: unknown, titleRaw: unknown) => {
+  const direct = String(eventTypeRaw || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z_]/g, "_");
+  const title = String(titleRaw || "").toLowerCase();
+  if (["live_music", "trivia", "karaoke", "pop_up", "food_truck_night", "watch_party", "holiday"].includes(direct)) {
+    return direct as
+      | "live_music"
+      | "trivia"
+      | "karaoke"
+      | "pop_up"
+      | "food_truck_night"
+      | "watch_party"
+      | "holiday";
+  }
+  if (title.includes("music")) return "live_music";
+  if (title.includes("trivia")) return "trivia";
+  if (title.includes("karaoke")) return "karaoke";
+  if (title.includes("pop")) return "pop_up";
+  if (title.includes("truck")) return "food_truck_night";
+  if (title.includes("watch")) return "watch_party";
+  if (title.includes("holiday")) return "holiday";
+  return "other" as const;
+};
+
+const buildPublicEventsPayload = async (input: {
+  restaurantId?: string;
+  hostId?: string;
+  restaurantRow?: any;
+}) => {
+  const now = new Date();
+  const rows = await db
+    .select({
+      id: events.id,
+      title: events.name,
+      description: events.description,
+      eventType: events.eventType,
+      date: events.date,
+      startTime: events.startTime,
+      endTime: events.endTime,
+      status: events.status,
+      hostId: events.hostId,
+      hostName: hosts.businessName,
+      hostAddress: hosts.address,
+      hostCity: hosts.city,
+      hostState: hosts.state,
+    })
+    .from(events)
+    .leftJoin(hosts, eq(events.hostId, hosts.id))
+    .where(
+      input.restaurantId
+        ? and(eq(events.bookedRestaurantId, input.restaurantId), gte(events.date, now))
+        : input.hostId
+          ? and(eq(events.hostId, input.hostId), gte(events.date, now))
+          : gte(events.date, now),
+    );
+
+  const upcoming = rows
+    .filter((row: any) => String(row.status || "").toLowerCase() !== "cancelled")
+    .sort((a: any, b: any) => new Date(a.date as any).getTime() - new Date(b.date as any).getTime())
+    .slice(0, 8)
+    .map((row: any) => {
+      const title = String(row.title || "").trim();
+      const id = String(row.id || "").trim();
+      if (!id || !title) return null;
+      const dateObj = row.date ? new Date(row.date as any) : null;
+      const dateLabel = dateObj && Number.isFinite(dateObj.getTime()) ? dateObj.toLocaleDateString() : null;
+      const startTime = String(row.startTime || "").trim();
+      const endTime = String(row.endTime || "").trim();
+      const timeWindowLabel = startTime && endTime ? `${startTime} - ${endTime}` : startTime || endTime || null;
+      const addressPublicLabel = [row.hostAddress, row.hostCity, row.hostState]
+        .map((v) => String(v || "").trim())
+        .filter(Boolean)
+        .join(", ");
+      let actionLabel: string = "View event";
+      let actionHref: string = `/event/${id}`;
+      let actionType: "rsvp" | "share" | "website" | "directions" | "internal" = "internal";
+      if (addressPublicLabel) {
+        actionLabel = "Get directions";
+        actionHref = `https://maps.google.com/?q=${encodeURIComponent(addressPublicLabel)}`;
+        actionType = "directions";
+      } else if (String(input.restaurantRow?.websiteUrl || "").trim()) {
+        actionLabel = "Website";
+        actionHref = String(input.restaurantRow.websiteUrl).trim();
+        actionType = "website";
+      }
+      return {
+        id,
+        title,
+        description: String(row.description || "").trim() || null,
+        eventType: classifyPublicEventType(row.eventType, row.title),
+        startsAt: dateObj && Number.isFinite(dateObj.getTime()) ? dateObj.toISOString() : null,
+        endsAt: null,
+        dateLabel,
+        timeWindowLabel,
+        locationName: String(row.hostName || "").trim() || null,
+        addressPublicLabel: addressPublicLabel || null,
+        imageUrl: null,
+        actionLabel,
+        actionHref,
+        actionType,
+      };
+    })
+    .filter(Boolean);
+
+  return {
+    eventsItems: upcoming,
+    upcomingEventCount: upcoming.length,
+  };
+};
+
 const buildPublicMenuPayload = async (restaurantId: string) => {
   const menuRows = await db
     .select({
@@ -1069,10 +1181,11 @@ export function registerPublicDiscoveryRoutes(app: Express) {
         const profileSettings = (ownerUser?.publicProfileSettings || {}) as any;
         const showAddress = profileSettings.showAddress !== false;
         const showContact = profileSettings.showContact !== false;
-        const [menuPayload, schedulePayload, dealsPayload] = await Promise.all([
+        const [menuPayload, schedulePayload, dealsPayload, eventsPayload] = await Promise.all([
           buildPublicMenuPayload(String(row.id)),
           buildPublicTruckSchedulePayload(String(row.id)),
           buildPublicDealsPayload(String(row.id), row),
+          buildPublicEventsPayload({ restaurantId: String(row.id), restaurantRow: row }),
         ]);
         const mapped = toPublicTruckProfile({
           row: {
@@ -1080,6 +1193,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
             ...menuPayload,
             ...schedulePayload,
             ...dealsPayload,
+            ...eventsPayload,
           },
           baseUrl,
           showAddress,
@@ -1110,15 +1224,17 @@ export function registerPublicDiscoveryRoutes(app: Express) {
         const profileSettings = (ownerUser?.publicProfileSettings || {}) as any;
         const showAddress = profileSettings.showAddress !== false;
         const showContact = profileSettings.showContact !== false;
-        const [menuPayload, dealsPayload] = await Promise.all([
+        const [menuPayload, dealsPayload, eventsPayload] = await Promise.all([
           buildPublicMenuPayload(String(row.id)),
           buildPublicDealsPayload(String(row.id), row),
+          buildPublicEventsPayload({ restaurantId: String(row.id), restaurantRow: row }),
         ]);
         const mapped = toPublicBarProfile({
           row: {
             ...row,
             ...menuPayload,
             ...dealsPayload,
+            ...eventsPayload,
           },
           baseUrl,
           showAddress,
@@ -1149,6 +1265,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
         const profileSettings = (ownerUser?.publicProfileSettings || {}) as any;
         const showAddress = profileSettings.showAddress !== false;
         const showContact = profileSettings.showContact !== false;
+        const eventsPayload = await buildPublicEventsPayload({ hostId: String(row.id) });
         const mapped = toPublicLocationProfile({
           row,
           baseUrl,
@@ -1157,6 +1274,13 @@ export function registerPublicDiscoveryRoutes(app: Express) {
         });
         return sendPublicJson(res, {
           ...mapped,
+          events: {
+            totalUpcoming: Math.max(
+              Number(mapped.events?.totalUpcoming || 0),
+              Number(eventsPayload.upcomingEventCount || 0),
+            ),
+            items: Array.isArray(eventsPayload.eventsItems) ? eventsPayload.eventsItems : [],
+          },
           entity: "host",
           title: mapped.displayName,
           subtitle:
@@ -1183,10 +1307,11 @@ export function registerPublicDiscoveryRoutes(app: Express) {
         const profileSettings = (ownerUser?.publicProfileSettings || {}) as any;
         const showAddress = profileSettings.showAddress !== false;
         const showContact = profileSettings.showContact !== false;
-        const [menuPayload, schedulePayload, dealsPayload] = await Promise.all([
+        const [menuPayload, schedulePayload, dealsPayload, eventsPayload] = await Promise.all([
           buildPublicMenuPayload(String(row.id)),
           buildPublicTruckSchedulePayload(String(row.id)),
           buildPublicDealsPayload(String(row.id), row),
+          buildPublicEventsPayload({ restaurantId: String(row.id), restaurantRow: row }),
         ]);
         if (row.isFoodTruck || row.businessType === "food_truck") {
           const mapped = toPublicTruckProfile({
@@ -1195,6 +1320,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
               ...menuPayload,
               ...schedulePayload,
               ...dealsPayload,
+              ...eventsPayload,
             },
             baseUrl,
             showAddress,
@@ -1221,6 +1347,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
               ...row,
               ...menuPayload,
               ...dealsPayload,
+              ...eventsPayload,
             },
             baseUrl,
             showAddress,
@@ -1246,6 +1373,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
             ...row,
             ...menuPayload,
             ...dealsPayload,
+            ...eventsPayload,
           },
           baseUrl,
           showAddress,

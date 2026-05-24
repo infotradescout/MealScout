@@ -62,6 +62,13 @@ export function toPublicLocationProfile(input: {
       xUrl: null,
     },
     websiteUrl: String(row.websiteUrl || "").trim() || null,
+    events: {
+      totalUpcoming: Math.max(
+        0,
+        Number(row.upcomingEventCount ?? row.eventsCount ?? 0) || 0,
+      ),
+      items: Array.isArray(row.eventsItems) ? row.eventsItems.slice(0, 8) : [],
+    },
     cta: ctas,
     seo: toPublicProfileSeo({
       baseUrl: input.baseUrl,

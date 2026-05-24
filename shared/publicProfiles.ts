@@ -75,6 +75,36 @@ export type PublicDealItem = {
   actionType: "call" | "show_this_deal" | "order" | "website" | "menu" | "internal";
 };
 
+export type PublicEventSummary = {
+  totalUpcoming: number;
+  items: PublicEventItem[];
+};
+
+export type PublicEventItem = {
+  id: string;
+  title: string;
+  description: string | null;
+  eventType:
+    | "live_music"
+    | "trivia"
+    | "karaoke"
+    | "pop_up"
+    | "food_truck_night"
+    | "watch_party"
+    | "holiday"
+    | "other";
+  startsAt: string | null;
+  endsAt: string | null;
+  dateLabel: string | null;
+  timeWindowLabel: string | null;
+  locationName: string | null;
+  addressPublicLabel: string | null;
+  imageUrl: string | null;
+  actionLabel: string;
+  actionHref: string;
+  actionType: "rsvp" | "share" | "website" | "directions" | "internal";
+};
+
 export type PublicMenuItem = {
   name: string;
   priceLabel: string | null;
@@ -166,6 +196,7 @@ export type PublicRestaurantProfile = {
   menuUrl: string | null;
   featuredMenuItems: string[];
   deals: PublicDealSummary;
+  events: PublicEventSummary;
   reviewSummary: PublicReviewSummary;
   recommendations: PublicRecommendationSummary;
   truckSchedule: PublicTruckScheduleSummary | null;
@@ -199,6 +230,7 @@ export type PublicLocationProfile = {
     xUrl: string | null;
   };
   websiteUrl: string | null;
+  events: PublicEventSummary;
   cta: PublicCta[];
   seo: PublicProfileSeo;
 };

@@ -178,6 +178,67 @@ export function toPublicRestaurantProfile(input: {
     })
     .filter(Boolean)
     .slice(0, 8) as PublicRestaurantProfile["deals"]["items"];
+  const eventItemsRaw = Array.isArray(row.eventsItems) ? row.eventsItems : [];
+  const eventItems = eventItemsRaw
+    .map((item: any) => {
+      const id = String(item?.id || "").trim();
+      const title = String(item?.title || "").trim();
+      const actionHref = String(item?.actionHref || "").trim();
+      if (!id || !title || !actionHref) return null;
+      const eventTypeRaw = String(item?.eventType || "other")
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z_]/g, "_");
+      const normalizedEventType = (
+        [
+          "live_music",
+          "trivia",
+          "karaoke",
+          "pop_up",
+          "food_truck_night",
+          "watch_party",
+          "holiday",
+          "other",
+        ] as const
+      ).includes(eventTypeRaw as any)
+        ? (eventTypeRaw as
+            | "live_music"
+            | "trivia"
+            | "karaoke"
+            | "pop_up"
+            | "food_truck_night"
+            | "watch_party"
+            | "holiday"
+            | "other")
+        : "other";
+      const actionTypeRaw = String(item?.actionType || "internal")
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z_]/g, "_");
+      const normalizedActionType = (
+        ["rsvp", "share", "website", "directions", "internal"] as const
+      ).includes(actionTypeRaw as any)
+        ? (actionTypeRaw as "rsvp" | "share" | "website" | "directions" | "internal")
+        : "internal";
+      return {
+        id,
+        title,
+        description: String(item?.description || "").trim() || null,
+        eventType: normalizedEventType,
+        startsAt: String(item?.startsAt || "").trim() || null,
+        endsAt: String(item?.endsAt || "").trim() || null,
+        dateLabel: String(item?.dateLabel || "").trim() || null,
+        timeWindowLabel: String(item?.timeWindowLabel || "").trim() || null,
+        locationName: String(item?.locationName || "").trim() || null,
+        addressPublicLabel: String(item?.addressPublicLabel || "").trim() || null,
+        imageUrl: String(item?.imageUrl || "").trim() || null,
+        actionLabel: String(item?.actionLabel || "").trim() || "View event",
+        actionHref,
+        actionType: normalizedActionType,
+      };
+    })
+    .filter(Boolean)
+    .slice(0, 8) as PublicRestaurantProfile["events"]["items"];
   const reviewCount = Math.max(
     0,
     Number(
@@ -273,6 +334,14 @@ export function toPublicRestaurantProfile(input: {
     deals: {
       totalActive: Math.max(dealCount, dealItems.length),
       items: dealItems,
+    },
+    events: {
+      totalUpcoming: Math.max(
+        0,
+        Number(row.upcomingEventCount ?? row.eventsCount ?? 0) || 0,
+        eventItems.length,
+      ),
+      items: eventItems,
     },
     reviewSummary: { count: reviewCount, rating: reviewRating },
     recommendations: {

@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
+  CalendarDays,
   Clock3,
   ExternalLink,
   MapPin,
@@ -835,6 +836,79 @@ function DealsSection({ profile }: { profile: PublicRestaurantProfile }) {
   );
 }
 
+function EventsSection({
+  profile,
+}: {
+  profile: Pick<PublicRestaurantProfile, "events"> | Pick<PublicLocationProfile, "events">;
+}) {
+  const eventItems = Array.isArray(profile.events?.items)
+    ? profile.events.items.filter(
+        (item) =>
+          Boolean(
+            String(item?.id || "").trim() &&
+              String(item?.title || "").trim() &&
+              String(item?.actionHref || "").trim(),
+          ),
+      )
+    : [];
+  if (eventItems.length === 0) return null;
+  const typeLabel = (value: string) => {
+    if (value === "live_music") return "Live music";
+    if (value === "food_truck_night") return "Food truck night";
+    if (value === "watch_party") return "Watch party";
+    if (value === "pop_up") return "Pop-up";
+    return value.replace(/_/g, " ");
+  };
+  return (
+    <Card className="border-white/10 bg-[#0f0d0b]">
+      <CardHeader>
+        <CardTitle className="text-xl text-white">Events</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-2.5">
+        {eventItems.map((event) => (
+          <div key={event.id} className="rounded-lg border border-white/10 bg-black/20 p-3">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm font-semibold text-white">{event.title}</p>
+              <Badge variant="outline" className="border-white/20 text-white/80 capitalize">
+                {typeLabel(event.eventType)}
+              </Badge>
+            </div>
+            {event.description ? (
+              <p className="mt-1 text-xs text-white/75">{event.description}</p>
+            ) : null}
+            <div className="mt-2 flex flex-wrap gap-2">
+              {event.dateLabel ? (
+                <Badge variant="secondary">{event.dateLabel}</Badge>
+              ) : null}
+              {event.timeWindowLabel ? (
+                <Badge variant="outline" className="border-white/15 text-white/80">
+                  {event.timeWindowLabel}
+                </Badge>
+              ) : null}
+            </div>
+            {event.locationName || event.addressPublicLabel ? (
+              <p className="mt-2 text-xs text-white/70">
+                {[event.locationName, event.addressPublicLabel].filter(Boolean).join(" · ")}
+              </p>
+            ) : null}
+            <div className="mt-3">
+              <a
+                href={event.actionHref}
+                target={event.actionType === "internal" || event.actionType === "rsvp" ? undefined : "_blank"}
+                rel={event.actionType === "internal" || event.actionType === "rsvp" ? undefined : "noopener noreferrer"}
+                className="inline-flex items-center gap-1 rounded-md bg-orange-500 px-3 py-1.5 text-xs font-semibold text-black hover:bg-orange-400"
+              >
+                <CalendarDays className="h-3.5 w-3.5" />
+                {event.actionLabel}
+              </a>
+            </div>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
 function ProofSection({ profile }: { profile: PublicRestaurantProfile }) {
   const metrics = [
     { label: "Recommendations", value: Number(profile.recommendations.total || 0) },
@@ -1096,6 +1170,7 @@ export default function PublicProfilePage() {
           <>
             <LocationNowSection profile={data} />
             <LocationTruckOptionsSection profile={data} />
+            <EventsSection profile={data} />
             <LocationMapSection profile={data} />
             <LocationAmenitiesSection profile={data} />
           </>
@@ -1107,6 +1182,7 @@ export default function PublicProfilePage() {
             <DealsSection profile={data} />
             <GalleryStrip profile={data} />
             <RestaurantSchedule profile={data} />
+            <EventsSection profile={data} />
             <ProofSection profile={data} />
             <RestaurantSocial profile={data} safeCtas={safeCtas} />
           </>

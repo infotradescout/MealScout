@@ -1776,7 +1776,9 @@ export default function RestaurantOwnerDashboard() {
             Number((currentRestaurant as any).truckScheduleCount || 0) > 0,
           );
           const hasDeal = (stats?.activeDeals || 0) > 0;
-          const hasEvents = Boolean((currentRestaurant as any).eventsEnabled);
+          const hasEvents =
+            Number((currentRestaurant as any).upcomingPublicEventCount || 0) > 0 ||
+            Number((currentRestaurant as any).upcomingEventCount || 0) > 0;
           const isVerifiedProfile = Boolean((currentRestaurant as any).isVerified);
           const publicReady =
             hasBasics &&
