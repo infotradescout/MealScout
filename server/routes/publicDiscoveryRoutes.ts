@@ -17,6 +17,13 @@ import {
   suppliers,
   videoStories,
 } from "@shared/schema";
+import {
+  toPublicBarProfile,
+  toPublicLocationProfile,
+  toPublicRestaurantProfile,
+  toPublicSupplierProfile,
+  toPublicTruckProfile,
+} from "../publicProfiles";
 
 const toSlug = (value: string | null | undefined) =>
   String(value || "")
@@ -419,31 +426,69 @@ export function registerPublicDiscoveryRoutes(app: Express) {
         const profileSettings = (ownerUser?.publicProfileSettings || {}) as any;
         const showAddress = profileSettings.showAddress !== false;
         const showContact = profileSettings.showContact !== false;
-        const slug = toSlug(row.name) || row.id;
-        const profilePath = `/p/restaurant/${row.id}/${slug}`;
+        if (row.isFoodTruck || row.businessType === "food_truck") {
+          const mapped = toPublicTruckProfile({
+            row,
+            baseUrl,
+            showAddress,
+            showContact,
+          });
+          return res.json({
+            ...mapped,
+            entity: "restaurant",
+            title: mapped.displayName,
+            subtitle: mapped.serviceType || "Food Truck",
+            address: mapped.addressPublicLabel,
+            phone: mapped.phonePublic,
+            imageUrl: mapped.coverImageUrl || mapped.logoUrl,
+            profilePath: `/p/truck/${mapped.id}/${mapped.slug}`,
+            canonicalUrl: mapped.seo.canonicalUrl,
+            websiteUrl: mapped.websiteUrl,
+            profileSettings,
+            social: mapped.socialLinks,
+          });
+        }
+        if (row.businessType === "bar") {
+          const mapped = toPublicBarProfile({
+            row,
+            baseUrl,
+            showAddress,
+            showContact,
+          });
+          return res.json({
+            ...mapped,
+            entity: "restaurant",
+            title: mapped.displayName,
+            subtitle: mapped.serviceType || "Bar",
+            address: mapped.addressPublicLabel,
+            phone: mapped.phonePublic,
+            imageUrl: mapped.coverImageUrl || mapped.logoUrl,
+            profilePath: `/p/bar/${mapped.id}/${mapped.slug}`,
+            canonicalUrl: mapped.seo.canonicalUrl,
+            websiteUrl: mapped.websiteUrl,
+            profileSettings,
+            social: mapped.socialLinks,
+          });
+        }
+        const mapped = toPublicRestaurantProfile({
+          row,
+          baseUrl,
+          showAddress,
+          showContact,
+        });
         return res.json({
+          ...mapped,
           entity: "restaurant",
-          id: row.id,
-          title: row.name,
-          subtitle:
-            row.cuisineType || (row.isFoodTruck ? "Food Truck" : "Restaurant"),
-          description:
-            row.description ||
-            `${row.name} on MealScout. Local hours, deals, and direct booking visibility.`,
-          address: showAddress ? row.address || null : null,
-          city: row.city || null,
-          state: row.state || null,
-          phone: showContact ? row.phone || null : null,
-          websiteUrl: row.websiteUrl || null,
-          imageUrl: row.coverImageUrl || row.logoUrl || null,
-          profilePath,
-          canonicalUrl: `${baseUrl}${profilePath}`,
+          title: mapped.displayName,
+          subtitle: mapped.serviceType || "Restaurant",
+          address: mapped.addressPublicLabel,
+          phone: mapped.phonePublic,
+          imageUrl: mapped.coverImageUrl || mapped.logoUrl,
+          profilePath: `/p/restaurant/${mapped.id}/${mapped.slug}`,
+          canonicalUrl: mapped.seo.canonicalUrl,
+          websiteUrl: mapped.websiteUrl,
           profileSettings,
-          social: {
-            instagramUrl: row.instagramUrl || null,
-            facebookPageUrl: row.facebookPageUrl || null,
-            xUrl: row.xUrl || null,
-          },
+          social: mapped.socialLinks,
         });
       }
 
@@ -456,33 +501,28 @@ export function registerPublicDiscoveryRoutes(app: Express) {
         const profileSettings = (ownerUser?.publicProfileSettings || {}) as any;
         const showAddress = profileSettings.showAddress !== false;
         const showContact = profileSettings.showContact !== false;
-        const slug = toSlug(row.businessName) || row.id;
-        const profilePath = `/p/host/${row.id}/${slug}`;
+        const mapped = toPublicLocationProfile({
+          row,
+          baseUrl,
+          showAddress,
+          showContact,
+        });
         return res.json({
+          ...mapped,
           entity: "host",
-          id: row.id,
-          title: row.businessName,
+          title: mapped.displayName,
           subtitle:
             row.locationType === "event_coordinator"
               ? "Event Coordinator"
               : "Host Location",
-          description:
-            row.notes ||
-            `${row.businessName} hosts trucks on MealScout with live event and parking availability.`,
-          address: showAddress ? row.address || null : null,
-          city: row.city || null,
-          state: row.state || null,
-          phone: showContact ? row.contactPhone || null : null,
-          websiteUrl: null,
-          imageUrl: row.spotImageUrl || null,
-          profilePath,
-          canonicalUrl: `${baseUrl}${profilePath}`,
+          address: mapped.addressPublicLabel,
+          phone: showContact ? String(row.contactPhone || "").trim() || null : null,
+          imageUrl: mapped.spotImageUrl || mapped.coverImageUrl || mapped.logoUrl,
+          profilePath: `/p/location/${mapped.id}/${mapped.slug}`,
+          canonicalUrl: mapped.seo.canonicalUrl,
+          websiteUrl: mapped.websiteUrl,
           profileSettings,
-          social: {
-            instagramUrl: null,
-            facebookPageUrl: null,
-            xUrl: null,
-          },
+          social: mapped.socialLinks,
         });
       }
 
@@ -510,28 +550,27 @@ export function registerPublicDiscoveryRoutes(app: Express) {
               eq(supplierProducts.isActive, true),
             ),
           );
-        const slug = toSlug(row.businessName) || row.id;
-        const profilePath = `/p/supplier/${row.id}/${slug}`;
+        const mapped = toPublicSupplierProfile({
+          row,
+          activeProductCount: Number(counts?.activeProductCount || 0),
+          baseUrl,
+          showAddress,
+          showContact,
+        });
         return res.json({
+          ...mapped,
           entity: "supplier",
-          id: row.id,
-          title: row.businessName,
+          title: mapped.displayName,
           subtitle: "Supplier",
-          description:
-            row.onlinePaymentsNotes ||
-            row.deliveryNotes ||
-            `${row.businessName} supplies local trucks and kitchens on MealScout.`,
-          address: showAddress ? row.address || null : null,
-          city: row.city || null,
-          state: row.state || null,
-          phone: showContact ? row.contactPhone || null : null,
-          websiteUrl: null,
-          imageUrl: null,
-          profilePath,
-          canonicalUrl: `${baseUrl}${profilePath}`,
+          address: mapped.addressPublicLabel,
+          phone: mapped.phonePublic,
+          imageUrl: mapped.logoUrl,
+          profilePath: `/p/supplier/${mapped.id}/${mapped.slug}`,
+          canonicalUrl: mapped.seo.canonicalUrl,
+          websiteUrl: mapped.websiteUrl,
           profileSettings,
           metrics: {
-            activeProductCount: Number(counts?.activeProductCount || 0),
+            activeProductCount: mapped.activeProductCount,
           },
           social: {
             instagramUrl: null,
