@@ -474,6 +474,10 @@ export function registerTruckImportAdminRoutes(
           String(value || "")
             .trim()
             .toLowerCase();
+        const normalizePhone = (value: any) =>
+          String(value || "")
+            .replace(/[^\d]/g, "")
+            .trim();
         const nameAddressKey = (name: string, address: string) =>
           `${normalize(name)}|${normalize(address)}`;
 
@@ -519,6 +523,9 @@ export function registerTruckImportAdminRoutes(
                   email: truckImportListings.email,
                   name: truckImportListings.name,
                   address: truckImportListings.address,
+                  city: truckImportListings.city,
+                  state: truckImportListings.state,
+                  phone: truckImportListings.phone,
                 })
                 .from(truckImportListings)
                 .where(
@@ -551,6 +558,9 @@ export function registerTruckImportAdminRoutes(
                 .select({
                   name: restaurants.name,
                   address: restaurants.address,
+                  city: restaurants.city,
+                  state: restaurants.state,
+                  phone: restaurants.phone,
                 })
                 .from(restaurants)
                 .where(
@@ -579,15 +589,39 @@ export function registerTruckImportAdminRoutes(
             .filter((value: string) => value.length > 0),
         );
         const existingNameAddressSet = new Set<string>();
+        const existingNameCityStateAddressSet = new Set<string>();
+        const existingNameCityStatePhoneSet = new Set<string>();
         existingImportRows.forEach((row: any) => {
           const name = normalize(row.name);
           const address = normalize(row.address);
+          const city = normalize(row.city);
+          const state = normalize(row.state);
+          const phone = normalizePhone(row.phone);
           if (name && address) existingNameAddressSet.add(`${name}|${address}`);
+          if (name && city && state && address) {
+            existingNameCityStateAddressSet.add(
+              `${name}|${city}|${state}|${address}`,
+            );
+          }
+          if (name && city && state && phone) {
+            existingNameCityStatePhoneSet.add(`${name}|${city}|${state}|${phone}`);
+          }
         });
         existingRestaurantRows.forEach((row: any) => {
           const name = normalize(row.name);
           const address = normalize(row.address);
+          const city = normalize(row.city);
+          const state = normalize(row.state);
+          const phone = normalizePhone(row.phone);
           if (name && address) existingNameAddressSet.add(`${name}|${address}`);
+          if (name && city && state && address) {
+            existingNameCityStateAddressSet.add(
+              `${name}|${city}|${state}|${address}`,
+            );
+          }
+          if (name && city && state && phone) {
+            existingNameCityStatePhoneSet.add(`${name}|${city}|${state}|${phone}`);
+          }
         });
 
         for (const row of rows) {
@@ -601,6 +635,8 @@ export function registerTruckImportAdminRoutes(
           const email = row.email?.trim()?.toLowerCase() || null;
           const externalId = row.externalId?.trim() || null;
           const cityKey = (row.city || "").trim().toLowerCase();
+          const stateKey = (row.state || "").trim().toLowerCase();
+          const phoneKey = normalizePhone(row.phone || "");
           const nameKey = name.toLowerCase();
           const addressKey = addressInput.toLowerCase();
           const dedupeKey = externalId
@@ -609,7 +645,16 @@ export function registerTruckImportAdminRoutes(
               ? `email:${email}`
               : addressInput
                 ? `addr:${nameKey}|${addressKey}`
-                : `name:${nameKey}|${cityKey}`;
+                : phoneKey
+                  ? `name-city-state-phone:${nameKey}|${cityKey}|${stateKey}|${phoneKey}`
+                  : cityKey && stateKey
+                    ? `name-city-state:${nameKey}|${cityKey}|${stateKey}`
+                    : "";
+          if (!dedupeKey) {
+            // Reject weak name-only rows to avoid false matches from common terms.
+            missingRows += 1;
+            continue;
+          }
           if (seenKeys.has(dedupeKey)) {
             duplicateRows += 1;
             continue;
@@ -627,6 +672,26 @@ export function registerTruckImportAdminRoutes(
             addressInput &&
             existingNameAddressSet.has(
               `${normalize(name)}|${normalize(addressInput)}`,
+            )
+          ) {
+            matchScore += 2;
+          }
+          if (
+            cityKey &&
+            stateKey &&
+            addressInput &&
+            existingNameCityStateAddressSet.has(
+              `${normalize(name)}|${cityKey}|${stateKey}|${normalize(addressInput)}`,
+            )
+          ) {
+            matchScore += 2;
+          }
+          if (
+            cityKey &&
+            stateKey &&
+            phoneKey &&
+            existingNameCityStatePhoneSet.has(
+              `${normalize(name)}|${cityKey}|${stateKey}|${phoneKey}`,
             )
           ) {
             matchScore += 2;
