@@ -748,18 +748,88 @@ function MenuSection({
 }
 
 function DealsSection({ profile }: { profile: PublicRestaurantProfile }) {
-  const total = Number(profile.deals.totalActive || 0);
-  if (total <= 0) return null;
+  const dealItems = Array.isArray(profile.deals.items)
+    ? profile.deals.items.filter(
+        (item) =>
+          Boolean(
+            String(item?.id || "").trim() &&
+              String(item?.title || "").trim() &&
+              String(item?.actionHref || "").trim(),
+          ),
+      )
+    : [];
+  if (dealItems.length === 0) return null;
+  const formatDealDate = (value: string | null) => {
+    if (!value) return null;
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return null;
+    return date.toLocaleDateString();
+  };
+  const dateWindowLabel = (item: (typeof dealItems)[number]) => {
+    const start = formatDealDate(item.startAt);
+    const end = formatDealDate(item.endAt);
+    if (start && end && start !== end) return `${start} - ${end}`;
+    if (start && end && start === end) return "Today";
+    if (end) return `Ends ${end}`;
+    if (start) return start;
+    return null;
+  };
+  const dealTypeLabel = (dealType: string) => {
+    if (dealType === "happy_hour") return "Happy hour";
+    if (dealType === "limited_time") return "Limited-time";
+    if (dealType === "family_meal") return "Family meal";
+    if (dealType === "daily") return "Daily";
+    if (dealType === "lunch") return "Lunch";
+    if (dealType === "coupon") return "Coupon";
+    return "Special";
+  };
   return (
     <Card className="border-white/10 bg-[#0f0d0b]">
       <CardHeader>
         <CardTitle className="text-xl text-white">Deals and specials</CardTitle>
       </CardHeader>
-      <CardContent>
-        <div className="rounded-lg border border-white/10 bg-black/20 p-3">
-          <p className="text-xs uppercase tracking-wide text-white/60">Active deals</p>
-          <p className="mt-1 text-2xl font-semibold text-white">{total}</p>
-        </div>
+      <CardContent className="space-y-2.5">
+        {dealItems.map((deal) => (
+          <div key={deal.id} className="rounded-lg border border-white/10 bg-black/20 p-3">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm font-semibold text-white">{deal.title}</p>
+              <Badge variant="outline" className="border-white/20 text-white/80">
+                {dealTypeLabel(deal.dealType)}
+              </Badge>
+            </div>
+            {deal.description ? (
+              <p className="mt-1 text-xs text-white/75">{deal.description}</p>
+            ) : null}
+            <div className="mt-2 flex flex-wrap gap-2">
+              {dateWindowLabel(deal) ? (
+                <Badge variant="secondary">{dateWindowLabel(deal)}</Badge>
+              ) : null}
+              {deal.timeWindowLabel ? (
+                <Badge variant="outline" className="border-white/15 text-white/80">
+                  {deal.timeWindowLabel}
+                </Badge>
+              ) : null}
+            </div>
+            <div className="mt-3">
+              <a
+                href={deal.actionHref}
+                target={
+                  deal.actionType === "internal" || deal.actionType === "show_this_deal"
+                    ? undefined
+                    : "_blank"
+                }
+                rel={
+                  deal.actionType === "internal" || deal.actionType === "show_this_deal"
+                    ? undefined
+                    : "noopener noreferrer"
+                }
+                className="inline-flex items-center rounded-md bg-orange-500 px-3 py-1.5 text-xs font-semibold text-black hover:bg-orange-400"
+              >
+                {deal.actionLabel}
+              </a>
+            </div>
+          </div>
+        ))}
       </CardContent>
     </Card>
   );

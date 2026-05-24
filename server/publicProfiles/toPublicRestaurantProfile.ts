@@ -116,6 +116,68 @@ export function toPublicRestaurantProfile(input: {
         0,
     ) || 0,
   );
+  const dealItemsRaw = Array.isArray(row.dealsItems) ? row.dealsItems : [];
+  const dealItems = dealItemsRaw
+    .map((item: any) => {
+      const id = String(item?.id || "").trim();
+      const title = String(item?.title || "").trim();
+      const actionHref = String(item?.actionHref || "").trim();
+      if (!id || !title || !actionHref) return null;
+      const dealTypeRaw = String(item?.dealType || "other")
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z_]/g, "_");
+      const normalizedDealType = (
+        [
+          "daily",
+          "happy_hour",
+          "lunch",
+          "family_meal",
+          "limited_time",
+          "coupon",
+          "other",
+        ] as const
+      ).includes(dealTypeRaw as any)
+        ? (dealTypeRaw as
+            | "daily"
+            | "happy_hour"
+            | "lunch"
+            | "family_meal"
+            | "limited_time"
+            | "coupon"
+            | "other")
+        : "other";
+      const actionTypeRaw = String(item?.actionType || "show_this_deal")
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z_]/g, "_");
+      const normalizedActionType = (
+        ["call", "show_this_deal", "order", "website", "menu", "internal"] as const
+      ).includes(actionTypeRaw as any)
+        ? (actionTypeRaw as
+            | "call"
+            | "show_this_deal"
+            | "order"
+            | "website"
+            | "menu"
+            | "internal")
+        : "show_this_deal";
+      return {
+        id,
+        title,
+        description: String(item?.description || "").trim() || null,
+        dealType: normalizedDealType,
+        startAt: String(item?.startAt || "").trim() || null,
+        endAt: String(item?.endAt || "").trim() || null,
+        timeWindowLabel: String(item?.timeWindowLabel || "").trim() || null,
+        imageUrl: String(item?.imageUrl || "").trim() || null,
+        actionLabel: String(item?.actionLabel || "").trim() || "View deal",
+        actionHref,
+        actionType: normalizedActionType,
+      };
+    })
+    .filter(Boolean)
+    .slice(0, 8) as PublicRestaurantProfile["deals"]["items"];
   const reviewCount = Math.max(
     0,
     Number(
@@ -208,7 +270,10 @@ export function toPublicRestaurantProfile(input: {
     menuPdfUrl,
     menuUrl,
     featuredMenuItems,
-    deals: { totalActive: dealCount },
+    deals: {
+      totalActive: Math.max(dealCount, dealItems.length),
+      items: dealItems,
+    },
     reviewSummary: { count: reviewCount, rating: reviewRating },
     recommendations: {
       total: recommendationTotal,

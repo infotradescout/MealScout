@@ -391,6 +391,95 @@ const buildPublicTruckSchedulePayload = async (restaurantId: string) => {
   };
 };
 
+const classifyPublicDealType = (input: {
+  title: string;
+  description: string;
+  startTime: string;
+  endTime: string;
+  isOngoing: boolean;
+}) => {
+  const haystack = `${input.title} ${input.description}`.toLowerCase();
+  if (haystack.includes("happy hour")) return "happy_hour" as const;
+  if (haystack.includes("lunch")) return "lunch" as const;
+  if (haystack.includes("family")) return "family_meal" as const;
+  if (haystack.includes("coupon")) return "coupon" as const;
+  if (input.isOngoing || haystack.includes("limited") || haystack.includes("today")) {
+    return "limited_time" as const;
+  }
+  if (input.startTime || input.endTime) return "daily" as const;
+  return "other" as const;
+};
+
+const buildPublicDealsPayload = async (restaurantId: string, row?: any) => {
+  const now = new Date();
+  const dealsRows = await storage.getDealsByRestaurant(restaurantId);
+  const activeDeals = (Array.isArray(dealsRows) ? dealsRows : [])
+    .filter((deal: any) => Boolean(deal?.isActive !== false))
+    .filter((deal: any) => {
+      const startDate = deal?.startDate ? new Date(deal.startDate) : null;
+      const endDate = deal?.endDate ? new Date(deal.endDate) : null;
+      if (startDate && Number.isFinite(startDate.getTime()) && now < startDate) return false;
+      if (endDate && Number.isFinite(endDate.getTime()) && now > endDate) return false;
+      return true;
+    });
+
+  const dealItems = activeDeals
+    .map((deal: any) => {
+      const id = String(deal?.id || "").trim();
+      const title = String(deal?.title || "").trim();
+      if (!id || !title) return null;
+      const description = String(deal?.description || "").trim();
+      const startAt = deal?.startDate ? new Date(deal.startDate).toISOString() : null;
+      const endAt = deal?.endDate ? new Date(deal.endDate).toISOString() : null;
+      const startTime = String(deal?.startTime || "").trim();
+      const endTime = String(deal?.endTime || "").trim();
+      const timeWindowLabel =
+        startTime && endTime ? `${startTime} - ${endTime}` : startTime || endTime || null;
+      const imageUrl = String(deal?.imageUrl || "").trim() || null;
+      const websiteUrl = String(row?.websiteUrl || "").trim() || null;
+      const phone = String(row?.phone || "").trim() || null;
+      let actionLabel = "Show this deal";
+      let actionHref = `/deal/${encodeURIComponent(id)}`;
+      let actionType: "call" | "show_this_deal" | "order" | "website" | "menu" | "internal" =
+        "show_this_deal";
+      if (websiteUrl) {
+        actionLabel = "Order";
+        actionHref = websiteUrl;
+        actionType = "order";
+      } else if (phone) {
+        actionLabel = "Call";
+        actionHref = `tel:${phone}`;
+        actionType = "call";
+      }
+      return {
+        id,
+        title,
+        description: description || null,
+        dealType: classifyPublicDealType({
+          title,
+          description,
+          startTime,
+          endTime,
+          isOngoing: Boolean(deal?.isOngoing),
+        }),
+        startAt,
+        endAt,
+        timeWindowLabel,
+        imageUrl,
+        actionLabel,
+        actionHref,
+        actionType,
+      };
+    })
+    .filter(Boolean)
+    .slice(0, 8);
+
+  return {
+    dealsItems: dealItems,
+    activeDealCount: activeDeals.length,
+  };
+};
+
 const buildPublicMenuPayload = async (restaurantId: string) => {
   const menuRows = await db
     .select({
@@ -980,15 +1069,17 @@ export function registerPublicDiscoveryRoutes(app: Express) {
         const profileSettings = (ownerUser?.publicProfileSettings || {}) as any;
         const showAddress = profileSettings.showAddress !== false;
         const showContact = profileSettings.showContact !== false;
-        const [menuPayload, schedulePayload] = await Promise.all([
+        const [menuPayload, schedulePayload, dealsPayload] = await Promise.all([
           buildPublicMenuPayload(String(row.id)),
           buildPublicTruckSchedulePayload(String(row.id)),
+          buildPublicDealsPayload(String(row.id), row),
         ]);
         const mapped = toPublicTruckProfile({
           row: {
             ...row,
             ...menuPayload,
             ...schedulePayload,
+            ...dealsPayload,
           },
           baseUrl,
           showAddress,
@@ -1019,11 +1110,15 @@ export function registerPublicDiscoveryRoutes(app: Express) {
         const profileSettings = (ownerUser?.publicProfileSettings || {}) as any;
         const showAddress = profileSettings.showAddress !== false;
         const showContact = profileSettings.showContact !== false;
-        const menuPayload = await buildPublicMenuPayload(String(row.id));
+        const [menuPayload, dealsPayload] = await Promise.all([
+          buildPublicMenuPayload(String(row.id)),
+          buildPublicDealsPayload(String(row.id), row),
+        ]);
         const mapped = toPublicBarProfile({
           row: {
             ...row,
             ...menuPayload,
+            ...dealsPayload,
           },
           baseUrl,
           showAddress,
@@ -1088,9 +1183,10 @@ export function registerPublicDiscoveryRoutes(app: Express) {
         const profileSettings = (ownerUser?.publicProfileSettings || {}) as any;
         const showAddress = profileSettings.showAddress !== false;
         const showContact = profileSettings.showContact !== false;
-        const [menuPayload, schedulePayload] = await Promise.all([
+        const [menuPayload, schedulePayload, dealsPayload] = await Promise.all([
           buildPublicMenuPayload(String(row.id)),
           buildPublicTruckSchedulePayload(String(row.id)),
+          buildPublicDealsPayload(String(row.id), row),
         ]);
         if (row.isFoodTruck || row.businessType === "food_truck") {
           const mapped = toPublicTruckProfile({
@@ -1098,6 +1194,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
               ...row,
               ...menuPayload,
               ...schedulePayload,
+              ...dealsPayload,
             },
             baseUrl,
             showAddress,
@@ -1123,6 +1220,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
             row: {
               ...row,
               ...menuPayload,
+              ...dealsPayload,
             },
             baseUrl,
             showAddress,
@@ -1147,6 +1245,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           row: {
             ...row,
             ...menuPayload,
+            ...dealsPayload,
           },
           baseUrl,
           showAddress,

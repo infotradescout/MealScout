@@ -51,6 +51,28 @@ export type PublicReviewSummary = {
 
 export type PublicDealSummary = {
   totalActive: number;
+  items: PublicDealItem[];
+};
+
+export type PublicDealItem = {
+  id: string;
+  title: string;
+  description: string | null;
+  dealType:
+    | "daily"
+    | "happy_hour"
+    | "lunch"
+    | "family_meal"
+    | "limited_time"
+    | "coupon"
+    | "other";
+  startAt: string | null;
+  endAt: string | null;
+  timeWindowLabel: string | null;
+  imageUrl: string | null;
+  actionLabel: string;
+  actionHref: string;
+  actionType: "call" | "show_this_deal" | "order" | "website" | "menu" | "internal";
 };
 
 export type PublicMenuItem = {
