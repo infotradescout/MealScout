@@ -85,11 +85,35 @@ const ctaTarget = (cta: PublicCta) =>
 const ctaRel = (cta: PublicCta) =>
   cta.type === "internal" || cta.type === "phone" ? undefined : "noopener noreferrer";
 
-const pickPrimaryCta = (ctas: PublicCta[]) =>
-  ctas.find((cta) => cta.type === "map") ||
-  ctas.find((cta) => cta.type === "internal") ||
-  ctas[0] ||
-  null;
+const pickPrimaryCta = (profile: PublicProfilePayload, ctas: PublicCta[]) => {
+  const nonSelfInternal = ctas.find(
+    (cta) => cta.type === "internal" && cta.href !== profile.profilePath,
+  );
+
+  if (profile.entity === "restaurant") {
+    return (
+      ctas.find(
+        (cta) =>
+          cta.type === "menu" ||
+          /menu/i.test(cta.label || "") ||
+          /\/menu\//i.test(cta.href || ""),
+      ) ||
+      ctas.find((cta) => cta.type === "map") ||
+      ctas.find((cta) => cta.type === "phone") ||
+      ctas.find((cta) => cta.type === "external") ||
+      nonSelfInternal ||
+      null
+    );
+  }
+
+  return (
+    ctas.find((cta) => cta.type === "map") ||
+    ctas.find((cta) => cta.type === "phone") ||
+    ctas.find((cta) => cta.type === "external") ||
+    nonSelfInternal ||
+    null
+  );
+};
 
 const locationLine = (profile: { addressPublicLabel?: string | null; city?: string | null; state?: string | null }) =>
   profile.addressPublicLabel ||
@@ -120,23 +144,44 @@ const renderCtaButton = (cta: PublicCta, variant: "default" | "outline", key: st
 );
 
 function HeroBlock({ profile, safeCtas }: { profile: PublicProfilePayload; safeCtas: PublicCta[] }) {
-  const primary = pickPrimaryCta(safeCtas);
-  const secondary = safeCtas.find((cta) => cta !== primary) || null;
+  const filteredCtas = safeCtas.filter(
+    (cta) =>
+      !(cta.type === "internal" && cta.href === profile.profilePath) &&
+      !/view details/i.test(cta.label || ""),
+  );
+  const primary = pickPrimaryCta(profile, filteredCtas);
+  const secondary = filteredCtas.find((cta) => cta !== primary) || null;
   const heroImage =
     profile.entity === "host"
       ? profile.spotImageUrl || profile.coverImageUrl || profile.logoUrl || profile.imageUrl
       : profile.entity === "restaurant"
         ? profile.coverImageUrl || profile.logoUrl || profile.imageUrl
         : profile.logoUrl || profile.imageUrl;
+  const initials = String(profile.displayName || "MS")
+    .split(" ")
+    .map((part) => part[0] || "")
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
 
   return (
     <section className="overflow-hidden rounded-2xl border border-white/10 bg-[#0f0d0b]">
-      <div
-        className="h-44 w-full bg-cover bg-center md:h-56"
-        style={{
-          backgroundImage: `linear-gradient(180deg, rgba(0,0,0,.2), rgba(0,0,0,.8)), url('${heroImage || DEFAULT_IMAGE}')`,
-        }}
-      />
+      {heroImage ? (
+        <div
+          className="h-52 w-full bg-cover bg-center md:h-64"
+          style={{
+            backgroundImage: `linear-gradient(180deg, rgba(0,0,0,.16), rgba(0,0,0,.78)), url('${heroImage}')`,
+          }}
+        />
+      ) : (
+        <div className="relative h-52 w-full bg-[radial-gradient(circle_at_22%_24%,rgba(255,96,35,0.34),transparent_48%),linear-gradient(145deg,#1d100a_0%,#120d09_48%,#0d0a08_100%)] md:h-64">
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="flex h-20 w-20 items-center justify-center rounded-full border border-orange-300/35 bg-black/30 text-2xl font-black text-orange-100">
+              {initials}
+            </div>
+          </div>
+        </div>
+      )}
       <div className="space-y-3 p-4">
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant="outline" className="border-orange-400/50 text-orange-200">
@@ -510,7 +555,7 @@ function RestaurantSignals({ profile }: { profile: PublicRestaurantProfile }) {
             ))}
           </div>
         ) : (
-          <p className="text-sm text-white/75">Worth checking out nearby.</p>
+          <p className="text-sm text-white/75">Check today's location and hours before you go.</p>
         )}
       </CardContent>
     </Card>
@@ -518,6 +563,12 @@ function RestaurantSignals({ profile }: { profile: PublicRestaurantProfile }) {
 }
 
 function RestaurantHighlights({ profile }: { profile: PublicRestaurantProfile }) {
+  const metrics = [
+    { label: "Deals", value: Number(profile.deals.totalActive || 0) },
+    { label: "Recommendations", value: Number(profile.recommendations.total || 0) },
+    { label: "Reviews", value: Number(profile.reviewSummary.count || 0) },
+  ].filter((metric) => metric.value > 0);
+
   return (
     <Card className="border-white/10 bg-[#0f0d0b]">
       <CardHeader>
@@ -536,20 +587,16 @@ function RestaurantHighlights({ profile }: { profile: PublicRestaurantProfile })
             </div>
           </div>
         ) : null}
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <div className="rounded-lg border border-white/10 bg-black/20 p-3">
-            <p className="text-xs uppercase tracking-wide text-white/60">Deals</p>
-            <p className="mt-1 text-2xl font-semibold text-white">{profile.deals.totalActive}</p>
+        {metrics.length > 0 ? (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            {metrics.map((metric) => (
+              <div key={metric.label} className="rounded-lg border border-white/10 bg-black/20 p-3">
+                <p className="text-xs uppercase tracking-wide text-white/60">{metric.label}</p>
+                <p className="mt-1 text-2xl font-semibold text-white">{metric.value}</p>
+              </div>
+            ))}
           </div>
-          <div className="rounded-lg border border-white/10 bg-black/20 p-3">
-            <p className="text-xs uppercase tracking-wide text-white/60">Recommendations</p>
-            <p className="mt-1 text-2xl font-semibold text-white">{profile.recommendations.total}</p>
-          </div>
-          <div className="rounded-lg border border-white/10 bg-black/20 p-3">
-            <p className="text-xs uppercase tracking-wide text-white/60">Reviews</p>
-            <p className="mt-1 text-2xl font-semibold text-white">{profile.reviewSummary.count}</p>
-          </div>
-        </div>
+        ) : null}
         {profile.menuUrl ? (
           <a
             href={profile.menuUrl}
@@ -731,8 +778,17 @@ export default function PublicProfilePage() {
           <>
             <RestaurantSignals profile={data} />
             <GalleryStrip profile={data} />
-            <RestaurantHighlights profile={data} />
-            <RestaurantSchedule profile={data} />
+            {data.profileType === "truck" ? (
+              <>
+                <RestaurantSchedule profile={data} />
+                <RestaurantHighlights profile={data} />
+              </>
+            ) : (
+              <>
+                <RestaurantHighlights profile={data} />
+                <RestaurantSchedule profile={data} />
+              </>
+            )}
             <RestaurantSocial profile={data} safeCtas={safeCtas} />
           </>
         ) : (
