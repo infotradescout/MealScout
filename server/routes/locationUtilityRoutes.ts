@@ -10,6 +10,28 @@ type LocationUtilityRouteDependencies = {
   hasBusinessDistributionAccess: (userId: string) => Promise<boolean>;
 };
 
+const GOOGLE_PLACE_PHOTO_HOST_RE = /(^|\/\/)(lh\d*\.googleusercontent\.com|maps\.googleapis\.com)(\/|$)/i;
+
+const isGooglePlacePhotoUrl = (value: unknown): boolean => {
+  const url = String(value || "").trim();
+  if (!url) return false;
+  return GOOGLE_PLACE_PHOTO_HOST_RE.test(url);
+};
+
+const sanitizeRestaurantMedia = <T extends Record<string, unknown>>(restaurant: T): T => {
+  const next = { ...restaurant } as T & {
+    coverImageUrl?: unknown;
+    logoUrl?: unknown;
+    heroImageUrl?: unknown;
+    imageUrl?: unknown;
+  };
+  if (isGooglePlacePhotoUrl(next.coverImageUrl)) next.coverImageUrl = null;
+  if (isGooglePlacePhotoUrl(next.heroImageUrl)) next.heroImageUrl = null;
+  if (isGooglePlacePhotoUrl(next.imageUrl)) next.imageUrl = null;
+  if (isGooglePlacePhotoUrl(next.logoUrl)) next.logoUrl = null;
+  return next as T;
+};
+
 export function registerLocationUtilityRoutes(
   app: Express,
   { hasBusinessDistributionAccess }: LocationUtilityRouteDependencies,
@@ -146,7 +168,7 @@ export function registerLocationUtilityRoutes(
 
       res.json(
         restaurants.map((restaurant) => ({
-          ...restaurant,
+          ...sanitizeRestaurantMedia(restaurant),
           activeDealsCount: dealCounts[restaurant.id] || 0,
         })),
       );

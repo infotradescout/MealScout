@@ -93,6 +93,21 @@ const milesBetween = (
 const dedupe = (items: string[]) =>
   Array.from(new Set(items.map((item) => item.trim()).filter(Boolean)));
 
+const GOOGLE_PLACE_PHOTO_HOST_RE = /(^|\/\/)(lh\d*\.googleusercontent\.com|maps\.googleapis\.com)(\/|$)/i;
+const isGooglePlacePhotoUrl = (value: unknown): boolean => {
+  const url = String(value || "").trim();
+  if (!url) return false;
+  return GOOGLE_PLACE_PHOTO_HOST_RE.test(url);
+};
+const pickTrustedBusinessImage = (...candidates: Array<unknown>): string | null => {
+  const urls = candidates
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
+  if (!urls.length) return null;
+  const firstNonGoogle = urls.find((url) => !isGooglePlacePhotoUrl(url));
+  return firstNonGoogle || null;
+};
+
 const isRestaurantOpenNow = (restaurant: any): boolean => {
   const explicit = [
     restaurant?.isOpen,
@@ -620,9 +635,12 @@ export async function buildScoutSurface(
       entityId: restaurantId,
       title: String((restaurant as any)?.name || "Restaurant"),
       subtitle: String((restaurant as any)?.cuisineType || "").trim() || undefined,
-      imageUrl: ((restaurant as any)?.coverImageUrl || (restaurant as any)?.logoUrl || null) as
-        | string
-        | null,
+      imageUrl: pickTrustedBusinessImage(
+        (restaurant as any)?.coverImageUrl,
+        (restaurant as any)?.heroImageUrl,
+        (restaurant as any)?.imageUrl,
+        (restaurant as any)?.logoUrl,
+      ),
       distanceMiles:
         typeof distanceMiles === "number" && Number.isFinite(distanceMiles)
           ? Number(distanceMiles.toFixed(2))
