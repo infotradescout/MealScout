@@ -636,10 +636,10 @@ export async function buildScoutSurface(
       title: String((restaurant as any)?.name || "Restaurant"),
       subtitle: String((restaurant as any)?.cuisineType || "").trim() || undefined,
       imageUrl: pickTrustedBusinessImage(
+        (restaurant as any)?.logoUrl,
         (restaurant as any)?.coverImageUrl,
         (restaurant as any)?.heroImageUrl,
         (restaurant as any)?.imageUrl,
-        (restaurant as any)?.logoUrl,
       ),
       distanceMiles:
         typeof distanceMiles === "number" && Number.isFinite(distanceMiles)

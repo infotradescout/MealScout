@@ -24,11 +24,23 @@ const sanitizeRestaurantMedia = <T extends Record<string, unknown>>(restaurant: 
     logoUrl?: unknown;
     heroImageUrl?: unknown;
     imageUrl?: unknown;
+    isVerified?: unknown;
+    claimedFromImportId?: unknown;
   };
   if (isGooglePlacePhotoUrl(next.coverImageUrl)) next.coverImageUrl = null;
   if (isGooglePlacePhotoUrl(next.heroImageUrl)) next.heroImageUrl = null;
   if (isGooglePlacePhotoUrl(next.imageUrl)) next.imageUrl = null;
   if (isGooglePlacePhotoUrl(next.logoUrl)) next.logoUrl = null;
+  const importedClaim =
+    String(next.claimedFromImportId || "").trim().length > 0;
+  const verified = Boolean(next.isVerified);
+  // Imported + unverified records are most likely to carry stale third-party cover photos.
+  // Keep logo (if present), but suppress broader hero/cover/image fields until verified.
+  if (importedClaim && !verified) {
+    next.coverImageUrl = null;
+    next.heroImageUrl = null;
+    next.imageUrl = null;
+  }
   return next as T;
 };
 
