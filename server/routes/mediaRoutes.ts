@@ -13,6 +13,12 @@ import {
 import { imageUploads } from "@shared/schema";
 
 export function registerMediaRoutes(app: Express) {
+  const isStaffOrAdminUserType = (userType?: string | null) =>
+    userType === "staff" ||
+    userType === "admin" ||
+    userType === "duper_admin" ||
+    userType === "super_admin";
+
   app.post(
     "/api/upload/restaurant-logo",
     isAuthenticated,
@@ -35,7 +41,13 @@ export function registerMediaRoutes(app: Express) {
         }
 
         const restaurant = await storage.getRestaurant(restaurantId);
-        if (!restaurant || restaurant.ownerId !== req.user.id) {
+        if (!restaurant) {
+          return res.status(404).json({ message: "Restaurant not found" });
+        }
+        if (
+          restaurant.ownerId !== req.user.id &&
+          !isStaffOrAdminUserType(req.user?.userType)
+        ) {
           return res.status(403).json({ message: "Not authorized" });
         }
 
@@ -96,7 +108,13 @@ export function registerMediaRoutes(app: Express) {
         }
 
         const restaurant = await storage.getRestaurant(restaurantId);
-        if (!restaurant || restaurant.ownerId !== req.user.id) {
+        if (!restaurant) {
+          return res.status(404).json({ message: "Restaurant not found" });
+        }
+        if (
+          restaurant.ownerId !== req.user.id &&
+          !isStaffOrAdminUserType(req.user?.userType)
+        ) {
           return res.status(403).json({ message: "Not authorized" });
         }
 
@@ -162,7 +180,13 @@ export function registerMediaRoutes(app: Express) {
         }
 
         const restaurant = await storage.getRestaurant(deal.restaurantId);
-        if (!restaurant || restaurant.ownerId !== req.user.id) {
+        if (!restaurant) {
+          return res.status(404).json({ message: "Restaurant not found" });
+        }
+        if (
+          restaurant.ownerId !== req.user.id &&
+          !isStaffOrAdminUserType(req.user?.userType)
+        ) {
           return res.status(403).json({ message: "Not authorized" });
         }
 
@@ -215,10 +239,26 @@ export function registerMediaRoutes(app: Express) {
           return res.status(400).json({ message: "No image file provided" });
         }
 
+        const targetUserId = String(req.body.userId || req.user.id || "").trim();
+        if (!targetUserId) {
+          return res.status(400).json({ message: "User ID required" });
+        }
+        if (
+          targetUserId !== req.user.id &&
+          !isStaffOrAdminUserType(req.user?.userType)
+        ) {
+          return res.status(403).json({ message: "Not authorized" });
+        }
+
+        const targetUser = await storage.getUser(targetUserId);
+        if (!targetUser) {
+          return res.status(404).json({ message: "User not found" });
+        }
+
         const result = await uploadToCloudinary(
           req.file.buffer,
           "user-profiles",
-          `user-${req.user.id}`,
+          `user-${targetUserId}`,
         );
 
         const imageUpload = await db
@@ -226,7 +266,7 @@ export function registerMediaRoutes(app: Express) {
           .values({
             uploadedByUserId: req.user.id,
             imageType: "user_profile",
-            entityId: req.user.id,
+            entityId: targetUserId,
             entityType: "user",
             cloudinaryPublicId: result.publicId,
             cloudinaryUrl: result.secureUrl,
@@ -239,7 +279,7 @@ export function registerMediaRoutes(app: Express) {
           .returning();
 
         await storage.upsertUser({
-          ...req.user,
+          ...targetUser,
           profileImageUrl: result.secureUrl,
         });
 

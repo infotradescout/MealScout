@@ -44,7 +44,7 @@ import {
   type MenuItemModifier,
 } from "@shared/schema";
 import { eq, and, asc, inArray, isNotNull, isNull } from "drizzle-orm";
-import { isAuthenticated, isRestaurantOwner, isStaffOrAdmin } from "../unifiedAuth";
+import { isAuthenticated, isStaffOrAdmin } from "../unifiedAuth";
 import { storage } from "../storage";
 import { parseMenuCsv } from "../utils/menuCsvParser";
 import { parsePdfMenuWithAi } from "../utils/menuPdfParser";
@@ -62,28 +62,48 @@ const upload = multer({
 });
 
 // ── Ownership helper ──────────────────────────────────────────────────────────
-async function assertOwnsRestaurant(userId: string, restaurantId: string) {
-  const ok = await storage.verifyRestaurantOwnership(restaurantId, userId);
+const isMenuManagerUserType = (userType?: string | null) =>
+  userType === "restaurant_owner" ||
+  userType === "staff" ||
+  userType === "admin" ||
+  userType === "duper_admin" ||
+  userType === "super_admin";
+
+const canManageMenu = (req: any, res: any, next: any) => {
+  if (!req.isAuthenticated()) {
+    return res.status(401).json({ error: "Authentication required" });
+  }
+  if (!isMenuManagerUserType(req.user?.userType)) {
+    return res.status(403).json({ error: "Menu management access required" });
+  }
+  next();
+};
+
+async function assertOwnsRestaurant(reqUser: any, restaurantId: string) {
+  if (reqUser?.userType && reqUser.userType !== "restaurant_owner") {
+    return;
+  }
+  const ok = await storage.verifyRestaurantOwnership(restaurantId, reqUser.id);
   if (!ok)
     throw Object.assign(new Error("Not authorized"), { statusCode: 403 });
 }
 
-async function assertOwnsMenu(userId: string, menuId: string) {
+async function assertOwnsMenu(reqUser: any, menuId: string) {
   const [menu] = await db.select().from(menus).where(eq(menus.id, menuId));
   if (!menu)
     throw Object.assign(new Error("Menu not found"), { statusCode: 404 });
-  await assertOwnsRestaurant(userId, menu.restaurantId);
+  await assertOwnsRestaurant(reqUser, menu.restaurantId);
   return menu;
 }
 
-async function assertOwnsMenuItem(userId: string, itemId: string) {
+async function assertOwnsMenuItem(reqUser: any, itemId: string) {
   const [item] = await db
     .select()
     .from(menuItems)
     .where(eq(menuItems.id, itemId));
   if (!item)
     throw Object.assign(new Error("Item not found"), { statusCode: 404 });
-  await assertOwnsRestaurant(userId, item.restaurantId);
+  await assertOwnsRestaurant(reqUser, item.restaurantId);
   return item;
 }
 
@@ -805,10 +825,10 @@ export function registerMenuRoutes(app: Express) {
   app.get(
     "/api/owner/restaurants/:restaurantId/ordering-readiness",
     isAuthenticated,
-    isRestaurantOwner,
+    canManageMenu,
     wrap(async (req, res) => {
       const { restaurantId } = req.params;
-      await assertOwnsRestaurant(req.user.id, restaurantId);
+      await assertOwnsRestaurant(req.user, restaurantId);
       res.json(await buildOrderingReadiness(restaurantId));
     }),
   );
@@ -834,10 +854,10 @@ export function registerMenuRoutes(app: Express) {
   app.get(
     "/api/owner/menus/:restaurantId",
     isAuthenticated,
-    isRestaurantOwner,
+    canManageMenu,
     wrap(async (req, res) => {
       const { restaurantId } = req.params;
-      await assertOwnsRestaurant(req.user.id, restaurantId);
+      await assertOwnsRestaurant(req.user, restaurantId);
 
       const restaurantMenus = await db
         .select()
@@ -856,10 +876,10 @@ export function registerMenuRoutes(app: Express) {
   app.post(
     "/api/owner/menus",
     isAuthenticated,
-    isRestaurantOwner,
+    canManageMenu,
     wrap(async (req, res) => {
       const body = insertMenuSchema.parse(req.body);
-      await assertOwnsRestaurant(req.user.id, body.restaurantId);
+      await assertOwnsRestaurant(req.user, body.restaurantId);
 
       const [menu] = await db.insert(menus).values(body).returning();
 
@@ -886,10 +906,10 @@ export function registerMenuRoutes(app: Express) {
   app.patch(
     "/api/owner/menus/:menuId",
     isAuthenticated,
-    isRestaurantOwner,
+    canManageMenu,
     wrap(async (req, res) => {
       const { menuId } = req.params;
-      await assertOwnsMenu(req.user.id, menuId);
+      await assertOwnsMenu(req.user, menuId);
 
       const updateSchema = insertMenuSchema
         .partial()
@@ -912,10 +932,10 @@ export function registerMenuRoutes(app: Express) {
   app.delete(
     "/api/owner/menus/:menuId",
     isAuthenticated,
-    isRestaurantOwner,
+    canManageMenu,
     wrap(async (req, res) => {
       const { menuId } = req.params;
-      await assertOwnsMenu(req.user.id, menuId);
+      await assertOwnsMenu(req.user, menuId);
 
       await db
         .update(menus)
@@ -933,10 +953,10 @@ export function registerMenuRoutes(app: Express) {
   app.post(
     "/api/owner/menu-categories",
     isAuthenticated,
-    isRestaurantOwner,
+    canManageMenu,
     wrap(async (req, res) => {
       const body = insertMenuCategorySchema.parse(req.body);
-      await assertOwnsMenu(req.user.id, body.menuId);
+      await assertOwnsMenu(req.user, body.menuId);
 
       const [cat] = await db.insert(menuCategories).values(body).returning();
       res.status(201).json({ category: cat });
@@ -949,7 +969,7 @@ export function registerMenuRoutes(app: Express) {
   app.patch(
     "/api/owner/menu-categories/:categoryId",
     isAuthenticated,
-    isRestaurantOwner,
+    canManageMenu,
     wrap(async (req, res) => {
       const { categoryId } = req.params;
       const [cat] = await db
@@ -957,7 +977,7 @@ export function registerMenuRoutes(app: Express) {
         .from(menuCategories)
         .where(eq(menuCategories.id, categoryId));
       if (!cat) return res.status(404).json({ message: "Category not found" });
-      await assertOwnsRestaurant(req.user.id, cat.restaurantId);
+      await assertOwnsRestaurant(req.user, cat.restaurantId);
 
       const updateSchema = insertMenuCategorySchema
         .partial()
@@ -979,7 +999,7 @@ export function registerMenuRoutes(app: Express) {
   app.delete(
     "/api/owner/menu-categories/:categoryId",
     isAuthenticated,
-    isRestaurantOwner,
+    canManageMenu,
     wrap(async (req, res) => {
       const { categoryId } = req.params;
       const [cat] = await db
@@ -987,7 +1007,7 @@ export function registerMenuRoutes(app: Express) {
         .from(menuCategories)
         .where(eq(menuCategories.id, categoryId));
       if (!cat) return res.status(404).json({ message: "Category not found" });
-      await assertOwnsRestaurant(req.user.id, cat.restaurantId);
+      await assertOwnsRestaurant(req.user, cat.restaurantId);
 
       await db
         .update(menuCategories)
@@ -1005,10 +1025,10 @@ export function registerMenuRoutes(app: Express) {
   app.post(
     "/api/owner/menu-items",
     isAuthenticated,
-    isRestaurantOwner,
+    canManageMenu,
     wrap(async (req, res) => {
       const body = insertMenuItemSchema.parse(req.body);
-      await assertOwnsMenu(req.user.id, body.menuId);
+      await assertOwnsMenu(req.user, body.menuId);
 
       const [item] = await db.insert(menuItems).values(body).returning();
       res.status(201).json({ item });
@@ -1021,10 +1041,10 @@ export function registerMenuRoutes(app: Express) {
   app.patch(
     "/api/owner/menu-items/:itemId",
     isAuthenticated,
-    isRestaurantOwner,
+    canManageMenu,
     wrap(async (req, res) => {
       const { itemId } = req.params;
-      await assertOwnsMenuItem(req.user.id, itemId);
+      await assertOwnsMenuItem(req.user, itemId);
 
       const updateSchema = insertMenuItemSchema
         .partial()
@@ -1047,10 +1067,10 @@ export function registerMenuRoutes(app: Express) {
   app.delete(
     "/api/owner/menu-items/:itemId",
     isAuthenticated,
-    isRestaurantOwner,
+    canManageMenu,
     wrap(async (req, res) => {
       const { itemId } = req.params;
-      await assertOwnsMenuItem(req.user.id, itemId);
+      await assertOwnsMenuItem(req.user, itemId);
 
       await db
         .update(menuItems)
@@ -1069,10 +1089,10 @@ export function registerMenuRoutes(app: Express) {
   app.patch(
     "/api/owner/menu-items/:itemId/inventory",
     isAuthenticated,
-    isRestaurantOwner,
+    canManageMenu,
     wrap(async (req, res) => {
       const { itemId } = req.params;
-      await assertOwnsMenuItem(req.user.id, itemId);
+      await assertOwnsMenuItem(req.user, itemId);
 
       const { inventoryQty } = z
         .object({ inventoryQty: z.number().int().min(0) })
@@ -1100,10 +1120,10 @@ export function registerMenuRoutes(app: Express) {
   app.put(
     "/api/owner/menu-items/:itemId/variants",
     isAuthenticated,
-    isRestaurantOwner,
+    canManageMenu,
     wrap(async (req, res) => {
       const { itemId } = req.params;
-      await assertOwnsMenuItem(req.user.id, itemId);
+      await assertOwnsMenuItem(req.user, itemId);
 
       const variantList = z
         .array(insertMenuItemVariantSchema)
@@ -1134,10 +1154,10 @@ export function registerMenuRoutes(app: Express) {
   app.put(
     "/api/owner/menu-items/:itemId/modifiers",
     isAuthenticated,
-    isRestaurantOwner,
+    canManageMenu,
     wrap(async (req, res) => {
       const { itemId } = req.params;
-      await assertOwnsMenuItem(req.user.id, itemId);
+      await assertOwnsMenuItem(req.user, itemId);
 
       const modList = z
         .array(insertMenuItemModifierSchema)
@@ -1170,11 +1190,11 @@ export function registerMenuRoutes(app: Express) {
   app.post(
     "/api/owner/menus/:menuId/import/csv",
     isAuthenticated,
-    isRestaurantOwner,
+    canManageMenu,
     upload.single("file"),
     wrap(async (req, res) => {
       const { menuId } = req.params;
-      const menu = await assertOwnsMenu(req.user.id, menuId);
+      const menu = await assertOwnsMenu(req.user, menuId);
 
       if (!req.file) {
         return res.status(400).json({ message: "No file uploaded" });
@@ -1228,11 +1248,11 @@ export function registerMenuRoutes(app: Express) {
   app.post(
     "/api/owner/menus/:menuId/import/pdf",
     isAuthenticated,
-    isRestaurantOwner,
+    canManageMenu,
     upload.single("file"),
     wrap(async (req, res) => {
       const { menuId } = req.params;
-      const menu = await assertOwnsMenu(req.user.id, menuId);
+      const menu = await assertOwnsMenu(req.user, menuId);
 
       if (!req.file) {
         return res.status(400).json({ message: "No file uploaded" });
@@ -1284,10 +1304,10 @@ export function registerMenuRoutes(app: Express) {
   app.post(
     "/api/owner/menus/:menuId/import/external",
     isAuthenticated,
-    isRestaurantOwner,
+    canManageMenu,
     wrap(async (req, res) => {
       const { menuId } = req.params;
-      const menu = await assertOwnsMenu(req.user.id, menuId);
+      const menu = await assertOwnsMenu(req.user, menuId);
 
       const bodySchema = z.object({
         source: z.enum([
@@ -1348,10 +1368,10 @@ export function registerMenuRoutes(app: Express) {
   app.post(
     "/api/owner/menus/:menuId/pos-connection-request",
     isAuthenticated,
-    isRestaurantOwner,
+    canManageMenu,
     wrap(async (req, res) => {
       const { menuId } = req.params;
-      const menu = await assertOwnsMenu(req.user.id, menuId);
+      const menu = await assertOwnsMenu(req.user, menuId);
 
       const bodySchema = z.object({
         source: z.enum([
@@ -1415,10 +1435,10 @@ export function registerMenuRoutes(app: Express) {
   app.get(
     "/api/owner/menus/:menuId/import-logs",
     isAuthenticated,
-    isRestaurantOwner,
+    canManageMenu,
     wrap(async (req, res) => {
       const { menuId } = req.params;
-      const menu = await assertOwnsMenu(req.user.id, menuId);
+      const menu = await assertOwnsMenu(req.user, menuId);
 
       const logs = await db
         .select()
@@ -1535,3 +1555,4 @@ function normalizeExternalMenuData(
 
   return { imported, skipped, errors };
 }
+
