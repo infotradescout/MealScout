@@ -1152,6 +1152,9 @@ export function registerRestaurantCoreRoutes(
           like_count: number;
           share_count: number;
           viewer_reaction: string | null;
+          recommendation_comment: string | null;
+          recommendation_photo_url: string | null;
+          has_video_recommendation: boolean;
         }>`
           select
             rur.id,
@@ -1161,7 +1164,36 @@ export function registerRestaurantCoreRoutes(
             u.last_name,
             coalesce(sum(case rr.reaction_type when 'like' then 1 else 0 end), 0)::int as like_count,
             coalesce(count(distinct rs.id), 0)::int as share_count,
-            max(case when rr.user_id = ${viewerId} then rr.reaction_type else null end) as viewer_reaction
+            max(case when rr.user_id = ${viewerId} then rr.reaction_type else null end) as viewer_reaction,
+            (
+              select rv.comment
+              from reviews rv
+              where rv.restaurant_id = rur.restaurant_id
+                and rv.user_id = rur.user_id
+                and rv.comment is not null
+                and length(trim(rv.comment)) > 0
+              order by rv.created_at desc
+              limit 1
+            ) as recommendation_comment,
+            (
+              select substring(rv.comment from '(https?://\\S+)')
+              from reviews rv
+              where rv.restaurant_id = rur.restaurant_id
+                and rv.user_id = rur.user_id
+                and rv.comment is not null
+                and rv.comment ~* '(https?://\\S+)'
+              order by rv.created_at desc
+              limit 1
+            ) as recommendation_photo_url,
+            exists(
+              select 1
+              from video_stories vs
+              where vs.restaurant_id = rur.restaurant_id
+                and vs.user_id = rur.user_id
+                and vs.status = 'ready'
+                and vs.deleted_at is null
+                and (vs.is_approved is null or vs.is_approved = true)
+            ) as has_video_recommendation
           from restaurant_user_recommendations rur
           inner join users u on u.id = rur.user_id
           left join recommendation_reactions rr on rr.recommendation_id = rur.id
@@ -1184,6 +1216,11 @@ export function registerRestaurantCoreRoutes(
             "Community Member",
           likeCount: Number(row.like_count) || 0,
           shareCount: Number(row.share_count) || 0,
+          comment:
+            String(row.recommendation_comment || "").trim() || null,
+          photoUrl:
+            String(row.recommendation_photo_url || "").trim() || null,
+          hasVideoRecommendation: Boolean(row.has_video_recommendation),
           viewerReaction:
             row.viewer_reaction === "like" || row.viewer_reaction === "dislike"
               ? row.viewer_reaction

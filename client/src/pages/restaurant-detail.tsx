@@ -58,6 +58,9 @@ type PublicRecommendation = {
   authorName: string;
   likeCount: number;
   shareCount: number;
+  comment?: string | null;
+  photoUrl?: string | null;
+  hasVideoRecommendation?: boolean;
   viewerReaction: "like" | "dislike" | null;
 };
 
@@ -79,6 +82,9 @@ export default function RestaurantDetailPage() {
     useState(false);
   const [isSubmittingRecommendation, setIsSubmittingRecommendation] =
     useState(false);
+  const [recommendDialogOpen, setRecommendDialogOpen] = useState(false);
+  const [recommendComment, setRecommendComment] = useState("");
+  const [recommendPhotoUrl, setRecommendPhotoUrl] = useState("");
   const [businessMessage, setBusinessMessage] = useState({
     name: "",
     email: "",
@@ -375,6 +381,10 @@ export default function RestaurantDetailPage() {
   };
 
   const handleRecommend = async () => {
+    setRecommendDialogOpen(true);
+  };
+
+  const handleSubmitRecommendationComposer = async () => {
     if (!user) {
       window.location.href = "/login";
       return;
@@ -388,18 +398,40 @@ export default function RestaurantDetailPage() {
         `/api/restaurants/${restaurantId}/recommend`,
         {},
       );
+      const commentText = recommendComment.trim();
+      const photoText = recommendPhotoUrl.trim();
+      const mergedComment =
+        commentText || photoText
+          ? [commentText, photoText ? `Photo: ${photoText}` : ""]
+              .filter(Boolean)
+              .join("\n\n")
+          : "";
+      if (mergedComment) {
+        await apiRequest("POST", "/api/reviews", {
+          restaurantId,
+          rating: 5,
+          comment: mergedComment,
+        });
+      }
       const alreadyExists = Boolean((result as any)?.alreadyExists);
       if (alreadyExists) {
         toast({
           title: "Already recommended",
-          description: "Thanks for supporting this place.",
+          description: mergedComment
+            ? "Thanks for supporting this place. Your note was saved."
+            : "Thanks for supporting this place.",
         });
       } else {
         toast({
           title: "Recommendation added",
-          description: "Your recommendation helps locals choose.",
+          description: mergedComment
+            ? "Your recommendation and note help locals choose."
+            : "Your recommendation helps locals choose.",
         });
       }
+      setRecommendDialogOpen(false);
+      setRecommendComment("");
+      setRecommendPhotoUrl("");
       await refetchRecommendations();
     } catch (error: any) {
       toast({
@@ -1109,16 +1141,73 @@ export default function RestaurantDetailPage() {
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => void handleRecommend()}
+                onClick={() => setRecommendDialogOpen(true)}
                 disabled={isSubmittingRecommendation}
               >
                 {isSubmittingRecommendation ? "Adding..." : "Recommend"}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() =>
+                  (window.location.href = `/video?restaurantId=${encodeURIComponent(
+                    String(restaurantId || ""),
+                  )}&from=recommendation`)
+                }
+              >
+                Post video
               </Button>
               {restaurantId && (
                 <FlagProfileContentDialog restaurantId={restaurantId} />
               )}
             </div>
           </div>
+          <Dialog open={recommendDialogOpen} onOpenChange={setRecommendDialogOpen}>
+            <DialogContent className="max-w-md bg-[var(--bg-card)] border-white/10">
+              <DialogHeader>
+                <DialogTitle>Add recommendation</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="recommend-note">Comment</Label>
+                  <Textarea
+                    id="recommend-note"
+                    value={recommendComment}
+                    onChange={(e) => setRecommendComment(e.target.value)}
+                    placeholder="Why should locals try this spot?"
+                    rows={4}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="recommend-photo">Photo URL (optional)</Label>
+                  <Input
+                    id="recommend-photo"
+                    value={recommendPhotoUrl}
+                    onChange={(e) => setRecommendPhotoUrl(e.target.value)}
+                    placeholder="https://..."
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() =>
+                    (window.location.href = `/video?restaurantId=${encodeURIComponent(
+                      String(restaurantId || ""),
+                    )}&from=recommendation`)
+                  }
+                >
+                  Post video recommendation
+                </Button>
+                <Button
+                  onClick={() => void handleSubmitRecommendationComposer()}
+                  disabled={isSubmittingRecommendation}
+                >
+                  {isSubmittingRecommendation ? "Saving..." : "Submit recommendation"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
           {recommendationRows.length > 0 ? (
             <div className="space-y-3">
               {recommendationRows.map((rec) => (
@@ -1137,6 +1226,26 @@ export default function RestaurantDetailPage() {
                             ? new Date(rec.createdAt).toLocaleDateString()
                             : "Recent"}
                         </p>
+                        {rec.comment ? (
+                          <p className="text-sm text-white/80 mt-2 whitespace-pre-line">
+                            {rec.comment}
+                          </p>
+                        ) : null}
+                        <div className="flex items-center gap-2 mt-2">
+                          {rec.photoUrl ? (
+                            <a
+                              href={rec.photoUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-primary underline underline-offset-2"
+                            >
+                              View photo
+                            </a>
+                          ) : null}
+                          {rec.hasVideoRecommendation ? (
+                            <Badge variant="outline">Video recommendation</Badge>
+                          ) : null}
+                        </div>
                       </div>
                       <div className="flex items-center gap-1">
                         <Button
