@@ -73,6 +73,42 @@ export function toPublicRestaurantProfile(input: {
     .map((item: unknown) => String(item || "").trim())
     .filter(Boolean)
     .slice(0, 12);
+  const rawGalleryImages = Array.isArray(row.galleryImages) ? row.galleryImages : [];
+  const mappedGalleryImages = rawGalleryImages
+    .map((entry: any) => {
+      if (!entry) return null;
+      if (typeof entry === "string") {
+        return imageAsset(entry, "gallery");
+      }
+      const url = String(entry?.url || entry?.imageUrl || "").trim();
+      if (!url) return null;
+      const sourceRaw = String(entry?.source || "gallery")
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z_]/g, "_");
+      const source = (
+        ["cover_image", "logo", "gallery", "google_photo", "spot_image", "fallback"] as const
+      ).includes(sourceRaw as any)
+        ? (sourceRaw as
+            | "cover_image"
+            | "logo"
+            | "gallery"
+            | "google_photo"
+            | "spot_image"
+            | "fallback")
+        : "gallery";
+      const publicApproved =
+        entry?.publicApproved === undefined ? true : Boolean(entry?.publicApproved);
+      if (!publicApproved) return null;
+      const built = imageAsset(url, source);
+      if (!built) return null;
+      return {
+        ...built,
+        publicApproved,
+        lastVerifiedAt: String(entry?.lastVerifiedAt || "").trim() || built.lastVerifiedAt,
+      };
+    })
+    .filter(Boolean) as PublicRestaurantProfile["galleryImages"];
   const menuSectionsRaw = Array.isArray(row.menuSections) ? row.menuSections : [];
   const menuSections = menuSectionsRaw
     .map((section: any) => {
@@ -324,7 +360,18 @@ export function toPublicRestaurantProfile(input: {
     galleryImages: [
       imageAsset(coverImageUrl, "cover_image"),
       imageAsset(logoUrl, "logo"),
+      ...mappedGalleryImages,
     ].filter(Boolean) as PublicRestaurantProfile["galleryImages"],
+    verifiedProfile: Boolean(
+      row.verifiedProfile ??
+        row.isVerified ??
+        row.profileVerified ??
+        row.claimVerified ??
+        false,
+    ),
+    locallyOwned: Boolean(
+      row.locallyOwned ?? row.isLocallyOwned ?? row.localOwned ?? false,
+    ),
     menuSections,
     menuLastUpdatedAt,
     menuImageUrl,

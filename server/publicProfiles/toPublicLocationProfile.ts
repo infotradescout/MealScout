@@ -50,6 +50,16 @@ export function toPublicLocationProfile(input: {
     spotImageUrl,
     coverImageUrl,
     logoUrl,
+    verifiedProfile: Boolean(
+      row.verifiedProfile ??
+        row.isVerified ??
+        row.profileVerified ??
+        row.claimVerified ??
+        false,
+    ),
+    locallyOwned: Boolean(
+      row.locallyOwned ?? row.isLocallyOwned ?? row.localOwned ?? false,
+    ),
     amenities: [],
     publicParkingSummary: null,
     foodTrucksNow: null,

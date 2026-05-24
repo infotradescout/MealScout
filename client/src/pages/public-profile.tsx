@@ -223,8 +223,16 @@ function HeroBlock({ profile, safeCtas }: { profile: PublicProfilePayload; safeC
                   ? "Bar"
                   : profile.profileType === "supplier"
                     ? "Supplier"
-                    : "Restaurant"}
+                  : "Restaurant"}
           </Badge>
+          {"verifiedProfile" in profile && profile.verifiedProfile ? (
+            <Badge variant="secondary">Verified profile</Badge>
+          ) : null}
+          {"locallyOwned" in profile && profile.locallyOwned ? (
+            <Badge variant="outline" className="border-emerald-300/45 text-emerald-200">
+              Locally owned
+            </Badge>
+          ) : null}
           {profile.entity === "restaurant" && profile.openStatus ? (
             <Badge variant="secondary">{profile.openStatus}</Badge>
           ) : null}
@@ -940,6 +948,14 @@ function GalleryStrip({ profile }: { profile: PublicRestaurantProfile }) {
     .filter((image) => image.publicApproved && image.url)
     .slice(0, 12);
   if (images.length === 0) return null;
+  const imageTypeLabel = (source: string) => {
+    if (source === "cover_image") return "Cover";
+    if (source === "logo") return "Logo";
+    if (source === "spot_image") return "Storefront";
+    if (source === "google_photo") return "Atmosphere";
+    if (source === "gallery") return "Food";
+    return "Photo";
+  };
 
   return (
     <Card className="border-white/10 bg-[#0f0d0b]">
@@ -949,13 +965,17 @@ function GalleryStrip({ profile }: { profile: PublicRestaurantProfile }) {
       <CardContent>
         <div className="flex gap-2.5 overflow-x-auto pb-1">
           {images.map((image, idx) => (
-            <img
-              key={`${image.url}-${idx}`}
-              src={image.url}
-              alt={`${profile.displayName} ${idx + 1}`}
-              loading="lazy"
-              className="h-24 w-36 flex-none rounded-md object-cover"
-            />
+            <div key={`${image.url}-${idx}`} className="relative h-24 w-36 flex-none overflow-hidden rounded-md border border-white/10">
+              <img
+                src={image.url}
+                alt={`${profile.displayName} ${idx + 1}`}
+                loading="lazy"
+                className="h-full w-full object-cover"
+              />
+              <span className="absolute bottom-1 left-1 rounded bg-black/65 px-1.5 py-0.5 text-[10px] font-medium text-white/90">
+                {imageTypeLabel(image.source)}
+              </span>
+            </div>
           ))}
         </div>
       </CardContent>

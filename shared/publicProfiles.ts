@@ -189,6 +189,8 @@ export type PublicRestaurantProfile = {
   coverImageUrl: string | null;
   logoUrl: string | null;
   galleryImages: PublicImageAsset[];
+  verifiedProfile: boolean;
+  locallyOwned: boolean;
   menuSections: PublicMenuSection[];
   menuLastUpdatedAt: string | null;
   menuImageUrl: string | null;
@@ -218,6 +220,8 @@ export type PublicLocationProfile = {
   spotImageUrl: string | null;
   coverImageUrl: string | null;
   logoUrl: string | null;
+  verifiedProfile: boolean;
+  locallyOwned: boolean;
   amenities: string[];
   publicParkingSummary: string | null;
   foodTrucksNow: number | null;

@@ -1737,7 +1737,16 @@ export default function RestaurantOwnerDashboard() {
           const hasPhoto = Boolean(
             (currentRestaurant as any).imageUrl ||
               (currentRestaurant as any).logoUrl ||
-              (currentRestaurant as any).coverImageUrl,
+              (currentRestaurant as any).coverImageUrl ||
+              ((currentRestaurant as any).galleryImages || []).some((image: any) => {
+                if (!image) return false;
+                if (typeof image === "string") return Boolean(image.trim());
+                const approved =
+                  image.publicApproved === undefined
+                    ? true
+                    : Boolean(image.publicApproved);
+                return approved && Boolean(String(image.url || image.imageUrl || "").trim());
+              }),
           );
           const hasMenu = Boolean(
             (currentRestaurant as any).menuUrl ||
@@ -1798,7 +1807,7 @@ export default function RestaurantOwnerDashboard() {
               href: profileSetupHref,
             },
             {
-              label: "Photos complete",
+              label: "Photos complete (add logo, cover photo, or food/truck photos)",
               done: hasPhoto,
               href: profileSetupHref,
             },
