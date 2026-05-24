@@ -755,16 +755,16 @@ export default function ScoutPrototype() {
                 );
               })}
             </div>
+            <button
+              type="button"
+              onClick={() => setSearchOpen(true)}
+              className="flex h-[46px] w-full items-center gap-2 border-0 border-t border-white/8 bg-transparent px-4 text-left text-[13px] font-semibold text-white/88"
+              aria-label="Search food, places, trucks, events"
+            >
+              <Search size={16} className="text-orange-400 shrink-0" />
+              <span className="truncate">Search food, places, trucks, events</span>
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={() => setSearchOpen(true)}
-            className="mt-0 flex h-[46px] w-full items-center gap-2 rounded-none border-0 border-t border-white/8 bg-[#0f0d0b]/95 px-4 text-left text-[13px] font-semibold text-white/88"
-            aria-label="Search food, places, trucks, events"
-          >
-            <Search size={16} className="text-orange-400 shrink-0" />
-            <span className="truncate">Search food, places, trucks, events</span>
-          </button>
         </div>
       </div>
 
