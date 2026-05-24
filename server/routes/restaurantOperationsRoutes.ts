@@ -180,6 +180,12 @@ export function registerRestaurantOperationsRoutes(
     hasBusinessDistributionAccess,
   }: RestaurantOperationsRouteDependencies,
 ) {
+  const isAdminLikeUserType = (userType?: string | null) =>
+    userType === "admin" ||
+    userType === "duper_admin" ||
+    userType === "super_admin" ||
+    userType === "staff";
+
   const buildPremiumWeeklySummary = async (userId: string) => {
     const now = new Date();
     const windowStart = new Date(now);
@@ -285,6 +291,11 @@ export function registerRestaurantOperationsRoutes(
     isAuthenticated,
     async (req: any, res) => {
       try {
+        if (isAdminLikeUserType(req.user?.userType)) {
+          const allRestaurants = await storage.getAllRestaurants();
+          return res.json(allRestaurants);
+        }
+
         const restaurantsByOwner = await storage.getRestaurantsByOwner(req.user.id);
         const context = await getBusinessAccessContext(req.user.id);
 
@@ -313,6 +324,79 @@ export function registerRestaurantOperationsRoutes(
       } catch (error) {
         console.error("Error fetching user restaurants:", error);
         res.status(500).json({ message: "Failed to fetch restaurants" });
+      }
+    },
+  );
+
+  app.patch(
+    "/api/restaurants/:restaurantId/profile-basics",
+    isAuthenticated,
+    async (req: any, res) => {
+      try {
+        const { restaurantId } = req.params;
+        const canBypassOwnership = isAdminLikeUserType(req.user?.userType);
+        if (!canBypassOwnership) {
+          const isAuthorized = await storage.verifyRestaurantOwnership(
+            restaurantId,
+            req.user.id,
+            "manageProfile",
+          );
+          if (!isAuthorized) {
+            return res.status(403).json({
+              message:
+                "Unauthorized: You can only update profile details for restaurants you own",
+            });
+          }
+        }
+
+        const profileSchema = z.object({
+          name: z.string().trim().min(1).max(160).optional(),
+          description: z.string().trim().max(4000).optional().nullable(),
+          cuisineType: z.string().trim().max(160).optional().nullable(),
+          businessType: z.string().trim().max(80).optional().nullable(),
+          address: z.string().trim().max(240).optional().nullable(),
+          city: z.string().trim().max(120).optional().nullable(),
+          state: z.string().trim().max(120).optional().nullable(),
+          phone: z.string().trim().max(40).optional().nullable(),
+          websiteUrl: z.string().trim().max(500).optional().nullable(),
+          facebookPageUrl: z.string().trim().max(500).optional().nullable(),
+          instagramUrl: z.string().trim().max(500).optional().nullable(),
+          xUrl: z.string().trim().max(500).optional().nullable(),
+          menuUrl: z.string().trim().max(500).optional().nullable(),
+          logoUrl: z.string().trim().max(500).optional().nullable(),
+          coverImageUrl: z.string().trim().max(500).optional().nullable(),
+        });
+
+        const parsed = profileSchema.parse(req.body || {});
+        const normalize = (value: unknown) => {
+          const text = String(value ?? "").trim();
+          return text.length > 0 ? text : null;
+        };
+
+        const updates = Object.fromEntries(
+          Object.entries(parsed)
+            .filter(([, value]) => value !== undefined)
+            .map(([key, value]) => [key, normalize(value)]),
+        );
+
+        if (Object.keys(updates).length === 0) {
+          return res.status(400).json({ message: "No profile fields provided" });
+        }
+
+        const updatedRestaurant = await storage.updateRestaurant(
+          restaurantId,
+          updates as any,
+        );
+
+        res.json({ success: true, restaurant: updatedRestaurant });
+      } catch (error) {
+        console.error("Error updating restaurant profile basics:", error);
+        res.status(400).json({
+          message:
+            error instanceof Error
+              ? error.message
+              : "Failed to update business profile",
+        });
       }
     },
   );

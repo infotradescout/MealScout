@@ -29,10 +29,132 @@ export function toPublicRestaurantProfile(input: {
       : joinedAddressLabel(row.address, row.city, row.state);
   const phonePublic =
     input.showContact === false ? null : String(row.phone || "").trim() || null;
+  const menuUrl = String(row.menuUrl || "").trim() || null;
+  const menuImageUrl = String(row.menuImageUrl || "").trim() || null;
+  const menuPdfUrl = String(row.menuPdfUrl || "").trim() || null;
+  const websiteUrl = String(row.websiteUrl || "").trim() || null;
+  const instagramUrl = String(row.instagramUrl || "").trim() || null;
+  const facebookPageUrl = String(row.facebookPageUrl || "").trim() || null;
+  const xUrl = String(row.xUrl || "").trim() || null;
+  const hoursValue =
+    String(
+      row.hours ||
+        row.businessHours ||
+        row.hoursSummary ||
+        row.openHours ||
+        "",
+    ).trim() || null;
+  const openStatusValue =
+    String(
+      row.openStatus ||
+        row.currentOpenStatus ||
+        row.statusLabel ||
+        row.businessOpenStatus ||
+        "",
+    ).trim() || null;
+  const nextWindowLabelValue =
+    String(
+      row.nextWindowLabel ||
+        row.nextServiceWindow ||
+        row.truckNextWindowLabel ||
+        "",
+    ).trim() || null;
+  const upcomingCountValue = Number(
+    row.upcomingCount ?? row.upcomingScheduleCount ?? row.truckUpcomingCount ?? 0,
+  );
+  const featuredMenuItemsRaw = Array.isArray(row.featuredMenuItems)
+    ? row.featuredMenuItems
+    : Array.isArray(row.menuHighlights)
+      ? row.menuHighlights
+      : Array.isArray(row.featuredItems)
+        ? row.featuredItems
+        : [];
+  const featuredMenuItems = featuredMenuItemsRaw
+    .map((item: unknown) => String(item || "").trim())
+    .filter(Boolean)
+    .slice(0, 12);
+  const menuSectionsRaw = Array.isArray(row.menuSections) ? row.menuSections : [];
+  const menuSections = menuSectionsRaw
+    .map((section: any) => {
+      const sectionName = String(section?.name || "").trim();
+      const itemsRaw = Array.isArray(section?.items) ? section.items : [];
+      const items = itemsRaw
+        .map((item: any) => {
+          const itemName = String(item?.name || "").trim();
+          if (!itemName) return null;
+          const priceValue = Number(item?.priceCents);
+          const priceLabel = Number.isFinite(priceValue)
+            ? `$${(priceValue / 100).toFixed(2)}`
+            : null;
+          return {
+            name: itemName,
+            priceLabel,
+            description: String(item?.description || "").trim() || null,
+            imageUrl: String(item?.imageUrl || "").trim() || null,
+            featured: Boolean(item?.featured),
+          };
+        })
+        .filter(Boolean)
+        .slice(0, 24) as PublicRestaurantProfile["menuSections"][number]["items"];
+      if (!sectionName || items.length === 0) return null;
+      return {
+        name: sectionName,
+        items,
+      };
+    })
+    .filter(Boolean) as PublicRestaurantProfile["menuSections"];
+  const menuLastUpdatedAt = row.menuLastUpdatedAt
+    ? new Date(row.menuLastUpdatedAt).toISOString()
+    : null;
+  const dealCount = Math.max(
+    0,
+    Number(
+      row.dealCount ??
+        row.activeDealCount ??
+        row.totalActiveDeals ??
+        row.dealsCount ??
+        0,
+    ) || 0,
+  );
+  const reviewCount = Math.max(
+    0,
+    Number(
+      row.reviewCount ??
+        row.totalReviews ??
+        row.ratingsCount ??
+        row.googleReviewCount ??
+        0,
+    ) || 0,
+  );
+  const reviewRatingRaw = Number(
+    row.reviewRating ??
+      row.rating ??
+      row.avgRating ??
+      row.googleRating ??
+      Number.NaN,
+  );
+  const reviewRating = Number.isFinite(reviewRatingRaw) ? reviewRatingRaw : null;
+  const recommendationTotal = Math.max(
+    0,
+    Number(
+      row.recommendationCount ??
+        row.totalRecommendations ??
+        row.recommendationsCount ??
+        0,
+    ) || 0,
+  );
+  const recommendationLikes = Math.max(
+    0,
+    Number(row.recommendationLikeCount ?? row.recommendationLikes ?? 0) || 0,
+  );
+  const recommendationShares = Math.max(
+    0,
+    Number(row.recommendationShareCount ?? row.recommendationShares ?? 0) || 0,
+  );
 
   const ctas = [
-    buildPublicCta({ label: "View details", href: canonicalPath, type: "internal" }),
-    buildPublicCta({ label: "View menu", href: row.menuUrl, type: "menu" }),
+    buildPublicCta({ label: "Profile", href: canonicalPath, type: "internal" }),
+    buildPublicCta({ label: "Menu", href: menuUrl, type: "menu" }),
     buildPublicCta({
       label: "Get directions",
       href:
@@ -42,7 +164,10 @@ export function toPublicRestaurantProfile(input: {
       type: "map",
     }),
     buildPublicCta({ label: "Call", href: phonePublic ? `tel:${phonePublic}` : null, type: "phone" }),
-    buildPublicCta({ label: "Website", href: row.websiteUrl, type: "external" }),
+    buildPublicCta({ label: "Website", href: websiteUrl, type: "external" }),
+    buildPublicCta({ label: "Instagram", href: instagramUrl, type: "external" }),
+    buildPublicCta({ label: "Facebook", href: facebookPageUrl, type: "external" }),
+    buildPublicCta({ label: "X", href: xUrl, type: "external" }),
   ].filter(Boolean) as PublicRestaurantProfile["cta"];
 
   return {
@@ -63,27 +188,40 @@ export function toPublicRestaurantProfile(input: {
     longitude: Number.isFinite(Number(row.longitude)) ? Number(row.longitude) : null,
     distanceLabel: null,
     phonePublic,
-    websiteUrl: String(row.websiteUrl || "").trim() || null,
+    websiteUrl,
     socialLinks: {
-      instagramUrl: String(row.instagramUrl || "").trim() || null,
-      facebookPageUrl: String(row.facebookPageUrl || "").trim() || null,
-      xUrl: String(row.xUrl || "").trim() || null,
+      instagramUrl,
+      facebookPageUrl,
+      xUrl,
     },
-    hours: null,
-    openStatus: null,
+    hours: hoursValue,
+    openStatus: openStatusValue,
     coverImageUrl,
     logoUrl,
     galleryImages: [
       imageAsset(coverImageUrl, "cover_image"),
       imageAsset(logoUrl, "logo"),
     ].filter(Boolean) as PublicRestaurantProfile["galleryImages"],
-    menuUrl: String(row.menuUrl || "").trim() || null,
-    featuredMenuItems: [],
-    deals: { totalActive: 0 },
-    reviewSummary: { count: 0, rating: null },
-    recommendations: { total: 0, likes: 0, shares: 0 },
+    menuSections,
+    menuLastUpdatedAt,
+    menuImageUrl,
+    menuPdfUrl,
+    menuUrl,
+    featuredMenuItems,
+    deals: { totalActive: dealCount },
+    reviewSummary: { count: reviewCount, rating: reviewRating },
+    recommendations: {
+      total: recommendationTotal,
+      likes: recommendationLikes,
+      shares: recommendationShares,
+    },
     truckSchedule:
-      profileType === "truck" ? { nextWindowLabel: null, upcomingCount: 0 } : null,
+      profileType === "truck"
+        ? {
+            nextWindowLabel: nextWindowLabelValue || null,
+            upcomingCount: Math.max(0, upcomingCountValue || 0),
+          }
+        : null,
     cta: ctas,
     seo: toPublicProfileSeo({
       baseUrl: input.baseUrl,

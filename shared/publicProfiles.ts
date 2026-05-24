@@ -53,6 +53,19 @@ export type PublicDealSummary = {
   totalActive: number;
 };
 
+export type PublicMenuItem = {
+  name: string;
+  priceLabel: string | null;
+  description: string | null;
+  imageUrl: string | null;
+  featured: boolean;
+};
+
+export type PublicMenuSection = {
+  name: string;
+  items: PublicMenuItem[];
+};
+
 export type PublicTruckScheduleSummary = {
   nextWindowLabel: string | null;
   upcomingCount: number;
@@ -84,6 +97,10 @@ export type PublicRestaurantProfile = {
   coverImageUrl: string | null;
   logoUrl: string | null;
   galleryImages: PublicImageAsset[];
+  menuSections: PublicMenuSection[];
+  menuLastUpdatedAt: string | null;
+  menuImageUrl: string | null;
+  menuPdfUrl: string | null;
   menuUrl: string | null;
   featuredMenuItems: string[];
   deals: PublicDealSummary;

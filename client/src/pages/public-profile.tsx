@@ -85,6 +85,39 @@ const ctaTarget = (cta: PublicCta) =>
 const ctaRel = (cta: PublicCta) =>
   cta.type === "internal" || cta.type === "phone" ? undefined : "noopener noreferrer";
 
+const isSelfProfileCta = (profile: PublicProfilePayload, cta: PublicCta) =>
+  cta.type === "internal" && cta.href === profile.profilePath;
+
+const isDetailsCta = (cta: PublicCta) => /details/i.test(String(cta.label || ""));
+
+const uniqueByHref = (ctas: PublicCta[]) => {
+  const seen = new Set<string>();
+  return ctas.filter((cta) => {
+    const href = String(cta.href || "").trim();
+    if (!href || seen.has(href)) return false;
+    seen.add(href);
+    return true;
+  });
+};
+
+const ctaPriorityForProfile = (profile: PublicProfilePayload, cta: PublicCta) => {
+  if (cta.type === "menu") return 100;
+  if (cta.type === "map") return 90;
+  if (cta.type === "phone") return 80;
+  if (String(cta.label || "").toLowerCase().includes("instagram")) return 70;
+  if (String(cta.label || "").toLowerCase().includes("facebook")) return 69;
+  if (cta.type === "external") return 65;
+  if (cta.type === "internal" && !isSelfProfileCta(profile, cta)) return 50;
+  return 0;
+};
+
+const pickActionCtas = (profile: PublicProfilePayload, safeCtas: PublicCta[], limit = 6) =>
+  uniqueByHref(
+    safeCtas.filter((cta) => !isSelfProfileCta(profile, cta) && !isDetailsCta(cta)),
+  )
+    .sort((a, b) => ctaPriorityForProfile(profile, b) - ctaPriorityForProfile(profile, a))
+    .slice(0, limit);
+
 const pickPrimaryCta = (profile: PublicProfilePayload, ctas: PublicCta[]) => {
   const nonSelfInternal = ctas.find(
     (cta) => cta.type === "internal" && cta.href !== profile.profilePath,
@@ -144,11 +177,7 @@ const renderCtaButton = (cta: PublicCta, variant: "default" | "outline", key: st
 );
 
 function HeroBlock({ profile, safeCtas }: { profile: PublicProfilePayload; safeCtas: PublicCta[] }) {
-  const filteredCtas = safeCtas.filter(
-    (cta) =>
-      !(cta.type === "internal" && cta.href === profile.profilePath) &&
-      !/view details/i.test(cta.label || ""),
-  );
+  const filteredCtas = pickActionCtas(profile, safeCtas, 8);
   const primary = pickPrimaryCta(profile, filteredCtas);
   const secondary = filteredCtas.find((cta) => cta !== primary) || null;
   const heroImage =
@@ -262,6 +291,24 @@ function LocationNowSection({ profile }: { profile: PublicLocationProfile }) {
             No trucks listed right now. Check back soon.
           </div>
         )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function QuickActionRow({
+  profile,
+  safeCtas,
+}: {
+  profile: PublicProfilePayload;
+  safeCtas: PublicCta[];
+}) {
+  const actions = pickActionCtas(profile, safeCtas, 6);
+  if (actions.length === 0) return null;
+  return (
+    <Card className="border-white/10 bg-[#0f0d0b]">
+      <CardContent className="flex flex-wrap gap-2 p-4">
+        {actions.map((cta, idx) => renderCtaButton(cta, "outline", `${cta.href}-${idx}`))}
       </CardContent>
     </Card>
   );
@@ -540,46 +587,142 @@ function RestaurantSignals({ profile }: { profile: PublicRestaurantProfile }) {
   }
   if (profile.recommendations.total > 0) signals.push("Local favorite");
 
+  if (signals.length === 0) return null;
   return (
     <Card className="border-white/10 bg-[#0f0d0b]">
       <CardHeader>
         <CardTitle className="text-xl text-white">Why go now</CardTitle>
       </CardHeader>
       <CardContent>
-        {signals.length > 0 ? (
-          <div className="flex flex-wrap gap-2">
-            {signals.map((signal) => (
-              <Badge key={signal} variant="secondary">
-                {signal}
-              </Badge>
-            ))}
-          </div>
-        ) : (
-          <p className="text-sm text-white/75">Check today's location and hours before you go.</p>
-        )}
+        <div className="flex flex-wrap gap-2">
+          {signals.map((signal) => (
+            <Badge key={signal} variant="secondary">
+              {signal}
+            </Badge>
+          ))}
+        </div>
       </CardContent>
     </Card>
   );
 }
 
-function RestaurantHighlights({ profile }: { profile: PublicRestaurantProfile }) {
-  const metrics = [
-    { label: "Deals", value: Number(profile.deals.totalActive || 0) },
-    { label: "Recommendations", value: Number(profile.recommendations.total || 0) },
-    { label: "Reviews", value: Number(profile.reviewSummary.count || 0) },
-  ].filter((metric) => metric.value > 0);
+function AboutFoodStyle({ profile }: { profile: PublicRestaurantProfile }) {
+  const tags = [
+    ...profile.cuisineTags,
+    profile.serviceType || "",
+  ]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean)
+    .slice(0, 10);
+  const hasAbout = Boolean(profile.description) || tags.length > 0;
+  if (!hasAbout) return null;
+  return (
+    <Card className="border-white/10 bg-[#0f0d0b]">
+      <CardHeader>
+        <CardTitle className="text-xl text-white">About</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {profile.description ? <p className="text-sm text-white/85">{profile.description}</p> : null}
+        {tags.length > 0 ? (
+          <div className="flex flex-wrap gap-2">
+            {tags.map((tag) => (
+              <Badge key={tag} variant="outline" className="border-white/20 text-white/80">
+                {tag}
+              </Badge>
+            ))}
+          </div>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+function MenuSection({
+  profile,
+  safeCtas,
+}: {
+  profile: PublicRestaurantProfile;
+  safeCtas: PublicCta[];
+}) {
+  const menuCta = safeCtas.find(
+    (cta) =>
+      cta.type === "menu" ||
+      /menu/i.test(String(cta.label || "")) ||
+      /\/menu\//i.test(String(cta.href || "")),
+  );
+  const featuredItems = Array.isArray(profile.featuredMenuItems)
+    ? profile.featuredMenuItems.filter(Boolean)
+    : [];
+  const structuredSections = Array.isArray(profile.menuSections)
+    ? profile.menuSections.filter(
+        (section) =>
+          section &&
+          String(section.name || "").trim().length > 0 &&
+          Array.isArray(section.items) &&
+          section.items.length > 0,
+      )
+    : [];
+  const hasStructuredMenu = structuredSections.length > 0;
+  const hasSection =
+    hasStructuredMenu ||
+    Boolean(menuCta) ||
+    Boolean(profile.menuUrl) ||
+    Boolean(profile.menuImageUrl) ||
+    Boolean(profile.menuPdfUrl) ||
+    featuredItems.length > 0;
+  if (!hasSection) return null;
+
+  const fallbackMenuLink =
+    profile.menuPdfUrl || profile.menuImageUrl || profile.menuUrl || null;
+  const updatedLabel = profile.menuLastUpdatedAt
+    ? new Date(profile.menuLastUpdatedAt).toLocaleDateString()
+    : null;
 
   return (
     <Card className="border-white/10 bg-[#0f0d0b]">
       <CardHeader>
-        <CardTitle className="text-xl text-white">Menu, deals, and highlights</CardTitle>
+        <CardTitle className="text-xl text-white">Menu</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {profile.featuredMenuItems.length > 0 ? (
+        {updatedLabel ? (
+          <p className="text-xs text-white/65">Menu last updated {updatedLabel}</p>
+        ) : null}
+
+        {hasStructuredMenu ? (
+          <div className="space-y-4">
+            {structuredSections.map((section) => (
+              <div key={section.name} className="space-y-2">
+                <p className="text-sm font-semibold text-white/90">{section.name}</p>
+                <div className="space-y-2">
+                  {section.items.map((item, index) => (
+                    <div
+                      key={`${section.name}:${item.name}:${index}`}
+                      className="rounded-lg border border-white/10 bg-black/20 p-3"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-white">{item.name}</p>
+                          {item.description ? (
+                            <p className="mt-1 text-xs text-white/70">{item.description}</p>
+                          ) : null}
+                        </div>
+                        {item.priceLabel ? (
+                          <p className="text-sm font-semibold text-orange-200">{item.priceLabel}</p>
+                        ) : null}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : null}
+
+        {featuredItems.length > 0 ? (
           <div className="space-y-2">
-            <p className="text-sm font-medium text-white/90">Featured menu items</p>
+            <p className="text-sm font-medium text-white/90">Featured items</p>
             <div className="flex flex-wrap gap-2">
-              {profile.featuredMenuItems.map((item) => (
+              {featuredItems.map((item) => (
                 <Badge key={item} variant="outline" className="border-white/20 text-white/80">
                   {item}
                 </Badge>
@@ -587,26 +730,59 @@ function RestaurantHighlights({ profile }: { profile: PublicRestaurantProfile })
             </div>
           </div>
         ) : null}
-        {metrics.length > 0 ? (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            {metrics.map((metric) => (
-              <div key={metric.label} className="rounded-lg border border-white/10 bg-black/20 p-3">
-                <p className="text-xs uppercase tracking-wide text-white/60">{metric.label}</p>
-                <p className="mt-1 text-2xl font-semibold text-white">{metric.value}</p>
-              </div>
-            ))}
-          </div>
-        ) : null}
-        {profile.menuUrl ? (
+        {menuCta ? (
+          renderCtaButton(menuCta, "default", "menu-cta")
+        ) : fallbackMenuLink ? (
           <a
-            href={profile.menuUrl}
+            href={fallbackMenuLink}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1 text-sm font-medium text-orange-300 hover:text-orange-200"
           >
-            View menu <MenuSquare className="h-4 w-4" />
+            See menu <MenuSquare className="h-4 w-4" />
           </a>
         ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+function DealsSection({ profile }: { profile: PublicRestaurantProfile }) {
+  const total = Number(profile.deals.totalActive || 0);
+  if (total <= 0) return null;
+  return (
+    <Card className="border-white/10 bg-[#0f0d0b]">
+      <CardHeader>
+        <CardTitle className="text-xl text-white">Deals and specials</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="rounded-lg border border-white/10 bg-black/20 p-3">
+          <p className="text-xs uppercase tracking-wide text-white/60">Active deals</p>
+          <p className="mt-1 text-2xl font-semibold text-white">{total}</p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ProofSection({ profile }: { profile: PublicRestaurantProfile }) {
+  const metrics = [
+    { label: "Recommendations", value: Number(profile.recommendations.total || 0) },
+    { label: "Reviews", value: Number(profile.reviewSummary.count || 0) },
+  ].filter((metric) => metric.value > 0);
+  if (metrics.length === 0) return null;
+  return (
+    <Card className="border-white/10 bg-[#0f0d0b]">
+      <CardHeader>
+        <CardTitle className="text-xl text-white">Local proof</CardTitle>
+      </CardHeader>
+      <CardContent className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        {metrics.map((metric) => (
+          <div key={metric.label} className="rounded-lg border border-white/10 bg-black/20 p-3">
+            <p className="text-xs uppercase tracking-wide text-white/60">{metric.label}</p>
+            <p className="mt-1 text-2xl font-semibold text-white">{metric.value}</p>
+          </div>
+        ))}
       </CardContent>
     </Card>
   );
@@ -644,24 +820,29 @@ function GalleryStrip({ profile }: { profile: PublicRestaurantProfile }) {
 }
 
 function RestaurantSchedule({ profile }: { profile: PublicRestaurantProfile }) {
+  const hasHours = Boolean(String(profile.hours || "").trim());
+  const truckWindow =
+    profile.profileType === "truck" ? String(profile.truckSchedule?.nextWindowLabel || "").trim() : "";
+  const upcomingCount =
+    profile.profileType === "truck" ? Number(profile.truckSchedule?.upcomingCount || 0) : 0;
+  const hasTruckSchedule = Boolean(truckWindow) || upcomingCount > 0;
+  if (!hasHours && !hasTruckSchedule) return null;
   return (
     <Card className="border-white/10 bg-[#0f0d0b]">
       <CardHeader>
         <CardTitle className="text-xl text-white">Hours and schedule</CardTitle>
       </CardHeader>
       <CardContent className="space-y-2 text-sm text-white/80">
-        {profile.hours ? (
+        {hasHours ? (
           <p className="inline-flex items-center gap-1">
             <Clock3 className="h-4 w-4" />
             {profile.hours}
           </p>
-        ) : (
-          <p>Hours will be posted soon.</p>
-        )}
-        {profile.profileType === "truck" && profile.truckSchedule ? (
+        ) : null}
+        {profile.profileType === "truck" && hasTruckSchedule ? (
           <p className="inline-flex items-center gap-1">
             <Truck className="h-4 w-4" />
-            {profile.truckSchedule.nextWindowLabel || "Schedule available"}
+            {truckWindow || `${upcomingCount} upcoming stops`}
           </p>
         ) : null}
       </CardContent>
@@ -669,23 +850,25 @@ function RestaurantSchedule({ profile }: { profile: PublicRestaurantProfile }) {
   );
 }
 
-function RestaurantSocial({ profile, safeCtas }: { profile: PublicRestaurantProfile; safeCtas: PublicCta[] }) {
-  const extraCtas = safeCtas.filter((cta) => cta.type !== "map").slice(0, 4);
+function RestaurantSocial({
+  profile,
+  safeCtas,
+}: {
+  profile: PublicRestaurantProfile;
+  safeCtas: PublicCta[];
+}) {
+  const extraCtas = pickActionCtas(
+    profile as PublicProfilePayload,
+    safeCtas.filter((cta) => cta.type !== "map"),
+    6,
+  );
+  if (extraCtas.length === 0) return null;
   return (
     <Card className="border-white/10 bg-[#0f0d0b]">
       <CardHeader>
-        <CardTitle className="text-xl text-white">Reviews, socials, and contact</CardTitle>
+        <CardTitle className="text-xl text-white">Contact and follow</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
-        <div className="text-sm text-white/80">
-          <p className="inline-flex items-center gap-1">
-            <Star className="h-4 w-4" />
-            {profile.reviewSummary.count} reviews
-            {typeof profile.reviewSummary.rating === "number"
-              ? ` · ${profile.reviewSummary.rating.toFixed(1)} avg`
-              : ""}
-          </p>
-        </div>
         <div className="flex flex-wrap gap-2">
           {extraCtas.map((cta, idx) => renderCtaButton(cta, "outline", `${cta.href}-${idx}`))}
         </div>
@@ -758,6 +941,7 @@ export default function PublicProfilePage() {
 
       <div className="mx-auto max-w-5xl space-y-6 px-4 py-8">
         <HeroBlock profile={data} safeCtas={safeCtas} />
+        <QuickActionRow profile={data} safeCtas={safeCtas} />
 
         {data.entity === "host" ? (
           <>
@@ -765,30 +949,16 @@ export default function PublicProfilePage() {
             <LocationTruckOptionsSection profile={data} />
             <LocationMapSection profile={data} />
             <LocationAmenitiesSection profile={data} />
-            <Card className="border-white/10 bg-[#0f0d0b]">
-              <CardHeader>
-                <CardTitle className="text-xl text-white">Local discovery</CardTitle>
-              </CardHeader>
-              <CardContent className="text-sm text-white/75">
-                Nearby food activity and event links will appear here when available.
-              </CardContent>
-            </Card>
           </>
         ) : data.entity === "restaurant" ? (
           <>
+            <AboutFoodStyle profile={data} />
+            <MenuSection profile={data} safeCtas={safeCtas} />
             <RestaurantSignals profile={data} />
+            <DealsSection profile={data} />
             <GalleryStrip profile={data} />
-            {data.profileType === "truck" ? (
-              <>
-                <RestaurantSchedule profile={data} />
-                <RestaurantHighlights profile={data} />
-              </>
-            ) : (
-              <>
-                <RestaurantHighlights profile={data} />
-                <RestaurantSchedule profile={data} />
-              </>
-            )}
+            <RestaurantSchedule profile={data} />
+            <ProofSection profile={data} />
             <RestaurantSocial profile={data} safeCtas={safeCtas} />
           </>
         ) : (

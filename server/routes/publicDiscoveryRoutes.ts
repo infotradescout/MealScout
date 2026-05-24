@@ -1,5 +1,5 @@
 import type { Express } from "express";
-import { and, desc, eq, gte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
 
 import { db } from "../db";
 import { storage } from "../storage";
@@ -9,6 +9,9 @@ import {
   deals,
   events,
   hosts,
+  menuCategories,
+  menuItems,
+  menus,
   requestLogs,
   restaurants,
   searchQueryEvents,
@@ -103,6 +106,162 @@ const countBy = <T extends string>(values: T[]) =>
 
 const sendPublicJson = <T>(res: any, payload: T) =>
   res.json(assertPublicResponseSafe(payload));
+
+const buildPublicMenuPayload = async (restaurantId: string) => {
+  const menuRows = await db
+    .select({
+      id: menus.id,
+      name: menus.name,
+      updatedAt: menus.updatedAt,
+      importedAt: menus.importedAt,
+    })
+    .from(menus)
+    .where(and(eq(menus.restaurantId, restaurantId), eq(menus.isActive, true)));
+
+  if (!menuRows.length) {
+    return {
+      menuSections: [],
+      menuLastUpdatedAt: null as Date | null,
+      hasStructuredMenu: false,
+    };
+  }
+
+  const menuIds = menuRows.map((row: any) => row.id);
+  const categoryRows = await db
+    .select({
+      id: menuCategories.id,
+      menuId: menuCategories.menuId,
+      name: menuCategories.name,
+      sortOrder: menuCategories.sortOrder,
+    })
+    .from(menuCategories)
+    .where(
+      and(
+        inArray(menuCategories.menuId, menuIds),
+        eq(menuCategories.isActive, true),
+      ),
+    );
+
+  const itemRows = await db
+    .select({
+      id: menuItems.id,
+      menuId: menuItems.menuId,
+      categoryId: menuItems.categoryId,
+      name: menuItems.name,
+      description: menuItems.description,
+      priceCents: menuItems.priceCents,
+      imageUrl: menuItems.imageUrl,
+      updatedAt: menuItems.updatedAt,
+      sortOrder: menuItems.sortOrder,
+    })
+    .from(menuItems)
+    .where(
+      and(
+        inArray(menuItems.menuId, menuIds),
+        eq(menuItems.isAvailable, true),
+      ),
+    );
+
+  const categoryById = new Map(categoryRows.map((row: any) => [row.id, row]));
+  const itemsByCategory = new Map<string, typeof itemRows>();
+  const ungroupedItems: typeof itemRows = [];
+  for (const item of itemRows) {
+    if (item.categoryId && categoryById.has(item.categoryId)) {
+      const existing = itemsByCategory.get(item.categoryId) || [];
+      existing.push(item);
+      itemsByCategory.set(item.categoryId, existing);
+      continue;
+    }
+    ungroupedItems.push(item);
+  }
+
+  const orderedCategories = [...categoryRows].sort((a: any, b: any) => {
+    if (a.sortOrder === b.sortOrder) {
+      return String(a.name || "").localeCompare(String(b.name || ""));
+    }
+    return Number(a.sortOrder || 0) - Number(b.sortOrder || 0);
+  });
+
+  const menuSections: Array<{
+    name: string;
+    items: Array<{
+      name: string;
+      priceCents: number | null;
+      description: string | null;
+      imageUrl: string | null;
+      featured: boolean;
+    }>;
+  }> = [];
+
+  for (const category of orderedCategories) {
+    const categoryItems = (itemsByCategory.get(category.id) || [])
+      .sort(
+        (a: any, b: any) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0),
+      )
+      .slice(0, 24)
+      .map((item: any) => ({
+        name: String(item.name || "").trim(),
+        priceCents: Number.isFinite(Number(item.priceCents))
+          ? Number(item.priceCents)
+          : null,
+        description: String(item.description || "").trim() || null,
+        imageUrl: String(item.imageUrl || "").trim() || null,
+        featured: false,
+      }))
+      .filter((item: any) => item.name.length > 0);
+
+    if (!categoryItems.length) continue;
+    menuSections.push({
+      name: String(category.name || "").trim() || "Menu",
+      items: categoryItems,
+    });
+  }
+
+  if (ungroupedItems.length > 0) {
+    const fallbackItems = [...ungroupedItems]
+      .sort(
+        (a: any, b: any) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0),
+      )
+      .slice(0, 24)
+      .map((item: any) => ({
+        name: String(item.name || "").trim(),
+        priceCents: Number.isFinite(Number(item.priceCents))
+          ? Number(item.priceCents)
+          : null,
+        description: String(item.description || "").trim() || null,
+        imageUrl: String(item.imageUrl || "").trim() || null,
+        featured: false,
+      }))
+      .filter((item) => item.name.length > 0);
+    if (fallbackItems.length) {
+      menuSections.push({
+        name: "Menu",
+        items: fallbackItems,
+      });
+    }
+  }
+
+  const latestTimestamps = [
+    ...menuRows
+      .map((row: any) => row.updatedAt || row.importedAt)
+      .filter((value: any): value is Date => value instanceof Date),
+    ...itemRows
+      .map((row: any) => row.updatedAt)
+      .filter((value: any): value is Date => value instanceof Date),
+  ];
+  const menuLastUpdatedAt =
+    latestTimestamps.length > 0
+      ? new Date(
+          Math.max(...latestTimestamps.map((value) => value.getTime())),
+        )
+      : null;
+
+  return {
+    menuSections,
+    menuLastUpdatedAt,
+    hasStructuredMenu: menuSections.length > 0,
+  };
+};
 
 export function registerPublicDiscoveryRoutes(app: Express) {
   app.get("/api/public/resolve/:entity/:slug", async (req, res) => {
@@ -537,8 +696,12 @@ export function registerPublicDiscoveryRoutes(app: Express) {
         const profileSettings = (ownerUser?.publicProfileSettings || {}) as any;
         const showAddress = profileSettings.showAddress !== false;
         const showContact = profileSettings.showContact !== false;
+        const menuPayload = await buildPublicMenuPayload(String(row.id));
         const mapped = toPublicTruckProfile({
-          row,
+          row: {
+            ...row,
+            ...menuPayload,
+          },
           baseUrl,
           showAddress,
           showContact,
@@ -568,8 +731,12 @@ export function registerPublicDiscoveryRoutes(app: Express) {
         const profileSettings = (ownerUser?.publicProfileSettings || {}) as any;
         const showAddress = profileSettings.showAddress !== false;
         const showContact = profileSettings.showContact !== false;
+        const menuPayload = await buildPublicMenuPayload(String(row.id));
         const mapped = toPublicBarProfile({
-          row,
+          row: {
+            ...row,
+            ...menuPayload,
+          },
           baseUrl,
           showAddress,
           showContact,
@@ -633,9 +800,13 @@ export function registerPublicDiscoveryRoutes(app: Express) {
         const profileSettings = (ownerUser?.publicProfileSettings || {}) as any;
         const showAddress = profileSettings.showAddress !== false;
         const showContact = profileSettings.showContact !== false;
+        const menuPayload = await buildPublicMenuPayload(String(row.id));
         if (row.isFoodTruck || row.businessType === "food_truck") {
           const mapped = toPublicTruckProfile({
-            row,
+            row: {
+              ...row,
+              ...menuPayload,
+            },
             baseUrl,
             showAddress,
             showContact,
@@ -657,7 +828,10 @@ export function registerPublicDiscoveryRoutes(app: Express) {
         }
         if (row.businessType === "bar") {
           const mapped = toPublicBarProfile({
-            row,
+            row: {
+              ...row,
+              ...menuPayload,
+            },
             baseUrl,
             showAddress,
             showContact,
@@ -678,7 +852,10 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           });
         }
         const mapped = toPublicRestaurantProfile({
-          row,
+          row: {
+            ...row,
+            ...menuPayload,
+          },
           baseUrl,
           showAddress,
           showContact,

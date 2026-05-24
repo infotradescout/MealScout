@@ -135,6 +135,24 @@ interface TruckBookingItem {
   } | null;
 }
 
+interface ProfileCompletionDraft {
+  name: string;
+  description: string;
+  cuisineType: string;
+  businessType: string;
+  address: string;
+  city: string;
+  state: string;
+  phone: string;
+  websiteUrl: string;
+  facebookPageUrl: string;
+  instagramUrl: string;
+  xUrl: string;
+  menuUrl: string;
+  logoUrl: string;
+  coverImageUrl: string;
+}
+
 export default function RestaurantOwnerDashboard() {
   const { user } = useAuth();
   const [, setLocation] = useLocation();
@@ -153,6 +171,23 @@ export default function RestaurantOwnerDashboard() {
   const [comparisonPeriod, setComparisonPeriod] = useState<
     "week" | "month" | "quarter"
   >("month");
+  const [profileDraft, setProfileDraft] = useState<ProfileCompletionDraft>({
+    name: "",
+    description: "",
+    cuisineType: "",
+    businessType: "",
+    address: "",
+    city: "",
+    state: "",
+    phone: "",
+    websiteUrl: "",
+    facebookPageUrl: "",
+    instagramUrl: "",
+    xUrl: "",
+    menuUrl: "",
+    logoUrl: "",
+    coverImageUrl: "",
+  });
 
   // Food truck state
   const [isBroadcasting, setIsBroadcasting] = useState(false);
@@ -548,6 +583,27 @@ export default function RestaurantOwnerDashboard() {
   const currentRestaurant = restaurants.find(
     (r) => r.id === selectedRestaurant,
   );
+  useEffect(() => {
+    if (!currentRestaurant) return;
+    const row: any = currentRestaurant;
+    setProfileDraft({
+      name: String(row?.name || ""),
+      description: String(row?.description || ""),
+      cuisineType: String(row?.cuisineType || ""),
+      businessType: String(row?.businessType || ""),
+      address: String(row?.address || ""),
+      city: String(row?.city || ""),
+      state: String(row?.state || ""),
+      phone: String(row?.phone || ""),
+      websiteUrl: String(row?.websiteUrl || ""),
+      facebookPageUrl: String(row?.facebookPageUrl || ""),
+      instagramUrl: String(row?.instagramUrl || ""),
+      xUrl: String(row?.xUrl || ""),
+      menuUrl: String(row?.menuUrl || ""),
+      logoUrl: String(row?.logoUrl || ""),
+      coverImageUrl: String(row?.coverImageUrl || ""),
+    });
+  }, [currentRestaurant?.id]);
   const visibleTruckBookings = truckBookings.filter(
     (booking) => !selectedRestaurant || booking.truckId === selectedRestaurant,
   );
@@ -1208,6 +1264,32 @@ export default function RestaurantOwnerDashboard() {
     },
   });
 
+  const updateProfileBasicsMutation = useMutation({
+    mutationFn: async (payload: ProfileCompletionDraft) => {
+      return await apiRequest(
+        "PATCH",
+        `/api/restaurants/${selectedRestaurant}/profile-basics`,
+        payload,
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["/api/restaurants/my-restaurants"],
+      });
+      toast({
+        title: "Business Profile Updated",
+        description: "Public-facing profile details have been saved.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Unable to save profile",
+        description: error?.message || "Please check the fields and try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const formatTime = (time: string) => {
     const [hours, minutes] = time.split(":");
     const hour = parseInt(hours);
@@ -1462,6 +1544,183 @@ export default function RestaurantOwnerDashboard() {
               </Button>
             </Link>
           </div>
+
+          {setupMode === "profile" ? (
+            <div className="mt-4 rounded-xl border border-orange-200 bg-white p-4">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h3 className="text-sm font-black uppercase tracking-[0.14em] text-orange-800">
+                    Profile completion
+                  </h3>
+                  <p className="text-xs text-orange-900/75">
+                    Complete public profile basics, contact, and media in one place.
+                  </p>
+                </div>
+                {isAdmin || isStaff ? (
+                  <Badge className="bg-orange-600 text-white">
+                    Admin assist mode
+                  </Badge>
+                ) : null}
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Input
+                  value={profileDraft.name}
+                  onChange={(e) =>
+                    setProfileDraft((prev) => ({ ...prev, name: e.target.value }))
+                  }
+                  placeholder="Business name"
+                />
+                <Input
+                  value={profileDraft.cuisineType}
+                  onChange={(e) =>
+                    setProfileDraft((prev) => ({
+                      ...prev,
+                      cuisineType: e.target.value,
+                    }))
+                  }
+                  placeholder="Cuisine or type"
+                />
+                <Input
+                  value={profileDraft.businessType}
+                  onChange={(e) =>
+                    setProfileDraft((prev) => ({
+                      ...prev,
+                      businessType: e.target.value,
+                    }))
+                  }
+                  placeholder="Service type"
+                />
+                <Input
+                  value={profileDraft.phone}
+                  onChange={(e) =>
+                    setProfileDraft((prev) => ({ ...prev, phone: e.target.value }))
+                  }
+                  placeholder="Public phone"
+                />
+                <Input
+                  value={profileDraft.address}
+                  onChange={(e) =>
+                    setProfileDraft((prev) => ({ ...prev, address: e.target.value }))
+                  }
+                  placeholder="Address or service area"
+                  className="sm:col-span-2"
+                />
+                <Input
+                  value={profileDraft.city}
+                  onChange={(e) =>
+                    setProfileDraft((prev) => ({ ...prev, city: e.target.value }))
+                  }
+                  placeholder="City"
+                />
+                <Input
+                  value={profileDraft.state}
+                  onChange={(e) =>
+                    setProfileDraft((prev) => ({ ...prev, state: e.target.value }))
+                  }
+                  placeholder="State"
+                />
+                <Input
+                  value={profileDraft.websiteUrl}
+                  onChange={(e) =>
+                    setProfileDraft((prev) => ({
+                      ...prev,
+                      websiteUrl: e.target.value,
+                    }))
+                  }
+                  placeholder="Website URL"
+                />
+                <Input
+                  value={profileDraft.menuUrl}
+                  onChange={(e) =>
+                    setProfileDraft((prev) => ({ ...prev, menuUrl: e.target.value }))
+                  }
+                  placeholder="Menu URL"
+                />
+                <Input
+                  value={profileDraft.facebookPageUrl}
+                  onChange={(e) =>
+                    setProfileDraft((prev) => ({
+                      ...prev,
+                      facebookPageUrl: e.target.value,
+                    }))
+                  }
+                  placeholder="Facebook URL"
+                />
+                <Input
+                  value={profileDraft.instagramUrl}
+                  onChange={(e) =>
+                    setProfileDraft((prev) => ({
+                      ...prev,
+                      instagramUrl: e.target.value,
+                    }))
+                  }
+                  placeholder="Instagram URL"
+                />
+                <Input
+                  value={profileDraft.xUrl}
+                  onChange={(e) =>
+                    setProfileDraft((prev) => ({ ...prev, xUrl: e.target.value }))
+                  }
+                  placeholder="X URL"
+                />
+                <Input
+                  value={profileDraft.logoUrl}
+                  onChange={(e) =>
+                    setProfileDraft((prev) => ({ ...prev, logoUrl: e.target.value }))
+                  }
+                  placeholder="Logo image URL"
+                />
+                <Input
+                  value={profileDraft.coverImageUrl}
+                  onChange={(e) =>
+                    setProfileDraft((prev) => ({
+                      ...prev,
+                      coverImageUrl: e.target.value,
+                    }))
+                  }
+                  placeholder="Cover image URL"
+                  className="sm:col-span-2"
+                />
+                <textarea
+                  value={profileDraft.description}
+                  onChange={(e) =>
+                    setProfileDraft((prev) => ({
+                      ...prev,
+                      description: e.target.value,
+                    }))
+                  }
+                  placeholder="Description"
+                  className="sm:col-span-2 min-h-[96px] rounded-md border border-input bg-background px-3 py-2 text-sm"
+                />
+              </div>
+
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <Button
+                  onClick={() => updateProfileBasicsMutation.mutate(profileDraft)}
+                  disabled={updateProfileBasicsMutation.isPending}
+                >
+                  {updateProfileBasicsMutation.isPending ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Save className="mr-2 h-4 w-4" />
+                  )}
+                  Save profile basics
+                </Button>
+                <Link
+                  href={`/menu-builder?restaurantId=${encodeURIComponent(String(selectedRestaurant))}`}
+                >
+                  <Button variant="outline">Update menu</Button>
+                </Link>
+                <Link href="/deal-creation">
+                  <Button variant="outline">Add deal</Button>
+                </Link>
+                <Link href="/events">
+                  <Button variant="outline">Add event</Button>
+                </Link>
+              </div>
+            </div>
+          ) : null}
         </div>
       )}
 
@@ -1469,13 +1728,25 @@ export default function RestaurantOwnerDashboard() {
       {subscription?.hasAccess &&
         currentRestaurant &&
         (() => {
+          const hasBasics = Boolean(
+            (currentRestaurant as any).name &&
+              ((currentRestaurant as any).description ||
+                (currentRestaurant as any).cuisineType ||
+                (currentRestaurant as any).businessType),
+          );
           const hasPhoto = Boolean(
             (currentRestaurant as any).imageUrl ||
-            (currentRestaurant as any).logoUrl,
+              (currentRestaurant as any).logoUrl ||
+              (currentRestaurant as any).coverImageUrl,
           );
           const hasMenu = Boolean(
             (currentRestaurant as any).menuUrl ||
-            (currentRestaurant as any).hasMenu,
+            (currentRestaurant as any).hasMenu ||
+            (currentRestaurant as any).menuImageUrl ||
+            (currentRestaurant as any).menuPdfUrl ||
+            (currentRestaurant as any).featuredMenuItems?.length ||
+            Number((currentRestaurant as any).menuItemCount || 0) > 0 ||
+            Number((currentRestaurant as any).publicMenuItemCount || 0) > 0,
           );
           const hasAddress = Boolean(
             (currentRestaurant as any).address ||
@@ -1485,6 +1756,12 @@ export default function RestaurantOwnerDashboard() {
             (currentRestaurant as any).phone ||
             (currentRestaurant as any).contactPhone,
           );
+          const hasContact = Boolean(
+            hasPhone ||
+              (currentRestaurant as any).websiteUrl ||
+              (currentRestaurant as any).facebookPageUrl ||
+              (currentRestaurant as any).instagramUrl,
+          );
           const hasSchedule = Boolean(
             (currentRestaurant as any).operatingHours ||
             (currentRestaurant as any).businessHours ||
@@ -1492,12 +1769,27 @@ export default function RestaurantOwnerDashboard() {
             (currentRestaurant as any).schedulePublished,
           );
           const hasDeal = (stats?.activeDeals || 0) > 0;
+          const hasEvents = Boolean((currentRestaurant as any).eventsEnabled);
+          const isVerifiedProfile = Boolean((currentRestaurant as any).isVerified);
+          const publicReady =
+            hasBasics &&
+            hasAddress &&
+            hasContact &&
+            hasMenu &&
+            hasPhoto &&
+            hasSchedule &&
+            (isFoodTruck ? true : hasDeal);
           const profileSetupHref = `/restaurant-owner-dashboard?setup=profile&restaurantId=${encodeURIComponent(
             String(selectedRestaurant),
           )}`;
           const checklistItems = [
             {
-              label: "Profile photo or logo uploaded",
+              label: "Basics complete",
+              done: hasBasics,
+              href: profileSetupHref,
+            },
+            {
+              label: "Photos complete",
               done: hasPhoto,
               href: profileSetupHref,
             },
@@ -1507,26 +1799,50 @@ export default function RestaurantOwnerDashboard() {
               href: profileSetupHref,
             },
             {
-              label: "Phone number added",
-              done: hasPhone,
+              label: "Contact links complete",
+              done: hasContact,
               href: profileSetupHref,
             },
             {
-              label: "Online menu linked or built",
+              label: "Menu complete",
               done: hasMenu,
               href: `/menu-builder?restaurantId=${encodeURIComponent(
                 String(selectedRestaurant),
               )}`,
             },
             {
-              label: "Schedule or operating hours published",
+              label: "Hours complete",
               done: hasSchedule,
               href: "/restaurant-owner-dashboard?setup=schedule",
             },
             {
-              label: "First special or deal created",
+              label: "Deals or specials added",
               done: hasDeal,
               href: "/deal-creation",
+            },
+            ...(isFoodTruck
+              ? [
+                  {
+                    label: "Truck schedule complete",
+                    done: hasSchedule,
+                    href: "/restaurant-owner-dashboard?setup=schedule&truck=1",
+                  },
+                ]
+              : []),
+            {
+              label: "Events added (if relevant)",
+              done: hasEvents,
+              href: "/events",
+            },
+            {
+              label: "Public profile ready",
+              done: publicReady,
+              href: profileSetupHref,
+            },
+            {
+              label: "Verified profile badge",
+              done: isVerifiedProfile,
+              href: profileSetupHref,
             },
           ];
           const completedCount = checklistItems.filter((i) => i.done).length;
