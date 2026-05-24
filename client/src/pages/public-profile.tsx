@@ -17,6 +17,7 @@ import {
   MapPin,
   MenuSquare,
   Phone,
+  Route,
   Star,
   Truck,
 } from "lucide-react";
@@ -54,6 +55,26 @@ type PublicProfilePayload =
     });
 
 const DEFAULT_IMAGE = "/og-default.jpg";
+
+type LocationDiscoveryTruck = {
+  id: string;
+  name: string;
+  cuisineType?: string | null;
+  truckPath?: string;
+  logoUrl?: string | null;
+  coverImageUrl?: string | null;
+  imageUrl?: string | null;
+  schedules?: Array<{
+    date?: string;
+    startTime?: string;
+    endTime?: string;
+  }>;
+};
+
+type LocationDiscoveryPayload = {
+  totalTrucks?: number;
+  trucks?: LocationDiscoveryTruck[];
+};
 
 const asSafeCtas = (ctas: PublicCta[] | undefined) =>
   (Array.isArray(ctas) ? ctas : []).filter((cta) => Boolean(cta?.safe && cta?.href));
@@ -196,6 +217,168 @@ function LocationNowSection({ profile }: { profile: PublicLocationProfile }) {
             No trucks listed right now. Check back soon.
           </div>
         )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function formatScheduleLabel(truck: LocationDiscoveryTruck) {
+  const first = Array.isArray(truck.schedules) ? truck.schedules[0] : null;
+  if (!first) return null;
+  const start = String(first.startTime || "").trim();
+  const end = String(first.endTime || "").trim();
+  if (start && end) return `${start} - ${end}`;
+  return start || end || null;
+}
+
+function LocationTruckOptionsSection({
+  profile,
+}: {
+  profile: PublicLocationProfile;
+}) {
+  const hostId = String(profile.id || "").trim();
+  const { data: nowData, isLoading: nowLoading } = useQuery<LocationDiscoveryPayload>({
+    queryKey: ["/api/public/discovery/location", hostId, "now"],
+    enabled: Boolean(hostId),
+    queryFn: async () => {
+      const res = await fetch(
+        `/api/public/discovery/location/${encodeURIComponent(hostId)}/time/now`,
+      );
+      if (!res.ok) return { totalTrucks: 0, trucks: [] };
+      return res.json();
+    },
+  });
+
+  const { data: tonightData, isLoading: tonightLoading } =
+    useQuery<LocationDiscoveryPayload>({
+      queryKey: ["/api/public/discovery/location", hostId, "tonight"],
+      enabled: Boolean(hostId),
+      queryFn: async () => {
+        const res = await fetch(
+          `/api/public/discovery/location/${encodeURIComponent(hostId)}/time/tonight`,
+        );
+        if (!res.ok) return { totalTrucks: 0, trucks: [] };
+        return res.json();
+      },
+    });
+
+  const nowTrucks = Array.isArray(nowData?.trucks) ? nowData!.trucks! : [];
+  const tonightTrucks = Array.isArray(tonightData?.trucks)
+    ? tonightData!.trucks!
+    : [];
+
+  const cards = useMemo(() => {
+    const byId = new Map<
+      string,
+      {
+        truck: LocationDiscoveryTruck;
+        status: "here_now" | "tonight";
+      }
+    >();
+
+    for (const truck of nowTrucks) {
+      byId.set(String(truck.id), { truck, status: "here_now" });
+    }
+    for (const truck of tonightTrucks) {
+      const id = String(truck.id);
+      if (!byId.has(id)) {
+        byId.set(id, { truck, status: "tonight" });
+      }
+    }
+    return Array.from(byId.values());
+  }, [nowTrucks, tonightTrucks]);
+
+  const hasCards = cards.length > 0;
+  const loading = nowLoading || tonightLoading;
+
+  return (
+    <Card className="border-white/10 bg-[#0f0d0b]">
+      <CardHeader>
+        <CardTitle className="text-xl text-white">Food options here</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {loading ? (
+          <div className="rounded-lg border border-white/10 bg-black/20 p-4 text-sm text-white/75">
+            Loading nearby trucks...
+          </div>
+        ) : null}
+
+        {!loading && hasCards ? (
+          <div className="space-y-3">
+            {cards.map(({ truck, status }) => {
+              const image =
+                truck.coverImageUrl || truck.logoUrl || truck.imageUrl || null;
+              const scheduleLabel = formatScheduleLabel(truck);
+              return (
+                <div
+                  key={`${status}:${truck.id}`}
+                  className="flex gap-3 rounded-xl border border-white/10 bg-black/25 p-3"
+                >
+                  <div className="h-16 w-16 flex-none overflow-hidden rounded-lg bg-[#1a1714]">
+                    {image ? (
+                      <img
+                        src={image}
+                        alt={truck.name}
+                        className="h-full w-full object-cover"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-xs font-semibold text-white/75">
+                        {String(truck.name || "Truck").slice(0, 2).toUpperCase()}
+                      </div>
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-white">
+                      {truck.name}
+                    </p>
+                    {truck.cuisineType ? (
+                      <p className="truncate text-xs text-white/70">{truck.cuisineType}</p>
+                    ) : null}
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <Badge variant="secondary">
+                        {status === "here_now" ? "Here now" : "Tonight"}
+                      </Badge>
+                      {scheduleLabel ? (
+                        <Badge variant="outline" className="border-white/15 text-white/80">
+                          {scheduleLabel}
+                        </Badge>
+                      ) : null}
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    {truck.truckPath ? (
+                      <a
+                        href={truck.truckPath}
+                        className="inline-flex items-center rounded-md bg-orange-500 px-2.5 py-1.5 text-xs font-semibold text-black hover:bg-orange-400"
+                      >
+                        View
+                      </a>
+                    ) : null}
+                    {locationLine(profile) ? (
+                      <a
+                        href={`https://maps.google.com/?q=${encodeURIComponent(String(locationLine(profile) || ""))}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 rounded-md border border-white/20 px-2.5 py-1.5 text-xs text-white/90 hover:bg-white/10"
+                      >
+                        <Route className="h-3.5 w-3.5" />
+                        Route
+                      </a>
+                    ) : null}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : null}
+
+        {!loading && !hasCards ? (
+          <div className="rounded-lg border border-white/10 bg-black/20 p-4 text-sm text-white/75">
+            <p>No trucks listed right now.</p>
+            <p className="mt-1">Check back soon or explore nearby food.</p>
+          </div>
+        ) : null}
       </CardContent>
     </Card>
   );
@@ -344,6 +527,37 @@ function RestaurantHighlights({ profile }: { profile: PublicRestaurantProfile })
   );
 }
 
+function GalleryStrip({ profile }: { profile: PublicRestaurantProfile }) {
+  if (!Array.isArray(profile.galleryImages) || profile.galleryImages.length === 0) {
+    return null;
+  }
+  const images = profile.galleryImages
+    .filter((image) => image.publicApproved && image.url)
+    .slice(0, 12);
+  if (images.length === 0) return null;
+
+  return (
+    <Card className="border-white/10 bg-[#0f0d0b]">
+      <CardHeader>
+        <CardTitle className="text-xl text-white">Gallery</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="flex gap-3 overflow-x-auto pb-1">
+          {images.map((image, idx) => (
+            <img
+              key={`${image.url}-${idx}`}
+              src={image.url}
+              alt={`${profile.displayName} ${idx + 1}`}
+              loading="lazy"
+              className="h-28 w-40 flex-none rounded-lg object-cover"
+            />
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 function RestaurantSchedule({ profile }: { profile: PublicRestaurantProfile }) {
   return (
     <Card className="border-white/10 bg-[#0f0d0b]">
@@ -463,6 +677,7 @@ export default function PublicProfilePage() {
         {data.entity === "host" ? (
           <>
             <LocationNowSection profile={data} />
+            <LocationTruckOptionsSection profile={data} />
             <LocationMapSection profile={data} />
             <LocationAmenitiesSection profile={data} />
             <Card className="border-white/10 bg-[#0f0d0b]">
@@ -477,6 +692,7 @@ export default function PublicProfilePage() {
         ) : data.entity === "restaurant" ? (
           <>
             <RestaurantSignals profile={data} />
+            <GalleryStrip profile={data} />
             <RestaurantHighlights profile={data} />
             <RestaurantSchedule profile={data} />
             <RestaurantSocial profile={data} safeCtas={safeCtas} />
