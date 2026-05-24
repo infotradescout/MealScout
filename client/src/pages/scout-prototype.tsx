@@ -283,6 +283,35 @@ export default function ScoutPrototype() {
   const isPensacolaScoutPreview =
     isAdminPreviewEligible ||
     (scoutPreviewCity === "pensacola" && adminPreviewLocked);
+  const hasKnownUserLocation = useMemo(() => {
+    const candidate = user as
+      | {
+          latitude?: unknown;
+          longitude?: unknown;
+          lat?: unknown;
+          lng?: unknown;
+          city?: unknown;
+          state?: unknown;
+          locationName?: unknown;
+        }
+      | null
+      | undefined;
+    if (!candidate) return false;
+
+    const latCandidates = [candidate.latitude, candidate.lat];
+    const lngCandidates = [candidate.longitude, candidate.lng];
+    const hasCoords =
+      latCandidates.some((value) => Number.isFinite(Number(value))) &&
+      lngCandidates.some((value) => Number.isFinite(Number(value)));
+
+    if (hasCoords) return true;
+
+    const city = String(candidate.city ?? "").trim();
+    const state = String(candidate.state ?? "").trim();
+    const locationLabel = String(candidate.locationName ?? "").trim();
+    return city.length > 0 || state.length > 0 || locationLabel.length > 0;
+  }, [user]);
+  const shouldUseDeviceLocation = Boolean(user?.id) && hasKnownUserLocation;
   const resolvedLocationLabel = isPensacolaScoutPreview
     ? "Pensacola"
     : locationName;
@@ -317,6 +346,11 @@ export default function ScoutPrototype() {
       setLocationName("Pensacola");
       return;
     }
+    if (!shouldUseDeviceLocation) {
+      setDeviceCoords(null);
+      setLocationName("Pensacola");
+      return;
+    }
     if (!navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
       (pos) => {
@@ -328,7 +362,7 @@ export default function ScoutPrototype() {
       () => { /* use default Pensacola */ },
       { timeout: 8000 }
     );
-  }, [isPensacolaScoutPreview]);
+  }, [isPensacolaScoutPreview, shouldUseDeviceLocation]);
 
   /* ─── API queries ─── */
   const { data: trucksRaw = [] } = useQuery<Truck[]>({
