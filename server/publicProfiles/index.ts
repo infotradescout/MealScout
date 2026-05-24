@@ -4,3 +4,4 @@ export * from "./toPublicTruckProfile";
 export * from "./toPublicBarProfile";
 export * from "./toPublicLocationProfile";
 export * from "./toPublicSupplierProfile";
+export * from "./assertPublicResponseSafe";

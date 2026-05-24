@@ -6,6 +6,7 @@ import { buildSlotDateTimes, intervalOverlaps, resolveTimeIntent, type TimeInten
 import { getPublicSlotGateConfigFromEnv, isSlotPublic, type PublicSlot } from "../services/publicSlotGate";
 import { resolveCityTimeZone, usStateToTimeZone } from "../services/cityTimeZone";
 import { dateKeyInZone } from "../services/dateKeys";
+import { assertPublicResponseSafe } from "../publicProfiles";
 
 type TimeKey = "now" | "breakfast" | "lunch" | "dinner" | "tonight" | "this-weekend";
 
@@ -60,6 +61,9 @@ function timeKeyToIntent(value: TimeKey): TimeIntent {
 function getFreshnessGateConfig() {
   return getPublicSlotGateConfigFromEnv();
 }
+
+const sendPublicJson = <T>(res: any, payload: T) =>
+  res.json(assertPublicResponseSafe(payload));
 
 export function registerDiscoveryRoutes(app: Express) {
   const rowsOf = (result: any) =>
@@ -233,7 +237,7 @@ export function registerDiscoveryRoutes(app: Express) {
           `),
         ]);
 
-      res.json({
+      sendPublicJson(res, {
         generatedAt: new Date().toISOString(),
         windowDays,
         items: rowsOf(itemResult),
@@ -494,7 +498,7 @@ export function registerDiscoveryRoutes(app: Express) {
       const trucks = Array.from(byTruck.values()).sort((a, b) => a.name.localeCompare(b.name));
 
       res.setHeader("Cache-Control", "public, max-age=60");
-      res.json({
+      sendPublicJson(res, {
         city: { name: city.name, slug: city.slug, state: city.state || null },
         timeKey,
         timeZone,
@@ -654,7 +658,7 @@ export function registerDiscoveryRoutes(app: Express) {
       const trucks = Array.from(byTruck.values()).sort((a, b) => a.name.localeCompare(b.name));
 
       res.setHeader("Cache-Control", "public, max-age=60");
-      res.json({
+      sendPublicJson(res, {
         location: {
           id: host.id,
           name: host.businessName,
@@ -727,7 +731,7 @@ export function registerDiscoveryRoutes(app: Express) {
         .sort((a: any, b: any) => a.name.localeCompare(b.name));
 
       res.setHeader("Cache-Control", "public, max-age=300");
-      res.json({
+      sendPublicJson(res, {
         city: { name: city.name, slug: city.slug, state: city.state || null },
         cuisine: { slug: cuisineSlug, label: cuisineSlug.replace(/-/g, " ") },
         generatedAt: new Date().toISOString(),

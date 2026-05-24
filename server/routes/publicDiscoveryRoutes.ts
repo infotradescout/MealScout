@@ -18,6 +18,7 @@ import {
   videoStories,
 } from "@shared/schema";
 import {
+  assertPublicResponseSafe,
   toPublicBarProfile,
   toPublicLocationProfile,
   toPublicRestaurantProfile,
@@ -100,6 +101,9 @@ const countBy = <T extends string>(values: T[]) =>
     {} as Record<string, number>,
   );
 
+const sendPublicJson = <T>(res: any, payload: T) =>
+  res.json(assertPublicResponseSafe(payload));
+
 export function registerPublicDiscoveryRoutes(app: Express) {
   app.get("/api/public/resolve/:entity/:slug", async (req, res) => {
     try {
@@ -145,7 +149,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
                   ? "bar"
                   : "restaurant";
         const canonicalPath = `/p/${routeEntity}/${row.id}/${rowSlug}`;
-        return res.json({
+        return sendPublicJson(res, {
           exists: true,
           entityType: routeEntity,
           id: String(row.id),
@@ -168,7 +172,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
         }
         const rowSlug = toSlug(row.businessName) || String(row.id);
         const canonicalPath = `/p/location/${row.id}/${rowSlug}`;
-        return res.json({
+        return sendPublicJson(res, {
           exists: true,
           entityType: "location",
           id: String(row.id),
@@ -188,7 +192,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
         }
         const rowSlug = toSlug(row.businessName) || String(row.id);
         const canonicalPath = `/p/supplier/${row.id}/${rowSlug}`;
-        return res.json({
+        return sendPublicJson(res, {
           exists: true,
           entityType: "supplier",
           id: String(row.id),
@@ -239,7 +243,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
 
         const canonicalPath = `/restaurant/${row.id}`;
 
-        return res.json({
+        return sendPublicJson(res, {
           entityType: "restaurant",
           entityId: row.id,
           title: row.name,
@@ -329,7 +333,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
 
         const canonicalPath = `/event/${row.id}`;
 
-        return res.json({
+        return sendPublicJson(res, {
           entityType: "event",
           entityId: row.id,
           title: row.name || "Event",
@@ -393,7 +397,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
 
         const canonicalPath = `/p/host/${row.id}`;
 
-        return res.json({
+        return sendPublicJson(res, {
           entityType: "host",
           entityId: row.id,
           title: row.businessName,
@@ -470,7 +474,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
 
         const canonicalPath = `/deal/${row.id}`;
 
-        return res.json({
+        return sendPublicJson(res, {
           entityType: "deal",
           entityId: row.id,
           title: row.title,
@@ -539,7 +543,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           showAddress,
           showContact,
         });
-        return res.json({
+        return sendPublicJson(res, {
           ...mapped,
           entity: "restaurant",
           title: mapped.displayName,
@@ -570,7 +574,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           showAddress,
           showContact,
         });
-        return res.json({
+        return sendPublicJson(res, {
           ...mapped,
           entity: "restaurant",
           title: mapped.displayName,
@@ -601,7 +605,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           showAddress,
           showContact,
         });
-        return res.json({
+        return sendPublicJson(res, {
           ...mapped,
           entity: "host",
           title: mapped.displayName,
@@ -636,7 +640,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
             showAddress,
             showContact,
           });
-          return res.json({
+          return sendPublicJson(res, {
             ...mapped,
             entity: "restaurant",
             title: mapped.displayName,
@@ -658,7 +662,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
             showAddress,
             showContact,
           });
-          return res.json({
+          return sendPublicJson(res, {
             ...mapped,
             entity: "restaurant",
             title: mapped.displayName,
@@ -679,7 +683,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           showAddress,
           showContact,
         });
-        return res.json({
+        return sendPublicJson(res, {
           ...mapped,
           entity: "restaurant",
           title: mapped.displayName,
@@ -710,7 +714,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           showAddress,
           showContact,
         });
-        return res.json({
+        return sendPublicJson(res, {
           ...mapped,
           entity: "host",
           title: mapped.displayName,
@@ -760,7 +764,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           showAddress,
           showContact,
         });
-        return res.json({
+        return sendPublicJson(res, {
           ...mapped,
           entity: "supplier",
           title: mapped.displayName,
@@ -889,7 +893,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           return searchTokens.some((token) => normalized.includes(token));
         });
 
-        return res.json({
+        return sendPublicJson(res, {
           entityType: "restaurant",
           entityId: row.id,
           windowHours: hours,
@@ -1051,7 +1055,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           return searchTokens.some((token) => normalized.includes(token));
         });
 
-        return res.json({
+        return sendPublicJson(res, {
           entityType: "event",
           entityId: row.id,
           windowHours: hours,
@@ -1187,7 +1191,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           return searchTokens.some((token) => normalized.includes(token));
         });
 
-        return res.json({
+        return sendPublicJson(res, {
           entityType: "host",
           entityId: row.id,
           windowHours: hours,
@@ -1303,7 +1307,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           return searchTokens.some((token) => normalized.includes(token));
         });
 
-        return res.json({
+        return sendPublicJson(res, {
           entityType: "deal",
           entityId: row.id,
           windowHours: hours,
@@ -1407,7 +1411,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
         "Cache-Control",
         "public, max-age=300, s-maxage=600, stale-while-revalidate=1200",
       );
-      res.json(payload);
+      sendPublicJson(res, payload);
     } catch (error) {
       console.error("Error loading cities index:", error);
       res.status(500).json({ message: "Failed to load cities" });
@@ -1462,7 +1466,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
         }
       }
 
-      res.json({
+      sendPublicJson(res, {
         city: { name: city.name, slug: city.slug, state: city.state },
         stats: {
           restaurants: restaurantsOnly.length,
@@ -1485,3 +1489,4 @@ export function registerPublicDiscoveryRoutes(app: Express) {
     }
   });
 }
+
