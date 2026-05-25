@@ -776,6 +776,114 @@ export default function RestaurantOwnerDashboard() {
       description: `Downloaded ${assets.length} available assets.`,
     });
   };
+  const downloadSocialQrGraphic = async (options: {
+    title: string;
+    subtitle: string;
+    cta: string;
+    targetUrl: string;
+    filename: string;
+    format: "square" | "story" | "portrait";
+  }) => {
+    const qrUrl = buildQrImageUrl(options.targetUrl);
+    const businessName = String(currentRestaurant?.name || "MealScout Business");
+    const sizeByFormat: Record<
+      "square" | "story" | "portrait",
+      { width: number; height: number; tag: string }
+    > = {
+      square: { width: 1080, height: 1080, tag: "Square post" },
+      story: { width: 1080, height: 1920, tag: "Story" },
+      portrait: { width: 1080, height: 1350, tag: "Portrait" },
+    };
+
+    try {
+      const qrImage = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error("QR image failed to load."));
+        img.src = qrUrl;
+      });
+
+      const size = sizeByFormat[options.format];
+      const canvas = document.createElement("canvas");
+      canvas.width = size.width;
+      canvas.height = size.height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("Canvas unavailable.");
+
+      const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+      gradient.addColorStop(0, "#0f0d0b");
+      gradient.addColorStop(1, "#1a120d");
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      const pad = Math.round(Math.min(canvas.width, canvas.height) * 0.06);
+      const cardX = pad;
+      const cardY = pad;
+      const cardW = canvas.width - pad * 2;
+      const cardH = canvas.height - pad * 2;
+      ctx.fillStyle = "#15100b";
+      ctx.strokeStyle = "rgba(249,115,22,0.36)";
+      ctx.lineWidth = Math.max(3, Math.round(canvas.width * 0.0035));
+      ctx.beginPath();
+      ctx.roundRect(cardX, cardY, cardW, cardH, Math.round(canvas.width * 0.04));
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.textAlign = "center";
+      ctx.fillStyle = "#fb923c";
+      ctx.font = `800 ${Math.round(canvas.width * 0.048)}px Inter, Arial, sans-serif`;
+      ctx.fillText("MealScout", canvas.width / 2, cardY + Math.round(canvas.height * 0.1));
+
+      ctx.fillStyle = "#ffffff";
+      ctx.font = `900 ${Math.round(canvas.width * 0.058)}px Inter, Arial, sans-serif`;
+      ctx.fillText(options.title, canvas.width / 2, cardY + Math.round(canvas.height * 0.155));
+      ctx.fillStyle = "#fcd9be";
+      ctx.font = `600 ${Math.round(canvas.width * 0.03)}px Inter, Arial, sans-serif`;
+      ctx.fillText(options.subtitle, canvas.width / 2, cardY + Math.round(canvas.height * 0.195));
+
+      const qrFrame = Math.round(Math.min(canvas.width, canvas.height) * 0.48);
+      const qrFrameX = Math.round((canvas.width - qrFrame) / 2);
+      const qrFrameY =
+        options.format === "story"
+          ? Math.round(canvas.height * 0.39)
+          : Math.round(canvas.height * 0.29);
+      ctx.fillStyle = "#ffffff";
+      ctx.beginPath();
+      ctx.roundRect(qrFrameX, qrFrameY, qrFrame, qrFrame, Math.round(canvas.width * 0.025));
+      ctx.fill();
+      const qrPad = Math.round(qrFrame * 0.09);
+      ctx.drawImage(qrImage, qrFrameX + qrPad, qrFrameY + qrPad, qrFrame - qrPad * 2, qrFrame - qrPad * 2);
+
+      const footerY =
+        options.format === "story"
+          ? Math.round(canvas.height * 0.84)
+          : Math.round(canvas.height * 0.83);
+      ctx.fillStyle = "#ffffff";
+      ctx.font = `800 ${Math.round(canvas.width * 0.046)}px Inter, Arial, sans-serif`;
+      ctx.fillText(businessName, canvas.width / 2, footerY);
+      ctx.fillStyle = "#fcd9be";
+      ctx.font = `600 ${Math.round(canvas.width * 0.032)}px Inter, Arial, sans-serif`;
+      ctx.fillText(options.cta, canvas.width / 2, footerY + Math.round(canvas.height * 0.048));
+      ctx.fillStyle = "#fb923c";
+      ctx.font = `700 ${Math.round(canvas.width * 0.022)}px Inter, Arial, sans-serif`;
+      ctx.fillText(size.tag, canvas.width / 2, footerY + Math.round(canvas.height * 0.085));
+
+      const pngUrl = canvas.toDataURL("image/png");
+      const link = document.createElement("a");
+      link.href = pngUrl;
+      link.download = options.filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error: any) {
+      toast({
+        title: "Social graphic failed",
+        description: error?.message || "Unable to generate social graphic.",
+        variant: "destructive",
+      });
+    }
+  };
   const copyQrLink = async (targetUrl: string, label: string) => {
     try {
       await navigator.clipboard.writeText(targetUrl);
@@ -2372,6 +2480,59 @@ export default function RestaurantOwnerDashboard() {
                           ]
                         : []),
                     ];
+                    const socialTargets: Array<{
+                      id: string;
+                      label: string;
+                      targetUrl: string;
+                      title: string;
+                      subtitle: string;
+                      cta: string;
+                    }> = [
+                      {
+                        id: "profile",
+                        label: "Profile",
+                        targetUrl: canonicalUrl,
+                        title: "Find us on MealScout",
+                        subtitle: "Local updates, hours, and highlights",
+                        cta: "Find us on MealScout",
+                      },
+                      ...(menuTarget
+                        ? [
+                            {
+                              id: "menu",
+                              label: "Menu",
+                              targetUrl: String(menuTarget),
+                              title: "Scan for menu",
+                              subtitle: "See featured items and latest menu",
+                              cta: "Scan for menu",
+                            },
+                          ]
+                        : []),
+                      ...(specialsTarget
+                        ? [
+                            {
+                              id: "specials",
+                              label: "Specials",
+                              targetUrl: String(specialsTarget),
+                              title: "Today's specials",
+                              subtitle: "Active deals and limited-time offers",
+                              cta: "Scan for today's specials",
+                            },
+                          ]
+                        : []),
+                      ...(isTruckProfile
+                        ? [
+                            {
+                              id: "truck",
+                              label: "Truck schedule",
+                              targetUrl: String(menuTarget || canonicalUrl),
+                              title: "Schedule + menu",
+                              subtitle: "Find stops, hours, and food updates",
+                              cta: "Scan for schedule + menu",
+                            },
+                          ]
+                        : []),
+                    ];
 
                     return (
                       <div className="space-y-3">
@@ -2646,6 +2807,96 @@ export default function RestaurantOwnerDashboard() {
                               </div>
                             ) : null}
                           </div>
+
+                          {socialTargets.length > 0 ? (
+                            <div className="mt-4 rounded-md border border-orange-100 bg-orange-50/40 p-2.5">
+                              <h6 className="text-[11px] font-black uppercase tracking-[0.1em] text-orange-800">
+                                Social graphics
+                              </h6>
+                              <p className="mt-1 text-[11px] text-orange-900/70">
+                                Ready-to-post assets sized for square and story formats.
+                              </p>
+                              <div className="mt-2 space-y-2">
+                                {socialTargets.map((target) => (
+                                  <div
+                                    key={`social-${target.id}`}
+                                    className="rounded-md border border-orange-100 bg-white p-2"
+                                  >
+                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                      <p className="text-[11px] font-semibold text-orange-900">
+                                        {target.label}
+                                      </p>
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => copyQrLink(target.targetUrl, `${target.label} social`)}
+                                      >
+                                        <Copy className="mr-1 h-3.5 w-3.5" />
+                                        Copy link
+                                      </Button>
+                                    </div>
+                                    <div className="mt-2 flex flex-wrap gap-2">
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() =>
+                                          downloadSocialQrGraphic({
+                                            title: target.title,
+                                            subtitle: target.subtitle,
+                                            cta: target.cta,
+                                            targetUrl: target.targetUrl,
+                                            filename: `${target.id}-social-square-${selectedRestaurant}.png`,
+                                            format: "square",
+                                          })
+                                        }
+                                      >
+                                        <Download className="mr-1 h-3.5 w-3.5" />
+                                        Download Square
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() =>
+                                          downloadSocialQrGraphic({
+                                            title: target.title,
+                                            subtitle: target.subtitle,
+                                            cta: target.cta,
+                                            targetUrl: target.targetUrl,
+                                            filename: `${target.id}-social-story-${selectedRestaurant}.png`,
+                                            format: "story",
+                                          })
+                                        }
+                                      >
+                                        <Download className="mr-1 h-3.5 w-3.5" />
+                                        Download Story
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() =>
+                                          downloadSocialQrGraphic({
+                                            title: target.title,
+                                            subtitle: target.subtitle,
+                                            cta: target.cta,
+                                            targetUrl: target.targetUrl,
+                                            filename: `${target.id}-social-portrait-${selectedRestaurant}.png`,
+                                            format: "portrait",
+                                          })
+                                        }
+                                      >
+                                        <Download className="mr-1 h-3.5 w-3.5" />
+                                        Download Portrait
+                                      </Button>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ) : null}
                         </div>
                       </div>
                     );
