@@ -273,7 +273,7 @@ function LocationNowSection({ profile }: { profile: PublicLocationProfile }) {
   const hasAny = now > 0 || tonight > 0 || upcoming > 0;
 
   return (
-    <Card className="border-white/10 bg-[#0f0d0b]">
+    <Card id="menu" className="border-white/10 bg-[#0f0d0b]">
       <CardHeader>
         <CardTitle className="text-xl text-white">Food here now</CardTitle>
       </CardHeader>
@@ -333,7 +333,7 @@ function QuickActionRow({
     .slice(0, 7);
   if (actions.length === 0) return null;
   return (
-    <Card className="border-white/10 bg-[#0f0d0b]">
+    <Card id="deals" className="border-white/10 bg-[#0f0d0b]">
       <CardContent className="flex flex-wrap gap-2 p-4">
         {actions.map((cta, idx) => renderCtaButton(cta, "outline", `${cta.href}-${idx}`))}
       </CardContent>

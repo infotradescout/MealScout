@@ -64,6 +64,8 @@ import {
   Satellite,
   Save,
   RotateCcw,
+  QrCode,
+  Copy,
 } from "lucide-react";
 import Navigation from "@/components/navigation";
 import RestaurantCreditRedemptionForm from "@/components/RestaurantCreditRedemptionForm";
@@ -85,6 +87,7 @@ import {
 } from "recharts";
 import { z } from "zod";
 import type { Deal, Restaurant } from "@shared/schema";
+import type { PublicRestaurantProfile } from "@shared/publicProfiles";
 import { BackHeader } from "@/components/back-header";
 import { SEOHead } from "@/components/seo-head";
 
@@ -152,6 +155,11 @@ interface ProfileCompletionDraft {
   logoUrl: string;
   coverImageUrl: string;
 }
+
+type PublicProfileQrPayload = Pick<
+  PublicRestaurantProfile,
+  "seo" | "menuSections" | "menuUrl" | "menuPdfUrl" | "menuImageUrl" | "deals"
+>;
 
 export default function RestaurantOwnerDashboard() {
   const { user } = useAuth();
@@ -583,6 +591,47 @@ export default function RestaurantOwnerDashboard() {
   const currentRestaurant = restaurants.find(
     (r) => r.id === selectedRestaurant,
   );
+  const currentPublicEntityType =
+    currentRestaurant?.isFoodTruck || currentRestaurant?.businessType === "food_truck"
+      ? "truck"
+      : currentRestaurant?.businessType === "bar"
+        ? "bar"
+        : "restaurant";
+  const { data: publicProfileForQr } = useQuery<PublicProfileQrPayload | null>({
+    queryKey: ["/api/public/profiles", currentPublicEntityType, selectedRestaurant, "qr-kit"],
+    enabled: Boolean(selectedRestaurant),
+    queryFn: async () => {
+      const response = await fetch(
+        `/api/public/profiles/${encodeURIComponent(currentPublicEntityType)}/${encodeURIComponent(String(selectedRestaurant))}`,
+      );
+      if (!response.ok) return null;
+      return response.json();
+    },
+    staleTime: 60_000,
+  });
+
+  const buildQrImageUrl = (targetUrl: string) =>
+    `https://api.qrserver.com/v1/create-qr-code/?size=512x512&margin=16&data=${encodeURIComponent(targetUrl)}`;
+  const downloadQrPng = (targetUrl: string, filename: string) => {
+    const link = document.createElement("a");
+    link.href = buildQrImageUrl(targetUrl);
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+  const copyQrLink = async (targetUrl: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(targetUrl);
+      toast({ title: `${label} link copied` });
+    } catch (error: any) {
+      toast({
+        title: "Copy failed",
+        description: error?.message || "Unable to copy link.",
+        variant: "destructive",
+      });
+    }
+  };
   useEffect(() => {
     if (!currentRestaurant) return;
     const row: any = currentRestaurant;
@@ -1719,6 +1768,126 @@ export default function RestaurantOwnerDashboard() {
                   <Button variant="outline">Add event</Button>
                 </Link>
               </div>
+
+              {publicProfileForQr?.seo?.canonicalUrl ? (
+                <div className="mt-4 rounded-lg border border-orange-200 bg-orange-50/60 p-4">
+                  <div className="mb-2 flex items-center gap-2">
+                    <QrCode className="h-4 w-4 text-orange-700" />
+                    <h4 className="text-sm font-black uppercase tracking-[0.12em] text-orange-800">
+                      QR Kit
+                    </h4>
+                  </div>
+                  <p className="mb-3 text-xs text-orange-900/80">
+                    Print or share these QR codes for profile, menu, and specials.
+                  </p>
+                  {(() => {
+                    const canonicalUrl = publicProfileForQr.seo.canonicalUrl;
+                    const hasStructuredMenu = Array.isArray(publicProfileForQr.menuSections)
+                      ? publicProfileForQr.menuSections.some(
+                          (section) =>
+                            section &&
+                            Array.isArray(section.items) &&
+                            section.items.length > 0,
+                        )
+                      : false;
+                    const hasMenuFallback = Boolean(
+                      publicProfileForQr.menuUrl ||
+                        publicProfileForQr.menuPdfUrl ||
+                        publicProfileForQr.menuImageUrl,
+                    );
+                    const menuTarget =
+                      publicProfileForQr.menuUrl ||
+                      publicProfileForQr.menuPdfUrl ||
+                      publicProfileForQr.menuImageUrl ||
+                      (hasStructuredMenu ? `${canonicalUrl}#menu` : null);
+                    const specialsTarget =
+                      Number(publicProfileForQr.deals?.totalActive || 0) > 0
+                        ? `${canonicalUrl}#deals`
+                        : null;
+
+                    const options: Array<{
+                      id: string;
+                      label: string;
+                      target: string | null;
+                      note: string;
+                    }> = [
+                      {
+                        id: "profile",
+                        label: "Profile QR",
+                        target: canonicalUrl,
+                        note: "Scan to view your full MealScout profile.",
+                      },
+                      {
+                        id: "menu",
+                        label: "Menu QR",
+                        target: hasStructuredMenu || hasMenuFallback ? menuTarget : null,
+                        note: "Scan for menu and featured items.",
+                      },
+                      {
+                        id: "specials",
+                        label: "Specials QR",
+                        target: specialsTarget,
+                        note: "Scan for active deals and specials.",
+                      },
+                    ];
+
+                    return (
+                      <div className="grid gap-3 sm:grid-cols-3">
+                        {options
+                          .filter((option) => Boolean(option.target))
+                          .map((option) => (
+                            <div
+                              key={option.id}
+                              className="rounded-lg border border-orange-200 bg-white p-3"
+                            >
+                              <p className="text-xs font-bold uppercase tracking-[0.08em] text-orange-800">
+                                {option.label}
+                              </p>
+                              <img
+                                src={buildQrImageUrl(String(option.target))}
+                                alt={`${option.label} code`}
+                                className="my-2 h-28 w-28 rounded border border-orange-100 bg-white object-contain"
+                                loading="lazy"
+                              />
+                              <p className="mb-2 text-[11px] text-orange-900/75">
+                                {option.note}
+                              </p>
+                              <div className="flex flex-wrap gap-2">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() =>
+                                    downloadQrPng(
+                                      String(option.target),
+                                      `${option.id}-qr-${selectedRestaurant}.png`,
+                                    )
+                                  }
+                                >
+                                  Download PNG
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() =>
+                                    copyQrLink(String(option.target), option.label)
+                                  }
+                                >
+                                  <Copy className="mr-1 h-3.5 w-3.5" />
+                                  Copy link
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                      </div>
+                    );
+                  })()}
+                  <p className="mt-3 text-[11px] text-orange-900/75">
+                    Print tip: use Profile QR for window signage, Menu QR for table tents, and Specials QR for daily promos.
+                  </p>
+                </div>
+              ) : null}
             </div>
           ) : null}
         </div>
