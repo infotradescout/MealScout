@@ -166,6 +166,16 @@ interface ProfileCompletionDraft {
   coverImageUrl: string;
 }
 
+interface ProfileMediaItem {
+  id: string;
+  url: string;
+  source?: string | null;
+  category?: string | null;
+  publicApproved?: boolean;
+  uploadedAt?: string | null;
+  lastVerifiedAt?: string | null;
+}
+
 type PublicProfileQrPayload = Pick<
   PublicRestaurantProfile,
   "seo" | "menuSections" | "menuUrl" | "menuPdfUrl" | "menuImageUrl" | "deals"
@@ -216,6 +226,7 @@ export default function RestaurantOwnerDashboard() {
     logoUrl: "",
     coverImageUrl: "",
   });
+  const [mediaCategory, setMediaCategory] = useState<string>("food");
 
   // Food truck state
   const [isBroadcasting, setIsBroadcasting] = useState(false);
@@ -625,6 +636,20 @@ export default function RestaurantOwnerDashboard() {
         `/api/public/profiles/${encodeURIComponent(currentPublicEntityType)}/${encodeURIComponent(String(selectedRestaurant))}`,
       );
       if (!response.ok) return null;
+      return response.json();
+    },
+    staleTime: 60_000,
+  });
+  const { data: publicProfileActionAnalytics } = useQuery<any>({
+    queryKey: ["/api/restaurants", selectedRestaurant, "analytics/profile-actions"],
+    enabled: Boolean(selectedRestaurant),
+    queryFn: async () => {
+      const response = await fetch(
+        `/api/restaurants/${selectedRestaurant}/analytics/profile-actions`,
+      );
+      if (!response.ok) {
+        throw new Error("Failed to load profile action analytics");
+      }
       return response.json();
     },
     staleTime: 60_000,
@@ -1464,6 +1489,91 @@ export default function RestaurantOwnerDashboard() {
     },
   });
 
+  const uploadProfileMediaMutation = useMutation({
+    mutationFn: async (payload: {
+      file: File;
+      kind: "logo" | "cover" | "gallery";
+      category?: string;
+    }) => {
+      const formData = new FormData();
+      formData.append("image", payload.file);
+      formData.append("restaurantId", selectedRestaurant);
+      if (payload.kind === "gallery") {
+        formData.append("category", payload.category || "food");
+      }
+      const endpoint =
+        payload.kind === "logo"
+          ? "/api/upload/restaurant-logo"
+          : payload.kind === "cover"
+            ? "/api/upload/restaurant-cover"
+            : "/api/upload/restaurant-gallery";
+      const response = await fetch(endpoint, {
+        method: "POST",
+        credentials: "include",
+        body: formData,
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(body?.message || "Failed to upload media");
+      }
+      return body;
+    },
+    onSuccess: (_payload, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: ["/api/restaurants/my-restaurants"],
+      });
+      toast({
+        title: "Media uploaded",
+        description:
+          variables.kind === "gallery"
+            ? "Gallery image uploaded. Admin/staff approval may be required before it appears publicly."
+            : "Profile media uploaded successfully.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Upload failed",
+        description: error?.message || "Unable to upload image.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const approveProfileMediaMutation = useMutation({
+    mutationFn: async (payload: { mediaId: string; approved: boolean }) => {
+      const response = await fetch(
+        `/api/restaurants/${encodeURIComponent(String(selectedRestaurant))}/media-gallery/${encodeURIComponent(payload.mediaId)}`,
+        {
+          method: "PATCH",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ publicApproved: payload.approved }),
+        },
+      );
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(body?.message || "Failed to update media approval");
+      }
+      return body;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["/api/restaurants/my-restaurants"],
+      });
+      toast({
+        title: "Media approval updated",
+        description: "Public approval state has been saved.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Unable to update media",
+        description: error?.message || "Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const formatTime = (time: string) => {
     const [hours, minutes] = time.split(":");
     const hour = parseInt(hours);
@@ -1969,6 +2079,135 @@ export default function RestaurantOwnerDashboard() {
                 />
               </div>
 
+              <div className="mt-4 rounded-lg border border-orange-200 bg-orange-50/50 p-3">
+                <h4 className="text-xs font-black uppercase tracking-[0.12em] text-orange-800">
+                  Media manager
+                </h4>
+                <p className="mt-1 text-xs text-orange-900/75">
+                  Upload logo, cover, and gallery images. Public profiles only render approved media.
+                </p>
+                <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                  <label className="rounded-md border border-orange-200 bg-white px-3 py-2 text-xs font-medium text-orange-900">
+                    Upload logo
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="mt-2 block w-full text-xs"
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        if (!file) return;
+                        uploadProfileMediaMutation.mutate({ file, kind: "logo" });
+                        event.currentTarget.value = "";
+                      }}
+                    />
+                  </label>
+                  <label className="rounded-md border border-orange-200 bg-white px-3 py-2 text-xs font-medium text-orange-900">
+                    Upload cover
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="mt-2 block w-full text-xs"
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        if (!file) return;
+                        uploadProfileMediaMutation.mutate({ file, kind: "cover" });
+                        event.currentTarget.value = "";
+                      }}
+                    />
+                  </label>
+                  <div className="rounded-md border border-orange-200 bg-white px-3 py-2 text-xs font-medium text-orange-900">
+                    Gallery category
+                    <select
+                      className="mt-2 w-full rounded border border-orange-200 bg-white px-2 py-1 text-xs"
+                      value={mediaCategory}
+                      onChange={(event) => setMediaCategory(event.target.value)}
+                    >
+                      <option value="food">Food</option>
+                      <option value="menu">Menu</option>
+                      <option value="storefront">Storefront</option>
+                      <option value="truck">Truck</option>
+                      <option value="atmosphere">Atmosphere</option>
+                      <option value="owner_staff">Owner/staff</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+                </div>
+                <label className="mt-2 block rounded-md border border-orange-200 bg-white px-3 py-2 text-xs font-medium text-orange-900">
+                  Upload gallery image
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="mt-2 block w-full text-xs"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      if (!file) return;
+                      uploadProfileMediaMutation.mutate({
+                        file,
+                        kind: "gallery",
+                        category: mediaCategory,
+                      });
+                      event.currentTarget.value = "";
+                    }}
+                  />
+                </label>
+                {(() => {
+                  const restaurant = currentRestaurant as any;
+                  const settings =
+                    restaurant &&
+                    typeof restaurant.socialAutopostSettings === "object"
+                      ? restaurant.socialAutopostSettings
+                      : {};
+                  const gallery = Array.isArray(settings?.publicGalleryImages)
+                    ? (settings.publicGalleryImages as ProfileMediaItem[])
+                    : [];
+                  if (!gallery.length) return null;
+                  return (
+                    <div className="mt-3 space-y-2">
+                      {gallery.slice(-8).reverse().map((media) => (
+                        <div
+                          key={media.id || media.url}
+                          className="flex items-center justify-between gap-2 rounded-md border border-orange-200 bg-white px-2 py-2"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <img
+                              src={media.url}
+                              alt="Business media"
+                              className="h-10 w-10 rounded object-cover"
+                            />
+                            <div className="min-w-0">
+                              <p className="truncate text-xs font-medium text-slate-900">
+                                {media.category || "gallery"} ·{" "}
+                                {media.publicApproved ? "Approved" : "Pending"}
+                              </p>
+                              <p className="truncate text-[11px] text-slate-600">
+                                {media.url}
+                              </p>
+                            </div>
+                          </div>
+                          {isAdmin || isStaff ? (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                approveProfileMediaMutation.mutate({
+                                  mediaId: String(media.id || ""),
+                                  approved: !Boolean(media.publicApproved),
+                                })
+                              }
+                              disabled={
+                                approveProfileMediaMutation.isPending || !media.id
+                              }
+                            >
+                              {media.publicApproved ? "Set pending" : "Approve"}
+                            </Button>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </div>
+
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <Button
                   onClick={() => updateProfileBasicsMutation.mutate(profileDraft)}
@@ -2326,6 +2565,56 @@ export default function RestaurantOwnerDashboard() {
                   </p>
                 </div>
               ) : null}
+
+              <div className="rounded-lg border border-border p-4">
+                <p className="text-sm font-semibold">Profile action analytics</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Customer actions driven by your public MealScout profile.
+                </p>
+                <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                  <div className="rounded-md border border-border p-2.5">
+                    <p className="text-[11px] text-muted-foreground">Lifetime</p>
+                    <p className="text-lg font-semibold">
+                      {Number(publicProfileActionAnalytics?.totals?.lifetime || 0)}
+                    </p>
+                  </div>
+                  <div className="rounded-md border border-border p-2.5">
+                    <p className="text-[11px] text-muted-foreground">Last 7 days</p>
+                    <p className="text-lg font-semibold">
+                      {Number(publicProfileActionAnalytics?.totals?.last7Days || 0)}
+                    </p>
+                  </div>
+                  <div className="rounded-md border border-border p-2.5">
+                    <p className="text-[11px] text-muted-foreground">Last 30 days</p>
+                    <p className="text-lg font-semibold">
+                      {Number(publicProfileActionAnalytics?.totals?.last30Days || 0)}
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {[
+                    ["Profile views", "profileViews"],
+                    ["Menu clicks", "menuClicks"],
+                    ["Directions clicks", "directionsClicks"],
+                    ["Call clicks", "callClicks"],
+                    ["Order/delivery clicks", "orderClicks"],
+                    ["QR opens", "qrOpens"],
+                    ["Deal clicks", "dealClicks"],
+                    ["Event clicks", "eventClicks"],
+                    ["Social clicks", "socialClicks"],
+                    ["Share clicks", "shareClicks"],
+                    ["Catering clicks", "cateringClicks"],
+                    ["Truck booking clicks", "truckBookingClicks"],
+                  ].map(([label, key]) => (
+                    <div key={key} className="rounded-md border border-border p-2.5">
+                      <p className="text-[11px] text-muted-foreground">{label}</p>
+                      <p className="text-base font-semibold">
+                        {Number(publicProfileActionAnalytics?.totals?.[key] || 0)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           ) : null}
         </div>
@@ -2345,6 +2634,18 @@ export default function RestaurantOwnerDashboard() {
             (currentRestaurant as any).imageUrl ||
               (currentRestaurant as any).logoUrl ||
               (currentRestaurant as any).coverImageUrl ||
+              (((currentRestaurant as any)?.socialAutopostSettings &&
+                Array.isArray(
+                  (currentRestaurant as any).socialAutopostSettings
+                    .publicGalleryImages,
+                )
+                ? (currentRestaurant as any).socialAutopostSettings
+                    .publicGalleryImages
+                : []) as any[]).some((image: any) => {
+                if (!image) return false;
+                const approved = Boolean(image.publicApproved);
+                return approved && Boolean(String(image.url || "").trim());
+              }) ||
               ((currentRestaurant as any).galleryImages || []).some((image: any) => {
                 if (!image) return false;
                 if (typeof image === "string") return Boolean(image.trim());

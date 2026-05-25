@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "wouter";
 import type {
@@ -163,6 +163,26 @@ const renderCtaButton = (cta: PublicCta, variant: "default" | "outline", key: st
   <a
     key={key}
     href={cta.href}
+    data-analytics-action={
+      cta.type === "menu"
+        ? "menu_click"
+        : cta.type === "map"
+          ? "directions_click"
+          : cta.type === "phone"
+            ? "call_click"
+            : cta.type === "order"
+              ? "order_click"
+              : cta.type === "catering"
+                ? "catering_click"
+                : cta.type === "booking"
+                  ? "truck_booking_click"
+                  : cta.type === "social"
+                    ? "social_click"
+                    : cta.type === "share"
+                      ? "share_click"
+                      : "website_click"
+    }
+    data-analytics-target-type={cta.type || "unknown"}
     target={ctaTarget(cta)}
     rel={ctaRel(cta)}
     className={
@@ -449,6 +469,8 @@ function LocationTruckOptionsSection({
           {truck.truckPath ? (
             <a
               href={truck.truckPath}
+              data-analytics-action="profile_view"
+              data-analytics-target-type="internal"
               className="inline-flex items-center rounded-md bg-orange-500 px-3 py-1.5 text-xs font-semibold text-black hover:bg-orange-400"
             >
               View
@@ -457,6 +479,8 @@ function LocationTruckOptionsSection({
           {locationLine(profile) ? (
             <a
               href={`https://maps.google.com/?q=${encodeURIComponent(String(locationLine(profile) || ""))}`}
+              data-analytics-action="directions_click"
+              data-analytics-target-type="map"
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1 rounded-md border border-white/20 px-3 py-1.5 text-xs text-white/90 hover:bg-white/10"
@@ -565,9 +589,11 @@ function LocationMapSection({ profile }: { profile: PublicLocationProfile }) {
         )}
         {locationLine(profile) ? <p className="text-sm text-white/80">{locationLine(profile)}</p> : null}
         {mapHref ? (
-          <a
-            href={mapHref}
-            target="_blank"
+            <a
+              href={mapHref}
+              data-analytics-action="directions_click"
+              data-analytics-target-type="map"
+              target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1 text-sm font-medium text-orange-300 hover:text-orange-200"
           >
@@ -760,9 +786,11 @@ function MenuSection({
         {menuCta ? (
           renderCtaButton(menuCta, "default", "menu-cta")
         ) : fallbackMenuLink ? (
-          <a
-            href={fallbackMenuLink}
-            target="_blank"
+              <a
+                href={fallbackMenuLink}
+                data-analytics-action="menu_click"
+                data-analytics-target-type="menu"
+                target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1 text-sm font-medium text-orange-300 hover:text-orange-200"
           >
@@ -840,6 +868,8 @@ function DealsSection({ profile }: { profile: PublicRestaurantProfile }) {
             <div className="mt-3">
               <a
                 href={deal.actionHref}
+                data-analytics-action="deal_click"
+                data-analytics-target-type={deal.actionType || "deal"}
                 target={
                   deal.actionType === "internal" || deal.actionType === "show_this_deal"
                     ? undefined
@@ -920,6 +950,8 @@ function EventsSection({
             <div className="mt-3">
               <a
                 href={event.actionHref}
+                data-analytics-action="event_click"
+                data-analytics-target-type={event.actionType || "event"}
                 target={event.actionType === "internal" || event.actionType === "rsvp" ? undefined : "_blank"}
                 rel={event.actionType === "internal" || event.actionType === "rsvp" ? undefined : "noopener noreferrer"}
                 className="inline-flex items-center gap-1 rounded-md bg-orange-500 px-3 py-1.5 text-xs font-semibold text-black hover:bg-orange-400"
@@ -1043,6 +1075,8 @@ function RestaurantSchedule({ profile }: { profile: PublicRestaurantProfile }) {
         {stop.directionsUrl ? (
           <a
             href={stop.directionsUrl}
+            data-analytics-action="directions_click"
+            data-analytics-target-type="map"
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1 rounded-md border border-white/20 px-2.5 py-1 text-xs text-white/85 hover:bg-white/10"
@@ -1214,6 +1248,65 @@ export default function PublicProfilePage() {
   });
 
   const safeCtas = useMemo(() => asSafeCtas(data?.cta), [data?.cta]);
+  const sentViewRef = useRef<string>("");
+  const querySource = useMemo(() => {
+    if (typeof window === "undefined") return "public_profile";
+    const params = new URLSearchParams(window.location.search);
+    const raw = String(params.get("utm_source") || "").toLowerCase();
+    return raw.includes("qr") ? "qr" : "public_profile";
+  }, []);
+
+  const trackProfileEvent = useCallback(
+    (actionType: string, targetType?: string | null, href?: string | null) => {
+      if (!data?.id || !data?.profileType) return;
+      const hrefCategory = (() => {
+        const raw = String(href || "").trim();
+        if (!raw) return null;
+        if (raw.startsWith("tel:")) return "phone";
+        if (raw.includes("maps.google.com")) return "map";
+        if (raw.includes("/menu/")) return "menu";
+        if (raw.includes("doordash") || raw.includes("ubereats") || raw.includes("grubhub")) {
+          return "delivery";
+        }
+        if (raw.startsWith("/")) return "internal";
+        try {
+          return new URL(raw).hostname.toLowerCase();
+        } catch {
+          return "external";
+        }
+      })();
+
+      void fetch("/api/public/profile-analytics", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        keepalive: true,
+        body: JSON.stringify({
+          profileEntity: data.profileType,
+          profileId: data.id,
+          actionType,
+          targetType: targetType || null,
+          targetHrefCategory: hrefCategory,
+          source: querySource,
+        }),
+      }).catch(() => {});
+    },
+    [data?.id, data?.profileType, querySource],
+  );
+
+  useEffect(() => {
+    if (!data?.id || !data?.profileType) return;
+    const key = `${data.profileType}:${data.id}`;
+    if (sentViewRef.current === key) return;
+    sentViewRef.current = key;
+    trackProfileEvent("profile_view", "page", window.location.pathname);
+    if (querySource === "qr") {
+      const params = new URLSearchParams(window.location.search);
+      const qrType = String(params.get("type") || "").toLowerCase();
+      if (qrType === "menu") trackProfileEvent("qr_menu_open", "qr", window.location.href);
+      else if (qrType === "specials") trackProfileEvent("qr_specials_open", "qr", window.location.href);
+      else trackProfileEvent("qr_profile_open", "qr", window.location.href);
+    }
+  }, [data?.id, data?.profileType, querySource, trackProfileEvent]);
 
   if (isLoading) {
     return <div className="mx-auto max-w-4xl px-4 py-10">Loading profile...</div>;
@@ -1273,7 +1366,21 @@ export default function PublicProfilePage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-5xl space-y-6 px-4 py-6 sm:py-8">
+      <main
+        className="mx-auto max-w-5xl space-y-6 px-4 py-6 sm:py-8"
+        onClickCapture={(event) => {
+          const target = event.target as HTMLElement | null;
+          const anchor = target?.closest("a[data-analytics-action]") as HTMLAnchorElement | null;
+          if (!anchor) return;
+          const action = String(anchor.dataset.analyticsAction || "").trim();
+          if (!action) return;
+          trackProfileEvent(
+            action,
+            String(anchor.dataset.analyticsTargetType || "").trim() || null,
+            anchor.getAttribute("href"),
+          );
+        }}
+      >
         <HeroBlock profile={data} safeCtas={safeCtas} />
         <QuickActionRow profile={data} safeCtas={safeCtas} />
 

@@ -1,6 +1,6 @@
 import type { Express } from "express";
 import { createHash, randomBytes } from "crypto";
-import { and, eq, gte, inArray } from "drizzle-orm";
+import { and, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "../db";
@@ -18,6 +18,7 @@ import {
 import {
   insertFoodTruckLocationSchema,
   moderationEvents,
+  requestLogs,
   restaurants,
   socialPostQueue,
   socialPublishingConnections,
@@ -2080,6 +2081,138 @@ export function registerRestaurantOperationsRoutes(
       } catch (error) {
         console.error("Error fetching location history:", error);
         res.status(500).json({ message: "Failed to fetch location history" });
+      }
+    },
+  );
+
+  app.get(
+    "/api/restaurants/:restaurantId/analytics/profile-actions",
+    isAuthenticated,
+    async (req: any, res) => {
+      try {
+        const { restaurantId } = req.params;
+        const canBypassOwnership = isAdminLikeUserType(req.user?.userType);
+        if (!canBypassOwnership) {
+          const isAuthorized = await storage.verifyRestaurantOwnership(
+            restaurantId,
+            req.user.id,
+            "viewAnalytics",
+          );
+          if (!isAuthorized) {
+            return res.status(403).json({
+              message:
+                "Unauthorized: You can only access analytics for restaurants you own",
+            });
+          }
+        }
+
+        const toDate = (value: unknown) => {
+          if (!value) return null;
+          const parsed = new Date(String(value));
+          return Number.isNaN(parsed.getTime()) ? null : parsed;
+        };
+
+        const startDate = toDate(req.query.startDate);
+        const endDate = toDate(req.query.endDate);
+        const whereClauses = [
+          eq(requestLogs.surface, "public_profile"),
+          eq(requestLogs.entityId, String(restaurantId)),
+          inArray(requestLogs.entityType, ["restaurant", "truck", "bar"]),
+          inArray(requestLogs.eventType, ["profile_view", "profile_action", "qr_open"]),
+        ] as any[];
+        if (startDate) whereClauses.push(gte(requestLogs.createdAt, startDate));
+        if (endDate) whereClauses.push(lte(requestLogs.createdAt, endDate));
+
+        const [aggregate] = await db
+          .select({
+            profileViews:
+              sql<number>`count(*) filter (where ${requestLogs.eventType} = 'profile_view')`.mapWith(
+                Number,
+              ),
+            menuClicks:
+              sql<number>`count(*) filter (where ${requestLogs.metadata}->>'actionType' = 'menu_click')`.mapWith(
+                Number,
+              ),
+            directionsClicks:
+              sql<number>`count(*) filter (where ${requestLogs.metadata}->>'actionType' = 'directions_click')`.mapWith(
+                Number,
+              ),
+            callClicks:
+              sql<number>`count(*) filter (where ${requestLogs.metadata}->>'actionType' = 'call_click')`.mapWith(
+                Number,
+              ),
+            orderClicks:
+              sql<number>`count(*) filter (where ${requestLogs.metadata}->>'actionType' in ('order_click','delivery_click'))`.mapWith(
+                Number,
+              ),
+            qrOpens:
+              sql<number>`count(*) filter (where ${requestLogs.metadata}->>'actionType' in ('qr_profile_open','qr_menu_open','qr_specials_open'))`.mapWith(
+                Number,
+              ),
+            dealClicks:
+              sql<number>`count(*) filter (where ${requestLogs.metadata}->>'actionType' = 'deal_click')`.mapWith(
+                Number,
+              ),
+            eventClicks:
+              sql<number>`count(*) filter (where ${requestLogs.metadata}->>'actionType' = 'event_click')`.mapWith(
+                Number,
+              ),
+            socialClicks:
+              sql<number>`count(*) filter (where ${requestLogs.metadata}->>'actionType' = 'social_click')`.mapWith(
+                Number,
+              ),
+            shareClicks:
+              sql<number>`count(*) filter (where ${requestLogs.metadata}->>'actionType' = 'share_click')`.mapWith(
+                Number,
+              ),
+            cateringClicks:
+              sql<number>`count(*) filter (where ${requestLogs.metadata}->>'actionType' = 'catering_click')`.mapWith(
+                Number,
+              ),
+            truckBookingClicks:
+              sql<number>`count(*) filter (where ${requestLogs.metadata}->>'actionType' = 'truck_booking_click')`.mapWith(
+                Number,
+              ),
+            last7Days:
+              sql<number>`count(*) filter (where ${requestLogs.createdAt} >= now() - interval '7 days')`.mapWith(
+                Number,
+              ),
+            last30Days:
+              sql<number>`count(*) filter (where ${requestLogs.createdAt} >= now() - interval '30 days')`.mapWith(
+                Number,
+              ),
+            lifetime:
+              sql<number>`count(*)`.mapWith(Number),
+          })
+          .from(requestLogs)
+          .where(and(...whereClauses));
+
+        res.json({
+          totals: aggregate || {
+            profileViews: 0,
+            menuClicks: 0,
+            directionsClicks: 0,
+            callClicks: 0,
+            orderClicks: 0,
+            qrOpens: 0,
+            dealClicks: 0,
+            eventClicks: 0,
+            socialClicks: 0,
+            shareClicks: 0,
+            cateringClicks: 0,
+            truckBookingClicks: 0,
+            last7Days: 0,
+            last30Days: 0,
+            lifetime: 0,
+          },
+          range: {
+            startDate: startDate ? startDate.toISOString() : null,
+            endDate: endDate ? endDate.toISOString() : null,
+          },
+        });
+      } catch (error) {
+        console.error("Error fetching profile action analytics:", error);
+        res.status(500).json({ message: "Failed to fetch profile action analytics" });
       }
     },
   );

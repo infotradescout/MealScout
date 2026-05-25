@@ -1,5 +1,7 @@
 import type { Express } from "express";
+import { createHash } from "crypto";
 import { and, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
+import { z } from "zod";
 
 import { db } from "../db";
 import { storage } from "../storage";
@@ -107,6 +109,49 @@ const countBy = <T extends string>(values: T[]) =>
 
 const sendPublicJson = <T>(res: any, payload: T) =>
   res.json(assertPublicResponseSafe(payload));
+
+const PUBLIC_PROFILE_ANALYTICS_ACTIONS = new Set([
+  "profile_view",
+  "menu_click",
+  "directions_click",
+  "call_click",
+  "website_click",
+  "order_click",
+  "delivery_click",
+  "deal_click",
+  "event_click",
+  "social_click",
+  "share_click",
+  "qr_profile_open",
+  "qr_menu_open",
+  "qr_specials_open",
+  "catering_click",
+  "truck_booking_click",
+]);
+
+const PUBLIC_PROFILE_ANALYTICS_SOURCES = new Set([
+  "public_profile",
+  "qr",
+  "owner_dashboard_preview",
+  "unknown",
+]);
+
+const classifyActorTypeFromUserAgent = (ua: string) => {
+  if (!ua) return "human";
+  if (/gptbot|chatgpt-user|claudebot|anthropic-ai|perplexitybot|bytespider|ccbot|cohere-ai/i.test(ua)) {
+    return "llm_bot";
+  }
+  if (/bot|crawler|spider|slurp|facebookexternalhit|whatsapp|discordbot|telegrambot|linkedinbot/i.test(ua)) {
+    return "bot";
+  }
+  return "human";
+};
+
+const sourceTypeFromActor = (actorType: string) => {
+  if (actorType === "llm_bot") return "llm_crawler";
+  if (actorType === "bot") return "crawler";
+  return "human";
+};
 
 const toDateOnly = (value: Date) => {
   const year = value.getFullYear();
@@ -749,6 +794,99 @@ const buildPublicMenuPayload = async (restaurantId: string) => {
 };
 
 export function registerPublicDiscoveryRoutes(app: Express) {
+  app.post("/api/public/profile-analytics", async (req, res) => {
+    try {
+      const schema = z.object({
+        profileEntity: z.enum(["restaurant", "truck", "bar", "location"]),
+        profileId: z.string().trim().min(1),
+        actionType: z.string().trim().min(1),
+        targetType: z.string().trim().max(80).optional().nullable(),
+        targetHrefCategory: z.string().trim().max(200).optional().nullable(),
+        source: z.string().trim().max(64).optional(),
+      });
+      const parsed = schema.parse(req.body || {});
+      if (!PUBLIC_PROFILE_ANALYTICS_ACTIONS.has(parsed.actionType)) {
+        return res.status(400).json({ message: "Unsupported actionType" });
+      }
+
+      const source = PUBLIC_PROFILE_ANALYTICS_SOURCES.has(String(parsed.source || ""))
+        ? String(parsed.source)
+        : "unknown";
+
+      const userType = String((req as any).user?.userType || "");
+      if (
+        source === "owner_dashboard_preview" ||
+        ["admin", "duper_admin", "super_admin", "staff", "restaurant_owner", "food_truck", "host", "event_coordinator"].includes(userType)
+      ) {
+        return res.status(202).json({ ok: true, ignored: true });
+      }
+
+      const profileEntityType = parsed.profileEntity === "location" ? "host" : parsed.profileEntity;
+      if (parsed.profileEntity === "location") {
+        const host = await storage.getHost(parsed.profileId);
+        if (!host) return res.status(404).json({ message: "Profile not found" });
+      } else {
+        const row = await storage.getRestaurant(parsed.profileId);
+        if (!row || !row.isActive) return res.status(404).json({ message: "Profile not found" });
+        if (parsed.profileEntity === "truck" && !(row.isFoodTruck || row.businessType === "food_truck")) {
+          return res.status(404).json({ message: "Profile not found" });
+        }
+        if (parsed.profileEntity === "bar" && row.businessType !== "bar") {
+          return res.status(404).json({ message: "Profile not found" });
+        }
+      }
+
+      const userAgent = String(req.get("user-agent") || "");
+      const actorType = classifyActorTypeFromUserAgent(userAgent);
+      const sourceType = sourceTypeFromActor(actorType);
+      const anonymousActorId = createHash("sha256")
+        .update(`${String(req.ip || "unknown")}|${userAgent.slice(0, 160)}`)
+        .digest("hex")
+        .slice(0, 20);
+
+      await db.insert(requestLogs).values({
+        method: "EVENT",
+        path: `/p/${parsed.profileEntity}/${parsed.profileId}`,
+        statusCode: 200,
+        durationMs: 0,
+        userId: (req as any).user?.id || null,
+        sessionId: (req as any).sessionID || null,
+        anonymousActorId,
+        actorType,
+        sourceType,
+        eventType:
+          parsed.actionType === "profile_view"
+            ? "profile_view"
+            : parsed.actionType.startsWith("qr_")
+              ? "qr_open"
+              : "profile_action",
+        surface: "public_profile",
+        entityId: parsed.profileId,
+        entityType: profileEntityType,
+        ip: req.ip || null,
+        userAgent: userAgent || null,
+        metadata: {
+          profileEntity: parsed.profileEntity,
+          profileId: parsed.profileId,
+          actionType: parsed.actionType,
+          targetType: parsed.targetType || null,
+          targetHrefCategory: parsed.targetHrefCategory || null,
+          source,
+          referrer: String(req.get("referer") || ""),
+          timestamp: new Date().toISOString(),
+        },
+      });
+
+      return res.status(202).json({ ok: true });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid analytics payload", errors: error.errors });
+      }
+      console.error("Error recording public profile analytics:", error);
+      return res.status(500).json({ message: "Failed to record analytics event" });
+    }
+  });
+
   app.get("/api/public/resolve/:entity/:slug", async (req, res) => {
     try {
       const entity = String(req.params.entity || "").toLowerCase().trim();

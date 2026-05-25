@@ -117,7 +117,11 @@ export function toPublicRestaurantProfile(input: {
     .map((item: unknown) => String(item || "").trim())
     .filter(Boolean)
     .slice(0, 12);
-  const rawGalleryImages = Array.isArray(row.galleryImages) ? row.galleryImages : [];
+  const rawGalleryImages = Array.isArray(row.galleryImages)
+    ? row.galleryImages
+    : Array.isArray(row?.socialAutopostSettings?.publicGalleryImages)
+      ? row.socialAutopostSettings.publicGalleryImages
+      : [];
   const mappedGalleryImages = rawGalleryImages
     .map((entry: any) => {
       if (!entry) return null;
@@ -141,8 +145,7 @@ export function toPublicRestaurantProfile(input: {
             | "spot_image"
             | "fallback")
         : "gallery";
-      const publicApproved =
-        entry?.publicApproved === undefined ? true : Boolean(entry?.publicApproved);
+      const publicApproved = Boolean(entry?.publicApproved);
       if (!publicApproved) return null;
       const built = imageAsset(url, source);
       if (!built) return null;
