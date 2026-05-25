@@ -750,6 +750,32 @@ export default function RestaurantOwnerDashboard() {
       });
     }
   };
+  const downloadAllBrandedQrAssets = async (
+    assets: Array<{
+      title: string;
+      subtitle: string;
+      targetUrl: string;
+      filename: string;
+    }>,
+  ) => {
+    if (!assets.length) {
+      toast({
+        title: "No assets available",
+        description: "Add profile content first to unlock downloadable assets.",
+      });
+      return;
+    }
+
+    for (const asset of assets) {
+      await downloadBrandedQrAsset(asset);
+      await new Promise((resolve) => setTimeout(resolve, 220));
+    }
+
+    toast({
+      title: "Batch export started",
+      description: `Downloaded ${assets.length} available assets.`,
+    });
+  };
   const copyQrLink = async (targetUrl: string, label: string) => {
     try {
       await navigator.clipboard.writeText(targetUrl);
@@ -2298,6 +2324,55 @@ export default function RestaurantOwnerDashboard() {
                       },
                     ];
 
+                    const batchMarketingAssets: Array<{
+                      id: string;
+                      title: string;
+                      subtitle: string;
+                      targetUrl: string;
+                      filename: string;
+                    }> = [
+                      {
+                        id: "window",
+                        title: "Find us on MealScout",
+                        subtitle: "Scan to view profile and updates",
+                        targetUrl: canonicalUrl,
+                        filename: `window-sticker-${selectedRestaurant}.png`,
+                      },
+                      ...(menuTarget
+                        ? [
+                            {
+                              id: "menu",
+                              title: "Scan for menu",
+                              subtitle: "See featured items and latest menu",
+                              targetUrl: String(menuTarget),
+                              filename: `table-tent-menu-${selectedRestaurant}.png`,
+                            },
+                          ]
+                        : []),
+                      ...(specialsTarget
+                        ? [
+                            {
+                              id: "specials",
+                              title: "Today's specials",
+                              subtitle: "Active deals and limited-time offers",
+                              targetUrl: String(specialsTarget),
+                              filename: `specials-asset-${selectedRestaurant}.png`,
+                            },
+                          ]
+                        : []),
+                      ...(isTruckProfile
+                        ? [
+                            {
+                              id: "truck",
+                              title: "Schedule + menu",
+                              subtitle: "Find stops, hours, and food updates",
+                              targetUrl: String(menuTarget || canonicalUrl),
+                              filename: `truck-asset-${selectedRestaurant}.png`,
+                            },
+                          ]
+                        : []),
+                    ];
+
                     return (
                       <div className="space-y-3">
                         <div className="grid gap-3 sm:grid-cols-3">
@@ -2351,9 +2426,24 @@ export default function RestaurantOwnerDashboard() {
                         </div>
 
                         <div className="rounded-lg border border-orange-200 bg-white p-3">
-                          <h5 className="text-xs font-black uppercase tracking-[0.12em] text-orange-800">
-                            Marketing kit
-                          </h5>
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <h5 className="text-xs font-black uppercase tracking-[0.12em] text-orange-800">
+                              Marketing kit
+                            </h5>
+                            {batchMarketingAssets.length > 0 ? (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() =>
+                                  downloadAllBrandedQrAssets(batchMarketingAssets)
+                                }
+                              >
+                                <Download className="mr-1 h-3.5 w-3.5" />
+                                Download {batchMarketingAssets.length} assets
+                              </Button>
+                            ) : null}
+                          </div>
                           <p className="mt-1 text-[11px] text-orange-900/75">
                             Branded templates for counter cards, windows, and truck-side signage.
                           </p>
