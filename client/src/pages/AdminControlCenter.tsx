@@ -118,13 +118,15 @@ type BusinessProfileCompletionItem = {
     ready: boolean;
     menuCount: number;
     menuItemCount: number;
-    hasMenuUrl: boolean;
+    hasMenuFallback: boolean;
+    reviewedUnavailable?: boolean;
   };
   photoStatus: {
     ready: boolean;
     hasLogo: boolean;
     hasCover: boolean;
     uploadedCount: number;
+    reviewedUnavailable?: boolean;
   };
   contactActionStatus: {
     ready: boolean;
@@ -138,12 +140,35 @@ type BusinessProfileCompletionItem = {
     ready: boolean;
     mobileOnline: boolean;
     hasOperatingHours: boolean;
+    reviewedUnavailable?: boolean;
   };
   dealsEventsStatus: {
     dealsActive: number;
     eventsUpcoming: number;
+    dealsReviewedNone?: boolean;
+    eventsReviewedNone?: boolean;
   };
   qrKitReady: boolean;
+  identityNeedsReview?: boolean;
+  identityReason?: string | null;
+  similarBusinesses?: Array<{
+    id: string;
+    name: string;
+    city: string | null;
+    state: string | null;
+    phone: string | null;
+    websiteUrl: string | null;
+  }>;
+  publicReady?: boolean;
+  taskLabels?: {
+    basics?: string;
+    contactActions?: string;
+    menu?: string;
+    photos?: string;
+    schedule?: string;
+    deals?: string;
+    events?: string;
+  };
   analyticsActivity: {
     viewsOrClicks30d: number;
   };
@@ -770,6 +795,45 @@ export default function AdminControlCenter() {
       refetchInterval: 60000,
     });
 
+  const businessCompletionUpdateMutation = useMutation({
+    mutationFn: async (payload: {
+      businessId: string;
+      body: Record<string, unknown>;
+    }) => {
+      const res = await fetch(
+        `/api/admin/business-profiles/${encodeURIComponent(payload.businessId)}/completion`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload.body),
+        },
+      );
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.message || "Failed to update business completion");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["/api/admin/business-profiles/completion", 200],
+      });
+      toast({
+        title: "Completion updated",
+        description: "Business completion data was updated successfully.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Update failed",
+        description: error?.message || "Could not update completion fields.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const { data: priorityEntities, isLoading: isPriorityLoading } =
     useQuery<PriorityEntitiesResponse>({
       queryKey: ["/api/admin/lisa/priorities", 12],
@@ -890,6 +954,64 @@ export default function AdminControlCenter() {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/lisa/brief-actions"] });
     },
   });
+
+  const promptAndUpdateCompletion = async (
+    businessId: string,
+    fieldLabel: string,
+    bodyKey: string,
+    currentValue?: string | null,
+  ) => {
+    const nextValue = window.prompt(
+      `Set ${fieldLabel} (leave empty to clear):`,
+      String(currentValue || ""),
+    );
+    if (nextValue === null) return;
+    await businessCompletionUpdateMutation.mutateAsync({
+      businessId,
+      body: { [bodyKey]: nextValue.trim() || null },
+    });
+  };
+
+  const promptAndUpdateNestedAction = async (
+    businessId: string,
+    fieldLabel: string,
+    actionKey:
+      | "onlineOrderingUrl"
+      | "deliveryUrl"
+      | "cateringInquiryUrl"
+      | "truckBookingInquiryUrl",
+  ) => {
+    const nextValue = window.prompt(`Set ${fieldLabel} (leave empty to clear):`, "");
+    if (nextValue === null) return;
+    await businessCompletionUpdateMutation.mutateAsync({
+      businessId,
+      body: {
+        publicActionLinks: {
+          [actionKey]: nextValue.trim() || null,
+        },
+      },
+    });
+  };
+
+  const markReviewedOptional = async (
+    businessId: string,
+    field:
+      | "menuReviewedUnavailable"
+      | "photosReviewedUnavailable"
+      | "scheduleReviewedUnavailable"
+      | "dealsReviewedNone"
+      | "eventsReviewedNone",
+    value: boolean,
+  ) => {
+    await businessCompletionUpdateMutation.mutateAsync({
+      businessId,
+      body: {
+        reviewed: {
+          [field]: value,
+        },
+      },
+    });
+  };
 
   useEffect(() => {
     setLiveClaims(lisaFeed?.items ?? []);
@@ -2035,6 +2157,7 @@ export default function AdminControlCenter() {
                         <th className="px-3 py-2 font-medium">Contact</th>
                         <th className="px-3 py-2 font-medium">Schedule</th>
                         <th className="px-3 py-2 font-medium">Deals / Events</th>
+                        <th className="px-3 py-2 font-medium">Public Ready</th>
                         <th className="px-3 py-2 font-medium">QR Ready</th>
                         <th className="px-3 py-2 font-medium">Activity (30d)</th>
                         <th className="px-3 py-2 font-medium">Last updated</th>
@@ -2044,7 +2167,7 @@ export default function AdminControlCenter() {
                     <tbody>
                       {isBusinessCompletionLoading ? (
                         <tr>
-                          <td className="px-3 py-3 text-[color:var(--text-muted)]" colSpan={15}>
+                          <td className="px-3 py-3 text-[color:var(--text-muted)]" colSpan={16}>
                             Loading completion queue...
                           </td>
                         </tr>
@@ -2081,15 +2204,31 @@ export default function AdminControlCenter() {
                               {item.missingFields.length
                                 ? item.missingFields.join(", ")
                                 : "None"}
+                              {item.taskLabels ? (
+                                <div className="mt-1 flex flex-wrap gap-1">
+                                  {Object.entries(item.taskLabels)
+                                    .filter(([, status]) => status && status !== "ready" && status !== "not_applicable")
+                                    .slice(0, 3)
+                                    .map(([key, status]) => (
+                                      <Badge key={`${item.id}-${key}`} variant="outline">
+                                        {key}:{status}
+                                      </Badge>
+                                    ))}
+                                </div>
+                              ) : null}
                             </td>
                             <td className="px-3 py-2">
                               {item.menuStatus.ready
-                                ? `${item.menuStatus.menuItemCount} items`
+                                ? item.menuStatus.menuItemCount > 0
+                                  ? `${item.menuStatus.menuItemCount} items`
+                                  : "Reviewed"
                                 : "Missing"}
                             </td>
                             <td className="px-3 py-2">
                               {item.photoStatus.ready
-                                ? `${item.photoStatus.uploadedCount} uploads`
+                                ? item.photoStatus.uploadedCount > 0
+                                  ? `${item.photoStatus.uploadedCount} uploads`
+                                  : "Reviewed"
                                 : "Missing"}
                             </td>
                             <td className="px-3 py-2">
@@ -2107,7 +2246,12 @@ export default function AdminControlCenter() {
                             </td>
                             <td className="px-3 py-2">
                               <Badge variant="outline">
-                                {item.qrKitReady ? "Ready" : "Blocked"}
+                                {item.publicReady ? "Ready" : "Blocked"}
+                              </Badge>
+                            </td>
+                            <td className="px-3 py-2">
+                              <Badge variant="outline">
+                                {item.qrKitReady && item.publicReady ? "Ready" : "Blocked"}
                               </Badge>
                             </td>
                             <td className="px-3 py-2">
@@ -2132,25 +2276,150 @@ export default function AdminControlCenter() {
                                 >
                                   Edit profile
                                 </a>
-                                <a
-                                  href={`/restaurant-owner-dashboard?restaurantId=${encodeURIComponent(item.id)}&setup=1`}
-                                  className="inline-flex items-center rounded border border-[var(--border-subtle)] px-2 py-1 text-[11px]"
-                                >
-                                  Complete missing
-                                </a>
-                                <a
-                                  href={`/restaurant-owner-dashboard?restaurantId=${encodeURIComponent(item.id)}&setup=1`}
-                                  className="inline-flex items-center rounded border border-[var(--border-subtle)] px-2 py-1 text-[11px]"
-                                >
-                                  Open QR kit
-                                </a>
+                                {item.identityNeedsReview ? (
+                                  <div className="rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-[11px] text-amber-200">
+                                    {item.identityReason || "Identity review required"}
+                                  </div>
+                                ) : (
+                                  <>
+                                    <a
+                                      href={`/restaurant-owner-dashboard?restaurantId=${encodeURIComponent(item.id)}&setup=1`}
+                                      className="inline-flex items-center rounded border border-[var(--border-subtle)] px-2 py-1 text-[11px]"
+                                    >
+                                      Complete missing
+                                    </a>
+                                    <a
+                                      href={`/restaurant-owner-dashboard?restaurantId=${encodeURIComponent(item.id)}&setup=1`}
+                                      className="inline-flex items-center rounded border border-[var(--border-subtle)] px-2 py-1 text-[11px]"
+                                    >
+                                      Open QR kit
+                                    </a>
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        promptAndUpdateCompletion(item.id, "menu URL", "menuUrl", null)
+                                      }
+                                      className="inline-flex items-center rounded border border-[var(--border-subtle)] px-2 py-1 text-[11px]"
+                                    >
+                                      Add menu URL
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        promptAndUpdateCompletion(item.id, "logo URL", "logoUrl", null)
+                                      }
+                                      className="inline-flex items-center rounded border border-[var(--border-subtle)] px-2 py-1 text-[11px]"
+                                    >
+                                      Add logo URL
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        promptAndUpdateCompletion(item.id, "cover URL", "coverImageUrl", null)
+                                      }
+                                      className="inline-flex items-center rounded border border-[var(--border-subtle)] px-2 py-1 text-[11px]"
+                                    >
+                                      Add cover URL
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        promptAndUpdateCompletion(item.id, "gallery image URL", "galleryImageUrl", null)
+                                      }
+                                      className="inline-flex items-center rounded border border-[var(--border-subtle)] px-2 py-1 text-[11px]"
+                                    >
+                                      Add gallery URL
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        promptAndUpdateNestedAction(
+                                          item.id,
+                                          "online ordering URL",
+                                          "onlineOrderingUrl",
+                                        )
+                                      }
+                                      className="inline-flex items-center rounded border border-[var(--border-subtle)] px-2 py-1 text-[11px]"
+                                    >
+                                      Add order URL
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        promptAndUpdateNestedAction(
+                                          item.id,
+                                          "delivery URL",
+                                          "deliveryUrl",
+                                        )
+                                      }
+                                      className="inline-flex items-center rounded border border-[var(--border-subtle)] px-2 py-1 text-[11px]"
+                                    >
+                                      Add delivery URL
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => markReviewedOptional(item.id, "dealsReviewedNone", true)}
+                                      className="inline-flex items-center rounded border border-[var(--border-subtle)] px-2 py-1 text-[11px]"
+                                    >
+                                      Mark no deals
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        markReviewedOptional(item.id, "menuReviewedUnavailable", true)
+                                      }
+                                      className="inline-flex items-center rounded border border-[var(--border-subtle)] px-2 py-1 text-[11px]"
+                                    >
+                                      Mark menu reviewed
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        markReviewedOptional(item.id, "photosReviewedUnavailable", true)
+                                      }
+                                      className="inline-flex items-center rounded border border-[var(--border-subtle)] px-2 py-1 text-[11px]"
+                                    >
+                                      Mark photos reviewed
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => markReviewedOptional(item.id, "eventsReviewedNone", true)}
+                                      className="inline-flex items-center rounded border border-[var(--border-subtle)] px-2 py-1 text-[11px]"
+                                    >
+                                      Mark no events
+                                    </button>
+                                    {item.profileType === "truck" ? (
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          markReviewedOptional(item.id, "scheduleReviewedUnavailable", true)
+                                        }
+                                        className="inline-flex items-center rounded border border-[var(--border-subtle)] px-2 py-1 text-[11px]"
+                                      >
+                                        Mark schedule reviewed
+                                      </button>
+                                    ) : null}
+                                  </>
+                                )}
                               </div>
+                              {item.identityNeedsReview && item.similarBusinesses?.length ? (
+                                <div className="mt-1 text-[11px] text-amber-200/90">
+                                  Similar:{" "}
+                                  {item.similarBusinesses
+                                    .map((candidate) =>
+                                      `${candidate.name} (${[candidate.city, candidate.state]
+                                        .filter(Boolean)
+                                        .join(", ") || "N/A"})`,
+                                    )
+                                    .join(" | ")}
+                                </div>
+                              ) : null}
                             </td>
                           </tr>
                         ))
                       ) : (
                         <tr>
-                          <td className="px-3 py-3 text-[color:var(--text-muted)]" colSpan={15}>
+                          <td className="px-3 py-3 text-[color:var(--text-muted)]" colSpan={16}>
                             No business profiles found.
                           </td>
                         </tr>

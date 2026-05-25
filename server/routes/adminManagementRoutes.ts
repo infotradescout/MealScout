@@ -34,6 +34,7 @@ import { logAudit } from "../auditLogger";
 import { ensureAffiliateTag } from "../affiliateTagService";
 import { syncUserToBrevo } from "../brevoCrm";
 import multer from "multer";
+import { z } from "zod";
 import { distributedRateLimit } from "../middleware/distributedRateLimit";
 import { forwardGeocode } from "../utils/geocoding";
 import { ensurePremiumTrialForUserId } from "../services/premiumTrial";
@@ -2422,7 +2423,45 @@ export function registerAdminManagementRoutes(app: Express) {
           );
         });
 
-        const items = rows.map((row: any) => {
+        const collisionKeywordSet = new Set([
+          "florida",
+          "kitchen",
+          "island",
+          "cuisine",
+          "jamaican",
+          "caribbean",
+        ]);
+        const commonStopWords = new Set([
+          "the",
+          "and",
+          "llc",
+          "inc",
+          "co",
+          "company",
+          "restaurant",
+          "grill",
+          "cafe",
+          "food",
+          "truck",
+        ]);
+        const toIdentityTokens = (name: string) =>
+          String(name || "")
+            .toLowerCase()
+            .replace(/[^a-z0-9 ]/g, " ")
+            .split(/\s+/)
+            .filter((token) => token.length >= 3 && !commonStopWords.has(token));
+
+        const rowsWithIdentity = rows.map((row: any) => {
+          const tokens = toIdentityTokens(String(row?.name || ""));
+          const riskyTokens = tokens.filter((token) => collisionKeywordSet.has(token));
+          return {
+            ...row,
+            __identityTokens: tokens,
+            __riskyTokens: riskyTokens,
+          };
+        });
+
+        const items = rowsWithIdentity.map((row: any) => {
           const isTruck =
             Boolean(row?.isFoodTruck) ||
             String(row?.businessType || "").toLowerCase() === "food_truck";
@@ -2437,6 +2476,12 @@ export function registerAdminManagementRoutes(app: Express) {
             typeof row.socialAutopostSettings === "object" &&
             typeof row.socialAutopostSettings.publicActionLinks === "object"
               ? row.socialAutopostSettings.publicActionLinks
+              : {};
+          const completionReview =
+            row?.socialAutopostSettings &&
+            typeof row.socialAutopostSettings === "object" &&
+            typeof row.socialAutopostSettings.completionReview === "object"
+              ? row.socialAutopostSettings.completionReview
               : {};
           const menuItemCount = menuItemsByRestaurant.get(String(row.id)) || 0;
           const menuCount = menuByRestaurant.get(String(row.id)) || 0;
@@ -2461,25 +2506,50 @@ export function registerAdminManagementRoutes(app: Express) {
               actionLinks?.truckBookingInquiryUrl,
           );
           const contactReady = hasContact || hasActionLinks;
-          const menuReady = menuItemCount > 0 || menuCount > 0;
-          const photoReady = Boolean(row?.logoUrl || row?.coverImageUrl || photoCount > 0);
-          const scheduleReady = isTruck ? Boolean(row?.operatingHours || row?.mobileOnline) : true;
-          const dealsReady = activeDeals > 0;
-          const eventsReady = activeEvents > 0;
+          const featuredMenuItems = Array.isArray((row as any)?.featuredMenuItems)
+            ? (row as any).featuredMenuItems.filter((item: unknown) =>
+                Boolean(String(item || "").trim()),
+              )
+            : [];
+          const hasMenuFallback =
+            Boolean((row as any)?.menuUrl) ||
+            Boolean((row as any)?.menuImageUrl) ||
+            Boolean((row as any)?.menuPdfUrl) ||
+            featuredMenuItems.length > 0;
+          const menuReviewedUnavailable = Boolean(completionReview?.menuReviewedUnavailable);
+          const photosReviewedUnavailable = Boolean(
+            completionReview?.photosReviewedUnavailable,
+          );
+          const scheduleReviewedUnavailable = Boolean(
+            completionReview?.scheduleReviewedUnavailable,
+          );
+          const dealsReviewedNone = Boolean(completionReview?.dealsReviewedNone);
+          const eventsReviewedNone = Boolean(completionReview?.eventsReviewedNone);
+
+          const menuReady = menuItemCount > 0 || hasMenuFallback || menuReviewedUnavailable;
+          const photoReady = Boolean(
+            row?.logoUrl || row?.coverImageUrl || photoCount > 0 || photosReviewedUnavailable,
+          );
+          const scheduleReady = isTruck
+            ? Boolean(row?.operatingHours || row?.mobileOnline || scheduleReviewedUnavailable)
+            : true;
+          const dealsReady = activeDeals > 0 || dealsReviewedNone;
+          const eventsReady = activeEvents > 0 || eventsReviewedNone;
           const qrReady = Boolean(canonicalPath);
 
-          const sections = [
+          const requiredSections = [
             basicsReady,
             contactReady,
             menuReady,
             photoReady,
             scheduleReady,
-            dealsReady,
-            eventsReady,
             qrReady,
           ];
-          const completed = sections.filter(Boolean).length;
-          const completenessScore = Math.round((completed / sections.length) * 100);
+          const optionalSections = [dealsReady, eventsReady];
+          const completedRequired = requiredSections.filter(Boolean).length;
+          const requiredScore = completedRequired / requiredSections.length;
+          const optionalScore = optionalSections.filter(Boolean).length / optionalSections.length;
+          const completenessScore = Math.round(requiredScore * 85 + optionalScore * 15);
 
           const missingFields: string[] = [];
           if (!basicsReady) missingFields.push("basics");
@@ -2487,12 +2557,54 @@ export function registerAdminManagementRoutes(app: Express) {
           if (!menuReady) missingFields.push("menu");
           if (!photoReady) missingFields.push("photos");
           if (isTruck && !scheduleReady) missingFields.push("truck schedule");
-          if (!dealsReady) missingFields.push("deals");
-          if (!eventsReady) missingFields.push("events");
+          if (!dealsReady) missingFields.push("deals (optional)");
+          if (!eventsReady) missingFields.push("events (optional)");
 
           const ownerEmail = String(row?.ownerEmail || "").toLowerCase();
           const claimed =
             Boolean(row?.ownerId) && ownerEmail !== IMPORT_SYSTEM_EMAIL.toLowerCase();
+
+          const similarRows = rowsWithIdentity.filter((candidate: any) => {
+            if (!candidate?.id || String(candidate.id) === String(row.id)) return false;
+            const overlapCount = (row.__identityTokens || []).filter((token: string) =>
+              (candidate.__identityTokens || []).includes(token),
+            ).length;
+            if (row.__riskyTokens?.length > 0 || candidate.__riskyTokens?.length > 0) {
+              return overlapCount >= 2;
+            }
+            return false;
+          });
+          const identityNeedsReview = similarRows.some((candidate: any) => {
+            const cityStateA = `${String(row?.city || "").trim().toLowerCase()}|${String(
+              row?.state || "",
+            )
+              .trim()
+              .toLowerCase()}`;
+            const cityStateB = `${String(candidate?.city || "")
+              .trim()
+              .toLowerCase()}|${String(candidate?.state || "")
+              .trim()
+              .toLowerCase()}`;
+            const phoneA = String(row?.phone || "").replace(/\D/g, "");
+            const phoneB = String(candidate?.phone || "").replace(/\D/g, "");
+            const websiteA = String(row?.websiteUrl || "").trim().toLowerCase();
+            const websiteB = String(candidate?.websiteUrl || "").trim().toLowerCase();
+            const importA = String(row?.claimedFromImportId || "")
+              .trim()
+              .toLowerCase();
+            const importB = String(candidate?.claimedFromImportId || "")
+              .trim()
+              .toLowerCase();
+            return (
+              cityStateA !== cityStateB ||
+              (phoneA && phoneB && phoneA !== phoneB) ||
+              (websiteA && websiteB && websiteA !== websiteB) ||
+              (importA && importB && importA !== importB)
+            );
+          });
+          const identityReason = identityNeedsReview
+            ? "Possible duplicate/similar business. Confirm identity before editing."
+            : null;
 
           return {
             id: row.id,
@@ -2510,13 +2622,15 @@ export function registerAdminManagementRoutes(app: Express) {
               ready: menuReady,
               menuCount,
               menuItemCount,
-              hasMenuUrl: Boolean(row?.menuUrl),
+              hasMenuFallback,
+              reviewedUnavailable: menuReviewedUnavailable,
             },
             photoStatus: {
               ready: photoReady,
               hasLogo: Boolean(row?.logoUrl),
               hasCover: Boolean(row?.coverImageUrl),
               uploadedCount: photoCount,
+              reviewedUnavailable: photosReviewedUnavailable,
             },
             contactActionStatus: {
               ready: contactReady,
@@ -2533,12 +2647,49 @@ export function registerAdminManagementRoutes(app: Express) {
               ready: scheduleReady,
               mobileOnline: Boolean(row?.mobileOnline),
               hasOperatingHours: Boolean(row?.operatingHours),
+              reviewedUnavailable: scheduleReviewedUnavailable,
             },
             dealsEventsStatus: {
               dealsActive: activeDeals,
               eventsUpcoming: activeEvents,
+              dealsReviewedNone,
+              eventsReviewedNone,
             },
             qrKitReady: qrReady,
+            identityNeedsReview,
+            identityReason,
+            similarBusinesses: similarRows.slice(0, 4).map((candidate: any) => ({
+              id: String(candidate.id),
+              name: String(candidate.name || ""),
+              city: candidate.city || null,
+              state: candidate.state || null,
+              phone: candidate.phone || null,
+              websiteUrl: candidate.websiteUrl || null,
+            })),
+            publicReady:
+              basicsReady &&
+              contactReady &&
+              menuReady &&
+              photoReady &&
+              scheduleReady &&
+              qrReady,
+            taskLabels: {
+              basics: basicsReady ? "ready" : "fix_now",
+              contactActions: contactReady ? "ready" : "fix_now",
+              menu: menuReady
+                ? "ready"
+                : hasMenuFallback || menuItemCount > 0
+                  ? "fix_now"
+                  : "needs_business_input",
+              photos: photoReady ? "ready" : "needs_business_input",
+              schedule: !isTruck
+                ? "not_applicable"
+                : scheduleReady
+                  ? "ready"
+                  : "needs_business_input",
+              deals: dealsReady ? "optional_reviewed" : "optional",
+              events: eventsReady ? "optional_reviewed" : "optional",
+            },
             analyticsActivity: {
               viewsOrClicks30d: analyticsCount,
             },
@@ -2566,6 +2717,225 @@ export function registerAdminManagementRoutes(app: Express) {
         res
           .status(500)
           .json({ message: "Failed to fetch business profile completion dashboard" });
+      }
+    },
+  );
+
+  app.patch(
+    "/api/admin/business-profiles/:businessId/completion",
+    isAuthenticated,
+    isStaffOrAdmin,
+    async (req: any, res) => {
+      try {
+        const businessId = String(req.params.businessId || "").trim();
+        if (!businessId) {
+          return res.status(400).json({ message: "Business id is required" });
+        }
+
+        const schema = z.object({
+          phone: z.string().trim().max(40).optional().nullable(),
+          websiteUrl: z.string().trim().max(500).optional().nullable(),
+          facebookPageUrl: z.string().trim().max(500).optional().nullable(),
+          instagramUrl: z.string().trim().max(500).optional().nullable(),
+          menuUrl: z.string().trim().max(500).optional().nullable(),
+          menuImageUrl: z.string().trim().max(500).optional().nullable(),
+          menuPdfUrl: z.string().trim().max(500).optional().nullable(),
+          logoUrl: z.string().trim().max(500).optional().nullable(),
+          coverImageUrl: z.string().trim().max(500).optional().nullable(),
+          operatingHours: z.record(z.any()).optional().nullable(),
+          publicActionLinks: z
+            .object({
+              onlineOrderingUrl: z.string().trim().max(500).optional().nullable(),
+              deliveryUrl: z.string().trim().max(500).optional().nullable(),
+              cateringInquiryUrl: z.string().trim().max(500).optional().nullable(),
+              truckBookingInquiryUrl: z.string().trim().max(500).optional().nullable(),
+            })
+            .partial()
+            .optional(),
+          reviewed: z
+            .object({
+              menuReviewedUnavailable: z.boolean().optional(),
+              photosReviewedUnavailable: z.boolean().optional(),
+              scheduleReviewedUnavailable: z.boolean().optional(),
+              dealsReviewedNone: z.boolean().optional(),
+              eventsReviewedNone: z.boolean().optional(),
+            })
+            .partial()
+            .optional(),
+          galleryImageUrl: z.string().trim().max(500).optional().nullable(),
+          galleryImageApproved: z.boolean().optional(),
+        });
+
+        const parsed = schema.parse(req.body || {});
+        const normalize = (value: unknown) => {
+          const text = String(value ?? "").trim();
+          return text.length > 0 ? text : null;
+        };
+
+        const restaurant = await storage.getRestaurant(businessId);
+        if (!restaurant) {
+          return res.status(404).json({ message: "Business not found" });
+        }
+
+        const collisionKeywordSet = new Set([
+          "florida",
+          "kitchen",
+          "island",
+          "cuisine",
+          "jamaican",
+          "caribbean",
+        ]);
+        const commonStopWords = new Set([
+          "the",
+          "and",
+          "llc",
+          "inc",
+          "co",
+          "company",
+          "restaurant",
+          "grill",
+          "cafe",
+          "food",
+          "truck",
+        ]);
+        const toIdentityTokens = (name: string) =>
+          String(name || "")
+            .toLowerCase()
+            .replace(/[^a-z0-9 ]/g, " ")
+            .split(/\s+/)
+            .filter((token) => token.length >= 3 && !commonStopWords.has(token));
+        const rowTokens = toIdentityTokens(String((restaurant as any)?.name || ""));
+        const hasRiskyToken = rowTokens.some((token) => collisionKeywordSet.has(token));
+        if (hasRiskyToken) {
+          const candidates = await db
+            .select({
+              id: restaurants.id,
+              name: restaurants.name,
+              city: restaurants.city,
+              state: restaurants.state,
+              phone: restaurants.phone,
+              websiteUrl: restaurants.websiteUrl,
+            })
+            .from(restaurants)
+            .where(ne(restaurants.id, businessId))
+            .limit(500);
+          const ambiguous = candidates.some((candidate: any) => {
+            const candidateTokens = toIdentityTokens(String(candidate?.name || ""));
+            const overlapCount = rowTokens.filter((token) =>
+              candidateTokens.includes(token),
+            ).length;
+            if (overlapCount < 2) return false;
+            const cityStateA = `${String((restaurant as any)?.city || "")
+              .trim()
+              .toLowerCase()}|${String((restaurant as any)?.state || "")
+              .trim()
+              .toLowerCase()}`;
+            const cityStateB = `${String(candidate?.city || "")
+              .trim()
+              .toLowerCase()}|${String(candidate?.state || "")
+              .trim()
+              .toLowerCase()}`;
+            const phoneA = String((restaurant as any)?.phone || "").replace(/\D/g, "");
+            const phoneB = String(candidate?.phone || "").replace(/\D/g, "");
+            const websiteA = String((restaurant as any)?.websiteUrl || "")
+              .trim()
+              .toLowerCase();
+            const websiteB = String(candidate?.websiteUrl || "")
+              .trim()
+              .toLowerCase();
+            return (
+              cityStateA !== cityStateB ||
+              (phoneA && phoneB && phoneA !== phoneB) ||
+              (websiteA && websiteB && websiteA !== websiteB)
+            );
+          });
+          if (ambiguous) {
+            return res.status(409).json({
+              message:
+                "Identity review required for this business. Confirm duplicate/similar records before editing.",
+              code: "IDENTITY_REVIEW_REQUIRED",
+            });
+          }
+        }
+
+        const updates: Record<string, unknown> = {};
+        const directFields = [
+          "phone",
+          "websiteUrl",
+          "facebookPageUrl",
+          "instagramUrl",
+          "menuUrl",
+          "menuImageUrl",
+          "menuPdfUrl",
+          "logoUrl",
+          "coverImageUrl",
+        ] as const;
+        for (const field of directFields) {
+          if ((parsed as any)[field] !== undefined) {
+            updates[field] = normalize((parsed as any)[field]);
+          }
+        }
+        if (parsed.operatingHours !== undefined) {
+          updates.operatingHours = parsed.operatingHours ?? null;
+        }
+
+        const existingSettings =
+          restaurant && typeof (restaurant as any).socialAutopostSettings === "object"
+            ? { ...((restaurant as any).socialAutopostSettings || {}) }
+            : {};
+        const existingActionLinks =
+          existingSettings && typeof (existingSettings as any).publicActionLinks === "object"
+            ? { ...((existingSettings as any).publicActionLinks || {}) }
+            : {};
+        const existingReview =
+          existingSettings && typeof (existingSettings as any).completionReview === "object"
+            ? { ...((existingSettings as any).completionReview || {}) }
+            : {};
+        const existingGallery =
+          Array.isArray((existingSettings as any)?.publicGalleryImages)
+            ? [...((existingSettings as any).publicGalleryImages || [])]
+            : [];
+
+        if (parsed.publicActionLinks) {
+          const actionLinks = { ...existingActionLinks };
+          for (const [key, value] of Object.entries(parsed.publicActionLinks)) {
+            if (value === undefined) continue;
+            actionLinks[key] = normalize(value);
+          }
+          existingSettings.publicActionLinks = actionLinks;
+        }
+        if (parsed.reviewed) {
+          existingSettings.completionReview = {
+            ...existingReview,
+            ...parsed.reviewed,
+          };
+        }
+        if (parsed.galleryImageUrl !== undefined) {
+          const url = normalize(parsed.galleryImageUrl);
+          if (url) {
+            existingSettings.publicGalleryImages = [
+              ...existingGallery,
+              {
+                url,
+                source: "gallery",
+                publicApproved: parsed.galleryImageApproved !== false,
+                lastVerifiedAt: new Date().toISOString(),
+              },
+            ];
+          }
+        }
+
+        updates.socialAutopostSettings = existingSettings;
+        const updatedRestaurant = await storage.updateRestaurant(businessId, updates as any);
+        return res.json({ ok: true, restaurant: updatedRestaurant });
+      } catch (error) {
+        console.error("Error updating business completion fields:", error);
+        return res.status(400).json({
+          message:
+            error instanceof Error
+              ? error.message
+              : "Failed to update business completion fields",
+        });
       }
     },
   );
