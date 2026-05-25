@@ -55,7 +55,10 @@ import {
   geoAdEvents,
   geoLocationPings,
   hosts,
+  imageUploads,
   insertHostSchema,
+  menuItems,
+  menus,
   restaurants,
   requestLogs,
   searchQueryEvents,
@@ -2247,6 +2250,322 @@ export function registerAdminManagementRoutes(app: Express) {
       } catch (error) {
         console.error("Error fetching LISA entities:", error);
         res.status(500).json({ message: "Failed to fetch LISA entities" });
+      }
+    },
+  );
+
+  app.get(
+    "/api/admin/business-profiles/completion",
+    isAuthenticated,
+    isStaffOrAdmin,
+    async (req: any, res) => {
+      try {
+        const rawLimit = Number(req.query.limit ?? 200);
+        const limit = Number.isFinite(rawLimit)
+          ? Math.max(1, Math.min(500, Math.trunc(rawLimit)))
+          : 200;
+
+        const rows = await db
+          .select({
+            id: restaurants.id,
+            name: restaurants.name,
+            businessType: restaurants.businessType,
+            isFoodTruck: restaurants.isFoodTruck,
+            city: restaurants.city,
+            state: restaurants.state,
+            ownerId: restaurants.ownerId,
+            ownerEmail: users.email,
+            claimedFromImportId: restaurants.claimedFromImportId,
+            isVerified: restaurants.isVerified,
+            hasGoldenPlate: restaurants.hasGoldenPlate,
+            description: restaurants.description,
+            cuisineType: restaurants.cuisineType,
+            address: restaurants.address,
+            phone: restaurants.phone,
+            websiteUrl: restaurants.websiteUrl,
+            instagramUrl: restaurants.instagramUrl,
+            facebookPageUrl: restaurants.facebookPageUrl,
+            xUrl: restaurants.xUrl,
+            logoUrl: restaurants.logoUrl,
+            coverImageUrl: restaurants.coverImageUrl,
+            operatingHours: restaurants.operatingHours,
+            socialAutopostSettings: restaurants.socialAutopostSettings,
+            updatedAt: restaurants.updatedAt,
+            createdAt: restaurants.createdAt,
+          })
+          .from(restaurants)
+          .leftJoin(users, eq(restaurants.ownerId, users.id))
+          .orderBy(desc(restaurants.updatedAt))
+          .limit(limit);
+
+        const restaurantIds = rows.map((row: any) => row.id).filter(Boolean);
+        const [menuRows, menuItemRows, dealRows, eventRows, mediaRows, analyticsRows] =
+          restaurantIds.length
+            ? await Promise.all([
+                db
+                  .select({
+                    restaurantId: menus.restaurantId,
+                    isActive: menus.isActive,
+                  })
+                  .from(menus)
+                  .where(inArray(menus.restaurantId, restaurantIds)),
+                db
+                    .select({
+                      restaurantId: menuItems.restaurantId,
+                    })
+                    .from(menuItems)
+                    .where(inArray(menuItems.restaurantId, restaurantIds)),
+                db
+                  .select({
+                    restaurantId: deals.restaurantId,
+                    isActive: deals.isActive,
+                    endDate: deals.endDate,
+                  })
+                  .from(deals)
+                  .where(inArray(deals.restaurantId, restaurantIds)),
+                db
+                  .select({
+                    hostId: events.hostId,
+                    status: events.status,
+                    date: events.date,
+                  })
+                  .from(events)
+                  .where(inArray(events.hostId, restaurantIds)),
+                db
+                  .select({
+                    entityId: imageUploads.entityId,
+                  })
+                  .from(imageUploads)
+                  .where(
+                    and(
+                      eq(imageUploads.entityType, "restaurant"),
+                      inArray(imageUploads.entityId, restaurantIds),
+                    ),
+                  ),
+                db
+                  .select({
+                    path: requestLogs.path,
+                    createdAt: requestLogs.createdAt,
+                  })
+                  .from(requestLogs)
+                  .where(gte(requestLogs.createdAt, new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)))
+                  .orderBy(desc(requestLogs.createdAt))
+                  .limit(6000),
+              ])
+            : [[], [], [], [], [], []];
+
+        const menuByRestaurant = new Map<string, number>();
+        menuRows.forEach((row: any) => {
+          if (!row?.restaurantId) return;
+          if (row.isActive === false) return;
+          menuByRestaurant.set(
+            String(row.restaurantId),
+            (menuByRestaurant.get(String(row.restaurantId)) || 0) + 1,
+          );
+        });
+
+        const menuItemsByRestaurant = new Map<string, number>();
+        menuItemRows.forEach((row: any) => {
+          if (!row?.restaurantId) return;
+          menuItemsByRestaurant.set(
+            String(row.restaurantId),
+            (menuItemsByRestaurant.get(String(row.restaurantId)) || 0) + 1,
+          );
+        });
+
+        const now = new Date();
+        const activeDealsByRestaurant = new Map<string, number>();
+        dealRows.forEach((row: any) => {
+          if (!row?.restaurantId) return;
+          if (!row?.isActive) return;
+          const endDate = row?.endDate ? new Date(String(row.endDate)) : null;
+          if (endDate && endDate.getTime() < now.getTime()) return;
+          activeDealsByRestaurant.set(
+            String(row.restaurantId),
+            (activeDealsByRestaurant.get(String(row.restaurantId)) || 0) + 1,
+          );
+        });
+
+        const activeEventsByRestaurant = new Map<string, number>();
+        eventRows.forEach((row: any) => {
+          if (!row?.hostId) return;
+          const status = String(row?.status || "").toLowerCase();
+          if (status && ["cancelled", "archived", "completed"].includes(status)) return;
+          const date = row?.date ? new Date(String(row.date)) : null;
+          if (date && date.getTime() < now.getTime() - 24 * 60 * 60 * 1000) return;
+          activeEventsByRestaurant.set(
+            String(row.hostId),
+            (activeEventsByRestaurant.get(String(row.hostId)) || 0) + 1,
+          );
+        });
+
+        const photosByRestaurant = new Map<string, number>();
+        mediaRows.forEach((row: any) => {
+          if (!row?.entityId) return;
+          photosByRestaurant.set(
+            String(row.entityId),
+            (photosByRestaurant.get(String(row.entityId)) || 0) + 1,
+          );
+        });
+
+        const analyticsByRestaurant = new Map<string, number>();
+        analyticsRows.forEach((row: any) => {
+          const path = String(row?.path || "");
+          const match =
+            path.match(/^\/p\/(restaurant|truck|bar)\/([^/?#]+)/i) ||
+            path.match(/^\/restaurant\/([^/?#]+)/i);
+          const entityId = match?.[2] || match?.[1];
+          if (!entityId) return;
+          analyticsByRestaurant.set(
+            String(entityId),
+            (analyticsByRestaurant.get(String(entityId)) || 0) + 1,
+          );
+        });
+
+        const items = rows.map((row: any) => {
+          const isTruck =
+            Boolean(row?.isFoodTruck) ||
+            String(row?.businessType || "").toLowerCase() === "food_truck";
+          const profileType = isTruck
+            ? "truck"
+            : String(row?.businessType || "").toLowerCase() === "bar"
+              ? "bar"
+              : "restaurant";
+          const canonicalPath = `/p/${profileType}/${row.id}`;
+          const actionLinks =
+            row?.socialAutopostSettings &&
+            typeof row.socialAutopostSettings === "object" &&
+            typeof row.socialAutopostSettings.publicActionLinks === "object"
+              ? row.socialAutopostSettings.publicActionLinks
+              : {};
+          const menuItemCount = menuItemsByRestaurant.get(String(row.id)) || 0;
+          const menuCount = menuByRestaurant.get(String(row.id)) || 0;
+          const activeDeals = activeDealsByRestaurant.get(String(row.id)) || 0;
+          const activeEvents = activeEventsByRestaurant.get(String(row.id)) || 0;
+          const photoCount = photosByRestaurant.get(String(row.id)) || 0;
+          const analyticsCount = analyticsByRestaurant.get(String(row.id)) || 0;
+
+          const basicsReady = Boolean(
+            row?.name &&
+              row?.description &&
+              row?.cuisineType &&
+              (row?.address || (row?.city && row?.state)),
+          );
+          const hasContact = Boolean(
+            row?.phone || row?.websiteUrl || row?.instagramUrl || row?.facebookPageUrl || row?.xUrl,
+          );
+          const hasActionLinks = Boolean(
+            actionLinks?.onlineOrderingUrl ||
+              actionLinks?.deliveryUrl ||
+              actionLinks?.cateringInquiryUrl ||
+              actionLinks?.truckBookingInquiryUrl,
+          );
+          const contactReady = hasContact || hasActionLinks;
+          const menuReady = menuItemCount > 0 || menuCount > 0;
+          const photoReady = Boolean(row?.logoUrl || row?.coverImageUrl || photoCount > 0);
+          const scheduleReady = isTruck ? Boolean(row?.operatingHours || row?.mobileOnline) : true;
+          const dealsReady = activeDeals > 0;
+          const eventsReady = activeEvents > 0;
+          const qrReady = Boolean(canonicalPath);
+
+          const sections = [
+            basicsReady,
+            contactReady,
+            menuReady,
+            photoReady,
+            scheduleReady,
+            dealsReady,
+            eventsReady,
+            qrReady,
+          ];
+          const completed = sections.filter(Boolean).length;
+          const completenessScore = Math.round((completed / sections.length) * 100);
+
+          const missingFields: string[] = [];
+          if (!basicsReady) missingFields.push("basics");
+          if (!contactReady) missingFields.push("contact/actions");
+          if (!menuReady) missingFields.push("menu");
+          if (!photoReady) missingFields.push("photos");
+          if (isTruck && !scheduleReady) missingFields.push("truck schedule");
+          if (!dealsReady) missingFields.push("deals");
+          if (!eventsReady) missingFields.push("events");
+
+          const ownerEmail = String(row?.ownerEmail || "").toLowerCase();
+          const claimed =
+            Boolean(row?.ownerId) && ownerEmail !== IMPORT_SYSTEM_EMAIL.toLowerCase();
+
+          return {
+            id: row.id,
+            businessName: row.name,
+            profileType,
+            city: row.city || null,
+            state: row.state || null,
+            claimed,
+            verifiedProfile: Boolean(row?.isVerified),
+            locallyOwned: Boolean(row?.hasGoldenPlate),
+            publicProfileUrl: canonicalPath,
+            profileCompletenessScore: completenessScore,
+            missingFields,
+            menuStatus: {
+              ready: menuReady,
+              menuCount,
+              menuItemCount,
+              hasMenuUrl: Boolean(row?.menuUrl),
+            },
+            photoStatus: {
+              ready: photoReady,
+              hasLogo: Boolean(row?.logoUrl),
+              hasCover: Boolean(row?.coverImageUrl),
+              uploadedCount: photoCount,
+            },
+            contactActionStatus: {
+              ready: contactReady,
+              hasPhone: Boolean(row?.phone),
+              hasWebsite: Boolean(row?.websiteUrl),
+              hasSocial:
+                Boolean(row?.instagramUrl) ||
+                Boolean(row?.facebookPageUrl) ||
+                Boolean(row?.xUrl),
+              hasActionLinks,
+            },
+            scheduleStatus: {
+              required: isTruck,
+              ready: scheduleReady,
+              mobileOnline: Boolean(row?.mobileOnline),
+              hasOperatingHours: Boolean(row?.operatingHours),
+            },
+            dealsEventsStatus: {
+              dealsActive: activeDeals,
+              eventsUpcoming: activeEvents,
+            },
+            qrKitReady: qrReady,
+            analyticsActivity: {
+              viewsOrClicks30d: analyticsCount,
+            },
+            lastUpdated: row?.updatedAt || row?.createdAt,
+          };
+        });
+
+        res.json({
+          ok: true,
+          generatedAt: new Date().toISOString(),
+          total: items.length,
+          counts: {
+            complete: items.filter((item: any) => item.profileCompletenessScore >= 85).length,
+            almostComplete: items.filter(
+              (item: any) =>
+                item.profileCompletenessScore >= 60 &&
+                item.profileCompletenessScore < 85,
+            ).length,
+            needsWork: items.filter((item: any) => item.profileCompletenessScore < 60).length,
+          },
+          items,
+        });
+      } catch (error) {
+        console.error("Error fetching business profile completion dashboard:", error);
+        res
+          .status(500)
+          .json({ message: "Failed to fetch business profile completion dashboard" });
       }
     },
   );

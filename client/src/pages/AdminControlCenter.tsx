@@ -102,6 +102,66 @@ type CanonicalEntitiesResponse = {
   items: CanonicalEntityItem[];
 };
 
+type BusinessProfileCompletionItem = {
+  id: string;
+  businessName: string;
+  profileType: "restaurant" | "truck" | "bar";
+  city: string | null;
+  state: string | null;
+  claimed: boolean;
+  verifiedProfile: boolean;
+  locallyOwned: boolean;
+  publicProfileUrl: string;
+  profileCompletenessScore: number;
+  missingFields: string[];
+  menuStatus: {
+    ready: boolean;
+    menuCount: number;
+    menuItemCount: number;
+    hasMenuUrl: boolean;
+  };
+  photoStatus: {
+    ready: boolean;
+    hasLogo: boolean;
+    hasCover: boolean;
+    uploadedCount: number;
+  };
+  contactActionStatus: {
+    ready: boolean;
+    hasPhone: boolean;
+    hasWebsite: boolean;
+    hasSocial: boolean;
+    hasActionLinks: boolean;
+  };
+  scheduleStatus: {
+    required: boolean;
+    ready: boolean;
+    mobileOnline: boolean;
+    hasOperatingHours: boolean;
+  };
+  dealsEventsStatus: {
+    dealsActive: number;
+    eventsUpcoming: number;
+  };
+  qrKitReady: boolean;
+  analyticsActivity: {
+    viewsOrClicks30d: number;
+  };
+  lastUpdated: string;
+};
+
+type BusinessProfileCompletionResponse = {
+  ok: boolean;
+  generatedAt: string;
+  total: number;
+  counts: {
+    complete: number;
+    almostComplete: number;
+    needsWork: number;
+  };
+  items: BusinessProfileCompletionItem[];
+};
+
 type PriorityEntityItem = CanonicalEntityItem & {
   priorityScore: number;
   crawlerDemand: number;
@@ -697,6 +757,17 @@ export default function AdminControlCenter() {
         return res.json();
       },
       refetchInterval: 30000,
+    });
+
+  const { data: businessCompletion, isLoading: isBusinessCompletionLoading } =
+    useQuery<BusinessProfileCompletionResponse>({
+      queryKey: ["/api/admin/business-profiles/completion", 200],
+      queryFn: async () => {
+        const res = await fetch("/api/admin/business-profiles/completion?limit=200");
+        if (!res.ok) throw new Error("Failed to fetch business completion dashboard");
+        return res.json();
+      },
+      refetchInterval: 60000,
     });
 
   const { data: priorityEntities, isLoading: isPriorityLoading } =
@@ -1924,6 +1995,169 @@ export default function AdminControlCenter() {
                     </Button>
                   </div>
                 ) : null}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Production Business Profile Completion</CardTitle>
+                <CardDescription>
+                  Activation queue for live businesses that need profile completion or promotion
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {businessCompletion ? (
+                  <div className="flex flex-wrap gap-2">
+                    <Badge variant="outline">Total ({businessCompletion.total})</Badge>
+                    <Badge variant="outline">
+                      Complete ({businessCompletion.counts.complete})
+                    </Badge>
+                    <Badge variant="outline">
+                      Almost complete ({businessCompletion.counts.almostComplete})
+                    </Badge>
+                    <Badge variant="outline">
+                      Needs work ({businessCompletion.counts.needsWork})
+                    </Badge>
+                  </div>
+                ) : null}
+                <div className="overflow-x-auto rounded-lg border border-[var(--border-subtle)]">
+                  <table className="w-full min-w-[1280px] text-left text-xs">
+                    <thead className="bg-[var(--surface-muted)] text-[color:var(--text-muted)]">
+                      <tr>
+                        <th className="px-3 py-2 font-medium">Business</th>
+                        <th className="px-3 py-2 font-medium">Type / Location</th>
+                        <th className="px-3 py-2 font-medium">Claimed</th>
+                        <th className="px-3 py-2 font-medium">Verified / Local</th>
+                        <th className="px-3 py-2 font-medium">Completeness</th>
+                        <th className="px-3 py-2 font-medium">Missing</th>
+                        <th className="px-3 py-2 font-medium">Menu</th>
+                        <th className="px-3 py-2 font-medium">Photos</th>
+                        <th className="px-3 py-2 font-medium">Contact</th>
+                        <th className="px-3 py-2 font-medium">Schedule</th>
+                        <th className="px-3 py-2 font-medium">Deals / Events</th>
+                        <th className="px-3 py-2 font-medium">QR Ready</th>
+                        <th className="px-3 py-2 font-medium">Activity (30d)</th>
+                        <th className="px-3 py-2 font-medium">Last updated</th>
+                        <th className="px-3 py-2 font-medium">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {isBusinessCompletionLoading ? (
+                        <tr>
+                          <td className="px-3 py-3 text-[color:var(--text-muted)]" colSpan={15}>
+                            Loading completion queue...
+                          </td>
+                        </tr>
+                      ) : businessCompletion?.items?.length ? (
+                        businessCompletion.items.slice(0, 60).map((item) => (
+                          <tr key={item.id} className="border-t border-[var(--border-subtle)]">
+                            <td className="px-3 py-2">
+                              <div className="font-medium">{item.businessName}</div>
+                              <div className="text-[color:var(--text-muted)]">{item.id}</div>
+                            </td>
+                            <td className="px-3 py-2">
+                              <Badge variant="outline">{item.profileType}</Badge>
+                              <div className="mt-1 text-[color:var(--text-muted)]">
+                                {[item.city, item.state].filter(Boolean).join(", ") || "N/A"}
+                              </div>
+                            </td>
+                            <td className="px-3 py-2">
+                              <Badge variant="outline">{item.claimed ? "Claimed" : "Unclaimed"}</Badge>
+                            </td>
+                            <td className="px-3 py-2">
+                              <div className="flex flex-wrap gap-1">
+                                <Badge variant="outline">
+                                  {item.verifiedProfile ? "Verified" : "Unverified"}
+                                </Badge>
+                                <Badge variant="outline">
+                                  {item.locallyOwned ? "Locally owned" : "Standard"}
+                                </Badge>
+                              </div>
+                            </td>
+                            <td className="px-3 py-2">
+                              <Badge variant="outline">{item.profileCompletenessScore}%</Badge>
+                            </td>
+                            <td className="px-3 py-2 text-[color:var(--text-muted)]">
+                              {item.missingFields.length
+                                ? item.missingFields.join(", ")
+                                : "None"}
+                            </td>
+                            <td className="px-3 py-2">
+                              {item.menuStatus.ready
+                                ? `${item.menuStatus.menuItemCount} items`
+                                : "Missing"}
+                            </td>
+                            <td className="px-3 py-2">
+                              {item.photoStatus.ready
+                                ? `${item.photoStatus.uploadedCount} uploads`
+                                : "Missing"}
+                            </td>
+                            <td className="px-3 py-2">
+                              {item.contactActionStatus.ready ? "Ready" : "Missing"}
+                            </td>
+                            <td className="px-3 py-2">
+                              {item.scheduleStatus.required
+                                ? item.scheduleStatus.ready
+                                  ? "Ready"
+                                  : "Missing"
+                                : "N/A"}
+                            </td>
+                            <td className="px-3 py-2">
+                              {item.dealsEventsStatus.dealsActive} / {item.dealsEventsStatus.eventsUpcoming}
+                            </td>
+                            <td className="px-3 py-2">
+                              <Badge variant="outline">
+                                {item.qrKitReady ? "Ready" : "Blocked"}
+                              </Badge>
+                            </td>
+                            <td className="px-3 py-2">
+                              {item.analyticsActivity.viewsOrClicks30d}
+                            </td>
+                            <td className="px-3 py-2 text-[color:var(--text-muted)]">
+                              {formatSignalTime(item.lastUpdated)}
+                            </td>
+                            <td className="px-3 py-2">
+                              <div className="flex flex-wrap gap-1">
+                                <a
+                                  href={item.publicProfileUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex items-center rounded border border-[var(--border-subtle)] px-2 py-1 text-[11px]"
+                                >
+                                  Open profile
+                                </a>
+                                <a
+                                  href={`/restaurant-owner-dashboard?restaurantId=${encodeURIComponent(item.id)}&setup=1`}
+                                  className="inline-flex items-center rounded border border-[var(--border-subtle)] px-2 py-1 text-[11px]"
+                                >
+                                  Edit profile
+                                </a>
+                                <a
+                                  href={`/restaurant-owner-dashboard?restaurantId=${encodeURIComponent(item.id)}&setup=1`}
+                                  className="inline-flex items-center rounded border border-[var(--border-subtle)] px-2 py-1 text-[11px]"
+                                >
+                                  Complete missing
+                                </a>
+                                <a
+                                  href={`/restaurant-owner-dashboard?restaurantId=${encodeURIComponent(item.id)}&setup=1`}
+                                  className="inline-flex items-center rounded border border-[var(--border-subtle)] px-2 py-1 text-[11px]"
+                                >
+                                  Open QR kit
+                                </a>
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td className="px-3 py-3 text-[color:var(--text-muted)]" colSpan={15}>
+                            No business profiles found.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </CardContent>
             </Card>
 
