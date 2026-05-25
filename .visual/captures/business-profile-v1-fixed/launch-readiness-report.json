@@ -1,0 +1,80 @@
+{
+  "generatedAt": "2026-05-25T02:50:07.496Z",
+  "sample": {
+    "restaurant": {
+      "id": "184ebecc-7ba6-43cf-b72f-9554148f9326",
+      "name": "Onboarding Test Restaurant 1778129902463-404754",
+      "business_type": "restaurant",
+      "is_food_truck": false
+    },
+    "truck": {
+      "id": "f3b76054-f355-43b0-a2d3-901277748557",
+      "name": "Sweet Love",
+      "business_type": "food_truck",
+      "is_food_truck": true
+    },
+    "bar": null,
+    "location": {
+      "id": "adb9f7b7-3b3b-455a-ab06-ee552482024e",
+      "business_name": "Exxon"
+    }
+  },
+  "targets": [
+    {
+      "key": "restaurant",
+      "url": "http://127.0.0.1:5200/p/restaurant/184ebecc-7ba6-43cf-b72f-9554148f9326"
+    },
+    {
+      "key": "truck",
+      "url": "http://127.0.0.1:5200/p/truck/f3b76054-f355-43b0-a2d3-901277748557"
+    },
+    {
+      "key": "location",
+      "url": "http://127.0.0.1:5200/p/location/adb9f7b7-3b3b-455a-ab06-ee552482024e"
+    }
+  ],
+  "results": [
+    {
+      "key": "restaurant",
+      "mode": "desktop",
+      "url": "http://127.0.0.1:5200/p/restaurant/184ebecc-7ba6-43cf-b72f-9554148f9326",
+      "status": 200,
+      "screenshot": "C:\\Users\\flavo\\OneDrive\\AAATraderCorner\\TradeScout\\MealScout\\.visual\\captures\\business-profile-v1-fixed\\restaurant-desktop-1440w.png"
+    },
+    {
+      "key": "restaurant",
+      "mode": "mobile",
+      "url": "http://127.0.0.1:5200/p/restaurant/184ebecc-7ba6-43cf-b72f-9554148f9326",
+      "status": 200,
+      "screenshot": "C:\\Users\\flavo\\OneDrive\\AAATraderCorner\\TradeScout\\MealScout\\.visual\\captures\\business-profile-v1-fixed\\restaurant-mobile-430w.png"
+    },
+    {
+      "key": "truck",
+      "mode": "desktop",
+      "url": "http://127.0.0.1:5200/p/truck/f3b76054-f355-43b0-a2d3-901277748557",
+      "status": 200,
+      "screenshot": "C:\\Users\\flavo\\OneDrive\\AAATraderCorner\\TradeScout\\MealScout\\.visual\\captures\\business-profile-v1-fixed\\truck-desktop-1440w.png"
+    },
+    {
+      "key": "truck",
+      "mode": "mobile",
+      "url": "http://127.0.0.1:5200/p/truck/f3b76054-f355-43b0-a2d3-901277748557",
+      "status": 200,
+      "screenshot": "C:\\Users\\flavo\\OneDrive\\AAATraderCorner\\TradeScout\\MealScout\\.visual\\captures\\business-profile-v1-fixed\\truck-mobile-430w.png"
+    },
+    {
+      "key": "location",
+      "mode": "desktop",
+      "url": "http://127.0.0.1:5200/p/location/adb9f7b7-3b3b-455a-ab06-ee552482024e",
+      "status": 200,
+      "screenshot": "C:\\Users\\flavo\\OneDrive\\AAATraderCorner\\TradeScout\\MealScout\\.visual\\captures\\business-profile-v1-fixed\\location-desktop-1440w.png"
+    },
+    {
+      "key": "location",
+      "mode": "mobile",
+      "url": "http://127.0.0.1:5200/p/location/adb9f7b7-3b3b-455a-ab06-ee552482024e",
+      "status": 200,
+      "screenshot": "C:\\Users\\flavo\\OneDrive\\AAATraderCorner\\TradeScout\\MealScout\\.visual\\captures\\business-profile-v1-fixed\\location-mobile-430w.png"
+    }
+  ]
+}

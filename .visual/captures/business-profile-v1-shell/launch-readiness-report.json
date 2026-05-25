@@ -1,0 +1,47 @@
+{
+  "generatedAt": "2026-05-25T02:58:52.972Z",
+  "results": [
+    {
+      "key": "restaurant",
+      "mode": "desktop",
+      "url": "http://127.0.0.1:5200/p/restaurant/184ebecc-7ba6-43cf-b72f-9554148f9326",
+      "status": 200,
+      "screenshot": ".visual/captures/business-profile-v1-shell/restaurant-desktop-1440w.png"
+    },
+    {
+      "key": "restaurant",
+      "mode": "mobile",
+      "url": "http://127.0.0.1:5200/p/restaurant/184ebecc-7ba6-43cf-b72f-9554148f9326",
+      "status": 200,
+      "screenshot": ".visual/captures/business-profile-v1-shell/restaurant-mobile-430w.png"
+    },
+    {
+      "key": "truck",
+      "mode": "desktop",
+      "url": "http://127.0.0.1:5200/p/truck/f3b76054-f355-43b0-a2d3-901277748557",
+      "status": 200,
+      "screenshot": ".visual/captures/business-profile-v1-shell/truck-desktop-1440w.png"
+    },
+    {
+      "key": "truck",
+      "mode": "mobile",
+      "url": "http://127.0.0.1:5200/p/truck/f3b76054-f355-43b0-a2d3-901277748557",
+      "status": 200,
+      "screenshot": ".visual/captures/business-profile-v1-shell/truck-mobile-430w.png"
+    },
+    {
+      "key": "location",
+      "mode": "desktop",
+      "url": "http://127.0.0.1:5200/p/location/adb9f7b7-3b3b-455a-ab06-ee552482024e",
+      "status": 200,
+      "screenshot": ".visual/captures/business-profile-v1-shell/location-desktop-1440w.png"
+    },
+    {
+      "key": "location",
+      "mode": "mobile",
+      "url": "http://127.0.0.1:5200/p/location/adb9f7b7-3b3b-455a-ab06-ee552482024e",
+      "status": 200,
+      "screenshot": ".visual/captures/business-profile-v1-shell/location-mobile-430w.png"
+    }
+  ]
+}

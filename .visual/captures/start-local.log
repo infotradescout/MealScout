@@ -1,0 +1,186 @@
+
+> mealscout@1.0.0 start:local
+> cross-env NODE_ENV=production PUBLIC_BASE_URL=http://127.0.0.1:5200 INCIDENT_SIGNATURE_SECRET=local-dev node dist/server/index.js
+
+✅ Database connection established successfully
+🌐 trust proxy enabled
+Google OAuth not configured: GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET environment variables are missing
+Facebook OAuth not configured: FACEBOOK_APP_ID and FACEBOOK_APP_SECRET environment variables are missing
+✅ Static compliance pages registered
+✅ Operational endpoints registered
+[schedulers] timezone=America/Chicago marketing_email_window=8:00-20:00
+✅ Story cron jobs registered
+   POST /api/cron/cleanup-stories - Clean up expired stories
+   POST /api/cron/recalculate-levels - Recalculate reviewer levels
+   Include header: x-cron-secret: <CRON_SECRET>
+✅ All schedulers registered
+Socket.IO server setup complete at default path
+[express] WebSocket server initialized for food truck tracking
+[express] serving on port 5200
+âœ… Admin account already exists
+[seed] Development seed disabled. Set SEED_DEV_DATA=true (and NODE_ENV=development) to enable.
+✅ Database initialization completed successfully
+✅ Schema validation: phone column exists
+✅ Session cleanup completed
+📋 /api/auth/user called, isAuthenticated: false
+📋 Session ID: 7EHDDSp6Jz9fZLvUu17hgNrsiT3jg2l1
+📋 Session data: Session {
+  cookie: {
+    path: '/',
+    _expires: 2026-06-01T02:49:47.615Z,
+    originalMaxAge: 604800000,
+    httpOnly: true,
+    secure: true,
+    sameSite: 'none'
+  }
+}
+❌ User not authenticated
+📋 /api/auth/user called, isAuthenticated: false
+📋 Session ID: koIZEdY-hGqP2wXb4A56ht896KoUkoFe
+📋 Session data: Session {
+  cookie: {
+    path: '/',
+    _expires: 2026-06-01T02:49:51.139Z,
+    originalMaxAge: 604800000,
+    httpOnly: true,
+    secure: true,
+    sameSite: 'none'
+  }
+}
+❌ User not authenticated
+📋 /api/auth/user called, isAuthenticated: false
+📋 Session ID: xAujO1gvedOvdqTKYXhGKVR9ik18teHe
+📋 Session data: Session {
+  cookie: {
+    path: '/',
+    _expires: 2026-06-01T02:49:54.450Z,
+    originalMaxAge: 604800000,
+    httpOnly: true,
+    secure: true,
+    sameSite: 'none'
+  }
+}
+❌ User not authenticated
+📋 /api/auth/user called, isAuthenticated: false
+📋 Session ID: 92nLfCCoORHqnBoHmwpK5hItDyQWHHGc
+📋 Session data: Session {
+  cookie: {
+    path: '/',
+    _expires: 2026-06-01T02:49:57.704Z,
+    originalMaxAge: 604800000,
+    httpOnly: true,
+    secure: true,
+    sameSite: 'none'
+  }
+}
+❌ User not authenticated
+✅ Ops cleanup completed (idempotency=0, rateLimit=0, reportTokens=0)
+📋 /api/auth/user called, isAuthenticated: false
+📋 Session ID: PswF5gxmKpUXwpZIQOvnnd8Kg14s-wks
+📋 Session data: Session {
+  cookie: {
+    path: '/',
+    _expires: 2026-06-01T02:50:01.396Z,
+    originalMaxAge: 604800000,
+    httpOnly: true,
+    secure: true,
+    sameSite: 'none'
+  }
+}
+❌ User not authenticated
+📋 /api/auth/user called, isAuthenticated: false
+📋 Session ID: LvJ5Mzb3N75oFesGbMmoUXtSOX6Lpeex
+📋 Session data: Session {
+  cookie: {
+    path: '/',
+    _expires: 2026-06-01T02:50:04.518Z,
+    originalMaxAge: 604800000,
+    httpOnly: true,
+    secure: true,
+    sameSite: 'none'
+  }
+}
+❌ User not authenticated
+[marketplace-health] ok total=0 collecting=0 threshold_met=0 claimed=0 fulfilled=0
+📋 /api/auth/user called, isAuthenticated: false
+📋 Session ID: 8nf4HtqZ6b6G7f-Lr-C_hQHqhNnZN9yR
+📋 Session data: Session {
+  cookie: {
+    path: '/',
+    _expires: 2026-06-01T02:58:37.062Z,
+    originalMaxAge: 604800000,
+    httpOnly: true,
+    secure: true,
+    sameSite: 'none'
+  }
+}
+❌ User not authenticated
+📋 /api/auth/user called, isAuthenticated: false
+📋 Session ID: DNp-N8UdcNP6lymrYX_KLBon91upFwZv
+📋 Session data: Session {
+  cookie: {
+    path: '/',
+    _expires: 2026-06-01T02:58:44.552Z,
+    originalMaxAge: 604800000,
+    httpOnly: true,
+    secure: true,
+    sameSite: 'none'
+  }
+}
+❌ User not authenticated
+📋 /api/auth/user called, isAuthenticated: false
+📋 Session ID: 8KE-hzkuocEoJldWdIw5BOXqbjElJS-f
+📋 Session data: Session {
+  cookie: {
+    path: '/',
+    _expires: 2026-06-01T02:58:46.534Z,
+    originalMaxAge: 604800000,
+    httpOnly: true,
+    secure: true,
+    sameSite: 'none'
+  }
+}
+❌ User not authenticated
+📋 /api/auth/user called, isAuthenticated: false
+📋 Session ID: CW5Vk59fScGRdPRerEblZjaYEJMwsYi2
+📋 Session data: Session {
+  cookie: {
+    path: '/',
+    _expires: 2026-06-01T02:58:48.347Z,
+    originalMaxAge: 604800000,
+    httpOnly: true,
+    secure: true,
+    sameSite: 'none'
+  }
+}
+❌ User not authenticated
+📋 /api/auth/user called, isAuthenticated: false
+📋 Session ID: ZNEbWPsm1D_NrEmE7Gz7YoXyUfpLezwn
+📋 Session data: Session {
+  cookie: {
+    path: '/',
+    _expires: 2026-06-01T02:58:50.330Z,
+    originalMaxAge: 604800000,
+    httpOnly: true,
+    secure: true,
+    sameSite: 'none'
+  }
+}
+❌ User not authenticated
+📋 /api/auth/user called, isAuthenticated: false
+📋 Session ID: 3XAcXzjQHUGl0fEprPC2dfvXD7rb6ceW
+📋 Session data: Session {
+  cookie: {
+    path: '/',
+    _expires: 2026-06-01T02:58:51.658Z,
+    originalMaxAge: 604800000,
+    httpOnly: true,
+    secure: true,
+    sameSite: 'none'
+  }
+}
+❌ User not authenticated
+[EventNotificationCron] Starting unbooked event notification check...
+[EventNotificationCron] Found 0 unbooked events within 48-hour buffer
+[EventNotificationCron] Notification check complete: { eventsProcessed: 0, trucksNotified: 0, errors: 0 }
+✅ Ops cleanup completed (idempotency=0, rateLimit=0, reportTokens=0)

@@ -1,0 +1,5 @@
+BREVO_API_KEY environment variable is not set. Email functionality will be disabled.
+ALLOWED_ORIGINS not set, defaulting to: http://localhost:5000
+BREVO_API_KEY environment variable is not set. Email functionality will be disabled.
+⚠️  BREVO_API_KEY is not set – incident email notifications will fail and related actions will error until configured.
+⚠️  INCIDENT_EMAIL_RECIPIENTS is not set – incident email notifications will throw errors when triggered.

@@ -23,7 +23,7 @@
     "build:lib": "vite build --config vite.lib.config.ts",
     "doctor": "node scripts/repoDoctor.mjs",
     "start": "node dist/server/index.js",
-    "start:local": "cross-env NODE_ENV=production PORT=5000 node dist/server/index.js",
+    "start:local": "cross-env NODE_ENV=production PUBLIC_BASE_URL=http://127.0.0.1:5200 INCIDENT_SIGNATURE_SECRET=local-dev node dist/server/index.js",
     "check": "tsc",
     "db:generate:sql": "drizzle-kit generate",
     "db:push": "drizzle-kit push",

@@ -1,0 +1,18 @@
+{
+  "generatedAt": "2026-05-25T03:57:59.178Z",
+  "barId": "cf960d8c-b12f-4119-8b54-19c358d6394b",
+  "results": [
+    {
+      "mode": "desktop",
+      "url": "http://127.0.0.1:5200/p/bar/cf960d8c-b12f-4119-8b54-19c358d6394b",
+      "status": 200,
+      "screenshot": ".visual/captures/business-profile-v1-bar/bar-desktop-1440w.png"
+    },
+    {
+      "mode": "mobile",
+      "url": "http://127.0.0.1:5200/p/bar/cf960d8c-b12f-4119-8b54-19c358d6394b",
+      "status": 200,
+      "screenshot": ".visual/captures/business-profile-v1-bar/bar-mobile-430w.png"
+    }
+  ]
+}

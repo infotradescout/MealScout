@@ -1,0 +1,25 @@
+{
+  "restaurant": null,
+  "truck": null,
+  "bar": null,
+  "location": null,
+  "sampleIds": {
+    "sampleRestaurant": {
+      "id": "184ebecc-7ba6-43cf-b72f-9554148f9326",
+      "name": "Onboarding Test Restaurant 1778129902463-404754",
+      "business_type": "restaurant",
+      "is_food_truck": false
+    },
+    "sampleTruck": {
+      "id": "f3b76054-f355-43b0-a2d3-901277748557",
+      "name": "Sweet Love",
+      "business_type": "food_truck",
+      "is_food_truck": true
+    },
+    "sampleBar": null,
+    "sampleLocation": {
+      "id": "adb9f7b7-3b3b-455a-ab06-ee552482024e",
+      "business_name": "Exxon"
+    }
+  }
+}

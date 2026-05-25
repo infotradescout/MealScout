@@ -1257,7 +1257,23 @@ export default function PublicProfilePage() {
         ogImage={ogImage}
       />
 
-      <div className="mx-auto max-w-5xl space-y-6 px-4 py-8">
+      <header className="border-b border-white/10 bg-[#0b0908]/95">
+        <div className="mx-auto flex w-full max-w-5xl items-center justify-between px-4 py-3">
+          <Link href="/" className="text-base font-semibold tracking-tight text-white">
+            MealScout
+          </Link>
+          <div className="flex items-center gap-3 text-xs sm:text-sm">
+            <Link href="/scout" className="text-white/75 hover:text-white">
+              Find local food
+            </Link>
+            <Link href="/claim-truck" className="text-orange-200 hover:text-orange-100">
+              Claim or update
+            </Link>
+          </div>
+        </div>
+      </header>
+
+      <main className="mx-auto max-w-5xl space-y-6 px-4 py-6 sm:py-8">
         <HeroBlock profile={data} safeCtas={safeCtas} />
         <QuickActionRow profile={data} safeCtas={safeCtas} />
 
@@ -1294,7 +1310,21 @@ export default function PublicProfilePage() {
             </CardContent>
           </Card>
         )}
-      </div>
+      </main>
+
+      <footer className="mt-8 border-t border-white/10 bg-[#0b0908]">
+        <div className="mx-auto flex w-full max-w-5xl flex-col gap-2 px-4 py-5 text-sm text-white/70 sm:flex-row sm:items-center sm:justify-between">
+          <p>MealScout</p>
+          <div className="flex items-center gap-4">
+            <Link href="/scout" className="hover:text-white">
+              Find local food
+            </Link>
+            <Link href="/claim-truck" className="hover:text-white">
+              Business owner?
+            </Link>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

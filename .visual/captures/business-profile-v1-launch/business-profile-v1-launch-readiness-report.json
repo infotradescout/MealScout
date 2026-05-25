@@ -1,0 +1,104 @@
+{
+  "generatedAt": "2026-05-25T04:28:01.611Z",
+  "reportName": "business-profile-v1-launch-readiness-report.json",
+  "overallStatus": "PASS",
+  "profiles": [
+    {
+      "profileType": "restaurant",
+      "recordId": "184ebecc-7ba6-43cf-b72f-9554148f9326",
+      "route": "/p/restaurant/184ebecc-7ba6-43cf-b72f-9554148f9326",
+      "captures": [
+        {
+          "viewport": "desktop-1440w",
+          "runtimeApiStatus": 200,
+          "pageStatus": 200,
+          "screenshotPath": ".visual/captures/business-profile-v1-launch/restaurant-desktop-1440w.png",
+          "visualPass": true,
+          "notes": "Public shell rendered; screenshot captured."
+        },
+        {
+          "viewport": "mobile-430w",
+          "runtimeApiStatus": 200,
+          "pageStatus": 200,
+          "screenshotPath": ".visual/captures/business-profile-v1-launch/restaurant-mobile-430w.png",
+          "visualPass": true,
+          "notes": "Public shell rendered; screenshot captured."
+        }
+      ],
+      "overallPass": true
+    },
+    {
+      "profileType": "truck",
+      "recordId": "f3b76054-f355-43b0-a2d3-901277748557",
+      "route": "/p/truck/f3b76054-f355-43b0-a2d3-901277748557",
+      "captures": [
+        {
+          "viewport": "desktop-1440w",
+          "runtimeApiStatus": 200,
+          "pageStatus": 200,
+          "screenshotPath": ".visual/captures/business-profile-v1-launch/truck-desktop-1440w.png",
+          "visualPass": true,
+          "notes": "Public shell rendered; screenshot captured."
+        },
+        {
+          "viewport": "mobile-430w",
+          "runtimeApiStatus": 200,
+          "pageStatus": 200,
+          "screenshotPath": ".visual/captures/business-profile-v1-launch/truck-mobile-430w.png",
+          "visualPass": true,
+          "notes": "Public shell rendered; screenshot captured."
+        }
+      ],
+      "overallPass": true
+    },
+    {
+      "profileType": "location",
+      "recordId": "adb9f7b7-3b3b-455a-ab06-ee552482024e",
+      "route": "/p/location/adb9f7b7-3b3b-455a-ab06-ee552482024e",
+      "captures": [
+        {
+          "viewport": "desktop-1440w",
+          "runtimeApiStatus": 200,
+          "pageStatus": 200,
+          "screenshotPath": ".visual/captures/business-profile-v1-launch/location-desktop-1440w.png",
+          "visualPass": true,
+          "notes": "Public shell rendered; screenshot captured."
+        },
+        {
+          "viewport": "mobile-430w",
+          "runtimeApiStatus": 200,
+          "pageStatus": 200,
+          "screenshotPath": ".visual/captures/business-profile-v1-launch/location-mobile-430w.png",
+          "visualPass": true,
+          "notes": "Public shell rendered; screenshot captured."
+        }
+      ],
+      "overallPass": true
+    },
+    {
+      "profileType": "bar",
+      "recordId": "cf960d8c-b12f-4119-8b54-19c358d6394b",
+      "route": "/p/bar/cf960d8c-b12f-4119-8b54-19c358d6394b",
+      "captures": [
+        {
+          "viewport": "desktop-1440w",
+          "runtimeApiStatus": 200,
+          "pageStatus": 200,
+          "screenshotPath": ".visual/captures/business-profile-v1-launch/bar-desktop-1440w.png",
+          "visualPass": true,
+          "notes": "Public shell rendered; screenshot captured."
+        },
+        {
+          "viewport": "mobile-430w",
+          "runtimeApiStatus": 200,
+          "pageStatus": 200,
+          "screenshotPath": ".visual/captures/business-profile-v1-launch/bar-mobile-430w.png",
+          "visualPass": true,
+          "notes": "Public shell rendered; screenshot captured."
+        }
+      ],
+      "overallPass": true
+    }
+  ],
+  "notes": "Business Profile v1 launch-readiness evidence complete for restaurant, truck, location, and bar."
+}

@@ -2113,7 +2113,7 @@ export default function RestaurantOwnerDashboard() {
 
                         <div className="rounded-lg border border-orange-200 bg-white p-3">
                           <h5 className="text-xs font-black uppercase tracking-[0.12em] text-orange-800">
-                            Print tools
+                            Marketing kit
                           </h5>
                           <p className="mt-1 text-[11px] text-orange-900/75">
                             Branded templates for counter cards, windows, and truck-side signage.
@@ -2126,6 +2126,17 @@ export default function RestaurantOwnerDashboard() {
                               <p className="text-[11px] text-orange-900/70">
                                 Find us on MealScout
                               </p>
+                              <div className="mt-2 inline-flex items-center gap-2 rounded-md border border-orange-100 bg-white px-2 py-1">
+                                <img
+                                  src={buildQrImageUrl(String(canonicalUrl))}
+                                  alt="Window sticker QR preview"
+                                  className="h-10 w-10 rounded border border-orange-100 bg-white object-contain"
+                                  loading="lazy"
+                                />
+                                <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-orange-800">
+                                  Preview asset
+                                </span>
+                              </div>
                               <div className="mt-2 flex gap-2">
                                 <Button
                                   type="button"
@@ -2158,11 +2169,22 @@ export default function RestaurantOwnerDashboard() {
                             {menuTarget ? (
                               <div className="rounded-md border border-orange-100 bg-orange-50/40 p-2">
                                 <p className="text-[11px] font-bold text-orange-900">
-                                  Table tent
+                                  Table tent / menu card
                                 </p>
                                 <p className="text-[11px] text-orange-900/70">
                                   Scan for menu
                                 </p>
+                                <div className="mt-2 inline-flex items-center gap-2 rounded-md border border-orange-100 bg-white px-2 py-1">
+                                  <img
+                                    src={buildQrImageUrl(String(menuTarget))}
+                                    alt="Menu card QR preview"
+                                    className="h-10 w-10 rounded border border-orange-100 bg-white object-contain"
+                                    loading="lazy"
+                                  />
+                                  <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-orange-800">
+                                    Preview asset
+                                  </span>
+                                </div>
                                 <div className="mt-2 flex gap-2">
                                   <Button
                                     type="button"
@@ -2196,11 +2218,22 @@ export default function RestaurantOwnerDashboard() {
                             {specialsTarget ? (
                               <div className="rounded-md border border-orange-100 bg-orange-50/40 p-2">
                                 <p className="text-[11px] font-bold text-orange-900">
-                                  Specials asset
+                                  Specials card
                                 </p>
                                 <p className="text-[11px] text-orange-900/70">
                                   Scan for today&apos;s specials
                                 </p>
+                                <div className="mt-2 inline-flex items-center gap-2 rounded-md border border-orange-100 bg-white px-2 py-1">
+                                  <img
+                                    src={buildQrImageUrl(String(specialsTarget))}
+                                    alt="Specials card QR preview"
+                                    className="h-10 w-10 rounded border border-orange-100 bg-white object-contain"
+                                    loading="lazy"
+                                  />
+                                  <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-orange-800">
+                                    Preview asset
+                                  </span>
+                                </div>
                                 <div className="mt-2 flex gap-2">
                                   <Button
                                     type="button"
@@ -2236,11 +2269,22 @@ export default function RestaurantOwnerDashboard() {
                             {isTruckProfile ? (
                               <div className="rounded-md border border-orange-100 bg-orange-50/40 p-2">
                                 <p className="text-[11px] font-bold text-orange-900">
-                                  Food truck asset
+                                  Food truck counter card
                                 </p>
                                 <p className="text-[11px] text-orange-900/70">
                                   Scan for schedule + menu
                                 </p>
+                                <div className="mt-2 inline-flex items-center gap-2 rounded-md border border-orange-100 bg-white px-2 py-1">
+                                  <img
+                                    src={buildQrImageUrl(String(menuTarget || canonicalUrl))}
+                                    alt="Food truck card QR preview"
+                                    className="h-10 w-10 rounded border border-orange-100 bg-white object-contain"
+                                    loading="lazy"
+                                  />
+                                  <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-orange-800">
+                                    Preview asset
+                                  </span>
+                                </div>
                                 <div className="mt-2 flex gap-2">
                                   <Button
                                     type="button"
@@ -2278,7 +2322,7 @@ export default function RestaurantOwnerDashboard() {
                     );
                   })()}
                   <p className="mt-3 text-[11px] text-orange-900/75">
-                    Print tip: use Profile QR for window signage, Menu QR for table tents, and Specials QR for daily promos.
+                    Print guidance: use Profile QR for window signage, Menu QR for table tents, Specials QR for daily promos, and the truck card at your counter or service window.
                   </p>
                 </div>
               ) : null}

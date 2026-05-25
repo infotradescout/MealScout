@@ -627,7 +627,20 @@ function Router() {
 function App() {
   const [location] = useLocation();
   const currentPath = location.split("?")[0];
-  const hideGlobalNavOnPublicProfile = currentPath.startsWith("/p/");
+  const isPublicProfilePath = currentPath.startsWith("/p/");
+
+  if (isPublicProfilePath) {
+    return (
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <div className="min-h-screen bg-[#070605] text-white">
+            <Toaster />
+            <Router />
+          </div>
+        </TooltipProvider>
+      </QueryClientProvider>
+    );
+  }
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -636,7 +649,7 @@ function App() {
         <div className="desktop-full-width app-background app-content min-h-screen md:pt-16 relative z-10">
           <Toaster />
           <Router />
-          {!hideGlobalNavOnPublicProfile ? <Navigation scope="global" /> : null}
+          <Navigation scope="global" />
         </div>
       </TooltipProvider>
     </QueryClientProvider>
