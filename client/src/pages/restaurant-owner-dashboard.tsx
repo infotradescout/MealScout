@@ -640,6 +640,91 @@ export default function RestaurantOwnerDashboard() {
     link.click();
     document.body.removeChild(link);
   };
+  const downloadBrandedQrAsset = async (options: {
+    title: string;
+    subtitle: string;
+    targetUrl: string;
+    filename: string;
+  }) => {
+    const qrUrl = buildQrImageUrl(options.targetUrl);
+    const businessName = String(currentRestaurant?.name || "MealScout Business");
+    try {
+      const qrImage = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error("QR image failed to load."));
+        img.src = qrUrl;
+      });
+
+      const canvas = document.createElement("canvas");
+      canvas.width = 1200;
+      canvas.height = 1800;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("Canvas unavailable.");
+
+      const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+      gradient.addColorStop(0, "#0f0d0b");
+      gradient.addColorStop(1, "#1a120d");
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.fillStyle = "#15100b";
+      ctx.strokeStyle = "rgba(249,115,22,0.38)";
+      ctx.lineWidth = 4;
+      const cardX = 64;
+      const cardY = 64;
+      const cardW = canvas.width - 128;
+      const cardH = canvas.height - 128;
+      ctx.beginPath();
+      ctx.roundRect(cardX, cardY, cardW, cardH, 44);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = "#fb923c";
+      ctx.font = "800 52px Inter, Arial, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("MealScout", canvas.width / 2, 200);
+
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "900 64px Inter, Arial, sans-serif";
+      ctx.fillText(options.title, canvas.width / 2, 300);
+      ctx.font = "500 34px Inter, Arial, sans-serif";
+      ctx.fillStyle = "#fcd9be";
+      ctx.fillText(options.subtitle, canvas.width / 2, 360);
+
+      const qrFrameX = 300;
+      const qrFrameY = 440;
+      const qrFrameSize = 600;
+      ctx.fillStyle = "#ffffff";
+      ctx.beginPath();
+      ctx.roundRect(qrFrameX, qrFrameY, qrFrameSize, qrFrameSize, 30);
+      ctx.fill();
+      ctx.drawImage(qrImage, qrFrameX + 48, qrFrameY + 48, qrFrameSize - 96, qrFrameSize - 96);
+
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "800 54px Inter, Arial, sans-serif";
+      ctx.fillText(businessName, canvas.width / 2, 1160);
+      ctx.fillStyle = "#fcd9be";
+      ctx.font = "500 30px Inter, Arial, sans-serif";
+      ctx.fillText("Open your camera and scan", canvas.width / 2, 1230);
+      ctx.fillText("Profile, menu, specials, and local discovery", canvas.width / 2, 1274);
+
+      const pngUrl = canvas.toDataURL("image/png");
+      const link = document.createElement("a");
+      link.href = pngUrl;
+      link.download = options.filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error: any) {
+      toast({
+        title: "Asset download failed",
+        description: error?.message || "Unable to generate branded print asset.",
+        variant: "destructive",
+      });
+    }
+  };
   const copyQrLink = async (targetUrl: string, label: string) => {
     try {
       await navigator.clipboard.writeText(targetUrl);
@@ -1944,6 +2029,9 @@ export default function RestaurantOwnerDashboard() {
                       Number(publicProfileForQr.deals?.totalActive || 0) > 0
                         ? `${canonicalUrl}#deals`
                         : null;
+                    const isTruckProfile =
+                      Boolean(currentRestaurant?.isFoodTruck) ||
+                      String(currentRestaurant?.businessType || "") === "food_truck";
 
                     const options: Array<{
                       id: string;
@@ -1972,54 +2060,220 @@ export default function RestaurantOwnerDashboard() {
                     ];
 
                     return (
-                      <div className="grid gap-3 sm:grid-cols-3">
-                        {options
-                          .filter((option) => Boolean(option.target))
-                          .map((option) => (
-                            <div
-                              key={option.id}
-                              className="rounded-lg border border-orange-200 bg-white p-3"
-                            >
-                              <p className="text-xs font-bold uppercase tracking-[0.08em] text-orange-800">
-                                {option.label}
+                      <div className="space-y-3">
+                        <div className="grid gap-3 sm:grid-cols-3">
+                          {options
+                            .filter((option) => Boolean(option.target))
+                            .map((option) => (
+                              <div
+                                key={option.id}
+                                className="rounded-lg border border-orange-200 bg-white p-3"
+                              >
+                                <p className="text-xs font-bold uppercase tracking-[0.08em] text-orange-800">
+                                  {option.label}
+                                </p>
+                                <img
+                                  src={buildQrImageUrl(String(option.target))}
+                                  alt={`${option.label} code`}
+                                  className="my-2 h-28 w-28 rounded border border-orange-100 bg-white object-contain"
+                                  loading="lazy"
+                                />
+                                <p className="mb-2 text-[11px] text-orange-900/75">
+                                  {option.note}
+                                </p>
+                                <div className="flex flex-wrap gap-2">
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() =>
+                                      downloadQrPng(
+                                        String(option.target),
+                                        `${option.id}-qr-${selectedRestaurant}.png`,
+                                      )
+                                    }
+                                  >
+                                    Download PNG
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() =>
+                                      copyQrLink(String(option.target), option.label)
+                                    }
+                                  >
+                                    <Copy className="mr-1 h-3.5 w-3.5" />
+                                    Copy link
+                                  </Button>
+                                </div>
+                              </div>
+                            ))}
+                        </div>
+
+                        <div className="rounded-lg border border-orange-200 bg-white p-3">
+                          <h5 className="text-xs font-black uppercase tracking-[0.12em] text-orange-800">
+                            Print tools
+                          </h5>
+                          <p className="mt-1 text-[11px] text-orange-900/75">
+                            Branded templates for counter cards, windows, and truck-side signage.
+                          </p>
+                          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                            <div className="rounded-md border border-orange-100 bg-orange-50/40 p-2">
+                              <p className="text-[11px] font-bold text-orange-900">
+                                Window sticker
                               </p>
-                              <img
-                                src={buildQrImageUrl(String(option.target))}
-                                alt={`${option.label} code`}
-                                className="my-2 h-28 w-28 rounded border border-orange-100 bg-white object-contain"
-                                loading="lazy"
-                              />
-                              <p className="mb-2 text-[11px] text-orange-900/75">
-                                {option.note}
+                              <p className="text-[11px] text-orange-900/70">
+                                Find us on MealScout
                               </p>
-                              <div className="flex flex-wrap gap-2">
+                              <div className="mt-2 flex gap-2">
                                 <Button
                                   type="button"
-                                  variant="outline"
                                   size="sm"
+                                  variant="outline"
                                   onClick={() =>
-                                    downloadQrPng(
-                                      String(option.target),
-                                      `${option.id}-qr-${selectedRestaurant}.png`,
-                                    )
+                                    downloadBrandedQrAsset({
+                                      title: "Find us on MealScout",
+                                      subtitle: "Scan to view profile and updates",
+                                      targetUrl: canonicalUrl,
+                                      filename: `window-sticker-${selectedRestaurant}.png`,
+                                    })
                                   }
                                 >
-                                  Download PNG
+                                  <Download className="mr-1 h-3.5 w-3.5" />
+                                  Download
                                 </Button>
                                 <Button
                                   type="button"
-                                  variant="ghost"
                                   size="sm"
-                                  onClick={() =>
-                                    copyQrLink(String(option.target), option.label)
-                                  }
+                                  variant="ghost"
+                                  onClick={() => copyQrLink(canonicalUrl, "Profile")}
                                 >
                                   <Copy className="mr-1 h-3.5 w-3.5" />
-                                  Copy link
+                                  Copy
                                 </Button>
                               </div>
                             </div>
-                          ))}
+
+                            {menuTarget ? (
+                              <div className="rounded-md border border-orange-100 bg-orange-50/40 p-2">
+                                <p className="text-[11px] font-bold text-orange-900">
+                                  Table tent
+                                </p>
+                                <p className="text-[11px] text-orange-900/70">
+                                  Scan for menu
+                                </p>
+                                <div className="mt-2 flex gap-2">
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() =>
+                                      downloadBrandedQrAsset({
+                                        title: "Scan for menu",
+                                        subtitle: "See featured items and latest menu",
+                                        targetUrl: String(menuTarget),
+                                        filename: `table-tent-menu-${selectedRestaurant}.png`,
+                                      })
+                                    }
+                                  >
+                                    <Download className="mr-1 h-3.5 w-3.5" />
+                                    Download
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => copyQrLink(String(menuTarget), "Menu")}
+                                  >
+                                    <Copy className="mr-1 h-3.5 w-3.5" />
+                                    Copy
+                                  </Button>
+                                </div>
+                              </div>
+                            ) : null}
+
+                            {specialsTarget ? (
+                              <div className="rounded-md border border-orange-100 bg-orange-50/40 p-2">
+                                <p className="text-[11px] font-bold text-orange-900">
+                                  Specials asset
+                                </p>
+                                <p className="text-[11px] text-orange-900/70">
+                                  Scan for today&apos;s specials
+                                </p>
+                                <div className="mt-2 flex gap-2">
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() =>
+                                      downloadBrandedQrAsset({
+                                        title: "Today's specials",
+                                        subtitle: "Active deals and limited-time offers",
+                                        targetUrl: String(specialsTarget),
+                                        filename: `specials-asset-${selectedRestaurant}.png`,
+                                      })
+                                    }
+                                  >
+                                    <Download className="mr-1 h-3.5 w-3.5" />
+                                    Download
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() =>
+                                      copyQrLink(String(specialsTarget), "Specials")
+                                    }
+                                  >
+                                    <Copy className="mr-1 h-3.5 w-3.5" />
+                                    Copy
+                                  </Button>
+                                </div>
+                              </div>
+                            ) : null}
+
+                            {isTruckProfile ? (
+                              <div className="rounded-md border border-orange-100 bg-orange-50/40 p-2">
+                                <p className="text-[11px] font-bold text-orange-900">
+                                  Food truck asset
+                                </p>
+                                <p className="text-[11px] text-orange-900/70">
+                                  Scan for schedule + menu
+                                </p>
+                                <div className="mt-2 flex gap-2">
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() =>
+                                      downloadBrandedQrAsset({
+                                        title: "Schedule + menu",
+                                        subtitle: "Find stops, hours, and food updates",
+                                        targetUrl: String(menuTarget || canonicalUrl),
+                                        filename: `truck-asset-${selectedRestaurant}.png`,
+                                      })
+                                    }
+                                  >
+                                    <Download className="mr-1 h-3.5 w-3.5" />
+                                    Download
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() =>
+                                      copyQrLink(String(menuTarget || canonicalUrl), "Truck")
+                                    }
+                                  >
+                                    <Copy className="mr-1 h-3.5 w-3.5" />
+                                    Copy
+                                  </Button>
+                                </div>
+                              </div>
+                            ) : null}
+                          </div>
+                        </div>
                       </div>
                     );
                   })()}
