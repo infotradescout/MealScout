@@ -648,10 +648,19 @@ const buildPublicMenuPayload = async (restaurantId: string) => {
     .from(menus)
     .where(and(eq(menus.restaurantId, restaurantId), eq(menus.isActive, true)));
 
+  const importUrlRows = await db.execute(
+    sql`select import_url from menus where restaurant_id = ${restaurantId} and is_active = true and import_url is not null order by updated_at desc nulls last limit 1`,
+  );
+  const menuUrlFallback =
+    (Array.isArray((importUrlRows as any)?.rows)
+      ? String((importUrlRows as any).rows[0]?.import_url || "").trim()
+      : "") || null;
+
   if (!menuRows.length) {
     return {
       menuSections: [],
       menuLastUpdatedAt: null as Date | null,
+      menuUrl: menuUrlFallback,
       hasStructuredMenu: false,
     };
   }
@@ -789,6 +798,7 @@ const buildPublicMenuPayload = async (restaurantId: string) => {
   return {
     menuSections,
     menuLastUpdatedAt,
+    menuUrl: menuUrlFallback,
     hasStructuredMenu: menuSections.length > 0,
   };
 };
