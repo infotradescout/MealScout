@@ -365,6 +365,16 @@ export function registerRestaurantOperationsRoutes(
           menuUrl: z.string().trim().max(500).optional().nullable(),
           logoUrl: z.string().trim().max(500).optional().nullable(),
           coverImageUrl: z.string().trim().max(500).optional().nullable(),
+          onlineOrderingUrl: z.string().trim().max(500).optional().nullable(),
+          deliveryUrl: z.string().trim().max(500).optional().nullable(),
+          doordashUrl: z.string().trim().max(500).optional().nullable(),
+          uberEatsUrl: z.string().trim().max(500).optional().nullable(),
+          toastUrl: z.string().trim().max(500).optional().nullable(),
+          squareUrl: z.string().trim().max(500).optional().nullable(),
+          chowNowUrl: z.string().trim().max(500).optional().nullable(),
+          grubhubUrl: z.string().trim().max(500).optional().nullable(),
+          cateringInquiryUrl: z.string().trim().max(500).optional().nullable(),
+          truckBookingInquiryUrl: z.string().trim().max(500).optional().nullable(),
         });
 
         const parsed = profileSchema.parse(req.body || {});
@@ -373,11 +383,51 @@ export function registerRestaurantOperationsRoutes(
           return text.length > 0 ? text : null;
         };
 
-        const updates = Object.fromEntries(
+        const actionLinkKeys = new Set([
+          "onlineOrderingUrl",
+          "deliveryUrl",
+          "doordashUrl",
+          "uberEatsUrl",
+          "toastUrl",
+          "squareUrl",
+          "chowNowUrl",
+          "grubhubUrl",
+          "cateringInquiryUrl",
+          "truckBookingInquiryUrl",
+        ]);
+
+        const baseUpdates = Object.fromEntries(
           Object.entries(parsed)
-            .filter(([, value]) => value !== undefined)
+            .filter(([key, value]) => value !== undefined && !actionLinkKeys.has(key))
             .map(([key, value]) => [key, normalize(value)]),
         );
+
+        const actionLinkUpdates = Object.fromEntries(
+          Object.entries(parsed)
+            .filter(([key, value]) => value !== undefined && actionLinkKeys.has(key))
+            .map(([key, value]) => [key, normalize(value)]),
+        );
+
+        const updates: Record<string, unknown> = { ...baseUpdates };
+        if (Object.keys(actionLinkUpdates).length > 0) {
+          const restaurant = await storage.getRestaurant(restaurantId);
+          const existingSettings =
+            restaurant && typeof (restaurant as any).socialAutopostSettings === "object"
+              ? { ...((restaurant as any).socialAutopostSettings || {}) }
+              : {};
+          const existingPublicActionLinks =
+            existingSettings &&
+            typeof (existingSettings as any).publicActionLinks === "object"
+              ? { ...((existingSettings as any).publicActionLinks || {}) }
+              : {};
+          updates.socialAutopostSettings = {
+            ...existingSettings,
+            publicActionLinks: {
+              ...existingPublicActionLinks,
+              ...actionLinkUpdates,
+            },
+          };
+        }
 
         if (Object.keys(updates).length === 0) {
           return res.status(400).json({ message: "No profile fields provided" });

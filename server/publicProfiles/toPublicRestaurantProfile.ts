@@ -10,6 +10,13 @@ export function toPublicRestaurantProfile(input: {
   showContact?: boolean;
 }): PublicRestaurantProfile {
   const row = input.row || {};
+  const publicActionLinks =
+    row &&
+    typeof row.socialAutopostSettings === "object" &&
+    row.socialAutopostSettings &&
+    typeof row.socialAutopostSettings.publicActionLinks === "object"
+      ? row.socialAutopostSettings.publicActionLinks
+      : {};
   const profileType =
     input.profileType ||
     (row.isFoodTruck || row.businessType === "food_truck"
@@ -36,6 +43,7 @@ export function toPublicRestaurantProfile(input: {
   const onlineOrderingUrl =
     String(
       row.onlineOrderingUrl ||
+        publicActionLinks.onlineOrderingUrl ||
         row.orderingUrl ||
         row.orderUrl ||
         row.onlineOrderUrl ||
@@ -44,20 +52,29 @@ export function toPublicRestaurantProfile(input: {
   const deliveryUrl =
     String(
       row.deliveryUrl ||
+        publicActionLinks.deliveryUrl ||
         row.doordashUrl ||
+        publicActionLinks.doordashUrl ||
         row.uberEatsUrl ||
+        publicActionLinks.uberEatsUrl ||
         row.toastUrl ||
+        publicActionLinks.toastUrl ||
         row.squareUrl ||
+        publicActionLinks.squareUrl ||
         row.chowNowUrl ||
+        publicActionLinks.chowNowUrl ||
         row.grubhubUrl ||
+        publicActionLinks.grubhubUrl ||
         "",
     ).trim() || null;
   const cateringUrl =
     String(
+      publicActionLinks.cateringInquiryUrl ||
       row.cateringInquiryUrl || row.cateringUrl || row.cateringRequestUrl || "",
     ).trim() || null;
   const truckBookingUrl =
     String(
+      publicActionLinks.truckBookingInquiryUrl ||
       row.truckBookingInquiryUrl || row.truckBookingUrl || row.bookingInquiryUrl || "",
     ).trim() || null;
   const instagramUrl = String(row.instagramUrl || "").trim() || null;

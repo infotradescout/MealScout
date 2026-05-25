@@ -152,6 +152,16 @@ interface ProfileCompletionDraft {
   instagramUrl: string;
   xUrl: string;
   menuUrl: string;
+  onlineOrderingUrl: string;
+  deliveryUrl: string;
+  doordashUrl: string;
+  uberEatsUrl: string;
+  toastUrl: string;
+  squareUrl: string;
+  chowNowUrl: string;
+  grubhubUrl: string;
+  cateringInquiryUrl: string;
+  truckBookingInquiryUrl: string;
   logoUrl: string;
   coverImageUrl: string;
 }
@@ -193,6 +203,16 @@ export default function RestaurantOwnerDashboard() {
     instagramUrl: "",
     xUrl: "",
     menuUrl: "",
+    onlineOrderingUrl: "",
+    deliveryUrl: "",
+    doordashUrl: "",
+    uberEatsUrl: "",
+    toastUrl: "",
+    squareUrl: "",
+    chowNowUrl: "",
+    grubhubUrl: "",
+    cateringInquiryUrl: "",
+    truckBookingInquiryUrl: "",
     logoUrl: "",
     coverImageUrl: "",
   });
@@ -635,6 +655,12 @@ export default function RestaurantOwnerDashboard() {
   useEffect(() => {
     if (!currentRestaurant) return;
     const row: any = currentRestaurant;
+    const actionLinks =
+      row?.socialAutopostSettings &&
+      typeof row.socialAutopostSettings === "object" &&
+      typeof row.socialAutopostSettings.publicActionLinks === "object"
+        ? row.socialAutopostSettings.publicActionLinks
+        : {};
     setProfileDraft({
       name: String(row?.name || ""),
       description: String(row?.description || ""),
@@ -649,6 +675,20 @@ export default function RestaurantOwnerDashboard() {
       instagramUrl: String(row?.instagramUrl || ""),
       xUrl: String(row?.xUrl || ""),
       menuUrl: String(row?.menuUrl || ""),
+      onlineOrderingUrl: String(row?.onlineOrderingUrl || actionLinks?.onlineOrderingUrl || ""),
+      deliveryUrl: String(row?.deliveryUrl || actionLinks?.deliveryUrl || ""),
+      doordashUrl: String(row?.doordashUrl || actionLinks?.doordashUrl || ""),
+      uberEatsUrl: String(row?.uberEatsUrl || actionLinks?.uberEatsUrl || ""),
+      toastUrl: String(row?.toastUrl || actionLinks?.toastUrl || ""),
+      squareUrl: String(row?.squareUrl || actionLinks?.squareUrl || ""),
+      chowNowUrl: String(row?.chowNowUrl || actionLinks?.chowNowUrl || ""),
+      grubhubUrl: String(row?.grubhubUrl || actionLinks?.grubhubUrl || ""),
+      cateringInquiryUrl: String(
+        row?.cateringInquiryUrl || actionLinks?.cateringInquiryUrl || "",
+      ),
+      truckBookingInquiryUrl: String(
+        row?.truckBookingInquiryUrl || actionLinks?.truckBookingInquiryUrl || "",
+      ),
       logoUrl: String(row?.logoUrl || ""),
       coverImageUrl: String(row?.coverImageUrl || ""),
     });
@@ -1687,6 +1727,106 @@ export default function RestaurantOwnerDashboard() {
                   placeholder="Menu URL"
                 />
                 <Input
+                  value={profileDraft.onlineOrderingUrl}
+                  onChange={(e) =>
+                    setProfileDraft((prev) => ({
+                      ...prev,
+                      onlineOrderingUrl: e.target.value,
+                    }))
+                  }
+                  placeholder="Online ordering URL"
+                />
+                <Input
+                  value={profileDraft.deliveryUrl}
+                  onChange={(e) =>
+                    setProfileDraft((prev) => ({
+                      ...prev,
+                      deliveryUrl: e.target.value,
+                    }))
+                  }
+                  placeholder="Delivery URL"
+                />
+                <Input
+                  value={profileDraft.doordashUrl}
+                  onChange={(e) =>
+                    setProfileDraft((prev) => ({
+                      ...prev,
+                      doordashUrl: e.target.value,
+                    }))
+                  }
+                  placeholder="DoorDash URL"
+                />
+                <Input
+                  value={profileDraft.uberEatsUrl}
+                  onChange={(e) =>
+                    setProfileDraft((prev) => ({
+                      ...prev,
+                      uberEatsUrl: e.target.value,
+                    }))
+                  }
+                  placeholder="Uber Eats URL"
+                />
+                <Input
+                  value={profileDraft.toastUrl}
+                  onChange={(e) =>
+                    setProfileDraft((prev) => ({
+                      ...prev,
+                      toastUrl: e.target.value,
+                    }))
+                  }
+                  placeholder="Toast URL"
+                />
+                <Input
+                  value={profileDraft.squareUrl}
+                  onChange={(e) =>
+                    setProfileDraft((prev) => ({
+                      ...prev,
+                      squareUrl: e.target.value,
+                    }))
+                  }
+                  placeholder="Square URL"
+                />
+                <Input
+                  value={profileDraft.chowNowUrl}
+                  onChange={(e) =>
+                    setProfileDraft((prev) => ({
+                      ...prev,
+                      chowNowUrl: e.target.value,
+                    }))
+                  }
+                  placeholder="ChowNow URL"
+                />
+                <Input
+                  value={profileDraft.grubhubUrl}
+                  onChange={(e) =>
+                    setProfileDraft((prev) => ({
+                      ...prev,
+                      grubhubUrl: e.target.value,
+                    }))
+                  }
+                  placeholder="Grubhub URL"
+                />
+                <Input
+                  value={profileDraft.cateringInquiryUrl}
+                  onChange={(e) =>
+                    setProfileDraft((prev) => ({
+                      ...prev,
+                      cateringInquiryUrl: e.target.value,
+                    }))
+                  }
+                  placeholder="Catering inquiry URL"
+                />
+                <Input
+                  value={profileDraft.truckBookingInquiryUrl}
+                  onChange={(e) =>
+                    setProfileDraft((prev) => ({
+                      ...prev,
+                      truckBookingInquiryUrl: e.target.value,
+                    }))
+                  }
+                  placeholder="Truck booking inquiry URL"
+                />
+                <Input
                   value={profileDraft.facebookPageUrl}
                   onChange={(e) =>
                     setProfileDraft((prev) => ({
@@ -1934,11 +2074,41 @@ export default function RestaurantOwnerDashboard() {
             (currentRestaurant as any).phone ||
             (currentRestaurant as any).contactPhone,
           );
+          const profileActionLinks =
+            (currentRestaurant as any)?.socialAutopostSettings &&
+            typeof (currentRestaurant as any).socialAutopostSettings === "object" &&
+            typeof (currentRestaurant as any).socialAutopostSettings.publicActionLinks ===
+              "object"
+              ? (currentRestaurant as any).socialAutopostSettings.publicActionLinks
+              : {};
+          const hasActionLinks = Boolean(
+            (currentRestaurant as any).onlineOrderingUrl ||
+              (currentRestaurant as any).deliveryUrl ||
+              (currentRestaurant as any).doordashUrl ||
+              (currentRestaurant as any).uberEatsUrl ||
+              (currentRestaurant as any).toastUrl ||
+              (currentRestaurant as any).squareUrl ||
+              (currentRestaurant as any).chowNowUrl ||
+              (currentRestaurant as any).grubhubUrl ||
+              (currentRestaurant as any).cateringInquiryUrl ||
+              (currentRestaurant as any).truckBookingInquiryUrl ||
+              profileActionLinks.onlineOrderingUrl ||
+              profileActionLinks.deliveryUrl ||
+              profileActionLinks.doordashUrl ||
+              profileActionLinks.uberEatsUrl ||
+              profileActionLinks.toastUrl ||
+              profileActionLinks.squareUrl ||
+              profileActionLinks.chowNowUrl ||
+              profileActionLinks.grubhubUrl ||
+              profileActionLinks.cateringInquiryUrl ||
+              profileActionLinks.truckBookingInquiryUrl,
+          );
           const hasContact = Boolean(
             hasPhone ||
               (currentRestaurant as any).websiteUrl ||
               (currentRestaurant as any).facebookPageUrl ||
-              (currentRestaurant as any).instagramUrl,
+              (currentRestaurant as any).instagramUrl ||
+              hasActionLinks,
           );
           const hasSchedule = Boolean(
             (currentRestaurant as any).operatingHours ||
