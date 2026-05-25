@@ -22,9 +22,14 @@ export function toPublicLocationProfile(input: {
       : joinedAddressLabel(row.address, row.city, row.state);
   const contactPhone =
     input.showContact === false ? null : String(row.contactPhone || "").trim() || null;
+  const websiteUrl = String(row.websiteUrl || "").trim() || null;
+  const instagramUrl = String(row.instagramUrl || "").trim() || null;
+  const facebookPageUrl = String(row.facebookPageUrl || "").trim() || null;
+  const xUrl = String(row.xUrl || "").trim() || null;
 
   const ctas = [
     buildPublicCta({ label: "View location", href: canonicalPath, type: "internal" }),
+    buildPublicCta({ label: "See food here", href: canonicalPath, type: "internal", priority: 95 }),
     buildPublicCta({
       label: "Get directions",
       href:
@@ -32,8 +37,19 @@ export function toPublicLocationProfile(input: {
           ? `https://maps.google.com/?q=${row.latitude},${row.longitude}`
           : null,
       type: "map",
+      priority: 100,
     }),
-    buildPublicCta({ label: "Call", href: contactPhone ? `tel:${contactPhone}` : null, type: "phone" }),
+    buildPublicCta({ label: "Call", href: contactPhone ? `tel:${contactPhone}` : null, type: "phone", priority: 90 }),
+    buildPublicCta({ label: "Website", href: websiteUrl, type: "external", priority: 86 }),
+    buildPublicCta({ label: "Instagram", href: instagramUrl, type: "social", priority: 82 }),
+    buildPublicCta({ label: "Facebook", href: facebookPageUrl, type: "social", priority: 81 }),
+    buildPublicCta({ label: "X", href: xUrl, type: "social", priority: 78 }),
+    buildPublicCta({
+      label: "Share",
+      href: `${input.baseUrl.replace(/\/$/, "")}${canonicalPath}`,
+      type: "share",
+      priority: 70,
+    }),
   ].filter(Boolean) as PublicLocationProfile["cta"];
 
   return {
@@ -67,11 +83,11 @@ export function toPublicLocationProfile(input: {
     upcomingFoodTruckSlots: null,
     publicRules: null,
     socialLinks: {
-      instagramUrl: null,
-      facebookPageUrl: null,
-      xUrl: null,
+      instagramUrl,
+      facebookPageUrl,
+      xUrl,
     },
-    websiteUrl: String(row.websiteUrl || "").trim() || null,
+    websiteUrl,
     events: {
       totalUpcoming: Math.max(
         0,

@@ -102,13 +102,34 @@ const uniqueByHref = (ctas: PublicCta[]) => {
 };
 
 const ctaPriorityForProfile = (profile: PublicProfilePayload, cta: PublicCta) => {
-  if (cta.type === "menu") return 100;
+  if (typeof cta.priority === "number" && Number.isFinite(cta.priority)) return cta.priority;
+  const label = String(cta.label || "").toLowerCase();
+  if (profile.entity === "restaurant") {
+    if (cta.type === "order" || label.includes("order")) return 100;
+    if (cta.type === "menu" || label.includes("menu")) return 96;
+    if (cta.type === "map") return 92;
+    if (cta.type === "phone") return 90;
+    if (cta.type === "external") return 85;
+  }
+  if (profile.entity === "host") {
+    if (cta.type === "map") return 100;
+    if (label.includes("food")) return 95;
+    if (cta.type === "external") return 86;
+    if (cta.type === "phone") return 84;
+  }
+  if (profile.entity === "supplier") {
+    if (cta.type === "external") return 92;
+    if (cta.type === "phone") return 88;
+    if (cta.type === "map") return 86;
+  }
   if (cta.type === "map") return 90;
-  if (cta.type === "phone") return 80;
-  if (String(cta.label || "").toLowerCase().includes("instagram")) return 70;
-  if (String(cta.label || "").toLowerCase().includes("facebook")) return 69;
-  if (cta.type === "external") return 65;
-  if (cta.type === "internal" && !isSelfProfileCta(profile, cta)) return 50;
+  if (cta.type === "menu") return 88;
+  if (cta.type === "order") return 86;
+  if (cta.type === "phone") return 84;
+  if (cta.type === "social") return 76;
+  if (cta.type === "share") return 74;
+  if (cta.type === "external") return 72;
+  if (cta.type === "internal" && !isSelfProfileCta(profile, cta)) return 60;
   return 0;
 };
 
@@ -120,33 +141,10 @@ const pickActionCtas = (profile: PublicProfilePayload, safeCtas: PublicCta[], li
     .slice(0, limit);
 
 const pickPrimaryCta = (profile: PublicProfilePayload, ctas: PublicCta[]) => {
-  const nonSelfInternal = ctas.find(
-    (cta) => cta.type === "internal" && cta.href !== profile.profilePath,
-  );
-
-  if (profile.entity === "restaurant") {
-    return (
-      ctas.find(
-        (cta) =>
-          cta.type === "menu" ||
-          /menu/i.test(cta.label || "") ||
-          /\/menu\//i.test(cta.href || ""),
-      ) ||
-      ctas.find((cta) => cta.type === "map") ||
-      ctas.find((cta) => cta.type === "phone") ||
-      ctas.find((cta) => cta.type === "external") ||
-      nonSelfInternal ||
-      null
-    );
-  }
-
-  return (
-    ctas.find((cta) => cta.type === "map") ||
-    ctas.find((cta) => cta.type === "phone") ||
-    ctas.find((cta) => cta.type === "external") ||
-    nonSelfInternal ||
-    null
-  );
+  const sorted = [...ctas]
+    .filter((cta) => !isSelfProfileCta(profile, cta))
+    .sort((a, b) => ctaPriorityForProfile(profile, b) - ctaPriorityForProfile(profile, a));
+  return sorted[0] || null;
 };
 
 const locationLine = (profile: { addressPublicLabel?: string | null; city?: string | null; state?: string | null }) =>
@@ -312,7 +310,27 @@ function QuickActionRow({
   profile: PublicProfilePayload;
   safeCtas: PublicCta[];
 }) {
-  const actions = pickActionCtas(profile, safeCtas, 6);
+  const preferredOrder: PublicCta["type"][] = [
+    "menu",
+    "map",
+    "phone",
+    "order",
+    "external",
+    "social",
+    "share",
+    "catering",
+    "booking",
+  ];
+  const actions = preferredOrder
+    .flatMap((type) =>
+      pickActionCtas(profile, safeCtas, 16).filter((cta) => cta.type === type),
+    )
+    .reduce((acc, cta) => {
+      if (acc.find((existing) => existing.href === cta.href)) return acc;
+      acc.push(cta);
+      return acc;
+    }, [] as PublicCta[])
+    .slice(0, 7);
   if (actions.length === 0) return null;
   return (
     <Card className="border-white/10 bg-[#0f0d0b]">
@@ -1100,21 +1118,78 @@ function RestaurantSocial({
   profile: PublicRestaurantProfile;
   safeCtas: PublicCta[];
 }) {
-  const extraCtas = pickActionCtas(
-    profile as PublicProfilePayload,
-    safeCtas.filter((cta) => cta.type !== "map"),
-    6,
-  );
-  if (extraCtas.length === 0) return null;
+  const grouped = {
+    contact: safeCtas.filter((cta) => cta.type === "phone" || cta.type === "map"),
+    order: safeCtas.filter(
+      (cta) => cta.type === "menu" || cta.type === "order" || cta.type === "external",
+    ),
+    follow: safeCtas.filter((cta) => cta.type === "social" || cta.type === "share"),
+    inquiries: safeCtas.filter((cta) => cta.type === "catering" || cta.type === "booking"),
+  };
+  const unique = (ctas: PublicCta[]) =>
+    ctas.reduce((acc, cta) => {
+      if (acc.some((x) => x.href === cta.href)) return acc;
+      acc.push(cta);
+      return acc;
+    }, [] as PublicCta[]);
+  const contactActions = unique(grouped.contact);
+  const orderActions = unique(grouped.order);
+  const followActions = unique(grouped.follow);
+  const inquiryActions = unique(grouped.inquiries);
+  if (
+    contactActions.length === 0 &&
+    orderActions.length === 0 &&
+    followActions.length === 0 &&
+    inquiryActions.length === 0
+  ) {
+    return null;
+  }
   return (
     <Card className="border-white/10 bg-[#0f0d0b]">
       <CardHeader>
         <CardTitle className="text-xl text-white">Contact and follow</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
-        <div className="flex flex-wrap gap-2">
-          {extraCtas.map((cta, idx) => renderCtaButton(cta, "outline", `${cta.href}-${idx}`))}
-        </div>
+        {contactActions.length > 0 ? (
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-white/60">Contact</p>
+            <div className="flex flex-wrap gap-2">
+              {contactActions.map((cta, idx) =>
+                renderCtaButton(cta, "outline", `contact-${cta.href}-${idx}`),
+              )}
+            </div>
+          </div>
+        ) : null}
+        {orderActions.length > 0 ? (
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-white/60">Order and menu</p>
+            <div className="flex flex-wrap gap-2">
+              {orderActions.map((cta, idx) =>
+                renderCtaButton(cta, "outline", `order-${cta.href}-${idx}`),
+              )}
+            </div>
+          </div>
+        ) : null}
+        {followActions.length > 0 ? (
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-white/60">Follow</p>
+            <div className="flex flex-wrap gap-2">
+              {followActions.map((cta, idx) =>
+                renderCtaButton(cta, "outline", `follow-${cta.href}-${idx}`),
+              )}
+            </div>
+          </div>
+        ) : null}
+        {inquiryActions.length > 0 ? (
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-white/60">Business inquiries</p>
+            <div className="flex flex-wrap gap-2">
+              {inquiryActions.map((cta, idx) =>
+                renderCtaButton(cta, "outline", `inquiry-${cta.href}-${idx}`),
+              )}
+            </div>
+          </div>
+        ) : null}
       </CardContent>
     </Card>
   );

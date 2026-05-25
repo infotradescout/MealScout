@@ -6,7 +6,17 @@ export type PublicProfileType =
   | "host"
   | "supplier";
 
-export type PublicCtaType = "internal" | "external" | "phone" | "map" | "menu";
+export type PublicCtaType =
+  | "internal"
+  | "external"
+  | "phone"
+  | "map"
+  | "menu"
+  | "order"
+  | "social"
+  | "catering"
+  | "booking"
+  | "share";
 
 export type PublicImageAsset = {
   url: string;
@@ -26,6 +36,7 @@ export type PublicCta = {
   href: string;
   type: PublicCtaType;
   safe: boolean;
+  priority?: number;
 };
 
 export type PublicProfileSeo = {

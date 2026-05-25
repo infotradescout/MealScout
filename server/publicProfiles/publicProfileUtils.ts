@@ -27,12 +27,20 @@ export const buildPublicCta = (input: {
   label: string;
   href: unknown;
   type: PublicCtaType;
+  priority?: number;
 }): PublicCta | null => {
   const href = normalizeUrl(input.href);
   if (!href) return null;
   const safe =
     (input.type === "internal" && isSafeInternalPath(href)) ||
-    ((input.type === "external" || input.type === "map" || input.type === "menu") &&
+    ((input.type === "external" ||
+      input.type === "map" ||
+      input.type === "menu" ||
+      input.type === "order" ||
+      input.type === "social" ||
+      input.type === "catering" ||
+      input.type === "booking" ||
+      input.type === "share") &&
       isSafeExternal(href)) ||
     (input.type === "phone" && isSafePhone(href));
   if (!safe) return null;
@@ -41,6 +49,10 @@ export const buildPublicCta = (input: {
     href,
     type: input.type,
     safe,
+    priority:
+      typeof input.priority === "number" && Number.isFinite(input.priority)
+        ? input.priority
+        : undefined,
   };
 };
 

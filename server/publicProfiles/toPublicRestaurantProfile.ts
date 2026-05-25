@@ -33,6 +33,33 @@ export function toPublicRestaurantProfile(input: {
   const menuImageUrl = String(row.menuImageUrl || "").trim() || null;
   const menuPdfUrl = String(row.menuPdfUrl || "").trim() || null;
   const websiteUrl = String(row.websiteUrl || "").trim() || null;
+  const onlineOrderingUrl =
+    String(
+      row.onlineOrderingUrl ||
+        row.orderingUrl ||
+        row.orderUrl ||
+        row.onlineOrderUrl ||
+        "",
+    ).trim() || null;
+  const deliveryUrl =
+    String(
+      row.deliveryUrl ||
+        row.doordashUrl ||
+        row.uberEatsUrl ||
+        row.toastUrl ||
+        row.squareUrl ||
+        row.chowNowUrl ||
+        row.grubhubUrl ||
+        "",
+    ).trim() || null;
+  const cateringUrl =
+    String(
+      row.cateringInquiryUrl || row.cateringUrl || row.cateringRequestUrl || "",
+    ).trim() || null;
+  const truckBookingUrl =
+    String(
+      row.truckBookingInquiryUrl || row.truckBookingUrl || row.bookingInquiryUrl || "",
+    ).trim() || null;
   const instagramUrl = String(row.instagramUrl || "").trim() || null;
   const facebookPageUrl = String(row.facebookPageUrl || "").trim() || null;
   const xUrl = String(row.xUrl || "").trim() || null;
@@ -313,7 +340,9 @@ export function toPublicRestaurantProfile(input: {
 
   const ctas = [
     buildPublicCta({ label: "Profile", href: canonicalPath, type: "internal" }),
-    buildPublicCta({ label: "Menu", href: menuUrl, type: "menu" }),
+    buildPublicCta({ label: "Order online", href: onlineOrderingUrl, type: "order", priority: 100 }),
+    buildPublicCta({ label: "Delivery", href: deliveryUrl, type: "order", priority: 96 }),
+    buildPublicCta({ label: "Menu", href: menuUrl, type: "menu", priority: 94 }),
     buildPublicCta({
       label: "Get directions",
       href:
@@ -321,12 +350,26 @@ export function toPublicRestaurantProfile(input: {
           ? `https://maps.google.com/?q=${row.latitude},${row.longitude}`
           : null,
       type: "map",
+      priority: 92,
     }),
-    buildPublicCta({ label: "Call", href: phonePublic ? `tel:${phonePublic}` : null, type: "phone" }),
-    buildPublicCta({ label: "Website", href: websiteUrl, type: "external" }),
-    buildPublicCta({ label: "Instagram", href: instagramUrl, type: "external" }),
-    buildPublicCta({ label: "Facebook", href: facebookPageUrl, type: "external" }),
-    buildPublicCta({ label: "X", href: xUrl, type: "external" }),
+    buildPublicCta({ label: "Call", href: phonePublic ? `tel:${phonePublic}` : null, type: "phone", priority: 90 }),
+    buildPublicCta({ label: "Website", href: websiteUrl, type: "external", priority: 86 }),
+    buildPublicCta({ label: "Instagram", href: instagramUrl, type: "social", priority: 82 }),
+    buildPublicCta({ label: "Facebook", href: facebookPageUrl, type: "social", priority: 81 }),
+    buildPublicCta({ label: "X", href: xUrl, type: "social", priority: 78 }),
+    buildPublicCta({ label: "Catering inquiry", href: cateringUrl, type: "catering", priority: 74 }),
+    buildPublicCta({
+      label: profileType === "truck" ? "Truck booking inquiry" : "Booking inquiry",
+      href: truckBookingUrl,
+      type: "booking",
+      priority: 72,
+    }),
+    buildPublicCta({
+      label: "Share",
+      href: `${input.baseUrl.replace(/\/$/, "")}${canonicalPath}`,
+      type: "share",
+      priority: 70,
+    }),
   ].filter(Boolean) as PublicRestaurantProfile["cta"];
 
   return {
