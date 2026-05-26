@@ -2525,6 +2525,10 @@ export function registerAdminManagementRoutes(app: Express) {
           );
           const dealsReviewedNone = Boolean(completionReview?.dealsReviewedNone);
           const eventsReviewedNone = Boolean(completionReview?.eventsReviewedNone);
+          const identityReviewed = Boolean(completionReview?.identityReviewed);
+          const forceIdentityReview = Boolean(completionReview?.identityReviewNeeded);
+          const hideAsTestQa = Boolean(completionReview?.hideAsTestQa);
+          const blockerReason = String(completionReview?.blockerReason || "").trim() || null;
 
           const menuReady = menuItemCount > 0 || hasMenuFallback || menuReviewedUnavailable;
           const photoReady = Boolean(
@@ -2602,9 +2606,119 @@ export function registerAdminManagementRoutes(app: Express) {
               (importA && importB && importA !== importB)
             );
           });
-          const identityReason = identityNeedsReview
+          const identityNeedsReviewFinal = forceIdentityReview || identityNeedsReview;
+          const identityReason = identityNeedsReviewFinal
             ? "Possible duplicate/similar business. Confirm identity before editing."
             : null;
+
+          const normalizedName = String(row?.name || "").toLowerCase();
+          const importSourceHint = String(row?.claimedFromImportId || "").toLowerCase();
+          const qaHint = [normalizedName, importSourceHint].join(" ");
+          const testOrQaDetected =
+            hideAsTestQa ||
+            /\b(test|qa|seed|demo|fake|internal|sample|sandbox|staging)\b/.test(qaHint);
+
+          const publicReady = Boolean(
+            basicsReady && contactReady && menuReady && photoReady && scheduleReady && qrReady,
+          );
+          const handoffReady = Boolean(
+            publicReady &&
+              menuReady &&
+              photoReady &&
+              qrReady &&
+              !identityNeedsReviewFinal &&
+              !testOrQaDetected,
+          );
+          const adminFixableItems: string[] = [];
+          if (!contactReady) adminFixableItems.push("contact/actions");
+          if (!menuReady) adminFixableItems.push("menu");
+          if (!photoReady) adminFixableItems.push("photos");
+          if (!dealsReady) adminFixableItems.push("deals");
+          if (!eventsReady) adminFixableItems.push("events");
+          const ownerInputBlockers: string[] = [];
+          if (!basicsReady) ownerInputBlockers.push("basics");
+          if (isTruck && !scheduleReady) ownerInputBlockers.push("truck schedule");
+          if (!menuReady && !hasMenuFallback && menuItemCount === 0) ownerInputBlockers.push("menu source");
+          if (!photoReady && !row?.logoUrl && !row?.coverImageUrl && photoCount === 0)
+            ownerInputBlockers.push("photo proof");
+          const adminFixable =
+            !testOrQaDetected &&
+            !identityNeedsReviewFinal &&
+            ownerInputBlockers.length === 0 &&
+            adminFixableItems.length > 0;
+          const blockedOwnerInput =
+            !testOrQaDetected &&
+            !identityNeedsReviewFinal &&
+            !handoffReady &&
+            ownerInputBlockers.length > 0;
+
+          const completionScore = completenessScore;
+          const confidenceScore = Math.max(
+            0,
+            Math.min(
+              100,
+              100 -
+                (identityNeedsReviewFinal && !identityReviewed ? 35 : 0) -
+                (testOrQaDetected ? 60 : 0) +
+                (row?.isVerified ? 10 : 0),
+            ),
+          );
+          const fixabilityScore = Math.max(
+            0,
+            Math.min(
+              100,
+              100 -
+                ownerInputBlockers.length * 25 -
+                (identityNeedsReviewFinal && !identityReviewed ? 20 : 0) -
+                (testOrQaDetected ? 80 : 0),
+            ),
+          );
+          const actionabilityScore = Math.max(
+            0,
+            Math.min(
+              100,
+              Math.round(
+                completionScore * 0.35 +
+                  confidenceScore * 0.35 +
+                  fixabilityScore * 0.3 +
+                  Math.min(10, analyticsCount > 0 ? 10 : 0),
+              ),
+            ),
+          );
+          const rankReason: string[] = [];
+          if (menuReady && photoReady && contactReady) {
+            rankReason.push("Has menu, photo, and contact path");
+          }
+          if (publicReady && !handoffReady) {
+            rankReason.push("Only optional sections missing");
+          }
+          if (!menuReady) {
+            rankReason.push("Needs menu source from business");
+          }
+          if (testOrQaDetected) {
+            rankReason.push("Likely test record");
+          }
+          if (identityNeedsReviewFinal && !identityReviewed) {
+            rankReason.push("Possible duplicate/name conflict");
+          }
+          if (isTruck && !scheduleReady) {
+            rankReason.push("Truck missing schedule");
+          }
+          if (!rankReason.length) {
+            rankReason.push("Needs focused completion cleanup");
+          }
+
+          const primaryStatus = testOrQaDetected
+            ? "test_or_qa"
+            : identityNeedsReviewFinal && !identityReviewed
+              ? "identity_review_needed"
+              : handoffReady
+                ? "handoff_ready"
+                : publicReady
+                  ? "public_ready"
+                  : adminFixable
+                    ? "admin_fixable"
+                    : "blocked_owner_input";
 
           return {
             id: row.id,
@@ -2656,7 +2770,7 @@ export function registerAdminManagementRoutes(app: Express) {
               eventsReviewedNone,
             },
             qrKitReady: qrReady,
-            identityNeedsReview,
+            identityNeedsReview: identityNeedsReviewFinal,
             identityReason,
             similarBusinesses: similarRows.slice(0, 4).map((candidate: any) => ({
               id: String(candidate.id),
@@ -2666,13 +2780,29 @@ export function registerAdminManagementRoutes(app: Express) {
               phone: candidate.phone || null,
               websiteUrl: candidate.websiteUrl || null,
             })),
-            publicReady:
-              basicsReady &&
-              contactReady &&
-              menuReady &&
-              photoReady &&
-              scheduleReady &&
-              qrReady,
+            publicReady,
+            handoffReady,
+            adminFixable,
+            blockedOwnerInput,
+            testOrQa: testOrQaDetected,
+            primaryStatus,
+            secondaryFlags: [
+              publicReady ? "public_ready" : null,
+              handoffReady ? "handoff_ready" : null,
+              adminFixable ? "admin_fixable" : null,
+              blockedOwnerInput ? "blocked_owner_input" : null,
+              identityNeedsReviewFinal && !identityReviewed ? "identity_review_needed" : null,
+              testOrQaDetected ? "test_or_qa" : null,
+            ].filter(Boolean),
+            completionScore,
+            confidenceScore,
+            fixabilityScore,
+            actionabilityScore,
+            rankReason,
+            adminFixableItems,
+            ownerInputBlockers,
+            blockerReason,
+            hasAnalyticsActivity: analyticsCount > 0,
             taskLabels: {
               basics: basicsReady ? "ready" : "fix_now",
               contactActions: contactReady ? "ready" : "fix_now",
@@ -2759,6 +2889,10 @@ export function registerAdminManagementRoutes(app: Express) {
               scheduleReviewedUnavailable: z.boolean().optional(),
               dealsReviewedNone: z.boolean().optional(),
               eventsReviewedNone: z.boolean().optional(),
+              hideAsTestQa: z.boolean().optional(),
+              identityReviewNeeded: z.boolean().optional(),
+              identityReviewed: z.boolean().optional(),
+              blockerReason: z.string().trim().max(160).optional().nullable(),
             })
             .partial()
             .optional(),

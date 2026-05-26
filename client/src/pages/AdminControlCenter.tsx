@@ -160,6 +160,27 @@ type BusinessProfileCompletionItem = {
     websiteUrl: string | null;
   }>;
   publicReady?: boolean;
+  handoffReady?: boolean;
+  adminFixable?: boolean;
+  blockedOwnerInput?: boolean;
+  testOrQa?: boolean;
+  primaryStatus?:
+    | "public_ready"
+    | "handoff_ready"
+    | "admin_fixable"
+    | "blocked_owner_input"
+    | "identity_review_needed"
+    | "test_or_qa";
+  secondaryFlags?: string[];
+  completionScore?: number;
+  confidenceScore?: number;
+  fixabilityScore?: number;
+  actionabilityScore?: number;
+  rankReason?: string[];
+  adminFixableItems?: string[];
+  ownerInputBlockers?: string[];
+  blockerReason?: string | null;
+  hasAnalyticsActivity?: boolean;
   taskLabels?: {
     basics?: string;
     contactActions?: string;
@@ -695,6 +716,8 @@ export default function AdminControlCenter() {
   const [subjectFilter, setSubjectFilter] = useState("all");
   const [claimTypeFilter, setClaimTypeFilter] = useState("all");
   const [usefulOnly, setUsefulOnly] = useState(true);
+  const [completionView, setCompletionView] = useState("next_20_actionable");
+  const [selectedCompletionIds, setSelectedCompletionIds] = useState<string[]>([]);
   const [briefStatus, setBriefStatus] = useState<Record<string, { until: number }>>(() => {
     if (typeof window === "undefined") return {};
     try {
@@ -711,6 +734,13 @@ export default function AdminControlCenter() {
   const [selectedEntity, setSelectedEntity] = useState<CanonicalEntityItem | null>(
     null,
   );
+
+  const isCompletionSelected = (id: string) => selectedCompletionIds.includes(id);
+  const toggleCompletionSelected = (id: string) => {
+    setSelectedCompletionIds((current) =>
+      current.includes(id) ? current.filter((value) => value !== id) : [...current, id],
+    );
+  };
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1011,6 +1041,47 @@ export default function AdminControlCenter() {
         },
       },
     });
+  };
+
+  const applyBulkReviewed = async (
+    reviewed:
+      | "dealsReviewedNone"
+      | "eventsReviewedNone"
+      | "menuReviewedUnavailable"
+      | "photosReviewedUnavailable"
+      | "scheduleReviewedUnavailable"
+      | "hideAsTestQa"
+      | "identityReviewNeeded"
+      | "identityReviewed",
+    value: boolean,
+  ) => {
+    if (!selectedCompletionIds.length) return;
+    for (const businessId of selectedCompletionIds) {
+      await businessCompletionUpdateMutation.mutateAsync({
+        businessId,
+        body: {
+          reviewed: {
+            [reviewed]: value,
+          },
+        },
+      });
+    }
+  };
+
+  const applyBulkBlockerReason = async () => {
+    if (!selectedCompletionIds.length) return;
+    const reason = window.prompt("Assign blocker reason (leave empty to clear):", "");
+    if (reason === null) return;
+    for (const businessId of selectedCompletionIds) {
+      await businessCompletionUpdateMutation.mutateAsync({
+        businessId,
+        body: {
+          reviewed: {
+            blockerReason: reason.trim() || null,
+          },
+        },
+      });
+    }
   };
 
   useEffect(() => {
@@ -1319,6 +1390,46 @@ export default function AdminControlCenter() {
         },
       }));
   }, [filteredSignals, marketIntel]);
+
+  const filteredCompletionItems = useMemo(() => {
+    const items = businessCompletion?.items ?? [];
+    const applyFilter = (item: BusinessProfileCompletionItem) => {
+      const status = item.primaryStatus || "blocked_owner_input";
+      const needsMenu = !item.menuStatus?.ready;
+      const needsPhoto = !item.photoStatus?.ready;
+      const needsSchedule = Boolean(item.scheduleStatus?.required && !item.scheduleStatus?.ready);
+      const needsContactAction = !item.contactActionStatus?.ready;
+      const hasAnalytics = Boolean(item.hasAnalyticsActivity || item.analyticsActivity?.viewsOrClicks30d > 0);
+      if (completionView === "next_20_actionable") {
+        return (
+          !item.testOrQa &&
+          !item.blockedOwnerInput &&
+          !item.identityNeedsReview &&
+          (status === "handoff_ready" || status === "public_ready" || status === "admin_fixable")
+        );
+      }
+      if (completionView === "public_ready") return status === "public_ready";
+      if (completionView === "handoff_ready") return status === "handoff_ready";
+      if (completionView === "admin_fixable") return status === "admin_fixable";
+      if (completionView === "blocked_owner_input") return status === "blocked_owner_input";
+      if (completionView === "identity_review_needed") return status === "identity_review_needed";
+      if (completionView === "test_or_qa") return status === "test_or_qa";
+      if (completionView === "needs_menu") return needsMenu;
+      if (completionView === "needs_photo") return needsPhoto;
+      if (completionView === "needs_schedule") return needsSchedule;
+      if (completionView === "needs_contact_action") return needsContactAction;
+      if (completionView === "has_analytics_activity") return hasAnalytics;
+      return true;
+    };
+
+    return items
+      .filter(applyFilter)
+      .sort((a, b) => {
+        const scoreDiff = Number(b.actionabilityScore || 0) - Number(a.actionabilityScore || 0);
+        if (scoreDiff !== 0) return scoreDiff;
+        return Number(b.profileCompletenessScore || 0) - Number(a.profileCompletenessScore || 0);
+      });
+  }, [businessCompletion?.items, completionView]);
 
   const knowledgeGapCounts = useMemo(() => {
     const items = canonicalEntities?.items ?? [];
@@ -2142,24 +2253,76 @@ export default function AdminControlCenter() {
                     </Badge>
                   </div>
                 ) : null}
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    ["next_20_actionable", "Next 20 actionable"],
+                    ["public_ready", "Public-ready"],
+                    ["handoff_ready", "Handoff-ready"],
+                    ["admin_fixable", "Admin-fixable"],
+                    ["blocked_owner_input", "Blocked owner input"],
+                    ["identity_review_needed", "Identity review"],
+                    ["test_or_qa", "Test / QA"],
+                    ["needs_menu", "Needs menu"],
+                    ["needs_photo", "Needs photo"],
+                    ["needs_schedule", "Needs schedule"],
+                    ["needs_contact_action", "Needs contact/action"],
+                    ["has_analytics_activity", "Has analytics activity"],
+                  ].map(([value, label]) => (
+                    <Button
+                      key={value}
+                      size="sm"
+                      variant={completionView === value ? "default" : "outline"}
+                      onClick={() => setCompletionView(value)}
+                    >
+                      {label}
+                    </Button>
+                  ))}
+                </div>
+                <div className="flex flex-wrap gap-2 rounded-lg border border-[var(--border-subtle)] p-3">
+                  <div className="text-xs text-[color:var(--text-muted)] self-center">
+                    Bulk actions ({selectedCompletionIds.length} selected)
+                  </div>
+                  <Button size="sm" variant="outline" onClick={() => applyBulkReviewed("dealsReviewedNone", true)}>
+                    Deals reviewed-none
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => applyBulkReviewed("eventsReviewedNone", true)}>
+                    Events reviewed-none
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => applyBulkReviewed("menuReviewedUnavailable", true)}>
+                    Menu reviewed-unavailable
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => applyBulkReviewed("photosReviewedUnavailable", true)}>
+                    Photos reviewed-unavailable
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => applyBulkReviewed("scheduleReviewedUnavailable", true)}>
+                    Schedule reviewed-unavailable
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => applyBulkReviewed("hideAsTestQa", true)}>
+                    Hide as test/QA
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => applyBulkReviewed("identityReviewNeeded", true)}>
+                    Mark identity review needed
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => applyBulkReviewed("identityReviewed", true)}>
+                    Mark identity reviewed
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={applyBulkBlockerReason}>
+                    Assign blocker reason
+                  </Button>
+                </div>
                 <div className="overflow-x-auto rounded-lg border border-[var(--border-subtle)]">
-                  <table className="w-full min-w-[1280px] text-left text-xs">
+                  <table className="w-full min-w-[1560px] text-left text-xs">
                     <thead className="bg-[var(--surface-muted)] text-[color:var(--text-muted)]">
                       <tr>
+                        <th className="px-3 py-2 font-medium">Select</th>
                         <th className="px-3 py-2 font-medium">Business</th>
                         <th className="px-3 py-2 font-medium">Type / Location</th>
-                        <th className="px-3 py-2 font-medium">Claimed</th>
-                        <th className="px-3 py-2 font-medium">Verified / Local</th>
-                        <th className="px-3 py-2 font-medium">Completeness</th>
-                        <th className="px-3 py-2 font-medium">Missing</th>
-                        <th className="px-3 py-2 font-medium">Menu</th>
-                        <th className="px-3 py-2 font-medium">Photos</th>
-                        <th className="px-3 py-2 font-medium">Contact</th>
-                        <th className="px-3 py-2 font-medium">Schedule</th>
-                        <th className="px-3 py-2 font-medium">Deals / Events</th>
-                        <th className="px-3 py-2 font-medium">Public Ready</th>
-                        <th className="px-3 py-2 font-medium">QR Ready</th>
-                        <th className="px-3 py-2 font-medium">Activity (30d)</th>
+                        <th className="px-3 py-2 font-medium">Primary status</th>
+                        <th className="px-3 py-2 font-medium">Actionability</th>
+                        <th className="px-3 py-2 font-medium">Scores</th>
+                        <th className="px-3 py-2 font-medium">Missing + blockers</th>
+                        <th className="px-3 py-2 font-medium">Identity / QA</th>
+                        <th className="px-3 py-2 font-medium">Activity</th>
                         <th className="px-3 py-2 font-medium">Last updated</th>
                         <th className="px-3 py-2 font-medium">Actions</th>
                       </tr>
@@ -2167,13 +2330,22 @@ export default function AdminControlCenter() {
                     <tbody>
                       {isBusinessCompletionLoading ? (
                         <tr>
-                          <td className="px-3 py-3 text-[color:var(--text-muted)]" colSpan={16}>
+                          <td className="px-3 py-3 text-[color:var(--text-muted)]" colSpan={11}>
                             Loading completion queue...
                           </td>
                         </tr>
-                      ) : businessCompletion?.items?.length ? (
-                        businessCompletion.items.slice(0, 60).map((item) => (
+                      ) : filteredCompletionItems.length ? (
+                        filteredCompletionItems
+                          .slice(0, completionView === "next_20_actionable" ? 20 : 60)
+                          .map((item) => (
                           <tr key={item.id} className="border-t border-[var(--border-subtle)]">
+                            <td className="px-3 py-2">
+                              <input
+                                type="checkbox"
+                                checked={isCompletionSelected(item.id)}
+                                onChange={() => toggleCompletionSelected(item.id)}
+                              />
+                            </td>
                             <td className="px-3 py-2">
                               <div className="font-medium">{item.businessName}</div>
                               <div className="text-[color:var(--text-muted)]">{item.id}</div>
@@ -2185,74 +2357,43 @@ export default function AdminControlCenter() {
                               </div>
                             </td>
                             <td className="px-3 py-2">
-                              <Badge variant="outline">{item.claimed ? "Claimed" : "Unclaimed"}</Badge>
-                            </td>
-                            <td className="px-3 py-2">
-                              <div className="flex flex-wrap gap-1">
-                                <Badge variant="outline">
-                                  {item.verifiedProfile ? "Verified" : "Unverified"}
-                                </Badge>
-                                <Badge variant="outline">
-                                  {item.locallyOwned ? "Locally owned" : "Standard"}
-                                </Badge>
+                              <Badge variant="outline">
+                                {String(item.primaryStatus || "blocked_owner_input").replace(/_/g, " ")}
+                              </Badge>
+                              <div className="mt-1 flex flex-wrap gap-1">
+                                {(item.secondaryFlags || []).slice(0, 3).map((flag) => (
+                                  <Badge key={`${item.id}:${flag}`} variant="outline">
+                                    {flag.replace(/_/g, " ")}
+                                  </Badge>
+                                ))}
                               </div>
                             </td>
                             <td className="px-3 py-2">
-                              <Badge variant="outline">{item.profileCompletenessScore}%</Badge>
+                              <Badge variant="outline">{item.actionabilityScore ?? 0}</Badge>
+                              <div className="mt-1 text-[color:var(--text-muted)]">
+                                {(item.rankReason || []).slice(0, 2).join(" • ") || "Needs review"}
+                              </div>
+                            </td>
+                            <td className="px-3 py-2">
+                              <div>C {item.completionScore ?? item.profileCompletenessScore}</div>
+                              <div>Conf {item.confidenceScore ?? 0}</div>
+                              <div>Fix {item.fixabilityScore ?? 0}</div>
                             </td>
                             <td className="px-3 py-2 text-[color:var(--text-muted)]">
-                              {item.missingFields.length
-                                ? item.missingFields.join(", ")
-                                : "None"}
-                              {item.taskLabels ? (
-                                <div className="mt-1 flex flex-wrap gap-1">
-                                  {Object.entries(item.taskLabels)
-                                    .filter(([, status]) => status && status !== "ready" && status !== "not_applicable")
-                                    .slice(0, 3)
-                                    .map(([key, status]) => (
-                                      <Badge key={`${item.id}-${key}`} variant="outline">
-                                        {key}:{status}
-                                      </Badge>
-                                    ))}
-                                </div>
-                              ) : null}
+                              <div>Missing: {item.missingFields.length ? item.missingFields.join(", ") : "None"}</div>
+                              <div>Admin-fix: {(item.adminFixableItems || []).join(", ") || "None"}</div>
+                              <div>Owner blockers: {(item.ownerInputBlockers || []).join(", ") || "None"}</div>
+                              {item.blockerReason ? <div>Blocker note: {item.blockerReason}</div> : null}
                             </td>
                             <td className="px-3 py-2">
-                              {item.menuStatus.ready
-                                ? item.menuStatus.menuItemCount > 0
-                                  ? `${item.menuStatus.menuItemCount} items`
-                                  : "Reviewed"
-                                : "Missing"}
-                            </td>
-                            <td className="px-3 py-2">
-                              {item.photoStatus.ready
-                                ? item.photoStatus.uploadedCount > 0
-                                  ? `${item.photoStatus.uploadedCount} uploads`
-                                  : "Reviewed"
-                                : "Missing"}
-                            </td>
-                            <td className="px-3 py-2">
-                              {item.contactActionStatus.ready ? "Ready" : "Missing"}
-                            </td>
-                            <td className="px-3 py-2">
-                              {item.scheduleStatus.required
-                                ? item.scheduleStatus.ready
-                                  ? "Ready"
-                                  : "Missing"
-                                : "N/A"}
-                            </td>
-                            <td className="px-3 py-2">
-                              {item.dealsEventsStatus.dealsActive} / {item.dealsEventsStatus.eventsUpcoming}
-                            </td>
-                            <td className="px-3 py-2">
-                              <Badge variant="outline">
-                                {item.publicReady ? "Ready" : "Blocked"}
-                              </Badge>
-                            </td>
-                            <td className="px-3 py-2">
-                              <Badge variant="outline">
-                                {item.qrKitReady && item.publicReady ? "Ready" : "Blocked"}
-                              </Badge>
+                              {item.identityNeedsReview ? (
+                                <Badge variant="outline">Identity review needed</Badge>
+                              ) : (
+                                <Badge variant="outline">Identity clear</Badge>
+                              )}
+                              <div className="mt-1">
+                                <Badge variant="outline">{item.testOrQa ? "Test/QA" : "Live"}</Badge>
+                              </div>
                             </td>
                             <td className="px-3 py-2">
                               {item.analyticsActivity.viewsOrClicks30d}
@@ -2399,6 +2540,18 @@ export default function AdminControlCenter() {
                                         Mark schedule reviewed
                                       </button>
                                     ) : null}
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        businessCompletionUpdateMutation.mutateAsync({
+                                          businessId: item.id,
+                                          body: { reviewed: { identityReviewNeeded: true } },
+                                        })
+                                      }
+                                      className="inline-flex items-center rounded border border-[var(--border-subtle)] px-2 py-1 text-[11px]"
+                                    >
+                                      Flag identity review
+                                    </button>
                                   </>
                                 )}
                               </div>
@@ -2419,7 +2572,7 @@ export default function AdminControlCenter() {
                         ))
                       ) : (
                         <tr>
-                          <td className="px-3 py-3 text-[color:var(--text-muted)]" colSpan={16}>
+                          <td className="px-3 py-3 text-[color:var(--text-muted)]" colSpan={11}>
                             No business profiles found.
                           </td>
                         </tr>
