@@ -31,3 +31,6 @@ ios/App/App.xcodeproj/xcuserdata/
 .tools/
 
 .env*.local
+
+# Runtime integration logs
+pda_int.log

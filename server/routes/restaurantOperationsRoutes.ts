@@ -2556,6 +2556,170 @@ export function registerRestaurantOperationsRoutes(
     },
   );
 
+  app.get("/api/owner/value-attribution", isAuthenticated, async (req: any, res) => {
+    try {
+      const windowParam = String(req.query.window || "7d");
+      if (windowParam !== "7d" && windowParam !== "30d") {
+        return res.status(400).json({ message: "Invalid window parameter" });
+      }
+
+      const now = new Date();
+      const start = new Date(now);
+      start.setHours(0, 0, 0, 0);
+      start.setDate(start.getDate() - (windowParam === "30d" ? 30 : 7));
+
+      const isAdminUser =
+        req.user?.userType === "admin" ||
+        req.user?.userType === "duper_admin" ||
+        req.user?.userType === "super_admin" ||
+        req.user?.userType === "staff";
+
+      let ownerRestaurantIds: string[] = [];
+      if (isAdminUser && req.query.ownerId) {
+        const ownerRestaurants = await db
+          .select({ id: restaurants.id })
+          .from(restaurants)
+          .where(eq(restaurants.ownerId, String(req.query.ownerId)));
+        ownerRestaurantIds = ownerRestaurants.map((row: any) => String(row.id));
+      } else {
+        const context = await getBusinessAccessContext(req.user.id);
+        ownerRestaurantIds = context.restaurants.map((row) => String(row.id));
+      }
+
+      if (ownerRestaurantIds.length === 0) {
+        return res.json({
+          window: windowParam as "7d" | "30d",
+          generatedAt: now.toISOString(),
+          ownerId: String(req.user.id),
+          entities: [],
+        });
+      }
+
+      const ownedRestaurants = await db
+        .select({
+          id: restaurants.id,
+          ownerId: restaurants.ownerId,
+          name: restaurants.name,
+          isFoodTruck: restaurants.isFoodTruck,
+          businessType: restaurants.businessType,
+        })
+        .from(restaurants)
+        .where(inArray(restaurants.id, ownerRestaurantIds));
+
+      const rows = await db
+        .select({
+          entityId: requestLogs.entityId,
+          entityType: requestLogs.entityType,
+          createdAt: requestLogs.createdAt,
+          surface: requestLogs.surface,
+          eventType: requestLogs.eventType,
+          metadata: requestLogs.metadata,
+        })
+        .from(requestLogs)
+        .where(
+          and(
+            gte(requestLogs.createdAt, start),
+            inArray(requestLogs.entityId, ownerRestaurantIds),
+            inArray(requestLogs.surface, ["public_profile", "public_discovery"]),
+          ),
+        );
+
+      const byEntity = new Map<string, any>();
+      for (const restaurant of ownedRestaurants as any[]) {
+        const entityType =
+          restaurant.isFoodTruck || String(restaurant.businessType || "").toLowerCase() === "food_truck"
+            ? "truck"
+            : String(restaurant.businessType || "").toLowerCase() === "bar"
+              ? "bar"
+              : "restaurant";
+        byEntity.set(String(restaurant.id), {
+          ownerId: String(restaurant.ownerId || req.user.id),
+          entityId: String(restaurant.id),
+          entityType,
+          profileViews: 0,
+          discoveryImpressions: 0,
+          ctaClicks: 0,
+          shareOpens: 0,
+          highIntentActions: 0,
+          topSourcesRaw: new Map<string, number>(),
+          lastActivityAt: null as string | null,
+        });
+      }
+
+      const highIntentActionTypes = new Set([
+        "call_click",
+        "directions_click",
+        "order_click",
+        "delivery_click",
+        "deal_click",
+        "catering_click",
+        "truck_booking_click",
+      ]);
+
+      for (const row of rows as any[]) {
+        const entityId = String(row.entityId || "");
+        if (!byEntity.has(entityId)) continue;
+        const item = byEntity.get(entityId)!;
+        const metadata = (row.metadata || {}) as Record<string, any>;
+        const createdAt = row.createdAt ? new Date(row.createdAt).toISOString() : null;
+        if (createdAt && (!item.lastActivityAt || new Date(createdAt) > new Date(item.lastActivityAt))) {
+          item.lastActivityAt = createdAt;
+        }
+
+        if (String(row.surface) === "public_profile") {
+          if (String(row.eventType) === "profile_view") item.profileViews += 1;
+          const actionType = String(metadata.actionType || "");
+          if (actionType === "share_click" || actionType.startsWith("qr_")) item.shareOpens += 1;
+          if (highIntentActionTypes.has(actionType)) item.highIntentActions += 1;
+          const sourceLabel = String(metadata.source || "direct");
+          item.topSourcesRaw.set(sourceLabel, (item.topSourcesRaw.get(sourceLabel) || 0) + 1);
+        } else if (String(row.surface) === "public_discovery") {
+          const discoveryEventType = String(metadata.discoveryEventType || "");
+          const sourcePageType = String(metadata.sourcePageType || "unknown");
+          if (discoveryEventType === "discovery_page_view") item.discoveryImpressions += 1;
+          if (discoveryEventType === "discovery_cta_click") {
+            item.ctaClicks += 1;
+            item.highIntentActions += 1;
+          }
+          if (
+            discoveryEventType === "discovery_card_click" ||
+            discoveryEventType === "discovery_profile_click"
+          ) {
+            item.highIntentActions += 1;
+          }
+          const sourceLabel = `discovery:${sourcePageType}`;
+          item.topSourcesRaw.set(sourceLabel, (item.topSourcesRaw.get(sourceLabel) || 0) + 1);
+        }
+      }
+
+      const entities = Array.from(byEntity.values()).map((item) => ({
+        ownerId: item.ownerId,
+        entityId: item.entityId,
+        entityType: item.entityType,
+        profileViews: item.profileViews,
+        discoveryImpressions: item.discoveryImpressions,
+        ctaClicks: item.ctaClicks,
+        shareOpens: item.shareOpens,
+        highIntentActions: item.highIntentActions,
+        topSources: (Array.from(item.topSourcesRaw.entries()) as Array<[string, number]>)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 5)
+          .map(([source, count]) => ({ source, count })),
+        lastActivityAt: item.lastActivityAt,
+      }));
+
+      return res.json({
+        window: windowParam as "7d" | "30d",
+        generatedAt: now.toISOString(),
+        ownerId: String(req.query.ownerId || req.user.id),
+        entities,
+      });
+    } catch (error) {
+      console.error("Error fetching owner value attribution:", error);
+      return res.status(500).json({ message: "Failed to fetch owner value attribution" });
+    }
+  });
+
   app.get(
     "/api/restaurants/:restaurantId/analytics/summary",
     isAuthenticated,

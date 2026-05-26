@@ -34,6 +34,25 @@ Last updated: 2026-05-26 (America/Chicago)
 - Commit: `e16601e8`
 - Validation: `public-discovery-analytics.contract` + check/test/build/verify:routes pass
 
+7. PDA-2.1 DB-Seeded Runtime Integration Contract
+- Status: IN PROGRESS
+- Commit: pending
+- Validation target:
+  - `npm run test -- public-discovery-analytics.integration`
+  - `npm run test -- public-discovery-analytics.contract`
+  - `npm run test:run`
+  - `npm run check`
+  - `npm run build`
+
+8. PDA-2.2 Owner Value + Discovery Attribution Aggregate
+- Status: IN PROGRESS
+- Commit: pending
+- Validation target:
+  - `npm run test -- owner-value-attribution`
+  - `npm run test:run`
+  - `npm run check`
+  - `npm run build`
+
 ## What is now live
 
 - Public SEO/discovery pages route into canonical `/p/...` profiles.
@@ -43,10 +62,8 @@ Last updated: 2026-05-26 (America/Chicago)
 
 ## Remaining non-blocking gaps
 
-1. DB-seeded runtime integration contract for Public Discovery Analytics.
-2. Joined Owner Value + Discovery attribution aggregate view.
-3. SEO ranking/dedupe tuning.
-4. Richer structured data (`schema.org`) coverage.
+1. SEO ranking/dedupe tuning.
+2. Richer structured data (`schema.org`) coverage.
 
 ## Current source-of-truth KPI
 
