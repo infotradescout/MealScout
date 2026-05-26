@@ -2218,6 +2218,345 @@ export function registerRestaurantOperationsRoutes(
   );
 
   app.get(
+    "/api/restaurants/:restaurantId/owner-value-dashboard",
+    isAuthenticated,
+    async (req: any, res) => {
+      try {
+        const { restaurantId } = req.params;
+        const windowParam = String(req.query.window || "30d").toLowerCase();
+        const windowDays = windowParam === "7d" ? 7 : windowParam === "30d" ? 30 : null;
+        if (!windowDays) {
+          return res.status(400).json({ message: "window must be 7d or 30d" });
+        }
+
+        const canBypassOwnership = isAdminLikeUserType(req.user?.userType);
+        if (!canBypassOwnership) {
+          const isAuthorized = await storage.verifyRestaurantOwnership(
+            restaurantId,
+            req.user.id,
+            "viewAnalytics",
+          );
+          if (!isAuthorized) {
+            return res.status(403).json({
+              message:
+                "Unauthorized: You can only access analytics for restaurants you own",
+            });
+          }
+        }
+
+        const restaurant = (await storage.getRestaurant(
+          String(restaurantId),
+        )) as any;
+        if (!restaurant) {
+          return res.status(404).json({ message: "Restaurant not found" });
+        }
+
+        const now = new Date();
+        const currentStart = new Date(now.getTime() - windowDays * 24 * 60 * 60 * 1000);
+        const previousStart = new Date(
+          currentStart.getTime() - windowDays * 24 * 60 * 60 * 1000,
+        );
+
+        const baseWhere = [
+          eq(requestLogs.surface, "public_profile"),
+          eq(requestLogs.entityId, String(restaurantId)),
+          inArray(requestLogs.entityType, ["restaurant", "truck", "bar"]),
+          inArray(requestLogs.eventType, ["profile_view", "profile_action", "qr_open"]),
+        ] as any[];
+
+        const [aggregate] = await db
+          .select({
+            profileViewsCurrent:
+              sql<number>`count(*) filter (where ${requestLogs.eventType} = 'profile_view' and ${requestLogs.createdAt} >= ${currentStart} and ${requestLogs.createdAt} < ${now})`.mapWith(
+                Number,
+              ),
+            profileViewsPrevious:
+              sql<number>`count(*) filter (where ${requestLogs.eventType} = 'profile_view' and ${requestLogs.createdAt} >= ${previousStart} and ${requestLogs.createdAt} < ${currentStart})`.mapWith(
+                Number,
+              ),
+            menuClicksCurrent:
+              sql<number>`count(*) filter (where ${requestLogs.metadata}->>'actionType' = 'menu_click' and ${requestLogs.createdAt} >= ${currentStart} and ${requestLogs.createdAt} < ${now})`.mapWith(
+                Number,
+              ),
+            menuClicksPrevious:
+              sql<number>`count(*) filter (where ${requestLogs.metadata}->>'actionType' = 'menu_click' and ${requestLogs.createdAt} >= ${previousStart} and ${requestLogs.createdAt} < ${currentStart})`.mapWith(
+                Number,
+              ),
+            directionsClicksCurrent:
+              sql<number>`count(*) filter (where ${requestLogs.metadata}->>'actionType' = 'directions_click' and ${requestLogs.createdAt} >= ${currentStart} and ${requestLogs.createdAt} < ${now})`.mapWith(
+                Number,
+              ),
+            directionsClicksPrevious:
+              sql<number>`count(*) filter (where ${requestLogs.metadata}->>'actionType' = 'directions_click' and ${requestLogs.createdAt} >= ${previousStart} and ${requestLogs.createdAt} < ${currentStart})`.mapWith(
+                Number,
+              ),
+            callClicksCurrent:
+              sql<number>`count(*) filter (where ${requestLogs.metadata}->>'actionType' = 'call_click' and ${requestLogs.createdAt} >= ${currentStart} and ${requestLogs.createdAt} < ${now})`.mapWith(
+                Number,
+              ),
+            callClicksPrevious:
+              sql<number>`count(*) filter (where ${requestLogs.metadata}->>'actionType' = 'call_click' and ${requestLogs.createdAt} >= ${previousStart} and ${requestLogs.createdAt} < ${currentStart})`.mapWith(
+                Number,
+              ),
+            websiteClicksCurrent:
+              sql<number>`count(*) filter (where ${requestLogs.metadata}->>'actionType' = 'website_click' and ${requestLogs.createdAt} >= ${currentStart} and ${requestLogs.createdAt} < ${now})`.mapWith(
+                Number,
+              ),
+            orderClicksCurrent:
+              sql<number>`count(*) filter (where ${requestLogs.metadata}->>'actionType' = 'order_click' and ${requestLogs.createdAt} >= ${currentStart} and ${requestLogs.createdAt} < ${now})`.mapWith(
+                Number,
+              ),
+            orderClicksPrevious:
+              sql<number>`count(*) filter (where ${requestLogs.metadata}->>'actionType' = 'order_click' and ${requestLogs.createdAt} >= ${previousStart} and ${requestLogs.createdAt} < ${currentStart})`.mapWith(
+                Number,
+              ),
+            deliveryClicksCurrent:
+              sql<number>`count(*) filter (where ${requestLogs.metadata}->>'actionType' = 'delivery_click' and ${requestLogs.createdAt} >= ${currentStart} and ${requestLogs.createdAt} < ${now})`.mapWith(
+                Number,
+              ),
+            deliveryClicksPrevious:
+              sql<number>`count(*) filter (where ${requestLogs.metadata}->>'actionType' = 'delivery_click' and ${requestLogs.createdAt} >= ${previousStart} and ${requestLogs.createdAt} < ${currentStart})`.mapWith(
+                Number,
+              ),
+            qrOpensCurrent:
+              sql<number>`count(*) filter (where ${requestLogs.metadata}->>'actionType' in ('qr_profile_open','qr_menu_open','qr_specials_open') and ${requestLogs.createdAt} >= ${currentStart} and ${requestLogs.createdAt} < ${now})`.mapWith(
+                Number,
+              ),
+            qrOpensPrevious:
+              sql<number>`count(*) filter (where ${requestLogs.metadata}->>'actionType' in ('qr_profile_open','qr_menu_open','qr_specials_open') and ${requestLogs.createdAt} >= ${previousStart} and ${requestLogs.createdAt} < ${currentStart})`.mapWith(
+                Number,
+              ),
+            dealClicksCurrent:
+              sql<number>`count(*) filter (where ${requestLogs.metadata}->>'actionType' = 'deal_click' and ${requestLogs.createdAt} >= ${currentStart} and ${requestLogs.createdAt} < ${now})`.mapWith(
+                Number,
+              ),
+            eventClicksCurrent:
+              sql<number>`count(*) filter (where ${requestLogs.metadata}->>'actionType' = 'event_click' and ${requestLogs.createdAt} >= ${currentStart} and ${requestLogs.createdAt} < ${now})`.mapWith(
+                Number,
+              ),
+            socialClicksCurrent:
+              sql<number>`count(*) filter (where ${requestLogs.metadata}->>'actionType' = 'social_click' and ${requestLogs.createdAt} >= ${currentStart} and ${requestLogs.createdAt} < ${now})`.mapWith(
+                Number,
+              ),
+            shareClicksCurrent:
+              sql<number>`count(*) filter (where ${requestLogs.metadata}->>'actionType' = 'share_click' and ${requestLogs.createdAt} >= ${currentStart} and ${requestLogs.createdAt} < ${now})`.mapWith(
+                Number,
+              ),
+            cateringClicksCurrent:
+              sql<number>`count(*) filter (where ${requestLogs.metadata}->>'actionType' = 'catering_click' and ${requestLogs.createdAt} >= ${currentStart} and ${requestLogs.createdAt} < ${now})`.mapWith(
+                Number,
+              ),
+            truckBookingClicksCurrent:
+              sql<number>`count(*) filter (where ${requestLogs.metadata}->>'actionType' = 'truck_booking_click' and ${requestLogs.createdAt} >= ${currentStart} and ${requestLogs.createdAt} < ${now})`.mapWith(
+                Number,
+              ),
+            latestEventAt: sql<Date>`max(${requestLogs.createdAt})`,
+          })
+          .from(requestLogs)
+          .where(and(...baseWhere));
+
+        const counts = aggregate || ({} as any);
+        const totals = {
+          profileViews: Number(counts.profileViewsCurrent || 0),
+          menuClicks: Number(counts.menuClicksCurrent || 0),
+          directionsClicks: Number(counts.directionsClicksCurrent || 0),
+          callClicks: Number(counts.callClicksCurrent || 0),
+          websiteClicks: Number(counts.websiteClicksCurrent || 0),
+          orderClicks: Number(counts.orderClicksCurrent || 0),
+          deliveryClicks: Number(counts.deliveryClicksCurrent || 0),
+          qrOpens: Number(counts.qrOpensCurrent || 0),
+          dealClicks: Number(counts.dealClicksCurrent || 0),
+          eventClicks: Number(counts.eventClicksCurrent || 0),
+          socialClicks: Number(counts.socialClicksCurrent || 0),
+          shareClicks: Number(counts.shareClicksCurrent || 0),
+          cateringClicks: Number(counts.cateringClicksCurrent || 0),
+          truckBookingClicks: Number(counts.truckBookingClicksCurrent || 0),
+        };
+        const previousWindowTotals = {
+          profileViews: Number(counts.profileViewsPrevious || 0),
+          menuClicks: Number(counts.menuClicksPrevious || 0),
+          directionsClicks: Number(counts.directionsClicksPrevious || 0),
+          callClicks: Number(counts.callClicksPrevious || 0),
+          orderClicks: Number(counts.orderClicksPrevious || 0),
+          deliveryClicks: Number(counts.deliveryClicksPrevious || 0),
+          qrOpens: Number(counts.qrOpensPrevious || 0),
+        };
+        const deltas = {
+          profileViews: totals.profileViews - previousWindowTotals.profileViews,
+          menuClicks: totals.menuClicks - previousWindowTotals.menuClicks,
+          directionsClicks: totals.directionsClicks - previousWindowTotals.directionsClicks,
+          callClicks: totals.callClicks - previousWindowTotals.callClicks,
+          orderClicks:
+            totals.orderClicks +
+            totals.deliveryClicks -
+            (previousWindowTotals.orderClicks + previousWindowTotals.deliveryClicks),
+          qrOpens: totals.qrOpens - previousWindowTotals.qrOpens,
+        };
+
+        const topActions = [
+          { actionType: "menu_click", label: "Menu", count: totals.menuClicks },
+          {
+            actionType: "directions_click",
+            label: "Directions",
+            count: totals.directionsClicks,
+          },
+          { actionType: "call_click", label: "Calls", count: totals.callClicks },
+          {
+            actionType: "order_delivery_click",
+            label: "Orders / Delivery",
+            count: totals.orderClicks + totals.deliveryClicks,
+          },
+          { actionType: "qr_open", label: "QR opens", count: totals.qrOpens },
+          {
+            actionType: "deal_event_click",
+            label: "Deals / Events",
+            count: totals.dealClicks + totals.eventClicks,
+          },
+          {
+            actionType: "social_share_click",
+            label: "Social / Shares",
+            count: totals.socialClicks + totals.shareClicks,
+          },
+        ]
+          .filter((item) => item.count > 0)
+          .sort((a, b) => b.count - a.count)
+          .slice(0, 3);
+
+        const hasAddress = Boolean(
+          String(restaurant.address || "").trim() || String(restaurant.city || "").trim(),
+        );
+        const hasOrderingLink = Boolean(
+          String(restaurant.onlineOrderingUrl || "").trim() ||
+            String(restaurant.deliveryUrl || "").trim() ||
+            String(restaurant.doordashUrl || "").trim() ||
+            String(restaurant.uberEatsUrl || "").trim() ||
+            String(restaurant.toastUrl || "").trim() ||
+            String(restaurant.squareUrl || "").trim() ||
+            String(restaurant.chowNowUrl || "").trim() ||
+            String(restaurant.grubhubUrl || "").trim(),
+        );
+        const isTruck =
+          Boolean(restaurant.isFoodTruck) ||
+          String(restaurant.businessType || "").toLowerCase() === "food_truck";
+        const hasTruckSchedule = Boolean(
+          (restaurant as any).operatingHours || (restaurant as any).businessHours,
+        );
+
+        const recommendations: Array<{
+          id: string;
+          severity: "info" | "opportunity" | "urgent";
+          title: string;
+          body: string;
+          ctaLabel: string;
+          ctaHref: string;
+        }> = [];
+        if (totals.profileViews > 0 && totals.menuClicks === 0) {
+          recommendations.push({
+            id: "menu_visibility",
+            severity: "opportunity",
+            title: "Customers are viewing your profile but not opening your menu",
+            body: "Add or refresh your menu so visitors can quickly see what you serve.",
+            ctaLabel: "Update menu",
+            ctaHref: `/menu-builder?restaurantId=${encodeURIComponent(String(restaurantId))}`,
+          });
+        }
+        if (totals.profileViews > 0 && totals.directionsClicks === 0 && hasAddress) {
+          recommendations.push({
+            id: "promote_directions",
+            severity: "opportunity",
+            title: "No directions taps yet",
+            body: "Promote your directions QR and confirm your public location details are clear.",
+            ctaLabel: "Open profile setup",
+            ctaHref: `/restaurant-owner-dashboard?setup=profile&restaurantId=${encodeURIComponent(String(restaurantId))}`,
+          });
+        }
+        if (totals.qrOpens === 0) {
+          recommendations.push({
+            id: "print_qr_assets",
+            severity: "opportunity",
+            title: "QR assets are not being used yet",
+            body: "Display your Profile or Menu QR in-store so customers can open your links instantly.",
+            ctaLabel: "Open QR Kit",
+            ctaHref: `/restaurant-owner-dashboard?setup=profile&restaurantId=${encodeURIComponent(String(restaurantId))}`,
+          });
+        }
+        if (totals.orderClicks === 0 && hasOrderingLink) {
+          recommendations.push({
+            id: "improve_order_path",
+            severity: "info",
+            title: "Ordering links exist but no order clicks this period",
+            body: "Move your ordering links higher and share a social graphic with your order CTA.",
+            ctaLabel: "Edit profile links",
+            ctaHref: `/restaurant-owner-dashboard?setup=profile&restaurantId=${encodeURIComponent(String(restaurantId))}`,
+          });
+        }
+        if (totals.profileViews === 0) {
+          recommendations.push({
+            id: "drive_initial_traffic",
+            severity: "urgent",
+            title: "No profile views recorded yet",
+            body: "Share your MealScout profile link or QR code to start driving measurable customer actions.",
+            ctaLabel: "Open QR Kit",
+            ctaHref: `/restaurant-owner-dashboard?setup=profile&restaurantId=${encodeURIComponent(String(restaurantId))}`,
+          });
+        }
+        if (totals.menuClicks > totals.directionsClicks + totals.callClicks) {
+          recommendations.push({
+            id: "convert_menu_intent",
+            severity: "opportunity",
+            title: "Menu interest is strong",
+            body: "If you have a real current special, feature it so customers have a reason to choose you today.",
+            ctaLabel: "Add a special",
+            ctaHref: "/deal-creation",
+          });
+        }
+        if (isTruck && !hasTruckSchedule) {
+          recommendations.push({
+            id: "truck_schedule_missing",
+            severity: "opportunity",
+            title: "Your truck schedule looks incomplete",
+            body: "Add your weekly or current stop schedule so customers know where to find you.",
+            ctaLabel: "Update schedule",
+            ctaHref: `/restaurant-owner-dashboard?setup=schedule&truck=1&restaurantId=${encodeURIComponent(String(restaurantId))}`,
+          });
+        }
+
+        const latestEventAt =
+          counts.latestEventAt instanceof Date
+            ? counts.latestEventAt
+            : counts.latestEventAt
+              ? new Date(counts.latestEventAt)
+              : null;
+        let freshnessLabel = "Last updated just now";
+        if (latestEventAt) {
+          const ageMs = Math.max(0, now.getTime() - latestEventAt.getTime());
+          const ageMinutes = Math.floor(ageMs / 60000);
+          if (ageMinutes < 1) freshnessLabel = "Last updated just now";
+          else if (ageMinutes < 60) freshnessLabel = `Last updated ${ageMinutes} min ago`;
+          else freshnessLabel = "Last updated today";
+        }
+
+        return res.json({
+          restaurantId: String(restaurantId),
+          window: windowParam as "7d" | "30d",
+          generatedAt: now.toISOString(),
+          freshnessLabel,
+          totals,
+          previousWindowTotals,
+          deltas,
+          topActions,
+          recommendations: recommendations.slice(0, 3),
+        });
+      } catch (error) {
+        console.error("Error fetching owner value dashboard:", error);
+        return res
+          .status(500)
+          .json({ message: "Failed to fetch owner value dashboard" });
+      }
+    },
+  );
+
+  app.get(
     "/api/restaurants/:restaurantId/analytics/summary",
     isAuthenticated,
     async (req: any, res) => {

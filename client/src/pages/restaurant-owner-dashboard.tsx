@@ -196,6 +196,7 @@ export default function RestaurantOwnerDashboard() {
     start: format(subDays(new Date(), 30), "yyyy-MM-dd"),
     end: format(new Date(), "yyyy-MM-dd"),
   });
+  const [ownerValueWindow, setOwnerValueWindow] = useState<"7d" | "30d">("30d");
   const [comparisonPeriod, setComparisonPeriod] = useState<
     "week" | "month" | "quarter"
   >("month");
@@ -640,15 +641,15 @@ export default function RestaurantOwnerDashboard() {
     },
     staleTime: 60_000,
   });
-  const { data: publicProfileActionAnalytics } = useQuery<any>({
-    queryKey: ["/api/restaurants", selectedRestaurant, "analytics/profile-actions"],
+  const { data: ownerValueDashboard } = useQuery<any>({
+    queryKey: ["/api/restaurants", selectedRestaurant, "owner-value-dashboard", ownerValueWindow],
     enabled: Boolean(selectedRestaurant),
     queryFn: async () => {
       const response = await fetch(
-        `/api/restaurants/${selectedRestaurant}/analytics/profile-actions`,
+        `/api/restaurants/${selectedRestaurant}/owner-value-dashboard?window=${ownerValueWindow}`,
       );
       if (!response.ok) {
-        throw new Error("Failed to load profile action analytics");
+        throw new Error("Failed to load owner value dashboard");
       }
       return response.json();
     },
@@ -2908,53 +2909,167 @@ export default function RestaurantOwnerDashboard() {
               ) : null}
 
               <div className="rounded-lg border border-border p-4">
-                <p className="text-sm font-semibold">Profile action analytics</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Customer actions driven by your public MealScout profile.
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold">Profile value</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Real customer actions from your public MealScout profile.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={ownerValueWindow === "7d" ? "default" : "outline"}
+                      onClick={() => setOwnerValueWindow("7d")}
+                    >
+                      7 days
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={ownerValueWindow === "30d" ? "default" : "outline"}
+                      onClick={() => setOwnerValueWindow("30d")}
+                    >
+                      30 days
+                    </Button>
+                  </div>
+                </div>
+                <p className="mt-2 text-[11px] text-muted-foreground">
+                  {ownerValueDashboard?.freshnessLabel || "Last updated just now"}
                 </p>
-                <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                  <div className="rounded-md border border-border p-2.5">
-                    <p className="text-[11px] text-muted-foreground">Lifetime</p>
-                    <p className="text-lg font-semibold">
-                      {Number(publicProfileActionAnalytics?.totals?.lifetime || 0)}
-                    </p>
-                  </div>
-                  <div className="rounded-md border border-border p-2.5">
-                    <p className="text-[11px] text-muted-foreground">Last 7 days</p>
-                    <p className="text-lg font-semibold">
-                      {Number(publicProfileActionAnalytics?.totals?.last7Days || 0)}
-                    </p>
-                  </div>
-                  <div className="rounded-md border border-border p-2.5">
-                    <p className="text-[11px] text-muted-foreground">Last 30 days</p>
-                    <p className="text-lg font-semibold">
-                      {Number(publicProfileActionAnalytics?.totals?.last30Days || 0)}
-                    </p>
-                  </div>
-                </div>
-                <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                  {[
-                    ["Profile views", "profileViews"],
-                    ["Menu clicks", "menuClicks"],
-                    ["Directions clicks", "directionsClicks"],
-                    ["Call clicks", "callClicks"],
-                    ["Order/delivery clicks", "orderClicks"],
-                    ["QR opens", "qrOpens"],
-                    ["Deal clicks", "dealClicks"],
-                    ["Event clicks", "eventClicks"],
-                    ["Social clicks", "socialClicks"],
-                    ["Share clicks", "shareClicks"],
-                    ["Catering clicks", "cateringClicks"],
-                    ["Truck booking clicks", "truckBookingClicks"],
-                  ].map(([label, key]) => (
-                    <div key={key} className="rounded-md border border-border p-2.5">
-                      <p className="text-[11px] text-muted-foreground">{label}</p>
-                      <p className="text-base font-semibold">
-                        {Number(publicProfileActionAnalytics?.totals?.[key] || 0)}
-                      </p>
-                    </div>
-                  ))}
-                </div>
+
+                {(() => {
+                  const totals = ownerValueDashboard?.totals || {};
+                  const hasAnyData =
+                    Number(totals.profileViews || 0) > 0 ||
+                    Number(totals.menuClicks || 0) > 0 ||
+                    Number(totals.directionsClicks || 0) > 0 ||
+                    Number(totals.callClicks || 0) > 0 ||
+                    Number(totals.orderClicks || 0) > 0 ||
+                    Number(totals.deliveryClicks || 0) > 0 ||
+                    Number(totals.qrOpens || 0) > 0;
+                  if (!hasAnyData) {
+                    const publicProfilePath =
+                      currentPublicEntityType === "truck"
+                        ? `/p/truck/${encodeURIComponent(String(selectedRestaurant))}`
+                        : currentPublicEntityType === "bar"
+                          ? `/p/bar/${encodeURIComponent(String(selectedRestaurant))}`
+                          : `/p/restaurant/${encodeURIComponent(String(selectedRestaurant))}`;
+                    return (
+                      <div className="mt-3 rounded-md border border-dashed border-border p-4">
+                        <p className="text-sm font-medium">
+                          No customer activity recorded yet.
+                        </p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Share your profile link or QR code to start tracking views, menu clicks, directions, and calls.
+                        </p>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <Link
+                            href={`/restaurant-owner-dashboard?setup=profile&restaurantId=${encodeURIComponent(String(selectedRestaurant))}`}
+                          >
+                            <Button type="button" size="sm">
+                              Open QR Kit
+                            </Button>
+                          </Link>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={async () => {
+                              const fullUrl = `${window.location.origin}${publicProfilePath}`;
+                              await navigator.clipboard.writeText(fullUrl);
+                              toast({
+                                title: "Profile link copied",
+                                description: "Public profile URL copied to clipboard.",
+                              });
+                            }}
+                          >
+                            Copy public profile link
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  const movementLabel = (delta: number) => {
+                    if (delta > 0) return `+${delta} from previous period`;
+                    if (delta < 0) return `Down ${Math.abs(delta)} from previous period`;
+                    return "No change";
+                  };
+
+                  return (
+                    <>
+                      <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                        {[
+                          ["Profile views", Number(totals.profileViews || 0), Number(ownerValueDashboard?.deltas?.profileViews || 0)],
+                          ["Menu clicks", Number(totals.menuClicks || 0), Number(ownerValueDashboard?.deltas?.menuClicks || 0)],
+                          ["Directions clicks", Number(totals.directionsClicks || 0), Number(ownerValueDashboard?.deltas?.directionsClicks || 0)],
+                          ["Calls", Number(totals.callClicks || 0), Number(ownerValueDashboard?.deltas?.callClicks || 0)],
+                          ["Orders / delivery", Number(totals.orderClicks || 0) + Number(totals.deliveryClicks || 0), Number(ownerValueDashboard?.deltas?.orderClicks || 0)],
+                          ["QR opens", Number(totals.qrOpens || 0), Number(ownerValueDashboard?.deltas?.qrOpens || 0)],
+                        ].map(([label, count, delta]) => (
+                          <div key={String(label)} className="rounded-md border border-border p-2.5">
+                            <p className="text-[11px] text-muted-foreground">{String(label)}</p>
+                            <p className="text-base font-semibold">{Number(count)}</p>
+                            <p className="mt-0.5 text-[11px] text-muted-foreground">
+                              {movementLabel(Number(delta))}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                        <div className="rounded-md border border-border p-3">
+                          <p className="text-sm font-semibold">Top customer actions</p>
+                          <div className="mt-2 space-y-1.5 text-sm">
+                            {(ownerValueDashboard?.topActions || []).length ? (
+                              (ownerValueDashboard.topActions || []).map(
+                                (item: any, idx: number) => (
+                                  <p key={`${item.actionType}-${idx}`}>
+                                    {idx + 1}. {item.label} - {Number(item.count || 0)}
+                                  </p>
+                                ),
+                              )
+                            ) : (
+                              <p className="text-muted-foreground">No top actions yet.</p>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="rounded-md border border-border p-3">
+                          <p className="text-sm font-semibold">Recommended next action</p>
+                          <div className="mt-2 space-y-2">
+                            {(ownerValueDashboard?.recommendations || []).length ? (
+                              (ownerValueDashboard.recommendations || [])
+                                .slice(0, 3)
+                                .map((recommendation: any) => (
+                                  <div
+                                    key={recommendation.id}
+                                    className="rounded border border-border p-2"
+                                  >
+                                    <p className="text-sm font-medium">{recommendation.title}</p>
+                                    <p className="mt-1 text-xs text-muted-foreground">
+                                      {recommendation.body}
+                                    </p>
+                                    <Link href={recommendation.ctaHref}>
+                                      <Button size="sm" variant="outline" className="mt-2">
+                                        {recommendation.ctaLabel}
+                                      </Button>
+                                    </Link>
+                                  </div>
+                                ))
+                            ) : (
+                              <p className="text-muted-foreground text-sm">
+                                Keep your profile active with current menu, links, and schedule updates.
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
             </div>
           ) : null}
