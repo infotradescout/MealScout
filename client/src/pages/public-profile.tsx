@@ -1253,6 +1253,7 @@ export default function PublicProfilePage() {
     if (typeof window === "undefined") return "public_profile";
     const params = new URLSearchParams(window.location.search);
     const raw = String(params.get("utm_source") || "").toLowerCase();
+    if (raw.startsWith("discovery_")) return raw;
     return raw.includes("qr") ? "qr" : "public_profile";
   }, []);
 

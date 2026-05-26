@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useParams, Link } from "wouter";
 
@@ -63,10 +63,37 @@ const mapRouteToEndpoint = (pathname: string) => {
   return null;
 };
 
+const mapSourcePageType = (routeKey?: string | null) => {
+  switch (String(routeKey || "")) {
+    case "food-trucks-today":
+      return "food_trucks_today";
+    case "deals-today":
+      return "deals_today";
+    case "events-today":
+      return "events_today";
+    case "city":
+      return "city_food";
+    case "cuisine":
+      return "cuisine";
+    case "locations-with-trucks":
+      return "locations_with_trucks";
+    default:
+      return "city_food";
+  }
+};
+
 export default function PublicSeoLandingPage() {
   const params = useParams() as Record<string, string | undefined>;
   const rawPath = window.location.pathname;
   const endpoint = useMemo(() => mapRouteToEndpoint(rawPath), [rawPath, params]);
+  const pageViewSentRef = useRef<string>("");
+  const [analyticsWindow] = useState(() => {
+    if (typeof window === "undefined") return null;
+    return {
+      sourcePath: window.location.pathname,
+      referrer: document.referrer || "",
+    };
+  });
 
   const { data, isLoading, error } = useQuery<Payload>({
     queryKey: ["public-seo-landing", endpoint],
@@ -91,6 +118,45 @@ export default function PublicSeoLandingPage() {
     : undefined;
   const citySlug = data?.page?.citySlug;
   const cuisineSlug = data?.page?.cuisineSlug;
+  const sourcePageType = mapSourcePageType(data?.page?.routeKey);
+
+  const trackDiscoveryEvent = useCallback(
+    (payload: {
+      eventType: "discovery_page_view" | "discovery_card_click" | "discovery_profile_click" | "discovery_cta_click";
+      profileId?: string;
+      profileType?: string;
+      targetPath?: string;
+      displayName?: string;
+    }) => {
+      if (!analyticsWindow?.sourcePath) return;
+      void fetch(apiUrl("/api/public/discovery-analytics"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        keepalive: true,
+        body: JSON.stringify({
+          eventType: payload.eventType,
+          sourcePageType,
+          city: citySlug || null,
+          cuisine: cuisineSlug || null,
+          profileId: payload.profileId || null,
+          profileType: payload.profileType || null,
+          targetPath: payload.targetPath || null,
+          sourcePath: analyticsWindow.sourcePath,
+          displayName: payload.displayName || null,
+          referrer: analyticsWindow.referrer || null,
+        }),
+      }).catch(() => {});
+    },
+    [analyticsWindow, citySlug, cuisineSlug, sourcePageType],
+  );
+
+  useEffect(() => {
+    if (!data?.page?.canonicalPath) return;
+    const key = `${sourcePageType}:${data.page.canonicalPath}`;
+    if (pageViewSentRef.current === key) return;
+    pageViewSentRef.current = key;
+    trackDiscoveryEvent({ eventType: "discovery_page_view" });
+  }, [data?.page?.canonicalPath, sourcePageType, trackDiscoveryEvent]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -131,7 +197,19 @@ export default function PublicSeoLandingPage() {
                 <Card key={item.id} className="overflow-hidden">
                   <CardContent className="pt-5">
                     <div className="space-y-2">
-                      <a href={item.profilePath} className="font-semibold underline">
+                      <a
+                        href={`${item.profilePath}?utm_source=discovery_${sourcePageType}`}
+                        className="font-semibold underline"
+                        onClick={() =>
+                          trackDiscoveryEvent({
+                            eventType: "discovery_profile_click",
+                            profileId: item.id,
+                            profileType: item.profileType,
+                            targetPath: item.profilePath,
+                            displayName: item.displayName,
+                          })
+                        }
+                      >
                         {item.displayName}
                       </a>
                       <p className="text-xs text-muted-foreground">
@@ -147,7 +225,20 @@ export default function PublicSeoLandingPage() {
                       ) : null}
                       <div className="pt-1">
                         <Button asChild size="sm">
-                          <a href={item.primaryCtaPath}>Open profile</a>
+                          <a
+                            href={`${item.primaryCtaPath}?utm_source=discovery_${sourcePageType}`}
+                            onClick={() =>
+                              trackDiscoveryEvent({
+                                eventType: "discovery_card_click",
+                                profileId: item.id,
+                                profileType: item.profileType,
+                                targetPath: item.primaryCtaPath,
+                                displayName: item.displayName,
+                              })
+                            }
+                          >
+                            Open profile
+                          </a>
                         </Button>
                       </div>
                     </div>

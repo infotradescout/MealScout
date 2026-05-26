@@ -31,6 +31,7 @@ import {
   toPublicSupplierProfile,
   toPublicTruckProfile,
 } from "../publicProfiles";
+import { isAuthenticated } from "../unifiedAuth";
 
 const toSlug = (value: string | null | undefined) =>
   String(value || "")
@@ -132,8 +133,30 @@ const PUBLIC_PROFILE_ANALYTICS_ACTIONS = new Set([
 const PUBLIC_PROFILE_ANALYTICS_SOURCES = new Set([
   "public_profile",
   "qr",
+  "discovery_food_trucks_today",
+  "discovery_deals_today",
+  "discovery_events_today",
+  "discovery_city_food",
+  "discovery_cuisine",
+  "discovery_locations_with_trucks",
   "owner_dashboard_preview",
   "unknown",
+]);
+
+const DISCOVERY_ANALYTICS_EVENT_TYPES = new Set([
+  "discovery_page_view",
+  "discovery_card_click",
+  "discovery_profile_click",
+  "discovery_cta_click",
+]);
+
+const DISCOVERY_SOURCE_PAGE_TYPES = new Set([
+  "food_trucks_today",
+  "deals_today",
+  "events_today",
+  "city_food",
+  "cuisine",
+  "locations_with_trucks",
 ]);
 
 const classifyActorTypeFromUserAgent = (ua: string) => {
@@ -804,6 +827,74 @@ const buildPublicMenuPayload = async (restaurantId: string) => {
 };
 
 export function registerPublicDiscoveryRoutes(app: Express) {
+  app.post("/api/public/discovery-analytics", async (req, res) => {
+    try {
+      const schema = z.object({
+        eventType: z.string().trim().min(1),
+        sourcePageType: z.string().trim().min(1),
+        city: z.string().trim().max(120).optional().nullable(),
+        cuisine: z.string().trim().max(120).optional().nullable(),
+        profileId: z.string().trim().max(80).optional().nullable(),
+        profileType: z.enum(["restaurant", "truck", "bar", "location"]).optional().nullable(),
+        targetPath: z.string().trim().max(500).optional().nullable(),
+        sourcePath: z.string().trim().max(500),
+      });
+      const parsed = schema.parse(req.body || {});
+      if (!DISCOVERY_ANALYTICS_EVENT_TYPES.has(parsed.eventType)) {
+        return res.status(400).json({ message: "Unsupported eventType" });
+      }
+      if (!DISCOVERY_SOURCE_PAGE_TYPES.has(parsed.sourcePageType)) {
+        return res.status(400).json({ message: "Unsupported sourcePageType" });
+      }
+
+      const userAgent = String(req.get("user-agent") || "");
+      const actorType = classifyActorTypeFromUserAgent(userAgent);
+      const sourceType = sourceTypeFromActor(actorType);
+      const anonymousActorId = createHash("sha256")
+        .update(`${String(req.ip || "unknown")}|${userAgent.slice(0, 160)}`)
+        .digest("hex")
+        .slice(0, 20);
+
+      await db.insert(requestLogs).values({
+        method: "EVENT",
+        path: parsed.sourcePath,
+        statusCode: 202,
+        durationMs: 0,
+        userId: (req as any).user?.id || null,
+        sessionId: (req as any).sessionID || null,
+        anonymousActorId,
+        actorType,
+        sourceType,
+        eventType: "discovery_event",
+        surface: "public_discovery",
+        entityId: parsed.profileId || null,
+        entityType: parsed.profileType === "location" ? "host" : parsed.profileType || null,
+        ip: req.ip || null,
+        userAgent: userAgent || null,
+        metadata: {
+          discoveryEventType: parsed.eventType,
+          sourcePageType: parsed.sourcePageType,
+          city: parsed.city || null,
+          cuisine: parsed.cuisine || null,
+          profileId: parsed.profileId || null,
+          profileType: parsed.profileType || null,
+          targetPath: parsed.targetPath || null,
+          sourcePath: parsed.sourcePath,
+          referrer: String(req.get("referer") || ""),
+          timestamp: new Date().toISOString(),
+        },
+      });
+
+      return res.status(202).json({ ok: true });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid analytics payload", errors: error.errors });
+      }
+      console.error("Error recording public discovery analytics:", error);
+      return res.status(500).json({ message: "Failed to record analytics event" });
+    }
+  });
+
   app.post("/api/public/profile-analytics", async (req, res) => {
     try {
       const schema = z.object({
@@ -894,6 +985,154 @@ export function registerPublicDiscoveryRoutes(app: Express) {
       }
       console.error("Error recording public profile analytics:", error);
       return res.status(500).json({ message: "Failed to record analytics event" });
+    }
+  });
+
+  app.get("/api/admin/discovery-analytics", isAuthenticated, async (req: any, res) => {
+    try {
+      const userType = String(req.user?.userType || "");
+      if (!["admin", "duper_admin", "super_admin", "staff"].includes(userType)) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+
+      const windowParam = String(req.query.window || "7d");
+      if (windowParam !== "7d" && windowParam !== "30d") {
+        return res.status(400).json({ message: "Invalid window" });
+      }
+      const now = new Date();
+      const currentStart = new Date(now);
+      currentStart.setHours(0, 0, 0, 0);
+      currentStart.setDate(currentStart.getDate() - (windowParam === "30d" ? 30 : 7));
+
+      const baseWhere = [
+        eq(requestLogs.surface, "public_discovery"),
+        eq(requestLogs.eventType, "discovery_event"),
+        gte(requestLogs.createdAt, currentStart),
+      ];
+
+      const [totalsRow] = await db
+        .select({
+          discoveryPageViews: sql<number>`count(*) filter (where ${requestLogs.metadata}->>'discoveryEventType' = 'discovery_page_view')`.mapWith(
+            Number,
+          ),
+          cardClicks: sql<number>`count(*) filter (where ${requestLogs.metadata}->>'discoveryEventType' = 'discovery_card_click')`.mapWith(
+            Number,
+          ),
+          profileClicks: sql<number>`count(*) filter (where ${requestLogs.metadata}->>'discoveryEventType' = 'discovery_profile_click')`.mapWith(
+            Number,
+          ),
+          ctaClicks: sql<number>`count(*) filter (where ${requestLogs.metadata}->>'discoveryEventType' = 'discovery_cta_click')`.mapWith(
+            Number,
+          ),
+        })
+        .from(requestLogs)
+        .where(and(...baseWhere));
+
+      const topPagesRows = await db
+        .select({
+          sourcePageType: sql<string>`${requestLogs.metadata}->>'sourcePageType'`,
+          city: sql<string | null>`${requestLogs.metadata}->>'city'`,
+          cuisine: sql<string | null>`${requestLogs.metadata}->>'cuisine'`,
+          sourcePath: sql<string>`${requestLogs.metadata}->>'sourcePath'`,
+          views: sql<number>`count(*) filter (where ${requestLogs.metadata}->>'discoveryEventType' = 'discovery_page_view')`.mapWith(
+            Number,
+          ),
+          clicks: sql<number>`count(*) filter (where ${requestLogs.metadata}->>'discoveryEventType' in ('discovery_card_click','discovery_profile_click','discovery_cta_click'))`.mapWith(
+            Number,
+          ),
+        })
+        .from(requestLogs)
+        .where(and(...baseWhere))
+        .groupBy(
+          sql`${requestLogs.metadata}->>'sourcePageType'`,
+          sql`${requestLogs.metadata}->>'city'`,
+          sql`${requestLogs.metadata}->>'cuisine'`,
+          sql`${requestLogs.metadata}->>'sourcePath'`,
+        )
+        .orderBy(sql`count(*) desc`)
+        .limit(20);
+
+      const topProfilesRows = await db
+        .select({
+          profileId: sql<string>`${requestLogs.metadata}->>'profileId'`,
+          profileType: sql<string>`${requestLogs.metadata}->>'profileType'`,
+          profilePath: sql<string>`${requestLogs.metadata}->>'targetPath'`,
+          displayName: sql<string | null>`${requestLogs.metadata}->>'displayName'`,
+          clicks: sql<number>`count(*) filter (where ${requestLogs.metadata}->>'discoveryEventType' in ('discovery_card_click','discovery_profile_click'))`.mapWith(
+            Number,
+          ),
+        })
+        .from(requestLogs)
+        .where(
+          and(
+            ...baseWhere,
+            sql`${requestLogs.metadata}->>'discoveryEventType' in ('discovery_card_click','discovery_profile_click')`,
+          ),
+        )
+        .groupBy(
+          sql`${requestLogs.metadata}->>'profileId'`,
+          sql`${requestLogs.metadata}->>'profileType'`,
+          sql`${requestLogs.metadata}->>'targetPath'`,
+          sql`${requestLogs.metadata}->>'displayName'`,
+        )
+        .orderBy(sql`count(*) desc`)
+        .limit(20);
+
+      const topCitiesRows = await db
+        .select({
+          city: sql<string>`${requestLogs.metadata}->>'city'`,
+          views: sql<number>`count(*) filter (where ${requestLogs.metadata}->>'discoveryEventType' = 'discovery_page_view')`.mapWith(
+            Number,
+          ),
+          clicks: sql<number>`count(*) filter (where ${requestLogs.metadata}->>'discoveryEventType' in ('discovery_card_click','discovery_profile_click','discovery_cta_click'))`.mapWith(
+            Number,
+          ),
+        })
+        .from(requestLogs)
+        .where(and(...baseWhere))
+        .groupBy(sql`${requestLogs.metadata}->>'city'`)
+        .orderBy(sql`count(*) desc`)
+        .limit(20);
+
+      return res.json({
+        window: windowParam as "7d" | "30d",
+        generatedAt: now.toISOString(),
+        totals: {
+          discoveryPageViews: Number(totalsRow?.discoveryPageViews || 0),
+          cardClicks: Number(totalsRow?.cardClicks || 0),
+          profileClicks: Number(totalsRow?.profileClicks || 0),
+          ctaClicks: Number(totalsRow?.ctaClicks || 0),
+        },
+        topPages: topPagesRows
+          .filter((row: any) => String(row.sourcePageType || "").trim().length > 0)
+          .map((row: any) => ({
+            sourcePageType: String(row.sourcePageType || ""),
+            city: row.city || undefined,
+            cuisine: row.cuisine || undefined,
+            sourcePath: String(row.sourcePath || ""),
+            views: Number(row.views || 0),
+            clicks: Number(row.clicks || 0),
+          })),
+        topProfilesFromDiscovery: topProfilesRows
+          .filter((row: any) => String(row.profileId || "").trim().length > 0)
+          .map((row: any) => ({
+            profileId: String(row.profileId || ""),
+            profileType: String(row.profileType || ""),
+            profilePath: String(row.profilePath || ""),
+            displayName: row.displayName || undefined,
+            clicks: Number(row.clicks || 0),
+          })),
+        topCities: topCitiesRows
+          .filter((row: any) => String(row.city || "").trim().length > 0)
+          .map((row: any) => ({
+            city: String(row.city || ""),
+            views: Number(row.views || 0),
+            clicks: Number(row.clicks || 0),
+          })),
+      });
+    } catch (error) {
+      console.error("Error fetching admin discovery analytics:", error);
+      return res.status(500).json({ message: "Failed to fetch discovery analytics" });
     }
   });
 

@@ -483,6 +483,37 @@ type BriefActionLogResponse = {
   latest: BriefActionLogItem[];
 };
 
+type DiscoveryAnalyticsResponse = {
+  window: "7d" | "30d";
+  generatedAt: string;
+  totals: {
+    discoveryPageViews: number;
+    cardClicks: number;
+    profileClicks: number;
+    ctaClicks: number;
+  };
+  topPages: Array<{
+    sourcePageType: string;
+    city?: string;
+    cuisine?: string;
+    sourcePath: string;
+    views: number;
+    clicks: number;
+  }>;
+  topProfilesFromDiscovery: Array<{
+    profileId: string;
+    profileType: string;
+    profilePath: string;
+    displayName?: string;
+    clicks: number;
+  }>;
+  topCities: Array<{
+    city: string;
+    views: number;
+    clicks: number;
+  }>;
+};
+
 // Sockets are ON by default; set VITE_ENABLE_SOCKETS=false to disable
 const ENABLE_SOCKETS = import.meta.env.VITE_ENABLE_SOCKETS !== "false";
 const LISA_FEED_LIMIT = 40;
@@ -734,6 +765,7 @@ export default function AdminControlCenter() {
   const [selectedEntity, setSelectedEntity] = useState<CanonicalEntityItem | null>(
     null,
   );
+  const [discoveryWindow, setDiscoveryWindow] = useState<"7d" | "30d">("7d");
 
   const isCompletionSelected = (id: string) => selectedCompletionIds.includes(id);
   const toggleCompletionSelected = (id: string) => {
@@ -915,6 +947,16 @@ export default function AdminControlCenter() {
       return res.json();
     },
     refetchInterval: 30000,
+  });
+
+  const { data: discoveryAnalytics } = useQuery<DiscoveryAnalyticsResponse>({
+    queryKey: ["/api/admin/discovery-analytics", discoveryWindow],
+    queryFn: async () => {
+      const res = await fetch(`/api/admin/discovery-analytics?window=${discoveryWindow}`);
+      if (!res.ok) throw new Error("Failed to fetch discovery analytics");
+      return res.json();
+    },
+    refetchInterval: 60000,
   });
 
   const remediationMutation = useMutation({
@@ -1937,6 +1979,103 @@ export default function AdminControlCenter() {
                   <div className="text-xs text-[color:var(--text-muted)]">Friction cases</div>
                   <div className="text-xl font-semibold">{marketIntel?.truthCounters?.frictionCasesNow ?? 0}</div>
                 </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Public Discovery Analytics</CardTitle>
+                <CardDescription>
+                  Which public SEO pages are driving profile traffic and clicks
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant={discoveryWindow === "7d" ? "default" : "outline"}
+                    onClick={() => setDiscoveryWindow("7d")}
+                  >
+                    7 days
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={discoveryWindow === "30d" ? "default" : "outline"}
+                    onClick={() => setDiscoveryWindow("30d")}
+                  >
+                    30 days
+                  </Button>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  <div className="rounded-lg border border-[var(--border-subtle)] p-3">
+                    <div className="text-xs text-[color:var(--text-muted)]">Discovery page views</div>
+                    <div className="text-xl font-semibold">{discoveryAnalytics?.totals.discoveryPageViews ?? 0}</div>
+                  </div>
+                  <div className="rounded-lg border border-[var(--border-subtle)] p-3">
+                    <div className="text-xs text-[color:var(--text-muted)]">Card clicks</div>
+                    <div className="text-xl font-semibold">{discoveryAnalytics?.totals.cardClicks ?? 0}</div>
+                  </div>
+                  <div className="rounded-lg border border-[var(--border-subtle)] p-3">
+                    <div className="text-xs text-[color:var(--text-muted)]">Profile clicks</div>
+                    <div className="text-xl font-semibold">{discoveryAnalytics?.totals.profileClicks ?? 0}</div>
+                  </div>
+                  <div className="rounded-lg border border-[var(--border-subtle)] p-3">
+                    <div className="text-xs text-[color:var(--text-muted)]">CTA clicks</div>
+                    <div className="text-xl font-semibold">{discoveryAnalytics?.totals.ctaClicks ?? 0}</div>
+                  </div>
+                </div>
+
+                {(discoveryAnalytics?.totals.discoveryPageViews ?? 0) === 0 &&
+                (discoveryAnalytics?.totals.cardClicks ?? 0) === 0 &&
+                (discoveryAnalytics?.totals.profileClicks ?? 0) === 0 &&
+                (discoveryAnalytics?.totals.ctaClicks ?? 0) === 0 ? (
+                  <div className="text-sm text-[color:var(--text-muted)]">
+                    No discovery activity recorded yet. Share or index the public SEO pages to start measuring traffic.
+                  </div>
+                ) : (
+                  <div className="grid gap-3 xl:grid-cols-3">
+                    <div className="rounded-lg border border-[var(--border-subtle)] p-3">
+                      <div className="text-sm font-medium">Top public pages</div>
+                      <div className="mt-2 space-y-2 text-xs">
+                        {(discoveryAnalytics?.topPages || []).slice(0, 5).map((page) => (
+                          <div key={`${page.sourcePath}:${page.sourcePageType}`}>
+                            <div className="font-medium">{page.sourcePath}</div>
+                            <div className="text-[color:var(--text-muted)]">
+                              {page.sourcePageType} • views {page.views} • clicks {page.clicks}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="rounded-lg border border-[var(--border-subtle)] p-3">
+                      <div className="text-sm font-medium">Top profiles from discovery</div>
+                      <div className="mt-2 space-y-2 text-xs">
+                        {(discoveryAnalytics?.topProfilesFromDiscovery || []).slice(0, 5).map((profile) => (
+                          <div key={`${profile.profileId}:${profile.profilePath}`}>
+                            <div className="font-medium">{profile.displayName || profile.profilePath}</div>
+                            <div className="text-[color:var(--text-muted)]">
+                              {profile.profileType} • clicks {profile.clicks}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="rounded-lg border border-[var(--border-subtle)] p-3">
+                      <div className="text-sm font-medium">Top cities</div>
+                      <div className="mt-2 space-y-2 text-xs">
+                        {(discoveryAnalytics?.topCities || []).slice(0, 5).map((city) => (
+                          <div key={city.city}>
+                            <div className="font-medium">{city.city}</div>
+                            <div className="text-[color:var(--text-muted)]">
+                              views {city.views} • clicks {city.clicks}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
