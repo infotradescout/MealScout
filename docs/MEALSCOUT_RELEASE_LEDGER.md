@@ -113,6 +113,33 @@ Last updated: 2026-05-26 (America/Chicago)
   - Authenticated browser path renders messaging and conversion buttons with DB-seeded attribution data.
   - Copy avoids inflated ranking/superiority claims.
 
+12. PDA-2.6 Owner Profile Completion Loop
+- Status: PASS
+- Commit: `pending`
+- Depends on:
+  - PDA-2.1 — DB-seeded runtime integration contract
+  - PDA-2.2 — Owner value attribution aggregate
+  - PDA-2.3 — Owner analytics UI consumption contract
+  - PDA-2.4 — DB-seeded owner analytics browser proof
+  - PDA-2.5 — Owner value messaging + conversion surface
+- Goal:
+  - Use owner attribution context to show profile strength, missing profile items, and the next safe completion action without inflated claims.
+- Validation:
+  - `npm run test -- owner-profile-completion` ✅
+  - `npm run test -- owner-value-attribution-browser` ✅
+  - `npm run test:run` ✅
+  - `npm run check` ✅
+  - `npm run build` ✅
+  - `npm run verify:routes` ✅
+- Proof:
+  - Owner dashboard renders profile strength score.
+  - Missing schema-backed profile items are flagged.
+  - Completed fields are not flagged.
+  - "Why this matters" guidance renders for missing items.
+  - "Update next missing item" CTA renders.
+  - Completed-state copy renders safely.
+  - Authenticated browser proof covers completion-loop rendering.
+
 ## What is now live
 
 - Public SEO/discovery pages route into canonical `/p/...` profiles.

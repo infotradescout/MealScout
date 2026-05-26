@@ -482,6 +482,13 @@ async function run() {
     );
 
     await page.getByText("Profile value").first().waitFor({ state: "visible", timeout: 20_000 });
+    await page.getByText("Profile completion loop").first().waitFor({ state: "visible", timeout: 20_000 });
+    await page.getByText("Profile strength:").first().waitFor({ state: "visible", timeout: 20_000 });
+    await page.getByText("Menu missing").first().waitFor({ state: "visible", timeout: 20_000 });
+    await page.getByRole("button", { name: "Update next missing item" }).first().waitFor({
+      state: "visible",
+      timeout: 20_000,
+    });
     await page
       .getByText("Discovery traffic and profile actions are shown from real activity only.")
       .first()
@@ -554,6 +561,11 @@ async function run() {
       )
       .first()
       .waitFor({ state: "visible", timeout: 20_000 });
+    await page.getByText("Profile completion loop").first().waitFor({ state: "visible", timeout: 20_000 });
+    await page.getByRole("button", { name: "Update next missing item" }).first().waitFor({
+      state: "visible",
+      timeout: 20_000,
+    });
 
     console.log("owner-value-attribution-browser: PASS");
   } finally {

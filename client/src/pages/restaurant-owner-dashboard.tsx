@@ -2984,6 +2984,107 @@ export default function RestaurantOwnerDashboard() {
                     Number(totals.ctaClicks || 0) > 0 ||
                     Number(totals.shareOpens || 0) > 0 ||
                     Number(totals.highIntentActions || 0) > 0;
+                  const socialLinks =
+                    (currentRestaurant as any)?.socialAutopostSettings &&
+                    typeof (currentRestaurant as any).socialAutopostSettings === "object" &&
+                    typeof (currentRestaurant as any).socialAutopostSettings.publicActionLinks ===
+                      "object"
+                      ? (currentRestaurant as any).socialAutopostSettings.publicActionLinks
+                      : {};
+                  const completionItems = [
+                    {
+                      id: "menu",
+                      label: "Menu missing",
+                      why: "Customers need a menu to decide quickly.",
+                      done: Boolean(
+                        (currentRestaurant as any)?.menuUrl ||
+                          (currentRestaurant as any)?.menuPdfUrl ||
+                          (currentRestaurant as any)?.menuImageUrl ||
+                          Number((currentRestaurant as any)?.menuItemCount || 0) > 0 ||
+                          Number((currentRestaurant as any)?.publicMenuItemCount || 0) > 0,
+                      ),
+                      href: `/menu-builder?restaurantId=${encodeURIComponent(String(selectedRestaurant))}`,
+                    },
+                    {
+                      id: "photos",
+                      label: "Photos missing",
+                      why: "Photos help people trust what they are choosing.",
+                      done: Boolean(
+                        (currentRestaurant as any)?.imageUrl ||
+                          (currentRestaurant as any)?.logoUrl ||
+                          (currentRestaurant as any)?.coverImageUrl,
+                      ),
+                      href: `/restaurant-owner-dashboard?setup=profile&restaurantId=${encodeURIComponent(String(selectedRestaurant))}`,
+                    },
+                    {
+                      id: "hours",
+                      label: "Business hours missing",
+                      why: "People act faster when they know if you are open.",
+                      done: Boolean(
+                        (currentRestaurant as any)?.operatingHours ||
+                          (currentRestaurant as any)?.businessHours ||
+                          (currentRestaurant as any)?.hours ||
+                          (currentRestaurant as any)?.schedulePublished,
+                      ),
+                      href: `/restaurant-owner-dashboard?setup=schedule&restaurantId=${encodeURIComponent(String(selectedRestaurant))}`,
+                    },
+                    {
+                      id: "service-area",
+                      label: "Service area missing",
+                      why: "A clear location helps direction and pickup decisions.",
+                      done: Boolean((currentRestaurant as any)?.address || (currentRestaurant as any)?.city),
+                      href: `/restaurant-owner-dashboard?setup=profile&restaurantId=${encodeURIComponent(String(selectedRestaurant))}`,
+                    },
+                    {
+                      id: "contact",
+                      label: "Contact method missing",
+                      why: "Calls and direct actions need an obvious contact path.",
+                      done: Boolean(
+                        (currentRestaurant as any)?.phone ||
+                          (currentRestaurant as any)?.contactPhone ||
+                          (currentRestaurant as any)?.websiteUrl ||
+                          (currentRestaurant as any)?.onlineOrderingUrl ||
+                          socialLinks.onlineOrderingUrl ||
+                          socialLinks.deliveryUrl,
+                      ),
+                      href: `/restaurant-owner-dashboard?setup=profile&restaurantId=${encodeURIComponent(String(selectedRestaurant))}`,
+                    },
+                    {
+                      id: "social",
+                      label: "Social link missing",
+                      why: "Social links help discovery visitors follow and return.",
+                      done: Boolean(
+                        (currentRestaurant as any)?.facebookPageUrl ||
+                          (currentRestaurant as any)?.instagramUrl,
+                      ),
+                      href: `/restaurant-owner-dashboard?setup=profile&restaurantId=${encodeURIComponent(String(selectedRestaurant))}`,
+                    },
+                    {
+                      id: "catering-events",
+                      label: "Catering/private event info missing",
+                      why: "Private event details create another high-intent action path.",
+                      done: Boolean(
+                        (currentRestaurant as any)?.cateringInquiryUrl ||
+                          (currentRestaurant as any)?.truckBookingInquiryUrl ||
+                          socialLinks.cateringInquiryUrl ||
+                          socialLinks.truckBookingInquiryUrl ||
+                          Number((currentRestaurant as any)?.upcomingPublicEventCount || 0) > 0 ||
+                          Number((currentRestaurant as any)?.upcomingEventCount || 0) > 0,
+                      ),
+                      href: "/events",
+                    },
+                    {
+                      id: "deal",
+                      label: "Deal/special missing",
+                      why: "Current offers give people a reason to choose you today.",
+                      done: Number(stats?.activeDeals || 0) > 0,
+                      href: "/deal-creation",
+                    },
+                  ];
+                  const profileStrength = completionItems.filter((item) => item.done).length;
+                  const missingCompletionItems = completionItems.filter((item) => !item.done);
+                  const nextCompletionCta = missingCompletionItems[0]?.href ||
+                    `/restaurant-owner-dashboard?setup=profile&restaurantId=${encodeURIComponent(String(selectedRestaurant))}`;
                   if (!hasAnyData) {
                     const publicProfilePath =
                       currentPublicEntityType === "truck"
@@ -3022,6 +3123,34 @@ export default function RestaurantOwnerDashboard() {
                           >
                             Copy public profile link
                           </Button>
+                        </div>
+                        <div className="mt-4 rounded-md border border-border bg-background p-3">
+                          <p className="text-sm font-semibold">Profile completion loop</p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Complete profiles are easier for people to evaluate when they find you through MealScout.
+                          </p>
+                          <p className="mt-2 text-xs text-muted-foreground">
+                            Profile strength: {profileStrength}/{completionItems.length}
+                          </p>
+                          {missingCompletionItems.length ? (
+                            <div className="mt-2 space-y-2">
+                              {missingCompletionItems.slice(0, 4).map((item) => (
+                                <div key={item.id} className="rounded border border-border p-2">
+                                  <p className="text-sm font-medium">{item.label}</p>
+                                  <p className="text-xs text-muted-foreground">{item.why}</p>
+                                </div>
+                              ))}
+                              <Link href={nextCompletionCta}>
+                                <Button type="button" size="sm" className="mt-1">
+                                  Update next missing item
+                                </Button>
+                              </Link>
+                            </div>
+                          ) : (
+                            <p className="mt-2 text-xs text-muted-foreground">
+                              Profile completion looks strong. Keep details current as your business updates.
+                            </p>
+                          )}
                         </div>
                       </div>
                     );
@@ -3111,6 +3240,34 @@ export default function RestaurantOwnerDashboard() {
                               </Button>
                             </Link>
                           </div>
+                        </div>
+                        <div className="rounded-md border border-border p-3">
+                          <p className="text-sm font-semibold">Profile completion loop</p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Complete profiles are easier for people to evaluate when they find you through MealScout.
+                          </p>
+                          <p className="mt-2 text-xs text-muted-foreground">
+                            Profile strength: {profileStrength}/{completionItems.length}
+                          </p>
+                          {missingCompletionItems.length ? (
+                            <div className="mt-2 space-y-2">
+                              {missingCompletionItems.slice(0, 5).map((item) => (
+                                <div key={item.id} className="rounded border border-border p-2">
+                                  <p className="text-sm font-medium">{item.label}</p>
+                                  <p className="text-xs text-muted-foreground">{item.why}</p>
+                                </div>
+                              ))}
+                              <Link href={nextCompletionCta}>
+                                <Button type="button" size="sm" className="mt-1">
+                                  Update next missing item
+                                </Button>
+                              </Link>
+                            </div>
+                          ) : (
+                            <p className="mt-2 text-xs text-muted-foreground">
+                              Profile completion looks strong. Keep details current as your business updates.
+                            </p>
+                          )}
                         </div>
                       </div>
                     </>
