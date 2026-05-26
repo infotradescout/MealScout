@@ -53,6 +53,7 @@ import { registerRestaurantCoreRoutes } from "./routes/restaurantCoreRoutes";
 import { registerRestaurantOperationsRoutes } from "./routes/restaurantOperationsRoutes";
 import { registerRestaurantSignupRoutes } from "./routes/restaurantSignupRoutes";
 import { registerPublicSearchRoutes } from "./routes/publicSearchRoutes";
+import { registerPublicSeoLandingRoutes } from "./routes/publicSeoLandingRoutes";
 import { registerSeoRoutes } from "./routes/seoRoutes";
 import { registerSubscriptionRoutes } from "./routes/subscriptionRoutes";
 import { registerRuntimeBootstrapRoutes } from "./routes/runtimeBootstrapRoutes";
@@ -146,6 +147,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerRestaurantCoreRoutes(app, { validateAnalyticsAccess });
 
   registerPublicSearchRoutes(app);
+  registerPublicSeoLandingRoutes(app);
   registerRecommendationRoutes(app);
   registerScoutSurfaceRoutes(app);
 

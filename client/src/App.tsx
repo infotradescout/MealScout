@@ -73,6 +73,7 @@ const DealsCityPage = lazy(() => import("@/pages/deals-city"));
 const RestaurantDetail = lazy(() => import("@/pages/restaurant-detail"));
 const LocationDetailPage = lazy(() => import("@/pages/location-detail"));
 const LocationDiscoveryPage = lazy(() => import("@/pages/location-discovery"));
+const PublicSeoLandingPage = lazy(() => import("@/pages/public-seo-landing"));
 const NotificationsPage = lazy(() => import("@/pages/profile/notifications"));
 const SettingsPage = lazy(() => import("@/pages/profile/settings"));
 const AddressesPage = lazy(() => import("@/pages/profile/addresses"));
@@ -202,6 +203,10 @@ const publicRoutePrefixes = [
   "/private-chefs",
   "/events",
   "/food-trucks/",
+  "/food-trucks-today/",
+  "/deals-today/",
+  "/events-today/",
+  "/locations-with-trucks/",
   "/sitemap",
   "/status",
   "/golden-plate-winners",
@@ -316,7 +321,7 @@ function Router() {
             <Route path="/video" component={VideoPage} />
             <Route path="/video/:id" component={VideoDetailPage} />
             <Route path="/category/:category" component={CategoryPage} />
-            <Route path="/cuisine/:type" component={CategoryPage} />
+            <Route path="/cuisine/:type" component={PublicSeoLandingPage} />
             <Route path="/deals" component={FeaturedDealsPage} />
             <Route path="/deals/featured" component={FeaturedDealsPage} />
             <Route path="/deals/:city" component={DealsCityPage} />
@@ -338,6 +343,12 @@ function Router() {
             />
             <Route path="/city/:city" component={CityLanding} />
             <Route path="/city/:city/:mode" component={CityDiscoveryPage} />
+            <Route path="/city/:city/food" component={PublicSeoLandingPage} />
+            <Route path="/food-trucks-today/:city" component={PublicSeoLandingPage} />
+            <Route path="/deals-today/:city" component={PublicSeoLandingPage} />
+            <Route path="/events-today/:city" component={PublicSeoLandingPage} />
+            <Route path="/cuisine/:cuisine/:city" component={PublicSeoLandingPage} />
+            <Route path="/locations-with-trucks/:city" component={PublicSeoLandingPage} />
             <Route path="/terms-of-service" component={TermsOfService} />
             <Route path="/moderation-policy" component={ModerationPolicy} />
             <Route path="/privacy-policy" component={PrivacyPolicy} />
@@ -505,7 +516,7 @@ function Router() {
             />
             <Route path="/admin/switcher" component={DashboardSwitcherPage} />
             <Route path="/category/:category" component={CategoryPage} />
-            <Route path="/cuisine/:type" component={CategoryPage} />
+            <Route path="/cuisine/:type" component={PublicSeoLandingPage} />
             <Route path="/deals" component={FeaturedDealsPage} />
             <Route path="/deals/featured" component={FeaturedDealsPage} />
             <Route path="/deals/:city" component={DealsCityPage} />
@@ -527,6 +538,12 @@ function Router() {
             />
             <Route path="/city/:city" component={CityLanding} />
             <Route path="/city/:city/:mode" component={CityDiscoveryPage} />
+            <Route path="/city/:city/food" component={PublicSeoLandingPage} />
+            <Route path="/food-trucks-today/:city" component={PublicSeoLandingPage} />
+            <Route path="/deals-today/:city" component={PublicSeoLandingPage} />
+            <Route path="/events-today/:city" component={PublicSeoLandingPage} />
+            <Route path="/cuisine/:cuisine/:city" component={PublicSeoLandingPage} />
+            <Route path="/locations-with-trucks/:city" component={PublicSeoLandingPage} />
             <Route path="/terms-of-service" component={TermsOfService} />
             <Route path="/moderation-policy" component={ModerationPolicy} />
             <Route path="/privacy-policy" component={PrivacyPolicy} />

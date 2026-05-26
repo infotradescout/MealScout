@@ -1,0 +1,193 @@
+import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useParams, Link } from "wouter";
+
+import { SEOHead } from "@/components/seo-head";
+import { apiUrl } from "@/lib/api";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+
+type Payload = {
+  page: {
+    routeKey: string;
+    citySlug: string | null;
+    cityName: string | null;
+    cuisineSlug: string | null;
+    cuisineName: string | null;
+    canonicalPath: string;
+    title: string;
+    description: string;
+    ogImage: string | null;
+    emptyMessage: string;
+  };
+  items: Array<{
+    id: string;
+    profileType: string;
+    displayName: string;
+    slug: string;
+    profilePath: string;
+    city: string | null;
+    state: string | null;
+    imageUrl: string | null;
+    cuisineTags: string[];
+    statusLabel: string | null;
+    summary: string | null;
+    primaryCtaPath: string;
+  }>;
+  total: number;
+};
+
+const mapRouteToEndpoint = (pathname: string) => {
+  const parts = pathname.split("/").filter(Boolean);
+  if (parts[0] === "food-trucks-today" && parts[1]) {
+    return `/api/public/seo/food-trucks-today/${encodeURIComponent(parts[1])}`;
+  }
+  if (parts[0] === "deals-today" && parts[1]) {
+    return `/api/public/seo/deals-today/${encodeURIComponent(parts[1])}`;
+  }
+  if (parts[0] === "events-today" && parts[1]) {
+    return `/api/public/seo/events-today/${encodeURIComponent(parts[1])}`;
+  }
+  if (parts[0] === "city" && parts[1] && parts[2] === "food") {
+    return `/api/public/seo/city/${encodeURIComponent(parts[1])}/food`;
+  }
+  if (parts[0] === "cuisine" && parts[1] && parts[2]) {
+    return `/api/public/seo/cuisine/${encodeURIComponent(parts[1])}/${encodeURIComponent(parts[2])}`;
+  }
+  if (parts[0] === "cuisine" && parts[1]) {
+    return `/api/public/seo/cuisine/${encodeURIComponent(parts[1])}`;
+  }
+  if (parts[0] === "locations-with-trucks" && parts[1]) {
+    return `/api/public/seo/locations-with-trucks/${encodeURIComponent(parts[1])}`;
+  }
+  return null;
+};
+
+export default function PublicSeoLandingPage() {
+  const params = useParams() as Record<string, string | undefined>;
+  const rawPath = window.location.pathname;
+  const endpoint = useMemo(() => mapRouteToEndpoint(rawPath), [rawPath, params]);
+
+  const { data, isLoading, error } = useQuery<Payload>({
+    queryKey: ["public-seo-landing", endpoint],
+    enabled: Boolean(endpoint),
+    queryFn: async () => {
+      const res = await fetch(apiUrl(String(endpoint)));
+      if (!res.ok) {
+        const payload = await res.json().catch(() => null);
+        throw new Error(payload?.message || "Failed to load page");
+      }
+      return res.json();
+    },
+    staleTime: 60_000,
+  });
+
+  const title = data?.page?.title || "Local food discovery";
+  const description =
+    data?.page?.description ||
+    "Find local food, nearby trucks, deals, and events on MealScout.";
+  const canonicalUrl = data?.page?.canonicalPath
+    ? `https://www.mealscout.us${data.page.canonicalPath}`
+    : undefined;
+  const citySlug = data?.page?.citySlug;
+  const cuisineSlug = data?.page?.cuisineSlug;
+
+  return (
+    <div className="min-h-screen bg-background">
+      <SEOHead
+        title={title}
+        description={description}
+        canonicalUrl={canonicalUrl}
+        ogImage={data?.page?.ogImage || undefined}
+      />
+      <div className="mx-auto max-w-6xl px-4 py-10">
+        <header className="mb-6">
+          <h1 className="text-3xl font-bold tracking-tight">{title}</h1>
+          <p className="mt-2 text-sm text-muted-foreground">{description}</p>
+        </header>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>
+              {isLoading ? "Loading local results..." : `${data?.total || 0} local results`}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {error ? (
+              <p className="text-sm text-destructive">
+                {(error as any)?.message || "Failed to load local discovery results."}
+              </p>
+            ) : null}
+
+            {!isLoading && (data?.items?.length || 0) === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                {data?.page?.emptyMessage ||
+                  "No local listings are available yet. Check nearby food or come back soon."}
+              </p>
+            ) : null}
+
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {(data?.items || []).map((item) => (
+                <Card key={item.id} className="overflow-hidden">
+                  <CardContent className="pt-5">
+                    <div className="space-y-2">
+                      <a href={item.profilePath} className="font-semibold underline">
+                        {item.displayName}
+                      </a>
+                      <p className="text-xs text-muted-foreground">
+                        {[item.city, item.state].filter(Boolean).join(", ") || "Local area"}
+                      </p>
+                      {item.summary ? (
+                        <p className="text-xs text-muted-foreground">{item.summary}</p>
+                      ) : null}
+                      {item.cuisineTags?.length ? (
+                        <p className="text-xs text-muted-foreground">
+                          {item.cuisineTags.slice(0, 2).join(" • ")}
+                        </p>
+                      ) : null}
+                      <div className="pt-1">
+                        <Button asChild size="sm">
+                          <a href={item.primaryCtaPath}>Open profile</a>
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        <section className="mt-6 rounded-lg border border-[var(--border-subtle)] p-4">
+          <h2 className="text-sm font-semibold">Related discovery</h2>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {citySlug ? (
+              <>
+                <Link href={`/city/${encodeURIComponent(citySlug)}/food`} className="text-sm underline">
+                  City food
+                </Link>
+                <Link href={`/food-trucks-today/${encodeURIComponent(citySlug)}`} className="text-sm underline">
+                  Food trucks today
+                </Link>
+                <Link href={`/deals-today/${encodeURIComponent(citySlug)}`} className="text-sm underline">
+                  Deals today
+                </Link>
+                <Link href={`/events-today/${encodeURIComponent(citySlug)}`} className="text-sm underline">
+                  Events today
+                </Link>
+                <Link href={`/locations-with-trucks/${encodeURIComponent(citySlug)}`} className="text-sm underline">
+                  Locations with trucks
+                </Link>
+              </>
+            ) : null}
+            {cuisineSlug ? (
+              <Link href={`/cuisine/${encodeURIComponent(cuisineSlug)}`} className="text-sm underline">
+                More {cuisineSlug.replace(/-/g, " ")}
+              </Link>
+            ) : null}
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+}

@@ -245,11 +245,37 @@ export function registerSeoRoutes(app: Express) {
       }
       const uniqueCityRows = Array.from(latestCityBySlug.values());
 
+      const anyRestaurantCity = new Set(
+        restaurantRows
+          .map((row: any) => String(row.city || "").trim().toLowerCase())
+          .filter(Boolean),
+      );
+      const truckRestaurantCity = new Set(
+        restaurantRows
+          .filter((row: any) => Boolean(row.isFoodTruck))
+          .map((row: any) => String(row.city || "").trim().toLowerCase())
+          .filter(Boolean),
+      );
+
       uniqueCityRows.forEach((city: any) => {
-        mergeUrl(
-          `${baseUrl}/food-trucks/${encodeURIComponent(city.slug)}`,
-          city.updatedAt || city.createdAt,
-        );
+        const cityName = String(city?.name || "").trim().toLowerCase();
+        if (!cityName) return;
+        if (truckRestaurantCity.has(cityName)) {
+          mergeUrl(
+            `${baseUrl}/food-trucks/${encodeURIComponent(city.slug)}`,
+            city.updatedAt || city.createdAt,
+          );
+          mergeUrl(
+            `${baseUrl}/food-trucks-today/${encodeURIComponent(city.slug)}`,
+            city.updatedAt || city.createdAt,
+          );
+        }
+        if (anyRestaurantCity.has(cityName)) {
+          mergeUrl(
+            `${baseUrl}/city/${encodeURIComponent(city.slug)}/food`,
+            city.updatedAt || city.createdAt,
+          );
+        }
       });
 
       restaurantRows.forEach((row: any) => {
@@ -317,6 +343,10 @@ export function registerSeoRoutes(app: Express) {
           `${baseUrl}/food-trucks/${encodeURIComponent(citySlug)}/${encodeURIComponent(cuisineSlug)}`,
           lastmod || undefined,
         );
+        mergeUrl(
+          `${baseUrl}/cuisine/${encodeURIComponent(cuisineSlug)}/${encodeURIComponent(citySlug)}`,
+          lastmod || undefined,
+        );
       });
 
       // Deal-city pages: /deals/:citySlug for cities with at least one active deal
@@ -359,9 +389,65 @@ export function registerSeoRoutes(app: Express) {
             `${baseUrl}/deals/${encodeURIComponent(slug)}`,
             lastmod || undefined,
           );
+          mergeUrl(
+            `${baseUrl}/deals-today/${encodeURIComponent(slug)}`,
+            lastmod || undefined,
+          );
         });
       } catch (dealCityErr) {
         console.error("[sitemap] deal-city section failed:", dealCityErr);
+      }
+
+      // Event city pages: /events-today/:citySlug where upcoming public events exist.
+      try {
+        const now = new Date();
+        const windowEnd = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+        const eventCityRows = await db
+          .select({
+            cityName: hosts.city,
+            updatedAt: events.updatedAt,
+          })
+          .from(events)
+          .innerJoin(hosts, eq(events.hostId, hosts.id))
+          .where(
+            and(
+              isNotNull(events.bookedRestaurantId),
+              ne(events.status, "cancelled"),
+              gte(events.date, now),
+              lte(events.date, windowEnd),
+              isNotNull(hosts.city),
+            ),
+          );
+
+        const eventCityLastmod = new Map<string, string | null>();
+        for (const row of eventCityRows) {
+          const cityName = String(row.cityName || "")
+            .trim()
+            .toLowerCase();
+          const slug = citySlugByName.get(cityName);
+          if (!slug) continue;
+          const next = toIsoDateOrNull(row.updatedAt);
+          const existing = eventCityLastmod.get(slug) || null;
+          if (
+            !existing ||
+            (next && new Date(next).getTime() > new Date(existing).getTime())
+          ) {
+            eventCityLastmod.set(slug, next);
+          }
+        }
+
+        eventCityLastmod.forEach((lastmod, slug) => {
+          mergeUrl(
+            `${baseUrl}/events-today/${encodeURIComponent(slug)}`,
+            lastmod || undefined,
+          );
+          mergeUrl(
+            `${baseUrl}/locations-with-trucks/${encodeURIComponent(slug)}`,
+            lastmod || undefined,
+          );
+        });
+      } catch (eventCityErr) {
+        console.error("[sitemap] event-city section failed:", eventCityErr);
       }
 
       sendUrlsetXml(res, {

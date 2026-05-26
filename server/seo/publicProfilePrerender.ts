@@ -763,6 +763,27 @@ async function supplierPage(baseUrl: string, supplierId: string) {
   } satisfies PrerenderPage;
 }
 
+async function seoLandingPage(
+  baseUrl: string,
+  input: { path: string; title: string; description: string; links: PageLink[] },
+) {
+  return {
+    title: `${input.title} | MealScout`,
+    description: input.description,
+    canonicalPath: input.path,
+    imageUrl: defaultSocialImagePath,
+    schema: {
+      "@context": "https://schema.org",
+      "@type": "CollectionPage",
+      name: input.title,
+      description: input.description,
+      url: absoluteUrl(baseUrl, input.path),
+    },
+    links: input.links,
+    body: [input.description],
+  } satisfies PrerenderPage;
+}
+
 const sendPage = (
   baseUrl: string,
   res: Response,
@@ -859,6 +880,81 @@ export function registerPublicProfilePrerenderRoutes(
       }
       return Promise.resolve(null);
     }),
+  );
+  app.get(
+    "/food-trucks-today/:city",
+    gate((req) =>
+      seoLandingPage(canonicalBaseUrl, {
+        path: `/food-trucks-today/${encodeURIComponent(String(req.params.city || ""))}`,
+        title: `Food trucks today in ${String(req.params.city || "").replace(/-/g, " ")}`,
+        description: "Find local food trucks active today. Browse local profiles, menus, and nearby stops.",
+        links: [{ label: "Open city food", href: `/city/${encodeURIComponent(String(req.params.city || ""))}/food` }],
+      }),
+    ),
+  );
+  app.get(
+    "/deals-today/:city",
+    gate((req) =>
+      seoLandingPage(canonicalBaseUrl, {
+        path: `/deals-today/${encodeURIComponent(String(req.params.city || ""))}`,
+        title: `Deals today in ${String(req.params.city || "").replace(/-/g, " ")}`,
+        description: "See local food deals active today and open the related business profiles.",
+        links: [{ label: "Open city food", href: `/city/${encodeURIComponent(String(req.params.city || ""))}/food` }],
+      }),
+    ),
+  );
+  app.get(
+    "/events-today/:city",
+    gate((req) =>
+      seoLandingPage(canonicalBaseUrl, {
+        path: `/events-today/${encodeURIComponent(String(req.params.city || ""))}`,
+        title: `Food events today in ${String(req.params.city || "").replace(/-/g, " ")}`,
+        description: "Find food events happening today and open local profile pages from each listing.",
+        links: [{ label: "Browse events", href: "/events/public" }],
+      }),
+    ),
+  );
+  app.get(
+    "/city/:city/food",
+    gate((req) =>
+      seoLandingPage(canonicalBaseUrl, {
+        path: `/city/${encodeURIComponent(String(req.params.city || ""))}/food`,
+        title: `Places to eat in ${String(req.params.city || "").replace(/-/g, " ")}`,
+        description: "Browse local food businesses and open their canonical MealScout profile pages.",
+        links: [
+          { label: "Food trucks today", href: `/food-trucks-today/${encodeURIComponent(String(req.params.city || ""))}` },
+          { label: "Deals today", href: `/deals-today/${encodeURIComponent(String(req.params.city || ""))}` },
+          { label: "Events today", href: `/events-today/${encodeURIComponent(String(req.params.city || ""))}` },
+        ],
+      }),
+    ),
+  );
+  app.get(
+    "/cuisine/:cuisine/:city?",
+    gate((req) =>
+      seoLandingPage(canonicalBaseUrl, {
+        path:
+          req.params.city
+            ? `/cuisine/${encodeURIComponent(String(req.params.cuisine || ""))}/${encodeURIComponent(String(req.params.city || ""))}`
+            : `/cuisine/${encodeURIComponent(String(req.params.cuisine || ""))}`,
+        title: `${String(req.params.cuisine || "").replace(/-/g, " ")} food`,
+        description: "Explore local cuisine pages and open canonical MealScout profiles for nearby options.",
+        links: req.params.city
+          ? [{ label: "Open city food", href: `/city/${encodeURIComponent(String(req.params.city || ""))}/food` }]
+          : [{ label: "Open search", href: "/search" }],
+      }),
+    ),
+  );
+  app.get(
+    "/locations-with-trucks/:city",
+    gate((req) =>
+      seoLandingPage(canonicalBaseUrl, {
+        path: `/locations-with-trucks/${encodeURIComponent(String(req.params.city || ""))}`,
+        title: `Locations with food trucks in ${String(req.params.city || "").replace(/-/g, " ")}`,
+        description: "Find host locations with active truck activity and open location profile pages.",
+        links: [{ label: "Open city food", href: `/city/${encodeURIComponent(String(req.params.city || ""))}/food` }],
+      }),
+    ),
   );
 }
 

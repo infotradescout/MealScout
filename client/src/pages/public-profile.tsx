@@ -1331,6 +1331,7 @@ export default function PublicProfilePage() {
     data.description ||
     "Find local food activity, menus, deals, and nearby places on MealScout.";
   const canonicalUrl = data.seo?.canonicalUrl || data.canonicalUrl;
+  const citySlug = String((data as any).citySlug || "").trim() || null;
   const ogImage =
     data.seo?.ogImageUrl ||
     (data.entity === "host"
@@ -1383,6 +1384,42 @@ export default function PublicProfilePage() {
       >
         <HeroBlock profile={data} safeCtas={safeCtas} />
         <QuickActionRow profile={data} safeCtas={safeCtas} />
+        {data.city ? (
+          <Card className="border-white/10 bg-[#0f0d0b]">
+            <CardHeader>
+              <CardTitle className="text-base text-white">Related local discovery</CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-wrap gap-2 text-sm">
+              {citySlug ? (
+                <>
+                  <a href={`/city/${encodeURIComponent(citySlug)}/food`} className="underline text-white/85">
+                    Places to eat in {data.city}
+                  </a>
+                  <a href={`/food-trucks-today/${encodeURIComponent(citySlug)}`} className="underline text-white/85">
+                    Food trucks today
+                  </a>
+                  <a href={`/deals-today/${encodeURIComponent(citySlug)}`} className="underline text-white/85">
+                    Deals today
+                  </a>
+                  <a href={`/events-today/${encodeURIComponent(citySlug)}`} className="underline text-white/85">
+                    Events today
+                  </a>
+                  <a href={`/locations-with-trucks/${encodeURIComponent(citySlug)}`} className="underline text-white/85">
+                    Locations with trucks
+                  </a>
+                </>
+              ) : null}
+              {data.entity === "restaurant" && Array.isArray(data.cuisineTags) && data.cuisineTags.length > 0 ? (
+                <a
+                  href={`/cuisine/${encodeURIComponent(String(data.cuisineTags[0] || "").toLowerCase().replace(/[^a-z0-9]+/g, "-"))}${citySlug ? `/${encodeURIComponent(citySlug)}` : ""}`}
+                  className="underline text-white/85"
+                >
+                  More {String(data.cuisineTags[0] || "local food").toLowerCase()}
+                </a>
+              ) : null}
+            </CardContent>
+          </Card>
+        ) : null}
 
         {data.entity === "host" ? (
           <>
