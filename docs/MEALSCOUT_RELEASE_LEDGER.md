@@ -57,7 +57,7 @@ Last updated: 2026-05-26 (America/Chicago)
 
 9. PDA-2.3 Owner Analytics UI Consumption Contract
 - Status: PASS
-- Commit: `pending`
+- Commit: `e434d577`
 - Target endpoint: `GET /api/owner/value-attribution?window=7d|30d`
 - Depends on: PDA-2.1, PDA-2.2
 - Validation:
@@ -71,7 +71,7 @@ Last updated: 2026-05-26 (America/Chicago)
 
 10. PDA-2.4 DB-Seeded Owner Analytics Browser Proof
 - Status: PASS
-- Commit: `pending`
+- Commit: `3088b923`
 - Depends on:
   - PDA-2.1 — DB-seeded runtime integration contract
   - PDA-2.2 — Owner value attribution aggregate
