@@ -1,9 +1,10 @@
+import "dotenv/config";
 import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
 import net from "node:net";
 import { setTimeout as sleep } from "node:timers/promises";
 import bcrypt from "bcryptjs";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, or, sql } from "drizzle-orm";
 
 import { db } from "../server/db";
 import { requestLogs, restaurants, users } from "../shared/schema";
@@ -12,7 +13,7 @@ function assert(condition: unknown, message: string) {
   if (!condition) throw new Error(message);
 }
 
-async function getFreePort(preferred = 5011): Promise<number> {
+async function getFreePort(preferred = 0): Promise<number> {
   const tryPort = (port: number) =>
     new Promise<number>((resolve, reject) => {
       const srv = net.createServer();
@@ -59,11 +60,25 @@ function toCookieHeader(setCookies: string[]) {
 async function login(baseUrl: string, email: string, password: string) {
   const res = await fetch(`${baseUrl}/api/auth/login`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      Origin: baseUrl,
+      Referer: `${baseUrl}/login`,
+    },
     body: JSON.stringify({ email, password }),
   });
-  assert(res.ok, `Login failed for ${email} (${res.status})`);
-  return toCookieHeader(getSetCookies(res));
+  const payload = await res.json().catch(() => ({}));
+  const setCookie = getSetCookies(res);
+  if (!res.ok) {
+    throw new Error(
+      `Login failed status=${res.status} message=${String(
+        payload?.error || payload?.message || "unknown",
+      )} setCookie=${setCookie.length > 0 ? "present" : "missing"}`,
+    );
+  }
+  assert(setCookie.length > 0, "Login succeeded but Set-Cookie was missing");
+  return toCookieHeader(setCookie);
 }
 
 async function seedRequestEvents(input: {
@@ -105,9 +120,9 @@ async function run() {
   const port = await getFreePort();
   const baseUrl = `http://127.0.0.1:${port}`;
 
-  const ownerId = `ovd_owner_${randomUUID()}`;
-  const outsiderId = `ovd_outsider_${randomUUID()}`;
-  const adminId = `ovd_admin_${randomUUID()}`;
+  const ownerId = randomUUID();
+  const outsiderId = randomUUID();
+  const adminId = randomUUID();
   const targetRestaurantId = `ovd_restaurant_${randomUUID()}`;
   const emptyRestaurantId = `ovd_empty_${randomUUID()}`;
   const ownerEmail = `ovd_owner_${Date.now()}@example.com`;
@@ -137,6 +152,9 @@ async function run() {
         email: ownerEmail,
         passwordHash,
         emailVerified: true,
+        isDisabled: false,
+        mustResetPassword: false,
+        appContext: "mealscout",
         firstName: "OVD",
         lastName: "Owner",
       },
@@ -146,6 +164,9 @@ async function run() {
         email: outsiderEmail,
         passwordHash,
         emailVerified: true,
+        isDisabled: false,
+        mustResetPassword: false,
+        appContext: "mealscout",
         firstName: "OVD",
         lastName: "Outsider",
       },
@@ -155,10 +176,82 @@ async function run() {
         email: adminEmail,
         passwordHash,
         emailVerified: true,
+        isDisabled: false,
+        mustResetPassword: false,
+        appContext: "mealscout",
         firstName: "OVD",
         lastName: "Admin",
       },
     ]);
+
+    const [sanityUser] = await db
+      .select({
+        id: (users as any).id,
+        userType: (users as any).userType,
+        email: (users as any).email,
+        passwordHash: (users as any).passwordHash,
+        emailVerified: (users as any).emailVerified,
+        isDisabled: (users as any).isDisabled,
+        mustResetPassword: (users as any).mustResetPassword,
+        appContext: (users as any).appContext,
+      })
+      .from(users as any)
+      .where(eq((users as any).id, ownerId))
+      .limit(1);
+    assert(Boolean(sanityUser?.email), "Seed sanity: owner user not persisted");
+    assert(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        String(sanityUser?.id || ""),
+      ),
+      "Seed sanity: owner id is not UUID",
+    );
+    assert(
+      String(sanityUser?.email || "").toLowerCase() === ownerEmail.toLowerCase(),
+      "Seed sanity: owner email mismatch",
+    );
+    assert(Boolean(sanityUser?.passwordHash), "Seed sanity: passwordHash missing");
+    assert(sanityUser?.emailVerified === true, "Seed sanity: emailVerified must be true");
+    assert(
+      sanityUser?.isDisabled !== true,
+      "Seed sanity: isDisabled must be false",
+    );
+    assert(
+      sanityUser?.mustResetPassword !== true,
+      "Seed sanity: mustResetPassword must be false",
+    );
+    assert(
+      String(sanityUser?.appContext || "") === "mealscout",
+      "Seed sanity: appContext must be mealscout",
+    );
+    assert(
+      await bcrypt.compare(password, String(sanityUser?.passwordHash || "")),
+      "Seed sanity: password hash mismatch before login",
+    );
+
+    const normalizedOwnerEmail = ownerEmail.toLowerCase();
+    const [loginLookupUser] = await db
+      .select({
+        id: (users as any).id,
+        userType: (users as any).userType,
+        email: (users as any).email,
+        passwordHash: (users as any).passwordHash,
+        emailVerified: (users as any).emailVerified,
+        isDisabled: (users as any).isDisabled,
+        mustResetPassword: (users as any).mustResetPassword,
+        appContext: (users as any).appContext,
+      })
+      .from(users as any)
+      .where(
+        and(
+          sql`lower(${(users as any).email}) = ${normalizedOwnerEmail}`,
+          or(
+            eq((users as any).isDisabled, false),
+            sql`${(users as any).isDisabled} is null`,
+          ),
+        ),
+      )
+      .limit(1);
+    assert(Boolean(loginLookupUser), "Login lookup sanity: user not found by email");
 
     await db.insert(restaurants as any).values([
       {
@@ -231,24 +324,61 @@ async function run() {
       });
     }
 
-    const ownerCookie = await login(baseUrl, ownerEmail, password);
-    const outsiderCookie = await login(baseUrl, outsiderEmail, password);
-    const adminCookie = await login(baseUrl, adminEmail, password);
+    let ownerCookie = "";
+    let outsiderCookie = "";
+    let adminCookie = "";
+    try {
+      ownerCookie = await login(baseUrl, ownerEmail, password);
+      outsiderCookie = await login(baseUrl, outsiderEmail, password);
+      adminCookie = await login(baseUrl, adminEmail, password);
+    } catch (error) {
+      const safeSummary = {
+        idPresent: Boolean(sanityUser?.id),
+        emailPresent: Boolean(sanityUser?.email),
+        passwordHashPresent: Boolean(sanityUser?.passwordHash),
+        emailVerified: Boolean(sanityUser?.emailVerified),
+        isDisabled: Boolean(sanityUser?.isDisabled),
+        mustResetPassword: Boolean(sanityUser?.mustResetPassword),
+        appContext: String(sanityUser?.appContext || ""),
+        role: String(sanityUser?.userType || ""),
+      };
+      console.error("[ovd-integration] login diagnostic summary:", safeSummary);
+      throw error;
+    }
+
+    const authUserRes = await fetch(`${baseUrl}/api/auth/user`, {
+      headers: { Cookie: ownerCookie, Accept: "application/json" },
+    });
+    assert(authUserRes.status === 200, "Authenticated /api/auth/user check failed");
 
     const unauth = await fetch(
       `${baseUrl}/api/restaurants/${targetRestaurantId}/owner-value-dashboard?window=7d`,
+      { headers: { Origin: baseUrl, Referer: `${baseUrl}/restaurant-owner-dashboard` } },
     );
     assert([401, 403].includes(unauth.status), "Unauthenticated request should be rejected");
 
     const outsiderRes = await fetch(
       `${baseUrl}/api/restaurants/${targetRestaurantId}/owner-value-dashboard?window=7d`,
-      { headers: { Cookie: outsiderCookie } },
+      {
+        headers: {
+          Cookie: outsiderCookie,
+          Origin: baseUrl,
+          Referer: `${baseUrl}/restaurant-owner-dashboard`,
+        },
+      },
     );
     assert(outsiderRes.status === 403, "Non-owner should receive 403");
 
     const ownerRes = await fetch(
       `${baseUrl}/api/restaurants/${targetRestaurantId}/owner-value-dashboard?window=7d`,
-      { headers: { Cookie: ownerCookie, Accept: "application/json" } },
+      {
+        headers: {
+          Cookie: ownerCookie,
+          Accept: "application/json",
+          Origin: baseUrl,
+          Referer: `${baseUrl}/restaurant-owner-dashboard`,
+        },
+      },
     );
     assert(ownerRes.ok, `Owner request failed (${ownerRes.status})`);
     const ownerBody: any = await ownerRes.json();
@@ -296,13 +426,27 @@ async function run() {
 
     const adminRes = await fetch(
       `${baseUrl}/api/restaurants/${targetRestaurantId}/owner-value-dashboard?window=7d`,
-      { headers: { Cookie: adminCookie, Accept: "application/json" } },
+      {
+        headers: {
+          Cookie: adminCookie,
+          Accept: "application/json",
+          Origin: baseUrl,
+          Referer: `${baseUrl}/restaurant-owner-dashboard`,
+        },
+      },
     );
     assert(adminRes.ok, `Admin request failed (${adminRes.status})`);
 
     const emptyRes = await fetch(
       `${baseUrl}/api/restaurants/${emptyRestaurantId}/owner-value-dashboard?window=7d`,
-      { headers: { Cookie: ownerCookie, Accept: "application/json" } },
+      {
+        headers: {
+          Cookie: ownerCookie,
+          Accept: "application/json",
+          Origin: baseUrl,
+          Referer: `${baseUrl}/restaurant-owner-dashboard`,
+        },
+      },
     );
     assert(emptyRes.ok, `Empty state request failed (${emptyRes.status})`);
     const emptyBody: any = await emptyRes.json();

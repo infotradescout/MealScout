@@ -1,6 +1,10 @@
 import { existsSync, readdirSync } from "fs";
 import path from "path";
 import { spawnSync } from "child_process";
+import dotenv from "dotenv";
+
+dotenv.config({ path: ".env" });
+dotenv.config({ path: ".env.local" });
 
 const repoRoot = process.cwd();
 const scriptsDir = path.join(repoRoot, "scripts");
@@ -24,10 +28,19 @@ function normalizePattern(raw: string): string {
   return String(raw || "")
     .trim()
     .toLowerCase()
-    .replace(/\.contract(\.test)?$/, "")
     .replace(/\.test$/, "")
     .replace(/[^\w-]+/g, "-")
     .replace(/-+/g, "-");
+}
+
+function hasWildcard(pattern: string): boolean {
+  return pattern.includes("*");
+}
+
+function wildcardToRegex(pattern: string): RegExp {
+  const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, "\\$&");
+  const regexSource = `^${escaped.replace(/\\\*/g, ".*")}$`;
+  return new RegExp(regexSource, "i");
 }
 
 function runScript(scriptPath: string): number {
@@ -36,6 +49,7 @@ function runScript(scriptPath: string): number {
   const result = spawnSync("npx", ["--yes", "tsx", rel], {
     stdio: "inherit",
     cwd: repoRoot,
+    env: { ...process.env },
     shell: process.platform === "win32",
   });
   return result.status ?? 1;
@@ -62,9 +76,17 @@ function main() {
   const matched = candidates.filter((file) => {
     const name = path.basename(file).toLowerCase();
     const normalizedName = normalizePattern(name.replace(/\.(ts|mts|cts|js|mjs|cjs)$/i, ""));
-    return patterns.some(
-      (pattern) => normalizedName.includes(pattern) || name.includes(pattern),
-    );
+    return patterns.some((pattern) => {
+      if (hasWildcard(pattern)) {
+        const regex = wildcardToRegex(pattern);
+        return regex.test(normalizedName) || regex.test(name);
+      }
+      return (
+        normalizedName === pattern ||
+        normalizedName.startsWith(`${pattern}-`) ||
+        name.includes(`${pattern}.`)
+      );
+    });
   });
 
   if (matched.length === 0) {
