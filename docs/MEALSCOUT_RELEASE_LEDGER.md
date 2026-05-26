@@ -69,6 +69,27 @@ Last updated: 2026-05-26 (America/Chicago)
 - Remaining non-blocking hardening:
   - DB-seeded browser/runtime UI proof deferred to PDA-2.4
 
+10. PDA-2.4 DB-Seeded Owner Analytics Browser Proof
+- Status: PASS
+- Commit: `pending`
+- Depends on:
+  - PDA-2.1 — DB-seeded runtime integration contract
+  - PDA-2.2 — Owner value attribution aggregate
+  - PDA-2.3 — Owner analytics UI consumption contract
+- Goal:
+  - Prove seeded owner attribution data renders in the authenticated owner dashboard without leaking unrelated owner/entity analytics.
+- Validation:
+  - `npm run test -- owner-value-attribution-browser` ✅
+  - `npm run test:run` ✅
+  - `npm run check` ✅
+  - `npm run build` ✅
+  - `npm run verify:routes` ✅
+- Proof:
+  - Authenticated owner dashboard renders DB-seeded attribution values.
+  - 7d and 30d windows request and render distinct values.
+  - Outsider entity/activity does not leak.
+  - Empty-state owner renders safe zero-activity copy.
+
 ## What is now live
 
 - Public SEO/discovery pages route into canonical `/p/...` profiles.
