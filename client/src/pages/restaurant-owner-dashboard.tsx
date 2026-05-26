@@ -3085,9 +3085,31 @@ export default function RestaurantOwnerDashboard() {
                             <p className="text-sm text-muted-foreground">
                               Discovery traffic and profile actions are shown from real activity only.
                             </p>
+                            <p className="text-sm text-muted-foreground">
+                              Completing your menu, photos, and action links helps people take the next step when they discover your profile.
+                            </p>
                             <p className="text-xs text-muted-foreground">
                               Window: {ownerValueWindow === "7d" ? "Last 7 days" : "Last 30 days"}
                             </p>
+                            <p className="text-xs text-muted-foreground">
+                              Use this panel weekly to track what changed and decide your next profile update.
+                            </p>
+                          </div>
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            <Link
+                              href={`/restaurant-owner-dashboard?setup=profile&restaurantId=${encodeURIComponent(String(selectedRestaurant))}`}
+                            >
+                              <Button type="button" size="sm">
+                                Complete profile basics
+                              </Button>
+                            </Link>
+                            <Link
+                              href={`/restaurant-owner-dashboard?setup=menu&restaurantId=${encodeURIComponent(String(selectedRestaurant))}`}
+                            >
+                              <Button type="button" size="sm" variant="outline">
+                                Update menu and links
+                              </Button>
+                            </Link>
                           </div>
                         </div>
                       </div>

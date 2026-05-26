@@ -482,6 +482,28 @@ async function run() {
     );
 
     await page.getByText("Profile value").first().waitFor({ state: "visible", timeout: 20_000 });
+    await page
+      .getByText("Discovery traffic and profile actions are shown from real activity only.")
+      .first()
+      .waitFor({ state: "visible", timeout: 20_000 });
+    await page
+      .getByText(
+        "Completing your menu, photos, and action links helps people take the next step when they discover your profile.",
+      )
+      .first()
+      .waitFor({ state: "visible", timeout: 20_000 });
+    await page
+      .getByText("Use this panel weekly to track what changed and decide your next profile update.")
+      .first()
+      .waitFor({ state: "visible", timeout: 20_000 });
+    await page.getByRole("button", { name: "Complete profile basics" }).first().waitFor({
+      state: "visible",
+      timeout: 20_000,
+    });
+    await page.getByRole("button", { name: "Update menu and links" }).first().waitFor({
+      state: "visible",
+      timeout: 20_000,
+    });
     await page.getByText("7 days").first().click();
     await page.waitForTimeout(800);
 

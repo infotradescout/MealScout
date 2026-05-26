@@ -90,6 +90,29 @@ Last updated: 2026-05-26 (America/Chicago)
   - Outsider entity/activity does not leak.
   - Empty-state owner renders safe zero-activity copy.
 
+11. PDA-2.5 Owner Value Messaging + Conversion Surface
+- Status: PASS
+- Commit: `pending`
+- Depends on:
+  - PDA-2.1 — DB-seeded runtime integration contract
+  - PDA-2.2 — Owner value attribution aggregate
+  - PDA-2.3 — Owner analytics UI consumption contract
+  - PDA-2.4 — DB-seeded owner analytics browser proof
+- Goal:
+  - Convert owner attribution analytics into clear, measured owner-facing guidance that encourages profile completion and repeat dashboard usage without inflated claims.
+- Validation:
+  - `npm run test -- owner-value-messaging` ✅
+  - `npm run test -- owner-value-attribution-ui` ✅
+  - `npm run test -- owner-value-attribution-browser` ✅
+  - `npm run test:run` ✅
+  - `npm run check` ✅
+  - `npm run build` ✅
+  - `npm run verify:routes` ✅
+- Proof:
+  - Attribution panel includes measured owner-facing value framing and completion CTAs.
+  - Authenticated browser path renders messaging and conversion buttons with DB-seeded attribution data.
+  - Copy avoids inflated ranking/superiority claims.
+
 ## What is now live
 
 - Public SEO/discovery pages route into canonical `/p/...` profiles.
