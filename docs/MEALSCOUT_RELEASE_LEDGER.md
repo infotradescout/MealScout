@@ -92,7 +92,7 @@ Last updated: 2026-05-26 (America/Chicago)
 
 11. PDA-2.5 Owner Value Messaging + Conversion Surface
 - Status: PASS
-- Commit: `pending`
+- Commit: `9ff6dc8f`
 - Depends on:
   - PDA-2.1 — DB-seeded runtime integration contract
   - PDA-2.2 — Owner value attribution aggregate
