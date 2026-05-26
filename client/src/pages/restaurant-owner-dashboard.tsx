@@ -90,6 +90,11 @@ import type { Deal, Restaurant } from "@shared/schema";
 import type { PublicRestaurantProfile } from "@shared/publicProfiles";
 import { BackHeader } from "@/components/back-header";
 import { SEOHead } from "@/components/seo-head";
+import {
+  fetchOwnerValueAttribution,
+  type OwnerValueAttributionEntity,
+  type OwnerValueAttributionResponse,
+} from "@/lib/owner-value-attribution-client";
 
 interface DashboardStats {
   totalDeals: number;
@@ -641,18 +646,14 @@ export default function RestaurantOwnerDashboard() {
     },
     staleTime: 60_000,
   });
-  const { data: ownerValueDashboard } = useQuery<any>({
-    queryKey: ["/api/restaurants", selectedRestaurant, "owner-value-dashboard", ownerValueWindow],
+  const {
+    data: ownerValueAttribution,
+    isLoading: loadingOwnerValueAttribution,
+    isError: ownerValueAttributionError,
+  } = useQuery<OwnerValueAttributionResponse>({
+    queryKey: ["/api/owner/value-attribution", ownerValueWindow],
     enabled: Boolean(selectedRestaurant),
-    queryFn: async () => {
-      const response = await fetch(
-        `/api/restaurants/${selectedRestaurant}/owner-value-dashboard?window=${ownerValueWindow}`,
-      );
-      if (!response.ok) {
-        throw new Error("Failed to load owner value dashboard");
-      }
-      return response.json();
-    },
+    queryFn: () => fetchOwnerValueAttribution(ownerValueWindow),
     staleTime: 60_000,
   });
 
@@ -2936,19 +2937,53 @@ export default function RestaurantOwnerDashboard() {
                   </div>
                 </div>
                 <p className="mt-2 text-[11px] text-muted-foreground">
-                  {ownerValueDashboard?.freshnessLabel || "Last updated just now"}
+                  {ownerValueAttribution?.generatedAt
+                    ? `Last updated ${new Date(ownerValueAttribution.generatedAt).toLocaleString()}`
+                    : "Last updated just now"}
                 </p>
 
                 {(() => {
-                  const totals = ownerValueDashboard?.totals || {};
+                  if (loadingOwnerValueAttribution) {
+                    return (
+                      <div className="mt-3 rounded-md border border-border p-4">
+                        <p className="text-sm text-muted-foreground">Loading owner analytics...</p>
+                      </div>
+                    );
+                  }
+                  if (ownerValueAttributionError) {
+                    return (
+                      <div className="mt-3 rounded-md border border-border p-4">
+                        <p className="text-sm font-medium">
+                          Owner analytics could not be loaded right now.
+                        </p>
+                      </div>
+                    );
+                  }
+                  const entities = Array.isArray(ownerValueAttribution?.entities)
+                    ? ownerValueAttribution.entities
+                    : [];
+                  const selectedEntity = entities.find(
+                    (item) => String(item.entityId) === String(selectedRestaurant),
+                  ) as OwnerValueAttributionEntity | undefined;
+                  const fallbackEntity = entities[0] as OwnerValueAttributionEntity | undefined;
+                  const entity = selectedEntity || fallbackEntity;
+                  const totals = entity || {
+                    profileViews: 0,
+                    discoveryImpressions: 0,
+                    ctaClicks: 0,
+                    shareOpens: 0,
+                    highIntentActions: 0,
+                    topSources: [],
+                    lastActivityAt: null,
+                    entityType: currentPublicEntityType,
+                    entityId: selectedRestaurant,
+                  };
                   const hasAnyData =
                     Number(totals.profileViews || 0) > 0 ||
-                    Number(totals.menuClicks || 0) > 0 ||
-                    Number(totals.directionsClicks || 0) > 0 ||
-                    Number(totals.callClicks || 0) > 0 ||
-                    Number(totals.orderClicks || 0) > 0 ||
-                    Number(totals.deliveryClicks || 0) > 0 ||
-                    Number(totals.qrOpens || 0) > 0;
+                    Number(totals.discoveryImpressions || 0) > 0 ||
+                    Number(totals.ctaClicks || 0) > 0 ||
+                    Number(totals.shareOpens || 0) > 0 ||
+                    Number(totals.highIntentActions || 0) > 0;
                   if (!hasAnyData) {
                     const publicProfilePath =
                       currentPublicEntityType === "truck"
@@ -2959,10 +2994,10 @@ export default function RestaurantOwnerDashboard() {
                     return (
                       <div className="mt-3 rounded-md border border-dashed border-border p-4">
                         <p className="text-sm font-medium">
-                          No customer activity recorded yet.
+                          No discovery activity yet.
                         </p>
                         <p className="mt-1 text-xs text-muted-foreground">
-                          Share your profile link or QR code to start tracking views, menu clicks, directions, and calls.
+                          Your profile is ready to receive views, clicks, and shares as people find you through MealScout.
                         </p>
                         <div className="mt-3 flex flex-wrap gap-2">
                           <Link
@@ -2992,78 +3027,67 @@ export default function RestaurantOwnerDashboard() {
                     );
                   }
 
-                  const movementLabel = (delta: number) => {
-                    if (delta > 0) return `+${delta} from previous period`;
-                    if (delta < 0) return `Down ${Math.abs(delta)} from previous period`;
-                    return "No change";
-                  };
-
                   return (
                     <>
+                      <div className="mt-3 rounded-md border border-border p-2.5">
+                        <p className="text-[11px] text-muted-foreground">Entity</p>
+                        <p className="text-base font-semibold">
+                          {currentRestaurant?.name || "Owned profile"}
+                        </p>
+                        <p className="mt-0.5 text-[11px] text-muted-foreground">
+                          {String(totals.entityType || currentPublicEntityType)}
+                        </p>
+                      </div>
                       <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                         {[
-                          ["Profile views", Number(totals.profileViews || 0), Number(ownerValueDashboard?.deltas?.profileViews || 0)],
-                          ["Menu clicks", Number(totals.menuClicks || 0), Number(ownerValueDashboard?.deltas?.menuClicks || 0)],
-                          ["Directions clicks", Number(totals.directionsClicks || 0), Number(ownerValueDashboard?.deltas?.directionsClicks || 0)],
-                          ["Calls", Number(totals.callClicks || 0), Number(ownerValueDashboard?.deltas?.callClicks || 0)],
-                          ["Orders / delivery", Number(totals.orderClicks || 0) + Number(totals.deliveryClicks || 0), Number(ownerValueDashboard?.deltas?.orderClicks || 0)],
-                          ["QR opens", Number(totals.qrOpens || 0), Number(ownerValueDashboard?.deltas?.qrOpens || 0)],
-                        ].map(([label, count, delta]) => (
+                          ["Profile views", Number(totals.profileViews || 0)],
+                          ["Discovery impressions", Number(totals.discoveryImpressions || 0)],
+                          ["CTA clicks", Number(totals.ctaClicks || 0)],
+                          ["Share opens", Number(totals.shareOpens || 0)],
+                          ["High-intent actions", Number(totals.highIntentActions || 0)],
+                        ].map(([label, count]) => (
                           <div key={String(label)} className="rounded-md border border-border p-2.5">
                             <p className="text-[11px] text-muted-foreground">{String(label)}</p>
                             <p className="text-base font-semibold">{Number(count)}</p>
-                            <p className="mt-0.5 text-[11px] text-muted-foreground">
-                              {movementLabel(Number(delta))}
-                            </p>
                           </div>
                         ))}
+                        <div className="rounded-md border border-border p-2.5">
+                          <p className="text-[11px] text-muted-foreground">Last activity</p>
+                          <p className="text-base font-semibold">
+                            {totals.lastActivityAt
+                              ? new Date(totals.lastActivityAt).toLocaleString()
+                              : "No activity yet"}
+                          </p>
+                        </div>
                       </div>
 
                       <div className="mt-3 grid gap-3 lg:grid-cols-2">
                         <div className="rounded-md border border-border p-3">
-                          <p className="text-sm font-semibold">Top customer actions</p>
+                          <p className="text-sm font-semibold">Top sources</p>
                           <div className="mt-2 space-y-1.5 text-sm">
-                            {(ownerValueDashboard?.topActions || []).length ? (
-                              (ownerValueDashboard.topActions || []).map(
+                            {(totals.topSources || []).length ? (
+                              (totals.topSources || []).map(
                                 (item: any, idx: number) => (
-                                  <p key={`${item.actionType}-${idx}`}>
-                                    {idx + 1}. {item.label} - {Number(item.count || 0)}
+                                  <p key={`${item.source}-${idx}`}>
+                                    {idx + 1}. {String(item.source || "unknown")} - {Number(item.count || 0)}
                                   </p>
                                 ),
                               )
                             ) : (
-                              <p className="text-muted-foreground">No top actions yet.</p>
+                              <p className="text-muted-foreground">No top sources yet.</p>
                             )}
                           </div>
                         </div>
 
                         <div className="rounded-md border border-border p-3">
-                          <p className="text-sm font-semibold">Recommended next action</p>
+                          <p className="text-sm font-semibold">Attribution summary</p>
                           <div className="mt-2 space-y-2">
-                            {(ownerValueDashboard?.recommendations || []).length ? (
-                              (ownerValueDashboard.recommendations || [])
-                                .slice(0, 3)
-                                .map((recommendation: any) => (
-                                  <div
-                                    key={recommendation.id}
-                                    className="rounded border border-border p-2"
-                                  >
-                                    <p className="text-sm font-medium">{recommendation.title}</p>
-                                    <p className="mt-1 text-xs text-muted-foreground">
-                                      {recommendation.body}
-                                    </p>
-                                    <Link href={recommendation.ctaHref}>
-                                      <Button size="sm" variant="outline" className="mt-2">
-                                        {recommendation.ctaLabel}
-                                      </Button>
-                                    </Link>
-                                  </div>
-                                ))
-                            ) : (
-                              <p className="text-muted-foreground text-sm">
-                                Keep your profile active with current menu, links, and schedule updates.
-                              </p>
-                            )}
+                            <p className="text-sm text-muted-foreground">
+                              Discovery traffic and profile actions are shown from real activity only.
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              Window: {ownerValueWindow === "7d" ? "Last 7 days" : "Last 30 days"}
+                            </p>
                           </div>
                         </div>
                       </div>

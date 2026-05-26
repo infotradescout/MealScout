@@ -35,23 +35,39 @@ Last updated: 2026-05-26 (America/Chicago)
 - Validation: `public-discovery-analytics.contract` + check/test/build/verify:routes pass
 
 7. PDA-2.1 DB-Seeded Runtime Integration Contract
-- Status: IN PROGRESS
-- Commit: pending
-- Validation target:
-  - `npm run test -- public-discovery-analytics.integration`
-  - `npm run test -- public-discovery-analytics.contract`
-  - `npm run test:run`
-  - `npm run check`
-  - `npm run build`
+- Status: PASS
+- Commit: `7bde6679`
+- Validation:
+  - `npm run test -- public-discovery-analytics.integration` ✅
+  - `npm run test -- public-discovery-analytics.contract` ✅
+  - `npm run test:run` ✅
+  - `npm run check` ✅
+  - `npm run build` ✅
+  - `npm run verify:routes` ✅
 
 8. PDA-2.2 Owner Value + Discovery Attribution Aggregate
-- Status: IN PROGRESS
-- Commit: pending
-- Validation target:
-  - `npm run test -- owner-value-attribution`
-  - `npm run test:run`
-  - `npm run check`
-  - `npm run build`
+- Status: PASS
+- Commit: `7bde6679`
+- Validation:
+  - `npm run test -- owner-value-attribution` ✅
+  - `npm run test:run` ✅
+  - `npm run check` ✅
+  - `npm run build` ✅
+  - `npm run verify:routes` ✅
+
+9. PDA-2.3 Owner Analytics UI Consumption Contract
+- Status: PASS
+- Commit: `pending`
+- Target endpoint: `GET /api/owner/value-attribution?window=7d|30d`
+- Depends on: PDA-2.1, PDA-2.2
+- Validation:
+  - `npm run test -- owner-value-attribution-ui` ✅
+  - `npm run test:run` ✅
+  - `npm run check` ✅
+  - `npm run build` ✅
+  - `npm run verify:routes` ✅
+- Remaining non-blocking hardening:
+  - DB-seeded browser/runtime UI proof deferred to PDA-2.4
 
 ## What is now live
 
