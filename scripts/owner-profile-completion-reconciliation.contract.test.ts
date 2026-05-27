@@ -10,6 +10,7 @@ const ownerAttributionRoute = readFileSync(
 );
 
 const requiredRouteSnippets = [
+  "computeProfileCompletionStatus",
   "completionActionReconciliation",
   "clicked",
   "nowComplete",

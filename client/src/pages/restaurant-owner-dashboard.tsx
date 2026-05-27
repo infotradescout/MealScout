@@ -88,6 +88,7 @@ import {
 import { z } from "zod";
 import type { Deal, Restaurant } from "@shared/schema";
 import type { PublicRestaurantProfile } from "@shared/publicProfiles";
+import { computeProfileCompletionStatus } from "@shared/profileCompletionStatus";
 import { BackHeader } from "@/components/back-header";
 import { SEOHead } from "@/components/seo-head";
 import {
@@ -3004,100 +3005,64 @@ export default function RestaurantOwnerDashboard() {
                     Number(totals.ctaClicks || 0) > 0 ||
                     Number(totals.shareOpens || 0) > 0 ||
                     Number(totals.highIntentActions || 0) > 0;
-                  const socialLinks =
-                    (currentRestaurant as any)?.socialAutopostSettings &&
-                    typeof (currentRestaurant as any).socialAutopostSettings === "object" &&
-                    typeof (currentRestaurant as any).socialAutopostSettings.publicActionLinks ===
-                      "object"
-                      ? (currentRestaurant as any).socialAutopostSettings.publicActionLinks
-                      : {};
+                  const completionStatus = computeProfileCompletionStatus(currentRestaurant as any, {
+                    hasActiveDeal: Number(stats?.activeDeals || 0) > 0,
+                  });
                   const completionItems = [
                     {
                       id: "menu",
                       label: "Menu missing",
                       why: "Customers need a menu to decide quickly.",
-                      done: Boolean(
-                        (currentRestaurant as any)?.menuUrl ||
-                          (currentRestaurant as any)?.menuPdfUrl ||
-                          (currentRestaurant as any)?.menuImageUrl ||
-                          Number((currentRestaurant as any)?.menuItemCount || 0) > 0 ||
-                          Number((currentRestaurant as any)?.publicMenuItemCount || 0) > 0,
-                      ),
+                      done: Boolean(completionStatus.menu),
                       href: `/menu-builder?restaurantId=${encodeURIComponent(String(selectedRestaurant))}`,
                     },
                     {
                       id: "photos",
                       label: "Photos missing",
                       why: "Photos help people trust what they are choosing.",
-                      done: Boolean(
-                        (currentRestaurant as any)?.imageUrl ||
-                          (currentRestaurant as any)?.logoUrl ||
-                          (currentRestaurant as any)?.coverImageUrl,
-                      ),
+                      done: Boolean(completionStatus.photos),
                       href: `/restaurant-owner-dashboard?setup=profile&restaurantId=${encodeURIComponent(String(selectedRestaurant))}`,
                     },
                     {
                       id: "hours",
                       label: "Business hours missing",
                       why: "People act faster when they know if you are open.",
-                      done: Boolean(
-                        (currentRestaurant as any)?.operatingHours ||
-                          (currentRestaurant as any)?.businessHours ||
-                          (currentRestaurant as any)?.hours ||
-                          (currentRestaurant as any)?.schedulePublished,
-                      ),
+                      done: Boolean(completionStatus.hours),
                       href: `/restaurant-owner-dashboard?setup=schedule&restaurantId=${encodeURIComponent(String(selectedRestaurant))}`,
                     },
                     {
                       id: "service-area",
                       label: "Service area missing",
                       why: "A clear location helps direction and pickup decisions.",
-                      done: Boolean((currentRestaurant as any)?.address || (currentRestaurant as any)?.city),
+                      done: Boolean(completionStatus["service-area"]),
                       href: `/restaurant-owner-dashboard?setup=profile&restaurantId=${encodeURIComponent(String(selectedRestaurant))}`,
                     },
                     {
                       id: "contact",
                       label: "Contact method missing",
                       why: "Calls and direct actions need an obvious contact path.",
-                      done: Boolean(
-                        (currentRestaurant as any)?.phone ||
-                          (currentRestaurant as any)?.contactPhone ||
-                          (currentRestaurant as any)?.websiteUrl ||
-                          (currentRestaurant as any)?.onlineOrderingUrl ||
-                          socialLinks.onlineOrderingUrl ||
-                          socialLinks.deliveryUrl,
-                      ),
+                      done: Boolean(completionStatus.contact),
                       href: `/restaurant-owner-dashboard?setup=profile&restaurantId=${encodeURIComponent(String(selectedRestaurant))}`,
                     },
                     {
                       id: "social",
                       label: "Social link missing",
                       why: "Social links help discovery visitors follow and return.",
-                      done: Boolean(
-                        (currentRestaurant as any)?.facebookPageUrl ||
-                          (currentRestaurant as any)?.instagramUrl,
-                      ),
+                      done: Boolean(completionStatus.social),
                       href: `/restaurant-owner-dashboard?setup=profile&restaurantId=${encodeURIComponent(String(selectedRestaurant))}`,
                     },
                     {
                       id: "catering-events",
                       label: "Catering/private event info missing",
                       why: "Private event details create another high-intent action path.",
-                      done: Boolean(
-                        (currentRestaurant as any)?.cateringInquiryUrl ||
-                          (currentRestaurant as any)?.truckBookingInquiryUrl ||
-                          socialLinks.cateringInquiryUrl ||
-                          socialLinks.truckBookingInquiryUrl ||
-                          Number((currentRestaurant as any)?.upcomingPublicEventCount || 0) > 0 ||
-                          Number((currentRestaurant as any)?.upcomingEventCount || 0) > 0,
-                      ),
+                      done: Boolean(completionStatus["catering-events"]),
                       href: "/events",
                     },
                     {
                       id: "deal",
                       label: "Deal/special missing",
                       why: "Current offers give people a reason to choose you today.",
-                      done: Number(stats?.activeDeals || 0) > 0,
+                      done: Boolean(completionStatus.deal),
                       href: "/deal-creation",
                     },
                   ];

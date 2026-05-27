@@ -29,6 +29,7 @@ import {
   updateRestaurantMobileSettingsSchema,
   updateRestaurantOperatingHoursSchema,
 } from "@shared/schema";
+import { computeProfileCompletionStatus } from "@shared/profileCompletionStatus";
 import { getBusinessAccessContext } from "../services/businessTeamAccess";
 
 type AnalyticsAccessResult = {
@@ -2623,58 +2624,6 @@ export function registerRestaurantOperationsRoutes(
         );
 
       const byEntity = new Map<string, any>();
-      const completionStatusForRestaurant = (restaurant: any) => {
-        const socialLinks =
-          restaurant?.socialAutopostSettings &&
-          typeof restaurant.socialAutopostSettings === "object" &&
-          typeof restaurant.socialAutopostSettings.publicActionLinks === "object"
-            ? restaurant.socialAutopostSettings.publicActionLinks
-            : {};
-        const hasMenu = Boolean(
-          restaurant?.menuUrl ||
-            restaurant?.menuPdfUrl ||
-            restaurant?.menuImageUrl ||
-            Number(restaurant?.menuItemCount || 0) > 0 ||
-            Number(restaurant?.publicMenuItemCount || 0) > 0,
-        );
-        const hasPhotos = Boolean(restaurant?.imageUrl || restaurant?.logoUrl || restaurant?.coverImageUrl);
-        const hasHours = Boolean(
-          restaurant?.operatingHours || restaurant?.businessHours || restaurant?.hours || restaurant?.schedulePublished,
-        );
-        const hasServiceArea = Boolean(restaurant?.address || restaurant?.city);
-        const hasContact = Boolean(
-          restaurant?.phone ||
-            restaurant?.contactPhone ||
-            restaurant?.websiteUrl ||
-            restaurant?.onlineOrderingUrl ||
-            socialLinks.onlineOrderingUrl ||
-            socialLinks.deliveryUrl,
-        );
-        const hasSocial = Boolean(restaurant?.facebookPageUrl || restaurant?.instagramUrl);
-        const hasCateringEvents = Boolean(
-          restaurant?.cateringInquiryUrl ||
-            restaurant?.truckBookingInquiryUrl ||
-            socialLinks.cateringInquiryUrl ||
-            socialLinks.truckBookingInquiryUrl ||
-            Number(restaurant?.upcomingPublicEventCount || 0) > 0 ||
-            Number(restaurant?.upcomingEventCount || 0) > 0,
-        );
-        const hasDeal = Boolean(
-          Number(restaurant?.activeDeals || 0) > 0 ||
-            Number(restaurant?.activeDealsCount || 0) > 0 ||
-            Boolean(restaurant?.hasActiveDeals),
-        );
-        return {
-          menu: hasMenu,
-          photos: hasPhotos,
-          hours: hasHours,
-          "service-area": hasServiceArea,
-          contact: hasContact,
-          social: hasSocial,
-          "catering-events": hasCateringEvents,
-          deal: hasDeal,
-        } as Record<string, boolean>;
-      };
       for (const restaurant of ownedRestaurants as any[]) {
         const entityType =
           restaurant.isFoodTruck || String(restaurant.businessType || "").toLowerCase() === "food_truck"
@@ -2693,7 +2642,12 @@ export function registerRestaurantOperationsRoutes(
           highIntentActions: 0,
           completionActionClicks: 0,
           completionActionsRaw: new Map<string, number>(),
-          completionStatus: completionStatusForRestaurant(restaurant),
+          completionStatus: computeProfileCompletionStatus(restaurant, {
+            hasActiveDeal:
+              Number(restaurant?.activeDeals || 0) > 0 ||
+              Number(restaurant?.activeDealsCount || 0) > 0 ||
+              Boolean(restaurant?.hasActiveDeals),
+          }),
           topSourcesRaw: new Map<string, number>(),
           lastActivityAt: null as string | null,
         });

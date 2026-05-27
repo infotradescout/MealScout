@@ -203,3 +203,24 @@ Last updated: 2026-05-26 (America/Chicago)
 ## Current source-of-truth KPI
 
 Know which public discovery pages create profile traffic and customer action.
+
+16. PDA-2.10 Shared Profile Completion Status Adapter
+- Status: PASS
+- Commit: `pending`
+- Depends on:
+  - PDA-2.9 — Owner profile completion outcome reconciliation
+- Goal:
+  - Eliminate completion-state drift by using one shared adapter to compute missing/completed status across owner completion UI and reconciliation logic.
+- Validation:
+  - `npm run test -- owner-profile-completion-status` ✅
+  - `npm run test -- owner-profile-completion-reconciliation` ✅
+  - `npm run test -- owner-profile-completion-actions` ✅
+  - `npm run test -- owner-value-attribution-ui` ✅
+  - `npm run test -- owner-value-attribution-browser` ✅
+  - `npm run test:run` ✅
+  - `npm run check` ✅
+  - `npm run build` ✅
+  - `npm run verify:routes` ✅
+- Proof:
+  - Shared `profileCompletionStatus` adapter is used by reconciliation and owner dashboard completion logic.
+  - Deterministic contract verifies reconciliation follows shared adapter output.
