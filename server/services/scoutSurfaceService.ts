@@ -3,6 +3,7 @@ import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "../db";
 import { storage } from "../storage";
 import { isPublicBusinessVisible } from "../utils/publicBusinessVisibility";
+import { isTruckDiscoverableForScout, hasTruckScheduleSignal } from "../utils/truckListingEligibility";
 import { buildLocalRecommendations } from "./recommendationEngine";
 import {
   deals,
@@ -472,12 +473,17 @@ export async function buildScoutSurface(
   const restaurants = (Array.isArray(allRestaurants) ? allRestaurants : [])
     .filter((row: any) => row?.isActive)
     .filter((row: any) => isPublicBusinessVisible(row));
+  const scoutEligibleRestaurants = restaurants.filter((row: any) => {
+    const isTruck = Boolean(row?.isFoodTruck || String(row?.businessType || "").toLowerCase() === "food_truck");
+    if (!isTruck) return true;
+    return isTruckDiscoverableForScout(row);
+  });
 
   const restaurantById = new Map(
-    restaurants.map((restaurant: any) => [String(restaurant.id), restaurant]),
+    scoutEligibleRestaurants.map((restaurant: any) => [String(restaurant.id), restaurant]),
   );
 
-  const restaurantIds = restaurants
+  const restaurantIds = scoutEligibleRestaurants
     .map((restaurant: any) => String(restaurant.id || "").trim())
     .filter(Boolean);
   const recommendationSignals = await (async () => {
@@ -553,6 +559,10 @@ export async function buildScoutSurface(
   }
 
   for (const truck of Array.isArray(liveTrucks) ? liveTrucks : []) {
+    if (!hasTruckScheduleSignal(truck)) {
+      // Menu-only trucks should not be treated as "live".
+      continue;
+    }
     const truckId = String((truck as any)?.id || "").trim();
     if (!truckId) continue;
     const coords = parseLatLng(truck);
@@ -598,7 +608,7 @@ export async function buildScoutSurface(
     }
   }
 
-  for (const restaurant of restaurants) {
+  for (const restaurant of scoutEligibleRestaurants) {
     const restaurantId = String((restaurant as any)?.id || "").trim();
     if (!restaurantId) continue;
     const coords = parseLatLng(restaurant);

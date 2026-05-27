@@ -398,6 +398,15 @@ export function BookingPaymentModal({
       }
 
       const data = await res.json();
+      if (data?.paymentPending) {
+        toast({
+          title: "Request received",
+          description:
+            "Your spot request was received. We'll send payment instructions.",
+        });
+        handleSuccess("pending");
+        return;
+      }
       if (data?.bypassed) {
         toast({
           title: "Parking Pass Confirmed!",

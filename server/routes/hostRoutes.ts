@@ -1838,7 +1838,7 @@ export function registerHostRoutes(app: Express) {
 
           paymentIntent = await stripe.paymentIntents.create(intentParams);
         } catch (error: any) {
-          // Best-effort release holds if Stripe fails.
+          // Preserve booking intent for manual follow-up if Stripe fails.
           try {
             const holdIds = insertedHolds.map((row) => row.id);
             if (holdIds.length > 0) {
@@ -1847,7 +1847,9 @@ export function registerHostRoutes(app: Express) {
                 .set({
                   status: "cancelled",
                   cancelledAt: new Date(),
-                  cancellationReason: "Payment setup failed",
+                  cancellationReason:
+                    "payment_pending_manual_review: Payment setup failed",
+                  stripePaymentStatus: "payment_pending",
                   updatedAt: new Date(),
                 })
                 .where(inArray(eventBookings.id, holdIds));
@@ -1858,7 +1860,21 @@ export function registerHostRoutes(app: Express) {
               cleanupError,
             );
           }
-          throw error;
+          console.error("[parking-pass-booking] Stripe PaymentIntent creation failed", {
+            passId: event.id,
+            hostId: host.id,
+            truckId,
+            userId,
+            holdCount: insertedHolds.length,
+            failureReason: error?.message || "stripe_create_failed",
+          });
+          const holdIds = insertedHolds.map((row) => row.id);
+          return res.status(202).json({
+            paymentPending: true,
+            bookingIds: holdIds,
+            message:
+              "Your spot request was received. We'll send payment instructions.",
+          });
         }
 
         const holdIds = insertedHolds.map((row) => row.id);

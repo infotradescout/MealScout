@@ -1272,26 +1272,6 @@ export default function CustomerSignup() {
                         )}
                       />
                     </div>
-                    <FormField
-                      control={form.control}
-                      name="menuSourceUrl"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Menu import link</FormLabel>
-                          <FormControl>
-                            <Input
-                              data-testid="input-menu-source-url"
-                              placeholder="Website, online menu, PDF, or ordering page URL"
-                              {...field}
-                            />
-                          </FormControl>
-                          <p className="text-[11px] leading-snug text-[color:var(--text-secondary)]">
-                            Optional, but powerful: we’ll carry this into menu setup so your menu can be imported or reviewed after verification.
-                          </p>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
                   </div>
                 )}
 

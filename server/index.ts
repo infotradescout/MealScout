@@ -331,13 +331,85 @@ const verifyImportApiKey = (req: Request, res: Response): boolean => {
 
 app.post("/api/import/preview", express.json({ limit: "2mb" }), (req, res) => {
   if (!verifyImportApiKey(req, res)) return;
-  const body = (req.body || {}) as Record<string, unknown>;
-  const listingCount = Array.isArray(body.listings) ? body.listings.length : 0;
+  const body = (req.body || {}) as Record<string, any>;
+  const truckName = String(body.truckName || body.truck?.name || "").trim();
+  const cityArea = String(body.cityArea || body.truck?.address || body.truck?.city || "").trim();
+  const cuisine = String(body.cuisine || body.category || body.truck?.cuisine || "").trim();
+  const menuInput = Array.isArray(body.menu)
+    ? body.menu
+    : Array.isArray(body.truck?.menu)
+      ? body.truck.menu
+      : [];
+  const menu = menuInput
+    .filter((item: any) => item && typeof item === "object" && String(item.name || "").trim().length > 0)
+    .map((item: any) => ({
+      name: String(item.name || "").trim(),
+      ...(String(item.price || "").trim() ? { price: String(item.price).trim() } : {}),
+      ...(String(item.description || "").trim()
+        ? { description: String(item.description).trim() }
+        : {}),
+    }));
+
+  const hardMissing: string[] = [];
+  if (!truckName) hardMissing.push("truckName");
+  if (!cityArea) hardMissing.push("cityArea");
+
+  if (hardMissing.length > 0) {
+    return res.status(400).json({
+      ok: false,
+      mode: "preview",
+      message: "Missing required draft fields",
+      hardMissing,
+    });
+  }
+
+  const draft = {
+    truckName,
+    ownerContact: String(body.ownerContact || "").trim() || null,
+    phone: String(body.phone || "").trim() || null,
+    email: String(body.email || "").trim() || null,
+    socials: {
+      facebook: String(body.socials?.facebook || "").trim() || null,
+      instagram: String(body.socials?.instagram || "").trim() || null,
+    },
+    cityArea,
+    cuisine: cuisine || null,
+    menu,
+    truckPhotoLogo: body.truckPhotoLogo || null,
+    notesBio: String(body.notesBio || "").trim() || null,
+    rawSource: body.rawSource || null,
+    evidence: Array.isArray(body.evidence) ? body.evidence : [],
+    missingFields: Array.isArray(body.missingFields) ? body.missingFields : [],
+    reviewStatus: {
+      status: "draft",
+      publishBlocked: false,
+      hardMissing: [],
+      softMissing: [],
+      deferred: menu.length === 0 ? ["menu"] : [],
+      warnings: [],
+    },
+  };
+
+  const evidenceFieldProposals = Array.isArray(body.evidenceFieldProposals)
+    ? body.evidenceFieldProposals
+        .filter((proposal) => proposal && typeof proposal === "object")
+        .map((proposal) => ({
+          field: String(proposal.field || "").trim(),
+          proposedValue: String(proposal.proposedValue || "").trim(),
+          confidence: String(proposal.confidence || "low").trim(),
+          source: String(proposal.source || "screenshot").trim(),
+          evidenceText: String(proposal.evidenceText || "").trim(),
+          imageRef: String(proposal.imageRef || "").trim(),
+        }))
+        .filter((proposal) => proposal.field && proposal.proposedValue)
+    : [];
+
   return res.status(202).json({
     ok: true,
     mode: "preview",
-    listingCount,
     message: "Import preview request accepted",
+    draft,
+    evidenceFieldProposals,
   });
 });
 

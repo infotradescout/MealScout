@@ -166,6 +166,51 @@ function getInitialMenuSourceUrl() {
   }
 }
 
+function toArray<T>(value: unknown): T[] {
+  return Array.isArray(value) ? (value as T[]) : [];
+}
+
+function normalizeMenusPayload(payload: unknown): Menu[] {
+  if (Array.isArray(payload)) return payload as Menu[];
+  if (payload && typeof payload === "object") {
+    const wrapped = payload as Record<string, unknown>;
+    if (Array.isArray(wrapped.menus)) return wrapped.menus as Menu[];
+    if (Array.isArray(wrapped.items)) return wrapped.items as Menu[];
+    if (Array.isArray(wrapped.data)) return wrapped.data as Menu[];
+  }
+  return [];
+}
+
+function normalizeFullMenu(menu: unknown): FullMenu | null {
+  if (!menu || typeof menu !== "object") return null;
+  const candidate = menu as Record<string, unknown>;
+  const categoriesRaw = toArray<Record<string, unknown>>(candidate.categories);
+  const categories = categoriesRaw.map((category) => ({
+    ...((category as unknown) as MenuCategory),
+    items: toArray<MenuItem>(category.items),
+  }));
+  return {
+    ...((candidate as unknown) as FullMenu),
+    categories,
+  };
+}
+
+function normalizeFullMenusPayload(payload: unknown): FullMenu[] {
+  if (Array.isArray(payload)) {
+    return payload.map(normalizeFullMenu).filter((menu): menu is FullMenu => !!menu);
+  }
+  if (payload && typeof payload === "object") {
+    const wrapped = payload as Record<string, unknown>;
+    if (Array.isArray(wrapped.menus)) {
+      return wrapped.menus
+        .map(normalizeFullMenu)
+        .filter((menu): menu is FullMenu => !!menu);
+    }
+  }
+  const single = normalizeFullMenu(payload);
+  return single ? [single] : [];
+}
+
 // ──────────────────────────────── main page ───────────────────────────────────
 export default function MenuBuilderPage() {
   const restaurantId = useRestaurantId();
@@ -210,13 +255,14 @@ export default function MenuBuilderPage() {
         { credentials: "include" },
       );
       if (!res.ok) throw new Error("Failed to load menus");
-      return res.json();
+      const data = await res.json();
+      return normalizeMenusPayload(data);
     },
     enabled: !!restaurantId,
   });
 
   // fetch full menu with categories + items
-  const fullMenuQuery = useQuery<FullMenu>({
+  const fullMenuQuery = useQuery<FullMenu | null>({
     queryKey: ["/api/menus", selectedMenuId],
     queryFn: async () => {
       if (!selectedMenuId || !restaurantId) throw new Error("No menu selected");
@@ -226,9 +272,9 @@ export default function MenuBuilderPage() {
       );
       if (!res.ok) throw new Error("Failed to load menu");
       const data = await res.json();
-      // Return the specific menu from the list
-      const menus: FullMenu[] = Array.isArray(data) ? data : [data];
-      return menus.find((m) => m.id === selectedMenuId) ?? menus[0];
+      const menus = normalizeFullMenusPayload(data);
+      if (!menus.length) return null;
+      return menus.find((m) => m.id === selectedMenuId) ?? menus[0] ?? null;
     },
     enabled: !!selectedMenuId && !!restaurantId,
   });
@@ -384,8 +430,8 @@ export default function MenuBuilderPage() {
     );
   }
 
-  const menus = menusQuery.data ?? [];
-  const selectedMenu = fullMenuQuery.data ?? null;
+  const menus = toArray<Menu>(menusQuery.data);
+  const selectedMenu = normalizeFullMenu(fullMenuQuery.data);
 
   return (
     <div className="min-h-screen bg-background">
@@ -612,7 +658,17 @@ export default function MenuBuilderPage() {
                   });
                 }}
               />
-            ) : null}
+            ) : (
+              <Card>
+                <CardContent className="flex flex-col items-center justify-center h-64 text-center">
+                  <UtensilsCrossed className="w-10 h-10 text-muted-foreground mb-3" />
+                  <h3 className="font-medium mb-1">Menu data unavailable</h3>
+                  <p className="text-sm text-muted-foreground">
+                    We could not load menu items in the expected format. Try refreshing or re-importing your menu data.
+                  </p>
+                </CardContent>
+              </Card>
+            )}
           </div>
         </div>
       </div>

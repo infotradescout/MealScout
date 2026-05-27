@@ -223,6 +223,16 @@ export function EventBookingModal({
         throw new Error(data?.message || "Failed to initiate booking");
       }
       const data = await res.json();
+      if (data?.paymentPending) {
+        toast({
+          title: "Request received",
+          description:
+            "Your spot request was received. We'll send payment instructions.",
+        });
+        onSuccess();
+        onOpenChange(false);
+        return;
+      }
       const nextClientSecret = String(data.clientSecret || "").trim();
       const nextBookingId = String(data.bookingId || "").trim();
       if (!nextClientSecret || !nextBookingId) {

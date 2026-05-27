@@ -88,11 +88,70 @@ async function run() {
         Referer: `${allowedActionOrigin}/`,
         "X-API-Key": importApiKey,
       },
-      body: JSON.stringify({ test: true }),
+      body: JSON.stringify({
+        truckName: "Allowlist Probe Truck",
+        cityArea: "Pensacola, FL",
+      }),
     });
     assert(
       allowedRes.status === 202,
       `Allowed action origin should reach preview endpoint with 202, got ${allowedRes.status}`,
+    );
+    const allowedBody: any = await allowedRes.json();
+    assert(allowedBody?.draft, "Preview response should include draft");
+
+    const draftRes = await fetch(`${baseUrl}/api/import/preview`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Origin: allowedActionOrigin,
+        Referer: `${allowedActionOrigin}/`,
+        "X-API-Key": importApiKey,
+      },
+      body: JSON.stringify({
+        truckName: "Test Truck",
+        cityArea: "Pensacola, FL",
+        cuisine: "Tacos",
+        evidenceFieldProposals: [
+          {
+            field: "phone",
+            proposedValue: "(850) 686-1978",
+            confidence: "high",
+            source: "screenshot",
+            evidenceText: "Call (850) 686-1978",
+            imageRef: "screenshot_2",
+          },
+        ],
+      }),
+    });
+    assert(draftRes.status === 202, `Draft preview should return 202, got ${draftRes.status}`);
+    const draftBody: any = await draftRes.json();
+    assert(draftBody?.draft?.truckName === "Test Truck", "Draft truckName mismatch");
+    assert(draftBody?.draft?.cityArea === "Pensacola, FL", "Draft cityArea mismatch");
+    assert(draftBody?.draft?.cuisine === "Tacos", "Draft cuisine mismatch");
+    assert(Array.isArray(draftBody?.draft?.menu), "Draft menu should be an array");
+    assert(draftBody.draft.menu.length === 0, "Draft menu should stay empty when not provided");
+    assert(
+      Array.isArray(draftBody?.draft?.reviewStatus?.deferred) &&
+        draftBody.draft.reviewStatus.deferred.includes("menu"),
+      "Draft reviewStatus should defer menu when missing",
+    );
+    assert(
+      draftBody?.draft?.reviewStatus?.publishBlocked === false,
+      "Draft publishBlocked should be false",
+    );
+    assert(
+      Array.isArray(draftBody?.evidenceFieldProposals) &&
+        draftBody.evidenceFieldProposals.length === 1,
+      "Evidence field proposals should be preserved",
+    );
+    assert(
+      draftBody.evidenceFieldProposals[0].field === "phone",
+      "Evidence proposal field mismatch",
+    );
+    assert(
+      draftBody.evidenceFieldProposals[0].proposedValue === "(850) 686-1978",
+      "Evidence proposal value mismatch",
     );
 
     const blockedRes = await fetch(`${baseUrl}/api/import/preview`, {

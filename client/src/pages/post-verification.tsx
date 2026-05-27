@@ -38,8 +38,11 @@ function getBestRedirect(params: URLSearchParams): string {
   return storedRedirect || queryRedirect || "/scout";
 }
 
-function getLoginHref(redirectPath: string) {
-  return `/login?verified=1&redirect=${encodeURIComponent(redirectPath)}`;
+function getLoginHref(redirectPath: string, verified: boolean) {
+  const params = new URLSearchParams();
+  if (verified) params.set("verified", "1");
+  params.set("redirect", redirectPath);
+  return `/login?${params.toString()}`;
 }
 
 function getSetupBrief(redirectPath: string) {
@@ -111,7 +114,7 @@ export default function PostVerification() {
   const isSetupComplete = params.get("setup") === "complete";
   const isVerified = params.get("verified") === "1";
   const needsEmailCheck = mode === "check-email" || isSetupComplete;
-  const loginHref = getLoginHref(redirectPath);
+  const loginHref = getLoginHref(redirectPath, isVerified);
   const setupBrief = useMemo(() => getSetupBrief(redirectPath), [redirectPath]);
 
   useEffect(() => {

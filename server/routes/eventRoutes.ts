@@ -2375,13 +2375,15 @@ export function registerEventRoutes(
           }
           paymentIntent = await stripe.paymentIntents.create(intentParams);
         } catch (stripeError: any) {
-          // Roll back the pending booking if Stripe fails
+          // Preserve the booking intent for manual follow-up if Stripe fails.
           await db
             .update(eventBookings)
             .set({
               status: "cancelled",
               cancelledAt: new Date(),
-              cancellationReason: "Payment setup failed",
+              cancellationReason:
+                "payment_pending_manual_review: Payment setup failed",
+              stripePaymentStatus: "payment_pending",
               updatedAt: new Date(),
             })
             .where(eq(eventBookings.id, booking.id));
@@ -2392,9 +2394,12 @@ export function registerEventRoutes(
             hostPaymentsEnabled,
             failureReason: stripeError?.message || "stripe_create_failed",
           });
-          return res
-            .status(502)
-            .json({ message: "Payment setup failed, please try again" });
+          return res.status(202).json({
+            paymentPending: true,
+            bookingId: booking.id,
+            message:
+              "Your spot request was received. We'll send payment instructions.",
+          });
         }
 
         // Attach the PaymentIntent ID to the booking record

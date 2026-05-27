@@ -30,6 +30,9 @@ const requiredSnippets = [
   "paymentIntents.create(intentParams)",
   "[event-booking] create failed",
   "paymentIntentId: paymentIntent.id",
+  "paymentPending: true",
+  "payment_pending_manual_review",
+  "We'll send payment instructions.",
 ];
 
 for (const snippet of requiredSnippets) {

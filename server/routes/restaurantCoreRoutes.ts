@@ -18,6 +18,7 @@ import {
   insertRestaurantFollowSchema,
   insertRestaurantUserRecommendationSchema,
   insertVerificationRequestSchema,
+  verificationRequests,
   deals,
   restaurantFavorites,
   restaurantFollows,
@@ -1503,24 +1504,6 @@ export function registerRestaurantCoreRoutes(
           }
         }
 
-        const rateLimit = checkRateLimit(restaurantId);
-        if (!rateLimit.allowed) {
-          return res.status(429).json({
-            message:
-              "Rate limit exceeded. Only one verification request per restaurant per hour is allowed.",
-            nextAllowedTime: rateLimit.nextAllowedTime,
-          });
-        }
-
-        const hasPendingRequest =
-          await storage.hasPendingVerificationRequest(restaurantId);
-        if (hasPendingRequest) {
-          return res.status(409).json({
-            message:
-              "A verification request is already pending for this restaurant. Please wait for admin review.",
-          });
-        }
-
         const verificationData = insertVerificationRequestSchema.parse({
           ...req.body,
           restaurantId,
@@ -1545,6 +1528,58 @@ export function registerRestaurantCoreRoutes(
           return res.status(400).json({
             message: "Document validation failed",
             errors: documentValidation.errors,
+          });
+        }
+
+        const [pendingRequest] = await db
+          .select({
+            id: verificationRequests.id,
+            documents: verificationRequests.documents,
+          })
+          .from(verificationRequests)
+          .where(
+            and(
+              eq(verificationRequests.restaurantId, restaurantId),
+              eq(verificationRequests.status, "pending"),
+            ),
+          )
+          .limit(1);
+
+        if (pendingRequest) {
+          const mergedDocuments = Array.from(
+            new Set(
+              [
+                ...(Array.isArray(pendingRequest.documents)
+                  ? pendingRequest.documents
+                  : []),
+                ...verificationData.documents,
+              ]
+                .map((doc) => String(doc || "").trim())
+                .filter(Boolean),
+            ),
+          );
+
+          const [updatedRequest] = await db
+            .update(verificationRequests)
+            .set({
+              documents: mergedDocuments,
+              licenseNumber:
+                String(req.body?.licenseNumber || "").trim() || null,
+              submittedAt: new Date(),
+              updatedAt: new Date(),
+            })
+            .where(eq(verificationRequests.id, pendingRequest.id))
+            .returning();
+
+          return res.json(updatedRequest);
+        }
+
+        const rateLimit = checkRateLimit(restaurantId);
+        if (!rateLimit.allowed) {
+          return res.status(429).json({
+            message:
+              "Rate limit exceeded. Only one verification request per restaurant per hour is allowed.",
+            nextAllowedTime: rateLimit.nextAllowedTime,
           });
         }
 
