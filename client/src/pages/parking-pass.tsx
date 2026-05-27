@@ -77,6 +77,15 @@ interface Host {
   stripeChargesEnabled?: boolean | null;
   stripePayoutsEnabled?: boolean | null;
   stripeOnboardingCompleted?: boolean | null;
+  showFuelPrices?: boolean | null;
+  fuelPrices?: {
+    regularCents?: number | null;
+    midgradeCents?: number | null;
+    premiumCents?: number | null;
+    dieselCents?: number | null;
+    updatedAt?: string | null;
+    source?: string | null;
+  } | null;
 }
 
 interface HostPassListing {
@@ -390,6 +399,11 @@ const parseOptionalDollar = (value: string) => {
   const parsed = Number(trimmed);
   if (!Number.isFinite(parsed)) return null;
   return Math.max(0, Math.round(parsed));
+};
+
+const formatFuelCents = (value?: number | null) => {
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) return null;
+  return `$${(value / 100).toFixed(2)}`;
 };
 
 const buildSlotOptions = (listing: ParkingPassListing) =>
@@ -3917,6 +3931,30 @@ export default function ParkingPassPage() {
       staleTime: 5 * 60 * 1000,
       refetchOnWindowFocus: false,
     });
+  const selectedSpotHost = (activeListingForDate || activeListing)?.host || activeLocation?.host || null;
+  const selectedSpotFuelPrices = selectedSpotHost?.fuelPrices || null;
+  const selectedSpotGasPriceSummary = useMemo(() => {
+    if (!activeLocation) {
+      return "Select a spot to view gas prices.";
+    }
+    if (selectedSpotHost?.showFuelPrices !== true || !selectedSpotFuelPrices) {
+      return "Gas prices are not available for this spot yet.";
+    }
+    const regular = formatFuelCents(selectedSpotFuelPrices.regularCents);
+    const midgrade = formatFuelCents(selectedSpotFuelPrices.midgradeCents);
+    const premium = formatFuelCents(selectedSpotFuelPrices.premiumCents);
+    const diesel = formatFuelCents(selectedSpotFuelPrices.dieselCents);
+    const parts = [
+      regular ? `Regular ${regular}` : null,
+      midgrade ? `Midgrade ${midgrade}` : null,
+      premium ? `Premium ${premium}` : null,
+      diesel ? `Diesel ${diesel}` : null,
+    ].filter(Boolean) as string[];
+    if (!parts.length) {
+      return "Gas prices are not available for this spot yet.";
+    }
+    return parts.join(" · ");
+  }, [activeLocation, selectedSpotFuelPrices, selectedSpotHost?.showFuelPrices]);
   const spotFootTrafficCells = useMemo<MapTrafficCell[]>(() => {
     if (!showParkingScoutHeat || !canManageParkingPass || !activeLocation) return [];
     return (scheduleFootTrafficData?.cells || []).slice(0, 120).map((cell) => {
@@ -6617,6 +6655,7 @@ export default function ParkingPassPage() {
                           ? "Weather: available for selected booking window."
                           : "Weather: unavailable or not yet in provider forecast window."}
                       </p>
+                      <p className="mt-1">{`Gas: ${selectedSpotGasPriceSummary}`}</p>
                     </div>
                   </div>
 
@@ -8020,10 +8059,7 @@ export default function ParkingPassPage() {
                               </p>
                               <p>
                                 Gas prices:{" "}
-                                {String(
-                                  intelligenceStatusData?.layers?.gasPrices?.status ||
-                                    "unavailable",
-                                )}
+                                {selectedSpotGasPriceSummary}
                               </p>
                               <p>
                                 Propane suppliers:{" "}
