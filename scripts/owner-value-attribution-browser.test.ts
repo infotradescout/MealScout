@@ -524,6 +524,7 @@ async function run() {
       timeout: 20_000,
     });
     await page.getByText("Profile actions taken").first().waitFor({ state: "visible", timeout: 20_000 });
+    await page.getByText("Completion outcomes after clicks").first().waitFor({ state: "visible", timeout: 20_000 });
     await page.getByRole("button", { name: "Update next missing item" }).first().click();
     await page.waitForTimeout(700);
     assert(
@@ -544,6 +545,7 @@ async function run() {
     }
     await page.getByText("Profile actions taken").first().waitFor({ state: "visible", timeout: 20_000 });
     await page.getByText("Menu update clicked").first().waitFor({ state: "visible", timeout: 20_000 });
+    await page.getByText("Completion outcomes after clicks").first().waitFor({ state: "visible", timeout: 20_000 });
     await page.getByText("7 days").first().click();
     await page.waitForTimeout(800);
 

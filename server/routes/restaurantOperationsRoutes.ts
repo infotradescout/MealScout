@@ -2596,13 +2596,7 @@ export function registerRestaurantOperationsRoutes(
       }
 
       const ownedRestaurants = await db
-        .select({
-          id: restaurants.id,
-          ownerId: restaurants.ownerId,
-          name: restaurants.name,
-          isFoodTruck: restaurants.isFoodTruck,
-          businessType: restaurants.businessType,
-        })
+        .select()
         .from(restaurants)
         .where(inArray(restaurants.id, ownerRestaurantIds));
 
@@ -2629,6 +2623,58 @@ export function registerRestaurantOperationsRoutes(
         );
 
       const byEntity = new Map<string, any>();
+      const completionStatusForRestaurant = (restaurant: any) => {
+        const socialLinks =
+          restaurant?.socialAutopostSettings &&
+          typeof restaurant.socialAutopostSettings === "object" &&
+          typeof restaurant.socialAutopostSettings.publicActionLinks === "object"
+            ? restaurant.socialAutopostSettings.publicActionLinks
+            : {};
+        const hasMenu = Boolean(
+          restaurant?.menuUrl ||
+            restaurant?.menuPdfUrl ||
+            restaurant?.menuImageUrl ||
+            Number(restaurant?.menuItemCount || 0) > 0 ||
+            Number(restaurant?.publicMenuItemCount || 0) > 0,
+        );
+        const hasPhotos = Boolean(restaurant?.imageUrl || restaurant?.logoUrl || restaurant?.coverImageUrl);
+        const hasHours = Boolean(
+          restaurant?.operatingHours || restaurant?.businessHours || restaurant?.hours || restaurant?.schedulePublished,
+        );
+        const hasServiceArea = Boolean(restaurant?.address || restaurant?.city);
+        const hasContact = Boolean(
+          restaurant?.phone ||
+            restaurant?.contactPhone ||
+            restaurant?.websiteUrl ||
+            restaurant?.onlineOrderingUrl ||
+            socialLinks.onlineOrderingUrl ||
+            socialLinks.deliveryUrl,
+        );
+        const hasSocial = Boolean(restaurant?.facebookPageUrl || restaurant?.instagramUrl);
+        const hasCateringEvents = Boolean(
+          restaurant?.cateringInquiryUrl ||
+            restaurant?.truckBookingInquiryUrl ||
+            socialLinks.cateringInquiryUrl ||
+            socialLinks.truckBookingInquiryUrl ||
+            Number(restaurant?.upcomingPublicEventCount || 0) > 0 ||
+            Number(restaurant?.upcomingEventCount || 0) > 0,
+        );
+        const hasDeal = Boolean(
+          Number(restaurant?.activeDeals || 0) > 0 ||
+            Number(restaurant?.activeDealsCount || 0) > 0 ||
+            Boolean(restaurant?.hasActiveDeals),
+        );
+        return {
+          menu: hasMenu,
+          photos: hasPhotos,
+          hours: hasHours,
+          "service-area": hasServiceArea,
+          contact: hasContact,
+          social: hasSocial,
+          "catering-events": hasCateringEvents,
+          deal: hasDeal,
+        } as Record<string, boolean>;
+      };
       for (const restaurant of ownedRestaurants as any[]) {
         const entityType =
           restaurant.isFoodTruck || String(restaurant.businessType || "").toLowerCase() === "food_truck"
@@ -2647,6 +2693,7 @@ export function registerRestaurantOperationsRoutes(
           highIntentActions: 0,
           completionActionClicks: 0,
           completionActionsRaw: new Map<string, number>(),
+          completionStatus: completionStatusForRestaurant(restaurant),
           topSourcesRaw: new Map<string, number>(),
           lastActivityAt: null as string | null,
         });
@@ -2721,6 +2768,17 @@ export function registerRestaurantOperationsRoutes(
         completionActions: (Array.from(item.completionActionsRaw.entries()) as Array<[string, number]>)
           .sort((a, b) => b[1] - a[1])
           .map(([missingItemKey, count]) => ({ missingItemKey, count })),
+        completionActionReconciliation: (Array.from(item.completionActionsRaw.entries()) as Array<[string, number]>)
+          .sort((a, b) => b[1] - a[1])
+          .map(([missingItemKey, clicked]) => {
+            const nowComplete = Boolean(item.completionStatus?.[missingItemKey]);
+            return {
+              missingItemKey,
+              clicked,
+              nowComplete: nowComplete ? clicked : 0,
+              stillMissing: nowComplete ? 0 : clicked,
+            };
+          }),
         topSources: (Array.from(item.topSourcesRaw.entries()) as Array<[string, number]>)
           .sort((a, b) => b[1] - a[1])
           .slice(0, 5)

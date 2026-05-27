@@ -10,6 +10,13 @@ export interface OwnerCompletionActionCount {
   count: number;
 }
 
+export interface OwnerCompletionActionReconciliation {
+  missingItemKey: string;
+  clicked: number;
+  nowComplete: number;
+  stillMissing: number;
+}
+
 export interface OwnerValueAttributionEntity {
   ownerId: string;
   entityId: string;
@@ -21,6 +28,7 @@ export interface OwnerValueAttributionEntity {
   highIntentActions: number;
   completionActionClicks: number;
   completionActions: OwnerCompletionActionCount[];
+  completionActionReconciliation: OwnerCompletionActionReconciliation[];
   topSources: OwnerValueAttributionSource[];
   lastActivityAt: string | null;
 }

@@ -49,6 +49,8 @@ const requiredUiSnippets = [
   "Last activity",
   "Profile actions taken",
   "No completion actions recorded yet.",
+  "Completion outcomes after clicks",
+  "No completion outcomes recorded yet.",
 ];
 
 for (const snippet of requiredUiSnippets) {

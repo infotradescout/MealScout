@@ -3118,6 +3118,14 @@ export default function RestaurantOwnerDashboard() {
                   const completionActions = Array.isArray((totals as any).completionActions)
                     ? ((totals as any).completionActions as Array<{ missingItemKey: string; count: number }>)
                     : [];
+                  const completionReconciliation = Array.isArray((totals as any).completionActionReconciliation)
+                    ? ((totals as any).completionActionReconciliation as Array<{
+                        missingItemKey: string;
+                        clicked: number;
+                        nowComplete: number;
+                        stillMissing: number;
+                      }>)
+                    : [];
                   if (!hasAnyData) {
                     const publicProfilePath =
                       currentPublicEntityType === "truck"
@@ -3208,6 +3216,22 @@ export default function RestaurantOwnerDashboard() {
                             ) : (
                               <p className="mt-1 text-xs text-muted-foreground">
                                 No completion actions recorded yet.
+                              </p>
+                            )}
+                          </div>
+                          <div className="mt-3 rounded border border-border p-2">
+                            <p className="text-xs font-semibold">Completion outcomes after clicks</p>
+                            {(completionReconciliation || []).length ? (
+                              <div className="mt-1 space-y-1 text-xs text-muted-foreground">
+                                {completionReconciliation.slice(0, 3).map((action) => (
+                                  <p key={`completion-outcome-empty-${action.missingItemKey}`}>
+                                    {String(action.missingItemKey)}: clicked {Number(action.clicked || 0)} • now complete {Number(action.nowComplete || 0)} • still missing {Number(action.stillMissing || 0)}
+                                  </p>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="mt-1 text-xs text-muted-foreground">
+                                No completion outcomes recorded yet.
                               </p>
                             )}
                           </div>
@@ -3352,6 +3376,22 @@ export default function RestaurantOwnerDashboard() {
                             ) : (
                               <p className="mt-1 text-xs text-muted-foreground">
                                 No completion actions recorded yet.
+                              </p>
+                            )}
+                          </div>
+                          <div className="mt-3 rounded border border-border p-2">
+                            <p className="text-xs font-semibold">Completion outcomes after clicks</p>
+                            {(completionReconciliation || []).length ? (
+                              <div className="mt-1 space-y-1 text-xs text-muted-foreground">
+                                {completionReconciliation.slice(0, 5).map((action) => (
+                                  <p key={`completion-outcome-data-${action.missingItemKey}`}>
+                                    {String(action.missingItemKey)}: clicked {Number(action.clicked || 0)} • now complete {Number(action.nowComplete || 0)} • still missing {Number(action.stillMissing || 0)}
+                                  </p>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="mt-1 text-xs text-muted-foreground">
+                                No completion outcomes recorded yet.
                               </p>
                             )}
                           </div>
