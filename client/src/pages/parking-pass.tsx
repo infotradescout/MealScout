@@ -406,6 +406,21 @@ const formatFuelCents = (value?: number | null) => {
   return `$${(value / 100).toFixed(2)}`;
 };
 
+const distanceMilesBetween = (from: GeoPoint, to: GeoPoint) => {
+  const toRad = (value: number) => (value * Math.PI) / 180;
+  const earthRadiusMiles = 3958.8;
+  const dLat = toRad(to.lat - from.lat);
+  const dLng = toRad(to.lng - from.lng);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(from.lat)) *
+      Math.cos(toRad(to.lat)) *
+      Math.sin(dLng / 2) *
+      Math.sin(dLng / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return earthRadiusMiles * c;
+};
+
 const buildSlotOptions = (listing: ParkingPassListing) =>
   [
     {
@@ -3982,6 +3997,12 @@ export default function ParkingPassPage() {
     });
   const selectedSpotHost = (activeListingForDate || activeListing)?.host || activeLocation?.host || null;
   const selectedSpotFuelPrices = selectedSpotHost?.fuelPrices || null;
+  const selectedSpotCoords = useMemo<GeoPoint | null>(() => {
+    const lat = parseCoord(selectedSpotHost?.latitude);
+    const lng = parseCoord(selectedSpotHost?.longitude);
+    if (lat === null || lng === null) return null;
+    return { lat, lng };
+  }, [selectedSpotHost?.latitude, selectedSpotHost?.longitude]);
   const selectedSpotGasPriceSummary = useMemo(() => {
     if (!activeLocation) {
       return "Select a spot to view gas prices.";
@@ -4004,6 +4025,52 @@ export default function ParkingPassPage() {
     }
     return parts.join(" · ");
   }, [activeLocation, selectedSpotFuelPrices, selectedSpotHost?.showFuelPrices]);
+  const nearestOperationalSupport = useMemo(() => {
+    if (!selectedSpotCoords) {
+      return {
+        gas: "Select a spot",
+        propane: "Select a spot",
+        supply: "Select a spot",
+        support: "Select a spot",
+      };
+    }
+    const nearestLabel = (
+      points: Array<{ name: string; position: GeoPoint }>,
+      fallback: string,
+    ) => {
+      if (!points.length) return fallback;
+      let nearest = points[0];
+      let minDistance = distanceMilesBetween(selectedSpotCoords, points[0].position);
+      for (let index = 1; index < points.length; index += 1) {
+        const candidate = points[index];
+        const miles = distanceMilesBetween(selectedSpotCoords, candidate.position);
+        if (miles < minDistance) {
+          minDistance = miles;
+          nearest = candidate;
+        }
+      }
+      return `${nearest.name} · ${minDistance.toFixed(1)} mi`;
+    };
+    const propanePoints = supplierOverlayPins
+      .filter((pin) => pin.isPropane)
+      .map((pin) => ({ name: pin.name, position: pin.position }));
+    const supplyPoints = supplierOverlayPins
+      .filter((pin) => pin.isSupply)
+      .map((pin) => ({ name: pin.name, position: pin.position }));
+    const supportPoints = supplierOverlayPins
+      .filter((pin) => pin.isSupport)
+      .map((pin) => ({ name: pin.name, position: pin.position }));
+    const gasPoints = gasPricePins.map((pin) => ({
+      name: pin.name,
+      position: pin.position,
+    }));
+    return {
+      gas: nearestLabel(gasPoints, "Unavailable"),
+      propane: nearestLabel(propanePoints, "Unavailable"),
+      supply: nearestLabel(supplyPoints, "Unavailable"),
+      support: nearestLabel(supportPoints, "Unavailable"),
+    };
+  }, [gasPricePins, selectedSpotCoords, supplierOverlayPins]);
   const spotFootTrafficCells = useMemo<MapTrafficCell[]>(() => {
     if (!showParkingScoutHeat || !canManageParkingPass || !activeLocation) return [];
     return (scheduleFootTrafficData?.cells || []).slice(0, 120).map((cell) => {
@@ -8181,6 +8248,17 @@ export default function ParkingPassPage() {
                                     "unavailable",
                                 )}
                               </p>
+                            </div>
+                          </div>
+                          <div className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2 text-xs">
+                            <p className="font-semibold text-[color:var(--text-primary)]">
+                              Nearest operational support
+                            </p>
+                            <div className="mt-1 space-y-1 text-[color:var(--text-muted)]">
+                              <p>{`Nearest gas: ${nearestOperationalSupport.gas}`}</p>
+                              <p>{`Nearest propane: ${nearestOperationalSupport.propane}`}</p>
+                              <p>{`Nearest supply: ${nearestOperationalSupport.supply}`}</p>
+                              <p>{`Nearest support: ${nearestOperationalSupport.support}`}</p>
                             </div>
                           </div>
                           <div className="rounded-xl pp-glass-muted p-3 text-xs text-slate-700 space-y-2">
