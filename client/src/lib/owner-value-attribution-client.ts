@@ -5,6 +5,11 @@ export interface OwnerValueAttributionSource {
   count: number;
 }
 
+export interface OwnerCompletionActionCount {
+  missingItemKey: string;
+  count: number;
+}
+
 export interface OwnerValueAttributionEntity {
   ownerId: string;
   entityId: string;
@@ -14,6 +19,8 @@ export interface OwnerValueAttributionEntity {
   ctaClicks: number;
   shareOpens: number;
   highIntentActions: number;
+  completionActionClicks: number;
+  completionActions: OwnerCompletionActionCount[];
   topSources: OwnerValueAttributionSource[];
   lastActivityAt: string | null;
 }

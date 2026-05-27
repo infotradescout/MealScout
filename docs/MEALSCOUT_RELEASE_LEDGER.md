@@ -155,6 +155,22 @@ Last updated: 2026-05-26 (America/Chicago)
   - `npm run build` ✅
   - `npm run verify:routes` ✅
 
+14. PDA-2.8 Owner Completion Action Analytics Surface
+- Status: PASS
+- Commit: `pending`
+- Depends on:
+  - PDA-2.7 — Owner action tracking loop
+- Goal:
+  - Expose owner-scoped 7d/30d profile completion action counts grouped by missing item key and entity scope, then render a dashboard surface for measured completion actions.
+- Validation:
+  - `npm run test -- owner-profile-completion-actions` ✅
+  - `npm run test -- owner-value-attribution-ui` ✅
+  - `npm run test -- owner-value-attribution-browser` ✅
+  - `npm run test:run` ✅
+  - `npm run check` ✅
+  - `npm run build` ✅
+  - `npm run verify:routes` ✅
+
 ## What is now live
 
 - Public SEO/discovery pages route into canonical `/p/...` profiles.

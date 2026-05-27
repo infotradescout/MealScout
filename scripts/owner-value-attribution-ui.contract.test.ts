@@ -47,6 +47,8 @@ const requiredUiSnippets = [
   "High-intent actions",
   "Top sources",
   "Last activity",
+  "Profile actions taken",
+  "No completion actions recorded yet.",
 ];
 
 for (const snippet of requiredUiSnippets) {

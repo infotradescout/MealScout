@@ -2620,7 +2620,11 @@ export function registerRestaurantOperationsRoutes(
           and(
             gte(requestLogs.createdAt, start),
             inArray(requestLogs.entityId, ownerRestaurantIds),
-            inArray(requestLogs.surface, ["public_profile", "public_discovery"]),
+            inArray(requestLogs.surface, [
+              "public_profile",
+              "public_discovery",
+              "owner_dashboard_profile_completion",
+            ]),
           ),
         );
 
@@ -2641,6 +2645,8 @@ export function registerRestaurantOperationsRoutes(
           ctaClicks: 0,
           shareOpens: 0,
           highIntentActions: 0,
+          completionActionClicks: 0,
+          completionActionsRaw: new Map<string, number>(),
           topSourcesRaw: new Map<string, number>(),
           lastActivityAt: null as string | null,
         });
@@ -2689,6 +2695,16 @@ export function registerRestaurantOperationsRoutes(
           }
           const sourceLabel = `discovery:${sourcePageType}`;
           item.topSourcesRaw.set(sourceLabel, (item.topSourcesRaw.get(sourceLabel) || 0) + 1);
+        } else if (String(row.surface) === "owner_dashboard_profile_completion") {
+          const actionType = String(metadata.actionType || "");
+          if (actionType === "profile_completion_cta_click") {
+            item.completionActionClicks += 1;
+            const missingItemKey = String(metadata.missingItemKey || "unknown");
+            item.completionActionsRaw.set(
+              missingItemKey,
+              (item.completionActionsRaw.get(missingItemKey) || 0) + 1,
+            );
+          }
         }
       }
 
@@ -2701,6 +2717,10 @@ export function registerRestaurantOperationsRoutes(
         ctaClicks: item.ctaClicks,
         shareOpens: item.shareOpens,
         highIntentActions: item.highIntentActions,
+        completionActionClicks: item.completionActionClicks,
+        completionActions: (Array.from(item.completionActionsRaw.entries()) as Array<[string, number]>)
+          .sort((a, b) => b[1] - a[1])
+          .map(([missingItemKey, count]) => ({ missingItemKey, count })),
         topSources: (Array.from(item.topSourcesRaw.entries()) as Array<[string, number]>)
           .sort((a, b) => b[1] - a[1])
           .slice(0, 5)
