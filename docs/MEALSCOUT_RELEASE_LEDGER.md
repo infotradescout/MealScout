@@ -224,3 +224,12 @@ Know which public discovery pages create profile traffic and customer action.
 - Proof:
   - Shared `profileCompletionStatus` adapter is used by reconciliation and owner dashboard completion logic.
   - Deterministic contract verifies reconciliation follows shared adapter output.
+
+17. PDA-2.11 Deterministic Completion Reconciliation Runtime Test
+- Status: PASS
+- Commit: `pending`
+- Depends on:
+  - PDA-2.10 — Shared profile completion status adapter
+- Goal:
+  - Prove seeded runtime reconciliation math for `clicked`, `nowComplete`, and `stillMissing` using the shared completion-status adapter.
+
