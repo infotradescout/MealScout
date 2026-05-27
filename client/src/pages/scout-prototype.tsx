@@ -149,6 +149,54 @@ function imgSrc(r: { coverImageUrl?: string | null; heroImageUrl?: string | null
   return r.coverImageUrl || r.heroImageUrl || r.imageUrl || null;
 }
 
+function hasRestaurantScheduleData(restaurant: Restaurant) {
+  const candidate = restaurant as Restaurant & {
+    operatingHours?: unknown;
+    hours?: unknown;
+    businessHours?: unknown;
+    schedule?: unknown;
+    isOpen?: unknown;
+    openNow?: unknown;
+  };
+  const schedule =
+    candidate.operatingHours ??
+    candidate.hours ??
+    candidate.businessHours ??
+    candidate.schedule;
+  if (Array.isArray(schedule)) return schedule.length > 0;
+  if (schedule && typeof schedule === "object") return Object.keys(schedule as object).length > 0;
+  if (typeof schedule === "string" && schedule.trim().length > 0) return true;
+  if (typeof candidate.isOpen === "boolean" || typeof candidate.openNow === "boolean") return true;
+  return false;
+}
+
+function restaurantServingStatus(restaurant: Restaurant): "open_now" | "closed_now" | "no_schedule" {
+  const candidate = restaurant as Restaurant & {
+    isOpen?: unknown;
+    openNow?: unknown;
+    currentlyOpen?: unknown;
+    isCurrentlyOpen?: unknown;
+    openStatus?: unknown;
+    status?: unknown;
+    hoursStatus?: unknown;
+  };
+  if (!hasRestaurantScheduleData(restaurant)) return "no_schedule";
+  const explicit = [
+    candidate.isOpen,
+    candidate.openNow,
+    candidate.currentlyOpen,
+    candidate.isCurrentlyOpen,
+  ].find((value) => typeof value === "boolean");
+  if (typeof explicit === "boolean") return explicit ? "open_now" : "closed_now";
+  const statusText = String(
+    candidate.openStatus ?? candidate.status ?? candidate.hoursStatus ?? "",
+  )
+    .trim()
+    .toLowerCase();
+  if (statusText.includes("open") && !statusText.includes("closed")) return "open_now";
+  return "closed_now";
+}
+
 function distanceMilesBetween(
   aLat: number,
   aLng: number,
@@ -427,7 +475,9 @@ export default function ScoutPrototype() {
     [location.lat, location.lng],
   );
 
-  const trucks = filterByResolvedLocation(trucksRaw).slice(0, 20);
+  const trucks = filterByResolvedLocation(trucksRaw)
+    .filter((truck) => truck.mobileOnline === true)
+    .slice(0, 20);
   const restaurants = filterByResolvedLocation(restaurantsRaw).slice(0, 20);
   const deals = dealsRaw.slice(0, 10);
   const events = eventsRaw.slice(0, 10);
@@ -467,12 +517,25 @@ export default function ScoutPrototype() {
       restaurants.forEach(r => {
         const name = r.businessName || r.name || "Restaurant";
         const hasDeals = (r.activeDealsCount ?? r.activeDealCount ?? 0) > 0;
+        const serviceStatus = restaurantServingStatus(r);
+        const statusTag =
+          serviceStatus === "open_now"
+            ? "Open now"
+            : serviceStatus === "closed_now"
+              ? "Closed now"
+              : "No schedule";
+        const statusColor =
+          serviceStatus === "open_now"
+            ? "#10b981"
+            : serviceStatus === "closed_now"
+              ? "#f59e0b"
+              : "#94a3b8";
         items.push({
           id: `rest-${r.id}`, type: "RESTAURANT", typeColor: "#ff5c00",
           image: imgSrc(r), title: name,
-          subtitle: [r.cuisineType, r.neighborhood || r.city].filter(Boolean).join(" • "),
-          tag: hasDeals ? "Deal available" : (r.homeRankingReason ?? undefined),
-          tagColor: hasDeals ? "#10b981" : "#ff5c00",
+          subtitle: [r.cuisineType, r.neighborhood || r.city, statusTag].filter(Boolean).join(" • "),
+          tag: hasDeals ? "Deal available" : statusTag,
+          tagColor: hasDeals ? "#10b981" : statusColor,
           distance: distLabel(r),
           href: `/restaurant/${r.id}`,
           routeHref: routeUrl(r.latitude ?? r.lat, r.longitude ?? r.lng, name),
@@ -582,7 +645,7 @@ export default function ScoutPrototype() {
     });
     L.marker([location.lat, location.lng], { icon: userIcon }).addTo(map.current);
 
-    // Truck pins
+    // Truck pins (only actively serving trucks are rendered)
     trucks.slice(0, 8).forEach(t => {
       const lat = t.latitude ?? t.lat;
       const lng = t.longitude ?? t.lng;
@@ -596,8 +659,11 @@ export default function ScoutPrototype() {
       marker.on("click", () => navigate(`/truck/${t.id}`));
     });
 
-    // Restaurant pins
-    restaurants.slice(0, 8).forEach(r => {
+    // Restaurant pins (must have schedule status, or stay off map)
+    restaurants
+      .filter((restaurant) => restaurantServingStatus(restaurant) !== "no_schedule")
+      .slice(0, 8)
+      .forEach(r => {
       const lat = r.latitude ?? r.lat;
       const lng = r.longitude ?? r.lng;
       if (!lat || !lng) return;
@@ -608,7 +674,7 @@ export default function ScoutPrototype() {
       });
       const marker = L.marker([lat, lng], { icon }).addTo(map.current!);
       marker.on("click", () => navigate(`/restaurant/${r.id}`));
-    });
+      });
 
     // Event pins
     events.slice(0, 4).forEach(e => {
@@ -637,7 +703,7 @@ export default function ScoutPrototype() {
   }, [activeScene]);
 
   const sectionSubtitle = useMemo(() => {
-    if (activeScene === "for_you") return "A live mix of what locals love, what's open, what's new, and what's nearby.";
+    if (activeScene === "for_you") return "A local mix of what people are finding, with clear open/closed/schedule status.";
     if (activeScene === "food_trucks") return `${trucks.length || "No"} food trucks near ${location.label}.`;
     if (activeScene === "restaurants") return `${restaurants.length || "No"} restaurants near ${location.label}.`;
     if (activeScene === "deals") return `${deals.length || "No"} active deals near you.`;

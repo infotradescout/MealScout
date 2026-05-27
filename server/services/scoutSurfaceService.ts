@@ -126,6 +126,35 @@ const isRestaurantOpenNow = (restaurant: any): boolean => {
   return status.includes("open") && !status.includes("closed");
 };
 
+const hasRestaurantScheduleSignal = (restaurant: any): boolean => {
+  const directSchedule =
+    restaurant?.operatingHours ??
+    restaurant?.hours ??
+    restaurant?.businessHours ??
+    restaurant?.schedule;
+  if (Array.isArray(directSchedule)) return directSchedule.length > 0;
+  if (directSchedule && typeof directSchedule === "object") {
+    return Object.keys(directSchedule).length > 0;
+  }
+  if (typeof directSchedule === "string" && directSchedule.trim().length > 0) return true;
+  const explicitOpenFields = [
+    restaurant?.isOpen,
+    restaurant?.openNow,
+    restaurant?.currentlyOpen,
+    restaurant?.isCurrentlyOpen,
+  ];
+  if (explicitOpenFields.some((value) => typeof value === "boolean")) return true;
+  return false;
+};
+
+const getRestaurantAvailabilityState = (
+  restaurant: any,
+): "open_now" | "closed_now" | "no_schedule" => {
+  const hasSchedule = hasRestaurantScheduleSignal(restaurant);
+  if (!hasSchedule) return "no_schedule";
+  return isRestaurantOpenNow(restaurant) ? "open_now" : "closed_now";
+};
+
 const isTruckServingNow = (truck: any): boolean => {
   const explicit = [
     truck?.isOpen,
@@ -136,7 +165,7 @@ const isTruckServingNow = (truck: any): boolean => {
     truck?.availableNow,
   ].find((value) => typeof value === "boolean");
   if (typeof explicit === "boolean") return explicit;
-  return truck?.mobileOnline !== false;
+  return truck?.mobileOnline === true;
 };
 
 const isToday = (value: unknown): boolean => {
@@ -650,7 +679,9 @@ export async function buildScoutSurface(
       continue;
     }
 
-    const openNow = isRestaurantOpenNow(restaurant);
+    const availabilityState = getRestaurantAvailabilityState(restaurant);
+    const openNow = availabilityState === "open_now";
+    const hasSchedule = availabilityState !== "no_schedule";
     const signals =
       recommendationSignals.get(restaurantId) ||
       ({
@@ -680,14 +711,18 @@ export async function buildScoutSurface(
         typeof distanceMiles === "number" && Number.isFinite(distanceMiles)
           ? Number(distanceMiles.toFixed(2))
           : null,
-      statusLabel: openNow ? "Open now" : "Nearby",
+      statusLabel: openNow ? "Open now" : hasSchedule ? "Closed now" : "No schedule",
       badges: dedupe([
-        openNow ? "Open now" : "Nearby",
+        openNow ? "Open now" : hasSchedule ? "Closed now" : "No schedule",
         String((restaurant as any)?.city || "").trim(),
         signals.activeDealCount > 0 ? "Deal today" : "",
       ]),
       reasons: dedupe([
-        openNow ? "Open and available now" : "Available nearby",
+        openNow
+          ? "Open and available now"
+          : hasSchedule
+            ? "Closed right now"
+            : "Schedule not published yet",
         signals.activeDealCount > 0 ? "Has active deals today" : "",
       ]),
       availability: openNow ? "open_now" : "nearby",
@@ -698,7 +733,7 @@ export async function buildScoutSurface(
           : `/restaurant/${encodeURIComponent(restaurantId)}`,
       },
       score:
-        (openNow ? 70 : 45) +
+        (openNow ? 70 : hasSchedule ? 42 : 30) +
         Math.min(14, signals.activeDealCount * 3) +
         Math.min(10, signals.favoriteCount + signals.followCount) +
         Math.min(12, signals.recommendationCount + signals.videoRecommendationCount) -
