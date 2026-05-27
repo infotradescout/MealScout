@@ -485,7 +485,7 @@ function GoogleMapRenderer({
     trafficCells.forEach((cell) => {
       usedIds.add(cell.id);
       const existing = trafficCircleRefs.current.get(cell.id);
-      const radius = Math.max(140, Math.min(1800, (cell.weight || 1) * 15));
+      const radius = Math.max(110, Math.min(1200, (cell.weight || 1) * 10));
       const style = {
         clickable: false,
         strokeOpacity: 0,
@@ -493,10 +493,10 @@ function GoogleMapRenderer({
         fillColor: trafficCellColor(cell),
         fillOpacity:
           cell.source === "google_places"
-            ? 0.14
+            ? 0.1
             : cell.source === "supply_signal"
-              ? 0.22
-              : 0.18,
+              ? 0.14
+              : 0.12,
       };
       if (existing) {
         existing.setCenter({ lat: cell.lat, lng: cell.lng });
@@ -590,7 +590,7 @@ function LeafletRenderer({
         <Circle
           key={cell.id}
           center={[cell.lat, cell.lng]}
-          radius={Math.max(140, Math.min(1800, (cell.weight || 1) * 15))}
+          radius={Math.max(110, Math.min(1200, (cell.weight || 1) * 10))}
           interactive={false}
           pathOptions={{
             stroke: false,
@@ -603,10 +603,10 @@ function LeafletRenderer({
                   : "#f97316"),
             fillOpacity:
               cell.source === "google_places"
-                ? 0.14
+                ? 0.1
                 : cell.source === "supply_signal"
-                  ? 0.22
-                  : 0.18,
+                  ? 0.14
+                  : 0.12,
           }}
         />
       ))}

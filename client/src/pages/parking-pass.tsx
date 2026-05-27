@@ -3763,6 +3763,14 @@ export default function ParkingPassPage() {
     });
     return { propane, supply, support };
   }, [paidMapLocations?.supplierLocations]);
+  const supplierLayerSummary = useMemo(() => {
+    const statusFor = (count: number) => (count > 0 ? String(count) : "Unavailable");
+    return {
+      propane: statusFor(supplierLayerCounts.propane),
+      supply: statusFor(supplierLayerCounts.supply),
+      support: statusFor(supplierLayerCounts.support),
+    };
+  }, [supplierLayerCounts.propane, supplierLayerCounts.supply, supplierLayerCounts.support]);
   const fallbackMapCenter = useMemo(() => {
     const requestedPin = requestedHostId
       ? fallbackHostPins.find((pin) => pin.hostId === requestedHostId)
@@ -6640,7 +6648,7 @@ export default function ParkingPassPage() {
                         disabled={supplierLayerCounts.propane === 0}
                         className="w-full"
                       >
-                        Propane
+                        {`Propane (${supplierLayerSummary.propane})`}
                       </Button>
                       <Button
                         size="sm"
@@ -6649,7 +6657,7 @@ export default function ParkingPassPage() {
                         disabled={supplierLayerCounts.supply === 0}
                         className="w-full"
                       >
-                        Supply
+                        {`Supply (${supplierLayerSummary.supply})`}
                       </Button>
                       <Button
                         size="sm"
@@ -6658,8 +6666,21 @@ export default function ParkingPassPage() {
                         disabled={supplierLayerCounts.support === 0}
                         className="w-full"
                       >
-                        Support
+                        {`Support (${supplierLayerSummary.support})`}
                       </Button>
+                    </div>
+                    <div className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)]/85 px-3 py-2 text-[11px] text-[color:var(--text-muted)]">
+                      <p className="font-medium text-[color:var(--text-primary)]">
+                        Layer availability
+                      </p>
+                      <p className="mt-1">
+                        {`Propane: ${supplierLayerSummary.propane} · Supply: ${supplierLayerSummary.supply} · Support: ${supplierLayerSummary.support}`}
+                      </p>
+                      <p className="mt-1">
+                        {bookingWeatherData?.available
+                          ? "Weather: available for selected booking window."
+                          : "Weather: unavailable or not yet in provider forecast window."}
+                      </p>
                     </div>
                   </div>
 
@@ -6721,9 +6742,15 @@ export default function ParkingPassPage() {
                                 ...supplierOverlayPins.map((pin) => ({
                                   key: pin.key,
                                   position: pin.position,
+                                  occupied: true,
                                   popup: (
                                     <div className="space-y-1.5 text-xs">
                                       <p className="font-semibold text-orange-600">
+                                        {pin.isPropane
+                                          ? "🔥 "
+                                          : pin.isSupply
+                                            ? "📦 "
+                                            : "🛠️ "}
                                         {pin.name}
                                       </p>
                                       <p className="text-[color:var(--text-muted)]">
@@ -7068,7 +7095,8 @@ export default function ParkingPassPage() {
                                   return {
                                     key,
                                     position: coords,
-                                    occupied: bookings.length > 0,
+                                    occupied:
+                                      group.key === activeLocationKey || bookings.length > 0,
                                     popup: pinPopup,
                                   } satisfies MapPickerPin;
                                 },
@@ -7076,9 +7104,15 @@ export default function ParkingPassPage() {
                               ...supplierOverlayPins.map((pin) => ({
                                 key: pin.key,
                                 position: pin.position,
+                                occupied: true,
                                 popup: (
                                   <div className="space-y-1.5 text-xs">
                                     <p className="font-semibold text-orange-600">
+                                      {pin.isPropane
+                                        ? "🔥 "
+                                        : pin.isSupply
+                                          ? "📦 "
+                                          : "🛠️ "}
                                       {pin.name}
                                     </p>
                                     <p className="text-[color:var(--text-muted)]">
