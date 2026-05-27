@@ -1259,11 +1259,13 @@ export default function ParkingPassPage() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const passId = params.get("pass");
+    const passId = params.get("pass") || params.get("eventId");
     if (passId) {
       setPendingPassId(passId);
     }
-    const hostId = String(params.get("hostId") || "").trim();
+    const hostId = String(
+      params.get("hostId") || params.get("locationId") || "",
+    ).trim();
     if (hostId) {
       setRequestedHostId(hostId);
     }

@@ -210,14 +210,39 @@ const getStatusLabel = (
 };
 
 const getCta = (card: ScoutSurfaceCard): ScoutSurfaceCard["cta"] => {
+  const metadata = (card.metadata || {}) as Record<string, unknown>;
+  const parkingPassBookable = metadata.parkingPassBookable === true;
+  const parkingPassId = String(
+    metadata.parkingPassId || metadata.eventId || "",
+  ).trim();
+  const locationId = String(
+    metadata.locationId || metadata.hostId || card.entityId || "",
+  ).trim();
+  const spotId = String(metadata.spotId || "").trim();
+  const buildParkingPassHref = () => {
+    const params = new URLSearchParams();
+    params.set("setup", "book");
+    params.set("view", "map");
+    params.set("source", "scout");
+    if (parkingPassId) params.set("pass", parkingPassId);
+    if (locationId) params.set("hostId", locationId);
+    if (spotId) params.set("spotId", spotId);
+    if (parkingPassId) params.set("eventId", parkingPassId);
+    if (locationId) params.set("locationId", locationId);
+    return `/parking-pass?${params.toString()}`;
+  };
+
   if (card.entityType === "deal") {
     return { label: "View details", href: `/deal/${encodeURIComponent(card.entityId)}` };
   }
   if (card.entityType === "event") {
+    if (parkingPassBookable) {
+      return { label: "Book spot", href: buildParkingPassHref() };
+    }
     return { label: "View details", href: `/events/${encodeURIComponent(card.entityId)}` };
   }
   if (card.entityType === "host_spot") {
-    return { label: "Book spot", href: "/parking-pass" };
+    return { label: "View details", href: `/p/host/${encodeURIComponent(card.entityId)}` };
   }
   if (card.entityType === "truck") {
     return { label: "View details", href: `/truck/${encodeURIComponent(card.entityId)}` };
@@ -854,8 +879,8 @@ export async function buildScoutSurface(
       if (!hostId) continue;
       cardPool.moreNearby.push({
         id: `host_spot:${hostId}:${eventId}`,
-        entityType: "host_spot",
-        entityId: hostId,
+        entityType: "event",
+        entityId: eventId,
         title: String((host as any)?.businessName || "Host spot"),
         subtitle: String((event as any)?.name || "").trim() || undefined,
         imageUrl: ((host as any)?.spotImageUrl || null) as string | null,
@@ -872,11 +897,19 @@ export async function buildScoutSurface(
         availability: today ? "event_today" : "upcoming",
         cta: {
           label: "Book spot",
-          href: `/parking-pass`,
+          href: `/parking-pass?setup=book&view=map&source=scout&pass=${encodeURIComponent(eventId)}&hostId=${encodeURIComponent(hostId)}&eventId=${encodeURIComponent(eventId)}&locationId=${encodeURIComponent(hostId)}`,
         },
         score: (today ? 68 : 50) - Math.min(18, Number(distanceMiles || 0) * 2),
-        source: "host_spot",
-        metadata: { lat: coords.lat, lng: coords.lng, eventId },
+        source: "event",
+        metadata: {
+          lat: coords.lat,
+          lng: coords.lng,
+          eventId,
+          hostId,
+          locationId: hostId,
+          parkingPassId: eventId,
+          parkingPassBookable: true,
+        },
       });
     }
   }
