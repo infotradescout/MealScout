@@ -433,6 +433,193 @@ const optionalNonNegativeNumberEnv = (name: string): number | null => {
 };
 
 export function registerPublicMapRoutes(app: Express) {
+  app.get("/api/parking-pass/weather", async (req, res) => {
+    try {
+      const lat = toFiniteNumber(req.query.lat);
+      const lng = toFiniteNumber(req.query.lng);
+      const date = String(req.query.date || "").trim();
+      const startTime = String(req.query.startTime || "").trim() || "11:00";
+      const endTime = String(req.query.endTime || "").trim() || "14:00";
+      if (lat === null || lng === null || !date) {
+        return res.status(400).json({ message: "lat, lng, and date are required" });
+      }
+
+      const requestedDay = new Date(`${date}T00:00:00`);
+      if (Number.isNaN(requestedDay.getTime())) {
+        return res.status(400).json({ message: "Invalid date" });
+      }
+
+      const now = new Date();
+      const dayDiff = Math.floor((requestedDay.getTime() - now.getTime()) / (24 * 60 * 60 * 1000));
+      if (dayDiff > 16) {
+        return res.status(200).json({
+          available: false,
+          reason: "forecast_window_unavailable",
+          message: "Forecast is not available this far in advance yet.",
+        });
+      }
+
+      const weatherUrl = new URL("https://api.open-meteo.com/v1/forecast");
+      weatherUrl.searchParams.set("latitude", String(lat));
+      weatherUrl.searchParams.set("longitude", String(lng));
+      weatherUrl.searchParams.set("hourly", "temperature_2m,precipitation_probability,wind_speed_10m,weather_code");
+      weatherUrl.searchParams.set("timezone", "auto");
+      weatherUrl.searchParams.set("start_date", date);
+      weatherUrl.searchParams.set("end_date", date);
+      const upstream = await fetch(weatherUrl.toString(), { method: "GET" });
+      if (!upstream.ok) {
+        return res.status(200).json({
+          available: false,
+          reason: "provider_unavailable",
+          message: "Weather provider is unavailable right now.",
+        });
+      }
+      const payload = (await upstream.json()) as any;
+      const hourly = payload?.hourly || {};
+      const times: string[] = Array.isArray(hourly.time) ? hourly.time : [];
+      const temps: Array<number | null> = Array.isArray(hourly.temperature_2m)
+        ? hourly.temperature_2m
+        : [];
+      const precip: Array<number | null> = Array.isArray(hourly.precipitation_probability)
+        ? hourly.precipitation_probability
+        : [];
+      const wind: Array<number | null> = Array.isArray(hourly.wind_speed_10m)
+        ? hourly.wind_speed_10m
+        : [];
+      const codes: Array<number | null> = Array.isArray(hourly.weather_code)
+        ? hourly.weather_code
+        : [];
+
+      const inWindow = (iso: string) => {
+        const timePart = String(iso.split("T")[1] || "").slice(0, 5);
+        return timePart >= startTime && timePart <= endTime;
+      };
+      const indexes = times
+        .map((value, index) => (inWindow(value) ? index : -1))
+        .filter((index) => index >= 0);
+      if (!indexes.length) {
+        return res.status(200).json({
+          available: false,
+          reason: "forecast_window_missing",
+          message: "Forecast data is not available for that time window.",
+        });
+      }
+
+      const avg = (values: Array<number | null>) => {
+        const nums = indexes
+          .map((index) => values[index])
+          .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+        if (!nums.length) return null;
+        return Number((nums.reduce((sum, value) => sum + value, 0) / nums.length).toFixed(1));
+      };
+      const max = (values: Array<number | null>) => {
+        const nums = indexes
+          .map((index) => values[index])
+          .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+        if (!nums.length) return null;
+        return Math.max(...nums);
+      };
+      const maxPrecip = max(precip);
+      const maxWind = max(wind);
+      const severe = indexes.some((index) => {
+        const code = Number(codes[index] ?? -1);
+        return [95, 96, 99].includes(code);
+      });
+
+      const summary =
+        severe
+          ? "Severe weather risk in this window"
+          : (maxPrecip ?? 0) >= 60
+            ? "High rain risk during this slot"
+            : (maxPrecip ?? 0) >= 30
+              ? "Possible rain during this slot"
+              : "Weather looks workable for this slot";
+
+      return res.status(200).json({
+        available: true,
+        summary,
+        temperatureF: avg(temps),
+        rainRiskPercent: maxPrecip,
+        windMph: maxWind,
+        severeWeatherWarning: severe,
+        source: "open-meteo",
+      });
+    } catch (error) {
+      console.error("Error loading parking pass weather:", error);
+      return res.status(200).json({
+        available: false,
+        reason: "provider_error",
+        message: "Weather forecast is temporarily unavailable.",
+      });
+    }
+  });
+
+  app.get("/api/parking-pass/intelligence-status", async (_req, res) => {
+    try {
+      const payload = mapLocationsLastGood?.payload || mapLocationsCache?.payload;
+      const hostLocations = Array.isArray(payload?.hostLocations) ? payload.hostLocations : [];
+      const supplierLocations = Array.isArray(payload?.supplierLocations)
+        ? payload.supplierLocations
+        : [];
+
+      const gasHosts = hostLocations.filter((host: any) => {
+        const prices = host?.fuelPrices || null;
+        return (
+          host?.showFuelPrices === true &&
+          prices &&
+          [prices.regularCents, prices.midgradeCents, prices.premiumCents, prices.dieselCents].some(
+            (value) => typeof value === "number" && Number.isFinite(value),
+          )
+        );
+      });
+      const propane = supplierLocations.filter(
+        (row: any) => String(row?.category || "").toLowerCase() === "propane_dealer",
+      );
+      const supplyStores = supplierLocations.filter((row: any) => {
+        const category = String(row?.category || "").toLowerCase();
+        return category === "supplier" || category === "equipment_supplier";
+      });
+
+      return res.status(200).json({
+        generatedAt: new Date().toISOString(),
+        layers: {
+          footTraffic: {
+            status: "available",
+            endpoint: "/api/map/foot-traffic",
+          },
+          gasPrices: {
+            status: gasHosts.length > 0 ? "available" : "unavailable",
+            records: gasHosts.length,
+          },
+          propaneSuppliers: {
+            status: propane.length > 0 ? "available" : "unavailable",
+            records: propane.length,
+          },
+          restaurantSupplyStores: {
+            status: supplyStores.length > 0 ? "available" : "unavailable",
+            records: supplyStores.length,
+          },
+          operatorSupportPois: {
+            status: supplierLocations.length > 0 ? "available" : "unavailable",
+            records: supplierLocations.length,
+          },
+        },
+      });
+    } catch (error) {
+      console.error("Error loading parking pass intelligence status:", error);
+      return res.status(200).json({
+        generatedAt: new Date().toISOString(),
+        layers: {
+          footTraffic: { status: "unavailable" },
+          gasPrices: { status: "unavailable" },
+          propaneSuppliers: { status: "unavailable" },
+          restaurantSupplyStores: { status: "unavailable" },
+          operatorSupportPois: { status: "unavailable" },
+        },
+      });
+    }
+  });
+
   app.get("/api/map/runtime", async (_req, res) => {
     try {
       const googleMapsApiKey = getGoogleMapsApiKey();

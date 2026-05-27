@@ -894,6 +894,17 @@ export default function ParkingPassPage() {
     refetchOnWindowFocus: false,
     refetchOnReconnect: true,
   });
+  const { data: intelligenceStatusData } = useQuery<any>({
+    queryKey: ["/api/parking-pass/intelligence-status"],
+    queryFn: async () => {
+      const res = await fetch("/api/parking-pass/intelligence-status");
+      if (!res.ok) throw new Error("Failed to load intelligence status");
+      return res.json();
+    },
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
+  });
   const MAP_LOCATIONS_CACHE_KEY = "mealscout:map:locations:v1";
   const [cachedMapLocations, setCachedMapLocations] =
     useState<MapLocationsResponse | null>(() => {
@@ -3777,6 +3788,45 @@ export default function ParkingPassPage() {
   const selectedDateHasOpenSpots = Boolean(
     activeListingForDate && listingDayIsSelectable(activeListingForDate),
   );
+  const weatherLat = Number(activeListingForDate?.host?.latitude);
+  const weatherLng = Number(activeListingForDate?.host?.longitude);
+  const weatherDate = activeListingForDate
+    ? getListingDateKey(activeListingForDate.date)
+    : selectedDate;
+  const weatherStartTime =
+    String(activeListingForDate?.startTime || "").trim() || "11:00";
+  const weatherEndTime =
+    String(activeListingForDate?.endTime || "").trim() || "14:00";
+  const canLoadBookingWeather =
+    Number.isFinite(weatherLat) &&
+    Number.isFinite(weatherLng) &&
+    Boolean(weatherDate);
+  const { data: bookingWeatherData, isFetching: isBookingWeatherFetching } =
+    useQuery<any>({
+      queryKey: [
+        "/api/parking-pass/weather",
+        weatherLat,
+        weatherLng,
+        weatherDate,
+        weatherStartTime,
+        weatherEndTime,
+      ],
+      enabled: canLoadBookingWeather,
+      queryFn: async () => {
+        const params = new URLSearchParams({
+          lat: String(weatherLat),
+          lng: String(weatherLng),
+          date: String(weatherDate),
+          startTime: weatherStartTime,
+          endTime: weatherEndTime,
+        });
+        const res = await fetch(`/api/parking-pass/weather?${params.toString()}`);
+        if (!res.ok) throw new Error("Failed to load booking weather");
+        return res.json();
+      },
+      staleTime: 10 * 60 * 1000,
+      refetchOnWindowFocus: false,
+    });
 
   const nextBookableDateByGroup = useMemo(() => {
     const map = new Map<string, string | null>();
@@ -7646,6 +7696,76 @@ export default function ParkingPassPage() {
                                 ? "Any time"
                                 : `${activeListing.startTime} - ${activeListing.endTime}`}
                             </span>
+                          </div>
+                          <div className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2 text-xs">
+                            <p className="font-semibold text-[color:var(--text-primary)]">
+                              Booking-date weather
+                            </p>
+                            {isBookingWeatherFetching ? (
+                              <p className="mt-1 text-[color:var(--text-muted)]">
+                                Loading weather for this booking window...
+                              </p>
+                            ) : bookingWeatherData?.available ? (
+                              <div className="mt-1 space-y-1 text-[color:var(--text-muted)]">
+                                <p>{bookingWeatherData.summary}</p>
+                                <p>
+                                  Temp: {bookingWeatherData.temperatureF ?? "n/a"}°F · Rain risk:{" "}
+                                  {bookingWeatherData.rainRiskPercent ?? "n/a"}% · Wind:{" "}
+                                  {bookingWeatherData.windMph ?? "n/a"} mph
+                                </p>
+                                <p>
+                                  Severe weather:{" "}
+                                  {bookingWeatherData.severeWeatherWarning ? "Warning" : "None"}
+                                </p>
+                              </div>
+                            ) : (
+                              <p className="mt-1 text-[color:var(--text-muted)]">
+                                {bookingWeatherData?.message ||
+                                  "Weather forecast unavailable for this booking window."}
+                              </p>
+                            )}
+                          </div>
+                          <div className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2 text-xs">
+                            <p className="font-semibold text-[color:var(--text-primary)]">
+                              Intelligence layers
+                            </p>
+                            <div className="mt-1 space-y-1 text-[color:var(--text-muted)]">
+                              <p>
+                                Foot traffic:{" "}
+                                {String(
+                                  intelligenceStatusData?.layers?.footTraffic?.status ||
+                                    "unavailable",
+                                )}
+                              </p>
+                              <p>
+                                Gas prices:{" "}
+                                {String(
+                                  intelligenceStatusData?.layers?.gasPrices?.status ||
+                                    "unavailable",
+                                )}
+                              </p>
+                              <p>
+                                Propane suppliers:{" "}
+                                {String(
+                                  intelligenceStatusData?.layers?.propaneSuppliers?.status ||
+                                    "unavailable",
+                                )}
+                              </p>
+                              <p>
+                                Restaurant supply stores:{" "}
+                                {String(
+                                  intelligenceStatusData?.layers?.restaurantSupplyStores
+                                    ?.status || "unavailable",
+                                )}
+                              </p>
+                              <p>
+                                Operator-support POIs:{" "}
+                                {String(
+                                  intelligenceStatusData?.layers?.operatorSupportPois?.status ||
+                                    "unavailable",
+                                )}
+                              </p>
+                            </div>
                           </div>
                           <div className="rounded-xl pp-glass-muted p-3 text-xs text-slate-700 space-y-2">
                             <p className="text-[11px] font-semibold text-slate-700">
