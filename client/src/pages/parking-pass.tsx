@@ -3788,15 +3788,20 @@ export default function ParkingPassPage() {
   const selectedDateHasOpenSpots = Boolean(
     activeListingForDate && listingDayIsSelectable(activeListingForDate),
   );
-  const weatherLat = Number(activeListingForDate?.host?.latitude);
-  const weatherLng = Number(activeListingForDate?.host?.longitude);
-  const weatherDate = activeListingForDate
-    ? getListingDateKey(activeListingForDate.date)
+  const weatherListing = activeListingForDate || activeListing || null;
+  const weatherLat = Number(
+    weatherListing?.host?.latitude ?? activeLocation?.host?.latitude,
+  );
+  const weatherLng = Number(
+    weatherListing?.host?.longitude ?? activeLocation?.host?.longitude,
+  );
+  const weatherDate = weatherListing
+    ? getListingDateKey(weatherListing.date)
     : selectedDate;
   const weatherStartTime =
-    String(activeListingForDate?.startTime || "").trim() || "11:00";
+    String(weatherListing?.startTime || "").trim() || "11:00";
   const weatherEndTime =
-    String(activeListingForDate?.endTime || "").trim() || "14:00";
+    String(weatherListing?.endTime || "").trim() || "14:00";
   const canLoadBookingWeather =
     Number.isFinite(weatherLat) &&
     Number.isFinite(weatherLng) &&
