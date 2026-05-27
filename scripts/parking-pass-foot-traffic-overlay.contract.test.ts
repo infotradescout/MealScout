@@ -5,13 +5,15 @@ const mapPicker = readFileSync("client/src/components/maps/GoogleMapPicker.tsx",
 
 const requiredParkingPassSnippets = [
   "Foot traffic",
-  "footTrafficOverlayCells",
+  "spotFootTrafficCells",
   "showParkingScoutHeat",
   "/api/map/foot-traffic",
   "Green stronger",
   "Yellow moderate",
   "Red weaker",
-  "trafficCells={footTrafficOverlayCells}",
+  "trafficCells={spotFootTrafficCells}",
+  "Select a spot to view foot traffic.",
+  "Foot traffic data is not available for this spot yet.",
 ];
 
 for (const snippet of requiredParkingPassSnippets) {

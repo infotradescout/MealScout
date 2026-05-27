@@ -23,7 +23,6 @@ import { Calendar as DatePickerCalendar } from "@/components/ui/calendar";
 import { GoogleMapPicker } from "@/components/maps/GoogleMapPicker";
 import type { MapPickerPin } from "@/components/maps/GoogleMapPicker";
 import type {
-  MapBoundsLike,
   MapTrafficCell,
 } from "@/components/maps/map-adapter.types";
 import { BookingPaymentModal } from "@/components/booking-payment-modal";
@@ -797,10 +796,6 @@ export default function ParkingPassPage() {
   const [showPropaneLayer, setShowPropaneLayer] = useState(false);
   const [showSupplyLayer, setShowSupplyLayer] = useState(false);
   const [showSupportLayer, setShowSupportLayer] = useState(false);
-  const [parkingMapBounds, setParkingMapBounds] =
-    useState<MapBoundsLike | null>(null);
-  const [debouncedParkingMapBounds, setDebouncedParkingMapBounds] =
-    useState<MapBoundsLike | null>(null);
   const [activeLocationKey, setActiveLocationKey] = useState<string | null>(
     null,
   );
@@ -825,81 +820,6 @@ export default function ParkingPassPage() {
   }, [viewMode]);
 
   const mapInteractionsEnabled = !mapPopupOpen;
-  useEffect(() => {
-    if (!parkingMapBounds) {
-      setDebouncedParkingMapBounds(null);
-      return;
-    }
-    const timer = window.setTimeout(() => {
-      setDebouncedParkingMapBounds(parkingMapBounds);
-    }, 320);
-    return () => window.clearTimeout(timer);
-  }, [parkingMapBounds]);
-
-  const { data: parkingScoutHeatData, isFetching: isParkingScoutHeatFetching } =
-    useQuery<MapFootTrafficResponse>({
-      queryKey: [
-        "/api/map/foot-traffic",
-        "parking-pass",
-        showParkingScoutHeat,
-        debouncedParkingMapBounds
-          ? [
-              Number(debouncedParkingMapBounds.north.toFixed(4)),
-              Number(debouncedParkingMapBounds.south.toFixed(4)),
-              Number(debouncedParkingMapBounds.east.toFixed(4)),
-              Number(debouncedParkingMapBounds.west.toFixed(4)),
-            ]
-          : null,
-      ],
-      enabled:
-        showParkingScoutHeat &&
-        viewMode === "map" &&
-        Boolean(debouncedParkingMapBounds) &&
-        canManageParkingPass,
-      queryFn: async () => {
-        const bounds = debouncedParkingMapBounds;
-        if (!bounds) {
-          return {
-            generatedAt: new Date().toISOString(),
-            windowMinutes: 0,
-            requestedWindowMinutes: 0,
-            mode: "avg",
-            cells: [],
-          };
-        }
-        const params = new URLSearchParams({
-          north: String(bounds.north),
-          south: String(bounds.south),
-          east: String(bounds.east),
-          west: String(bounds.west),
-          mode: "avg",
-          windowMinutes: "720",
-          includeGoogle: "true",
-        });
-        const res = await fetch(`/api/map/foot-traffic?${params.toString()}`);
-        if (!res.ok) throw new Error("Failed to load foot traffic");
-        return res.json();
-      },
-      staleTime: 5 * 60 * 1000,
-      refetchOnWindowFocus: false,
-    });
-
-  const parkingScoutHeatCells = useMemo<MapTrafficCell[]>(() => {
-    if (!showParkingScoutHeat || !canManageParkingPass) return [];
-    return (parkingScoutHeatData?.cells || []).slice(0, 260);
-  }, [canManageParkingPass, parkingScoutHeatData?.cells, showParkingScoutHeat]);
-  const footTrafficOverlayCells = useMemo<MapTrafficCell[]>(() => {
-    if (!showParkingScoutHeat || !canManageParkingPass) return [];
-    return parkingScoutHeatCells.map((cell) => {
-      const weight = Number(cell.weight || 0);
-      const color = weight >= 67 ? "#22c55e" : weight >= 34 ? "#eab308" : "#ef4444";
-      return { ...cell, color };
-    });
-  }, [canManageParkingPass, parkingScoutHeatCells, showParkingScoutHeat]);
-
-  const parkingScoutHeatCellCount = parkingScoutHeatCells.length;
-  const parkingScoutHeatSignalLabel =
-    parkingScoutHeatData?.signalQuality?.tier || null;
   const { data: mapLocationsData } = useQuery<MapLocationsResponse>({
     queryKey: ["/api/map/locations"],
     queryFn: async () => {
@@ -3997,6 +3917,22 @@ export default function ParkingPassPage() {
       staleTime: 5 * 60 * 1000,
       refetchOnWindowFocus: false,
     });
+  const spotFootTrafficCells = useMemo<MapTrafficCell[]>(() => {
+    if (!showParkingScoutHeat || !canManageParkingPass || !activeLocation) return [];
+    return (scheduleFootTrafficData?.cells || []).slice(0, 120).map((cell) => {
+      const weight = Number(cell.weight || 0);
+      const color = weight >= 67 ? "#22c55e" : weight >= 34 ? "#eab308" : "#ef4444";
+      return { ...cell, color };
+    });
+  }, [
+    activeLocation,
+    canManageParkingPass,
+    scheduleFootTrafficData?.cells,
+    showParkingScoutHeat,
+  ]);
+  const spotFootTrafficCellCount = spotFootTrafficCells.length;
+  const spotFootTrafficSignalLabel =
+    scheduleFootTrafficData?.signalQuality?.tier || null;
 
   const nextBookableDateByGroup = useMemo(() => {
     const map = new Map<string, string | null>();
@@ -6700,8 +6636,7 @@ export default function ParkingPassPage() {
                               center={fallbackMapCenter}
                               zoom={13}
                               interactionsEnabled={mapInteractionsEnabled}
-                              trafficCells={footTrafficOverlayCells}
-                              onBoundsChanged={setParkingMapBounds}
+                              trafficCells={spotFootTrafficCells}
                               pins={[
                                 ...fallbackHostPins.map(
                                   ({
@@ -6778,19 +6713,23 @@ export default function ParkingPassPage() {
                             {showParkingScoutHeat && (
                               <div className="pointer-events-none absolute bottom-3 left-3 max-w-[min(270px,calc(100%-1.5rem))] rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)]/95 px-3 py-2 text-xs text-[color:var(--text-primary)] shadow-clean backdrop-blur">
                                 <p className="font-semibold">
-                                  {isParkingScoutHeatFetching
+                                  {isScheduleFootTrafficFetching
                                     ? "Loading foot traffic"
-                                    : parkingScoutHeatCellCount > 0
-                                      ? "Area foot traffic"
-                                      : "No heat signals here yet"}
+                                    : spotFootTrafficCellCount > 0
+                                    ? "Spot foot traffic"
+                                      : activeLocation
+                                        ? "No spot traffic signals yet"
+                                        : "Select a spot to view foot traffic"}
                                 </p>
                                 <p className="mt-1 text-[color:var(--text-muted)]">
-                                  {parkingScoutHeatCellCount > 0
-                                    ? `${parkingScoutHeatCellCount} cells - ${parkingScoutHeatSignalLabel || "sparse"} signal - ${Math.round(
-                                        (parkingScoutHeatData?.windowMinutes ||
+                                  {spotFootTrafficCellCount > 0
+                                    ? `${spotFootTrafficCellCount} cells - ${spotFootTrafficSignalLabel || "sparse"} signal - ${Math.round(
+                                        (scheduleFootTrafficData?.windowMinutes ||
                                           720) / 60,
-                                      )}h area avg`
-                                    : "Pan around your market to compare areas."}
+                                      )}h spot window`
+                                    : activeLocation
+                                      ? "Foot traffic data is not available for this spot yet."
+                                      : "Select a spot to view foot traffic."}
                                 </p>
                                 <div className="mt-2 flex items-center gap-3 text-[11px]">
                                   <span className="inline-flex items-center gap-1">
@@ -6806,13 +6745,13 @@ export default function ParkingPassPage() {
                                     Red weaker
                                   </span>
                                 </div>
-                                {parkingScoutHeatCellCount === 0 && (
+                                {spotFootTrafficCellCount === 0 && (
                                   <p className="mt-1 text-[11px] text-[color:var(--text-muted)]">
                                     {String(
                                       intelligenceStatusData?.layers?.footTraffic?.status ||
                                         "unavailable",
                                     ) === "available"
-                                      ? "Foot traffic data is temporarily unavailable in this map window."
+                                      ? "Foot traffic data is not available for this spot yet."
                                       : "Foot traffic is not configured or unavailable right now."}
                                   </p>
                                 )}
@@ -6841,8 +6780,7 @@ export default function ParkingPassPage() {
                             center={mapCenter}
                             zoom={13}
                             interactionsEnabled={mapInteractionsEnabled}
-                            trafficCells={footTrafficOverlayCells}
-                            onBoundsChanged={setParkingMapBounds}
+                            trafficCells={spotFootTrafficCells}
                             onPinClick={(pinKey) => {
                               const hit = mapPins.find((p) => p.key === pinKey);
                               if (hit) setActiveLocationKey(hit.group.key);
@@ -7140,19 +7078,23 @@ export default function ParkingPassPage() {
                           {showParkingScoutHeat && (
                             <div className="pointer-events-none absolute bottom-3 left-3 max-w-[min(270px,calc(100%-1.5rem))] rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)]/95 px-3 py-2 text-xs text-[color:var(--text-primary)] shadow-clean backdrop-blur">
                               <p className="font-semibold">
-                                {isParkingScoutHeatFetching
+                                {isScheduleFootTrafficFetching
                                   ? "Loading foot traffic"
-                                  : parkingScoutHeatCellCount > 0
-                                    ? "Area foot traffic"
-                                    : "No heat signals here yet"}
+                                  : spotFootTrafficCellCount > 0
+                                    ? "Spot foot traffic"
+                                    : activeLocation
+                                      ? "No spot traffic signals yet"
+                                      : "Select a spot to view foot traffic"}
                               </p>
                               <p className="mt-1 text-[color:var(--text-muted)]">
-                                {parkingScoutHeatCellCount > 0
-                                  ? `${parkingScoutHeatCellCount} cells - ${parkingScoutHeatSignalLabel || "sparse"} signal - ${Math.round(
-                                      (parkingScoutHeatData?.windowMinutes ||
+                                {spotFootTrafficCellCount > 0
+                                  ? `${spotFootTrafficCellCount} cells - ${spotFootTrafficSignalLabel || "sparse"} signal - ${Math.round(
+                                      (scheduleFootTrafficData?.windowMinutes ||
                                         720) / 60,
-                                    )}h area avg`
-                                  : "Pan around your market to compare areas."}
+                                    )}h spot window`
+                                  : activeLocation
+                                    ? "Foot traffic data is not available for this spot yet."
+                                    : "Select a spot to view foot traffic."}
                               </p>
                               <div className="mt-2 flex items-center gap-3 text-[11px]">
                                 <span className="inline-flex items-center gap-1">
@@ -7168,13 +7110,13 @@ export default function ParkingPassPage() {
                                   Red weaker
                                 </span>
                               </div>
-                              {parkingScoutHeatCellCount === 0 && (
+                              {spotFootTrafficCellCount === 0 && (
                                 <p className="mt-1 text-[11px] text-[color:var(--text-muted)]">
                                   {String(
                                     intelligenceStatusData?.layers?.footTraffic?.status ||
                                       "unavailable",
                                   ) === "available"
-                                    ? "Foot traffic data is temporarily unavailable in this map window."
+                                    ? "Foot traffic data is not available for this spot yet."
                                     : "Foot traffic is not configured or unavailable right now."}
                                 </p>
                               )}
