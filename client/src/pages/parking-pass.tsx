@@ -132,12 +132,18 @@ interface ParkingPassListing {
 
 type PublicMapLocation = {
   id: string;
-  type: "host_location" | "event";
+  type: "host_location" | "event" | "supplier";
   hostId?: string | null;
+  supplierId?: string | null;
   name?: string | null;
+  category?: string | null;
+  categoryLabel?: string | null;
   address?: string | null;
   city?: string | null;
   state?: string | null;
+  profileUrl?: string | null;
+  contactPhone?: string | null;
+  contactEmail?: string | null;
   spotImageUrl?: string | null;
   latitude?: string | null;
   longitude?: string | null;
@@ -145,6 +151,8 @@ type PublicMapLocation = {
 
 type MapLocationsResponse = {
   hostLocations: PublicMapLocation[];
+  eventLocations?: PublicMapLocation[];
+  supplierLocations?: PublicMapLocation[];
 };
 
 type MapFootTrafficResponse = {
@@ -786,6 +794,9 @@ export default function ParkingPassPage() {
   >([]);
   const [viewMode, setViewMode] = useState<"map" | "list">("map");
   const [showParkingScoutHeat, setShowParkingScoutHeat] = useState(false);
+  const [showPropaneLayer, setShowPropaneLayer] = useState(false);
+  const [showSupplyLayer, setShowSupplyLayer] = useState(false);
+  const [showSupportLayer, setShowSupportLayer] = useState(false);
   const [parkingMapBounds, setParkingMapBounds] =
     useState<MapBoundsLike | null>(null);
   const [debouncedParkingMapBounds, setDebouncedParkingMapBounds] =
@@ -944,6 +955,7 @@ export default function ParkingPassPage() {
       cachedMapLocations ?? {
         hostLocations: [],
         eventLocations: [],
+        supplierLocations: [],
       }
     );
   }, [mapLocationsData, cachedMapLocations]);
@@ -1044,7 +1056,10 @@ export default function ParkingPassPage() {
         return listingHostIds.has(hostId) || bookableHostIds.has(hostId);
       },
     );
-    return { ...baseMapLocations, hostLocations };
+    const supplierLocations = (baseMapLocations.supplierLocations || []).filter(
+      (loc: any) => String(loc?.type || "").toLowerCase() === "supplier",
+    );
+    return { ...baseMapLocations, hostLocations, supplierLocations };
   }, [baseMapLocations, bookableHostIds, passListings]);
   const [geocodeCache, setGeocodeCache] = useState<Record<string, GeoPoint>>(
     {},
@@ -3658,6 +3673,88 @@ export default function ParkingPassPage() {
         ),
     [paidMapLocations, normalizedCityQuery],
   );
+  const supplierOverlayPins = useMemo(() => {
+    const raw = Array.isArray(paidMapLocations?.supplierLocations)
+      ? paidMapLocations.supplierLocations
+      : [];
+    return raw
+      .map((loc) => {
+        const lat = parseCoord(loc.latitude);
+        const lng = parseCoord(loc.longitude);
+        if (lat === null || lng === null) return null;
+        const category = String(loc.category || "").trim().toLowerCase();
+        const isPropane = category === "propane_dealer";
+        const isSupply =
+          category === "supplier" || category === "equipment_supplier";
+        const isSupport = !isPropane && !isSupply;
+        return {
+          key: `supplier:${String(loc.id || loc.supplierId || `${lat}:${lng}`)}`,
+          position: { lat, lng },
+          name: String(loc.name || "Operator support"),
+          addressLabel: buildAddressLabel(
+            String(loc.address || ""),
+            String(loc.city || ""),
+            String(loc.state || ""),
+          ),
+          categoryLabel: String(loc.categoryLabel || "Operator support"),
+          profileUrl: String(loc.profileUrl || "").trim() || null,
+          contactPhone: String(loc.contactPhone || "").trim() || null,
+          contactEmail: String(loc.contactEmail || "").trim() || null,
+          isPropane,
+          isSupply,
+          isSupport,
+        };
+      })
+      .filter(
+        (
+          item,
+        ): item is {
+          key: string;
+          position: GeoPoint;
+          name: string;
+          addressLabel: string;
+          categoryLabel: string;
+          profileUrl: string | null;
+          contactPhone: string | null;
+          contactEmail: string | null;
+          isPropane: boolean;
+          isSupply: boolean;
+          isSupport: boolean;
+        } => item !== null,
+      )
+      .filter((pin) => {
+        if (pin.isPropane && showPropaneLayer) return true;
+        if (pin.isSupply && showSupplyLayer) return true;
+        if (pin.isSupport && showSupportLayer) return true;
+        return false;
+      });
+  }, [
+    paidMapLocations?.supplierLocations,
+    showPropaneLayer,
+    showSupplyLayer,
+    showSupportLayer,
+  ]);
+  const supplierLayerCounts = useMemo(() => {
+    const raw = Array.isArray(paidMapLocations?.supplierLocations)
+      ? paidMapLocations.supplierLocations
+      : [];
+    let propane = 0;
+    let supply = 0;
+    let support = 0;
+    raw.forEach((loc) => {
+      const category = String(loc?.category || "").trim().toLowerCase();
+      if (category === "propane_dealer") {
+        propane += 1;
+        return;
+      }
+      if (category === "supplier" || category === "equipment_supplier") {
+        supply += 1;
+        return;
+      }
+      support += 1;
+    });
+    return { propane, supply, support };
+  }, [paidMapLocations?.supplierLocations]);
   const fallbackMapCenter = useMemo(() => {
     const requestedPin = requestedHostId
       ? fallbackHostPins.find((pin) => pin.hostId === requestedHostId)
@@ -6432,7 +6529,9 @@ export default function ParkingPassPage() {
                       Map pins
                     </p>
                     <p className="mt-1 text-lg font-semibold text-[color:var(--text-primary)]">
-                      {viewMode === "map" ? mapPins.length : filteredLocations.length}
+                      {viewMode === "map"
+                        ? mapPins.length + supplierOverlayPins.length
+                        : filteredLocations.length}
                     </p>
                   </div>
                   <div>
@@ -6525,6 +6624,35 @@ export default function ParkingPassPage() {
                     >
                       Activity heat
                     </Button>
+                    <div className="grid grid-cols-3 gap-2 sm:w-auto">
+                      <Button
+                        size="sm"
+                        variant={showPropaneLayer ? "default" : "outline"}
+                        onClick={() => setShowPropaneLayer((value) => !value)}
+                        disabled={supplierLayerCounts.propane === 0}
+                        className="w-full"
+                      >
+                        Propane
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant={showSupplyLayer ? "default" : "outline"}
+                        onClick={() => setShowSupplyLayer((value) => !value)}
+                        disabled={supplierLayerCounts.supply === 0}
+                        className="w-full"
+                      >
+                        Supply
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant={showSupportLayer ? "default" : "outline"}
+                        onClick={() => setShowSupportLayer((value) => !value)}
+                        disabled={supplierLayerCounts.support === 0}
+                        className="w-full"
+                      >
+                        Support
+                      </Button>
+                    </div>
                   </div>
 
                   {isLoading ? (
@@ -6545,42 +6673,71 @@ export default function ParkingPassPage() {
                               interactionsEnabled={mapInteractionsEnabled}
                               trafficCells={parkingScoutHeatCells}
                               onBoundsChanged={setParkingMapBounds}
-                              pins={fallbackHostPins.map(
-                                ({
-                                  key,
-                                  hostId,
-                                  name,
-                                  coords,
-                                  addressLabel,
-                                  spotImageUrl,
-                                }) =>
+                              pins={[
+                                ...fallbackHostPins.map(
                                   ({
                                     key,
-                                    position: coords,
-                                    popup: (
-                                      <div className="space-y-2 text-xs">
-                                        <p className="font-semibold text-orange-600">
-                                          {name}
-                                        </p>
+                                    hostId,
+                                    name,
+                                    coords,
+                                    addressLabel,
+                                    spotImageUrl,
+                                  }) =>
+                                    ({
+                                      key,
+                                      position: coords,
+                                      popup: (
+                                        <div className="space-y-2 text-xs">
+                                          <p className="font-semibold text-orange-600">
+                                            {name}
+                                          </p>
+                                          <p className="text-[color:var(--text-muted)]">
+                                            {addressLabel}
+                                          </p>
+                                          {spotImageUrl && (
+                                            <img
+                                              src={spotImageUrl}
+                                              alt={`${name} parking spot`}
+                                              className="h-24 w-full rounded-lg border border-border/50 object-cover"
+                                              loading="lazy"
+                                            />
+                                          )}
+                                          <p className="text-[11px] text-[color:var(--text-muted)]">
+                                            No active parking pass listing is
+                                            open here right now.
+                                          </p>
+                                        </div>
+                                      ),
+                                    }) satisfies MapPickerPin,
+                                ),
+                                ...supplierOverlayPins.map((pin) => ({
+                                  key: pin.key,
+                                  position: pin.position,
+                                  popup: (
+                                    <div className="space-y-1.5 text-xs">
+                                      <p className="font-semibold text-orange-600">
+                                        {pin.name}
+                                      </p>
+                                      <p className="text-[color:var(--text-muted)]">
+                                        {pin.categoryLabel}
+                                      </p>
+                                      <p className="text-[color:var(--text-muted)]">
+                                        {pin.addressLabel || "Address unavailable"}
+                                      </p>
+                                      {pin.contactPhone && (
                                         <p className="text-[color:var(--text-muted)]">
-                                          {addressLabel}
+                                          {pin.contactPhone}
                                         </p>
-                                        {spotImageUrl && (
-                                          <img
-                                            src={spotImageUrl}
-                                            alt={`${name} parking spot`}
-                                            className="h-24 w-full rounded-lg border border-border/50 object-cover"
-                                            loading="lazy"
-                                          />
-                                        )}
-                                        <p className="text-[11px] text-[color:var(--text-muted)]">
-                                          No active parking pass listing is open
-                                          here right now.
+                                      )}
+                                      {pin.contactEmail && (
+                                        <p className="text-[color:var(--text-muted)]">
+                                          {pin.contactEmail}
                                         </p>
-                                      </div>
-                                    ),
-                                  }) satisfies MapPickerPin,
-                              )}
+                                      )}
+                                    </div>
+                                  ),
+                                })),
+                              ]}
                               className="h-full w-full"
                             />
                             {showParkingScoutHeat && (
@@ -6631,8 +6788,9 @@ export default function ParkingPassPage() {
                               const hit = mapPins.find((p) => p.key === pinKey);
                               if (hit) setActiveLocationKey(hit.group.key);
                             }}
-                            pins={mapPins.map(
-                              ({ key, group, coords, addressLabel }) => {
+                            pins={[
+                              ...mapPins.map(
+                                ({ key, group, coords, addressLabel }) => {
                                 const effectiveDateKey =
                                   group.key === activeLocationKey
                                     ? selectedDate
@@ -6875,14 +7033,42 @@ export default function ParkingPassPage() {
                                     )}
                                   </div>
                                 );
-                                return {
-                                  key,
-                                  position: coords,
-                                  occupied: bookings.length > 0,
-                                  popup: pinPopup,
-                                } satisfies MapPickerPin;
-                              },
-                            )}
+                                  return {
+                                    key,
+                                    position: coords,
+                                    occupied: bookings.length > 0,
+                                    popup: pinPopup,
+                                  } satisfies MapPickerPin;
+                                },
+                              ),
+                              ...supplierOverlayPins.map((pin) => ({
+                                key: pin.key,
+                                position: pin.position,
+                                popup: (
+                                  <div className="space-y-1.5 text-xs">
+                                    <p className="font-semibold text-orange-600">
+                                      {pin.name}
+                                    </p>
+                                    <p className="text-[color:var(--text-muted)]">
+                                      {pin.categoryLabel}
+                                    </p>
+                                    <p className="text-[color:var(--text-muted)]">
+                                      {pin.addressLabel || "Address unavailable"}
+                                    </p>
+                                    {pin.contactPhone && (
+                                      <p className="text-[color:var(--text-muted)]">
+                                        {pin.contactPhone}
+                                      </p>
+                                    )}
+                                    {pin.contactEmail && (
+                                      <p className="text-[color:var(--text-muted)]">
+                                        {pin.contactEmail}
+                                      </p>
+                                    )}
+                                  </div>
+                                ),
+                              })),
+                            ]}
                             className="h-full w-full"
                           />
                           {showParkingScoutHeat && (
