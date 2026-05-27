@@ -238,7 +238,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
       { path: dashboardPath, icon: LayoutDashboard, label: "Dashboard" },
     ],
     food_truck: [
-      { path: "/parking-pass", icon: ParkingSquare, label: "Parking" },
+      { path: "/parking-pass", icon: ParkingSquare, label: "Parking Pass" },
       { path: "/orders", icon: ShoppingCart, label: "Orders" },
       { path: "/kitchen", icon: ChefHat, label: "Kitchen" },
     ],
@@ -248,7 +248,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
       { path: dashboardPath, icon: LayoutDashboard, label: "Dashboard" },
     ],
     host: [
-      { path: "/parking-pass", icon: ParkingSquare, label: "Parking" },
+      { path: "/parking-pass", icon: ParkingSquare, label: "Parking Pass" },
       { path: "/video", icon: Clapperboard, label: "Video" },
       { path: dashboardPath, icon: LayoutDashboard, label: "Dashboard" },
     ],
