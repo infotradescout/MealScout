@@ -221,17 +221,34 @@ const extraOrigins = String(process.env.ALLOWED_ORIGINS || "")
   .map((s) => s.trim())
   .filter(Boolean);
 const allowedOrigins = Array.from(new Set([...defaultOrigins, ...extraOrigins]));
+const allowedActionOrigins = Array.from(
+  new Set(
+    String(process.env.MEALSCOUT_ALLOWED_ACTION_ORIGINS || "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
+  ),
+);
+
+const isActionImportPath = (pathValue: string) =>
+  pathValue === "/api/import/preview" ||
+  pathValue === "/api/import/commit";
 
 app.use((req, res, next) => {
   const origin = req.headers.origin as string | undefined;
+  const pathValue = String(req.path || "");
+  const allowActionOrigin =
+    Boolean(origin) &&
+    isActionImportPath(pathValue) &&
+    allowedActionOrigins.includes(String(origin));
 
-  if (origin && allowedOrigins.includes(origin)) {
+  if (origin && (allowedOrigins.includes(origin) || allowActionOrigin)) {
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Vary", "Origin");
     res.setHeader("Access-Control-Allow-Credentials", "true");
     res.setHeader(
       "Access-Control-Allow-Headers",
-      "Content-Type, Authorization"
+      "Content-Type, Authorization, X-API-Key"
     );
     res.setHeader(
       "Access-Control-Allow-Methods",
@@ -282,11 +299,55 @@ app.use((req, res, next) => {
   }
 
   const isAllowed = allowedOrigins.includes(requestOrigin);
-  if (!isAllowed) {
+  const isAllowedActionOrigin =
+    isActionImportPath(pathValue) &&
+    allowedActionOrigins.includes(requestOrigin);
+  if (!isAllowed && !isAllowedActionOrigin) {
     return res.status(403).json({ message: "Invalid origin" });
   }
 
   next();
+});
+
+const getImportApiKey = () =>
+  String(process.env.MEALSCOUT_IMPORT_API_KEY || "").trim();
+
+const verifyImportApiKey = (req: Request, res: Response): boolean => {
+  const configuredKey = getImportApiKey();
+  if (!configuredKey) {
+    res
+      .status(503)
+      .json({ message: "Import API key is not configured on this environment" });
+    return false;
+  }
+
+  const providedKey = String(req.headers["x-api-key"] || "").trim();
+  if (!providedKey || providedKey !== configuredKey) {
+    res.status(401).json({ message: "Invalid import API key" });
+    return false;
+  }
+  return true;
+};
+
+app.post("/api/import/preview", express.json({ limit: "2mb" }), (req, res) => {
+  if (!verifyImportApiKey(req, res)) return;
+  const body = (req.body || {}) as Record<string, unknown>;
+  const listingCount = Array.isArray(body.listings) ? body.listings.length : 0;
+  return res.status(202).json({
+    ok: true,
+    mode: "preview",
+    listingCount,
+    message: "Import preview request accepted",
+  });
+});
+
+app.post("/api/import/commit", express.json({ limit: "2mb" }), (req, res) => {
+  if (!verifyImportApiKey(req, res)) return;
+  return res.status(501).json({
+    ok: false,
+    mode: "commit",
+    message: "Import commit is not enabled in this environment",
+  });
 });
 
 if (sentryEnabled) {
