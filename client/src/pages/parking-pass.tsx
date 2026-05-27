@@ -3705,6 +3705,55 @@ export default function ParkingPassPage() {
       support: statusFor(supplierLayerCounts.support),
     };
   }, [supplierLayerCounts.propane, supplierLayerCounts.supply, supplierLayerCounts.support]);
+  const gasPricePins = useMemo(() => {
+    const raw = Array.isArray(paidMapLocations?.hostLocations)
+      ? paidMapLocations.hostLocations
+      : [];
+    return raw
+      .map((loc) => {
+        const lat = parseCoord(loc.latitude);
+        const lng = parseCoord(loc.longitude);
+        if (lat === null || lng === null) return null;
+        const fuelPrices = (loc as any)?.fuelPrices || null;
+        if ((loc as any)?.showFuelPrices !== true || !fuelPrices) return null;
+        const regular = formatFuelCents(fuelPrices.regularCents);
+        const midgrade = formatFuelCents(fuelPrices.midgradeCents);
+        const premium = formatFuelCents(fuelPrices.premiumCents);
+        const diesel = formatFuelCents(fuelPrices.dieselCents);
+        const hasPrice = Boolean(regular || midgrade || premium || diesel);
+        if (!hasPrice) return null;
+        return {
+          key: `gas:${String(loc.id || `${lat}:${lng}`)}`,
+          position: { lat, lng },
+          name: String(loc.name || "Gas station"),
+          addressLabel: buildAddressLabel(
+            String(loc.address || ""),
+            String(loc.city || ""),
+            String(loc.state || ""),
+          ),
+          regular,
+          midgrade,
+          premium,
+          diesel,
+          updatedAt: String(fuelPrices.updatedAt || "").trim() || null,
+        };
+      })
+      .filter(
+        (
+          item,
+        ): item is {
+          key: string;
+          position: GeoPoint;
+          name: string;
+          addressLabel: string;
+          regular: string | null;
+          midgrade: string | null;
+          premium: string | null;
+          diesel: string | null;
+          updatedAt: string | null;
+        } => item !== null,
+      );
+  }, [paidMapLocations?.hostLocations]);
   const fallbackMapCenter = useMemo(() => {
     const requestedPin = requestedHostId
       ? fallbackHostPins.find((pin) => pin.hostId === requestedHostId)
@@ -6520,7 +6569,7 @@ export default function ParkingPassPage() {
                     </p>
                     <p className="mt-1 text-lg font-semibold text-[color:var(--text-primary)]">
                       {viewMode === "map"
-                        ? mapPins.length + supplierOverlayPins.length
+                        ? mapPins.length + supplierOverlayPins.length + gasPricePins.length
                         : filteredLocations.length}
                     </p>
                   </div>
@@ -6743,6 +6792,31 @@ export default function ParkingPassPage() {
                                           {pin.contactEmail}
                                         </p>
                                       )}
+                                    </div>
+                                  ),
+                                })),
+                                ...gasPricePins.map((pin) => ({
+                                  key: pin.key,
+                                  position: pin.position,
+                                  occupied: true,
+                                  popup: (
+                                    <div className="space-y-1.5 text-xs">
+                                      <p className="font-semibold text-orange-600">
+                                        ⛽ {pin.name}
+                                      </p>
+                                      <p className="text-[color:var(--text-muted)]">
+                                        {pin.addressLabel || "Address unavailable"}
+                                      </p>
+                                      <p className="text-[color:var(--text-muted)]">
+                                        {[
+                                          pin.regular ? `Regular ${pin.regular}` : null,
+                                          pin.midgrade ? `Midgrade ${pin.midgrade}` : null,
+                                          pin.premium ? `Premium ${pin.premium}` : null,
+                                          pin.diesel ? `Diesel ${pin.diesel}` : null,
+                                        ]
+                                          .filter(Boolean)
+                                          .join(" · ")}
+                                      </p>
                                     </div>
                                   ),
                                 })),
@@ -7108,6 +7182,31 @@ export default function ParkingPassPage() {
                                         {pin.contactEmail}
                                       </p>
                                     )}
+                                  </div>
+                                ),
+                              })),
+                              ...gasPricePins.map((pin) => ({
+                                key: pin.key,
+                                position: pin.position,
+                                occupied: true,
+                                popup: (
+                                  <div className="space-y-1.5 text-xs">
+                                    <p className="font-semibold text-orange-600">
+                                      ⛽ {pin.name}
+                                    </p>
+                                    <p className="text-[color:var(--text-muted)]">
+                                      {pin.addressLabel || "Address unavailable"}
+                                    </p>
+                                    <p className="text-[color:var(--text-muted)]">
+                                      {[
+                                        pin.regular ? `Regular ${pin.regular}` : null,
+                                        pin.midgrade ? `Midgrade ${pin.midgrade}` : null,
+                                        pin.premium ? `Premium ${pin.premium}` : null,
+                                        pin.diesel ? `Diesel ${pin.diesel}` : null,
+                                      ]
+                                        .filter(Boolean)
+                                        .join(" · ")}
+                                    </p>
                                   </div>
                                 ),
                               })),
