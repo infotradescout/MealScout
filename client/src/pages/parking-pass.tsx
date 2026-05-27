@@ -3802,6 +3802,26 @@ export default function ParkingPassPage() {
     String(weatherListing?.startTime || "").trim() || "11:00";
   const weatherEndTime =
     String(weatherListing?.endTime || "").trim() || "14:00";
+  const scheduleWindowMinutes = (() => {
+    const [startHour, startMinute] = weatherStartTime
+      .split(":")
+      .map((value) => Number.parseInt(value, 10));
+    const [endHour, endMinute] = weatherEndTime
+      .split(":")
+      .map((value) => Number.parseInt(value, 10));
+    if (
+      !Number.isFinite(startHour) ||
+      !Number.isFinite(startMinute) ||
+      !Number.isFinite(endHour) ||
+      !Number.isFinite(endMinute)
+    ) {
+      return 240;
+    }
+    const start = startHour * 60 + startMinute;
+    const end = endHour * 60 + endMinute;
+    const span = end > start ? end - start : 240;
+    return Math.max(60, Math.min(720, span));
+  })();
   const canLoadBookingWeather =
     Number.isFinite(weatherLat) &&
     Number.isFinite(weatherLng) &&
@@ -3830,6 +3850,38 @@ export default function ParkingPassPage() {
         return res.json();
       },
       staleTime: 10 * 60 * 1000,
+      refetchOnWindowFocus: false,
+    });
+  const canLoadScheduleFootTraffic =
+    Number.isFinite(weatherLat) && Number.isFinite(weatherLng);
+  const { data: scheduleFootTrafficData, isFetching: isScheduleFootTrafficFetching } =
+    useQuery<MapFootTrafficResponse>({
+      queryKey: [
+        "/api/map/foot-traffic",
+        "parking-pass-schedule",
+        weatherLat,
+        weatherLng,
+        scheduleWindowMinutes,
+      ],
+      enabled: canLoadScheduleFootTraffic,
+      queryFn: async () => {
+        const lat = Number(weatherLat);
+        const lng = Number(weatherLng);
+        const delta = 0.015;
+        const params = new URLSearchParams({
+          north: String(lat + delta),
+          south: String(lat - delta),
+          east: String(lng + delta),
+          west: String(lng - delta),
+          zoom: "14",
+          windowMinutes: String(scheduleWindowMinutes),
+          includeGoogle: "true",
+        });
+        const res = await fetch(`/api/map/foot-traffic?${params.toString()}`);
+        if (!res.ok) throw new Error("Failed to load schedule foot traffic");
+        return res.json();
+      },
+      staleTime: 5 * 60 * 1000,
       refetchOnWindowFocus: false,
     });
 
@@ -7737,10 +7789,16 @@ export default function ParkingPassPage() {
                             <div className="mt-1 space-y-1 text-[color:var(--text-muted)]">
                               <p>
                                 Foot traffic:{" "}
-                                {String(
-                                  intelligenceStatusData?.layers?.footTraffic?.status ||
-                                    "unavailable",
-                                )}
+                                {isScheduleFootTrafficFetching
+                                  ? "loading"
+                                  : typeof scheduleFootTrafficData?.cells?.length === "number"
+                                    ? scheduleFootTrafficData.cells.length > 0
+                                      ? `${scheduleFootTrafficData.cells.length} nearby cells`
+                                      : "unavailable for this schedule window"
+                                    : String(
+                                        intelligenceStatusData?.layers?.footTraffic?.status ||
+                                          "unavailable",
+                                      )}
                               </p>
                               <p>
                                 Gas prices:{" "}
