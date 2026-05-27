@@ -473,12 +473,13 @@ function GoogleMapRenderer({
     const g = (window as GoogleMapsWindow).google;
     if (!g?.maps || !mapRef.current) return;
 
-    const trafficCellColor = (source: MapTrafficCell["source"]) =>
-      source === "google_places"
+    const trafficCellColor = (cell: MapTrafficCell) =>
+      cell.color ||
+      (cell.source === "google_places"
         ? "#60a5fa"
-        : source === "supply_signal"
+        : cell.source === "supply_signal"
           ? "#ef4444"
-          : "#f97316";
+          : "#f97316");
 
     const usedIds = new Set<string>();
     trafficCells.forEach((cell) => {
@@ -489,7 +490,7 @@ function GoogleMapRenderer({
         clickable: false,
         strokeOpacity: 0,
         strokeWeight: 0,
-        fillColor: trafficCellColor(cell.source),
+        fillColor: trafficCellColor(cell),
         fillOpacity:
           cell.source === "google_places"
             ? 0.14
@@ -594,11 +595,12 @@ function LeafletRenderer({
           pathOptions={{
             stroke: false,
             fillColor:
-              cell.source === "google_places"
+              cell.color ||
+              (cell.source === "google_places"
                 ? "#60a5fa"
                 : cell.source === "supply_signal"
                   ? "#ef4444"
-                  : "#f97316",
+                  : "#f97316"),
             fillOpacity:
               cell.source === "google_places"
                 ? 0.14
