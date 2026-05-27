@@ -233,3 +233,11 @@ Know which public discovery pages create profile traffic and customer action.
 - Goal:
   - Prove seeded runtime reconciliation math for `clicked`, `nowComplete`, and `stillMissing` using the shared completion-status adapter.
 
+18. PDA-2.12 Targeted Test Runner Exact-Match Safety
+- Status: PASS
+- Commit: `pending`
+- Depends on:
+  - PDA-2.11 — Deterministic completion reconciliation runtime test
+- Goal:
+  - Ensure targeted test execution matches intended scripts exactly and does not pull in prefix-sharing scripts unintentionally.
+

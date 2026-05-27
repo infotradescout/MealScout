@@ -33,6 +33,14 @@ function normalizePattern(raw: string): string {
     .replace(/-+/g, "-");
 }
 
+function normalizeScriptName(raw: string): string {
+  return String(raw || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^\w-]+/g, "-")
+    .replace(/-+/g, "-");
+}
+
 function hasWildcard(pattern: string): boolean {
   return pattern.includes("*");
 }
@@ -41,6 +49,22 @@ function wildcardToRegex(pattern: string): RegExp {
   const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, "\\$&");
   const regexSource = `^${escaped.replace(/\\\*/g, ".*")}$`;
   return new RegExp(regexSource, "i");
+}
+
+function buildAliases(file: string): string[] {
+  const name = path.basename(file).toLowerCase();
+  const withoutExt = name.replace(/\.(ts|mts|cts|js|mjs|cjs)$/i, "");
+  const normalized = normalizeScriptName(withoutExt);
+  const aliases = new Set<string>([normalized]);
+
+  if (normalized.endsWith("-test")) {
+    aliases.add(normalized.slice(0, -"-test".length));
+  }
+  if (normalized.endsWith("-contract-test")) {
+    aliases.add(normalized.slice(0, -"-contract-test".length));
+  }
+
+  return Array.from(aliases).filter(Boolean);
 }
 
 function runScript(scriptPath: string): number {
@@ -74,18 +98,14 @@ function main() {
   const patterns = rawArgs.map(normalizePattern).filter(Boolean);
   const candidates = listScriptFiles(scriptsDir);
   const matched = candidates.filter((file) => {
-    const name = path.basename(file).toLowerCase();
-    const normalizedName = normalizePattern(name.replace(/\.(ts|mts|cts|js|mjs|cjs)$/i, ""));
+    const aliases = buildAliases(file);
+    const normalizedName = aliases[0];
     return patterns.some((pattern) => {
       if (hasWildcard(pattern)) {
         const regex = wildcardToRegex(pattern);
-        return regex.test(normalizedName) || regex.test(name);
+        return aliases.some((alias) => regex.test(alias));
       }
-      return (
-        normalizedName === pattern ||
-        normalizedName.startsWith(`${pattern}-`) ||
-        name.includes(`${pattern}.`)
-      );
+      return aliases.includes(pattern);
     });
   });
 
