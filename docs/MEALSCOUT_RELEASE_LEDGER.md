@@ -115,7 +115,7 @@ Last updated: 2026-05-26 (America/Chicago)
 
 12. PDA-2.6 Owner Profile Completion Loop
 - Status: PASS
-- Commit: `pending`
+- Commit: `7661a7ca`
 - Depends on:
   - PDA-2.1 — DB-seeded runtime integration contract
   - PDA-2.2 — Owner value attribution aggregate
@@ -139,6 +139,21 @@ Last updated: 2026-05-26 (America/Chicago)
   - "Update next missing item" CTA renders.
   - Completed-state copy renders safely.
   - Authenticated browser proof covers completion-loop rendering.
+
+13. PDA-2.7 Owner Action Tracking Loop
+- Status: PASS
+- Commit: `pending`
+- Depends on:
+  - PDA-2.6 — Owner profile completion loop
+- Goal:
+  - Track owner clicks on profile-completion guidance CTA with owner/entity scope and missing item context.
+- Validation:
+  - `npm run test -- owner-profile-completion-action` ✅
+  - `npm run test -- owner-value-attribution-browser` ✅
+  - `npm run test:run` ✅
+  - `npm run check` ✅
+  - `npm run build` ✅
+  - `npm run verify:routes` ✅
 
 ## What is now live
 

@@ -659,6 +659,26 @@ export default function RestaurantOwnerDashboard() {
 
   const buildQrImageUrl = (targetUrl: string) =>
     `https://api.qrserver.com/v1/create-qr-code/?size=512x512&margin=16&data=${encodeURIComponent(targetUrl)}`;
+  const trackOwnerCompletionAction = async (params: {
+    entityId: string;
+    entityType: "restaurant" | "truck" | "bar";
+    missingItemKey: string;
+  }) => {
+    try {
+      await fetch("/api/owner/profile-completion-action", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          entityId: params.entityId,
+          entityType: params.entityType,
+          missingItemKey: params.missingItemKey,
+        }),
+        keepalive: true,
+      });
+    } catch {
+      // tracking must never block owner navigation
+    }
+  };
   const downloadQrPng = (targetUrl: string, filename: string) => {
     const link = document.createElement("a");
     link.href = buildQrImageUrl(targetUrl);
@@ -3141,7 +3161,18 @@ export default function RestaurantOwnerDashboard() {
                                 </div>
                               ))}
                               <Link href={nextCompletionCta}>
-                                <Button type="button" size="sm" className="mt-1">
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  className="mt-1"
+                                  onClick={() =>
+                                    void trackOwnerCompletionAction({
+                                      entityId: String(selectedRestaurant),
+                                      entityType: currentPublicEntityType as "restaurant" | "truck" | "bar",
+                                      missingItemKey: String(missingCompletionItems[0]?.id || "menu"),
+                                    })
+                                  }
+                                >
                                   Update next missing item
                                 </Button>
                               </Link>
@@ -3258,7 +3289,18 @@ export default function RestaurantOwnerDashboard() {
                                 </div>
                               ))}
                               <Link href={nextCompletionCta}>
-                                <Button type="button" size="sm" className="mt-1">
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  className="mt-1"
+                                  onClick={() =>
+                                    void trackOwnerCompletionAction({
+                                      entityId: String(selectedRestaurant),
+                                      entityType: currentPublicEntityType as "restaurant" | "truck" | "bar",
+                                      missingItemKey: String(missingCompletionItems[0]?.id || "menu"),
+                                    })
+                                  }
+                                >
                                   Update next missing item
                                 </Button>
                               </Link>

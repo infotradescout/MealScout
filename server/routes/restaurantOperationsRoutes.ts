@@ -2720,6 +2720,74 @@ export function registerRestaurantOperationsRoutes(
     }
   });
 
+  const ownerProfileCompletionActionSchema = z.object({
+    entityId: z.string().min(1),
+    entityType: z.enum(["restaurant", "truck", "bar"]),
+    missingItemKey: z.enum([
+      "menu",
+      "photos",
+      "hours",
+      "service-area",
+      "contact",
+      "social",
+      "catering-events",
+      "deal",
+    ]),
+  });
+
+  app.post("/api/owner/profile-completion-action", isAuthenticated, async (req: any, res) => {
+    try {
+      const parsed = ownerProfileCompletionActionSchema.safeParse(req.body || {});
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Invalid profile completion action payload" });
+      }
+
+      const context = await getBusinessAccessContext(req.user.id);
+      const ownerRestaurantIds = new Set(
+        context.restaurants.map((row: any) => String(row.id)),
+      );
+      if (!ownerRestaurantIds.has(String(parsed.data.entityId))) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+
+      const metadata = {
+        actionType: "profile_completion_cta_click",
+        missingItemKey: parsed.data.missingItemKey,
+        source: "owner_dashboard_profile_completion",
+        ownerId: String(req.user.id),
+        entityId: String(parsed.data.entityId),
+        entityType: String(parsed.data.entityType),
+      };
+
+      await db.insert(requestLogs).values({
+        method: "EVENT",
+        path: "/restaurant-owner-dashboard",
+        statusCode: 202,
+        durationMs: 0,
+        userId: String(req.user.id),
+        sessionId: String(req.sessionID || ""),
+        actorType: "human",
+        sourceType: "internal",
+        eventType: "owner_action",
+        surface: "owner_dashboard_profile_completion",
+        entityId: String(parsed.data.entityId),
+        entityType: String(parsed.data.entityType),
+        ip: String(req.ip || ""),
+        userAgent: String(req.get("user-agent") || ""),
+        metadata,
+      } as any);
+
+      return res.json({
+        ok: true,
+        actionType: "profile_completion_cta_click",
+        missingItemKey: parsed.data.missingItemKey,
+      });
+    } catch (error) {
+      console.error("Error recording owner profile completion action:", error);
+      return res.status(500).json({ message: "Failed to record profile completion action" });
+    }
+  });
+
   app.get(
     "/api/restaurants/:restaurantId/analytics/summary",
     isAuthenticated,

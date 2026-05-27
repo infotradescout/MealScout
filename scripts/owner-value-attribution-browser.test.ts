@@ -472,8 +472,20 @@ async function run() {
     await loginViaApi(page, baseUrl, ownerEmail, password);
 
     const requestUrls: string[] = [];
+    const completionActionPayloads: Array<Record<string, any>> = [];
     page.on("request", (request) => {
       requestUrls.push(request.url());
+      if (
+        request.url().includes("/api/owner/profile-completion-action") &&
+        request.method().toUpperCase() === "POST"
+      ) {
+        try {
+          const data = request.postDataJSON?.();
+          if (data && typeof data === "object") {
+            completionActionPayloads.push(data as Record<string, any>);
+          }
+        } catch {}
+      }
     });
 
     await page.goto(
@@ -511,6 +523,24 @@ async function run() {
       state: "visible",
       timeout: 20_000,
     });
+    await page.getByRole("button", { name: "Update next missing item" }).first().click();
+    await page.waitForTimeout(700);
+    assert(
+      completionActionPayloads.some(
+        (payload) =>
+          String(payload?.entityId || "") === ownerRestaurantId &&
+          String(payload?.entityType || "") === "restaurant" &&
+          String(payload?.missingItemKey || "").length > 0,
+      ),
+      "owner profile completion CTA action payload not observed",
+    );
+    if (!page.url().includes("/restaurant-owner-dashboard")) {
+      await page.goto(
+        `${baseUrl}/restaurant-owner-dashboard?setup=profile&restaurantId=${encodeURIComponent(ownerRestaurantId)}`,
+        { waitUntil: "networkidle" },
+      );
+      await page.getByText("Profile value").first().waitFor({ state: "visible", timeout: 20_000 });
+    }
     await page.getByText("7 days").first().click();
     await page.waitForTimeout(800);
 
