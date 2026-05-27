@@ -235,7 +235,7 @@ Know which public discovery pages create profile traffic and customer action.
 
 18. PDA-2.12 Targeted Test Runner Exact-Match Safety
 - Status: PASS
-- Commit: `pending`
+- Commit: `94b90822`
 - Depends on:
   - PDA-2.11 — Deterministic completion reconciliation runtime test
 - Goal:
