@@ -5,6 +5,7 @@
  */
 const IS_DEV = import.meta.env.DEV;
 const SHARED_API_FALLBACK = "https://www.mealscout.us";
+const MEALSCOUT_API_ORIGIN_FALLBACK = "https://mealscout.onrender.com";
 function resolveApiBaseUrl() {
   if (IS_DEV) return "";
 
@@ -23,6 +24,17 @@ function resolveApiBaseUrl() {
   // TradeScout is a separate frontend platform but should reuse the same API.
   if (!fromEnv && host.includes("tradescout")) {
     return SHARED_API_FALLBACK;
+  }
+
+  // MealScout production hosts should never silently fall back to same-origin
+  // when no API base is configured, because www may be frontend-only.
+  if (
+    !fromEnv &&
+    (host === "www.mealscout.us" ||
+      host === "mealscout.us" ||
+      host.endsWith(".mealscout.us"))
+  ) {
+    return MEALSCOUT_API_ORIGIN_FALLBACK;
   }
 
   return fromEnv.replace(/\/+$/, "");
