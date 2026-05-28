@@ -189,19 +189,83 @@ const restaurantPhone = normalize(restaurant.phone);
 const restaurantEmail = normalize((restaurant as any).email);
 const ownerEmailField = normalize((restaurant as any).ownerEmail);
 const contactEmailField = normalize((restaurant as any).contactEmail);
+const restaurantWebsite = normalize(restaurant.websiteUrl);
+const restaurantInstagram = normalize(restaurant.instagramUrl);
+const restaurantFacebook = normalize(restaurant.facebookPageUrl);
 const linkedVerifiedUserEmail =
   linkedUser?.emailVerified && normalize(linkedUser?.email)
     ? normalize(String(linkedUser.email))
     : "";
 const listingEmailForGate = normalize(listing.email);
+const listingPhoneForGate = normalizePhone(listing.phone);
+const listingWebsiteForGate = normalize(listing.websiteUrl);
+const listingInstagramForGate = normalize(listing.instagramUrl);
+const listingFacebookForGate = normalize(listing.facebookPageUrl);
+const listingEvidence = ((listing as any)?.rawData?.evidenceIngest || {}) as Record<
+  string,
+  any
+>;
+const extractedEvidence = (listingEvidence.extracted || {}) as Record<string, any>;
+const extractedPhone = normalizePhone(extractedEvidence.phone);
+const extractedEmail = normalize(extractedEvidence.email);
+const extractedWebsite = normalize(
+  extractedEvidence.websiteUrl || extractedEvidence.website,
+);
+const extractedInstagram = normalize(
+  extractedEvidence.instagramUrl || extractedEvidence.instagram,
+);
+const extractedFacebook = normalize(
+  extractedEvidence.facebookPageUrl || extractedEvidence.facebook,
+);
 
-let contactEvidenceSource = "";
-if (restaurantPhone) contactEvidenceSource = "restaurant.phone";
-else if (restaurantEmail) contactEvidenceSource = "restaurant.email";
-else if (ownerEmailField) contactEvidenceSource = "restaurant.ownerEmail";
-else if (contactEmailField) contactEvidenceSource = "restaurant.contactEmail";
-else if (linkedVerifiedUserEmail) contactEvidenceSource = "linked_user.verified_email";
-else if (listingEmailForGate) contactEvidenceSource = "import_listing.email";
+const contactEvidenceSources: string[] = [];
+const addEvidence = (source: string, present: unknown) => {
+  const has =
+    typeof present === "string"
+      ? present.trim().length > 0
+      : typeof present === "number"
+        ? Number.isFinite(present)
+        : Boolean(present);
+  if (!has) return;
+  if (!contactEvidenceSources.includes(source)) {
+    contactEvidenceSources.push(source);
+  }
+};
+
+addEvidence("restaurant.phone", restaurantPhone);
+addEvidence("restaurant.email", restaurantEmail);
+addEvidence("restaurant.ownerEmail", ownerEmailField);
+addEvidence("restaurant.contactEmail", contactEmailField);
+addEvidence("restaurant.websiteUrl", restaurantWebsite);
+addEvidence("restaurant.instagramUrl", restaurantInstagram);
+addEvidence("restaurant.facebookPageUrl", restaurantFacebook);
+addEvidence("linked_user.verified_email", linkedVerifiedUserEmail);
+addEvidence("import_listing.phone", listingPhoneForGate);
+addEvidence("import_listing.email", listingEmailForGate);
+addEvidence("import_listing.websiteUrl", listingWebsiteForGate);
+addEvidence("import_listing.instagramUrl", listingInstagramForGate);
+addEvidence("import_listing.facebookPageUrl", listingFacebookForGate);
+addEvidence("truckImportListings.rawData.evidenceIngest.extracted.phone", extractedPhone);
+addEvidence("truckImportListings.rawData.evidenceIngest.extracted.email", extractedEmail);
+addEvidence(
+  "truckImportListings.rawData.evidenceIngest.extracted.website",
+  extractedWebsite,
+);
+addEvidence(
+  "truckImportListings.rawData.evidenceIngest.extracted.instagram",
+  extractedInstagram,
+);
+addEvidence(
+  "truckImportListings.rawData.evidenceIngest.extracted.facebook",
+  extractedFacebook,
+);
+const screenshotOcrSourceUrls = Array.isArray(listingEvidence.sourceUrls)
+  ? listingEvidence.sourceUrls
+  : [];
+addEvidence(
+  "truckImportListings.rawData.evidenceIngest.sourceUrls",
+  screenshotOcrSourceUrls.length,
+);
 
 const hasPhoneOrEmail = Boolean(
   restaurantPhone ||
@@ -209,7 +273,19 @@ const hasPhoneOrEmail = Boolean(
     ownerEmailField ||
     contactEmailField ||
     linkedVerifiedUserEmail ||
-    listingEmailForGate,
+    listingPhoneForGate ||
+    listingEmailForGate ||
+    restaurantWebsite ||
+    restaurantInstagram ||
+    restaurantFacebook ||
+    listingWebsiteForGate ||
+    listingInstagramForGate ||
+    listingFacebookForGate ||
+    extractedPhone ||
+    extractedEmail ||
+    extractedWebsite ||
+    extractedInstagram ||
+    extractedFacebook,
 );
 
 const publishGate = {
@@ -231,7 +307,9 @@ if (!publishable) {
         restaurantId: restaurant.id,
         businessName: restaurant.name,
         linkedUserId: linkedUser?.id || "",
-        contactEvidenceSource,
+        contactEvidenceSource:
+          contactEvidenceSources[0] || "",
+        contactEvidenceSources,
         publishGate,
       },
       null,
@@ -257,7 +335,9 @@ console.log(
       restaurantId: restaurant.id,
       businessName: restaurant.name,
       linkedUserId: linkedUser?.id || "",
-      contactEvidenceSource,
+      contactEvidenceSource:
+        contactEvidenceSources[0] || "",
+      contactEvidenceSources,
       publishGate,
     },
     null,
