@@ -1178,6 +1178,14 @@ export function registerHostRoutes(app: Express) {
         const selectedSlotTypes = (
           durationSlots.length > 0 ? durationSlots : mealSlots
         ) as (typeof PARKING_PASS_SLOT_TYPES)[number][];
+        console.info("[parking-pass] booking request normalized", {
+          passId,
+          truckId,
+          selectedSlotTypes,
+          rawSlotType: slotType || null,
+          rawSlotTypes: Array.isArray(slotTypes) ? slotTypes : null,
+          rawSelectedDates: Array.isArray(selectedDates) ? selectedDates : null,
+        });
 
         // Verify truck capability and type
         const truck = await storage.getRestaurant(truckId);
@@ -1347,6 +1355,17 @@ export function registerHostRoutes(app: Express) {
             : Array.from({ length: bookingDaysDefault }, (_, offset) => {
                 return addDaysToDateKey(eventDateKey, offset);
               });
+        console.info("[parking-pass] availability validation scope", {
+          passId,
+          eventDateKey,
+          requestedDateKeys,
+          bookingDaysDefault,
+          isSingleOccurrenceBooking,
+          expectedDateKeys,
+          selectedSlotTypes,
+          eventStartTime: event.startTime,
+          eventEndTime: event.endTime,
+        });
         if (expectedDateKeys.length === 0) {
           return res
             .status(400)
@@ -1416,6 +1435,21 @@ export function registerHostRoutes(app: Express) {
           (dateKey) => !eventsByDate.has(dateKey),
         );
         if (missingDates.length > 0) {
+          console.warn("[parking-pass] full-range validation failed", {
+            passId,
+            hostId: host.id,
+            eventDateKey,
+            expectedDateKeys,
+            missingDates,
+            bookingEvents: bookingEvents.map((row) => ({
+              id: row.id,
+              date: row.date,
+              startTime: row.startTime,
+              endTime: row.endTime,
+              status: row.status,
+            })),
+            selectedSlotTypes,
+          });
           return res.status(400).json({
             message:
               "This parking pass does not have availability for the full booking range.",
