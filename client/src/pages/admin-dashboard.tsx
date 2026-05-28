@@ -1026,6 +1026,178 @@ function TruckImportPanel({ enabled }: { enabled: boolean }) {
   );
 }
 
+function ProfileEvidenceApplyPanel({ enabled }: { enabled: boolean }) {
+  const { toast } = useToast();
+  const [payloadText, setPayloadText] = useState(`{
+  "mode": "dry_run",
+  "profileType": "food_truck",
+  "match": {
+    "name": "",
+    "phone": "",
+    "email": "",
+    "city": "",
+    "state": "",
+    "facebook": "",
+    "instagram": "",
+    "website": ""
+  },
+  "fillIfBlank": {},
+  "descriptionOnlyIfBlank": "",
+  "menuItems": [],
+  "scheduleItems": [],
+  "sourceNotes": [],
+  "missingInfo": [],
+  "logoUpload": { "enabled": true, "fileField": "image" }
+}`);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [result, setResult] = useState<any | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const submit = async (targetMode: "dry_run" | "apply") => {
+    if (!enabled || isSubmitting) return;
+    let parsed: any;
+    try {
+      parsed = JSON.parse(payloadText);
+    } catch {
+      toast({
+        title: "Invalid JSON",
+        description: "Fix JSON before submitting.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const bodyPayload = {
+        ...parsed,
+        mode: targetMode,
+      };
+
+      const formData = new FormData();
+      formData.append("payload", JSON.stringify(bodyPayload));
+      if (logoFile) {
+        formData.append("image", logoFile);
+      }
+
+      const res = await fetch("/api/admin/profile-evidence/apply", {
+        method: "POST",
+        credentials: "include",
+        body: formData,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.message || "Failed to apply profile evidence.");
+      }
+      setResult(data);
+      toast({
+        title: targetMode === "apply" ? "Evidence applied" : "Dry run complete",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Evidence apply failed",
+        description: error?.message || "Request failed.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Package className="w-5 h-5" />
+          Profile Evidence Apply
+        </CardTitle>
+        <CardDescription>
+          Paste extracted profile JSON, optionally attach a logo, then run dry-run
+          or apply. The API fills only blank fields and reports skips/conflicts.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <textarea
+          className="w-full min-h-[260px] rounded-md border p-3 font-mono text-xs"
+          value={payloadText}
+          onChange={(event) => setPayloadText(event.target.value)}
+        />
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <input
+            type="file"
+            accept="image/*"
+            onChange={(event) => setLogoFile(event.target.files?.[0] || null)}
+          />
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              disabled={isSubmitting}
+              onClick={() => submit("dry_run")}
+            >
+              {isSubmitting ? "Working..." : "Dry Run"}
+            </Button>
+            <Button disabled={isSubmitting} onClick={() => submit("apply")}>
+              {isSubmitting ? "Working..." : "Apply"}
+            </Button>
+          </div>
+        </div>
+
+        {result && (
+          <div className="rounded-md border bg-muted/40 p-3 text-sm space-y-1">
+            <div>
+              <strong>Status:</strong> {result.status || "unknown"}
+            </div>
+            <div>
+              <strong>Matched restaurant:</strong>{" "}
+              {result.matchedRestaurantId || "(none)"}
+            </div>
+            <div>
+              <strong>Matched import listing:</strong>{" "}
+              {result.matchedImportListingId || "(none)"}
+            </div>
+            <div>
+              <strong>Created draft:</strong> {result.createdDraftId || "(none)"}
+            </div>
+            <div>
+              <strong>Menu:</strong> {result.menuStatus || "none"} |{" "}
+              <strong>Schedule:</strong> {result.scheduleStatus || "none"} |{" "}
+              <strong>Logo:</strong> {result.logoStatus || "none"}
+            </div>
+            <div>
+              <strong>Applied:</strong>{" "}
+              {Array.isArray(result.fieldsApplied)
+                ? result.fieldsApplied.join(", ") || "(none)"
+                : "(none)"}
+            </div>
+            <div>
+              <strong>Skipped:</strong>{" "}
+              {Array.isArray(result.fieldsSkipped)
+                ? result.fieldsSkipped.join(", ") || "(none)"
+                : "(none)"}
+            </div>
+            <div>
+              <strong>Conflicts:</strong>{" "}
+              {Array.isArray(result.conflicts) ? result.conflicts.length : 0}
+            </div>
+            {result.matchedRestaurantId && (
+              <div>
+                <a
+                  className="underline"
+                  href={`/restaurant/${result.matchedRestaurantId}`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Open matched restaurant
+                </a>
+              </div>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function UnclaimedImportedTrucksTab({ enabled }: { enabled: boolean }) {
   const { toast } = useToast();
   const [items, setItems] = useState<any[]>([]);
@@ -8815,6 +8987,7 @@ export default function AdminDashboard() {
 
               <TruckImportPanel enabled={selectedTab === "onboarding"} />
             </div>
+            <ProfileEvidenceApplyPanel enabled={selectedTab === "onboarding"} />
           </TabsContent>
 
           {/* Admin Uploads Tab */}

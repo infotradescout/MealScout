@@ -3,14 +3,24 @@ import { and, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { isAuthenticated, isStaffOrAdmin } from "../../unifiedAuth";
 import { db } from "../../db";
 import { storage } from "../../storage";
+import { randomUUID } from "crypto";
+import {
+  isCloudinaryConfigured,
+  upload,
+  uploadToCloudinary,
+} from "../../imageUpload";
 import { sendAccountSetupInvite } from "../../utils/accountSetup";
 import { parseTruckImportFile } from "../../utils/truckImport";
 import {
   eventBookings,
+  imageUploads,
+  menuItems,
+  menus,
   restaurants,
   truckClaimRequests,
   truckImportBatches,
   truckImportListings,
+  truckManualSchedules,
 } from "@shared/schema";
 
 type RequireAdminUser = (req: any, res: any) => boolean;
@@ -39,6 +49,26 @@ export function registerTruckImportAdminRoutes(
     getOrCreateImportSystemUserId,
     truckImportUploadSingle,
   } = deps;
+  const isBlankValue = (value: unknown) => {
+    if (value === null || value === undefined) return true;
+    if (typeof value === "string") return value.trim().length === 0;
+    if (Array.isArray(value)) return value.length === 0;
+    if (typeof value === "object") return Object.keys(value as any).length === 0;
+    return false;
+  };
+  const normalizeComparable = (value: unknown) =>
+    String(value ?? "")
+      .trim()
+      .toLowerCase();
+  const toUrl = (value: unknown, domainHint?: string) => {
+    const raw = String(value || "").trim();
+    if (!raw) return "";
+    if (/^https?:\/\//i.test(raw)) return raw;
+    if (domainHint && !raw.includes(".")) {
+      return `https://${domainHint}/${raw.replace(/^@/, "")}`;
+    }
+    return `https://${raw}`;
+  };
 
   app.get(
     "/api/admin/truck-imports",
@@ -307,6 +337,937 @@ export function registerTruckImportAdminRoutes(
         }
         console.error("Error updating import listing:", error);
         res.status(500).json({ message: "Failed to update import listing" });
+      }
+    },
+  );
+
+  app.post(
+    "/api/admin/profile-evidence/apply",
+    isAuthenticated,
+    isStaffOrAdmin,
+    upload.single("image"),
+    async (req: any, res) => {
+      if (!requireAdminUser(req, res)) return;
+      try {
+        await ensureTruckImportTables();
+
+        const requestBody =
+          typeof req.body?.payload === "string" && req.body.payload.trim()
+            ? JSON.parse(req.body.payload)
+            : req.body || {};
+
+        const mode = requestBody?.mode === "apply" ? "apply" : "dry_run";
+        const profileTypeRaw = String(requestBody?.profileType || "unknown")
+          .trim()
+          .toLowerCase();
+        const profileType = [
+          "restaurant",
+          "food_truck",
+          "bar",
+          "caterer",
+          "private_chef",
+          "supplier",
+          "unknown",
+        ].includes(profileTypeRaw)
+          ? profileTypeRaw
+          : "unknown";
+
+        const match = (requestBody?.match || {}) as Record<string, unknown>;
+        const fillIfBlank = (requestBody?.fillIfBlank ||
+          {}) as Record<string, unknown>;
+        const descriptionOnlyIfBlank = String(
+          requestBody?.descriptionOnlyIfBlank || "",
+        ).trim();
+        const incomingMenuItems = Array.isArray(requestBody?.menuItems)
+          ? requestBody.menuItems
+          : [];
+        const incomingScheduleItems = Array.isArray(requestBody?.scheduleItems)
+          ? requestBody.scheduleItems
+          : [];
+        const sourceNotes = Array.isArray(requestBody?.sourceNotes)
+          ? requestBody.sourceNotes.map((v: any) => String(v || "").trim()).filter(Boolean)
+          : [];
+        const missingInfo = Array.isArray(requestBody?.missingInfo)
+          ? requestBody.missingInfo.map((v: any) => String(v || "").trim()).filter(Boolean)
+          : [];
+        const logoUpload = requestBody?.logoUpload || {};
+        const logoEnabled = Boolean(logoUpload?.enabled);
+
+        const normalize = (value: unknown) =>
+          String(value || "")
+            .trim()
+            .toLowerCase();
+        const normalizePhone = (value: unknown) =>
+          String(value || "").replace(/[^\d]/g, "");
+
+        const matchEmail = normalize(match.email || fillIfBlank.email);
+        const matchPhone = normalizePhone(match.phone || fillIfBlank.phone);
+        const matchName = String(match.name || fillIfBlank.name || "").trim();
+        const matchCity = normalize(match.city || fillIfBlank.city);
+        const matchState = normalize(match.state || fillIfBlank.state);
+        const matchWebsite = normalize(match.website || fillIfBlank.websiteUrl || fillIfBlank.website);
+        const matchFacebook = normalize(match.facebook || fillIfBlank.facebook || fillIfBlank.facebookPageUrl);
+        const matchInstagram = normalize(match.instagram || fillIfBlank.instagram || fillIfBlank.instagramUrl);
+
+        const restaurantWhere = or(
+          matchPhone ? eq(sql`regexp_replace(coalesce(${restaurants.phone}, ''), '[^0-9]', '', 'g')`, matchPhone) : sql`false`,
+          matchWebsite ? sql`lower(coalesce(${restaurants.websiteUrl}, '')) like ${`%${matchWebsite}%`}` : sql`false`,
+          matchFacebook ? sql`lower(coalesce(${restaurants.facebookPageUrl}, '')) like ${`%${matchFacebook}%`}` : sql`false`,
+          matchInstagram ? sql`lower(coalesce(${restaurants.instagramUrl}, '')) like ${`%${matchInstagram}%`}` : sql`false`,
+          matchName
+            ? and(
+                sql`lower(${restaurants.name}) = ${normalize(matchName)}`,
+                matchCity
+                  ? sql`lower(coalesce(${restaurants.city}, '')) = ${matchCity}`
+                  : sql`true`,
+                matchState
+                  ? sql`lower(coalesce(${restaurants.state}, '')) = ${matchState}`
+                  : sql`true`,
+              )
+            : sql`false`,
+        );
+
+        const restaurantCandidates = await db
+          .select()
+          .from(restaurants)
+          .where(restaurantWhere)
+          .limit(10);
+
+        const scoredRestaurants = restaurantCandidates
+          .map((row: any) => {
+            let score = 0;
+            if (matchEmail && normalize(row.email) === matchEmail) score += 5;
+            if (
+              matchPhone &&
+              normalizePhone(row.phone) &&
+              normalizePhone(row.phone) === matchPhone
+            ) {
+              score += 5;
+            }
+            if (
+              matchName &&
+              normalize(row.name) === normalize(matchName) &&
+              (!matchCity || normalize(row.city) === matchCity) &&
+              (!matchState || normalize(row.state) === matchState)
+            ) {
+              score += 4;
+            }
+            if (matchWebsite && normalize(row.websiteUrl).includes(matchWebsite))
+              score += 3;
+            if (matchFacebook && normalize(row.facebookPageUrl).includes(matchFacebook))
+              score += 2;
+            if (matchInstagram && normalize(row.instagramUrl).includes(matchInstagram))
+              score += 2;
+            return { row, score };
+          })
+          .filter((row: any) => row.score >= 4)
+          .sort((a: any, b: any) => b.score - a.score);
+
+        let matchedRestaurant = scoredRestaurants[0]?.row || null;
+        const multipleRestaurantStrongMatches =
+          scoredRestaurants.length > 1 &&
+          scoredRestaurants[0].score === scoredRestaurants[1].score;
+
+        let matchedImportListing: any = null;
+        if (profileType === "food_truck") {
+          const listingWhere = or(
+            matchEmail
+              ? eq(
+                  sql`lower(coalesce(${truckImportListings.email}, ''))`,
+                  matchEmail,
+                )
+              : sql`false`,
+            matchPhone
+              ? eq(
+                  sql`regexp_replace(coalesce(${truckImportListings.phone}, ''), '[^0-9]', '', 'g')`,
+                  matchPhone,
+                )
+              : sql`false`,
+            matchWebsite
+              ? sql`lower(coalesce(${truckImportListings.websiteUrl}, '')) like ${`%${matchWebsite}%`}`
+              : sql`false`,
+            matchFacebook
+              ? sql`lower(coalesce(${truckImportListings.facebookPageUrl}, '')) like ${`%${matchFacebook}%`}`
+              : sql`false`,
+            matchInstagram
+              ? sql`lower(coalesce(${truckImportListings.instagramUrl}, '')) like ${`%${matchInstagram}%`}`
+              : sql`false`,
+            matchName
+              ? and(
+                  sql`lower(${truckImportListings.name}) = ${normalize(matchName)}`,
+                  matchCity
+                    ? sql`lower(coalesce(${truckImportListings.city}, '')) = ${matchCity}`
+                    : sql`true`,
+                  matchState
+                    ? sql`lower(coalesce(${truckImportListings.state}, '')) = ${matchState}`
+                    : sql`true`,
+                )
+              : sql`false`,
+          );
+          const importCandidates = await db
+            .select()
+            .from(truckImportListings)
+            .where(listingWhere)
+            .limit(10);
+          matchedImportListing = importCandidates[0] || null;
+          if (!matchedRestaurant && matchedImportListing) {
+            const [linked] = await db
+              .select()
+              .from(restaurants)
+              .where(eq(restaurants.claimedFromImportId, matchedImportListing.id))
+              .limit(1);
+            matchedRestaurant = linked || null;
+          }
+        }
+
+        if (multipleRestaurantStrongMatches) {
+          return res.json({
+            status: "needs_review",
+            matchedRestaurantId: null,
+            matchedImportListingId: null,
+            createdDraftId: "",
+            fieldsApplied: [],
+            fieldsSkipped: [],
+            conflicts: [{ field: "match", reason: "multiple_strong_matches" }],
+            menuStatus: "none",
+            scheduleStatus: "none",
+            logoStatus: "none",
+            missingInfo,
+            sourceNotes,
+          });
+        }
+
+        let createdDraftId = "";
+        if (!matchedRestaurant && !matchedImportListing) {
+          if (mode === "dry_run") {
+            return res.json({
+              status: "needs_review",
+              matchedRestaurantId: "",
+              matchedImportListingId: "",
+              createdDraftId: "",
+              fieldsApplied: [],
+              fieldsSkipped: [],
+              conflicts: [],
+              menuStatus: "none",
+              scheduleStatus: "none",
+              logoStatus: "none",
+              missingInfo,
+              sourceNotes,
+            });
+          }
+
+          if (profileType === "food_truck") {
+            const [createdListing] = await db
+              .insert(truckImportListings)
+              .values({
+                name: String(fillIfBlank.name || matchName || "Unknown").trim(),
+                address: String(fillIfBlank.address || fillIfBlank.location_text || "").trim(),
+                city: String(fillIfBlank.city || match.city || "").trim() || null,
+                state: String(fillIfBlank.state || match.state || "").trim() || null,
+                phone: String(fillIfBlank.phone || match.phone || "").trim() || null,
+                email: String(fillIfBlank.email || match.email || "").trim().toLowerCase() || null,
+                cuisineType: String(fillIfBlank.category || "").trim() || null,
+                websiteUrl: toUrl(fillIfBlank.website || fillIfBlank.websiteUrl || null) || null,
+                status: "unclaimed",
+                rawData: {
+                  evidenceApply: {
+                    sourceNotes,
+                    missingInfo,
+                    queuedMenuItems: incomingMenuItems,
+                    queuedScheduleItems: incomingScheduleItems,
+                  },
+                },
+              } as any)
+              .returning();
+            createdDraftId = createdListing.id;
+            matchedImportListing = createdListing;
+          } else if (
+            ["restaurant", "bar", "caterer", "private_chef"].includes(profileType)
+          ) {
+            const systemOwnerId = await getOrCreateImportSystemUserId();
+            const [createdRestaurant] = await db
+              .insert(restaurants)
+              .values({
+                ownerId: systemOwnerId,
+                name: String(fillIfBlank.name || matchName || "Unknown").trim(),
+                address: String(fillIfBlank.address || "").trim(),
+                city: String(fillIfBlank.city || match.city || "").trim() || null,
+                state: String(fillIfBlank.state || match.state || "").trim() || null,
+                businessType: profileType,
+                phone: String(fillIfBlank.phone || "").trim() || null,
+                cuisineType: String(fillIfBlank.category || "").trim() || null,
+                websiteUrl:
+                  toUrl(fillIfBlank.website || fillIfBlank.websiteUrl || null) || null,
+                facebookPageUrl:
+                  toUrl(fillIfBlank.facebook || fillIfBlank.facebookPageUrl || null, "facebook.com") ||
+                  null,
+                instagramUrl:
+                  toUrl(fillIfBlank.instagram || fillIfBlank.instagramUrl || null, "instagram.com") ||
+                  null,
+                isFoodTruck: false,
+                isActive: false,
+                isVerified: false,
+                socialAutopostSettings: {
+                  evidenceApply: {
+                    sourceNotes,
+                    missingInfo,
+                    queuedMenuItems: incomingMenuItems,
+                    queuedScheduleItems: incomingScheduleItems,
+                  },
+                },
+              } as any)
+              .returning();
+            createdDraftId = createdRestaurant.id;
+            matchedRestaurant = createdRestaurant;
+          } else {
+            return res.json({
+              status: "needs_review",
+              matchedRestaurantId: "",
+              matchedImportListingId: "",
+              createdDraftId: "",
+              fieldsApplied: [],
+              fieldsSkipped: [],
+              conflicts: [],
+              menuStatus: "none",
+              scheduleStatus: "none",
+              logoStatus: "none",
+              missingInfo,
+              sourceNotes,
+            });
+          }
+        }
+
+        if (!matchedRestaurant && matchedImportListing) {
+          const [linked] = await db
+            .select()
+            .from(restaurants)
+            .where(eq(restaurants.claimedFromImportId, matchedImportListing.id))
+            .limit(1);
+          matchedRestaurant = linked || null;
+        }
+
+        const fieldsApplied: string[] = [];
+        const fieldsSkipped: string[] = [];
+        const conflicts: Array<{ field: string; existing: unknown; incoming: unknown }> = [];
+        const listingUpdates: Record<string, unknown> = {};
+        const restaurantUpdates: Record<string, unknown> = {};
+
+        const isProtectedField = (field: string) =>
+          [
+            "description",
+            "menu",
+            "schedule",
+            "logoUrl",
+            "coverImageUrl",
+            "photos",
+            "booking_available",
+            "catering_available",
+          ].includes(field);
+
+        const mappedFields: Array<{
+          key: string;
+          listingField?: string;
+          restaurantField?: string;
+          transform?: (value: unknown) => unknown;
+        }> = [
+          { key: "name", listingField: "name", restaurantField: "name" },
+          { key: "address", listingField: "address", restaurantField: "address" },
+          { key: "city", listingField: "city", restaurantField: "city" },
+          { key: "state", listingField: "state", restaurantField: "state" },
+          { key: "phone", listingField: "phone", restaurantField: "phone" },
+          {
+            key: "email",
+            listingField: "email",
+            transform: (value) => String(value || "").trim().toLowerCase(),
+          },
+          {
+            key: "website",
+            listingField: "websiteUrl",
+            restaurantField: "websiteUrl",
+            transform: (value) => toUrl(value),
+          },
+          {
+            key: "websiteUrl",
+            listingField: "websiteUrl",
+            restaurantField: "websiteUrl",
+            transform: (value) => toUrl(value),
+          },
+          {
+            key: "facebook",
+            listingField: "facebookPageUrl",
+            restaurantField: "facebookPageUrl",
+            transform: (value) => toUrl(value, "facebook.com"),
+          },
+          {
+            key: "facebookPageUrl",
+            listingField: "facebookPageUrl",
+            restaurantField: "facebookPageUrl",
+            transform: (value) => toUrl(value, "facebook.com"),
+          },
+          {
+            key: "instagram",
+            listingField: "instagramUrl",
+            restaurantField: "instagramUrl",
+            transform: (value) => toUrl(value, "instagram.com"),
+          },
+          {
+            key: "instagramUrl",
+            listingField: "instagramUrl",
+            restaurantField: "instagramUrl",
+            transform: (value) => toUrl(value, "instagram.com"),
+          },
+          {
+            key: "category",
+            listingField: "cuisineType",
+            restaurantField: "cuisineType",
+          },
+          { key: "businessType", restaurantField: "businessType" },
+          { key: "business_type", restaurantField: "businessType" },
+        ];
+
+        for (const mapEntry of mappedFields) {
+          if (fillIfBlank[mapEntry.key] === undefined) continue;
+          if (isProtectedField(mapEntry.key)) {
+            fieldsSkipped.push(mapEntry.key);
+            continue;
+          }
+          const incoming = mapEntry.transform
+            ? mapEntry.transform(fillIfBlank[mapEntry.key])
+            : fillIfBlank[mapEntry.key];
+          if (isBlankValue(incoming)) continue;
+
+          if (matchedImportListing && mapEntry.listingField) {
+            const existing = (matchedImportListing as any)[mapEntry.listingField];
+            if (isBlankValue(existing)) {
+              listingUpdates[mapEntry.listingField] = incoming;
+              fieldsApplied.push(`listing.${mapEntry.listingField}`);
+            } else if (
+              normalizeComparable(existing) !== normalizeComparable(incoming)
+            ) {
+              conflicts.push({
+                field: `listing.${mapEntry.listingField}`,
+                existing,
+                incoming,
+              });
+              fieldsSkipped.push(`listing.${mapEntry.listingField}`);
+            } else {
+              fieldsSkipped.push(`listing.${mapEntry.listingField}`);
+            }
+          }
+
+          if (matchedRestaurant && mapEntry.restaurantField) {
+            const existing = (matchedRestaurant as any)[mapEntry.restaurantField];
+            if (isBlankValue(existing)) {
+              restaurantUpdates[mapEntry.restaurantField] = incoming;
+              fieldsApplied.push(`restaurant.${mapEntry.restaurantField}`);
+            } else if (
+              normalizeComparable(existing) !== normalizeComparable(incoming)
+            ) {
+              conflicts.push({
+                field: `restaurant.${mapEntry.restaurantField}`,
+                existing,
+                incoming,
+              });
+              fieldsSkipped.push(`restaurant.${mapEntry.restaurantField}`);
+            } else {
+              fieldsSkipped.push(`restaurant.${mapEntry.restaurantField}`);
+            }
+          }
+        }
+
+        if (descriptionOnlyIfBlank && matchedRestaurant) {
+          if (isBlankValue(matchedRestaurant.description)) {
+            restaurantUpdates.description = descriptionOnlyIfBlank;
+            fieldsApplied.push("restaurant.description");
+          } else {
+            fieldsSkipped.push("restaurant.description");
+          }
+        }
+
+        let menuStatus: "added" | "queued_review" | "skipped_existing" | "none" = "none";
+        let scheduleStatus:
+          | "added"
+          | "queued_review"
+          | "skipped_existing"
+          | "none" = "none";
+        let logoStatus: "uploaded" | "skipped_existing_logo" | "none" = "none";
+
+        const appendEvidence = (
+          existingRaw: Record<string, unknown> | null | undefined,
+        ) => ({
+          ...(existingRaw || {}),
+          evidenceApply: {
+            ...(typeof (existingRaw as any)?.evidenceApply === "object"
+              ? ((existingRaw as any).evidenceApply as Record<string, unknown>)
+              : {}),
+            updatedAt: new Date().toISOString(),
+            sourceNotes,
+            missingInfo,
+            queuedMenuItems: incomingMenuItems,
+            queuedScheduleItems: incomingScheduleItems,
+          },
+        });
+
+        if (matchedImportListing) {
+          listingUpdates.rawData = appendEvidence(
+            (matchedImportListing.rawData as Record<string, unknown>) || {},
+          );
+        }
+
+        if (matchedRestaurant) {
+          const existingSettings =
+            typeof (matchedRestaurant as any).socialAutopostSettings === "object"
+              ? ((matchedRestaurant as any).socialAutopostSettings as Record<string, unknown>)
+              : {};
+          restaurantUpdates.socialAutopostSettings = appendEvidence(
+            existingSettings,
+          );
+        }
+
+        if (matchedRestaurant) {
+          const existingMenuCountRows = await db
+            .select({ total: sql<number>`count(*)` })
+            .from(menuItems)
+            .where(eq(menuItems.restaurantId, matchedRestaurant.id));
+          const existingMenuCount = Number(existingMenuCountRows?.[0]?.total || 0);
+
+          if (incomingMenuItems.length > 0) {
+            if (existingMenuCount > 0) {
+              menuStatus = "queued_review";
+            } else if (mode === "apply") {
+              const [menu] = await db
+                .insert(menus)
+                .values({
+                  restaurantId: matchedRestaurant.id,
+                  name: "Menu",
+                  serviceType: "all",
+                  isActive: true,
+                  importSource: "manual",
+                  importedAt: new Date(),
+                } as any)
+                .returning();
+
+              const toPriceCents = (value: unknown) => {
+                const raw = String(value || "").trim();
+                if (!raw) return 0;
+                const parsed = Number(raw.replace(/[^0-9.]/g, ""));
+                if (!Number.isFinite(parsed)) return 0;
+                return Math.max(0, Math.round(parsed * 100));
+              };
+
+              const itemsToInsert = incomingMenuItems
+                .map((item: any, index: number) => {
+                  const name = String(item?.item_name || item?.name || "").trim();
+                  if (!name) return null;
+                  return {
+                    menuId: menu.id,
+                    categoryId: null,
+                    restaurantId: matchedRestaurant.id,
+                    name,
+                    description: String(item?.description || "").trim() || null,
+                    priceCents: toPriceCents(item?.price),
+                    itemType: "food",
+                    isAvailable: true,
+                    sortOrder: index,
+                  };
+                })
+                .filter(Boolean);
+
+              if (itemsToInsert.length > 0) {
+                await db.insert(menuItems).values(itemsToInsert as any[]);
+                menuStatus = "added";
+              } else {
+                menuStatus = "none";
+              }
+            } else {
+              menuStatus = "queued_review";
+            }
+          }
+
+          const existingScheduleRows = await db
+            .select({ total: sql<number>`count(*)` })
+            .from(truckManualSchedules)
+            .where(eq(truckManualSchedules.truckId, matchedRestaurant.id));
+          const existingScheduleCount = Number(existingScheduleRows?.[0]?.total || 0);
+
+          const validScheduleItems = incomingScheduleItems.filter((item: any) => {
+            const date = String(item?.date || "").trim();
+            const location = String(item?.location_name || item?.locationName || "").trim();
+            const start = String(item?.start_time || item?.startTime || "").trim();
+            const end = String(item?.end_time || item?.endTime || "").trim();
+            return Boolean(date && location && start && end);
+          });
+
+          if (validScheduleItems.length > 0) {
+            if (existingScheduleCount > 0) {
+              scheduleStatus = "queued_review";
+            } else if (mode === "apply" && profileType === "food_truck") {
+              const rows = validScheduleItems.map((item: any) => ({
+                truckId: matchedRestaurant.id,
+                date: new Date(String(item.date)),
+                startTime: String(item.start_time || item.startTime),
+                endTime: String(item.end_time || item.endTime),
+                locationName: String(item.location_name || item.locationName || "").trim() || null,
+                address:
+                  String(item.address || "").trim() ||
+                  String(item.location_name || item.locationName || "Unknown location").trim(),
+                city: String(item.city || fillIfBlank.city || "").trim() || null,
+                state: String(item.state || fillIfBlank.state || "").trim() || null,
+                notes: String(item.notes || "").trim() || null,
+                isPublic: true,
+                lastConfirmedAt: new Date(),
+              }));
+              await db.insert(truckManualSchedules).values(rows as any[]);
+              scheduleStatus = "added";
+            } else {
+              scheduleStatus = "queued_review";
+            }
+          }
+
+          if (logoEnabled) {
+            if (!matchedRestaurant.logoUrl && req.file && mode === "apply") {
+              if (!isCloudinaryConfigured()) {
+                return res.status(503).json({
+                  message: "Image upload service not configured",
+                });
+              }
+              const uploadResult = await uploadToCloudinary(
+                req.file.buffer,
+                "restaurant-logos",
+                `restaurant-${matchedRestaurant.id}-logo`,
+              );
+              const insertedUploads = await db
+                .insert(imageUploads)
+                .values({
+                  uploadedByUserId: req.user?.id || null,
+                  imageType: "restaurant_logo",
+                  entityId: matchedRestaurant.id,
+                  entityType: "restaurant",
+                  cloudinaryPublicId: uploadResult.publicId,
+                  cloudinaryUrl: uploadResult.secureUrl,
+                  thumbnailUrl: uploadResult.thumbnailUrl,
+                  width: uploadResult.width,
+                  height: uploadResult.height,
+                  fileSize: uploadResult.bytes,
+                  mimeType: req.file.mimetype,
+                })
+                .returning();
+              const existingSettings =
+                typeof (matchedRestaurant as any).socialAutopostSettings === "object"
+                  ? { ...((matchedRestaurant as any).socialAutopostSettings || {}) }
+                  : {};
+              const existingGallery = Array.isArray((existingSettings as any).publicGalleryImages)
+                ? [...((existingSettings as any).publicGalleryImages as any[])]
+                : [];
+              existingGallery.push({
+                id: insertedUploads?.[0]?.id || randomUUID(),
+                url: uploadResult.secureUrl,
+                source: "logo",
+                category: "logo",
+                publicApproved: true,
+                uploadedAt: new Date().toISOString(),
+                lastVerifiedAt: new Date().toISOString(),
+              });
+
+              restaurantUpdates.logoUrl = uploadResult.secureUrl;
+              restaurantUpdates.socialAutopostSettings = {
+                ...existingSettings,
+                publicGalleryImages: existingGallery,
+                evidenceApply: (restaurantUpdates.socialAutopostSettings as any)
+                  ?.evidenceApply,
+              };
+              logoStatus = "uploaded";
+            } else if (matchedRestaurant.logoUrl) {
+              logoStatus = "skipped_existing_logo";
+            }
+          }
+        }
+
+        if (mode === "apply") {
+          if (matchedImportListing && Object.keys(listingUpdates).length > 0) {
+            await db
+              .update(truckImportListings)
+              .set({ ...listingUpdates, updatedAt: new Date() })
+              .where(eq(truckImportListings.id, matchedImportListing.id));
+          }
+          if (matchedRestaurant && Object.keys(restaurantUpdates).length > 0) {
+            await db
+              .update(restaurants)
+              .set({ ...restaurantUpdates, updatedAt: new Date() })
+              .where(eq(restaurants.id, matchedRestaurant.id));
+          }
+        }
+
+        res.json({
+          status: mode === "apply" ? "applied" : "dry_run",
+          matchedRestaurantId: matchedRestaurant?.id || "",
+          matchedImportListingId: matchedImportListing?.id || "",
+          createdDraftId,
+          fieldsApplied: Array.from(new Set(fieldsApplied)),
+          fieldsSkipped: Array.from(new Set(fieldsSkipped)),
+          conflicts,
+          menuStatus,
+          scheduleStatus,
+          logoStatus,
+          missingInfo,
+          sourceNotes,
+        });
+      } catch (error: any) {
+        console.error("Error applying profile evidence:", error);
+        res.status(500).json({ message: "Failed to apply profile evidence" });
+      }
+    },
+  );
+
+  app.post(
+    "/api/admin/truck-import-listings/:id/fill-missing-from-evidence",
+    isAuthenticated,
+    isStaffOrAdmin,
+    async (req: any, res) => {
+      if (!requireAdminUser(req, res)) return;
+      try {
+        await ensureTruckImportTables();
+
+        const listingId = String(req.params.id || "").trim();
+        if (!listingId) {
+          return res.status(400).json({ message: "Listing ID is required" });
+        }
+
+        const [listing] = await db
+          .select()
+          .from(truckImportListings)
+          .where(eq(truckImportListings.id, listingId))
+          .limit(1);
+        if (!listing) {
+          return res.status(404).json({ message: "Import listing not found" });
+        }
+
+        const [restaurant] = await db
+          .select()
+          .from(restaurants)
+          .where(eq(restaurants.claimedFromImportId, listingId))
+          .limit(1);
+        if (!restaurant) {
+          return res.status(409).json({
+            message:
+              "No seeded restaurant is linked to this import listing. Refusing to create a duplicate.",
+          });
+        }
+
+        const fill = (req.body?.fill_if_blank || {}) as Record<string, unknown>;
+        const descriptionCandidate = String(
+          req.body?.suggested_description_only_if_blank || "",
+        ).trim();
+        const sourceNotes = String(req.body?.source_notes || "").trim();
+        const missingInfo = Array.isArray(req.body?.missing_info)
+          ? req.body.missing_info.map((v: any) => String(v || "").trim()).filter(Boolean)
+          : [];
+        const menuItems = Array.isArray(req.body?.menu_items)
+          ? req.body.menu_items
+              .map((item: any) => ({
+                section: String(item?.section || "").trim() || null,
+                item_name: String(item?.item_name || "").trim() || null,
+                description: String(item?.description || "").trim() || null,
+                price: String(item?.price || "").trim() || null,
+                confidence: String(item?.confidence || "").trim() || null,
+              }))
+              .filter((item: any) => item.item_name)
+          : [];
+        const scheduleNotes = Array.isArray(req.body?.schedule_notes)
+          ? req.body.schedule_notes
+              .map((note: any) => ({
+                text: String(note?.text || "").trim() || null,
+                confidence: String(note?.confidence || "").trim() || null,
+                source: String(note?.source || "").trim() || null,
+              }))
+              .filter((note: any) => note.text)
+          : [];
+
+        const listingUpdates: Record<string, unknown> = {};
+        const restaurantUpdates: Record<string, unknown> = {};
+        const fieldsFilled: string[] = [];
+        const fieldsSkipped: string[] = [];
+        const conflicts: Array<{ field: string; existing: unknown; incoming: unknown }> = [];
+
+        const protectedFieldSet = new Set([
+          "description",
+          "menu",
+          "schedule",
+          "logoUrl",
+          "photos",
+          "booking_available",
+          "catering_available",
+        ]);
+
+        const candidates: Array<{
+          evidenceField: string;
+          listingField?: string;
+          restaurantField?: string;
+          value: unknown;
+          transform?: (input: unknown) => unknown;
+        }> = [
+          { evidenceField: "business_type", restaurantField: "businessType", value: fill.business_type },
+          { evidenceField: "category", listingField: "cuisineType", restaurantField: "cuisineType", value: fill.category },
+          { evidenceField: "phone", listingField: "phone", restaurantField: "phone", value: fill.phone },
+          { evidenceField: "email", listingField: "email", value: fill.email, transform: (v) => String(v || "").trim().toLowerCase() },
+          { evidenceField: "website", listingField: "websiteUrl", restaurantField: "websiteUrl", value: fill.website, transform: (v) => toUrl(v) },
+          { evidenceField: "facebook", listingField: "facebookPageUrl", restaurantField: "facebookPageUrl", value: fill.facebook, transform: (v) => toUrl(v, "facebook.com") },
+          { evidenceField: "instagram", listingField: "instagramUrl", restaurantField: "instagramUrl", value: fill.instagram, transform: (v) => toUrl(v, "instagram.com") },
+          { evidenceField: "city", listingField: "city", restaurantField: "city", value: fill.city },
+          { evidenceField: "state", listingField: "state", restaurantField: "state", value: fill.state },
+        ];
+
+        for (const candidate of candidates) {
+          if (protectedFieldSet.has(candidate.evidenceField)) {
+            fieldsSkipped.push(candidate.evidenceField);
+            continue;
+          }
+          const rawValue = candidate.transform
+            ? candidate.transform(candidate.value)
+            : candidate.value;
+          if (isBlankValue(rawValue)) continue;
+
+          if (candidate.listingField) {
+            const existing = (listing as any)[candidate.listingField];
+            if (isBlankValue(existing)) {
+              listingUpdates[candidate.listingField] = rawValue;
+              fieldsFilled.push(candidate.listingField);
+            } else if (
+              normalizeComparable(existing) !== normalizeComparable(rawValue)
+            ) {
+              conflicts.push({
+                field: `listing.${candidate.listingField}`,
+                existing,
+                incoming: rawValue,
+              });
+              fieldsSkipped.push(candidate.listingField);
+            } else {
+              fieldsSkipped.push(candidate.listingField);
+            }
+          }
+
+          if (candidate.restaurantField) {
+            const existing = (restaurant as any)[candidate.restaurantField];
+            if (isBlankValue(existing)) {
+              restaurantUpdates[candidate.restaurantField] = rawValue;
+              fieldsFilled.push(candidate.restaurantField);
+            } else if (
+              normalizeComparable(existing) !== normalizeComparable(rawValue)
+            ) {
+              conflicts.push({
+                field: `restaurant.${candidate.restaurantField}`,
+                existing,
+                incoming: rawValue,
+              });
+              fieldsSkipped.push(candidate.restaurantField);
+            } else {
+              fieldsSkipped.push(candidate.restaurantField);
+            }
+          }
+        }
+
+        if (descriptionCandidate) {
+          if (isBlankValue(restaurant.description)) {
+            restaurantUpdates.description = descriptionCandidate;
+            fieldsFilled.push("description");
+          } else {
+            if (
+              normalizeComparable(restaurant.description) !==
+              normalizeComparable(descriptionCandidate)
+            ) {
+              conflicts.push({
+                field: "restaurant.description",
+                existing: restaurant.description,
+                incoming: descriptionCandidate,
+              });
+            }
+            fieldsSkipped.push("description");
+          }
+        }
+
+        const safeEvidenceFields = {
+          service_area: String(fill.service_area || "").trim() || null,
+          location_text: String(fill.location_text || "").trim() || null,
+          price_range: String(fill.price_range || "").trim() || null,
+          hours: String(fill.hours || "").trim() || null,
+          contact_method: String(req.body?.contact_method || "").trim() || null,
+          followers_note: String(req.body?.followers_note || "").trim() || null,
+          review_note: String(req.body?.review_note || "").trim() || null,
+          source_notes: sourceNotes || null,
+          missing_info: missingInfo,
+          confidence: String(req.body?.confidence || "").trim() || null,
+          menu_candidates: menuItems,
+          schedule_notes: scheduleNotes,
+        };
+        const rawDataNext = {
+          ...(((listing.rawData as Record<string, unknown>) || {}) as Record<string, unknown>),
+          evidenceUpdate: {
+            ...(typeof (listing.rawData as any)?.evidenceUpdate === "object"
+              ? ((listing.rawData as any).evidenceUpdate as Record<string, unknown>)
+              : {}),
+            updatedAt: new Date().toISOString(),
+            updatedByUserId: req.user?.id || null,
+            safeEvidenceFields,
+          },
+        };
+        listingUpdates.rawData = rawDataNext;
+
+        if (Object.keys(listingUpdates).length > 0) {
+          await db
+            .update(truckImportListings)
+            .set({ ...listingUpdates, updatedAt: new Date() })
+            .where(eq(truckImportListings.id, listingId));
+        }
+        if (Object.keys(restaurantUpdates).length > 0) {
+          await db
+            .update(restaurants)
+            .set({ ...restaurantUpdates, updatedAt: new Date() })
+            .where(eq(restaurants.id, restaurant.id));
+        }
+
+        const logoAction = isBlankValue(restaurant.logoUrl)
+          ? "missing_upload_required"
+          : "skipped_existing_logo";
+
+        res.json({
+          matchedImportListingId: listing.id,
+          matchedRestaurantId: restaurant.id,
+          fieldsFilled: Array.from(new Set(fieldsFilled)),
+          fieldsSkipped: Array.from(new Set(fieldsSkipped)),
+          conflicts,
+          protectedFieldsNeverOverwritten: [
+            "description_unless_blank",
+            "menu",
+            "schedule",
+            "logo_unless_blank",
+            "photos",
+            "booking_available",
+            "catering_available",
+          ],
+          logo: {
+            action: logoAction,
+            uploadRoute: "/api/upload/restaurant-logo",
+          },
+          menu: {
+            action: menuItems.length > 0 ? "queued_for_review" : "none",
+            queuedCount: menuItems.length,
+          },
+          schedule: {
+            action: scheduleNotes.length > 0 ? "note_only_no_rows_created" : "none",
+            queuedCount: scheduleNotes.length,
+          },
+          remainingMissingInfo: missingInfo,
+        });
+      } catch (error: any) {
+        if (isMissingRelationError(error, "truck_import_listings")) {
+          return res.status(503).json({
+            message:
+              "Truck import tables are missing in the database. Run `npm run migrate:sql -- 042_create_truck_import_tables.sql`.",
+            code: "migration_required",
+          });
+        }
+        console.error("Error filling missing listing fields from evidence:", error);
+        res.status(500).json({ message: "Failed to apply evidence update" });
       }
     },
   );
