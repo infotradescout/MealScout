@@ -396,8 +396,11 @@ const isParkingPassListingPublicVisible = (listing: ParkingPassListing) => {
   return true;
 };
 
-const isValidParkingPassTruck = (business: any): boolean =>
-  Boolean(business && business.isFoodTruck === true && business.id);
+const isValidParkingPassTruck = (business: any): boolean => {
+  if (!business || !business.id) return false;
+  const type = String(business.businessType || "").toLowerCase();
+  return business.isFoodTruck === true || type === "food_truck";
+};
 
 const normalizeDollar = (value: string | number) => {
   const parsed = Number(value);
