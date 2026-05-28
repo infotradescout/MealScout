@@ -217,6 +217,7 @@ const publicRoutePrefixes = [
   "/reset-password",
   "/change-password",
   "/account-setup",
+  "/owner/verify",
   "/post-verification",
   "/admin",
   "/business-team/accept",
@@ -413,6 +414,7 @@ function Router() {
             <Route path="/reset-password" component={ResetPassword} />
             <Route path="/change-password" component={ChangePassword} />
             <Route path="/account-setup" component={AccountSetup} />
+            <Route path="/owner/verify" component={AccountSetup} />
             <Route path="/post-verification" component={PostVerification} />
             <Route path="/admin" component={AdminLogin} />
             <Route path="/admin/login" component={AdminLogin} />
@@ -594,6 +596,7 @@ function Router() {
             <Route path="/reset-password" component={ResetPassword} />
             <Route path="/change-password" component={ChangePassword} />
             <Route path="/account-setup" component={AccountSetup} />
+            <Route path="/owner/verify" component={AccountSetup} />
             <Route path="/post-verification" component={PostVerification} />
             <Route path="/admin/login" component={AdminLogin} />
             <Route path="/admin/oauth-setup" component={OAuthSetupGuide} />

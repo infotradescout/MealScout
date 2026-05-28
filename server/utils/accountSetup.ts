@@ -9,12 +9,14 @@ type InviteOptions = {
   user: User;
   createdBy?: User | null;
   req: Request;
+  setupPath?: string;
 };
 
 export async function sendAccountSetupInvite({
   user,
   createdBy,
   req,
+  setupPath,
 }: InviteOptions): Promise<boolean> {
   const setupToken = crypto.randomBytes(32).toString("hex");
   const tokenHash = crypto.createHash("sha256").update(setupToken).digest("hex");
@@ -34,9 +36,16 @@ export async function sendAccountSetupInvite({
 
   const baseUrl =
     process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get("host")}`;
-  const setupUrl = `${baseUrl.replace(/\/+$/, "")}/account-setup?token=${encodeURIComponent(
-    setupToken
-  )}`;
+  const normalizedSetupPath = String(setupPath || "/account-setup")
+    .trim()
+    .replace(/\s+/g, "");
+  const safeSetupPath = normalizedSetupPath.startsWith("/")
+    ? normalizedSetupPath
+    : `/${normalizedSetupPath}`;
+  const setupUrl = `${baseUrl.replace(
+    /\/+$/,
+    "",
+  )}${safeSetupPath}?token=${encodeURIComponent(setupToken)}`;
 
   const createdByName = createdBy?.firstName
     ? `${createdBy.firstName} ${createdBy.lastName || ""}`.trim()

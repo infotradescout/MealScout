@@ -92,6 +92,7 @@ const privateNoIndexPrefixes = [
   "/event-coordinator/dashboard",
   "/supplier/dashboard",
   "/account-setup",
+  "/owner/verify",
 ];
 
 // Canonical redirect for SEO/indexing consistency (https + canonical host).

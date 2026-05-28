@@ -69,6 +69,37 @@ export function registerTruckImportAdminRoutes(
     }
     return `https://${raw}`;
   };
+  const recordListingInviteEvidence = async (
+    listingId: string,
+    details: {
+      invitedUserId: string;
+      inviteEmail: string;
+      emailSent: boolean;
+      source: "bulk_import" | "manual_invite";
+      invitedAt: string;
+    },
+  ) => {
+    try {
+      const [existingListing] = await db
+        .select()
+        .from(truckImportListings)
+        .where(eq(truckImportListings.id, listingId))
+        .limit(1);
+      if (!existingListing) return;
+      await db
+        .update(truckImportListings)
+        .set({
+          rawData: {
+            ...((existingListing as any).rawData || {}),
+            ownerVerificationInvite: details,
+          },
+          updatedAt: new Date(),
+        } as any)
+        .where(eq(truckImportListings.id, listingId));
+    } catch (error) {
+      console.error("Failed to record listing invite evidence:", error);
+    }
+  };
 
   app.get(
     "/api/admin/truck-imports",
@@ -1369,6 +1400,14 @@ export function registerTruckImportAdminRoutes(
           user: inviteUser,
           createdBy: req.user,
           req,
+          setupPath: "/owner/verify",
+        });
+        await recordListingInviteEvidence(listingId, {
+          invitedUserId: inviteUser.id,
+          inviteEmail: email,
+          emailSent,
+          source: "manual_invite",
+          invitedAt: new Date().toISOString(),
         });
 
         res.json({ success: true, emailSent, listing: updated });
@@ -1730,9 +1769,9 @@ export function registerTruckImportAdminRoutes(
         if (insertedListingRows.length > 0) {
           const systemOwnerId = await getOrCreateImportSystemUserId();
 
-          // Create invited owner accounts where we have an email, but do not email them here.
-          // The “Request this truck” flow sends reminders on-demand.
+          // Create/reuse invited owner accounts where we have an email.
           const invitedOwnerByEmail = new Map<string, string>();
+          const invitedOwnerByEmailSent = new Map<string, boolean>();
           const uniqueEmails = Array.from(
             new Set(
               insertedListingRows
@@ -1756,6 +1795,13 @@ export function registerTruckImportAdminRoutes(
                 userType: "food_truck",
               }));
             invitedOwnerByEmail.set(email, user.id);
+            const emailSent = await sendAccountSetupInvite({
+              user,
+              createdBy: req.user,
+              req,
+              setupPath: "/owner/verify",
+            });
+            invitedOwnerByEmailSent.set(email, emailSent);
           }
 
           const restaurantsToInsert = insertedListingRows.map(
@@ -1815,6 +1861,13 @@ export function registerTruckImportAdminRoutes(
                 .update(truckImportListings)
                 .set({ invitedUserId: invitedOwnerId, updatedAt: new Date() })
                 .where(eq(truckImportListings.id, listing.id));
+              await recordListingInviteEvidence(String(listing.id), {
+                invitedUserId: invitedOwnerId,
+                inviteEmail: email,
+                emailSent: Boolean(invitedOwnerByEmailSent.get(email)),
+                source: "bulk_import",
+                invitedAt: new Date().toISOString(),
+              });
             } catch {
               // ignore
             }

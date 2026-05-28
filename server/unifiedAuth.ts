@@ -2101,6 +2101,7 @@ export async function setupUnifiedAuth(app: Express) {
         firstName,
         lastName,
         phone,
+        emailVerified: true,
       };
 
       await storage.updateUser(user.id, updateData);
