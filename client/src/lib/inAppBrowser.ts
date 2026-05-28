@@ -65,8 +65,11 @@ const detectProvider = (ua: string): InAppBrowserDetection["provider"] => {
     return "twitter";
   }
 
-  const hasWv = normalized.includes("; wv)") || normalized.includes("version/");
-  if (hasWv) return "unknown";
+  // Treat explicit Android WebView signatures as unknown in-app browsers.
+  // Do not use generic "version/" because Safari includes it and should not
+  // be blocked from checkout.
+  const hasAndroidWebView = normalized.includes("; wv)");
+  if (hasAndroidWebView) return "unknown";
   return null;
 };
 
@@ -107,4 +110,3 @@ export function buildExternalBrowserUrl(currentUrl: string) {
 
   return safeUrl;
 }
-
