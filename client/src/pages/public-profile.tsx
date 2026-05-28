@@ -7,6 +7,10 @@ import type {
   PublicRestaurantProfile,
   PublicSupplierProfile,
 } from "@shared/publicProfiles";
+import {
+  assessPublicMenuCompleteness,
+  normalizeBusinessTypeLabel,
+} from "@/lib/publicMenuCompleteness";
 import { SEOHead } from "@/components/seo-head";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -259,7 +263,9 @@ function HeroBlock({ profile, safeCtas }: { profile: PublicProfilePayload; safeC
         <p className="text-sm text-white/80">
           {profile.entity === "host"
             ? "Food trucks, pop-ups, and local eats here"
-            : profile.entity === "restaurant"
+            : profile.entity === "restaurant" && profile.profileType === "truck"
+              ? "Track this truck, browse menu evidence, and catch upcoming stops."
+              : profile.entity === "restaurant"
               ? "Open near you, menu updates, and local favorites."
               : "Local supply and support for nearby food businesses."}
         </p>
@@ -632,9 +638,17 @@ function LocationAmenitiesSection({ profile }: { profile: PublicLocationProfile 
 
 function RestaurantSignals({ profile }: { profile: PublicRestaurantProfile }) {
   const signals: string[] = [];
+  const menuCompleteness = assessPublicMenuCompleteness({
+    menuSections: profile.menuSections,
+    featuredMenuItems: profile.featuredMenuItems,
+    menuUrl: profile.menuUrl,
+    menuImageUrl: profile.menuImageUrl,
+    menuPdfUrl: profile.menuPdfUrl,
+  });
   if (profile.openStatus) signals.push(profile.openStatus);
   if (profile.deals.totalActive > 0) signals.push("Deal today");
-  if (profile.menuUrl || profile.featuredMenuItems.length > 0) signals.push("Menu available");
+  if (menuCompleteness.state === "complete") signals.push("Menu available");
+  if (menuCompleteness.state === "partial") signals.push("Partial menu evidence");
   if (profile.profileType === "truck" && profile.truckSchedule?.nextWindowLabel) {
     signals.push("Truck schedule available");
   }
@@ -660,9 +674,10 @@ function RestaurantSignals({ profile }: { profile: PublicRestaurantProfile }) {
 }
 
 function AboutFoodStyle({ profile }: { profile: PublicRestaurantProfile }) {
+  const normalizedServiceType = normalizeBusinessTypeLabel(profile.serviceType || "");
   const tags = [
     ...profile.cuisineTags,
-    profile.serviceType || "",
+    normalizedServiceType || "",
   ]
     .map((value) => String(value || "").trim())
     .filter(Boolean)
@@ -716,6 +731,24 @@ function MenuSection({
       )
     : [];
   const hasStructuredMenu = structuredSections.length > 0;
+  const menuCompleteness = assessPublicMenuCompleteness({
+    menuSections: structuredSections,
+    featuredMenuItems: featuredItems,
+    menuUrl: profile.menuUrl,
+    menuImageUrl: profile.menuImageUrl,
+    menuPdfUrl: profile.menuPdfUrl,
+  });
+  const pricedSections = structuredSections
+    .map((section) => ({
+      ...section,
+      items: section.items.filter((item) => Boolean(String(item.priceLabel || "").trim())),
+    }))
+    .filter((section) => section.items.length > 0);
+  const unpricedItems = structuredSections.flatMap((section) =>
+    section.items
+      .filter((item) => !String(item.priceLabel || "").trim())
+      .map((item) => ({ sectionName: section.name, name: item.name })),
+  );
   const hasSection =
     hasStructuredMenu ||
     Boolean(menuCta) ||
@@ -737,13 +770,23 @@ function MenuSection({
         <CardTitle className="text-xl text-white">Menu</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        {menuCompleteness.state === "partial" ? (
+          <p className="rounded-md border border-amber-300/35 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+            Partial menu from available evidence. More items may be available from this business directly.
+          </p>
+        ) : null}
+        {menuCompleteness.state === "unavailable" ? (
+          <p className="rounded-md border border-white/15 bg-white/5 px-3 py-2 text-xs text-white/75">
+            Menu unavailable right now.
+          </p>
+        ) : null}
         {updatedLabel ? (
           <p className="text-xs text-white/65">Menu last updated {updatedLabel}</p>
         ) : null}
 
-        {hasStructuredMenu ? (
+        {pricedSections.length > 0 ? (
           <div className="space-y-4">
-            {structuredSections.map((section) => (
+            {pricedSections.map((section) => (
               <div key={section.name} className="space-y-2">
                 <p className="text-sm font-semibold text-white/90">{section.name}</p>
                 <div className="space-y-2">
@@ -768,6 +811,19 @@ function MenuSection({
                 </div>
               </div>
             ))}
+          </div>
+        ) : null}
+
+        {unpricedItems.length > 0 ? (
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-white/90">Unpriced items from evidence</p>
+            <div className="space-y-1">
+              {unpricedItems.map((item, index) => (
+                <p key={`${item.sectionName}:${item.name}:${index}`} className="text-xs text-white/75">
+                  {item.sectionName}: {item.name}
+                </p>
+              ))}
+            </div>
           </div>
         ) : null}
 
