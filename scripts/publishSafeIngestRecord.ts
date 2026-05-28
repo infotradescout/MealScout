@@ -175,11 +175,48 @@ const hasMenu =
   Boolean((listing as any)?.rawData?.evidenceIngest?.extracted?.menuItems?.length) ||
   Boolean((listing as any)?.rawData?.evidenceIngest?.extracted?.menu?.length);
 const menuDeferred = Boolean((listing as any)?.rawData?.evidenceIngest?.extracted?.menuDeferred);
+const [linkedUser] = await db
+  .select({
+    id: users.id,
+    email: users.email,
+    emailVerified: users.emailVerified,
+  })
+  .from(users)
+  .where(eq(users.id, String(restaurant.ownerId || "")))
+  .limit(1);
+
+const restaurantPhone = normalize(restaurant.phone);
+const restaurantEmail = normalize((restaurant as any).email);
+const ownerEmailField = normalize((restaurant as any).ownerEmail);
+const contactEmailField = normalize((restaurant as any).contactEmail);
+const linkedVerifiedUserEmail =
+  linkedUser?.emailVerified && normalize(linkedUser?.email)
+    ? normalize(String(linkedUser.email))
+    : "";
+const listingEmailForGate = normalize(listing.email);
+
+let contactEvidenceSource = "";
+if (restaurantPhone) contactEvidenceSource = "restaurant.phone";
+else if (restaurantEmail) contactEvidenceSource = "restaurant.email";
+else if (ownerEmailField) contactEvidenceSource = "restaurant.ownerEmail";
+else if (contactEmailField) contactEvidenceSource = "restaurant.contactEmail";
+else if (linkedVerifiedUserEmail) contactEvidenceSource = "linked_user.verified_email";
+else if (listingEmailForGate) contactEvidenceSource = "import_listing.email";
+
+const hasPhoneOrEmail = Boolean(
+  restaurantPhone ||
+    restaurantEmail ||
+    ownerEmailField ||
+    contactEmailField ||
+    linkedVerifiedUserEmail ||
+    listingEmailForGate,
+);
+
 const publishGate = {
   hasName: !isBlank(restaurant.name || listing.name),
   hasCityOrArea: !isBlank(restaurant.city || listing.city),
   hasCuisine: !isBlank(restaurant.cuisineType || listing.cuisineType),
-  hasPhoneOrEmail: !isBlank(restaurant.phone || listing.phone || listing.email),
+  hasPhoneOrEmail,
   hasMenuOrDeferred: hasMenu || menuDeferred,
 };
 const publishable = Object.values(publishGate).every(Boolean);
@@ -193,6 +230,8 @@ if (!publishable) {
         listingId,
         restaurantId: restaurant.id,
         businessName: restaurant.name,
+        linkedUserId: linkedUser?.id || "",
+        contactEvidenceSource,
         publishGate,
       },
       null,
@@ -217,6 +256,8 @@ console.log(
       listingId,
       restaurantId: restaurant.id,
       businessName: restaurant.name,
+      linkedUserId: linkedUser?.id || "",
+      contactEvidenceSource,
       publishGate,
     },
     null,

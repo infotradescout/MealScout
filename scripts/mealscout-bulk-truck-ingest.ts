@@ -434,6 +434,21 @@ const run = async () => {
       sourceUrls: record.sourceUrls,
       sourceFiles: record.sourceFiles,
       confidence: record.confidence || null,
+      contactEvidence: {
+        phone: record.phone || null,
+        email: record.email || null,
+        websiteUrl: record.websiteUrl || null,
+        instagramUrl: record.instagramUrl || null,
+        facebookPageUrl: record.facebookPageUrl || null,
+        sourcePriority: [
+          "restaurant.phone",
+          "restaurant.email",
+          "restaurant.ownerEmail",
+          "restaurant.contactEmail",
+          "linked_user.verified_email",
+          "import_listing.email",
+        ],
+      },
       missingInfo,
       extractedAt: new Date().toISOString(),
       publishGate: {

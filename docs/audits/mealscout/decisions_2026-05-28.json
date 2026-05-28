@@ -1,0 +1,32 @@
+[
+  {
+    "businessName": "Sweet Love",
+    "action": "attach_to_existing",
+    "targetRestaurantId": "f3b76054-f355-43b0-a2d3-901277748557",
+    "recommendedAction": "attach_to_existing",
+    "candidateIds": [
+      "f3b76054-f355-43b0-a2d3-901277748557"
+    ],
+    "notes": "High-confidence verified existing restaurant (score 33) with phone+email+website+name+city/state; avoid duplicate draft/import merge."
+  },
+  {
+    "businessName": "Blessed Berry Bowls",
+    "action": "attach_to_existing",
+    "targetRestaurantId": "e77ac77a-c432-42d0-ac0f-22c48b6306c9",
+    "recommendedAction": "attach_to_existing",
+    "candidateIds": [
+      "e77ac77a-c432-42d0-ac0f-22c48b6306c9"
+    ],
+    "notes": "Resolve multiple-strong-match by attaching to verified existing restaurant; import listing candidate appears to be duplicate identity."
+  },
+  {
+    "businessName": "Pie Faced",
+    "action": "attach_to_existing",
+    "targetRestaurantId": "d0fd61f5-4181-4216-a000-3dc08bd9a348",
+    "recommendedAction": "attach_to_existing",
+    "candidateIds": [
+      "d0fd61f5-4181-4216-a000-3dc08bd9a348"
+    ],
+    "notes": "Attach to verified existing restaurant; competing import listing/draft pair likely duplicate and should stay non-authoritative."
+  }
+]
