@@ -18,6 +18,7 @@ import { Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import PaymentBrowserGate from "@/components/payment-browser-gate";
 import { isPaymentHostileBrowser } from "@/lib/inAppBrowser";
+import { apiUrl } from "@/lib/api";
 
 const buildTimeStripePublicKey = import.meta.env.VITE_STRIPE_PUBLIC_KEY || "";
 const stripePromiseCache = new Map<string, ReturnType<typeof loadStripe>>();
@@ -292,7 +293,7 @@ export function BookingPaymentModal({
       cancelOnInitiateRef.current = false;
       if (!stripePublishableKey) {
         setIsStripeConfigLoading(true);
-        fetch("/api/payments/stripe-config")
+        fetch(apiUrl("/api/payments/stripe-config"))
           .then(async (res) => {
             if (!res.ok) return null;
             return res.json();

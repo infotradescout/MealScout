@@ -52,6 +52,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import ShareButton from "@/components/share-button";
 import { initFacebookSDK, postToFacebook } from "@/lib/facebook";
+import { apiUrl } from "@/lib/api";
 import { apiRequest } from "@/lib/queryClient";
 import { formatRelativeTime } from "@/lib/relative-time";
 import {
@@ -852,7 +853,7 @@ export default function ParkingPassPage() {
   const { data: mapLocationsData } = useQuery<MapLocationsResponse>({
     queryKey: ["/api/map/locations"],
     queryFn: async () => {
-      const res = await fetch("/api/map/locations");
+      const res = await fetch(apiUrl("/api/map/locations"));
       if (!res.ok) {
         throw new Error("Failed to load map locations");
       }
@@ -865,7 +866,7 @@ export default function ParkingPassPage() {
   const { data: intelligenceStatusData } = useQuery<any>({
     queryKey: ["/api/parking-pass/intelligence-status"],
     queryFn: async () => {
-      const res = await fetch("/api/parking-pass/intelligence-status");
+      const res = await fetch(apiUrl("/api/parking-pass/intelligence-status"));
       if (!res.ok) throw new Error("Failed to load intelligence status");
       return res.json();
     },
@@ -3956,7 +3957,9 @@ export default function ParkingPassPage() {
           startTime: weatherStartTime,
           endTime: weatherEndTime,
         });
-        const res = await fetch(`/api/parking-pass/weather?${params.toString()}`);
+        const res = await fetch(
+          apiUrl(`/api/parking-pass/weather?${params.toString()}`),
+        );
         if (!res.ok) throw new Error("Failed to load booking weather");
         return res.json();
       },
@@ -3988,7 +3991,7 @@ export default function ParkingPassPage() {
           windowMinutes: String(scheduleWindowMinutes),
           includeGoogle: "true",
         });
-        const res = await fetch(`/api/map/foot-traffic?${params.toString()}`);
+        const res = await fetch(apiUrl(`/api/map/foot-traffic?${params.toString()}`));
         if (!res.ok) throw new Error("Failed to load schedule foot traffic");
         return res.json();
       },

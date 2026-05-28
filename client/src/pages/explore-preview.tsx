@@ -44,6 +44,7 @@ import {
 } from "@/components/maps/google-map-surface";
 import { MapErrorBoundary } from "@/components/maps/map-error-boundary";
 import { GOOGLE_MAPS_WEB_API_KEY } from "@/lib/mapProvider";
+import { apiUrl } from "@/lib/api";
 import type {
   MapAdapterMarker,
   MapBoundsLike,
@@ -1892,7 +1893,7 @@ export default function ExplorePreview() {
         west: String(mapBoundsForScout.west),
         zoom: "13",
       });
-      const response = await fetch(`/api/map/locations?${params.toString()}`, {
+      const response = await fetch(apiUrl(`/api/map/locations?${params.toString()}`), {
         credentials: "include",
       });
       recordScoutSourceStatus("mapLocations", response.status);
