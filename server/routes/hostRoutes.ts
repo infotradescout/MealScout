@@ -1197,12 +1197,18 @@ export function registerHostRoutes(app: Express) {
           });
           return res.status(403).json({ message: "Not authorized" });
         }
-        if (!truck.isFoodTruck) {
+        const truckBusinessType = String(
+          (truck as any)?.businessType || "",
+        ).toLowerCase();
+        const isTruckProfile =
+          truck.isFoodTruck === true || truckBusinessType === "food_truck";
+        if (!isTruckProfile) {
           console.warn("[parking-pass] rejected booking attempt", {
             userId,
             userType: req.user?.userType || null,
             truckId,
             truckIsFoodTruck: truck.isFoodTruck,
+            truckBusinessType: truckBusinessType || null,
             hasManageParkingPass,
             reason: "not_food_truck",
           });
