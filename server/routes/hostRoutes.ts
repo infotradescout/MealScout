@@ -1311,6 +1311,14 @@ export function registerHostRoutes(app: Express) {
                 selectedDates
                   .filter((value: unknown) => typeof value === "string")
                   .map((value: string) => value.trim())
+                  .map((value: string) => {
+                    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+                    const normalized = dateKeyFromUnknown(
+                      value,
+                      bookingTimeZone,
+                    );
+                    return normalized || "";
+                  })
                   .filter((value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value)),
               ),
             )
