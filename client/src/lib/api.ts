@@ -60,8 +60,21 @@ export function authUrl(path: string): string {
   if (typeof window === "undefined") return url;
 
   const host = window.location.hostname.toLowerCase();
+  const isMealScoutHost =
+    host === "www.mealscout.us" ||
+    host === "mealscout.us" ||
+    host.endsWith(".mealscout.us");
+  const isAuthPath = path.startsWith("/api/auth/");
+
+  // Keep auth/session bootstrap same-origin on MealScout hosts so
+  // login cookies and redirect state stay on the active web domain.
+  if (isMealScoutHost && isAuthPath) {
+    const sameOriginUrl = new URL(path, window.location.origin).toString();
+    return sameOriginUrl;
+  }
+
   const isTradeScoutHost = host.includes("tradescout");
-  if (!isTradeScoutHost || !path.startsWith("/api/auth/")) {
+  if (!isTradeScoutHost || !isAuthPath) {
     return url;
   }
 

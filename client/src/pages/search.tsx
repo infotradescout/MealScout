@@ -525,14 +525,28 @@ export default function SearchPage() {
     restaurantSearchResults.forEach((restaurant: any) => {
       const id = String(restaurant?.id || "").trim();
       if (!id) return;
-      if (byId.has(id)) return;
+      const existing = byId.get(id) || {};
       byId.set(id, {
+        ...existing,
         id,
-        name: restaurant?.name,
-        cuisineType: restaurant?.cuisineType,
-        address: restaurant?.address,
-        isFoodTruck: Boolean(restaurant?.isFoodTruck),
-        isVerified: Boolean(restaurant?.isVerified),
+        name: restaurant?.name || existing?.name,
+        cuisineType: restaurant?.cuisineType || existing?.cuisineType,
+        address: restaurant?.address || existing?.address,
+        businessType: restaurant?.businessType || existing?.businessType,
+        logoUrl: restaurant?.logoUrl || existing?.logoUrl || null,
+        coverImageUrl: restaurant?.coverImageUrl || existing?.coverImageUrl || null,
+        imageUrl:
+          restaurant?.coverImageUrl ||
+          restaurant?.logoUrl ||
+          restaurant?.imageUrl ||
+          existing?.imageUrl ||
+          null,
+        isFoodTruck: Boolean(
+          restaurant?.isFoodTruck ??
+            (String(restaurant?.businessType || existing?.businessType || "")
+              .toLowerCase() === "food_truck"),
+        ),
+        isVerified: Boolean(restaurant?.isVerified ?? existing?.isVerified),
       });
     });
     return Array.from(byId.values()).slice(0, 24);
@@ -1176,6 +1190,14 @@ export default function SearchPage() {
                   <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean hover:shadow-clean-lg transition-shadow cursor-pointer">
                     <CardContent className="p-4">
                       <div className="flex items-start gap-3">
+                        {restaurant.imageUrl ? (
+                          <img
+                            src={restaurant.imageUrl}
+                            alt={restaurant.name || "Business image"}
+                            className="h-14 w-14 rounded-md border object-cover"
+                            loading="lazy"
+                          />
+                        ) : null}
                         <div className="flex-1">
                           <h3
                             className="font-semibold text-foreground mb-1"

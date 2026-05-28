@@ -4,7 +4,14 @@ import path from "node:path";
 import { and, eq, or, sql } from "drizzle-orm";
 
 import { db } from "../server/db";
-import { restaurants, truckImportListings, users } from "../shared/schema";
+import {
+  menuCategories,
+  menuItems,
+  menus,
+  restaurants,
+  truckImportListings,
+  users,
+} from "../shared/schema";
 
 type InputRecord = {
   business_name?: string;
@@ -26,6 +33,13 @@ type InputRecord = {
   cuisine?: string;
   cuisineType?: string;
   description?: string;
+  business_type?: string;
+  businessType?: string;
+  logo?: string;
+  logoUrl?: string;
+  imageUrl?: string;
+  coverImageUrl?: string;
+  photos?: unknown[];
   menu?: unknown[];
   menuItems?: unknown[];
   menuDeferred?: boolean;
@@ -50,6 +64,9 @@ type Normalized = {
   facebookPageUrl: string;
   cuisineType: string;
   description: string;
+  businessType: string;
+  logoUrl: string;
+  coverImageUrl: string;
   menuItems: unknown[];
   menuDeferred: boolean;
   sourceNotes: string[];
@@ -202,6 +219,20 @@ const normalizeRecord = (record: InputRecord): Normalized => {
   );
   const cuisineType = normalize(record.cuisineType || record.cuisine || record.category);
   const description = normalize(record.description);
+  const businessTypeRaw = normalizeLower(record.business_type || record.businessType);
+  const sourceNotesCombined = Array.isArray(record.sourceNotes)
+    ? record.sourceNotes.map((v) => normalizeLower(v)).join(" ")
+    : "";
+  const businessType =
+    businessTypeRaw === "restaurant" ||
+    businessTypeRaw === "bar" ||
+    sourceNotesCombined.includes("profile says restaurant")
+      ? businessTypeRaw
+        ? businessTypeRaw
+        : "restaurant"
+      : "food_truck";
+  const logoUrl = toWebsite(record.logoUrl || record.logo);
+  const coverImageUrl = toWebsite(record.coverImageUrl || record.imageUrl);
   const menuItems = Array.isArray(record.menuItems)
     ? record.menuItems
     : Array.isArray(record.menu)
@@ -233,6 +264,9 @@ const normalizeRecord = (record: InputRecord): Normalized => {
     facebookPageUrl,
     cuisineType,
     description,
+    businessType,
+    logoUrl,
+    coverImageUrl,
     menuItems,
     menuDeferred,
     sourceNotes,
@@ -251,6 +285,77 @@ const hasRequiredForPublish = (r: Normalized) =>
       (r.phoneDigits || r.email) &&
       (r.menuItems.length > 0 || r.menuDeferred),
   );
+
+const parsePriceToCents = (value: unknown): number | null => {
+  const raw = normalize(value);
+  if (!raw) return null;
+  const numeric = Number(raw.replace(/[^0-9.]/g, ""));
+  if (!Number.isFinite(numeric)) return null;
+  return Math.round(numeric * 100);
+};
+
+const hydrateMenuFromEvidence = async (restaurantId: string, menuEntries: unknown[]) => {
+  if (!menuEntries.length) return { created: 0 };
+  const rows = menuEntries
+    .map((entry: any) => ({
+      section: normalize(entry?.section) || "Menu",
+      name: normalize(entry?.item_name || entry?.name),
+      description: normalize(entry?.description),
+      priceCents: parsePriceToCents(entry?.price),
+    }))
+    .filter((entry) => entry.name);
+  if (!rows.length) return { created: 0 };
+
+  await db.delete(menuItems).where(eq(menuItems.restaurantId, restaurantId));
+  await db.delete(menuCategories).where(eq(menuCategories.restaurantId, restaurantId));
+  await db.delete(menus).where(eq(menus.restaurantId, restaurantId));
+
+  const [menu] = await db
+    .insert(menus)
+    .values({
+      restaurantId,
+      name: "Imported Menu",
+      importSource: "csv",
+      importedAt: new Date(),
+      isActive: true,
+    } as any)
+    .returning({ id: menus.id });
+
+  const sections = Array.from(new Set(rows.map((row) => row.section)));
+  const categoryByName = new Map<string, string>();
+  for (let i = 0; i < sections.length; i += 1) {
+    const [category] = await db
+      .insert(menuCategories)
+      .values({
+        menuId: menu.id,
+        restaurantId,
+        name: sections[i],
+        sortOrder: i,
+        isActive: true,
+      } as any)
+      .returning({ id: menuCategories.id });
+    categoryByName.set(sections[i], String(category.id));
+  }
+
+  let created = 0;
+  for (let i = 0; i < rows.length; i += 1) {
+    const row = rows[i];
+    if (row.priceCents == null) continue;
+    await db.insert(menuItems).values({
+      menuId: menu.id,
+      categoryId: categoryByName.get(row.section) || null,
+      restaurantId,
+      name: row.name,
+      description: row.description || null,
+      priceCents: row.priceCents,
+      itemType: "food",
+      isAvailable: true,
+      sortOrder: i,
+    } as any);
+    created += 1;
+  }
+  return { created };
+};
 
 const ensureImportSystemUserId = async () => {
   const importEmail =
@@ -490,6 +595,14 @@ const run = async () => {
             updates.instagramUrl = record.instagramUrl;
           if (isBlank(restaurantMatch.facebookPageUrl) && record.facebookPageUrl)
             updates.facebookPageUrl = record.facebookPageUrl;
+          if (isBlank((restaurantMatch as any).logoUrl) && record.logoUrl)
+            updates.logoUrl = record.logoUrl;
+          if (isBlank((restaurantMatch as any).coverImageUrl) && record.coverImageUrl)
+            updates.coverImageUrl = record.coverImageUrl;
+          if (isBlank((restaurantMatch as any).businessType) && record.businessType)
+            updates.businessType = record.businessType;
+          if ((restaurantMatch as any).isFoodTruck == null && record.businessType === "food_truck")
+            updates.isFoodTruck = true;
           if (Object.keys(updates).length > 0) {
             await db
               .update(restaurants)
@@ -498,6 +611,9 @@ const run = async () => {
             updated += 1;
           } else {
             skippedDuplicate += 1;
+          }
+          if (record.menuItems.length > 0) {
+            await hydrateMenuFromEvidence(String(restaurantMatch.id), record.menuItems);
           }
         } else {
           action = "needs_review";
@@ -556,14 +672,16 @@ const run = async () => {
                 address:
                   listing.address || record.address || record.serviceArea || "Unknown",
                 phone: listing.phone || record.phone || null,
-                businessType: "food_truck",
+                businessType: record.businessType || "food_truck",
                 cuisineType: listing.cuisineType || record.cuisineType || null,
                 city: listing.city || record.city || null,
                 state: listing.state || record.state || null,
+                logoUrl: record.logoUrl || null,
+                coverImageUrl: record.coverImageUrl || null,
                 websiteUrl: listing.websiteUrl || record.websiteUrl || null,
                 instagramUrl: listing.instagramUrl || record.instagramUrl || null,
                 facebookPageUrl: listing.facebookPageUrl || record.facebookPageUrl || null,
-                isFoodTruck: true,
+                isFoodTruck: record.businessType === "food_truck",
                 isActive: false,
                 isVerified: false,
                 claimedFromImportId: listing.id,
@@ -604,14 +722,16 @@ const run = async () => {
           name: record.businessName,
           address: record.address || record.serviceArea || "Unknown",
           phone: record.phone || null,
-          businessType: "food_truck",
+          businessType: record.businessType || "food_truck",
           cuisineType: record.cuisineType || null,
           city: record.city || null,
           state: record.state || null,
+          logoUrl: record.logoUrl || null,
+          coverImageUrl: record.coverImageUrl || null,
           websiteUrl: record.websiteUrl || null,
           instagramUrl: record.instagramUrl || null,
           facebookPageUrl: record.facebookPageUrl || null,
-          isFoodTruck: true,
+          isFoodTruck: record.businessType === "food_truck",
           isActive: false,
           isVerified: false,
           claimedFromImportId: createdListingId,
@@ -619,6 +739,9 @@ const run = async () => {
         .returning({ id: restaurants.id });
 
       createdRestaurantId = String(restaurant.id);
+      if (record.menuItems.length > 0) {
+        await hydrateMenuFromEvidence(createdRestaurantId, record.menuItems);
+      }
       created += 1;
     }
 

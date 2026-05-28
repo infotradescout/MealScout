@@ -20,6 +20,7 @@ import {
   socialPostQueue,
   supplierProducts,
   suppliers,
+  truckImportListings,
   truckManualSchedules,
   videoStories,
 } from "@shared/schema";
@@ -679,12 +680,74 @@ const buildPublicMenuPayload = async (restaurantId: string) => {
       ? String((importUrlRows as any).rows[0]?.import_url || "").trim()
       : "") || null;
 
+  const [linkedListing] = await db
+    .select({
+      id: truckImportListings.id,
+      rawData: truckImportListings.rawData,
+      updatedAt: truckImportListings.updatedAt,
+      createdAt: truckImportListings.createdAt,
+    })
+    .from(truckImportListings)
+    .innerJoin(restaurants, eq(restaurants.claimedFromImportId, truckImportListings.id))
+    .where(eq(restaurants.id, restaurantId))
+    .limit(1);
+
+  const listingMenuItems = Array.isArray(
+    (linkedListing as any)?.rawData?.evidenceIngest?.extracted?.menuItems,
+  )
+    ? ((linkedListing as any).rawData.evidenceIngest.extracted.menuItems as any[])
+    : [];
+
+  const listingMenuSections =
+    listingMenuItems.length > 0
+      ? Object.values(
+          listingMenuItems.reduce(
+            (
+              acc: Record<
+                string,
+                { name: string; items: Array<{ name: string; priceCents: number | null; description: string | null; imageUrl: string | null; featured: boolean }> }
+              >,
+              item: any,
+            ) => {
+              const sectionName = String(item?.section || "Menu").trim() || "Menu";
+              const itemName = String(item?.item_name || item?.name || "").trim();
+              if (!itemName) return acc;
+              const priceRaw = String(item?.price || "").trim();
+              const numericPrice = Number(priceRaw.replace(/[^0-9.]/g, ""));
+              const priceCents = Number.isFinite(numericPrice)
+                ? Math.round(numericPrice * 100)
+                : null;
+              if (!acc[sectionName]) {
+                acc[sectionName] = { name: sectionName, items: [] };
+              }
+              acc[sectionName].items.push({
+                name: itemName,
+                priceCents,
+                description: String(item?.description || "").trim() || null,
+                imageUrl: null,
+                featured: false,
+              });
+              return acc;
+            },
+            {},
+          ),
+        ).map((section: any) => ({
+          name: section.name,
+          items: section.items.slice(0, 24),
+        }))
+      : [];
+
   if (!menuRows.length) {
     return {
-      menuSections: [],
-      menuLastUpdatedAt: null as Date | null,
+      menuSections: listingMenuSections,
+      menuLastUpdatedAt:
+        listingMenuSections.length > 0
+          ? ((linkedListing as any)?.updatedAt ||
+            (linkedListing as any)?.createdAt ||
+            null)
+          : (null as Date | null),
       menuUrl: menuUrlFallback,
-      hasStructuredMenu: false,
+      hasStructuredMenu: listingMenuSections.length > 0,
     };
   }
 

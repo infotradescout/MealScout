@@ -299,6 +299,14 @@ export function registerPublicSearchRoutes(app: Express) {
           name: restaurant.name,
           cuisineType: restaurant.cuisineType,
           address: restaurant.address,
+          logoUrl: restaurant.logoUrl || null,
+          coverImageUrl: restaurant.coverImageUrl || null,
+          imageUrl:
+            restaurant.coverImageUrl ||
+            restaurant.logoUrl ||
+            restaurant.imageUrl ||
+            null,
+          businessType: restaurant.businessType || null,
           isFoodTruck: Boolean(restaurant.isFoodTruck),
           isVerified: Boolean(restaurant.isVerified),
         }));
