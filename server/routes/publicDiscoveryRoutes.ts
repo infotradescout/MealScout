@@ -661,11 +661,15 @@ const buildPublicEventsPayload = async (input: {
   };
 };
 
-const buildPublicMenuPayload = async (restaurantId: string) => {
+const buildPublicMenuPayload = async (
+  restaurantId: string,
+  context?: { preferredMenuId?: string | null; eventId?: string | null },
+) => {
   const menuRows = await db
     .select({
       id: menus.id,
       name: menus.name,
+      serviceType: menus.serviceType,
       updatedAt: menus.updatedAt,
       importedAt: menus.importedAt,
     })
@@ -740,6 +744,25 @@ const buildPublicMenuPayload = async (restaurantId: string) => {
   if (!menuRows.length) {
     return {
       menuSections: listingMenuSections,
+      menuVariants: [] as Array<{
+        id: string;
+        name: string;
+        serviceType: string | null;
+        menuSections: Array<{
+          name: string;
+          items: Array<{
+            name: string;
+            priceLabel: string | null;
+            description: string | null;
+            imageUrl: string | null;
+            featured: boolean;
+          }>;
+        }>;
+        menuLastUpdatedAt: Date | null;
+        menuUrl: string | null;
+      }>,
+      activeMenuId: null as string | null,
+      menuContextNote: null as string | null,
       menuLastUpdatedAt:
         listingMenuSections.length > 0
           ? ((linkedListing as any)?.updatedAt ||
@@ -807,6 +830,19 @@ const buildPublicMenuPayload = async (restaurantId: string) => {
     return Number(a.sortOrder || 0) - Number(b.sortOrder || 0);
   });
 
+  const menuSectionsByMenu = new Map<
+    string,
+    Array<{
+      name: string;
+      items: Array<{
+        name: string;
+        priceCents: number | null;
+        description: string | null;
+        imageUrl: string | null;
+        featured: boolean;
+      }>;
+    }>
+  >();
   const menuSections: Array<{
     name: string;
     items: Array<{
@@ -836,10 +872,14 @@ const buildPublicMenuPayload = async (restaurantId: string) => {
       .filter((item: any) => item.name.length > 0);
 
     if (!categoryItems.length) continue;
-    menuSections.push({
+    const sectionPayload = {
       name: String(category.name || "").trim() || "Menu",
       items: categoryItems,
-    });
+    };
+    menuSections.push(sectionPayload);
+    const existingForMenu = menuSectionsByMenu.get(String(category.menuId)) || [];
+    existingForMenu.push(sectionPayload);
+    menuSectionsByMenu.set(String(category.menuId), existingForMenu);
   }
 
   if (ungroupedItems.length > 0) {
@@ -859,10 +899,19 @@ const buildPublicMenuPayload = async (restaurantId: string) => {
       }))
       .filter((item) => item.name.length > 0);
     if (fallbackItems.length) {
-      menuSections.push({
+      const fallbackSection = {
         name: "Menu",
         items: fallbackItems,
-      });
+      };
+      menuSections.push(fallbackSection);
+      if (menuRows.length === 1) {
+        const firstMenuId = String(menuRows[0]?.id || "");
+        if (firstMenuId) {
+          const existingForMenu = menuSectionsByMenu.get(firstMenuId) || [];
+          existingForMenu.push(fallbackSection);
+          menuSectionsByMenu.set(firstMenuId, existingForMenu);
+        }
+      }
     }
   }
 
@@ -881,11 +930,68 @@ const buildPublicMenuPayload = async (restaurantId: string) => {
         )
       : null;
 
+  const menuVariants = menuRows.map((row: any) => {
+    const rowId = String(row.id || "");
+    const sectionsForMenu = menuSectionsByMenu.get(rowId) || [];
+    return {
+      id: rowId,
+      name: String(row.name || "").trim() || "Menu",
+      serviceType: String((row as any).serviceType || "").trim() || null,
+      menuSections: sectionsForMenu.map((section: any) => ({
+        name: section.name,
+        items: section.items.map((item: any) => ({
+          name: item.name,
+          priceLabel:
+            Number.isFinite(Number(item.priceCents)) && item.priceCents != null
+              ? `$${(Number(item.priceCents) / 100).toFixed(2)}`
+              : null,
+          description: item.description,
+          imageUrl: item.imageUrl,
+          featured: Boolean(item.featured),
+        })),
+      })),
+      menuLastUpdatedAt:
+        row.updatedAt instanceof Date
+          ? row.updatedAt
+          : row.importedAt instanceof Date
+            ? row.importedAt
+            : null,
+      menuUrl: menuUrlFallback,
+    };
+  });
+
+  const preferredMenuId = String(context?.preferredMenuId || "").trim();
+  const activeVariant =
+    (preferredMenuId && menuVariants.find((variant: any) => variant.id === preferredMenuId)) ||
+    menuVariants[0] ||
+    null;
+
+  const activeSections = activeVariant
+    ? activeVariant.menuSections.map((section: any) => ({
+        name: section.name,
+        items: section.items.map((item: any) => ({
+          name: item.name,
+          priceCents: item.priceLabel
+            ? Math.round(Number(String(item.priceLabel).replace(/[^0-9.]/g, "")) * 100)
+            : null,
+          description: item.description,
+          imageUrl: item.imageUrl,
+          featured: Boolean(item.featured),
+        })),
+      }))
+    : menuSections;
+
   return {
-    menuSections,
-    menuLastUpdatedAt,
+    menuSections: activeSections,
+    menuVariants,
+    activeMenuId: activeVariant ? String(activeVariant.id) : null,
+    menuContextNote:
+      context?.eventId && activeVariant
+        ? "Event menu prices are shown for this event."
+        : null,
+    menuLastUpdatedAt: activeVariant?.menuLastUpdatedAt || menuLastUpdatedAt,
     menuUrl: menuUrlFallback,
-    hasStructuredMenu: menuSections.length > 0,
+    hasStructuredMenu: activeSections.length > 0,
   };
 };
 
@@ -1617,6 +1723,12 @@ export function registerPublicDiscoveryRoutes(app: Express) {
       }
 
       const baseUrl = resolvePublicBaseUrl();
+      const queryPreferredMenuId = String(
+        (req.query?.eventMenuId as string) ||
+          (req.query?.menuId as string) ||
+          "",
+      ).trim();
+      const queryEventId = String((req.query?.eventId as string) || "").trim();
 
       if (entity === "truck") {
         const row = await storage.getRestaurant(id);
@@ -1632,7 +1744,10 @@ export function registerPublicDiscoveryRoutes(app: Express) {
         const showAddress = profileSettings.showAddress !== false;
         const showContact = profileSettings.showContact !== false;
         const [menuPayload, schedulePayload, dealsPayload, eventsPayload] = await Promise.all([
-          buildPublicMenuPayload(String(row.id)),
+          buildPublicMenuPayload(String(row.id), {
+            preferredMenuId: queryPreferredMenuId || null,
+            eventId: queryEventId || null,
+          }),
           buildPublicTruckSchedulePayload(String(row.id)),
           buildPublicDealsPayload(String(row.id), row),
           buildPublicEventsPayload({ restaurantId: String(row.id), restaurantRow: row }),
@@ -1675,7 +1790,10 @@ export function registerPublicDiscoveryRoutes(app: Express) {
         const showAddress = profileSettings.showAddress !== false;
         const showContact = profileSettings.showContact !== false;
         const [menuPayload, dealsPayload, eventsPayload] = await Promise.all([
-          buildPublicMenuPayload(String(row.id)),
+          buildPublicMenuPayload(String(row.id), {
+            preferredMenuId: queryPreferredMenuId || null,
+            eventId: queryEventId || null,
+          }),
           buildPublicDealsPayload(String(row.id), row),
           buildPublicEventsPayload({ restaurantId: String(row.id), restaurantRow: row }),
         ]);
@@ -1758,7 +1876,10 @@ export function registerPublicDiscoveryRoutes(app: Express) {
         const showAddress = profileSettings.showAddress !== false;
         const showContact = profileSettings.showContact !== false;
         const [menuPayload, schedulePayload, dealsPayload, eventsPayload] = await Promise.all([
-          buildPublicMenuPayload(String(row.id)),
+          buildPublicMenuPayload(String(row.id), {
+            preferredMenuId: queryPreferredMenuId || null,
+            eventId: queryEventId || null,
+          }),
           buildPublicTruckSchedulePayload(String(row.id)),
           buildPublicDealsPayload(String(row.id), row),
           buildPublicEventsPayload({ restaurantId: String(row.id), restaurantRow: row }),

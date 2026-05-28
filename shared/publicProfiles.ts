@@ -129,6 +129,15 @@ export type PublicMenuSection = {
   items: PublicMenuItem[];
 };
 
+export type PublicMenuVariant = {
+  id: string;
+  name: string;
+  serviceType: string | null;
+  menuSections: PublicMenuSection[];
+  menuLastUpdatedAt: string | null;
+  menuUrl: string | null;
+};
+
 export type PublicTruckScheduleSummary = {
   status:
     | "scheduled"
@@ -203,6 +212,9 @@ export type PublicRestaurantProfile = {
   verifiedProfile: boolean;
   locallyOwned: boolean;
   menuSections: PublicMenuSection[];
+  menuVariants: PublicMenuVariant[];
+  activeMenuId: string | null;
+  menuContextNote: string | null;
   menuLastUpdatedAt: string | null;
   menuImageUrl: string | null;
   menuPdfUrl: string | null;

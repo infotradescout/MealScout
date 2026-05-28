@@ -186,6 +186,49 @@ export function toPublicRestaurantProfile(input: {
       };
     })
     .filter(Boolean) as PublicRestaurantProfile["menuSections"];
+  const menuVariantsRaw = Array.isArray(row.menuVariants) ? row.menuVariants : [];
+  const menuVariants = menuVariantsRaw
+    .map((variant: any) => {
+      const variantId = String(variant?.id || "").trim();
+      if (!variantId) return null;
+      const variantSectionsRaw = Array.isArray(variant?.menuSections)
+        ? variant.menuSections
+        : [];
+      const variantSections = variantSectionsRaw
+        .map((section: any) => {
+          const sectionName = String(section?.name || "").trim();
+          const itemsRaw = Array.isArray(section?.items) ? section.items : [];
+          const items = itemsRaw
+            .map((item: any) => {
+              const itemName = String(item?.name || "").trim();
+              if (!itemName) return null;
+              const priceLabel = String(item?.priceLabel || "").trim() || null;
+              return {
+                name: itemName,
+                priceLabel,
+                description: String(item?.description || "").trim() || null,
+                imageUrl: String(item?.imageUrl || "").trim() || null,
+                featured: Boolean(item?.featured),
+              };
+            })
+            .filter(Boolean)
+            .slice(0, 24) as PublicRestaurantProfile["menuSections"][number]["items"];
+          if (!sectionName || items.length === 0) return null;
+          return { name: sectionName, items };
+        })
+        .filter(Boolean) as PublicRestaurantProfile["menuSections"];
+      return {
+        id: variantId,
+        name: String(variant?.name || "").trim() || "Menu",
+        serviceType: String(variant?.serviceType || "").trim() || null,
+        menuSections: variantSections,
+        menuLastUpdatedAt: variant?.menuLastUpdatedAt
+          ? new Date(variant.menuLastUpdatedAt).toISOString()
+          : null,
+        menuUrl: String(variant?.menuUrl || "").trim() || null,
+      };
+    })
+    .filter(Boolean) as PublicRestaurantProfile["menuVariants"];
   const menuLastUpdatedAt = row.menuLastUpdatedAt
     ? new Date(row.menuLastUpdatedAt).toISOString()
     : null;
@@ -436,6 +479,9 @@ export function toPublicRestaurantProfile(input: {
       row.locallyOwned ?? row.isLocallyOwned ?? row.localOwned ?? false,
     ),
     menuSections,
+    menuVariants,
+    activeMenuId: String(row.activeMenuId || "").trim() || null,
+    menuContextNote: String(row.menuContextNote || "").trim() || null,
     menuLastUpdatedAt,
     menuImageUrl,
     menuPdfUrl,

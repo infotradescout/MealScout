@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "wouter";
 import type {
@@ -712,6 +712,19 @@ function MenuSection({
   profile: PublicRestaurantProfile;
   safeCtas: PublicCta[];
 }) {
+  const menuVariants = Array.isArray(profile.menuVariants)
+    ? profile.menuVariants.filter((variant) => String(variant?.id || "").trim().length > 0)
+    : [];
+  const [selectedMenuId, setSelectedMenuId] = useState<string>(
+    String(profile.activeMenuId || menuVariants[0]?.id || ""),
+  );
+  useEffect(() => {
+    setSelectedMenuId(String(profile.activeMenuId || menuVariants[0]?.id || ""));
+  }, [profile.activeMenuId, profile.id, menuVariants]);
+  const activeVariant =
+    (selectedMenuId && menuVariants.find((variant) => String(variant.id) === selectedMenuId)) ||
+    menuVariants[0] ||
+    null;
   const menuCta = safeCtas.find(
     (cta) =>
       cta.type === "menu" ||
@@ -721,8 +734,8 @@ function MenuSection({
   const featuredItems = Array.isArray(profile.featuredMenuItems)
     ? profile.featuredMenuItems.filter(Boolean)
     : [];
-  const structuredSections = Array.isArray(profile.menuSections)
-    ? profile.menuSections.filter(
+  const structuredSections = Array.isArray(activeVariant?.menuSections)
+    ? activeVariant!.menuSections.filter(
         (section) =>
           section &&
           String(section.name || "").trim().length > 0 &&
@@ -734,7 +747,7 @@ function MenuSection({
   const menuCompleteness = assessPublicMenuCompleteness({
     menuSections: structuredSections,
     featuredMenuItems: featuredItems,
-    menuUrl: profile.menuUrl,
+    menuUrl: activeVariant?.menuUrl || profile.menuUrl,
     menuImageUrl: profile.menuImageUrl,
     menuPdfUrl: profile.menuPdfUrl,
   });
@@ -759,9 +772,9 @@ function MenuSection({
   if (!hasSection) return null;
 
   const fallbackMenuLink =
-    profile.menuPdfUrl || profile.menuImageUrl || profile.menuUrl || null;
-  const updatedLabel = profile.menuLastUpdatedAt
-    ? new Date(profile.menuLastUpdatedAt).toLocaleDateString()
+    profile.menuPdfUrl || profile.menuImageUrl || activeVariant?.menuUrl || profile.menuUrl || null;
+  const updatedLabel = (activeVariant?.menuLastUpdatedAt || profile.menuLastUpdatedAt)
+    ? new Date(activeVariant?.menuLastUpdatedAt || profile.menuLastUpdatedAt || "").toLocaleDateString()
     : null;
 
   return (
@@ -770,6 +783,35 @@ function MenuSection({
         <CardTitle className="text-xl text-white">Menu</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        {menuVariants.length > 1 ? (
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-white/60">Select menu</p>
+            <div className="flex flex-wrap gap-2">
+              {menuVariants.map((variant) => {
+                const active = String(variant.id) === String(selectedMenuId || activeVariant?.id || "");
+                return (
+                  <button
+                    key={variant.id}
+                    type="button"
+                    onClick={() => setSelectedMenuId(String(variant.id))}
+                    className={`rounded-md border px-2 py-1 text-xs ${
+                      active
+                        ? "border-orange-300/60 bg-orange-500/15 text-orange-100"
+                        : "border-white/20 bg-black/15 text-white/75"
+                    }`}
+                  >
+                    {variant.name}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
+        {profile.menuContextNote ? (
+          <p className="rounded-md border border-sky-300/35 bg-sky-500/10 px-3 py-2 text-xs text-sky-100">
+            {profile.menuContextNote}
+          </p>
+        ) : null}
         {menuCompleteness.state === "partial" ? (
           <p className="rounded-md border border-amber-300/35 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
             Partial menu from available evidence. More items may be available from this business directly.
@@ -1291,12 +1333,14 @@ export default function PublicProfilePage() {
     profileId: string;
   }>();
 
+  const locationSearch =
+    typeof window !== "undefined" ? window.location.search : "";
   const { data, isLoading } = useQuery<PublicProfilePayload>({
-    queryKey: ["/api/public/profiles", profileType, profileId],
+    queryKey: ["/api/public/profiles", profileType, profileId, locationSearch],
     enabled: !!profileType && !!profileId,
     queryFn: async () => {
       const res = await fetch(
-        `/api/public/profiles/${encodeURIComponent(String(profileType || ""))}/${encodeURIComponent(String(profileId || ""))}`,
+        `/api/public/profiles/${encodeURIComponent(String(profileType || ""))}/${encodeURIComponent(String(profileId || ""))}${locationSearch || ""}`,
       );
       if (!res.ok) throw new Error("Profile not found");
       return res.json();
