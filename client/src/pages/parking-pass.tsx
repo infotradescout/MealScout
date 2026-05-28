@@ -2966,6 +2966,15 @@ export default function ParkingPassPage() {
   };
 
   const handleSelect = (listing: ParkingPassListing, slotType: string) => {
+    if (!listingHasAvailability(listing)) {
+      toast({
+        title: "Location unavailable",
+        description:
+          "That location is currently unavailable. Pick another open location.",
+        variant: "destructive",
+      });
+      return;
+    }
     if (
       !isSlotBookableByTime(
         listing,
@@ -7147,7 +7156,7 @@ export default function ParkingPassPage() {
                                                 }
                                                 size="sm"
                                                 className="justify-between text-[11px]"
-                                                disabled={!canBook}
+                                                disabled={!hasAvailability}
                                                 onClick={() =>
                                                   handleSelect(
                                                     listingForDate,
@@ -7636,7 +7645,7 @@ export default function ParkingPassPage() {
                                           }
                                           size="sm"
                                           className="justify-between"
-                                          disabled={!canBook}
+                                          disabled={!hasAvailability}
                                           onClick={() =>
                                             handleSelect(
                                               listingForDate,
@@ -7998,7 +8007,7 @@ export default function ParkingPassPage() {
                                         }
                                         size="sm"
                                         className="justify-between"
-                                        disabled={!canBook}
+                                        disabled={!hasAvailability}
                                         onClick={() =>
                                           handleSelect(
                                             listingForDate,
