@@ -1338,8 +1338,11 @@ export function registerHostRoutes(app: Express) {
           : durationSlots.includes("weekly")
             ? 7
             : 1;
-        const expectedDateKeys: string[] =
-          requestedDateKeys.length > 0
+        const isSingleOccurrenceBooking =
+          mealSlots.length > 0 || durationSlots.includes("daily");
+        const expectedDateKeys: string[] = isSingleOccurrenceBooking
+          ? [eventDateKey]
+          : requestedDateKeys.length > 0
             ? requestedDateKeys
             : Array.from({ length: bookingDaysDefault }, (_, offset) => {
                 return addDaysToDateKey(eventDateKey, offset);
