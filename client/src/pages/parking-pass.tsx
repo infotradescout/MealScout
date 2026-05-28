@@ -3012,6 +3012,15 @@ export default function ParkingPassPage() {
       });
       return;
     }
+    if (!listingHasAvailability(listing)) {
+      toast({
+        title: "Location unavailable",
+        description:
+          "That location is currently unavailable. Pick another open location.",
+        variant: "destructive",
+      });
+      return;
+    }
     const slotTypes = (selectedSlotsByListing[listing.id] || []).filter(
       (slot) =>
         isSlotBookableByTime(
@@ -3019,12 +3028,23 @@ export default function ParkingPassPage() {
           slot as (typeof PARKING_PASS_SLOT_TYPES)[number],
         ),
     );
-    if (slotTypes.length === 0) return;
+    if (slotTypes.length === 0) {
+      toast({
+        title: "Select a booking slot",
+        description:
+          "Choose breakfast, lunch, dinner, daily, weekly, or monthly before booking.",
+      });
+      return;
+    }
 
     setCartItems((prev) => {
       const rest = prev.filter((item) => item.listing.id !== listing.id);
       return [...rest, { listing, slotTypes }];
     });
+    setCheckoutQueue([]);
+    setSelectedListing(listing);
+    setSelectedSlotTypes(slotTypes);
+    setPaymentOpen(true);
   };
 
   const removeCartItem = (listingId: string) => {
@@ -3042,7 +3062,13 @@ export default function ParkingPassPage() {
       });
       return;
     }
-    if (cartItems.length === 0) return;
+    if (cartItems.length === 0) {
+      toast({
+        title: "No booking selected",
+        description: "Pick a location and slot first, then try checkout.",
+      });
+      return;
+    }
     const [first, ...rest] = cartItems;
     setCheckoutQueue(rest);
     setSelectedListing(first.listing);
