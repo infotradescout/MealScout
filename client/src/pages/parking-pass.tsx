@@ -323,6 +323,17 @@ const SOCIAL_PREOPEN_PROMPT_MINUTES = 90;
 const formatSlotLabel = (slot: string) =>
   slot.charAt(0).toUpperCase() + slot.slice(1);
 
+const resolveEventMenuIdFromQuery = () => {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    return String(
+      params.get("eventMenuId") || params.get("menuId") || "",
+    ).trim();
+  } catch {
+    return "";
+  }
+};
+
 const buildReportKey = (report: {
   bookingId?: string | null;
   manualScheduleId?: string | null;
@@ -3030,8 +3041,12 @@ export default function ParkingPassPage() {
     setPaymentOpen(true);
   };
 
-  const buildTruckShareLink = () =>
-    truckId ? `${window.location.origin}/restaurant/${truckId}` : "";
+  const buildTruckShareLink = () => {
+    if (!truckId) return "";
+    const eventMenuId = resolveEventMenuIdFromQuery();
+    if (!eventMenuId) return `${window.location.origin}/restaurant/${truckId}`;
+    return `${window.location.origin}/restaurant/${truckId}?eventMenuId=${encodeURIComponent(eventMenuId)}`;
+  };
 
   const maybePromptSocialPost = (
     trigger: keyof SocialAutopostSettings["triggers"],

@@ -13,6 +13,7 @@ const requiredScoutSnippets = [
   "source=scout",
   "eventId",
   "locationId",
+  "eventMenuId",
   'if (card.entityType === "host_spot")',
   'label: "View details"',
   "/p/host/",
@@ -37,6 +38,7 @@ for (const snippet of forbiddenScoutSnippets) {
 const requiredParkingPassSnippets = [
   'params.get("pass") || params.get("eventId")',
   'params.get("hostId") || params.get("locationId")',
+  'params.get("eventMenuId") || params.get("menuId")',
 ];
 
 for (const snippet of requiredParkingPassSnippets) {

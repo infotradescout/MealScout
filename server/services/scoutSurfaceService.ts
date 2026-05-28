@@ -244,6 +244,9 @@ const getCta = (card: ScoutSurfaceCard): ScoutSurfaceCard["cta"] => {
   const parkingPassId = String(
     metadata.parkingPassId || metadata.eventId || "",
   ).trim();
+  const eventMenuId = String(
+    metadata.eventMenuId || metadata.menuId || "",
+  ).trim();
   const locationId = String(
     metadata.locationId || metadata.hostId || card.entityId || "",
   ).trim();
@@ -258,6 +261,7 @@ const getCta = (card: ScoutSurfaceCard): ScoutSurfaceCard["cta"] => {
     if (spotId) params.set("spotId", spotId);
     if (parkingPassId) params.set("eventId", parkingPassId);
     if (locationId) params.set("locationId", locationId);
+    if (eventMenuId) params.set("eventMenuId", eventMenuId);
     return `/parking-pass?${params.toString()}`;
   };
 
