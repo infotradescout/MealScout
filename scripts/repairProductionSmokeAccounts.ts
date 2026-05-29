@@ -201,30 +201,31 @@ async function clearUserBusinessLinksExcept(
   userId: string,
   allowedRestaurantIds: string[],
 ) {
+  const allowedIds = (allowedRestaurantIds || []).map((id) => String(id));
   await client.query(
     `
       update restaurants
       set owner_id = null, updated_at = now()
-      where owner_id = $1
+      where owner_id::text = $1::text
         and (
-          cardinality($2::uuid[]) = 0
-          or id <> all($2::uuid[])
+          cardinality($2::text[]) = 0
+          or id::text <> all($2::text[])
         )
     `,
-    [userId, allowedRestaurantIds],
+    [String(userId), allowedIds],
   );
 
   await client.query(
     `
       update business_staff_memberships
       set status = 'revoked', revoked_at = now(), updated_at = now()
-      where user_id = $1
+      where user_id::text = $1::text
         and (
-          cardinality($2::uuid[]) = 0
-          or restaurant_id <> all($2::uuid[])
+          cardinality($2::text[]) = 0
+          or restaurant_id::text <> all($2::text[])
         )
     `,
-    [userId, allowedRestaurantIds],
+    [String(userId), allowedIds],
   );
 }
 
