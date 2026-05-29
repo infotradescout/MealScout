@@ -105,9 +105,14 @@ function PaymentForm({
     while (Date.now() - startedAt < timeoutMs) {
       try {
         const res = await fetch(
-          `/api/bookings/payment-intent/${encodeURIComponent(
-            paymentIntentId,
-          )}?truckId=${encodeURIComponent(truckId)}`,
+          apiUrl(
+            `/api/bookings/payment-intent/${encodeURIComponent(
+              paymentIntentId,
+            )}?truckId=${encodeURIComponent(truckId)}`,
+          ),
+          {
+            credentials: "include",
+          },
         );
         if (res.ok) {
           const data = await res.json();
@@ -352,10 +357,12 @@ export function BookingPaymentModal({
   const cancelCheckout = async (intentId: string) => {
     try {
       await fetch(
-        `/api/bookings/payment-intent/${encodeURIComponent(intentId)}/cancel?truckId=${encodeURIComponent(
-          truckId,
-        )}`,
-        { method: "POST" },
+        apiUrl(
+          `/api/bookings/payment-intent/${encodeURIComponent(intentId)}/cancel?truckId=${encodeURIComponent(
+            truckId,
+          )}`,
+        ),
+        { method: "POST", credentials: "include" },
       );
     } catch {
       // Best effort; pending holds will eventually expire.
@@ -364,7 +371,9 @@ export function BookingPaymentModal({
 
   const loadCreditBalance = async () => {
     try {
-      const res = await fetch("/api/payout/balance");
+      const res = await fetch(apiUrl("/api/payout/balance"), {
+        credentials: "include",
+      });
       if (!res.ok) return;
       const data = await res.json();
       setCreditBalance(Number(data.balance || 0));
@@ -404,8 +413,9 @@ export function BookingPaymentModal({
             })
             .filter((value) => value.length > 0)
         : [];
-      const res = await fetch(`/api/parking-pass/${passId}/book`, {
+      const res = await fetch(apiUrl(`/api/parking-pass/${passId}/book`), {
         method: "POST",
+        credentials: "include",
         headers: {
           "Content-Type": "application/json",
           "Idempotency-Key": requestIdempotencyKey,

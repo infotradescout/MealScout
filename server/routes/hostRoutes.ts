@@ -1138,7 +1138,17 @@ export function registerHostRoutes(app: Express) {
           isTestDollarPromo &&
           (!testModeEnabled || (testPromosRequireAdmin && !isAdminUser))
         ) {
-          return res.status(403).json({ message: "Not authorized" });
+          if (!testModeEnabled) {
+            return res.status(400).json({
+              code: "promo_unavailable",
+              message:
+                "This test promo code is not enabled in this environment.",
+            });
+          }
+          return res.status(403).json({
+            code: "promo_admin_only",
+            message: "This test promo code is admin-only.",
+          });
         }
         if (normalizedPromoCode === "BOOKFEE10" && !bookingFeePromoEnabled) {
           return res

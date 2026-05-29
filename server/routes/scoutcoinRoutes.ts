@@ -127,7 +127,11 @@ async function getDailyUsedAtomic(userId: string): Promise<bigint> {
         eq(scoutcoinTxLedger.status, "confirmed"),
       ),
     );
-  return rows.reduce((sum, row) => sum + BigInt(row.amountAtomic || "0"), 0n);
+  return rows.reduce(
+    (sum: bigint, row: { amountAtomic: string | null }) =>
+      sum + BigInt(row.amountAtomic || "0"),
+    0n,
+  );
 }
 
 export function registerScoutcoinRoutes(app: Express) {
@@ -227,7 +231,7 @@ export function registerScoutcoinRoutes(app: Express) {
         dailyUsedAtomic,
         jurisdictionCode: payload.jurisdictionCode || wallet.jurisdictionCode,
         blockedJurisdictions: Array.isArray(complianceConfig.blockedJurisdictions)
-          ? complianceConfig.blockedJurisdictions.map((v) => String(v))
+          ? complianceConfig.blockedJurisdictions.map((v: unknown) => String(v))
           : [],
         kycRequiredForBuySend: Boolean(complianceConfig.kycRequiredForBuySend),
       });
