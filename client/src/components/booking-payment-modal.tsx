@@ -49,6 +49,22 @@ interface BookingPaymentModalProps {
     hostPrice?: number;
     slotSummary?: string;
   };
+  bookingContext?: {
+    weather: {
+      summary: string;
+      loading?: boolean;
+    };
+    footTraffic: {
+      summary: string;
+      loading?: boolean;
+    };
+    truckActivity: {
+      summary: string;
+    };
+    truckReviews: {
+      summary: string;
+    };
+  };
   onSuccess: (result: { outcome: "confirmed" | "pending" | "credited" }) => void;
 }
 
@@ -256,6 +272,7 @@ export function BookingPaymentModal({
   slotTypes,
   selectedDates = [],
   eventDetails,
+  bookingContext,
   onSuccess,
 }: BookingPaymentModalProps) {
   const { toast } = useToast();
@@ -405,6 +422,20 @@ export function BookingPaymentModal({
 
       if (!res.ok) {
         const data = await res.json();
+        if (res.status === 409 && data?.code === "truck_profile_required") {
+          toast({
+            title: "Complete truck profile",
+            description:
+              data?.message ||
+              "Complete your food truck profile before booking Parking Pass spots.",
+          });
+          const nextPath = String(
+            data?.onboardingPath ||
+              "/restaurant-signup?businessType=food_truck&source=parking-pass&claim=1",
+          );
+          window.location.assign(nextPath);
+          return;
+        }
         throw new Error(data.message || "Failed to initiate booking");
       }
 
@@ -502,7 +533,7 @@ export function BookingPaymentModal({
         }
       }}
     >
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle className="font-display">Parking Pass Checkout</DialogTitle>
           <DialogDescription>
@@ -540,6 +571,38 @@ export function BookingPaymentModal({
                   </p>
                 ) : null}
               </div>
+
+              {bookingContext ? (
+                <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[color:var(--text-muted)]">
+                    Booking snapshot
+                  </p>
+                  <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                    <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-card)] p-2">
+                      <p className="text-[11px] font-semibold text-[color:var(--text-primary)]">Weather</p>
+                      <p className="text-xs text-[color:var(--text-muted)]">
+                        {bookingContext.weather.loading ? "Loading weather..." : bookingContext.weather.summary}
+                      </p>
+                    </div>
+                    <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-card)] p-2">
+                      <p className="text-[11px] font-semibold text-[color:var(--text-primary)]">Foot traffic</p>
+                      <p className="text-xs text-[color:var(--text-muted)]">
+                        {bookingContext.footTraffic.loading
+                          ? "Loading foot traffic..."
+                          : bookingContext.footTraffic.summary}
+                      </p>
+                    </div>
+                    <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-card)] p-2">
+                      <p className="text-[11px] font-semibold text-[color:var(--text-primary)]">Truck activity</p>
+                      <p className="text-xs text-[color:var(--text-muted)]">{bookingContext.truckActivity.summary}</p>
+                    </div>
+                    <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-card)] p-2">
+                      <p className="text-[11px] font-semibold text-[color:var(--text-primary)]">Truck reviews</p>
+                      <p className="text-xs text-[color:var(--text-muted)]">{bookingContext.truckReviews.summary}</p>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
             </div>
           </DialogDescription>
         </DialogHeader>
@@ -643,9 +706,8 @@ export function BookingPaymentModal({
 
         {clientSecret && hostPaymentsReady === false ? (
           <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900">
-            <strong>Note:</strong> This host is still setting up their payout account. Your payment
-            will be held securely by MealScout and released to the host once they complete setup.
-            Your booking is fully guaranteed.
+            <strong>Note:</strong> Your booking is guaranteed. If payout routing is still finalizing,
+            MealScout will securely process this payment and complete settlement automatically.
           </div>
         ) : null}
 

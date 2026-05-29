@@ -1195,14 +1195,34 @@ export function registerHostRoutes(app: Express) {
           "manageParkingPass",
         );
         if (!truck || !hasManageParkingPass) {
+          const ownedRestaurants = await storage.getRestaurantsByOwner(userId);
+          const hasOwnedTruckProfile = Array.isArray(ownedRestaurants)
+            ? ownedRestaurants.some((row: any) => {
+                const businessType = String(row?.businessType || "").toLowerCase();
+                return row?.isFoodTruck === true || businessType === "food_truck";
+              })
+            : false;
+
           console.warn("[parking-pass] rejected booking attempt", {
             userId,
             userType: req.user?.userType || null,
             truckId,
             truckIsFoodTruck: truck?.isFoodTruck ?? null,
             hasManageParkingPass,
+            hasOwnedTruckProfile,
             reason: !truck ? "truck_not_found" : "missing_manageParkingPass",
           });
+
+          if (!hasOwnedTruckProfile) {
+            return res.status(409).json({
+              code: "truck_profile_required",
+              message:
+                "Complete your food truck profile before booking Parking Pass spots.",
+              onboardingPath:
+                "/restaurant-signup?businessType=food_truck&source=parking-pass&claim=1",
+            });
+          }
+
           return res.status(403).json({ message: "Not authorized" });
         }
         const truckBusinessType = String(
