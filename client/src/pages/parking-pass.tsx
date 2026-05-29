@@ -7139,28 +7139,44 @@ export default function ParkingPassPage() {
                                       </p>
                                     )}
                                     {popupDateKeys.length > 0 && (
-                                      <div className="flex items-center justify-between gap-2">
+                                      <div className="space-y-1.5">
                                         <span className="text-[11px] text-[color:var(--text-muted)]">
-                                          Date
+                                          Pick date
                                         </span>
-                                        <input
-                                          type="date"
-                                          className="rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-card)] px-2 py-1 text-[11px] text-[color:var(--text-primary)]"
-                                          value={selectedDate}
-                                          min={popupDateKeys[0]}
-                                          max={popupDateKeys[popupDateKeys.length - 1]}
-                                          onClick={(event) =>
-                                            event.stopPropagation()
-                                          }
-                                          onChange={(event) => {
-                                            event.stopPropagation();
-                                            const next = event.target.value;
-                                            if (!popupDateKeys.includes(next))
-                                              return;
-                                            setSelectedDate(next);
-                                            focusLocation(group.key, true);
-                                          }}
-                                        />
+                                        <div className="flex flex-wrap gap-1.5">
+                                          {popupDateKeys.slice(0, 6).map((dateKey) => {
+                                            const isSelected =
+                                              selectedDate === dateKey;
+                                            return (
+                                              <Button
+                                                key={`${group.key}-${dateKey}`}
+                                                size="sm"
+                                                type="button"
+                                                variant={
+                                                  isSelected ? "default" : "outline"
+                                                }
+                                                className="h-7 px-2 text-[10px]"
+                                                onClick={(event) => {
+                                                  event.preventDefault();
+                                                  event.stopPropagation();
+                                                  setSelectedDate(dateKey);
+                                                  focusLocation(group.key);
+                                                }}
+                                              >
+                                                {format(
+                                                  new Date(`${dateKey}T00:00:00`),
+                                                  "EEE M/d",
+                                                )}
+                                              </Button>
+                                            );
+                                          })}
+                                        </div>
+                                        {popupDateKeys.length > 6 && (
+                                          <p className="text-[10px] text-[color:var(--text-muted)]">
+                                            Open the spot card to view all available
+                                            dates.
+                                          </p>
+                                        )}
                                       </div>
                                     )}
                                     {!listingForDate && (
