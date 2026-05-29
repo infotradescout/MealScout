@@ -1157,22 +1157,15 @@ export function registerHostRoutes(app: Express) {
           const allowlisted =
             (emailKey && testPromoAllowlist.has(emailKey)) ||
             (userIdKey && testPromoAllowlist.has(userIdKey));
-          const promoPermitted =
-            testModeEnabled || allowlisted || (testPromosRequireAdmin && isAdminUser);
-
-          if (!promoPermitted) {
-            if (!testModeEnabled && !allowlisted) {
-              return res.status(400).json({
-                code: "promo_unavailable",
-                message:
-                  "This promo code is disabled for your account in this environment.",
-              });
-            }
+          if (testPromosRequireAdmin && !isAdminUser && !allowlisted) {
             return res.status(403).json({
               code: "promo_admin_only",
               message: "This test promo code is admin-only.",
             });
           }
+          // If admin-only mode is not enabled, allow test promos for verified booking flows.
+          // We intentionally do not hard-block on environment mode here, because Parking Pass
+          // QA in production-like environments needs a no-charge path for verified trucks.
         }
         if (normalizedPromoCode === "BOOKFEE10" && !bookingFeePromoEnabled) {
           return res

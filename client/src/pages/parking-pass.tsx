@@ -853,6 +853,7 @@ export default function ParkingPassPage() {
   // without accidental pan/zoom changes behind the popup.
   const [mapPopupOpen, setMapPopupOpen] = useState(false);
   const [datePickerOpen, setDatePickerOpen] = useState(false);
+  const [showSpotInsights, setShowSpotInsights] = useState(false);
   const [parkingCoords, setParkingCoords] = useState<Record<string, GeoPoint>>(
     {},
   );
@@ -3495,11 +3496,9 @@ export default function ParkingPassPage() {
   const focusLocation = (key: string, scroll = false) => {
     setActiveLocationKey(key);
     if (!scroll) return;
-    requestAnimationFrame(() => {
-      document
-        .getElementById("parking-pass-details")
-        ?.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
+    // Mobile UX: avoid forced auto-scroll jumps when switching locations.
+    // Keep user context stable and let them expand details intentionally.
+    return;
   };
 
   const activeListingDateKeys = useMemo(() => {
@@ -8265,90 +8264,126 @@ export default function ParkingPassPage() {
                                 : `${activeListing.startTime} - ${activeListing.endTime}`}
                             </span>
                           </div>
-                          <div className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2 text-xs">
-                            <p className="font-semibold text-[color:var(--text-primary)]">
-                              Booking-date weather
-                            </p>
-                            {isBookingWeatherFetching ? (
-                              <p className="mt-1 text-[color:var(--text-muted)]">
-                                Loading weather for this booking window...
+                          <div className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-xs font-semibold text-[color:var(--text-primary)]">
+                                Booking essentials
                               </p>
-                            ) : bookingWeatherData?.available ? (
-                              <div className="mt-1 space-y-1 text-[color:var(--text-muted)]">
-                                <p>{bookingWeatherData.summary}</p>
-                                <p>
-                                  Temp: {bookingWeatherData.temperatureF ?? "n/a"}°F · Rain risk:{" "}
-                                  {bookingWeatherData.rainRiskPercent ?? "n/a"}% · Wind:{" "}
-                                  {bookingWeatherData.windMph ?? "n/a"} mph
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="h-7 px-2 text-[11px]"
+                                onClick={() =>
+                                  setShowSpotInsights((prev) => !prev)
+                                }
+                              >
+                                {showSpotInsights ? "Hide insights" : "Show insights"}
+                              </Button>
+                            </div>
+                            <div className="mt-1 text-[11px] text-[color:var(--text-muted)]">
+                              {isBookingWeatherFetching
+                                ? "Weather loading..."
+                                : bookingWeatherData?.available
+                                  ? `Weather: ${bookingWeatherData.summary}`
+                                  : "Weather unavailable"}{" "}
+                              ·{" "}
+                              {isScheduleFootTrafficFetching
+                                ? "Foot traffic loading..."
+                                : typeof scheduleFootTrafficData?.cells?.length ===
+                                      "number" &&
+                                    scheduleFootTrafficData.cells.length > 0
+                                  ? `Foot traffic: ${scheduleFootTrafficData.cells.length} nearby cells`
+                                  : "Foot traffic unavailable"}
+                            </div>
+                          </div>
+                          {showSpotInsights && (
+                            <>
+                              <div className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2 text-xs">
+                                <p className="font-semibold text-[color:var(--text-primary)]">
+                                  Booking-date weather
                                 </p>
-                                <p>
-                                  Severe weather:{" "}
-                                  {bookingWeatherData.severeWeatherWarning ? "Warning" : "None"}
-                                </p>
+                                {isBookingWeatherFetching ? (
+                                  <p className="mt-1 text-[color:var(--text-muted)]">
+                                    Loading weather for this booking window...
+                                  </p>
+                                ) : bookingWeatherData?.available ? (
+                                  <div className="mt-1 space-y-1 text-[color:var(--text-muted)]">
+                                    <p>{bookingWeatherData.summary}</p>
+                                    <p>
+                                      Temp: {bookingWeatherData.temperatureF ?? "n/a"}°F · Rain risk:{" "}
+                                      {bookingWeatherData.rainRiskPercent ?? "n/a"}% · Wind:{" "}
+                                      {bookingWeatherData.windMph ?? "n/a"} mph
+                                    </p>
+                                    <p>
+                                      Severe weather:{" "}
+                                      {bookingWeatherData.severeWeatherWarning ? "Warning" : "None"}
+                                    </p>
+                                  </div>
+                                ) : (
+                                  <p className="mt-1 text-[color:var(--text-muted)]">
+                                    {bookingWeatherData?.message ||
+                                      "Weather forecast unavailable for this booking window."}
+                                  </p>
+                                )}
                               </div>
-                            ) : (
-                              <p className="mt-1 text-[color:var(--text-muted)]">
-                                {bookingWeatherData?.message ||
-                                  "Weather forecast unavailable for this booking window."}
-                              </p>
-                            )}
-                          </div>
-                          <div className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2 text-xs">
-                            <p className="font-semibold text-[color:var(--text-primary)]">
-                              Intelligence layers
-                            </p>
-                            <div className="mt-1 space-y-1 text-[color:var(--text-muted)]">
-                              <p>
-                                Foot traffic:{" "}
-                                {isScheduleFootTrafficFetching
-                                  ? "loading"
-                                  : typeof scheduleFootTrafficData?.cells?.length === "number"
-                                    ? scheduleFootTrafficData.cells.length > 0
-                                      ? `${scheduleFootTrafficData.cells.length} nearby cells`
-                                      : "unavailable for this schedule window"
-                                    : String(
-                                        intelligenceStatusData?.layers?.footTraffic?.status ||
-                                          "unavailable",
-                                      )}
-                              </p>
-                              <p>
-                                Gas prices:{" "}
-                                {selectedSpotGasPriceSummary}
-                              </p>
-                              <p>
-                                Propane suppliers:{" "}
-                                {String(
-                                  intelligenceStatusData?.layers?.propaneSuppliers?.status ||
-                                    "unavailable",
-                                )}
-                              </p>
-                              <p>
-                                Restaurant supply stores:{" "}
-                                {String(
-                                  intelligenceStatusData?.layers?.restaurantSupplyStores
-                                    ?.status || "unavailable",
-                                )}
-                              </p>
-                              <p>
-                                Operator-support POIs:{" "}
-                                {String(
-                                  intelligenceStatusData?.layers?.operatorSupportPois?.status ||
-                                    "unavailable",
-                                )}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2 text-xs">
-                            <p className="font-semibold text-[color:var(--text-primary)]">
-                              Nearest operational support
-                            </p>
-                            <div className="mt-1 space-y-1 text-[color:var(--text-muted)]">
-                              <p>{`Nearest gas: ${nearestOperationalSupport.gas}`}</p>
-                              <p>{`Nearest propane: ${nearestOperationalSupport.propane}`}</p>
-                              <p>{`Nearest supply: ${nearestOperationalSupport.supply}`}</p>
-                              <p>{`Nearest support: ${nearestOperationalSupport.support}`}</p>
-                            </div>
-                          </div>
+                              <div className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2 text-xs">
+                                <p className="font-semibold text-[color:var(--text-primary)]">
+                                  Intelligence layers
+                                </p>
+                                <div className="mt-1 space-y-1 text-[color:var(--text-muted)]">
+                                  <p>
+                                    Foot traffic:{" "}
+                                    {isScheduleFootTrafficFetching
+                                      ? "loading"
+                                      : typeof scheduleFootTrafficData?.cells?.length === "number"
+                                        ? scheduleFootTrafficData.cells.length > 0
+                                          ? `${scheduleFootTrafficData.cells.length} nearby cells`
+                                          : "unavailable for this schedule window"
+                                        : String(
+                                            intelligenceStatusData?.layers?.footTraffic?.status ||
+                                              "unavailable",
+                                          )}
+                                  </p>
+                                  <p>
+                                    Gas prices: {selectedSpotGasPriceSummary}
+                                  </p>
+                                  <p>
+                                    Propane suppliers:{" "}
+                                    {String(
+                                      intelligenceStatusData?.layers?.propaneSuppliers?.status ||
+                                        "unavailable",
+                                    )}
+                                  </p>
+                                  <p>
+                                    Restaurant supply stores:{" "}
+                                    {String(
+                                      intelligenceStatusData?.layers?.restaurantSupplyStores
+                                        ?.status || "unavailable",
+                                    )}
+                                  </p>
+                                  <p>
+                                    Operator-support POIs:{" "}
+                                    {String(
+                                      intelligenceStatusData?.layers?.operatorSupportPois?.status ||
+                                        "unavailable",
+                                    )}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2 text-xs">
+                                <p className="font-semibold text-[color:var(--text-primary)]">
+                                  Nearest operational support
+                                </p>
+                                <div className="mt-1 space-y-1 text-[color:var(--text-muted)]">
+                                  <p>{`Nearest gas: ${nearestOperationalSupport.gas}`}</p>
+                                  <p>{`Nearest propane: ${nearestOperationalSupport.propane}`}</p>
+                                  <p>{`Nearest supply: ${nearestOperationalSupport.supply}`}</p>
+                                  <p>{`Nearest support: ${nearestOperationalSupport.support}`}</p>
+                                </div>
+                              </div>
+                            </>
+                          )}
                           <div className="rounded-xl pp-glass-muted p-3 text-xs text-slate-700 space-y-2">
                             <p className="text-[11px] font-semibold text-slate-700">
                               Schedule
