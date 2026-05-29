@@ -46,6 +46,19 @@ export const API_BASE_URL = resolveApiBaseUrl();
  * Build API URL with base path
  */
 export function apiUrl(path: string): string {
+  if (typeof window !== "undefined") {
+    const host = window.location.hostname.toLowerCase();
+    const isMealScoutHost =
+      host === "www.mealscout.us" ||
+      host === "mealscout.us" ||
+      host.endsWith(".mealscout.us");
+    const isAuthPath = path.startsWith("/api/auth/");
+    // Keep auth/session bootstrap same-origin on MealScout hosts so OAuth/session
+    // cookies remain first-party and survive mobile browser privacy rules.
+    if (isMealScoutHost && isAuthPath) {
+      return path.startsWith("/") ? path : `/${path}`;
+    }
+  }
   // Remove leading slash from path to avoid double slashes
   const cleanPath = path.startsWith('/') ? path.slice(1) : path;
   return API_BASE_URL ? `${API_BASE_URL}/${cleanPath}` : `/${cleanPath}`;

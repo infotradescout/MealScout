@@ -51,6 +51,7 @@ declare module "express-session" {
 export function getSession() {
   const sessionTtl = 7 * 24 * 60 * 60 * 1000; // 1 week
   const isProduction = process.env.NODE_ENV === "production";
+  const cookieDomain = String(process.env.SESSION_COOKIE_DOMAIN || "").trim();
   const pgStore = connectPg(session);
   const sessionStore = new pgStore({
     conString: process.env.DATABASE_URL,
@@ -70,6 +71,7 @@ export function getSession() {
       httpOnly: true,
       secure: isProduction,
       sameSite: isProduction ? "none" : "lax",
+      domain: cookieDomain || undefined,
       maxAge: sessionTtl,
     },
   });
@@ -787,38 +789,59 @@ export async function setupUnifiedAuth(app: Express) {
       })(req, res, next);
     });
 
-    app.get(
-      "/api/auth/google/customer/callback",
-      (req, res, next) => {
-        console.log("🔍 Google customer OAuth callback reached:", {
-          query: req.query,
-          hasError: !!req.query.error,
-          errorDescription: req.query.error_description,
-        });
-        next();
-      },
-      passport.authenticate("google-customer", {
-        failureRedirect: "/?error=auth_failed",
-      }),
-      (req, res) => {
-        const appContext = req.session.googleAppContext || "mealscout";
-        const redirectBase =
-          appContext === "tradescout" ? tradeScoutBaseUrl : baseUrl;
-        // Ensure session is saved before redirecting
-        req.session.save((err) => {
-          if (err) {
-            console.error("❌ Session save error:", err);
+    app.get("/api/auth/google/customer/callback", (req, res, next) => {
+      console.log("🔍 Google customer OAuth callback reached:", {
+        query: req.query,
+        hasError: !!req.query.error,
+        errorDescription: req.query.error_description,
+      });
+
+      passport.authenticate("google-customer", (err: any, user: User | false) => {
+        if (err) {
+          const message = String(err?.message || "").toLowerCase();
+          const code = String(err?.code || "").toLowerCase();
+          const isInvalidGrant =
+            code === "invalid_grant" ||
+            message.includes("invalid_grant") ||
+            message.includes("malformed auth code");
+          if (isInvalidGrant) {
+            console.warn("[oauth] Google customer callback invalid grant", {
+              code: err?.code,
+              message: err?.message,
+            });
+            return res.redirect("/?error=auth_invalid_grant");
+          }
+          console.error("❌ Google customer callback error:", err);
+          return res.redirect("/?error=auth_failed");
+        }
+        if (!user) {
+          return res.redirect("/?error=auth_failed");
+        }
+        req.logIn(user, (loginErr: unknown) => {
+          if (loginErr) {
+            console.error("❌ Google customer login error:", loginErr);
             return res.redirect("/?error=session_error");
           }
-          console.log(
-            "✅ Google customer OAuth success, session saved, redirecting...",
-          );
-          const redirectPath = getOAuthRedirectPath(req);
-          req.session.oauthRedirectPath = undefined;
-          res.redirect(buildOAuthSuccessRedirect(redirectBase, redirectPath));
+          const appContext = req.session.googleAppContext || "mealscout";
+          const redirectBase =
+            appContext === "tradescout" ? tradeScoutBaseUrl : baseUrl;
+          req.session.save((saveErr: unknown) => {
+            if (saveErr) {
+              console.error("❌ Session save error:", saveErr);
+              return res.redirect("/?error=session_error");
+            }
+            console.log(
+              "✅ Google customer OAuth success, session saved, redirecting...",
+            );
+            const redirectPath = getOAuthRedirectPath(req);
+            req.session.oauthRedirectPath = undefined;
+            return res.redirect(
+              buildOAuthSuccessRedirect(redirectBase, redirectPath),
+            );
+          });
         });
-      },
-    );
+      })(req, res, next);
+    });
 
     // Google OAuth routes for restaurant owners
     app.get("/api/auth/google/restaurant", (req, res, next) => {
@@ -839,39 +862,60 @@ export async function setupUnifiedAuth(app: Express) {
       })(req, res, next);
     });
 
-    app.get(
-      "/api/auth/google/restaurant/callback",
-      (req, res, next) => {
-        console.log("🔍 Google restaurant OAuth callback reached:", {
-          query: req.query,
-          hasError: !!req.query.error,
-          errorDescription: req.query.error_description,
-        });
-        next();
-      },
-      passport.authenticate("google-restaurant", {
-        failureRedirect: "/restaurant-signup?error=auth_failed",
-      }),
-      (req, res) => {
-        const appContext = req.session.googleAppContext || "mealscout";
-        const redirectBase =
-          appContext === "tradescout" ? tradeScoutBaseUrl : baseUrl;
-        // Ensure session is saved before redirecting
-        req.session.save((err) => {
-          if (err) {
-            console.error("❌ Session save error:", err);
+    app.get("/api/auth/google/restaurant/callback", (req, res, next) => {
+      console.log("🔍 Google restaurant OAuth callback reached:", {
+        query: req.query,
+        hasError: !!req.query.error,
+        errorDescription: req.query.error_description,
+      });
+
+      passport.authenticate("google-restaurant", (err: any, user: User | false) => {
+        if (err) {
+          const message = String(err?.message || "").toLowerCase();
+          const code = String(err?.code || "").toLowerCase();
+          const isInvalidGrant =
+            code === "invalid_grant" ||
+            message.includes("invalid_grant") ||
+            message.includes("malformed auth code");
+          if (isInvalidGrant) {
+            console.warn("[oauth] Google restaurant callback invalid grant", {
+              code: err?.code,
+              message: err?.message,
+            });
+            return res.redirect("/restaurant-signup?error=auth_invalid_grant");
+          }
+          console.error("❌ Google restaurant callback error:", err);
+          return res.redirect("/restaurant-signup?error=auth_failed");
+        }
+        if (!user) {
+          return res.redirect("/restaurant-signup?error=auth_failed");
+        }
+        req.logIn(user, (loginErr: unknown) => {
+          if (loginErr) {
+            console.error("❌ Google restaurant login error:", loginErr);
             return res.redirect("/restaurant-signup?error=session_error");
           }
-          console.log(
-            "✅ Google restaurant OAuth success, session saved, redirecting...",
-          );
-          const redirectPath =
-            getOAuthRedirectPath(req) || "/restaurant-signup";
-          req.session.oauthRedirectPath = undefined;
-          res.redirect(buildOAuthSuccessRedirect(redirectBase, redirectPath));
+          const appContext = req.session.googleAppContext || "mealscout";
+          const redirectBase =
+            appContext === "tradescout" ? tradeScoutBaseUrl : baseUrl;
+          req.session.save((saveErr: unknown) => {
+            if (saveErr) {
+              console.error("❌ Session save error:", saveErr);
+              return res.redirect("/restaurant-signup?error=session_error");
+            }
+            console.log(
+              "✅ Google restaurant OAuth success, session saved, redirecting...",
+            );
+            const redirectPath =
+              getOAuthRedirectPath(req) || "/restaurant-signup";
+            req.session.oauthRedirectPath = undefined;
+            return res.redirect(
+              buildOAuthSuccessRedirect(redirectBase, redirectPath),
+            );
+          });
         });
-      },
-    );
+      })(req, res, next);
+    });
   } else {
     console.log(
       "Google OAuth not configured: GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET environment variables are missing",
