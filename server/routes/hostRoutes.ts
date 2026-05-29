@@ -1083,6 +1083,12 @@ export function registerHostRoutes(app: Express) {
           String(
             process.env.MEALSCOUT_TEST_PROMOS_REQUIRE_ADMIN || "",
           ).toLowerCase() === "true";
+        const testPromoAllowlist = new Set(
+          String(process.env.MEALSCOUT_TEST_PROMO_ALLOWLIST || "")
+            .split(",")
+            .map((value) => value.trim().toLowerCase())
+            .filter((value) => value.length > 0),
+        );
         const isAdminUser = [
           "admin",
           "duper_admin",
@@ -1126,29 +1132,47 @@ export function registerHostRoutes(app: Express) {
           .trim()
           .toUpperCase();
         const isTestDollarPromo =
-          normalizedPromoCode === "TEST1" || normalizedPromoCode === "FREE100";
-        const bookingPromoCodes = new Set(["TEST1", "FREE100", "BOOKFEE10"]);
+          normalizedPromoCode === "TEST1" ||
+          normalizedPromoCode === "FREE100" ||
+          normalizedPromoCode === "SCOUT100";
+        const bookingPromoCodes = new Set([
+          "TEST1",
+          "FREE100",
+          "SCOUT100",
+          "BOOKFEE10",
+        ]);
         if (
           normalizedPromoCode &&
           !bookingPromoCodes.has(normalizedPromoCode)
         ) {
           return res.status(400).json({ message: "Invalid promo code" });
         }
-        if (
-          isTestDollarPromo &&
-          (!testModeEnabled || (testPromosRequireAdmin && !isAdminUser))
-        ) {
-          if (!testModeEnabled) {
-            return res.status(400).json({
-              code: "promo_unavailable",
-              message:
-                "This test promo code is not enabled in this environment.",
+        if (isTestDollarPromo) {
+          const emailKey = String(req.user?.email || "")
+            .trim()
+            .toLowerCase();
+          const userIdKey = String(req.user?.id || "")
+            .trim()
+            .toLowerCase();
+          const allowlisted =
+            (emailKey && testPromoAllowlist.has(emailKey)) ||
+            (userIdKey && testPromoAllowlist.has(userIdKey));
+          const promoPermitted =
+            testModeEnabled || allowlisted || (testPromosRequireAdmin && isAdminUser);
+
+          if (!promoPermitted) {
+            if (!testModeEnabled && !allowlisted) {
+              return res.status(400).json({
+                code: "promo_unavailable",
+                message:
+                  "This promo code is disabled for your account in this environment.",
+              });
+            }
+            return res.status(403).json({
+              code: "promo_admin_only",
+              message: "This test promo code is admin-only.",
             });
           }
-          return res.status(403).json({
-            code: "promo_admin_only",
-            message: "This test promo code is admin-only.",
-          });
         }
         if (normalizedPromoCode === "BOOKFEE10" && !bookingFeePromoEnabled) {
           return res
