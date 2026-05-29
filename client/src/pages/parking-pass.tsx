@@ -4208,7 +4208,7 @@ export default function ParkingPassPage() {
             Parking Pass
           </h1>
           <p className="text-xs text-[color:var(--text-muted)]">
-            Book available parking spots by day and time.
+            Find spots, book parking, and run your operating schedule from one place.
           </p>
           {isAdminOrStaff && (
             <div className="mt-3 flex flex-wrap gap-2">
@@ -4240,11 +4240,11 @@ export default function ParkingPassPage() {
         <Tabs value={topTab} onValueChange={(value) => setTopTab(value as any)}>
           <TabsList className="w-full justify-start pp-glass-muted rounded-xl p-1">
             <TabsTrigger value="book" className="text-sm">
-              Book spots
+              Find & Book
             </TabsTrigger>
             {canScheduleTab && (
               <TabsTrigger value="schedule" className="text-sm">
-                My schedule
+                My Schedule
               </TabsTrigger>
             )}
             {canHostTab && (
@@ -4255,19 +4255,20 @@ export default function ParkingPassPage() {
           </TabsList>
         </Tabs>
 
-        {(isTruckViewUser || canHostTab) && (
+        {((topTab === "book" && isTruckViewUser) ||
+          (topTab === "host" && canHostTab)) && (
           <div className="grid gap-3 md:grid-cols-2">
-            {isTruckViewUser && (
+            {topTab === "book" && isTruckViewUser && (
               <Card className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)]">
                 <CardContent className="p-4 space-y-3">
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="text-sm font-semibold text-[color:var(--text-primary)]">
-                        Truck side
+                        Find & Book
                       </p>
                       <p className="text-xs text-[color:var(--text-muted)]">
-                        Book paid host spots, keep your schedule current, go
-                        live, and file day reports after stops.
+                        Map + list search, date and slot selection, and checkout for
+                        paid host spots.
                       </p>
                     </div>
                     <Truck className="h-5 w-5 text-orange-500" />
@@ -4293,27 +4294,27 @@ export default function ParkingPassPage() {
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <Button size="sm" onClick={() => setTopTab("book")}>
-                      Find spots
+                      Open Find & Book
                     </Button>
                     <Button
                       size="sm"
                       variant="outline"
                       onClick={() => setTopTab("schedule")}
                     >
-                      Schedule/live tools
+                      Open My Schedule
                     </Button>
                   </div>
                 </CardContent>
               </Card>
             )}
 
-            {canHostTab && (
+            {topTab === "host" && canHostTab && (
               <Card className="rounded-2xl border border-orange-200 bg-orange-50/70">
                 <CardContent className="p-4 space-y-3">
                   <div>
                     <p className="text-sm font-semibold text-orange-950">
-                      Host side
-                    </p>
+                        Host tools
+                      </p>
                     <p className="text-xs text-orange-800">
                       Publish where trucks can park, set pricing and
                       availability, block blackout dates, and manage payout
@@ -6641,20 +6642,17 @@ export default function ParkingPassPage() {
               className={`space-y-5 pb-24 lg:pb-10${isTruckViewUser ? " order-first" : ""}`}
             >
               {isTruckViewUser && truck && truck.isVerified === false && (
-                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 space-y-2">
-                  <p className="font-semibold">
-                    Verification pending
-                  </p>
-                  <p className="text-xs">
-                    Your business is pending verification. You can still book
-                    available Parking Pass spots while review is in progress.
-                    Most reviews complete within 1 business day.
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+                  <p className="font-semibold">Verification pending</p>
+                  <p className="text-[11px]">
+                    You can still continue booking while verification is in
+                    progress.
                   </p>
                   <a
                     href="/restaurant-signup"
-                    className="inline-block rounded-md bg-amber-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-800"
+                    className="text-[11px] font-semibold underline underline-offset-2 hover:no-underline"
                   >
-                    Submit verification documents
+                    Complete verification
                   </a>
                 </div>
               )}
@@ -6669,7 +6667,7 @@ export default function ParkingPassPage() {
               <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                 <div>
                   <p className="text-lg font-semibold text-[color:var(--text-primary)] font-display">
-                    Find parking pass spots
+                    Find spots and book now
                   </p>
                   <p className="max-w-2xl text-sm text-[color:var(--text-muted)]">
                     Search by city or address. Pick a spot first, then choose
