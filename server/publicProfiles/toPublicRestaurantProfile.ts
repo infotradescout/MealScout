@@ -170,6 +170,7 @@ export function toPublicRestaurantProfile(input: {
             ? `$${(priceValue / 100).toFixed(2)}`
             : null;
           return {
+            menuItemId: String((item as any)?.menuItemId || "").trim() || null,
             name: itemName,
             priceLabel,
             description: String(item?.description || "").trim() || null,
@@ -204,6 +205,7 @@ export function toPublicRestaurantProfile(input: {
               if (!itemName) return null;
               const priceLabel = String(item?.priceLabel || "").trim() || null;
               return {
+                menuItemId: String((item as any)?.menuItemId || "").trim() || null,
                 name: itemName,
                 priceLabel,
                 description: String(item?.description || "").trim() || null,

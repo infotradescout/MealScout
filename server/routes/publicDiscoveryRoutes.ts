@@ -13,6 +13,7 @@ import {
   hosts,
   menuCategories,
   menuItems,
+  menuItemPhotos,
   menus,
   requestLogs,
   restaurants,
@@ -810,6 +811,33 @@ const buildPublicMenuPayload = async (
       ),
     );
 
+  const itemIds = itemRows.map((row: any) => String(row.id || "")).filter(Boolean);
+  const publicPhotoRows = itemIds.length
+    ? await db
+        .select({
+          menuItemId: menuItemPhotos.menuItemId,
+          imageUrl: menuItemPhotos.imageUrl,
+          status: menuItemPhotos.status,
+          featuredByBusiness: menuItemPhotos.featuredByBusiness,
+          createdAt: menuItemPhotos.createdAt,
+        })
+        .from(menuItemPhotos)
+        .where(
+          and(
+            inArray(menuItemPhotos.menuItemId, itemIds),
+            inArray(menuItemPhotos.status, ["accepted", "featured"] as any),
+          ),
+        )
+    : [];
+  const photosByMenuItem = new Map<string, Array<any>>();
+  for (const photo of publicPhotoRows) {
+    const key = String(photo.menuItemId || "");
+    if (!key) continue;
+    const existing = photosByMenuItem.get(key) || [];
+    existing.push(photo);
+    photosByMenuItem.set(key, existing);
+  }
+
   const categoryById = new Map(categoryRows.map((row: any) => [row.id, row]));
   const itemsByCategory = new Map<string, typeof itemRows>();
   const ungroupedItems: typeof itemRows = [];
@@ -835,6 +863,7 @@ const buildPublicMenuPayload = async (
     Array<{
       name: string;
       items: Array<{
+        menuItemId: string | null;
         name: string;
         priceCents: number | null;
         description: string | null;
@@ -846,6 +875,7 @@ const buildPublicMenuPayload = async (
   const menuSections: Array<{
     name: string;
     items: Array<{
+      menuItemId: string | null;
       name: string;
       priceCents: number | null;
       description: string | null;
@@ -861,12 +891,29 @@ const buildPublicMenuPayload = async (
       )
       .slice(0, 24)
       .map((item: any) => ({
+        menuItemId: String(item.id || ""),
         name: String(item.name || "").trim(),
         priceCents: Number.isFinite(Number(item.priceCents))
           ? Number(item.priceCents)
           : null,
         description: String(item.description || "").trim() || null,
-        imageUrl: String(item.imageUrl || "").trim() || null,
+        imageUrl: (() => {
+          const restaurantOwned = String(item.imageUrl || "").trim() || null;
+          if (restaurantOwned) return restaurantOwned;
+          const photos = photosByMenuItem.get(String(item.id || "")) || [];
+          const featured =
+            photos.find((photo: any) => photo.featuredByBusiness || String(photo.status) === "featured") ||
+            null;
+          if (featured?.imageUrl) return String(featured.imageUrl).trim();
+          const accepted = photos
+            .filter((photo: any) => String(photo.status) === "accepted")
+            .sort(
+              (a: any, b: any) =>
+                new Date(b.createdAt || 0).getTime() -
+                new Date(a.createdAt || 0).getTime(),
+            );
+          return accepted[0]?.imageUrl ? String(accepted[0].imageUrl).trim() : null;
+        })(),
         featured: false,
       }))
       .filter((item: any) => item.name.length > 0);
@@ -889,12 +936,29 @@ const buildPublicMenuPayload = async (
       )
       .slice(0, 24)
       .map((item: any) => ({
+        menuItemId: String(item.id || ""),
         name: String(item.name || "").trim(),
         priceCents: Number.isFinite(Number(item.priceCents))
           ? Number(item.priceCents)
           : null,
         description: String(item.description || "").trim() || null,
-        imageUrl: String(item.imageUrl || "").trim() || null,
+        imageUrl: (() => {
+          const restaurantOwned = String(item.imageUrl || "").trim() || null;
+          if (restaurantOwned) return restaurantOwned;
+          const photos = photosByMenuItem.get(String(item.id || "")) || [];
+          const featured =
+            photos.find((photo: any) => photo.featuredByBusiness || String(photo.status) === "featured") ||
+            null;
+          if (featured?.imageUrl) return String(featured.imageUrl).trim();
+          const accepted = photos
+            .filter((photo: any) => String(photo.status) === "accepted")
+            .sort(
+              (a: any, b: any) =>
+                new Date(b.createdAt || 0).getTime() -
+                new Date(a.createdAt || 0).getTime(),
+            );
+          return accepted[0]?.imageUrl ? String(accepted[0].imageUrl).trim() : null;
+        })(),
         featured: false,
       }))
       .filter((item) => item.name.length > 0);
@@ -940,6 +1004,7 @@ const buildPublicMenuPayload = async (
       menuSections: sectionsForMenu.map((section: any) => ({
         name: section.name,
         items: section.items.map((item: any) => ({
+          menuItemId: String(item.menuItemId || "").trim() || null,
           name: item.name,
           priceLabel:
             Number.isFinite(Number(item.priceCents)) && item.priceCents != null
@@ -970,6 +1035,7 @@ const buildPublicMenuPayload = async (
     ? activeVariant.menuSections.map((section: any) => ({
         name: section.name,
         items: section.items.map((item: any) => ({
+          menuItemId: String(item.menuItemId || "").trim() || null,
           name: item.name,
           priceCents: item.priceLabel
             ? Math.round(Number(String(item.priceLabel).replace(/[^0-9.]/g, "")) * 100)

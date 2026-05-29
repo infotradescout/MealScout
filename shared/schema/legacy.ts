@@ -2812,6 +2812,12 @@ export type InsertRestaurantUserRecommendation = z.infer<
 >;
 export type RestaurantUserRecommendation =
   typeof restaurantUserRecommendations.$inferSelect;
+export type InsertMenuItemRecommendation = z.infer<
+  typeof insertMenuItemRecommendationSchema
+>;
+export type MenuItemRecommendation = typeof menuItemRecommendations.$inferSelect;
+export type InsertMenuItemPhoto = z.infer<typeof insertMenuItemPhotoSchema>;
+export type MenuItemPhoto = typeof menuItemPhotos.$inferSelect;
 
 export type InsertBusinessStaffInvite = z.infer<
   typeof insertBusinessStaffInviteSchema
@@ -5720,6 +5726,80 @@ export const menuItems = pgTable(
   ],
 );
 
+// Menu-item level recommendations with optional proof comment/rating.
+export const menuItemRecommendations = pgTable(
+  "menu_item_recommendations",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    restaurantId: varchar("restaurant_id")
+      .notNull()
+      .references(() => restaurants.id, { onDelete: "cascade" }),
+    menuItemId: varchar("menu_item_id")
+      .notNull()
+      .references(() => menuItems.id, { onDelete: "cascade" }),
+    userId: varchar("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    comment: text("comment"),
+    rating: integer("rating"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_menu_item_recommendations_restaurant").on(table.restaurantId),
+    index("idx_menu_item_recommendations_menu_item").on(table.menuItemId),
+    index("idx_menu_item_recommendations_user").on(table.userId),
+    unique("uq_menu_item_recommendations_user_item").on(table.userId, table.menuItemId),
+  ],
+);
+
+// User-submitted dish proof photos attached to a specific menu item.
+export const menuItemPhotos = pgTable(
+  "menu_item_photos",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    restaurantId: varchar("restaurant_id")
+      .notNull()
+      .references(() => restaurants.id, { onDelete: "cascade" }),
+    menuItemId: varchar("menu_item_id")
+      .notNull()
+      .references(() => menuItems.id, { onDelete: "cascade" }),
+    sourceUserId: varchar("source_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    recommendationId: varchar("recommendation_id").references(
+      () => menuItemRecommendations.id,
+      { onDelete: "set null" },
+    ),
+    imageUrl: text("image_url").notNull(),
+    thumbnailUrl: text("thumbnail_url"),
+    cloudinaryPublicId: varchar("cloudinary_public_id"),
+    caption: text("caption"),
+    status: varchar("status").notNull().default("pending"), // pending | accepted | rejected | featured
+    moderationStatus: varchar("moderation_status").notNull().default("pending"), // pending | accepted | rejected | featured
+    featuredByBusiness: boolean("featured_by_business").notNull().default(false),
+    reviewedByUserId: varchar("reviewed_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    reviewedAt: timestamp("reviewed_at"),
+    rejectedReason: text("rejected_reason"),
+    scorePhotoAwardedAt: timestamp("score_photo_awarded_at"),
+    scoreFeaturedAwardedAt: timestamp("score_featured_awarded_at"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_menu_item_photos_restaurant").on(table.restaurantId),
+    index("idx_menu_item_photos_menu_item").on(table.menuItemId),
+    index("idx_menu_item_photos_source_user").on(table.sourceUserId),
+    index("idx_menu_item_photos_status").on(table.status),
+  ],
+);
+
 /**
  * menuItemVariants – size / style variants that change the price.
  * e.g. Small ($8), Medium ($10), Large ($12)
@@ -6228,6 +6308,50 @@ export const menuItemsRelations = relations(menuItems, ({ one, many }) => ({
   }),
   variants: many(menuItemVariants),
   modifiers: many(menuItemModifiers),
+  recommendations: many(menuItemRecommendations),
+  photos: many(menuItemPhotos),
+}));
+
+export const menuItemRecommendationsRelations = relations(
+  menuItemRecommendations,
+  ({ one, many }) => ({
+    restaurant: one(restaurants, {
+      fields: [menuItemRecommendations.restaurantId],
+      references: [restaurants.id],
+    }),
+    menuItem: one(menuItems, {
+      fields: [menuItemRecommendations.menuItemId],
+      references: [menuItems.id],
+    }),
+    user: one(users, {
+      fields: [menuItemRecommendations.userId],
+      references: [users.id],
+    }),
+    photos: many(menuItemPhotos),
+  }),
+);
+
+export const menuItemPhotosRelations = relations(menuItemPhotos, ({ one }) => ({
+  restaurant: one(restaurants, {
+    fields: [menuItemPhotos.restaurantId],
+    references: [restaurants.id],
+  }),
+  menuItem: one(menuItems, {
+    fields: [menuItemPhotos.menuItemId],
+    references: [menuItems.id],
+  }),
+  sourceUser: one(users, {
+    fields: [menuItemPhotos.sourceUserId],
+    references: [users.id],
+  }),
+  reviewedByUser: one(users, {
+    fields: [menuItemPhotos.reviewedByUserId],
+    references: [users.id],
+  }),
+  recommendation: one(menuItemRecommendations, {
+    fields: [menuItemPhotos.recommendationId],
+    references: [menuItemRecommendations.id],
+  }),
 }));
 
 export const menuItemVariantsRelations = relations(
@@ -6402,6 +6526,26 @@ export const insertMenuItemSchema = createInsertSchema(menuItems, {
   itemType: z.enum(["food", "merchandise"]).default("food"),
   calories: z.number().int().min(0).optional().nullable(),
 }).omit({ id: true, createdAt: true, updatedAt: true });
+
+export const insertMenuItemRecommendationSchema = createInsertSchema(
+  menuItemRecommendations,
+).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertMenuItemPhotoSchema = createInsertSchema(menuItemPhotos).omit(
+  {
+    id: true,
+    reviewedByUserId: true,
+    reviewedAt: true,
+    scorePhotoAwardedAt: true,
+    scoreFeaturedAwardedAt: true,
+    createdAt: true,
+    updatedAt: true,
+  },
+);
 
 export const insertMenuItemVariantSchema = createInsertSchema(
   menuItemVariants,

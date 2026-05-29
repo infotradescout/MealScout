@@ -712,6 +712,12 @@ function MenuSection({
   profile: PublicRestaurantProfile;
   safeCtas: PublicCta[];
 }) {
+  const [recommendingKey, setRecommendingKey] = useState<string | null>(null);
+  const [recommendComment, setRecommendComment] = useState("");
+  const [recommendRating, setRecommendRating] = useState("5");
+  const [recommendPhoto, setRecommendPhoto] = useState<File | null>(null);
+  const [submitStateByItem, setSubmitStateByItem] = useState<Record<string, string>>({});
+  const [submittingItemId, setSubmittingItemId] = useState<string | null>(null);
   const menuVariants = Array.isArray(profile.menuVariants)
     ? profile.menuVariants.filter((variant) => String(variant?.id || "").trim().length > 0)
     : [];
@@ -776,6 +782,47 @@ function MenuSection({
   const updatedLabel = (activeVariant?.menuLastUpdatedAt || profile.menuLastUpdatedAt)
     ? new Date(activeVariant?.menuLastUpdatedAt || profile.menuLastUpdatedAt || "").toLocaleDateString()
     : null;
+  const submitRecommendation = async (menuItemId: string) => {
+    if (!menuItemId) return;
+    setSubmittingItemId(menuItemId);
+    try {
+      const formData = new FormData();
+      formData.append("comment", recommendComment);
+      formData.append("rating", recommendRating);
+      if (recommendPhoto) formData.append("image", recommendPhoto);
+      const res = await fetch(`/api/menu-items/${encodeURIComponent(menuItemId)}/recommend`, {
+        method: "POST",
+        credentials: "include",
+        body: formData,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setSubmitStateByItem((prev) => ({
+          ...prev,
+          [menuItemId]:
+            String(data?.message || "").trim() ||
+            "Unable to submit recommendation right now.",
+        }));
+        return;
+      }
+      setSubmitStateByItem((prev) => ({
+        ...prev,
+        [menuItemId]: data?.photoStatus?.status === "pending"
+          ? "Recommendation submitted. Photo is pending business review."
+          : "Recommendation submitted.",
+      }));
+      setRecommendComment("");
+      setRecommendPhoto(null);
+      setRecommendingKey(null);
+    } catch {
+      setSubmitStateByItem((prev) => ({
+        ...prev,
+        [menuItemId]: "Unable to submit recommendation right now.",
+      }));
+    } finally {
+      setSubmittingItemId(null);
+    }
+  };
 
   return (
     <Card className="border-white/10 bg-[#0f0d0b]">
@@ -848,6 +895,81 @@ function MenuSection({
                           <p className="text-sm font-semibold text-orange-200">{item.priceLabel}</p>
                         ) : null}
                       </div>
+                      {item.menuItemId ? (
+                        <div className="mt-3 space-y-2">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setRecommendingKey((current) =>
+                                current === item.menuItemId ? null : item.menuItemId || null,
+                              )
+                            }
+                            className="text-xs font-medium text-orange-300 hover:text-orange-200"
+                          >
+                            Recommend this item
+                          </button>
+                          {submitStateByItem[item.menuItemId] ? (
+                            <p className="text-xs text-white/70">
+                              {submitStateByItem[item.menuItemId]}
+                            </p>
+                          ) : null}
+                          {recommendingKey === item.menuItemId ? (
+                            <div className="space-y-2 rounded-md border border-white/10 bg-black/30 p-2">
+                              <textarea
+                                value={recommendComment}
+                                onChange={(event) => setRecommendComment(event.target.value)}
+                                placeholder="Why do you recommend this dish?"
+                                className="min-h-[64px] w-full rounded border border-white/20 bg-black/40 px-2 py-1 text-xs text-white"
+                              />
+                              <div className="flex items-center gap-2">
+                                <label className="text-xs text-white/70">Rating</label>
+                                <select
+                                  value={recommendRating}
+                                  onChange={(event) => setRecommendRating(event.target.value)}
+                                  className="rounded border border-white/20 bg-black/40 px-2 py-1 text-xs text-white"
+                                >
+                                  <option value="5">5</option>
+                                  <option value="4">4</option>
+                                  <option value="3">3</option>
+                                  <option value="2">2</option>
+                                  <option value="1">1</option>
+                                </select>
+                              </div>
+                              <div className="space-y-1">
+                                <p className="text-xs text-white/65">
+                                  Got a photo of this dish? Add it so others know what to expect.
+                                </p>
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  onChange={(event) =>
+                                    setRecommendPhoto(event.target.files?.[0] || null)
+                                  }
+                                  className="text-xs text-white/80"
+                                />
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  size="sm"
+                                  onClick={() => submitRecommendation(String(item.menuItemId || ""))}
+                                  disabled={submittingItemId === item.menuItemId}
+                                >
+                                  {submittingItemId === item.menuItemId
+                                    ? "Submitting..."
+                                    : "Submit recommendation"}
+                                </Button>
+                                <button
+                                  type="button"
+                                  className="text-xs text-white/60 hover:text-white/80"
+                                  onClick={() => setRecommendingKey(null)}
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : null}
                     </div>
                   ))}
                 </div>

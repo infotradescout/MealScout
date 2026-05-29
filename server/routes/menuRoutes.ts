@@ -18,9 +18,12 @@ import {
   menus,
   menuCategories,
   menuItems,
+  menuItemRecommendations,
+  menuItemPhotos,
   menuItemVariants,
   menuItemModifiers,
   menuImportLogs,
+  imageUploads,
   restaurants,
   restaurantFavorites,
   restaurantFollows,
@@ -34,6 +37,7 @@ import {
   insertMenuItemSchema,
   insertMenuItemVariantSchema,
   insertMenuItemModifierSchema,
+  insertMenuItemRecommendationSchema,
   LISA_CLAIM_TYPES,
   LISA_CLAIM_SOURCES,
   lisaClaims,
@@ -43,11 +47,12 @@ import {
   type MenuItemVariant,
   type MenuItemModifier,
 } from "@shared/schema";
-import { eq, and, asc, inArray, isNotNull, isNull } from "drizzle-orm";
+import { eq, and, asc, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { isAuthenticated, isStaffOrAdmin } from "../unifiedAuth";
 import { storage } from "../storage";
 import { parseMenuCsv } from "../utils/menuCsvParser";
 import { parsePdfMenuWithAi } from "../utils/menuPdfParser";
+import { isCloudinaryConfigured, upload as imageUpload, uploadToCloudinary } from "../imageUpload";
 
 // ── Multer config (memory storage – files processed in-process) ───────────────
 const upload = multer({
@@ -1447,6 +1452,327 @@ export function registerMenuRoutes(app: Express) {
         .orderBy(menuImportLogs.createdAt);
 
       res.json({ logs });
+    }),
+  );
+
+  /**
+   * POST /api/menu-items/:menuItemId/recommend
+   * Create/refresh a dish recommendation with optional proof photo.
+   * Proof photo is always pending until accepted/featured by business/admin.
+   */
+  app.post(
+    "/api/menu-items/:menuItemId/recommend",
+    isAuthenticated,
+    imageUpload.single("image"),
+    wrap(async (req, res) => {
+      const menuItemId = String(req.params.menuItemId || "").trim();
+      if (!menuItemId) {
+        throw Object.assign(new Error("menuItemId is required"), { statusCode: 400 });
+      }
+
+      const [item] = await db
+        .select()
+        .from(menuItems)
+        .where(eq(menuItems.id, menuItemId))
+        .limit(1);
+      if (!item) {
+        throw Object.assign(new Error("Menu item not found"), { statusCode: 404 });
+      }
+
+      const payload = z
+        .object({
+          comment: z.string().max(500).optional().nullable(),
+          rating: z.number().int().min(1).max(5).optional().nullable(),
+          caption: z.string().max(280).optional().nullable(),
+          aiGenerated: z.boolean().optional(),
+        })
+        .parse(req.body || {});
+
+      if (payload.aiGenerated === true) {
+        throw Object.assign(
+          new Error("AI-generated dish images are not allowed as proof photos"),
+          { statusCode: 400 },
+        );
+      }
+
+      const existing = await db
+        .select()
+        .from(menuItemRecommendations)
+        .where(
+          and(
+            eq(menuItemRecommendations.menuItemId, menuItemId),
+            eq(menuItemRecommendations.userId, req.user.id),
+          ),
+        )
+        .limit(1);
+
+      let recommendation = existing[0] || null;
+      if (!recommendation) {
+        const toInsert = insertMenuItemRecommendationSchema.parse({
+          restaurantId: item.restaurantId,
+          menuItemId,
+          userId: req.user.id,
+          comment: String(payload.comment || "").trim() || null,
+          rating: payload.rating ?? null,
+        });
+        const [inserted] = await db
+          .insert(menuItemRecommendations)
+          .values(toInsert as any)
+          .returning();
+        recommendation = inserted;
+
+        await db
+          .update(users)
+          .set({
+            recommendationCount: sql`${users.recommendationCount} + 1`,
+            influenceScore: sql`${users.influenceScore} + 1`,
+            updatedAt: new Date(),
+          } as any)
+          .where(eq(users.id, req.user.id));
+      } else {
+        const nextComment = String(payload.comment || "").trim() || null;
+        const nextRating = payload.rating ?? null;
+        const [updated] = await db
+          .update(menuItemRecommendations)
+          .set({
+            comment: nextComment,
+            rating: nextRating,
+            updatedAt: new Date(),
+          } as any)
+          .where(eq(menuItemRecommendations.id, recommendation.id))
+          .returning();
+        recommendation = updated || recommendation;
+      }
+
+      let photo: any = null;
+      if (req.file) {
+        if (!isCloudinaryConfigured()) {
+          throw Object.assign(new Error("Image upload service not configured"), {
+            statusCode: 503,
+          });
+        }
+        const uploadResult = await uploadToCloudinary(
+          req.file.buffer,
+          "menu-item-photos",
+          `menu-item-${menuItemId}-${Date.now()}`,
+        );
+
+        const [createdPhoto] = await db
+          .insert(menuItemPhotos)
+          .values({
+            restaurantId: item.restaurantId,
+            menuItemId,
+            sourceUserId: req.user.id,
+            recommendationId: recommendation.id,
+            imageUrl: uploadResult.secureUrl,
+            thumbnailUrl: uploadResult.thumbnailUrl,
+            cloudinaryPublicId: uploadResult.publicId,
+            caption: String(payload.caption || "").trim() || null,
+            status: "pending",
+            moderationStatus: "pending",
+            featuredByBusiness: false,
+          } as any)
+          .returning();
+
+        await db.insert(imageUploads).values({
+          uploadedByUserId: req.user.id,
+          imageType: "menu_item_photo",
+          entityId: menuItemId,
+          entityType: "menu_item",
+          cloudinaryPublicId: uploadResult.publicId,
+          cloudinaryUrl: uploadResult.secureUrl,
+          thumbnailUrl: uploadResult.thumbnailUrl,
+          width: uploadResult.width,
+          height: uploadResult.height,
+          fileSize: uploadResult.bytes,
+          mimeType: req.file.mimetype,
+        } as any);
+
+        photo = createdPhoto;
+      }
+
+      res.status(201).json({
+        recommendation,
+        photoStatus: photo
+          ? {
+              id: photo.id,
+              status: photo.status,
+              moderationStatus: photo.moderationStatus,
+            }
+          : null,
+      });
+    }),
+  );
+
+  app.get(
+    "/api/menu-items/:menuItemId/my-recommendation",
+    isAuthenticated,
+    wrap(async (req, res) => {
+      const menuItemId = String(req.params.menuItemId || "").trim();
+      const [recommendation] = await db
+        .select()
+        .from(menuItemRecommendations)
+        .where(
+          and(
+            eq(menuItemRecommendations.menuItemId, menuItemId),
+            eq(menuItemRecommendations.userId, req.user.id),
+          ),
+        )
+        .limit(1);
+
+      const photos = recommendation
+        ? await db
+            .select()
+            .from(menuItemPhotos)
+            .where(eq(menuItemPhotos.recommendationId, recommendation.id))
+            .orderBy(menuItemPhotos.createdAt)
+        : [];
+
+      res.json({
+        recommendation: recommendation || null,
+        photos: photos.map((photo: any) => ({
+          id: photo.id,
+          status: photo.status,
+          moderationStatus: photo.moderationStatus,
+          imageUrl: photo.imageUrl,
+          thumbnailUrl: photo.thumbnailUrl,
+          caption: photo.caption,
+          createdAt: photo.createdAt,
+        })),
+      });
+    }),
+  );
+
+  app.patch(
+    "/api/menu-item-photos/:photoId/moderate",
+    isAuthenticated,
+    wrap(async (req, res) => {
+      const photoId = String(req.params.photoId || "").trim();
+      const payload = z
+        .object({
+          action: z.enum(["accept", "reject", "feature", "unfeature"]),
+          reason: z.string().max(500).optional().nullable(),
+        })
+        .parse(req.body || {});
+
+      const [photo] = await db
+        .select()
+        .from(menuItemPhotos)
+        .where(eq(menuItemPhotos.id, photoId))
+        .limit(1);
+      if (!photo) {
+        throw Object.assign(new Error("Photo not found"), { statusCode: 404 });
+      }
+
+      const isPrivileged = [
+        "staff",
+        "admin",
+        "duper_admin",
+        "super_admin",
+      ].includes(String(req.user?.userType || ""));
+      if (!isPrivileged) {
+        await assertOwnsRestaurant(req.user, String(photo.restaurantId));
+      }
+
+      if (payload.action === "feature") {
+        await db
+          .update(menuItemPhotos)
+          .set({
+            status: "accepted",
+            moderationStatus: "accepted",
+            featuredByBusiness: false,
+            updatedAt: new Date(),
+          } as any)
+          .where(
+            and(
+              eq(menuItemPhotos.menuItemId, photo.menuItemId),
+              eq(menuItemPhotos.featuredByBusiness, true),
+            ),
+          );
+      }
+
+      const nextStatus =
+        payload.action === "accept"
+          ? "accepted"
+          : payload.action === "reject"
+            ? "rejected"
+            : payload.action === "feature"
+              ? "featured"
+              : "accepted";
+      const isFeature = payload.action === "feature";
+      const isReject = payload.action === "reject";
+
+      const [updated] = await db
+        .update(menuItemPhotos)
+        .set({
+          status: nextStatus,
+          moderationStatus: nextStatus,
+          featuredByBusiness: isFeature,
+          rejectedReason: isReject ? String(payload.reason || "").trim() || null : null,
+          reviewedByUserId: req.user.id,
+          reviewedAt: new Date(),
+          updatedAt: new Date(),
+        } as any)
+        .where(eq(menuItemPhotos.id, photoId))
+        .returning();
+
+      const scoreBumps: number[] = [];
+      if (
+        (payload.action === "accept" || payload.action === "feature") &&
+        !photo.scorePhotoAwardedAt
+      ) {
+        scoreBumps.push(8); // +3 submission proof +5 accepted
+        await db
+          .update(menuItemPhotos)
+          .set({ scorePhotoAwardedAt: new Date() } as any)
+          .where(eq(menuItemPhotos.id, photoId));
+      }
+      if (payload.action === "feature" && !photo.scoreFeaturedAwardedAt) {
+        scoreBumps.push(10);
+        await db
+          .update(menuItemPhotos)
+          .set({ scoreFeaturedAwardedAt: new Date() } as any)
+          .where(eq(menuItemPhotos.id, photoId));
+      }
+      if (scoreBumps.length) {
+        const bump = scoreBumps.reduce((sum, value) => sum + value, 0);
+        await db
+          .update(users)
+          .set({
+            influenceScore: sql`${users.influenceScore} + ${bump}`,
+            updatedAt: new Date(),
+          } as any)
+          .where(eq(users.id, String(photo.sourceUserId)));
+      }
+
+      res.json({ photo: updated });
+    }),
+  );
+
+  app.get(
+    "/api/menu-items/:menuItemId/photos/public",
+    wrap(async (req, res) => {
+      const menuItemId = String(req.params.menuItemId || "").trim();
+      const photos = await db
+        .select({
+          id: menuItemPhotos.id,
+          imageUrl: menuItemPhotos.imageUrl,
+          thumbnailUrl: menuItemPhotos.thumbnailUrl,
+          caption: menuItemPhotos.caption,
+          status: menuItemPhotos.status,
+          featuredByBusiness: menuItemPhotos.featuredByBusiness,
+          createdAt: menuItemPhotos.createdAt,
+        })
+        .from(menuItemPhotos)
+        .where(
+          and(
+            eq(menuItemPhotos.menuItemId, menuItemId),
+            inArray(menuItemPhotos.status, ["accepted", "featured"] as any),
+          ),
+        )
+        .orderBy(menuItemPhotos.createdAt);
+
+      res.json({ photos });
     }),
   );
 }

@@ -117,6 +117,7 @@ export type PublicEventItem = {
 };
 
 export type PublicMenuItem = {
+  menuItemId?: string | null;
   name: string;
   priceLabel: string | null;
   description: string | null;
