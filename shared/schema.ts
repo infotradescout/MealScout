@@ -13,3 +13,4 @@ export * from "./schema/marketIntel";
 export * from "./schema/growth";
 export * from "./schema/misc";
 export * from "./schema/moderation";
+export * from "./schema/scoutcoin";
