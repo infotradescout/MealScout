@@ -1,6 +1,8 @@
 ﻿import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { apiUrl } from "@/lib/api";
+import { useEffectiveLocationContext } from "@/hooks/useEffectiveLocationContext";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -2237,6 +2239,7 @@ export default function AdminDashboard() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [selectedTab, setSelectedTab] = useState("overview");
+  const { effectiveLocationContext } = useEffectiveLocationContext();
   const [briefStatus, setBriefStatus] = useState<
     Record<string, { until: number }>
   >(() => {
@@ -2481,9 +2484,20 @@ export default function AdminDashboard() {
     window.history.replaceState({}, "", url.toString());
   }, [selectedTab, users]);
   const { data: lisaMarketIntel } = useQuery<any>({
-    queryKey: ["/api/admin/lisa/market-intel", "dashboard-tab"],
+    queryKey: [
+      "/api/admin/lisa/market-intel",
+      "dashboard-tab",
+      effectiveLocationContext?.marketKey || "",
+    ],
     queryFn: async () => {
-      const res = await fetch("/api/admin/lisa/market-intel");
+      const query = new URLSearchParams();
+      if (effectiveLocationContext?.marketKey) {
+        query.set("market", effectiveLocationContext.marketKey);
+      }
+      const endpoint = query.toString()
+        ? `/api/admin/lisa/market-intel?${query.toString()}`
+        : "/api/admin/lisa/market-intel";
+      const res = await fetch(apiUrl(endpoint), { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch LISA market intel");
       return res.json();
     },
@@ -2491,9 +2505,22 @@ export default function AdminDashboard() {
     staleTime: 60 * 1000,
   });
   const { data: lisaSignals } = useQuery<any>({
-    queryKey: ["/api/admin/lisa/signals", "dashboard-tab"],
+    queryKey: [
+      "/api/admin/lisa/signals",
+      "dashboard-tab",
+      effectiveLocationContext?.marketKey || "",
+    ],
     queryFn: async () => {
-      const res = await fetch("/api/admin/lisa/signals?limit=16&hours=72");
+      const query = new URLSearchParams({
+        limit: "16",
+        hours: "72",
+      });
+      if (effectiveLocationContext?.marketKey) {
+        query.set("market", effectiveLocationContext.marketKey);
+      }
+      const res = await fetch(apiUrl(`/api/admin/lisa/signals?${query.toString()}`), {
+        credentials: "include",
+      });
       if (!res.ok) throw new Error("Failed to fetch LISA signals");
       return res.json();
     },
@@ -2501,9 +2528,19 @@ export default function AdminDashboard() {
     staleTime: 60 * 1000,
   });
   const { data: lisaPriorities } = useQuery<any>({
-    queryKey: ["/api/admin/lisa/priorities", "dashboard-tab"],
+    queryKey: [
+      "/api/admin/lisa/priorities",
+      "dashboard-tab",
+      effectiveLocationContext?.marketKey || "",
+    ],
     queryFn: async () => {
-      const res = await fetch("/api/admin/lisa/priorities?limit=6");
+      const query = new URLSearchParams({ limit: "6" });
+      if (effectiveLocationContext?.marketKey) {
+        query.set("market", effectiveLocationContext.marketKey);
+      }
+      const res = await fetch(apiUrl(`/api/admin/lisa/priorities?${query.toString()}`), {
+        credentials: "include",
+      });
       if (!res.ok) throw new Error("Failed to fetch LISA priorities");
       return res.json();
     },
@@ -2511,9 +2548,22 @@ export default function AdminDashboard() {
     staleTime: 60 * 1000,
   });
   const { data: lisaBriefActions } = useQuery<any>({
-    queryKey: ["/api/admin/lisa/brief-actions", "dashboard-tab"],
+    queryKey: [
+      "/api/admin/lisa/brief-actions",
+      "dashboard-tab",
+      effectiveLocationContext?.marketKey || "",
+    ],
     queryFn: async () => {
-      const res = await fetch("/api/admin/lisa/brief-actions?hours=720");
+      const query = new URLSearchParams({ hours: "720" });
+      if (effectiveLocationContext?.marketKey) {
+        query.set("market", effectiveLocationContext.marketKey);
+      }
+      const res = await fetch(
+        apiUrl(`/api/admin/lisa/brief-actions?${query.toString()}`),
+        {
+          credentials: "include",
+        },
+      );
       if (!res.ok) throw new Error("Failed to fetch LISA brief actions");
       return res.json();
     },

@@ -50,6 +50,7 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+import { useEffectiveLocationContext } from "@/hooks/useEffectiveLocationContext";
 import ShareButton from "@/components/share-button";
 import { initFacebookSDK, postToFacebook } from "@/lib/facebook";
 import { apiUrl } from "@/lib/api";
@@ -614,6 +615,7 @@ const defaultMapCenter = {
 
 export default function ParkingPassPage() {
   const { isAuthenticated, user } = useAuth();
+  const { effectiveLocationContext } = useEffectiveLocationContext();
   const { toast } = useToast();
   const [location, setLocation] = useLocation();
   const { data: subscription } = useQuery<{
@@ -829,6 +831,15 @@ export default function ParkingPassPage() {
       return "";
     }
   });
+  useEffect(() => {
+    if (cityQuery.trim()) return;
+    const city = String(effectiveLocationContext?.city || "").trim();
+    const state = String(effectiveLocationContext?.state || "").trim();
+    const nextQuery = [city, state].filter(Boolean).join(", ");
+    if (nextQuery) {
+      setCityQuery(nextQuery);
+    }
+  }, [cityQuery, effectiveLocationContext]);
   const [cartItems, setCartItems] = useState<
     Array<{ listing: ParkingPassListing; slotTypes: string[] }>
   >([]);

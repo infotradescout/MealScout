@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 
 import { useAuth } from "@/hooks/useAuth";
+import { useEffectiveLocationContext } from "@/hooks/useEffectiveLocationContext";
 import { getReverseGeocodedLocationName } from "@/utils/locationUtils";
 import { SEOHead } from "@/components/seo-head";
 import { ScoutMapHero } from "@/components/scout/ScoutMapHero";
@@ -1559,6 +1560,7 @@ function shiftCenterForRightQuadrant(
 
 export default function ExplorePreview() {
   const { user } = useAuth();
+  const { effectiveLocationContext } = useEffectiveLocationContext();
   const [location, navigate] = useWouterLocation();
 
   const firstName =
@@ -1640,12 +1642,28 @@ export default function ExplorePreview() {
     [isPensacolaScoutPreview],
   );
   const manualSelectedLocation = null;
-  const savedLocation = null;
+  const savedLocation = useMemo(() => {
+    const lat = Number(effectiveLocationContext?.latitude);
+    const lng = Number(effectiveLocationContext?.longitude);
+    const hasCoords = Number.isFinite(lat) && Number.isFinite(lng);
+    if (!effectiveLocationContext) return null;
+    if (!hasCoords) return null;
+    const city = String(effectiveLocationContext.city || "").trim();
+    const state = String(effectiveLocationContext.state || "").trim();
+    const label = [city, state].filter(Boolean).join(", ") || "Saved market";
+    return {
+      label,
+      lat,
+      lng,
+      source: "saved" as const,
+    };
+  }, [effectiveLocationContext]);
   const fallbackLocation = null;
   const resolvedScoutLocation = useMemo(
     () => {
       if (previewLocation) return previewLocation;
       if (manualSelectedLocation) return manualSelectedLocation;
+      if (savedLocation) return savedLocation;
       if (deviceCoords) {
         return {
           label: deviceLocationName || "Your area",
@@ -1654,10 +1672,9 @@ export default function ExplorePreview() {
           source: "device" as const,
         };
       }
-      if (savedLocation) return savedLocation;
       return fallbackLocation;
     },
-    [deviceCoords, deviceLocationName, previewLocation],
+    [deviceCoords, deviceLocationName, previewLocation, savedLocation],
   );
   const resolvedScoutCoords = useMemo(
     () =>
@@ -1726,6 +1743,30 @@ export default function ExplorePreview() {
         if (isPensacolaScoutPreview) return;
         setDeviceCoords({ lat: latitude, lng: longitude });
         setLocationStatus("ready");
+        if (user?.id) {
+          const marketKeyFallback = [
+            String(effectiveLocationContext?.city || "").trim().toLowerCase(),
+            String(effectiveLocationContext?.state || "").trim().toLowerCase(),
+          ]
+            .filter(Boolean)
+            .join("-");
+          const marketKey = marketKeyFallback || "device-market";
+          fetch(apiUrl("/api/location/context"), {
+            method: "PATCH",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              mode: "device",
+              location: {
+                marketKey,
+                city: effectiveLocationContext?.city || undefined,
+                state: effectiveLocationContext?.state || undefined,
+                latitude,
+                longitude,
+              },
+            }),
+          }).catch(() => {});
+        }
         getReverseGeocodedLocationName(latitude, longitude, (name) => {
           if (name && !isPensacolaScoutPreview) setDeviceLocationName(name);
         }).catch(() => {});
@@ -1735,7 +1776,7 @@ export default function ExplorePreview() {
       },
       { timeout: 10000, maximumAge: 0 },
     );
-  }, [isPensacolaScoutPreview, previewLocation]);
+  }, [effectiveLocationContext, isPensacolaScoutPreview, previewLocation, user?.id]);
 
   // Auto-request on mount
   useEffect(() => {
