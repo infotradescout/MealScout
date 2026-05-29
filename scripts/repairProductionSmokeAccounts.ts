@@ -119,6 +119,7 @@ async function ensureSmokeRestaurant(
     businessType: "food_truck" | "restaurant";
     city: string;
     state: string;
+    address: string;
   },
 ) {
   const existing = await client.query(
@@ -142,8 +143,9 @@ async function ensureSmokeRestaurant(
           is_food_truck = $4,
           is_active = false,
           is_verified = false,
-          city = $5,
-          state = $6,
+          address = $5,
+          city = $6,
+          state = $7,
           updated_at = now()
         where id = $1
       `,
@@ -152,6 +154,7 @@ async function ensureSmokeRestaurant(
         params.ownerId,
         params.businessType,
         params.businessType === "food_truck",
+        params.address,
         params.city,
         params.state,
       ],
@@ -170,12 +173,13 @@ async function ensureSmokeRestaurant(
         is_food_truck,
         is_active,
         is_verified,
+        address,
         city,
         state,
         created_at,
         updated_at
       ) values (
-        $1, $2, $3, $4, $5, false, false, $6, $7, now(), now()
+        $1, $2, $3, $4, $5, false, false, $6, $7, $8, now(), now()
       )
     `,
     [
@@ -184,6 +188,7 @@ async function ensureSmokeRestaurant(
       params.name,
       params.businessType,
       params.businessType === "food_truck",
+      params.address,
       params.city,
       params.state,
     ],
@@ -308,6 +313,7 @@ async function main() {
       key: "food_truck",
       name: valueOr("SMOKE_TRUCK_NAME", "Smoke Test Truck"),
       businessType: "food_truck",
+      address: valueOr("SMOKE_TRUCK_ADDRESS", "100 Smoke Test Dr"),
       city: valueOr("SMOKE_MARKET_CITY", "Pensacola"),
       state: valueOr("SMOKE_MARKET_STATE", "FL"),
     });
@@ -317,6 +323,7 @@ async function main() {
       key: "restaurant",
       name: valueOr("SMOKE_RESTAURANT_NAME", "Smoke Test Restaurant"),
       businessType: "restaurant",
+      address: valueOr("SMOKE_RESTAURANT_ADDRESS", "200 Smoke Test Ave"),
       city: valueOr("SMOKE_MARKET_CITY", "Pensacola"),
       state: valueOr("SMOKE_MARKET_STATE", "FL"),
     });
