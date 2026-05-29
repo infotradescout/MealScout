@@ -12,8 +12,19 @@ import {
   eventBookings,
   hostPayoutRequests,
   parkingPassBlackoutDates,
+  verificationRequests,
 } from "@shared/schema";
-import { and, asc, eq, gte, inArray, isNotNull, lt, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gte,
+  inArray,
+  isNotNull,
+  lt,
+  sql,
+} from "drizzle-orm";
 import { isAuthenticated } from "../unifiedAuth";
 import Stripe from "stripe";
 import {
@@ -1244,6 +1255,42 @@ export function registerHostRoutes(app: Express) {
             message:
               "Parking Pass bookings are only available for food trucks.",
           });
+        }
+        const shouldBypassVerificationGate = isStaffOrAdminUser(req.user);
+        if (!shouldBypassVerificationGate) {
+          const emailVerified = req.user?.emailVerified === true;
+          const verificationRows = await db
+            .select({
+              status: verificationRequests.status,
+              documents: verificationRequests.documents,
+              submittedAt: verificationRequests.submittedAt,
+            })
+            .from(verificationRequests)
+            .where(eq(verificationRequests.restaurantId, truckId))
+            .orderBy(desc(verificationRequests.submittedAt))
+            .limit(5);
+
+          const hasInsuranceEvidence = verificationRows.some((row: any) =>
+            Array.isArray(row?.documents)
+              ? row.documents.some(
+                  (doc: unknown) => String(doc || "").trim().length > 0,
+                )
+              : false,
+          );
+
+          if (!emailVerified || !hasInsuranceEvidence) {
+            return res.status(409).json({
+              code: "truck_verification_required",
+              message:
+                "Verify your email and submit business insurance to book Parking Pass spots.",
+              onboardingPath:
+                "/restaurant-signup?businessType=food_truck&source=parking-pass&step=verification",
+              requirements: {
+                emailVerified,
+                businessInsuranceSubmitted: hasInsuranceEvidence,
+              },
+            });
+          }
         }
         if (
           req.user?.userType &&

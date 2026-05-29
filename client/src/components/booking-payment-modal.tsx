@@ -422,9 +422,16 @@ export function BookingPaymentModal({
 
       if (!res.ok) {
         const data = await res.json();
-        if (res.status === 409 && data?.code === "truck_profile_required") {
+        if (
+          res.status === 409 &&
+          (data?.code === "truck_profile_required" ||
+            data?.code === "truck_verification_required")
+        ) {
           toast({
-            title: "Complete truck profile",
+            title:
+              data?.code === "truck_verification_required"
+                ? "Verification required"
+                : "Complete truck profile",
             description:
               data?.message ||
               "Complete your food truck profile before booking Parking Pass spots.",
