@@ -1305,7 +1305,9 @@ export function registerHostRoutes(app: Express) {
           });
         }
 
-        const eventDateKey = dateKeyFromUnknown(event.date, bookingTimeZone);
+        const eventVirtualId = parseParkingPassVirtualId(String(event.id || ""));
+        const eventDateKey =
+          eventVirtualId?.dateKey || dateKeyFromUnknown(event.date, "UTC");
         if (!eventDateKey) {
           return res.status(400).json({
             message: "Invalid parking pass date.",
@@ -1424,7 +1426,9 @@ export function registerHostRoutes(app: Express) {
 
         const eventsByDate = new Map<string, (typeof bookingEvents)[number]>();
         for (const row of bookingEvents) {
-          const dateKey = dateKeyFromUnknown(row.date, bookingTimeZone);
+          const rowVirtualId = parseParkingPassVirtualId(String(row.id || ""));
+          const dateKey =
+            rowVirtualId?.dateKey || dateKeyFromUnknown(row.date, "UTC");
           if (!dateKey) {
             continue;
           }
@@ -1441,7 +1445,7 @@ export function registerHostRoutes(app: Express) {
             eventDateKey,
             expectedDateKeys,
             missingDates,
-            bookingEvents: bookingEvents.map((row) => ({
+            bookingEvents: bookingEvents.map((row: any) => ({
               id: row.id,
               date: row.date,
               startTime: row.startTime,
