@@ -385,10 +385,9 @@ export function BookingPaymentModal({
     setIsLoading(true);
     try {
       const requestIdempotencyKey =
-        idempotencyKeyRef.current ||
-        (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
           ? crypto.randomUUID()
-          : `${Date.now()}-${Math.random().toString(36).slice(2)}`);
+          : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
       idempotencyKeyRef.current = requestIdempotencyKey;
 
       const creditCents = Math.max(
