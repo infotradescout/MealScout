@@ -44,6 +44,30 @@ declare module "express-session" {
     googleAppContext?: "mealscout" | "tradescout";
     oauthUserType?: User["userType"];
     oauthRedirectPath?: string;
+    adminMarketSelection?: {
+      marketKey?: string | null;
+      city?: string | null;
+      state?: string | null;
+      latitude?: number | null;
+      longitude?: number | null;
+      updatedAt?: string | null;
+    };
+    deviceLocationContext?: {
+      marketKey?: string | null;
+      city?: string | null;
+      state?: string | null;
+      latitude?: number | null;
+      longitude?: number | null;
+      updatedAt?: string | null;
+    };
+    savedLocationContext?: {
+      marketKey?: string | null;
+      city?: string | null;
+      state?: string | null;
+      latitude?: number | null;
+      longitude?: number | null;
+      updatedAt?: string | null;
+    };
   }
 }
 

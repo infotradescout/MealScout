@@ -21,6 +21,7 @@ import {
   restaurantSubscriptions,
   suppliers,
 } from "@shared/schema";
+import { resolveEffectiveLocationContext } from "../services/sessionLocationContext";
 
 const FIRST_PARTNER_MESSAGE =
   "As an appreciation of being our first MealScout Partner, 3D Eats now has lifetime free access to all paid features. Keep killin it.";
@@ -370,13 +371,98 @@ export function registerAuthAccountRoutes(app: Express) {
       }
 
       if (user.mustResetPassword) {
-        return res.json({ ...safeUser, requiresPasswordReset: true });
+        return res.json({
+          ...safeUser,
+          requiresPasswordReset: true,
+          effectiveLocationContext: resolveEffectiveLocationContext(req, user),
+        });
       }
 
-      res.json(safeUser);
+      res.json({
+        ...safeUser,
+        effectiveLocationContext: resolveEffectiveLocationContext(req, user),
+      });
     } catch (error) {
       console.error("❌ Error fetching user:", error);
       res.status(500).json({ message: "Failed to fetch user" });
+    }
+  });
+
+  app.get("/api/location/context", isAuthenticated, async (req: any, res) => {
+    try {
+      res.json({
+        effectiveLocationContext: resolveEffectiveLocationContext(req, req.user),
+        adminMarketSelection: req.session?.adminMarketSelection || null,
+        deviceLocationContext: req.session?.deviceLocationContext || null,
+      });
+    } catch (error) {
+      console.error("Error fetching session location context:", error);
+      res.status(500).json({ message: "Failed to fetch location context" });
+    }
+  });
+
+  app.patch("/api/location/context", isAuthenticated, async (req: any, res) => {
+    try {
+      const schema = z.object({
+        mode: z.enum(["device", "admin_override", "clear_admin_override"]),
+        location: z
+          .object({
+            marketKey: z.string().min(2).max(64),
+            city: z.string().max(120).optional(),
+            state: z.string().max(64).optional(),
+            latitude: z.number().finite().optional(),
+            longitude: z.number().finite().optional(),
+          })
+          .optional(),
+      });
+      const parsed = schema.parse(req.body || {});
+      const updatedAt = new Date().toISOString();
+
+      if (parsed.mode === "clear_admin_override") {
+        req.session.adminMarketSelection = undefined;
+      } else {
+        const payload = {
+          marketKey: parsed.location?.marketKey || "",
+          city: parsed.location?.city || null,
+          state: parsed.location?.state || null,
+          latitude:
+            typeof parsed.location?.latitude === "number"
+              ? parsed.location.latitude
+              : null,
+          longitude:
+            typeof parsed.location?.longitude === "number"
+              ? parsed.location.longitude
+              : null,
+          updatedAt,
+        };
+        if (parsed.mode === "admin_override") {
+          req.session.adminMarketSelection = payload;
+        } else {
+          req.session.deviceLocationContext = payload;
+        }
+      }
+
+      req.session.save((err: unknown) => {
+        if (err) {
+          console.error("Failed to persist location context session:", err);
+          return res
+            .status(500)
+            .json({ message: "Failed to save location context" });
+        }
+        return res.json({
+          effectiveLocationContext: resolveEffectiveLocationContext(req, req.user),
+          adminMarketSelection: req.session?.adminMarketSelection || null,
+          deviceLocationContext: req.session?.deviceLocationContext || null,
+        });
+      });
+    } catch (error: any) {
+      if (error instanceof z.ZodError) {
+        return res
+          .status(400)
+          .json({ message: "Invalid location context payload", errors: error.errors });
+      }
+      console.error("Error updating session location context:", error);
+      return res.status(500).json({ message: "Failed to update location context" });
     }
   });
 
