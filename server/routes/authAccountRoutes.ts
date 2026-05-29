@@ -16,6 +16,7 @@ import {
   uploadToCloudinary,
   isCloudinaryConfigured,
 } from "../imageUpload";
+import { getBusinessAccessContext } from "../services/businessTeamAccess";
 import {
   insertUserAddressSchema,
   restaurantSubscriptions,
@@ -374,13 +375,51 @@ export function registerAuthAccountRoutes(app: Express) {
         return res.json({
           ...safeUser,
           requiresPasswordReset: true,
+          businessOnboardingRequired: false,
+          businessOnboardingPath: null,
           effectiveLocationContext: resolveEffectiveLocationContext(req, user),
         });
+      }
+
+      let businessOnboardingRequired = false;
+      let businessOnboardingPath: string | null = null;
+      let businessAccessSummary: any = null;
+      const normalizedUserType = String(user?.userType || "").toLowerCase();
+      const isBusinessCapableUser =
+        normalizedUserType === "food_truck" ||
+        normalizedUserType === "restaurant_owner";
+      if (isBusinessCapableUser) {
+        try {
+          const businessAccess = await getBusinessAccessContext(user.id);
+          businessAccessSummary = {
+            linkState: businessAccess.linkState,
+            guidance: businessAccess.guidance,
+            restaurantCount: Array.isArray(businessAccess.restaurants)
+              ? businessAccess.restaurants.length
+              : 0,
+            primaryRestaurantId: businessAccess.primaryRestaurant?.id || null,
+          };
+          businessOnboardingRequired = businessAccess.linkState === "not_attached";
+          if (businessOnboardingRequired) {
+            businessOnboardingPath =
+              normalizedUserType === "food_truck"
+                ? "/restaurant-signup?businessType=food_truck&source=auth&claim=1"
+                : "/restaurant-signup?businessType=restaurant&source=auth&claim=1";
+          }
+        } catch (businessAccessError) {
+          console.warn(
+            "Unable to resolve business access summary for auth payload:",
+            businessAccessError,
+          );
+        }
       }
 
       res.json({
         ...safeUser,
         effectiveLocationContext: resolveEffectiveLocationContext(req, user),
+        businessOnboardingRequired,
+        businessOnboardingPath,
+        businessAccessSummary,
       });
     } catch (error) {
       console.error("❌ Error fetching user:", error);

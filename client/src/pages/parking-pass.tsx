@@ -630,6 +630,9 @@ export default function ParkingPassPage() {
   });
   const { data: businessAccess } = useQuery<{
     hasAnyAccess: boolean;
+    linkState?: "linked" | "not_attached";
+    guidance?: string | null;
+    primaryRestaurant?: { id: string; name: string } | null;
     permissions: {
       manageParkingPass: boolean;
       manageProfile?: boolean;
@@ -657,6 +660,14 @@ export default function ParkingPassPage() {
     isAdminOrStaff ||
     user?.userType === "food_truck" ||
     businessAccess?.permissions?.manageProfile === true;
+  const requiresBusinessAttachment =
+    !isAdminOrStaff &&
+    (user?.userType === "food_truck" || user?.userType === "restaurant_owner") &&
+    businessAccess?.linkState === "not_attached";
+  const businessSetupPath =
+    user?.userType === "food_truck"
+      ? "/restaurant-signup?businessType=food_truck&source=parking-pass&claim=1"
+      : "/restaurant-signup?businessType=restaurant&source=parking-pass&claim=1";
   const hasPremiumTruckTools =
     canManageParkingPass &&
     (isAdminOrStaff || Boolean(subscription?.hasAccess));
@@ -3071,12 +3082,25 @@ export default function ParkingPassPage() {
   };
 
   const startCheckout = () => {
+    if (requiresBusinessAttachment) {
+      toast({
+        title: "Connect your business first",
+        description:
+          businessAccess?.guidance ||
+          "Connect or claim your business to continue.",
+        variant: "destructive",
+      });
+      setLocation(businessSetupPath);
+      return;
+    }
     if (!hasFoodTruckBusiness || !truckId) {
       toast({
         title: "Food truck profile required",
-        description: "Only food trucks can book Parking Pass spots.",
+        description:
+          "Complete or claim your food truck profile before booking Parking Pass spots.",
         variant: "destructive",
       });
+      setLocation("/restaurant-signup?businessType=food_truck&source=parking-pass&claim=1");
       return;
     }
     if (cartItems.length === 0) {

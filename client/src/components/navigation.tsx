@@ -134,6 +134,12 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     user?.userType === "super_admin";
   const isStaff = user?.userType === "staff";
   const isEventCoordinator = user?.userType === "event_coordinator";
+  const businessOnboardingRequired = user?.businessOnboardingRequired === true;
+  const businessOnboardingPath =
+    user?.businessOnboardingPath ||
+    (isFoodTruck
+      ? "/restaurant-signup?businessType=food_truck&source=navigation&claim=1"
+      : "/restaurant-signup?businessType=restaurant&source=navigation&claim=1");
 
   const { data: businessAccess } = useQuery<{
     hasAnyAccess: boolean;
@@ -238,14 +244,26 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
       { path: dashboardPath, icon: LayoutDashboard, label: "Dashboard" },
     ],
     food_truck: [
-      { path: "/parking-pass", icon: ParkingSquare, label: "Parking Pass" },
-      { path: "/orders", icon: ShoppingCart, label: "Orders" },
-      { path: "/kitchen", icon: ChefHat, label: "Kitchen" },
+      businessOnboardingRequired
+        ? { path: businessOnboardingPath, icon: Store, label: "Set Up" }
+        : { path: "/parking-pass", icon: ParkingSquare, label: "Parking Pass" },
+      businessOnboardingRequired
+        ? { path: businessOnboardingPath, icon: UserPlus, label: "Claim" }
+        : { path: "/orders", icon: ShoppingCart, label: "Orders" },
+      businessOnboardingRequired
+        ? { path: businessOnboardingPath, icon: Truck, label: "Truck" }
+        : { path: "/kitchen", icon: ChefHat, label: "Kitchen" },
     ],
     restaurant: [
-      { path: "/orders", icon: ShoppingCart, label: "Orders" },
-      { path: "/kitchen", icon: ChefHat, label: "Kitchen" },
-      { path: dashboardPath, icon: LayoutDashboard, label: "Dashboard" },
+      businessOnboardingRequired
+        ? { path: businessOnboardingPath, icon: Store, label: "Set Up" }
+        : { path: "/orders", icon: ShoppingCart, label: "Orders" },
+      businessOnboardingRequired
+        ? { path: businessOnboardingPath, icon: UserPlus, label: "Claim" }
+        : { path: "/kitchen", icon: ChefHat, label: "Kitchen" },
+      businessOnboardingRequired
+        ? { path: businessOnboardingPath, icon: LayoutDashboard, label: "Finish" }
+        : { path: dashboardPath, icon: LayoutDashboard, label: "Dashboard" },
     ],
     host: [
       { path: "/parking-pass", icon: ParkingSquare, label: "Parking Pass" },

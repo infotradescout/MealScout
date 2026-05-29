@@ -16,7 +16,18 @@ export function useAuth() {
     error,
     refetch,
   } = useQuery<
-    User & { requiresPasswordReset?: boolean; loginAnnouncement?: string }
+    User & {
+      requiresPasswordReset?: boolean;
+      loginAnnouncement?: string;
+      businessOnboardingRequired?: boolean;
+      businessOnboardingPath?: string | null;
+      businessAccessSummary?: {
+        linkState?: "linked" | "not_attached";
+        guidance?: string | null;
+        restaurantCount?: number;
+        primaryRestaurantId?: string | null;
+      } | null;
+    }
   >({
     queryKey: ["/api/auth/user"],
     queryFn: getQueryFn({ on401: "returnNull", timeoutMs: 6000 }),
@@ -52,6 +63,36 @@ export function useAuth() {
       setLocation("/change-password");
     }
   }, [user, setLocation]);
+
+  useEffect(() => {
+    if (!user?.businessOnboardingRequired) return;
+    const pathname = window.location.pathname || "";
+    const isOnboardingPage =
+      pathname.startsWith("/restaurant-signup") ||
+      pathname.startsWith("/claim-truck") ||
+      pathname.startsWith("/profile");
+    if (isOnboardingPage) return;
+
+    const requiresLinkedBusinessRoute =
+      pathname.startsWith("/parking-pass") ||
+      pathname.startsWith("/restaurant-owner-dashboard") ||
+      pathname.startsWith("/deal-creation") ||
+      pathname.startsWith("/kitchen") ||
+      pathname.startsWith("/orders");
+    if (!requiresLinkedBusinessRoute) return;
+
+    const target =
+      user.businessOnboardingPath ||
+      (user.userType === "food_truck"
+        ? "/restaurant-signup?businessType=food_truck&source=auth-guard&claim=1"
+        : "/restaurant-signup?businessType=restaurant&source=auth-guard&claim=1");
+    setLocation(target);
+  }, [
+    user?.businessOnboardingRequired,
+    user?.businessOnboardingPath,
+    user?.userType,
+    setLocation,
+  ]);
 
   useEffect(() => {
     if (user?.affiliateTag || user?.id) {
