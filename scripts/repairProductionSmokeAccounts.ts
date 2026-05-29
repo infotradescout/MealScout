@@ -126,19 +126,10 @@ async function ensureSmokeRestaurant(
       select id
       from restaurants
       where lower(name) = lower($1)
-        and coalesce(raw_data->>'smokeSeed','false') = 'true'
       limit 1
     `,
     [params.name],
   );
-
-  const rawData = {
-    smokeSeed: true,
-    smokeKey: params.key,
-    hiddenFromDiscovery: true,
-    source: "repairProductionSmokeAccounts",
-    updatedAt: new Date().toISOString(),
-  };
 
   if (existing.rows.length > 0) {
     const id = String(existing.rows[0].id);
@@ -153,7 +144,6 @@ async function ensureSmokeRestaurant(
           is_verified = false,
           city = $5,
           state = $6,
-          raw_data = coalesce(raw_data, '{}'::jsonb) || $7::jsonb,
           updated_at = now()
         where id = $1
       `,
@@ -164,7 +154,6 @@ async function ensureSmokeRestaurant(
         params.businessType === "food_truck",
         params.city,
         params.state,
-        JSON.stringify(rawData),
       ],
     );
     return id;
@@ -183,11 +172,10 @@ async function ensureSmokeRestaurant(
         is_verified,
         city,
         state,
-        raw_data,
         created_at,
         updated_at
       ) values (
-        $1, $2, $3, $4, $5, false, false, $6, $7, $8::jsonb, now(), now()
+        $1, $2, $3, $4, $5, false, false, $6, $7, now(), now()
       )
     `,
     [
@@ -198,7 +186,6 @@ async function ensureSmokeRestaurant(
       params.businessType === "food_truck",
       params.city,
       params.state,
-      JSON.stringify(rawData),
     ],
   );
   return id;
@@ -214,7 +201,6 @@ async function clearUserBusinessLinksExcept(
       update restaurants
       set owner_id = null, updated_at = now()
       where owner_id = $1
-        and coalesce(raw_data->>'smokeSeed','false') = 'true'
         and (
           cardinality($2::uuid[]) = 0
           or id <> all($2::uuid[])
@@ -371,4 +357,3 @@ main().catch((error) => {
   console.error("[smoke-repair] failed:", error);
   process.exit(1);
 });
-
