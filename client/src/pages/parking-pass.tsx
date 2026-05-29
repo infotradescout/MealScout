@@ -7048,6 +7048,13 @@ export default function ParkingPassPage() {
                                   null;
                                 const bookingListing =
                                   listingForDate || displayListing;
+                                const popupDateKeys = Array.from(
+                                  new Set(
+                                    group.listings.map((listing) =>
+                                      getListingDateKey(listing.date),
+                                    ),
+                                  ),
+                                ).sort();
                                 const paymentsReady = Boolean(
                                   platformPaymentsReady,
                                 );
@@ -7131,6 +7138,31 @@ export default function ParkingPassPage() {
                                           ? "Any time"
                                           : `${displayListing.startTime} - ${displayListing.endTime}`}
                                       </p>
+                                    )}
+                                    {popupDateKeys.length > 0 && (
+                                      <div className="flex items-center justify-between gap-2">
+                                        <span className="text-[11px] text-[color:var(--text-muted)]">
+                                          Date
+                                        </span>
+                                        <input
+                                          type="date"
+                                          className="rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-card)] px-2 py-1 text-[11px] text-[color:var(--text-primary)]"
+                                          value={selectedDate}
+                                          min={popupDateKeys[0]}
+                                          max={popupDateKeys[popupDateKeys.length - 1]}
+                                          onClick={(event) =>
+                                            event.stopPropagation()
+                                          }
+                                          onChange={(event) => {
+                                            event.stopPropagation();
+                                            const next = event.target.value;
+                                            if (!popupDateKeys.includes(next))
+                                              return;
+                                            setSelectedDate(next);
+                                            focusLocation(group.key, true);
+                                          }}
+                                        />
+                                      </div>
                                     )}
                                     {!listingForDate && (
                                       <p className="text-[11px] text-amber-700">
@@ -8594,6 +8626,40 @@ export default function ParkingPassPage() {
               hostName: selectedListing.host.businessName,
               hostPrice: selectedListing.hostPriceCents,
               slotSummary: selectedSlotTypes.map(formatSlotLabel).join(", "),
+            }}
+            bookingContext={{
+              weather: {
+                loading: isBookingWeatherFetching,
+                summary: isBookingWeatherFetching
+                  ? "Loading weather for this booking window..."
+                  : bookingWeatherData?.available
+                    ? `Temp ${bookingWeatherData.temperatureF ?? "n/a"}°F · Rain ${bookingWeatherData.rainRiskPercent ?? "n/a"}% · Wind ${bookingWeatherData.windMph ?? "n/a"} mph`
+                    : String(
+                        bookingWeatherData?.message ||
+                          "Weather forecast unavailable for this booking window.",
+                      ),
+              },
+              footTraffic: {
+                loading: isScheduleFootTrafficFetching,
+                summary: isScheduleFootTrafficFetching
+                  ? "Loading nearby traffic cells..."
+                  : typeof scheduleFootTrafficData?.cells?.length === "number"
+                    ? scheduleFootTrafficData.cells.length > 0
+                      ? `${scheduleFootTrafficData.cells.length} nearby traffic cells detected`
+                      : "No nearby cells detected for this schedule window"
+                    : "Foot traffic unavailable",
+              },
+              truckActivity: {
+                summary:
+                  Array.isArray(selectedListing.bookings) &&
+                  selectedListing.bookings.length > 0
+                    ? `${selectedListing.bookings.length} truck(s) currently booked at this spot`
+                    : "No trucks currently booked at this spot",
+              },
+              truckReviews: {
+                summary:
+                  "Truck-to-truck spot reviews are not yet available in checkout. We'll surface this here once shared report data is live.",
+              },
             }}
             onSuccess={({ outcome }) => {
               handleSuccess(outcome);
