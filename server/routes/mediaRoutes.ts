@@ -12,6 +12,7 @@ import {
   uploadToCloudinary,
 } from "../imageUpload";
 import { imageUploads } from "@shared/schema";
+import { hasBusinessPermissionForRestaurant } from "../services/businessTeamAccess";
 
 export function registerMediaRoutes(app: Express) {
   const isStaffOrAdminUserType = (userType?: string | null) =>
@@ -45,10 +46,15 @@ export function registerMediaRoutes(app: Express) {
         if (!restaurant) {
           return res.status(404).json({ message: "Restaurant not found" });
         }
-        if (
-          restaurant.ownerId !== req.user.id &&
-          !isStaffOrAdminUserType(req.user?.userType)
-        ) {
+        const isStaffOrAdmin = isStaffOrAdminUserType(req.user?.userType);
+        const hasManageProfilePermission = isStaffOrAdmin
+          ? true
+          : await hasBusinessPermissionForRestaurant(
+              String(req.user.id),
+              String(restaurantId),
+              "manageProfile",
+            );
+        if (!hasManageProfilePermission) {
           return res.status(403).json({ message: "Not authorized" });
         }
 
@@ -140,10 +146,15 @@ export function registerMediaRoutes(app: Express) {
         if (!restaurant) {
           return res.status(404).json({ message: "Restaurant not found" });
         }
-        if (
-          restaurant.ownerId !== req.user.id &&
-          !isStaffOrAdminUserType(req.user?.userType)
-        ) {
+        const isStaffOrAdmin = isStaffOrAdminUserType(req.user?.userType);
+        const hasManageProfilePermission = isStaffOrAdmin
+          ? true
+          : await hasBusinessPermissionForRestaurant(
+              String(req.user.id),
+              String(restaurantId),
+              "manageProfile",
+            );
+        if (!hasManageProfilePermission) {
           return res.status(403).json({ message: "Not authorized" });
         }
 
@@ -248,7 +259,14 @@ export function registerMediaRoutes(app: Express) {
           return res.status(404).json({ message: "Restaurant not found" });
         }
         const isStaffOrAdmin = isStaffOrAdminUserType(req.user?.userType);
-        if (restaurant.ownerId !== req.user.id && !isStaffOrAdmin) {
+        const hasManageProfilePermission = isStaffOrAdmin
+          ? true
+          : await hasBusinessPermissionForRestaurant(
+              String(req.user.id),
+              String(restaurantId),
+              "manageProfile",
+            );
+        if (!hasManageProfilePermission) {
           return res.status(403).json({ message: "Not authorized" });
         }
 
@@ -330,7 +348,14 @@ export function registerMediaRoutes(app: Express) {
           return res.status(404).json({ message: "Restaurant not found" });
         }
         const isStaffOrAdmin = isStaffOrAdminUserType(req.user?.userType);
-        if (restaurant.ownerId !== req.user.id && !isStaffOrAdmin) {
+        const hasManageProfilePermission = isStaffOrAdmin
+          ? true
+          : await hasBusinessPermissionForRestaurant(
+              String(req.user.id),
+              String(restaurantId),
+              "manageProfile",
+            );
+        if (!hasManageProfilePermission) {
           return res.status(403).json({ message: "Not authorized" });
         }
 

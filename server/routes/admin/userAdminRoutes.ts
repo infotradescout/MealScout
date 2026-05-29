@@ -35,6 +35,7 @@ import {
   users,
   verificationRequests,
 } from "@shared/schema";
+import { getBusinessAccessContext } from "../../services/businessTeamAccess";
 
 type DenyStaffEdits = (req: any, res: any) => boolean;
 type RequireAdminUser = (req: any, res: any) => boolean;
@@ -73,6 +74,90 @@ export function registerUserAdminRoutes(
     resetHostPricingColumnsCache,
     isMissingColumnError,
   } = deps;
+
+  app.post(
+    "/api/admin/business-users/:userId/attach-restaurant",
+    isAuthenticated,
+    isStaffOrAdmin,
+    async (req: any, res) => {
+      if (!requireAdminUser(req, res)) return;
+      try {
+        const actorType = String(req.user?.userType || "").toLowerCase();
+        if (actorType !== "super_admin" && actorType !== "duper_admin") {
+          return res.status(403).json({
+            message: "Only super admin can attach a business user to a business.",
+          });
+        }
+
+        const userId = String(req.params.userId || "").trim();
+        const restaurantId = String(req.body?.restaurantId || "").trim();
+        if (!userId || !restaurantId) {
+          return res.status(400).json({
+            message: "userId and restaurantId are required.",
+          });
+        }
+
+        const targetUser = await storage.getUser(userId);
+        if (!targetUser) {
+          return res.status(404).json({ message: "User not found" });
+        }
+        const restaurant = await storage.getRestaurant(restaurantId);
+        if (!restaurant) {
+          return res.status(404).json({ message: "Restaurant not found" });
+        }
+
+        const allowedBusinessTypes = new Set([
+          "restaurant_owner",
+          "food_truck",
+          "admin",
+          "duper_admin",
+          "super_admin",
+        ]);
+        if (!allowedBusinessTypes.has(String(targetUser.userType || ""))) {
+          return res.status(400).json({
+            message:
+              "Target user must be a business-capable account (restaurant_owner or food_truck).",
+          });
+        }
+
+        await db
+          .update(restaurants)
+          .set({
+            ownerId: userId,
+            updatedAt: new Date(),
+          })
+          .where(eq(restaurants.id, restaurantId));
+
+        const accessContext = await getBusinessAccessContext(userId);
+        await logAudit(
+          req.user?.id || "",
+          "admin_attach_business_user",
+          "restaurant",
+          restaurantId,
+          req.ip || "",
+          String(req.get("user-agent") || ""),
+          {
+            attachedUserId: userId,
+            previousOwnerId: restaurant.ownerId || null,
+            restaurantId,
+          },
+        );
+
+        res.json({
+          success: true,
+          userId,
+          restaurantId,
+          previousOwnerId: restaurant.ownerId || null,
+          accessContext,
+        });
+      } catch (error: any) {
+        console.error("Error attaching business user to restaurant:", error);
+        res.status(500).json({
+          message: error?.message || "Failed to attach business user",
+        });
+      }
+    },
+  );
 
   app.post(
     "/api/admin/users/:id/resend-verification",

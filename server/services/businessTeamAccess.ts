@@ -178,9 +178,21 @@ export async function getBusinessAccessContext(userId: string) {
 
   const scopedRestaurants = Array.from(restaurantsById.values());
   const allPermissions = mergePermissions(scopedRestaurants.map((r) => r.permissions));
+  const primaryRestaurant =
+    scopedRestaurants.find((restaurant) => restaurant.isOwner) ||
+    scopedRestaurants[0] ||
+    null;
+  const linkState =
+    scopedRestaurants.length > 0 ? "linked" : "not_attached";
 
   return {
     restaurants: scopedRestaurants,
+    primaryRestaurant,
+    linkState,
+    guidance:
+      linkState === "linked"
+        ? null
+        : "Connect or claim your business to continue.",
     permissions: allPermissions,
     hasAnyAccess:
       scopedRestaurants.length > 0 &&
