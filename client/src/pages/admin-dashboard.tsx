@@ -2267,6 +2267,7 @@ export default function AdminDashboard() {
   const [userBusinessOnly, setUserBusinessOnly] = useState(false);
   const [userCityFilter, setUserCityFilter] = useState("");
   const [userStateFilter, setUserStateFilter] = useState("");
+  const [verificationSearch, setVerificationSearch] = useState("");
   const [messageSubject, setMessageSubject] = useState("");
   const [messageBody, setMessageBody] = useState("");
   const [messagePreview, setMessagePreview] = useState<any>(null);
@@ -4937,6 +4938,23 @@ export default function AdminDashboard() {
       enabled: !!adminUser && selectedTab === "verifications",
     });
 
+  const filteredVerificationRequests = useMemo(() => {
+    const search = verificationSearch.trim().toLowerCase();
+    if (!search) return verificationRequests;
+    return verificationRequests.filter((request: any) => {
+      const restaurantName = `${request?.restaurant?.name || ""}`.toLowerCase();
+      const address = `${request?.restaurant?.address || ""}`.toLowerCase();
+      const status = `${request?.status || ""}`.toLowerCase();
+      const ownerEmail = `${request?.restaurant?.email || ""}`.toLowerCase();
+      return (
+        restaurantName.includes(search) ||
+        address.includes(search) ||
+        status.includes(search) ||
+        ownerEmail.includes(search)
+      );
+    });
+  }, [verificationRequests, verificationSearch]);
+
   // Approve restaurant mutation
   const approveRestaurant = useMutation({
     mutationFn: async (restaurantId: string) => {
@@ -6355,6 +6373,42 @@ export default function AdminDashboard() {
             </CardContent>
           </Card>
         )}
+
+        <Card className="mb-4 border-primary/30 bg-background/70">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Admin Quick Tools</CardTitle>
+            <CardDescription>
+              Jump straight to verification review, user search, or business search.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setSelectedTab("verifications")}
+            >
+              Open Verification Queue
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setSelectedTab("users")}
+            >
+              Search Users
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setSelectedTab("users");
+                setUserBusinessOnly(true);
+                setUserTypeFilter("all");
+              }}
+            >
+              Search Businesses
+            </Button>
+          </CardContent>
+        </Card>
 
         {/* Main Content Tabs */}
         <Tabs
@@ -8115,6 +8169,28 @@ export default function AdminDashboard() {
                     below before the user list. Staff/admin accounts and opted-out
                     users are protected by default.
                   </div>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setUserBusinessOnly(false);
+                        setUserSearch("");
+                      }}
+                    >
+                      User search mode
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setUserBusinessOnly(true);
+                        setUserSearch("");
+                      }}
+                    >
+                      Business search mode
+                    </Button>
+                  </div>
                   <div className="flex flex-wrap gap-2">
                     <input
                       value={userSearch}
@@ -8805,18 +8881,36 @@ export default function AdminDashboard() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
+                <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <input
+                    value={verificationSearch}
+                    onChange={(e) => setVerificationSearch(e.target.value)}
+                    placeholder="Search business, email, address, status"
+                    className="text-xs px-2 py-1 border rounded-md bg-background sm:min-w-[320px]"
+                  />
+                  <div className="text-xs text-muted-foreground">
+                    {filteredVerificationRequests.length} visible
+                    {verificationSearch.trim()
+                      ? ` (filtered from ${verificationRequests.length})`
+                      : ""}
+                  </div>
+                </div>
                 {loadingVerifications ? (
                   <div className="flex items-center justify-center p-8">
                     <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
                   </div>
-                ) : verificationRequests.length === 0 ? (
+                ) : filteredVerificationRequests.length === 0 ? (
                   <div className="text-center p-8 text-muted-foreground">
                     <Shield className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                    <p>No verification requests found</p>
+                    <p>
+                      {verificationSearch.trim()
+                        ? "No verification requests match your search"
+                        : "No verification requests found"}
+                    </p>
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {verificationRequests.map((request: any) => {
+                    {filteredVerificationRequests.map((request: any) => {
                       const documentCount = Array.isArray(request.documents)
                         ? request.documents.filter(
                             (doc: unknown) =>
