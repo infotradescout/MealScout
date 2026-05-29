@@ -35,7 +35,7 @@ const funnelChecks: Array<{ stage: string; snippets: string[] }> = [
   },
   {
     stage: "parking_pass_feed_load",
-    snippets: ['fetch("/api/parking-pass")', "filterBookablePassListings"],
+    snippets: ['fetch(apiUrl("/api/parking-pass"))', "filterBookablePassListings"],
   },
   {
     stage: "selection_recovery_before_payment",
@@ -52,7 +52,7 @@ const funnelChecks: Array<{ stage: string; snippets: string[] }> = [
     stage: "stripe_config_and_checkout_prep",
     snippets: [
       'fetch(apiUrl("/api/payments/stripe-config"))',
-      "const res = await fetch(`/api/parking-pass/${passId}/book`, {",
+      "const res = await fetch(apiUrl(`/api/parking-pass/${passId}/book`), {",
       '"Idempotency-Key": requestIdempotencyKey',
     ],
   },

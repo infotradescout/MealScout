@@ -953,7 +953,7 @@ export default function ParkingPassPage() {
   >({
     queryKey: ["/api/parking-pass/host-ids"],
     queryFn: async () => {
-      const res = await fetch("/api/parking-pass/host-ids");
+      const res = await fetch(apiUrl("/api/parking-pass/host-ids"));
       if (!res.ok) throw new Error("Failed to load bookable hosts");
       return res.json();
     },
@@ -1118,7 +1118,9 @@ export default function ParkingPassPage() {
   const reloadHostPassListings = async (hostId: string) => {
     if (!hostId) return;
     try {
-      const res = await fetch(`/api/hosts/parking-pass?hostId=${hostId}`);
+      const res = await fetch(
+        apiUrl(`/api/hosts/parking-pass?hostId=${hostId}`),
+      );
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data)) {
@@ -1144,7 +1146,7 @@ export default function ParkingPassPage() {
 
   const reloadPassListings = async (options?: { silent?: boolean }) => {
     try {
-      const listingsRes = await fetch("/api/parking-pass");
+      const listingsRes = await fetch(apiUrl("/api/parking-pass"));
       if (!listingsRes.ok) {
         throw new Error("Failed to load parking pass listings");
       }
@@ -1168,7 +1170,7 @@ export default function ParkingPassPage() {
     if (!selectedTruckId) return;
     try {
       const res = await fetch(
-        `/api/bookings/truck/${selectedTruckId}/schedule`,
+        apiUrl(`/api/bookings/truck/${selectedTruckId}/schedule`),
       );
       if (!res.ok) {
         throw new Error("Failed to load booked schedule");
@@ -1204,7 +1206,7 @@ export default function ParkingPassPage() {
 
     setCancelingBookingId(bookingId);
     try {
-      const res = await fetch(`/api/bookings/${bookingId}/cancel`, {
+      const res = await fetch(apiUrl(`/api/bookings/${bookingId}/cancel`), {
         method: "POST",
         credentials: "include",
       });
@@ -1288,7 +1290,7 @@ export default function ParkingPassPage() {
       setIsLoading(true);
       try {
         if (isAuthenticated) {
-          const truckRes = await fetch("/api/restaurants/my-restaurants");
+          const truckRes = await fetch(apiUrl("/api/restaurants/my-restaurants"));
           if (truckRes.ok) {
             const trucks = await truckRes.json();
             if (!cancelled) {
@@ -1309,7 +1311,7 @@ export default function ParkingPassPage() {
             setTruckId(null);
             setTruck(null);
           }
-          const hostRes = await fetch("/api/hosts");
+          const hostRes = await fetch(apiUrl("/api/hosts"));
           if (hostRes.ok) {
             const hostList = await hostRes.json();
             if (!cancelled && Array.isArray(hostList) && hostList.length > 0) {
@@ -1325,7 +1327,7 @@ export default function ParkingPassPage() {
           }
         }
 
-        const listingsRes = await fetch("/api/parking-pass");
+        const listingsRes = await fetch(apiUrl("/api/parking-pass"));
         if (!listingsRes.ok) {
           throw new Error("Failed to load parking pass listings");
         }
