@@ -53,9 +53,12 @@ export function apiUrl(path: string): string {
       host === "mealscout.us" ||
       host.endsWith(".mealscout.us");
     const isAuthPath = path.startsWith("/api/auth/");
+    const isAdminPath = path.startsWith("/api/admin/");
     // Keep auth/session bootstrap same-origin on MealScout hosts so OAuth/session
     // cookies remain first-party and survive mobile browser privacy rules.
-    if (isMealScoutHost && isAuthPath) {
+    // Keep admin routes same-origin as well because admin sessions are scoped to
+    // the frontend host and cross-origin calls can appear as anonymous.
+    if (isMealScoutHost && (isAuthPath || isAdminPath)) {
       return path.startsWith("/") ? path : `/${path}`;
     }
   }
