@@ -57,6 +57,7 @@ const ReporterReputationPage = lazy(
 const ModerationPolicy = lazy(() => import("@/pages/public/ModerationPolicy"));
 const AdminAuditLogs = lazy(() => import("@/pages/AdminAuditLogs"));
 const AdminVacLogs = lazy(() => import("@/pages/AdminVacLogs"));
+const AdminOpsTools = lazy(() => import("@/pages/admin-ops-tools"));
 const AdminTelemetry = lazy(() => import("@/pages/admin-telemetry"));
 const AdminAffiliateManagement = lazy(
   () => import("@/pages/AdminAffiliateManagement"),
@@ -418,6 +419,7 @@ function Router() {
             <Route path="/post-verification" component={PostVerification} />
             <Route path="/admin" component={AdminLogin} />
             <Route path="/admin/login" component={AdminLogin} />
+            <Route path="/admin/ops-tools" component={AdminLogin} />
             <Route path="/menu/:restaurantId" component={OnlineMenuPage} />
             <Route
               path="/checkout/:restaurantId"
@@ -509,6 +511,7 @@ function Router() {
             />
             <Route path="/admin/audit-logs" component={AdminAuditLogs} />
             <Route path="/admin/vac-logs" component={AdminVacLogs} />
+            <Route path="/admin/ops-tools" component={AdminOpsTools} />
             <Route path="/admin/telemetry" component={AdminTelemetry} />
             <Route path="/admin/geo-ads" component={AdminGeoAds} />
             <Route path="/admin/geo/heatmap" component={AdminMarketHeatmap} />
