@@ -52,6 +52,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useEffectiveLocationContext } from "@/hooks/useEffectiveLocationContext";
 import ShareButton from "@/components/share-button";
+import LongPressHelp from "@/components/long-press-help";
 import { initFacebookSDK, postToFacebook } from "@/lib/facebook";
 import { apiUrl } from "@/lib/api";
 import { apiRequest } from "@/lib/queryClient";
@@ -4247,6 +4248,20 @@ export default function ParkingPassPage() {
           <p className="text-xs text-[color:var(--text-muted)]">
             Find spots, book parking, and run your operating schedule from one place.
           </p>
+          <p className="mt-1 text-xs text-[color:var(--text-muted)]">
+            You are here as{" "}
+            <span className="font-semibold text-[color:var(--text-primary)]">
+              {topTab === "host"
+                ? "Host"
+                : isTruckViewUser
+                  ? "Food truck"
+                  : isAdminOrStaff
+                    ? "Admin/staff"
+                    : "Operator"}
+            </span>
+            . Start with <span className="font-semibold text-[color:var(--text-primary)]">Find &amp; Book</span> to secure a spot, then use{" "}
+            <span className="font-semibold text-[color:var(--text-primary)]">My Schedule</span> to run your day.
+          </p>
           {isAdminOrStaff && (
             <div className="mt-3 flex flex-wrap gap-2">
               <Button
@@ -7779,26 +7794,28 @@ export default function ParkingPassPage() {
                                     time.
                                   </p>
                                   {isActive && listingForDate && (
-                                    <Button
-                                      size="sm"
-                                      type="button"
-                                      onClick={(event) => {
-                                        event.preventDefault();
-                                        event.stopPropagation();
-                                        handleBookSelected(listingForDate);
-                                      }}
-                                      disabled={selectedSlots.length === 0}
-                                    >
-                                      Book Spot
-                                      {selectedTotalWithFee > 0 && (
-                                        <span className="ml-2 text-xs">
-                                          $
-                                          {(
-                                            (selectedTotalWithFee || 0) / 100
-                                          ).toFixed(2)}
-                                        </span>
-                                      )}
-                                    </Button>
+                                    <LongPressHelp description="Reserve this selected slot and continue to checkout.">
+                                      <Button
+                                        size="sm"
+                                        type="button"
+                                        onClick={(event) => {
+                                          event.preventDefault();
+                                          event.stopPropagation();
+                                          handleBookSelected(listingForDate);
+                                        }}
+                                        disabled={selectedSlots.length === 0}
+                                      >
+                                        Book Spot
+                                        {selectedTotalWithFee > 0 && (
+                                          <span className="ml-2 text-xs">
+                                            $
+                                            {(
+                                              (selectedTotalWithFee || 0) / 100
+                                            ).toFixed(2)}
+                                          </span>
+                                        )}
+                                      </Button>
+                                    </LongPressHelp>
                                   )}
                                 </div>
                               ) : (
@@ -8142,28 +8159,30 @@ export default function ParkingPassPage() {
                                 {isActive &&
                                   listingForDate &&
                                   canStartTruckCheckout && (
-                                  <Button
-                                    size="sm"
-                                    type="button"
-                                    onClick={(event) => {
-                                      event.preventDefault();
-                                      event.stopPropagation();
-                                      handleBookSelected(listingForDate);
-                                    }}
-                                    disabled={
-                                      !canBook || selectedSlots.length === 0
-                                    }
-                                  >
-                                    Book Spot
-                                    {selectedTotalWithFee > 0 && (
-                                      <span className="ml-2 text-xs">
-                                        $
-                                        {(
-                                          (selectedTotalWithFee || 0) / 100
-                                        ).toFixed(2)}
-                                      </span>
-                                    )}
-                                  </Button>
+                                  <LongPressHelp description="Reserve this selected slot and continue to checkout.">
+                                    <Button
+                                      size="sm"
+                                      type="button"
+                                      onClick={(event) => {
+                                        event.preventDefault();
+                                        event.stopPropagation();
+                                        handleBookSelected(listingForDate);
+                                      }}
+                                      disabled={
+                                        !canBook || selectedSlots.length === 0
+                                      }
+                                    >
+                                      Book Spot
+                                      {selectedTotalWithFee > 0 && (
+                                        <span className="ml-2 text-xs">
+                                          $
+                                          {(
+                                            (selectedTotalWithFee || 0) / 100
+                                          ).toFixed(2)}
+                                        </span>
+                                      )}
+                                    </Button>
+                                  </LongPressHelp>
                                 )}
                               </div>
                             ) : (
@@ -8630,24 +8649,26 @@ export default function ParkingPassPage() {
                                     time.
                                   </p>
                                   {canStartTruckCheckout && (
-                                    <Button
-                                      size="sm"
-                                      type="button"
-                                      onClick={(event) => {
-                                        event.preventDefault();
-                                        event.stopPropagation();
-                                        handleBookSelected(activeListingForDate);
-                                      }}
-                                      disabled={
-                                        (
-                                          selectedSlotsByListing[
-                                            activeListingForDate.id
-                                          ] || []
-                                        ).length === 0
-                                      }
-                                    >
-                                      Book Spot
-                                    </Button>
+                                    <LongPressHelp description="Reserve this selected slot and continue to checkout.">
+                                      <Button
+                                        size="sm"
+                                        type="button"
+                                        onClick={(event) => {
+                                          event.preventDefault();
+                                          event.stopPropagation();
+                                          handleBookSelected(activeListingForDate);
+                                        }}
+                                        disabled={
+                                          (
+                                            selectedSlotsByListing[
+                                              activeListingForDate.id
+                                            ] || []
+                                          ).length === 0
+                                        }
+                                      >
+                                        Book Spot
+                                      </Button>
+                                    </LongPressHelp>
                                   )}
                                 </div>
                               )}

@@ -96,6 +96,7 @@ import {
   type OwnerValueAttributionEntity,
   type OwnerValueAttributionResponse,
 } from "@/lib/owner-value-attribution-client";
+import LongPressHelp from "@/components/long-press-help";
 
 interface DashboardStats {
   totalDeals: number;
@@ -1851,37 +1852,43 @@ export default function RestaurantOwnerDashboard() {
               (subscription as any)?.status === "active" ||
               (subscription as any)?.hasAccess === true ? (
                 <Link href="/deal-creation">
-                  <Button
-                    data-testid="button-create-deal"
-                    className="w-full sm:w-auto"
-                  >
-                    <Plus className="mr-2 h-4 w-4" />
-                    Create New Special
-                  </Button>
+                  <LongPressHelp description="Create a new deal that appears on your public MealScout profile.">
+                    <Button
+                      data-testid="button-create-deal"
+                      className="w-full sm:w-auto"
+                    >
+                      <Plus className="mr-2 h-4 w-4" />
+                      Create New Special
+                    </Button>
+                  </LongPressHelp>
                 </Link>
               ) : (
                 <Link href="/subscribe?next=/deal-creation&reason=create_deals">
-                  <Button
-                    variant="default"
-                    data-testid="button-subscribe"
-                    className="w-full sm:w-auto"
-                  >
-                    <CreditCard className="mr-2 h-4 w-4" />
-                    Subscribe to Create Specials
-                  </Button>
+                  <LongPressHelp description="Unlock deal publishing so customers can discover your specials.">
+                    <Button
+                      variant="default"
+                      data-testid="button-subscribe"
+                      className="w-full sm:w-auto"
+                    >
+                      <CreditCard className="mr-2 h-4 w-4" />
+                      Subscribe to Create Specials
+                    </Button>
+                  </LongPressHelp>
                 </Link>
               )
             ) : null}
             {canManageBilling ? (
               <Link href="/subscribe">
-                <Button
-                  variant="outline"
-                  data-testid="button-manage-subscription"
-                  className="w-full sm:w-auto"
-                >
-                  <Settings className="mr-2 h-4 w-4" />
-                  Manage Subscription
-                </Button>
+                <LongPressHelp description="Review billing status and manage your MealScout plan.">
+                  <Button
+                    variant="outline"
+                    data-testid="button-manage-subscription"
+                    className="w-full sm:w-auto"
+                  >
+                    <Settings className="mr-2 h-4 w-4" />
+                    Manage Subscription
+                  </Button>
+                </LongPressHelp>
               </Link>
             ) : null}
             {canManageDeals ? (
@@ -1900,6 +1907,20 @@ export default function RestaurantOwnerDashboard() {
         }
         className="bg-[var(--bg-card)] border-b border-border mb-8"
       />
+
+      <Card className="mb-6 border-[color:var(--border-subtle)] bg-[var(--bg-card)]">
+        <CardContent className="p-4 space-y-1">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[color:var(--text-muted)]">
+            Owner workspace
+          </p>
+          <p className="text-sm text-[color:var(--text-primary)]">
+            Manage your profile, menu visibility, deals, and booking readiness in one place.
+          </p>
+          <p className="text-xs text-[color:var(--text-muted)]">
+            Start with profile basics, then publish specials and monitor performance.
+          </p>
+        </CardContent>
+      </Card>
 
       {/* Restaurant Selector */}
       {restaurants.length > 1 && (

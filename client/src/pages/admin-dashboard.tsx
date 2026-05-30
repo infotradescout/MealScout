@@ -45,6 +45,7 @@ import QuickDashboardAccess from "@/components/quick-dashboard-access";
 import HostLocationManager from "@/components/admin/host-location-manager";
 import ShareHub from "@/components/share-hub";
 import { getOptimizedImageUrl } from "@/lib/images";
+import LongPressHelp from "@/components/long-press-help";
 import {
   Dialog,
   DialogContent,
@@ -6098,6 +6099,9 @@ export default function AdminDashboard() {
               <p className="text-primary text-sm font-medium uppercase tracking-[0.2em] mt-1">
                 Platform Control & Intelligence
               </p>
+              <p className="mt-2 text-xs text-white/70 max-w-2xl">
+                You are here as Admin. Use this space to fix user and business links, review quarantined profile evidence, and keep public data trustworthy.
+              </p>
             </div>
           </div>
           <Button
@@ -10491,30 +10495,32 @@ export default function AdminDashboard() {
                               </option>
                             ))}
                         </select>
-                        <Button
-                          size="sm"
-                          onClick={() => {
-                            if (!attachBusinessSelectedId) {
-                              toast({
-                                title: "Select a business",
-                                description:
-                                  "Choose a restaurant/truck before attaching.",
-                                variant: "destructive",
+                        <LongPressHelp description="Connect this user account to the selected restaurant or truck profile.">
+                          <Button
+                            size="sm"
+                            onClick={() => {
+                              if (!attachBusinessSelectedId) {
+                                toast({
+                                  title: "Select a business",
+                                  description:
+                                    "Choose a restaurant/truck before attaching.",
+                                  variant: "destructive",
+                                });
+                                return;
+                              }
+                              attachBusinessToUser.mutate({
+                                userId: selectedUser.id,
+                                restaurantId: attachBusinessSelectedId,
                               });
-                              return;
-                            }
-                            attachBusinessToUser.mutate({
-                              userId: selectedUser.id,
-                              restaurantId: attachBusinessSelectedId,
-                            });
-                          }}
-                          disabled={attachBusinessToUser.isPending}
-                          data-testid={`button-attach-selected-business-${selectedUser.id}`}
-                        >
-                          {attachBusinessToUser.isPending
-                            ? "Attaching..."
-                            : "Attach selected business"}
-                        </Button>
+                            }}
+                            disabled={attachBusinessToUser.isPending}
+                            data-testid={`button-attach-selected-business-${selectedUser.id}`}
+                          >
+                            {attachBusinessToUser.isPending
+                              ? "Attaching..."
+                              : "Attach selected business"}
+                          </Button>
+                        </LongPressHelp>
                       </div>
                     )}
                 </div>

@@ -27,6 +27,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useI18n } from "@/lib/i18n";
+import LongPressHelp from "@/components/long-press-help";
 
 type NavItem = {
   path?: string;
@@ -38,6 +39,15 @@ type NavItem = {
 
 type NavigationProps = {
   scope?: "global" | "local";
+};
+
+const NAV_HELP: Record<string, string> = {
+  Scout: "Find food trucks, restaurants, deals, and local food options near you.",
+  Deals: "Find or create local food deals based on your account type.",
+  "Parking Pass": "Food trucks use this to book approved host parking spots.",
+  Profile: "Manage your account, saved items, and business setup.",
+  More: "Open additional tools and pages for your account role.",
+  "Admin Dashboard": "Use admin tools to manage users, businesses, and platform operations.",
 };
 
 let hasGlobalNavigation = false;
@@ -404,39 +414,47 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
           <div className="flex items-center gap-1">
             {sixSlotNav.map((item, idx) =>
               item.path ? (
-                <Link
+                <LongPressHelp
                   key={`${item.path}-${idx}`}
-                  href={item.path}
-                  className={`inline-flex h-11 items-center gap-2 rounded-xl px-3 text-sm font-bold transition-all ${
-                    isActive(item.path)
-                      ? "bg-primary text-[#1a0d08] shadow-[0_0_20px_rgba(255,90,47,0.4)]"
-                      : "text-white/60 hover:text-white hover:bg-white/5"
-                  }`}
-                  aria-label={item.label}
+                  description={NAV_HELP[item.label] || `${item.label} navigation`}
                 >
-                  <item.icon className="h-4 w-4" />
-                  <span className="hidden lg:inline uppercase tracking-wider text-[11px]">
-                    {item.label}
-                  </span>
-                </Link>
+                  <Link
+                    href={item.path}
+                    className={`inline-flex h-11 items-center gap-2 rounded-xl px-3 text-sm font-bold transition-all ${
+                      isActive(item.path)
+                        ? "bg-primary text-[#1a0d08] shadow-[0_0_20px_rgba(255,90,47,0.4)]"
+                        : "text-white/60 hover:text-white hover:bg-white/5"
+                    }`}
+                    aria-label={item.label}
+                  >
+                    <item.icon className="h-4 w-4" />
+                    <span className="hidden lg:inline uppercase tracking-wider text-[11px]">
+                      {item.label}
+                    </span>
+                  </Link>
+                </LongPressHelp>
               ) : (
-                <button
+                <LongPressHelp
                   key={`more-${idx}`}
-                  type="button"
-                  aria-label={item.label}
-                  aria-expanded={moreOpen}
-                  onClick={item.onClick}
-                  className={`inline-flex h-11 items-center gap-2 rounded-xl px-3 text-sm font-bold transition-all ${
-                    moreOpen
-                      ? "bg-primary text-[#1a0d08] shadow-[0_0_20px_rgba(255,90,47,0.4)]"
-                      : "text-white/60 hover:text-white hover:bg-white/5"
-                  }`}
+                  description={NAV_HELP[item.label] || `${item.label} options`}
                 >
-                  <item.icon className="h-4 w-4" />
-                  <span className="hidden lg:inline uppercase tracking-wider text-[11px]">
-                    {item.label}
-                  </span>
-                </button>
+                  <button
+                    type="button"
+                    aria-label={item.label}
+                    aria-expanded={moreOpen}
+                    onClick={item.onClick}
+                    className={`inline-flex h-11 items-center gap-2 rounded-xl px-3 text-sm font-bold transition-all ${
+                      moreOpen
+                        ? "bg-primary text-[#1a0d08] shadow-[0_0_20px_rgba(255,90,47,0.4)]"
+                        : "text-white/60 hover:text-white hover:bg-white/5"
+                    }`}
+                  >
+                    <item.icon className="h-4 w-4" />
+                    <span className="hidden lg:inline uppercase tracking-wider text-[11px]">
+                      {item.label}
+                    </span>
+                  </button>
+                </LongPressHelp>
               ),
             )}
           </div>
@@ -461,48 +479,56 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
 
               if (item.path) {
                 return (
-                  <Link
+                  <LongPressHelp
                     key={`${item.path}-${index}`}
-                    href={item.path}
-                    aria-label={item.label}
-                    aria-current={active ? "page" : undefined}
-                    className={`flex flex-col items-center justify-end gap-0.5 flex-1 min-w-0 h-full transition-colors ${isPrimary ? "pb-0.5" : "pb-1"} ${
-                      active ? "text-orange-300" : "text-white/70 hover:text-white"
-                    }`}
+                    description={NAV_HELP[item.label] || `${item.label} navigation`}
                   >
-                    {isPrimary ? (
-                      <span
-                        className="flex h-8.5 w-8.5 items-center justify-center rounded-full bg-[#120805]/70 ring-[1.5px] ring-orange-500/90 -mt-3"
-                        style={{
-                          boxShadow:
-                            "0 0 0 2px rgba(255,90,47,0.13), 0 0 12px rgba(255,90,47,0.26)",
-                        }}
-                        aria-hidden="true"
-                      >
-                        <item.icon className="h-4.5 w-4.5 text-orange-300" />
-                      </span>
-                    ) : (
-                      <item.icon className="h-4.5 w-4.5" aria-hidden="true" />
-                    )}
-                    <span className="text-[9px] font-medium truncate max-w-full leading-none">{item.label}</span>
-                  </Link>
+                    <Link
+                      href={item.path}
+                      aria-label={item.label}
+                      aria-current={active ? "page" : undefined}
+                      className={`flex flex-col items-center justify-end gap-0.5 flex-1 min-w-0 h-full transition-colors ${isPrimary ? "pb-0.5" : "pb-1"} ${
+                        active ? "text-orange-300" : "text-white/70 hover:text-white"
+                      }`}
+                    >
+                      {isPrimary ? (
+                        <span
+                          className="flex h-8.5 w-8.5 items-center justify-center rounded-full bg-[#120805]/70 ring-[1.5px] ring-orange-500/90 -mt-3"
+                          style={{
+                            boxShadow:
+                              "0 0 0 2px rgba(255,90,47,0.13), 0 0 12px rgba(255,90,47,0.26)",
+                          }}
+                          aria-hidden="true"
+                        >
+                          <item.icon className="h-4.5 w-4.5 text-orange-300" />
+                        </span>
+                      ) : (
+                        <item.icon className="h-4.5 w-4.5" aria-hidden="true" />
+                      )}
+                      <span className="text-[9px] font-medium truncate max-w-full leading-none">{item.label}</span>
+                    </Link>
+                  </LongPressHelp>
                 );
               }
 
               return (
-                <button
+                <LongPressHelp
                   key={`more-${index}`}
-                  type="button"
-                  aria-label={item.label}
-                  aria-expanded={moreOpen}
-                  onClick={item.onClick}
-                  className={`flex flex-col items-center justify-end gap-0.5 flex-1 min-w-0 h-full pb-1 transition-colors ${
-                    moreOpen ? "text-orange-300" : "text-white/70 hover:text-white"
-                  }`}
+                  description={NAV_HELP[item.label] || `${item.label} options`}
                 >
-                  <item.icon className="h-4.5 w-4.5" aria-hidden="true" />
-                  <span className="text-[9px] font-medium leading-none">{item.label}</span>
-                </button>
+                  <button
+                    type="button"
+                    aria-label={item.label}
+                    aria-expanded={moreOpen}
+                    onClick={item.onClick}
+                    className={`flex flex-col items-center justify-end gap-0.5 flex-1 min-w-0 h-full pb-1 transition-colors ${
+                      moreOpen ? "text-orange-300" : "text-white/70 hover:text-white"
+                    }`}
+                  >
+                    <item.icon className="h-4.5 w-4.5" aria-hidden="true" />
+                    <span className="text-[9px] font-medium leading-none">{item.label}</span>
+                  </button>
+                </LongPressHelp>
               );
             })}
           </div>
