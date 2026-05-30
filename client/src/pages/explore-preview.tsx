@@ -3210,6 +3210,18 @@ export default function ExplorePreview() {
               : "calc(8.5rem + env(safe-area-inset-bottom, 0px))",
         }}
       >
+        {sheetState !== "fullMap" ? (
+          <section className="px-3 pt-3 pb-1">
+            <div className="rounded-xl border border-white/10 bg-black/25 p-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/65">
+                Scout • Customer discovery
+              </p>
+              <p className="mt-1 text-sm text-white/90">
+                Find food near you now, compare menus and deals, then tap a truck or restaurant to choose your next stop.
+              </p>
+            </div>
+          </section>
+        ) : null}
         {/* ============================================================
              SCOUT SURFACE
              Default: compact map accessory.

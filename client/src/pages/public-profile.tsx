@@ -269,6 +269,9 @@ function HeroBlock({ profile, safeCtas }: { profile: PublicProfilePayload; safeC
               ? "Open near you, menu updates, and local favorites."
               : "Local supply and support for nearby food businesses."}
         </p>
+        <p className="text-xs text-white/65">
+          What to do first: check location and hours, then use menu/order/directions actions below.
+        </p>
         <div className="flex flex-wrap items-center gap-3 text-sm text-white/75">
           {locationLine(profile) ? (
             <span className="inline-flex items-center gap-1">

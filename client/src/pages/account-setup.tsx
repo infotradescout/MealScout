@@ -311,13 +311,16 @@ export default function AccountSetup() {
           <CardHeader>
             <CardTitle>Welcome to MealScout!</CardTitle>
             <CardDescription>
-              Complete your profile to get started
+              Complete your account details to unlock your dashboard and business tools.
               {tokenValidation?.userEmail && (
                 <span className="block mt-1 font-medium text-[color:var(--text-primary)]">
                   {tokenValidation.userEmail}
                 </span>
               )}
             </CardDescription>
+            <p className="text-xs text-[color:var(--text-muted)]">
+              Next step after setup: verify your email, then connect or claim your business profile if you are an owner.
+            </p>
           </CardHeader>
           <CardContent>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
