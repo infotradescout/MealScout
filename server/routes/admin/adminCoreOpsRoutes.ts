@@ -27,6 +27,141 @@ const stripe = process.env.STRIPE_SECRET_KEY
 const normalizeSearch = (value: unknown) =>
   String(value || "").trim().toLowerCase();
 
+const normalizeLoose = (value: unknown) =>
+  String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const tokenSet = (value: unknown) =>
+  normalizeLoose(value)
+    .split(" ")
+    .map((token) => token.trim())
+    .filter((token) => token.length >= 3);
+
+const overlapRatio = (left: unknown, right: unknown) => {
+  const leftTokens = new Set(tokenSet(left));
+  const rightTokens = new Set(tokenSet(right));
+  if (leftTokens.size === 0 || rightTokens.size === 0) return 0;
+  let shared = 0;
+  leftTokens.forEach((token) => {
+    if (rightTokens.has(token)) shared += 1;
+  });
+  return shared / Math.max(leftTokens.size, rightTokens.size);
+};
+
+const normalizePhone = (value: unknown) => String(value || "").replace(/[^\d]/g, "");
+
+const normalizeDomain = (value: unknown) => {
+  const raw = String(value || "").trim().toLowerCase();
+  if (!raw) return "";
+  return raw
+    .replace(/^https?:\/\//, "")
+    .replace(/^www\./, "")
+    .split("/")[0]
+    .trim();
+};
+
+const normalizedAddressLabel = (value: unknown) => normalizeLoose(value);
+
+const buildQuarantineReview = (row: any) => {
+  const rawData =
+    row && typeof row.rawData === "object" && row.rawData
+      ? (row.rawData as Record<string, any>)
+      : {};
+  const evidenceIngest =
+    rawData && typeof rawData.evidenceIngest === "object" && rawData.evidenceIngest
+      ? (rawData.evidenceIngest as Record<string, any>)
+      : {};
+  const quarantineConfig =
+    rawData && typeof rawData.evidenceQuarantine === "object" && rawData.evidenceQuarantine
+      ? (rawData.evidenceQuarantine as Record<string, any>)
+      : evidenceIngest &&
+          typeof evidenceIngest.quarantine === "object" &&
+          evidenceIngest.quarantine
+        ? (evidenceIngest.quarantine as Record<string, any>)
+        : {};
+  const extractedEvidence =
+    evidenceIngest && typeof evidenceIngest.extracted === "object" && evidenceIngest.extracted
+      ? (evidenceIngest.extracted as Record<string, any>)
+      : {};
+
+  const externalBusinessName =
+    String(
+      extractedEvidence.business_name ||
+        extractedEvidence.name ||
+        evidenceIngest.businessName ||
+        evidenceIngest.sourceBusinessName ||
+        evidenceIngest.googleBusinessName ||
+        "",
+    ).trim() || null;
+
+  const hardIdentityPhoneMatch =
+    normalizePhone(row.phone) &&
+    normalizePhone(extractedEvidence.phone) &&
+    normalizePhone(row.phone) === normalizePhone(extractedEvidence.phone);
+  const hardIdentityEmailMatch =
+    String(row.email || "").trim().toLowerCase() &&
+    String(extractedEvidence.email || "").trim().toLowerCase() &&
+    String(row.email || "").trim().toLowerCase() ===
+      String(extractedEvidence.email || "").trim().toLowerCase();
+  const hardIdentityWebsiteMatch =
+    normalizeDomain(row.websiteUrl) &&
+    normalizeDomain(extractedEvidence.website || extractedEvidence.websiteUrl) &&
+    normalizeDomain(row.websiteUrl) ===
+      normalizeDomain(extractedEvidence.website || extractedEvidence.websiteUrl);
+  const hardIdentityAddressMatch =
+    normalizedAddressLabel(`${row.address || ""} ${row.city || ""} ${row.state || ""}`) &&
+    normalizedAddressLabel(extractedEvidence.address || extractedEvidence.location_text) &&
+    normalizedAddressLabel(`${row.address || ""} ${row.city || ""} ${row.state || ""}`) ===
+      normalizedAddressLabel(extractedEvidence.address || extractedEvidence.location_text);
+
+  const hasHardIdentityAnchor = Boolean(
+    hardIdentityPhoneMatch ||
+      hardIdentityEmailMatch ||
+      hardIdentityWebsiteMatch ||
+      hardIdentityAddressMatch,
+  );
+
+  const externalNameMismatch =
+    Boolean(externalBusinessName) &&
+    Boolean(String(row.name || "").trim()) &&
+    overlapRatio(row.name, externalBusinessName) < 0.6;
+  const quarantineByRule = externalNameMismatch && !hasHardIdentityAnchor;
+  const quarantinedByConfig =
+    quarantineConfig.active === true ||
+    String(quarantineConfig.status || "")
+      .trim()
+      .toLowerCase() === "quarantined";
+  const isQuarantined = Boolean(quarantinedByConfig || quarantineByRule);
+  const hidePublicTrustFields = isQuarantined && quarantineConfig.allowPublicTrustFields !== true;
+  const hideMedia = hidePublicTrustFields && quarantineConfig.hideMedia !== false;
+
+  const reasons: string[] = [];
+  if (externalNameMismatch) reasons.push("name_mismatch");
+  if (!hasHardIdentityAnchor) reasons.push("no_hard_identity_anchor");
+  if (quarantinedByConfig) reasons.push("manual_quarantine");
+  if (quarantineByRule) reasons.push("rule_quarantine");
+
+  return {
+    isQuarantined,
+    hidePublicTrustFields,
+    hideMedia,
+    reasons,
+    hasHardIdentityAnchor,
+    evidence: {
+      externalBusinessName,
+      extractedPhone: String(extractedEvidence.phone || "").trim() || null,
+      extractedEmail: String(extractedEvidence.email || "").trim() || null,
+      extractedWebsite:
+        String(extractedEvidence.website || extractedEvidence.websiteUrl || "").trim() || null,
+      extractedAddress:
+        String(extractedEvidence.address || extractedEvidence.location_text || "").trim() || null,
+    },
+  };
+};
+
 const isGeneralEmailAllowed = (accountSettings: unknown) => {
   const settings =
     accountSettings && typeof accountSettings === "object"
@@ -559,6 +694,106 @@ export function registerAdminCoreOpsRoutes(app: Express) {
       } catch (error) {
         console.error("Error fetching users:", error);
         res.status(500).json({ message: "Failed to fetch users" });
+      }
+    },
+  );
+
+  app.get(
+    "/api/admin/profile-quarantine/suspects",
+    isAuthenticated,
+    isStaffOrAdmin,
+    async (req: any, res) => {
+      try {
+        const q = normalizeSearch(req.query?.q);
+        const limitRaw = Number.parseInt(String(req.query?.limit || "100"), 10);
+        const limit = Number.isFinite(limitRaw)
+          ? Math.max(1, Math.min(limitRaw, 500))
+          : 100;
+
+        const rows = await db
+          .select({
+            id: restaurants.id,
+            ownerId: restaurants.ownerId,
+            name: restaurants.name,
+            businessType: restaurants.businessType,
+            isFoodTruck: restaurants.isFoodTruck,
+            city: restaurants.city,
+            state: restaurants.state,
+            phone: restaurants.phone,
+            email: sql<string>`coalesce(${restaurants}.email, '')`,
+            websiteUrl: restaurants.websiteUrl,
+            address: restaurants.address,
+            isVerified: restaurants.isVerified,
+            isActive: restaurants.isActive,
+            rawData: sql<any>`coalesce(${restaurants}.raw_data, '{}'::jsonb)`,
+            createdAt: restaurants.createdAt,
+            updatedAt: restaurants.updatedAt,
+          })
+          .from(restaurants);
+
+        const suspects = rows
+          .map((row: any) => {
+            const review = buildQuarantineReview(row);
+            if (!review.isQuarantined) return null;
+            const hiddenFields = [
+              ...(review.hidePublicTrustFields
+                ? ["verifiedProfile", "phonePublic", "addressPublicLabel", "websiteUrl", "socialLinks"]
+                : []),
+              ...(review.hideMedia ? ["logoUrl", "coverImageUrl", "galleryImages"] : []),
+            ];
+            return {
+              id: row.id,
+              ownerId: row.ownerId,
+              name: row.name,
+              businessType: row.businessType,
+              isFoodTruck: row.isFoodTruck,
+              city: row.city,
+              state: row.state,
+              isActive: row.isActive,
+              isVerified: row.isVerified,
+              reasons: review.reasons,
+              hiddenFields,
+              hidePublicTrustFields: review.hidePublicTrustFields,
+              hideMedia: review.hideMedia,
+              hasHardIdentityAnchor: review.hasHardIdentityAnchor,
+              evidence: review.evidence,
+              updatedAt: row.updatedAt,
+              createdAt: row.createdAt,
+            };
+          })
+          .filter(Boolean) as Array<Record<string, any>>;
+
+        const filtered = q
+          ? suspects.filter((item) => {
+              const haystack = [
+                item.name,
+                item.businessType,
+                item.city,
+                item.state,
+                item.reasons.join(" "),
+                item.evidence?.externalBusinessName || "",
+              ]
+                .map((value) => String(value || "").toLowerCase())
+                .join(" ");
+              return haystack.includes(q);
+            })
+          : suspects;
+
+        const sliced = filtered
+          .sort(
+            (a, b) =>
+              new Date(b.updatedAt || b.createdAt || 0).getTime() -
+              new Date(a.updatedAt || a.createdAt || 0).getTime(),
+          )
+          .slice(0, limit);
+
+        res.json({
+          total: filtered.length,
+          rows: sliced,
+        });
+      } catch (error) {
+        console.error("Error fetching profile quarantine suspects:", error);
+        res.status(500).json({ message: "Failed to fetch quarantine suspects" });
       }
     },
   );
