@@ -17,7 +17,10 @@ import {
   isCloudinaryConfigured,
 } from "../imageUpload";
 import { getBusinessAccessContext } from "../services/businessTeamAccess";
+import { resolveUserContinuation } from "../services/loginContinuation";
 import {
+  businessStaffMemberships,
+  hosts,
   insertUserAddressSchema,
   restaurantSubscriptions,
   suppliers,
@@ -375,8 +378,22 @@ export function registerAuthAccountRoutes(app: Express) {
         return res.json({
           ...safeUser,
           requiresPasswordReset: true,
+          accountOnboardingComplete: false,
           businessOnboardingRequired: false,
           businessOnboardingPath: null,
+          businessAccessSummary: null,
+          primaryBusinessId: null,
+          profileComplete: false,
+          verificationRequired: false,
+          emailVerified: user?.emailVerified === true,
+          businessInsuranceSubmitted: false,
+          menuRequired: false,
+          menuItemCount: 0,
+          scheduleRequired: false,
+          hasSchedule: false,
+          nextRequiredStep: "account_onboarding",
+          continuationPath: "/change-password",
+          continuationReason: "Password reset is required before continuing.",
           effectiveLocationContext: resolveEffectiveLocationContext(req, user),
         });
       }
@@ -414,12 +431,33 @@ export function registerAuthAccountRoutes(app: Express) {
         }
       }
 
+      const continuation = await resolveUserContinuation({
+        user,
+        businessAccessSummary,
+      });
       res.json({
         ...safeUser,
         effectiveLocationContext: resolveEffectiveLocationContext(req, user),
-        businessOnboardingRequired,
-        businessOnboardingPath,
-        businessAccessSummary,
+        businessOnboardingRequired:
+          continuation.businessOnboardingRequired || businessOnboardingRequired,
+        businessOnboardingPath:
+          continuation.nextRequiredStep === "business_setup"
+            ? continuation.continuationPath
+            : businessOnboardingPath,
+        businessAccessSummary: continuation.businessAccessSummary,
+        accountOnboardingComplete: continuation.accountOnboardingComplete,
+        primaryBusinessId: continuation.primaryBusinessId,
+        profileComplete: continuation.profileComplete,
+        verificationRequired: continuation.verificationRequired,
+        emailVerified: continuation.emailVerified,
+        businessInsuranceSubmitted: continuation.businessInsuranceSubmitted,
+        menuRequired: continuation.menuRequired,
+        menuItemCount: continuation.menuItemCount,
+        scheduleRequired: continuation.scheduleRequired,
+        hasSchedule: continuation.hasSchedule,
+        nextRequiredStep: continuation.nextRequiredStep,
+        continuationPath: continuation.continuationPath,
+        continuationReason: continuation.reason,
       });
     } catch (error) {
       console.error("❌ Error fetching user:", error);
@@ -604,6 +642,149 @@ export function registerAuthAccountRoutes(app: Express) {
         });
       }
       res.status(500).json({ message: "Failed to update settings" });
+    }
+  });
+
+  app.post("/api/auth/onboarding/role-correction", isAuthenticated, async (req: any, res) => {
+    try {
+      const schema = z.object({
+        targetRole: z.enum([
+          "customer",
+          "food_truck",
+          "restaurant_owner",
+          "host",
+          "event_coordinator",
+        ]),
+        businessType: z
+          .enum(["food_truck", "restaurant", "bar", "caterer", "private_chef"])
+          .optional(),
+        draft: z
+          .object({
+            businessName: z.string().max(120).optional(),
+            phone: z.string().max(50).optional(),
+            email: z.string().email().optional(),
+            address: z.string().max(240).optional(),
+            city: z.string().max(120).optional(),
+            state: z.string().max(80).optional(),
+            cuisineType: z.string().max(120).optional(),
+            logoUrl: z.string().max(500).optional(),
+            coverImageUrl: z.string().max(500).optional(),
+            menuItems: z.array(z.any()).optional(),
+          })
+          .optional(),
+      });
+      const parsed = schema.parse(req.body || {});
+      const userId = String(req.user?.id || "");
+      const user = await storage.getUser(userId);
+      if (!user) return res.status(404).json({ message: "User not found" });
+
+      const [ownedRestaurants, hostProfiles, activeMemberships] = await Promise.all([
+        storage.getRestaurantsByOwner(userId),
+        db.select({ id: hosts.id }).from(hosts).where(eq(hosts.userId, userId)),
+        db
+          .select({ id: businessStaffMemberships.id })
+          .from(businessStaffMemberships)
+          .where(eq(businessStaffMemberships.userId, userId)),
+      ]);
+      const hasBusinessProfile = Array.isArray(ownedRestaurants) && ownedRestaurants.length > 0;
+      const hasHostProfile = Array.isArray(hostProfiles) && hostProfiles.length > 0;
+      const hasBusinessMembership =
+        Array.isArray(activeMemberships) && activeMemberships.length > 0;
+
+      const switchingIntoHost = parsed.targetRole === "host";
+      const switchingIntoBusiness = ["food_truck", "restaurant_owner"].includes(
+        parsed.targetRole,
+      );
+      if (switchingIntoHost && hasBusinessProfile) {
+        return res.status(409).json({
+          message:
+            "Cannot switch to host after business profile creation without admin repair.",
+          code: "profile_already_created",
+        });
+      }
+      if (switchingIntoBusiness && hasHostProfile) {
+        return res.status(409).json({
+          message:
+            "Cannot switch to business role after host profile creation without admin repair.",
+          code: "profile_already_created",
+        });
+      }
+      if (switchingIntoBusiness && hasBusinessMembership && !hasBusinessProfile) {
+        return res.status(409).json({
+          message:
+            "This account is already linked to a business team. Use admin repair to convert role safely.",
+          code: "already_linked_membership",
+        });
+      }
+
+      const currentSettings =
+        user?.accountSettings && typeof user.accountSettings === "object"
+          ? ({ ...(user.accountSettings as any) } as any)
+          : {};
+      const existingDraft =
+        currentSettings.businessDraft && typeof currentSettings.businessDraft === "object"
+          ? ({ ...currentSettings.businessDraft } as any)
+          : {};
+      const nextDraft = {
+        ...existingDraft,
+        ...(parsed.draft || {}),
+        businessType:
+          parsed.businessType ||
+          existingDraft.businessType ||
+          (parsed.targetRole === "food_truck" ? "food_truck" : existingDraft.businessType),
+        roleIntent: parsed.targetRole,
+        updatedAt: new Date().toISOString(),
+      };
+      const nextSettings = {
+        ...currentSettings,
+        businessDraft: nextDraft,
+      };
+
+      let updatedUser = user;
+      if (String(user.userType || "") !== parsed.targetRole) {
+        await storage.updateUserType(userId, parsed.targetRole);
+        updatedUser = (await storage.getUser(userId)) || user;
+      }
+      updatedUser =
+        (await storage.updateUser(userId, {
+          accountSettings: nextSettings as any,
+        })) || updatedUser;
+
+      const businessAccessSummary = ["food_truck", "restaurant_owner"].includes(
+        String(updatedUser.userType || ""),
+      )
+        ? (() =>
+            getBusinessAccessContext(updatedUser.id).then((ctx) => ({
+              linkState: ctx.linkState as "linked" | "not_attached",
+              guidance: ctx.guidance,
+              restaurantCount: Array.isArray(ctx.restaurants)
+                ? ctx.restaurants.length
+                : 0,
+              primaryRestaurantId: ctx.primaryRestaurant?.id || null,
+            })))()
+        : Promise.resolve(null);
+      const continuation = await resolveUserContinuation({
+        user: updatedUser,
+        businessAccessSummary: await businessAccessSummary,
+      });
+
+      res.json({
+        ok: true,
+        userType: updatedUser.userType,
+        accountSettings: updatedUser.accountSettings || {},
+        nextRequiredStep: continuation.nextRequiredStep,
+        continuationPath: continuation.continuationPath,
+        continuationReason: continuation.reason,
+      });
+    } catch (error: any) {
+      console.error("Error correcting onboarding role:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({
+          message: "Invalid role correction payload",
+          errors: error.errors,
+        });
+      }
+      res.status(500).json({ message: "Failed to correct onboarding role" });
     }
   });
 
