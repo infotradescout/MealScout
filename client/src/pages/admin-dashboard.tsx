@@ -296,6 +296,23 @@ interface LocationDemandFunnelResponse {
   summary: LocationDemandFunnelSummary;
 }
 
+interface QuarantineSuspectItem {
+  id: string;
+  ownerId?: string | null;
+  name?: string | null;
+  businessType?: string | null;
+  isFoodTruck?: boolean | null;
+  city?: string | null;
+  state?: string | null;
+  isActive?: boolean | null;
+  isVerified?: boolean | null;
+  reasons?: string[];
+  hiddenFields?: string[];
+  hidePublicTrustFields?: boolean;
+  hideMedia?: boolean;
+  hasHardIdentityAnchor?: boolean;
+}
+
 const FOOT_TRAFFIC_OPTIONS = [
   { value: "50", label: "Low (1-50/day)", min: 1, max: 50 },
   { value: "200", label: "Medium (51-200/day)", min: 51, max: 200 },
@@ -2443,6 +2460,33 @@ export default function AdminDashboard() {
     if (Array.isArray(usersPayload?.users)) return usersPayload.users;
     return [];
   }, [usersPayload]);
+
+  const {
+    data: quarantinePayload,
+    isLoading: quarantineLoading,
+    error: quarantineError,
+    refetch: refetchQuarantine,
+  } = useQuery<any>({
+    queryKey: ["/api/admin/profile-quarantine/suspects"],
+    enabled: !!adminUser && selectedTab === "quarantine",
+    queryFn: async () => {
+      const res = await apiRequest(
+        "GET",
+        "/api/admin/profile-quarantine/suspects",
+      );
+      return await res.json();
+    },
+  });
+
+  const quarantineSuspects = useMemo<QuarantineSuspectItem[]>(() => {
+    if (Array.isArray(quarantinePayload)) return quarantinePayload;
+    if (Array.isArray(quarantinePayload?.suspects))
+      return quarantinePayload.suspects;
+    if (Array.isArray(quarantinePayload?.items)) return quarantinePayload.items;
+    if (Array.isArray(quarantinePayload?.profiles))
+      return quarantinePayload.profiles;
+    return [];
+  }, [quarantinePayload]);
 
   const openAdminUserProfile = (userId: string, inNewTab = false) => {
     const href = `/admin/dashboard?tab=users&focusUser=${encodeURIComponent(userId)}`;
@@ -6522,6 +6566,13 @@ export default function AdminDashboard() {
             <Button
               size="sm"
               variant="outline"
+              onClick={() => setSelectedTab("quarantine")}
+            >
+              Review Quarantine
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
               onClick={() => {
                 setSelectedTab("users");
                 setUserBusinessOnly(true);
@@ -6567,6 +6618,13 @@ export default function AdminDashboard() {
               className="px-6 py-2.5 rounded-xl transition-all data-[state=active]:bg-primary data-[state=active]:text-black data-[state=active]:shadow-[0_0_20px_rgba(245,158,11,0.4)] text-white/60 hover:text-white"
             >
               Users
+            </TabsTrigger>
+            <TabsTrigger
+              value="quarantine"
+              data-testid="tab-quarantine"
+              className="px-6 py-2.5 rounded-xl transition-all data-[state=active]:bg-primary data-[state=active]:text-black data-[state=active]:shadow-[0_0_20px_rgba(245,158,11,0.4)] text-white/60 hover:text-white"
+            >
+              Quarantine
             </TabsTrigger>
             <TabsTrigger
               value="staff"
@@ -8898,6 +8956,146 @@ export default function AdminDashboard() {
                     </div>
                   ))}
                 </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="quarantine" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Profile Quarantine Review</CardTitle>
+                <CardDescription>
+                  Review suspect profiles and why trust/media fields are hidden
+                  on public pages.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {quarantineLoading && (
+                  <div className="rounded-lg border px-3 py-3 text-sm text-muted-foreground">
+                    Loading quarantined profiles...
+                  </div>
+                )}
+
+                {quarantineError && (
+                  <div className="rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-xs flex items-center justify-between gap-2">
+                    <span>
+                      Failed to load quarantine suspects.{" "}
+                      {String((quarantineError as any)?.message || "").trim() ||
+                        "Please retry."}
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => refetchQuarantine()}
+                    >
+                      Retry
+                    </Button>
+                  </div>
+                )}
+
+                {!quarantineLoading &&
+                  !quarantineError &&
+                  quarantineSuspects.length === 0 && (
+                    <div className="rounded-lg border px-3 py-3 text-sm text-muted-foreground">
+                      No suspect profiles in quarantine right now.
+                    </div>
+                  )}
+
+                {!quarantineLoading &&
+                  !quarantineError &&
+                  quarantineSuspects.length > 0 && (
+                    <div className="space-y-3">
+                      {quarantineSuspects.map((profile) => (
+                        <div
+                          key={profile.id}
+                          className="rounded-lg border p-3 space-y-2"
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div>
+                              <div className="font-medium">
+                                {profile.name || "Unnamed business"}
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                ID: {profile.id}
+                              </div>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              <Badge variant="secondary">
+                                {toTitleCase(
+                                  profile.businessType ||
+                                    (profile.isFoodTruck
+                                      ? "food_truck"
+                                      : "restaurant"),
+                                )}
+                              </Badge>
+                              <Badge
+                                variant={
+                                  profile.isActive ? "default" : "outline"
+                                }
+                              >
+                                {profile.isActive ? "active" : "inactive"}
+                              </Badge>
+                            </div>
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {[profile.city, profile.state]
+                              .filter(Boolean)
+                              .join(", ") || "Location unknown"}
+                          </div>
+                          <div className="space-y-1">
+                            <div className="text-xs font-semibold">
+                              Quarantine reasons
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              {(profile.reasons || []).length > 0 ? (
+                                (profile.reasons || []).map((reason) => (
+                                  <Badge key={reason} variant="outline">
+                                    {toTitleCase(reason)}
+                                  </Badge>
+                                ))
+                              ) : (
+                                <span className="text-xs text-muted-foreground">
+                                  No explicit reason provided.
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="space-y-1">
+                            <div className="text-xs font-semibold">
+                              Hidden public fields
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              {(profile.hiddenFields || []).length > 0 ? (
+                                (profile.hiddenFields || []).map((field) => (
+                                  <Badge key={field} variant="outline">
+                                    {toTitleCase(field)}
+                                  </Badge>
+                                ))
+                              ) : (
+                                <span className="text-xs text-muted-foreground">
+                                  No hidden field summary provided.
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            Hard identity anchor:{" "}
+                            <span className="font-medium">
+                              {profile.hasHardIdentityAnchor ? "yes" : "no"}
+                            </span>{" "}
+                            • Trust fields hidden:{" "}
+                            <span className="font-medium">
+                              {profile.hidePublicTrustFields ? "yes" : "no"}
+                            </span>{" "}
+                            • Media hidden:{" "}
+                            <span className="font-medium">
+                              {profile.hideMedia ? "yes" : "no"}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
               </CardContent>
             </Card>
           </TabsContent>
