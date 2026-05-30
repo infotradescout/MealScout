@@ -2418,11 +2418,26 @@ export default function AdminDashboard() {
     enabled: !!adminUser && selectedTab === "restaurants",
   });
 
-  // Fetch all users
-  const { data: users = [] } = useQuery<any[]>({
+  // Fetch all users (normalize payload shape and surface load failures)
+  const {
+    data: usersPayload,
+    isLoading: usersLoading,
+    error: usersError,
+    refetch: refetchUsers,
+  } = useQuery<any>({
     queryKey: ["/api/admin/users"],
     enabled: !!adminUser && selectedTab === "users",
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/admin/users");
+      return await res.json();
+    },
   });
+
+  const users = useMemo<any[]>(() => {
+    if (Array.isArray(usersPayload)) return usersPayload;
+    if (Array.isArray(usersPayload?.users)) return usersPayload.users;
+    return [];
+  }, [usersPayload]);
 
   const openAdminUserProfile = (userId: string, inNewTab = false) => {
     const href = `/admin/dashboard?tab=users&focusUser=${encodeURIComponent(userId)}`;
@@ -8310,6 +8325,23 @@ export default function AdminDashboard() {
                   </div>
                 </div>
 
+                {usersError && (
+                  <div className="mt-3 rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-xs flex items-center justify-between gap-2">
+                    <span>
+                      Failed to load users.{" "}
+                      {String((usersError as any)?.message || "").trim() ||
+                        "Please retry."}
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => refetchUsers()}
+                    >
+                      Retry
+                    </Button>
+                  </div>
+                )}
+
                 <Tabs value={userTypeFilter} onValueChange={setUserTypeFilter}>
                   <TabsList className="mt-3 w-full justify-start overflow-x-auto flex-nowrap">
                     {userTypeTabs.map((tab) => {
@@ -8572,6 +8604,11 @@ export default function AdminDashboard() {
                   </div>
                 )}
                 <div className="space-y-3 mt-3">
+                  {!usersLoading && !usersError && users.length === 0 && (
+                    <div className="rounded-lg border bg-muted/20 px-3 py-4 text-sm text-muted-foreground">
+                      No users returned for this view yet.
+                    </div>
+                  )}
                   {filteredUsers.map((user: any) => (
                     <div
                       key={user.id}
