@@ -61,6 +61,14 @@ type PublicProfilePayload =
 
 const DEFAULT_IMAGE = "/og-default.jpg";
 
+const normalizePublicProfileEntity = (value: string | null | undefined) => {
+  const normalized = String(value || "").toLowerCase().trim();
+  if (normalized === "food_truck" || normalized === "food-truck" || normalized === "foodtruck") {
+    return "truck";
+  }
+  return normalized;
+};
+
 type LocationDiscoveryTruck = {
   id: string;
   name: string;
@@ -1457,15 +1465,16 @@ export default function PublicProfilePage() {
     profileType: string;
     profileId: string;
   }>();
+  const normalizedProfileType = normalizePublicProfileEntity(profileType);
 
   const locationSearch =
     typeof window !== "undefined" ? window.location.search : "";
   const { data, isLoading } = useQuery<PublicProfilePayload>({
-    queryKey: ["/api/public/profiles", profileType, profileId, locationSearch],
-    enabled: !!profileType && !!profileId,
+    queryKey: ["/api/public/profiles", normalizedProfileType, profileId, locationSearch],
+    enabled: !!normalizedProfileType && !!profileId,
     queryFn: async () => {
       const res = await fetch(
-        `/api/public/profiles/${encodeURIComponent(String(profileType || ""))}/${encodeURIComponent(String(profileId || ""))}${locationSearch || ""}`,
+        `/api/public/profiles/${encodeURIComponent(String(normalizedProfileType || ""))}/${encodeURIComponent(String(profileId || ""))}${locationSearch || ""}`,
       );
       if (!res.ok) throw new Error("Profile not found");
       return res.json();

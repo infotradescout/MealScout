@@ -480,6 +480,15 @@ const classifyPublicDealType = (input: {
   return "other" as const;
 };
 
+const normalizePublicProfileEntity = (value: string | null | undefined) => {
+  const normalized = String(value || "").toLowerCase().trim();
+  if (normalized === "food_truck" || normalized === "food-truck" || normalized === "foodtruck") {
+    return "truck";
+  }
+  if (normalized === "food_trucks") return "truck";
+  return normalized;
+};
+
 const buildPublicDealsPayload = async (restaurantId: string, row?: any) => {
   const now = new Date();
   const dealsRows = await storage.getDealsByRestaurant(restaurantId);
@@ -1373,7 +1382,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
 
   app.get("/api/public/resolve/:entity/:slug", async (req, res) => {
     try {
-      const entity = String(req.params.entity || "").toLowerCase().trim();
+      const entity = normalizePublicProfileEntity(req.params.entity);
       const slugOrId = String(req.params.slug || "").trim();
       if (!entity || !slugOrId) {
         return res.status(400).json({ exists: false, reason: "invalid_request" });
@@ -1476,7 +1485,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
 
   app.get("/api/public/canonical/:entity/:id", async (req, res) => {
     try {
-      const entity = String(req.params.entity || "").toLowerCase().trim();
+      const entity = normalizePublicProfileEntity(req.params.entity);
       const id = String(req.params.id || "").trim();
       if (!entity || !id) {
         return res.status(400).json({ message: "Entity and id are required" });
@@ -1782,7 +1791,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
 
   app.get("/api/public/profiles/:entity/:id", async (req, res) => {
     try {
-      const entity = String(req.params.entity || "").toLowerCase();
+      const entity = normalizePublicProfileEntity(req.params.entity);
       const id = String(req.params.id || "").trim();
       if (!id) {
         return res.status(400).json({ message: "Profile id is required" });
