@@ -4,7 +4,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../db";
 import { storage } from "../storage";
 import { forwardGeocode, reverseGeocode } from "../utils/geocoding";
-import { deals } from "@shared/schema";
+import { deals, menuItems } from "@shared/schema";
 
 type LocationUtilityRouteDependencies = {
   hasBusinessDistributionAccess: (userId: string) => Promise<boolean>;
@@ -156,9 +156,37 @@ export function registerLocationUtilityRoutes(
       }
 
       const restaurantIds = restaurants.map((restaurant) => restaurant.id);
+      const menuEligibleIds = new Set<string>();
+      if (restaurantIds.length > 0) {
+        const menuRows = await db
+          .select({
+            restaurantId: menuItems.restaurantId,
+            count: sql<number>`count(*)::integer`,
+          })
+          .from(menuItems)
+          .where(inArray(menuItems.restaurantId, restaurantIds))
+          .groupBy(menuItems.restaurantId);
+        for (const row of menuRows) {
+          if (Number(row.count || 0) > 0) {
+            menuEligibleIds.add(String(row.restaurantId));
+          }
+        }
+      }
+      const discoverableRestaurants = restaurants.filter((restaurant: any) =>
+        menuEligibleIds.has(String(restaurant.id || "")),
+      );
+      if (discoverableRestaurants.length !== restaurants.length) {
+        res.setHeader(
+          "X-MealScout-Filtered-Missing-Menu",
+          String(restaurants.length - discoverableRestaurants.length),
+        );
+      }
+      const discoverableRestaurantIds = discoverableRestaurants.map(
+        (restaurant) => restaurant.id,
+      );
       const dealCounts: Record<string, number> = {};
 
-      if (restaurantIds.length > 0) {
+      if (discoverableRestaurantIds.length > 0) {
         const allDeals = await db
           .select({
             restaurantId: deals.restaurantId,
@@ -167,7 +195,7 @@ export function registerLocationUtilityRoutes(
           .from(deals)
           .where(
             and(
-              inArray(deals.restaurantId, restaurantIds),
+              inArray(deals.restaurantId, discoverableRestaurantIds),
               eq(deals.isActive, true),
             ),
           )
@@ -179,7 +207,7 @@ export function registerLocationUtilityRoutes(
       }
 
       res.json(
-        restaurants.map((restaurant) => ({
+        discoverableRestaurants.map((restaurant) => ({
           ...sanitizeRestaurantMedia(restaurant),
           activeDealsCount: dealCounts[restaurant.id] || 0,
         })),

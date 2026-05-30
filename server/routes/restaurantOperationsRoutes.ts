@@ -18,6 +18,7 @@ import {
 import {
   insertFoodTruckLocationSchema,
   moderationEvents,
+  menuItems,
   requestLogs,
   restaurants,
   socialPostQueue,
@@ -1934,12 +1935,39 @@ export function registerRestaurantOperationsRoutes(
       const truckIds = payloadTrucks
         .map((truck: any) => String(truck?.id || "").trim())
         .filter(Boolean);
+      const menuEligibleIds = new Set<string>();
+      if (truckIds.length > 0) {
+        const menuRows = await db
+          .select({
+            restaurantId: menuItems.restaurantId,
+            count: sql<number>`count(*)::integer`,
+          })
+          .from(menuItems)
+          .where(inArray(menuItems.restaurantId, truckIds))
+          .groupBy(menuItems.restaurantId);
+        for (const row of menuRows) {
+          if (Number(row.count || 0) > 0) {
+            menuEligibleIds.add(String(row.restaurantId));
+          }
+        }
+      }
+      const menuEligibleTrucks = payloadTrucks.filter((truck: any) =>
+        menuEligibleIds.has(String(truck?.id || "").trim()),
+      );
+      if (menuEligibleTrucks.length !== payloadTrucks.length) {
+        res.setHeader(
+          "X-MealScout-Filtered-Missing-Menu",
+          String(payloadTrucks.length - menuEligibleTrucks.length),
+        );
+      }
       const suppressedTruckIds = await getSuppressedLocationResourceIds({
-        resourceIds: truckIds,
+        resourceIds: menuEligibleTrucks
+          .map((truck: any) => String(truck?.id || "").trim())
+          .filter(Boolean),
         targetType: "live_location",
       });
 
-      const trustedPayloadTrucks = payloadTrucks.filter(
+      const trustedPayloadTrucks = menuEligibleTrucks.filter(
         (truck: any) => !suppressedTruckIds.has(String(truck?.id || "")),
       );
       if (suppressedTruckIds.size > 0) {
