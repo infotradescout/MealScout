@@ -489,6 +489,20 @@ const normalizePublicProfileEntity = (value: string | null | undefined) => {
   return normalized;
 };
 
+const resolveTruckRestaurantForPublicId = async (id: string) => {
+  const direct = await storage.getRestaurant(id);
+  if (direct) return direct;
+
+  // Some discovery/public links may still carry a truck import listing id.
+  // Map listing id -> canonical restaurant profile id via claimedFromImportId.
+  const [mapped] = await db
+    .select()
+    .from(restaurants)
+    .where(eq(restaurants.claimedFromImportId, id))
+    .limit(1);
+  return mapped || null;
+};
+
 const buildPublicDealsPayload = async (restaurantId: string, row?: any) => {
   const now = new Date();
   const dealsRows = await storage.getDealsByRestaurant(restaurantId);
@@ -1806,7 +1820,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
       const queryEventId = String((req.query?.eventId as string) || "").trim();
 
       if (entity === "truck") {
-        const row = await storage.getRestaurant(id);
+        const row = await resolveTruckRestaurantForPublicId(id);
         if (
           !row ||
           !row.isActive ||
