@@ -47,11 +47,12 @@ export function useAuth() {
     staleTime: 5 * 60_000, // Consider user data fresh for 5 minutes (reduce auth calls)
   });
 
-  const authState: AuthState = isLoading
-    ? "loading"
-    : user
-    ? "authenticated"
-    : "guest";
+  const authState: AuthState =
+    isLoading || (isError && !user)
+      ? "loading"
+      : user
+      ? "authenticated"
+      : "guest";
 
   // Check for password reset requirement
   useEffect(() => {
