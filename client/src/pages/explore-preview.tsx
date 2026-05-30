@@ -3203,7 +3203,6 @@ export default function ExplorePreview() {
             : "pb-44 md:mx-auto md:max-w-[640px] md:min-h-screen"
         }`}
         style={{
-          overscrollBehaviorY: "none",
           paddingBottom:
             sheetState === "fullMap"
               ? undefined
@@ -3240,7 +3239,6 @@ export default function ExplorePreview() {
               sheetState === "fullMap" ? "100dvh" : compactMapHeight,
             transition: "height 320ms cubic-bezier(0.22,0.61,0.36,1)",
             touchAction: "auto",
-            overscrollBehaviorY: "none",
             boxShadow:
               sheetState === "fullMap"
                 ? undefined
@@ -5351,7 +5349,15 @@ function NearbyRestaurantCard({
   currentUserId?: string | null;
   relationshipSnapshot: RestaurantRelationshipSnapshot;
 }) {
-  const name = restaurant.businessName || restaurant.name || "Restaurant";
+  const canonicalEntityType =
+    readStringField(restaurant, ["entityType", "profileType"]) ||
+    (readBooleanField(restaurant, ["isFoodTruck"]) ? "food_truck" : readStringField(restaurant, ["businessType", "type"])) ||
+    "restaurant";
+  const isFoodTruckEntity = canonicalEntityType === "food_truck" || canonicalEntityType === "truck";
+  const isBarEntity = canonicalEntityType === "bar";
+  const canonicalLabel = isFoodTruckEntity ? "Food Truck" : isBarEntity ? "Bar" : "Restaurant";
+  const profileHref = isFoodTruckEntity ? `/truck/${restaurant.id}` : `/restaurant/${restaurant.id}`;
+  const name = restaurant.businessName || restaurant.name || canonicalLabel;
   const img = restaurant.coverImageUrl || restaurant.heroImageUrl || restaurant.imageUrl || restaurant.logoUrl;
   const cuisine = restaurant.cuisineType;
   const location = restaurant.neighborhood || restaurant.city;
@@ -5420,7 +5426,7 @@ function NearbyRestaurantCard({
   ].filter((update): update is string => Boolean(update));
   const statusLabels = [
     ...getOperationalBadges({
-      kind: "restaurant",
+      kind: isFoodTruckEntity ? "truck" : "restaurant",
       updatedAt: readStringField(restaurant, ["updatedAt", "lastUpdatedAt"]),
       confirmedAt: readStringField(restaurant, ["confirmedAt", "lastConfirmedAt"]),
       hasDeal: dealCount > 0,
@@ -5503,7 +5509,7 @@ function NearbyRestaurantCard({
 
   return (
     <Link
-      href={`/restaurant/${restaurant.id}`}
+      href={profileHref}
       className="block rounded-2xl overflow-hidden group focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70 bg-[#120805]/40 ring-1 ring-white/10"
       aria-label={`Open ${name}`}
       style={{ boxShadow: "0 8px 24px rgba(0,0,0,0.45)" }}
@@ -5596,7 +5602,7 @@ function NearbyRestaurantCard({
               key={label}
               className={getFreshnessBadgeClass(
                 {
-                  kind: "restaurant",
+                  kind: isFoodTruckEntity ? "truck" : "restaurant",
                   updatedAt: readStringField(restaurant, ["updatedAt", "lastUpdatedAt"]),
                   confirmedAt: readStringField(restaurant, ["confirmedAt", "lastConfirmedAt"]),
                   hasDeal: dealCount > 0,
@@ -5674,7 +5680,14 @@ function NearbyRestaurantCard({
 }
 
 function SavedRestaurantCard({ restaurant }: { restaurant: RestaurantSummary }) {
-  const name = restaurant.businessName || restaurant.name || "Restaurant";
+  const canonicalEntityType =
+    readStringField(restaurant, ["entityType", "profileType"]) ||
+    (readBooleanField(restaurant, ["isFoodTruck"]) ? "food_truck" : readStringField(restaurant, ["businessType", "type"])) ||
+    "restaurant";
+  const isFoodTruckEntity = canonicalEntityType === "food_truck" || canonicalEntityType === "truck";
+  const canonicalLabel = isFoodTruckEntity ? "Food Truck" : "Restaurant";
+  const profileHref = isFoodTruckEntity ? `/truck/${restaurant.id}` : `/restaurant/${restaurant.id}`;
+  const name = restaurant.businessName || restaurant.name || canonicalLabel;
   const img =
     restaurant.coverImageUrl ||
     restaurant.heroImageUrl ||
@@ -5685,9 +5698,9 @@ function SavedRestaurantCard({ restaurant }: { restaurant: RestaurantSummary }) 
 
   return (
     <Link
-      href={`/restaurant/${restaurant.id}`}
+      href={profileHref}
       className="block overflow-hidden rounded-3xl bg-white/5 ring-1 ring-white/10 transition hover:bg-white/8 hover:ring-orange-300/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
-      aria-label={`Open saved restaurant ${name}`}
+      aria-label={`Open saved ${canonicalLabel.toLowerCase()} ${name}`}
     >
       <div className="relative h-24 bg-[#120805]/50">
         {img ? (

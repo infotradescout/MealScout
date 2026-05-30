@@ -1965,7 +1965,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           });
           return sendPublicJson(res, {
             ...mapped,
-            entity: "restaurant",
+            entity: "truck",
             title: mapped.displayName,
             subtitle: mapped.serviceType || "Food Truck",
             address: mapped.addressPublicLabel,
@@ -1992,7 +1992,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           });
           return sendPublicJson(res, {
             ...mapped,
-            entity: "restaurant",
+            entity: "bar",
             title: mapped.displayName,
             subtitle: mapped.serviceType || "Bar",
             address: mapped.addressPublicLabel,
