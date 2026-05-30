@@ -64,6 +64,16 @@ const normalizeDomain = (value: unknown) => {
 };
 
 const normalizedAddressLabel = (value: unknown) => normalizeLoose(value);
+const QUARANTINE_EVIDENCE_IDS = new Set([
+  "contact_phone",
+  "contact_address",
+  "website_link",
+  "social_links",
+  "media_logo",
+  "media_cover",
+  "media_gallery",
+  "identity_verification",
+]);
 
 const buildQuarantineReview = (row: any) => {
   const rawData =
@@ -82,6 +92,10 @@ const buildQuarantineReview = (row: any) => {
           evidenceIngest.quarantine
         ? (evidenceIngest.quarantine as Record<string, any>)
         : {};
+  const decisions =
+    quarantineConfig && typeof quarantineConfig.decisions === "object" && quarantineConfig.decisions
+      ? (quarantineConfig.decisions as Record<string, any>)
+      : {};
   const extractedEvidence =
     evidenceIngest && typeof evidenceIngest.extracted === "object" && evidenceIngest.extracted
       ? (evidenceIngest.extracted as Record<string, any>)
@@ -159,6 +173,7 @@ const buildQuarantineReview = (row: any) => {
       extractedAddress:
         String(extractedEvidence.address || extractedEvidence.location_text || "").trim() || null,
     },
+    decisions,
   };
 };
 
@@ -794,6 +809,166 @@ export function registerAdminCoreOpsRoutes(app: Express) {
       } catch (error) {
         console.error("Error fetching profile quarantine suspects:", error);
         res.status(500).json({ message: "Failed to fetch quarantine suspects" });
+      }
+    },
+  );
+
+  app.post(
+    "/api/admin/profile-quarantine/:profileId/evidence/:evidenceId/accept",
+    isAuthenticated,
+    isStaffOrAdmin,
+    async (req: any, res) => {
+      try {
+        const profileId = String(req.params?.profileId || "").trim();
+        const evidenceId = String(req.params?.evidenceId || "")
+          .trim()
+          .toLowerCase()
+          .replace(/-/g, "_");
+        if (!profileId) {
+          return res.status(400).json({ message: "profileId is required" });
+        }
+        if (!QUARANTINE_EVIDENCE_IDS.has(evidenceId)) {
+          return res.status(400).json({ message: "Unsupported evidenceId" });
+        }
+
+        const actorId = String(req.user?.id || "").trim() || null;
+        const note = String(req.body?.note || "").trim() || null;
+        const nowIso = new Date().toISOString();
+
+        const targetRows = await db
+          .select({
+            id: restaurants.id,
+            rawData: sql<any>`coalesce(${restaurants}.raw_data, '{}'::jsonb)`,
+          })
+          .from(restaurants)
+          .where(eq(restaurants.id, profileId))
+          .limit(1);
+        const target = targetRows[0];
+        if (!target) {
+          return res.status(404).json({ message: "Profile not found" });
+        }
+
+        const rawData =
+          target.rawData && typeof target.rawData === "object"
+            ? { ...(target.rawData as Record<string, any>) }
+            : {};
+        const evidenceQuarantine =
+          rawData.evidenceQuarantine && typeof rawData.evidenceQuarantine === "object"
+            ? { ...(rawData.evidenceQuarantine as Record<string, any>) }
+            : {};
+        const decisions =
+          evidenceQuarantine.decisions && typeof evidenceQuarantine.decisions === "object"
+            ? { ...(evidenceQuarantine.decisions as Record<string, any>) }
+            : {};
+
+        decisions[evidenceId] = {
+          status: "accepted",
+          updatedAt: nowIso,
+          updatedBy: actorId,
+          note,
+        };
+        evidenceQuarantine.decisions = decisions;
+        evidenceQuarantine.lastDecisionAt = nowIso;
+        evidenceQuarantine.lastDecisionBy = actorId;
+        rawData.evidenceQuarantine = evidenceQuarantine;
+
+        await db
+          .update(restaurants)
+          .set({
+            rawData: rawData as any,
+            updatedAt: new Date(),
+          })
+          .where(eq(restaurants.id, profileId));
+
+        res.json({
+          ok: true,
+          profileId,
+          evidenceId,
+          decision: decisions[evidenceId],
+        });
+      } catch (error) {
+        console.error("Error accepting quarantine evidence:", error);
+        res.status(500).json({ message: "Failed to accept evidence decision" });
+      }
+    },
+  );
+
+  app.post(
+    "/api/admin/profile-quarantine/:profileId/evidence/:evidenceId/reject",
+    isAuthenticated,
+    isStaffOrAdmin,
+    async (req: any, res) => {
+      try {
+        const profileId = String(req.params?.profileId || "").trim();
+        const evidenceId = String(req.params?.evidenceId || "")
+          .trim()
+          .toLowerCase()
+          .replace(/-/g, "_");
+        if (!profileId) {
+          return res.status(400).json({ message: "profileId is required" });
+        }
+        if (!QUARANTINE_EVIDENCE_IDS.has(evidenceId)) {
+          return res.status(400).json({ message: "Unsupported evidenceId" });
+        }
+
+        const actorId = String(req.user?.id || "").trim() || null;
+        const reason = String(req.body?.reason || "").trim() || null;
+        const nowIso = new Date().toISOString();
+
+        const targetRows = await db
+          .select({
+            id: restaurants.id,
+            rawData: sql<any>`coalesce(${restaurants}.raw_data, '{}'::jsonb)`,
+          })
+          .from(restaurants)
+          .where(eq(restaurants.id, profileId))
+          .limit(1);
+        const target = targetRows[0];
+        if (!target) {
+          return res.status(404).json({ message: "Profile not found" });
+        }
+
+        const rawData =
+          target.rawData && typeof target.rawData === "object"
+            ? { ...(target.rawData as Record<string, any>) }
+            : {};
+        const evidenceQuarantine =
+          rawData.evidenceQuarantine && typeof rawData.evidenceQuarantine === "object"
+            ? { ...(rawData.evidenceQuarantine as Record<string, any>) }
+            : {};
+        const decisions =
+          evidenceQuarantine.decisions && typeof evidenceQuarantine.decisions === "object"
+            ? { ...(evidenceQuarantine.decisions as Record<string, any>) }
+            : {};
+
+        decisions[evidenceId] = {
+          status: "rejected",
+          updatedAt: nowIso,
+          updatedBy: actorId,
+          reason,
+        };
+        evidenceQuarantine.decisions = decisions;
+        evidenceQuarantine.lastDecisionAt = nowIso;
+        evidenceQuarantine.lastDecisionBy = actorId;
+        rawData.evidenceQuarantine = evidenceQuarantine;
+
+        await db
+          .update(restaurants)
+          .set({
+            rawData: rawData as any,
+            updatedAt: new Date(),
+          })
+          .where(eq(restaurants.id, profileId));
+
+        res.json({
+          ok: true,
+          profileId,
+          evidenceId,
+          decision: decisions[evidenceId],
+        });
+      } catch (error) {
+        console.error("Error rejecting quarantine evidence:", error);
+        res.status(500).json({ message: "Failed to reject evidence decision" });
       }
     },
   );

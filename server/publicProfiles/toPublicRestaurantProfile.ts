@@ -109,7 +109,22 @@ export function toPublicRestaurantProfile(input: {
         .toLowerCase() === "quarantined" ||
       quarantineByRule,
   );
-  const hidePublicTrustFields = isQuarantined && quarantineConfig.allowPublicTrustFields !== true;
+  const quarantineDecisions =
+    quarantineConfig && typeof quarantineConfig.decisions === "object" && quarantineConfig.decisions
+      ? (quarantineConfig.decisions as Record<string, any>)
+      : {};
+  const decisionStatus = (evidenceId: string) =>
+    String(
+      (quarantineDecisions[evidenceId] as any)?.status ||
+        (quarantineDecisions[evidenceId.replace(/-/g, "_")] as any)?.status ||
+        "",
+    )
+      .trim()
+      .toLowerCase();
+  const isAccepted = (evidenceId: string) => decisionStatus(evidenceId) === "accepted";
+  const isRejected = (evidenceId: string) => decisionStatus(evidenceId) === "rejected";
+  const hidePublicTrustFields =
+    isQuarantined && quarantineConfig.allowPublicTrustFields !== true;
   const hideMedia = hidePublicTrustFields && quarantineConfig.hideMedia !== false;
   const publicActionLinks =
     row &&
@@ -131,21 +146,29 @@ export function toPublicRestaurantProfile(input: {
   const canonicalPath = `/p/${profileType}/${id}/${slug}`;
   const coverImageUrlRaw = String(row.coverImageUrl || "").trim() || null;
   const logoUrlRaw = String(row.logoUrl || "").trim() || null;
-  const coverImageUrl = hideMedia ? null : coverImageUrlRaw;
-  const logoUrl = hideMedia ? null : logoUrlRaw;
+  const coverImageUrl =
+    hideMedia && !isAccepted("media_cover") ? null : coverImageUrlRaw;
+  const logoUrl = hideMedia && !isAccepted("media_logo") ? null : logoUrlRaw;
   const addressPublicLabel =
-    input.showAddress === false || hidePublicTrustFields
+    input.showAddress === false ||
+    isRejected("contact_address") ||
+    (hidePublicTrustFields && !isAccepted("contact_address"))
       ? null
       : joinedAddressLabel(row.address, row.city, row.state);
   const phonePublic =
-    input.showContact === false || hidePublicTrustFields
+    input.showContact === false ||
+    isRejected("contact_phone") ||
+    (hidePublicTrustFields && !isAccepted("contact_phone"))
       ? null
       : String(row.phone || "").trim() || null;
   const menuUrl = String(row.menuUrl || "").trim() || null;
   const menuImageUrl = String(row.menuImageUrl || "").trim() || null;
   const menuPdfUrl = String(row.menuPdfUrl || "").trim() || null;
   const websiteUrl =
-    hidePublicTrustFields ? null : String(row.websiteUrl || "").trim() || null;
+    isRejected("website_link") ||
+    (hidePublicTrustFields && !isAccepted("website_link"))
+      ? null
+      : String(row.websiteUrl || "").trim() || null;
   const onlineOrderingUrl =
     String(
       row.onlineOrderingUrl ||
@@ -184,10 +207,20 @@ export function toPublicRestaurantProfile(input: {
       row.truckBookingInquiryUrl || row.truckBookingUrl || row.bookingInquiryUrl || "",
     ).trim() || null;
   const instagramUrl =
-    hidePublicTrustFields ? null : String(row.instagramUrl || "").trim() || null;
+    isRejected("social_links") ||
+    (hidePublicTrustFields && !isAccepted("social_links"))
+      ? null
+      : String(row.instagramUrl || "").trim() || null;
   const facebookPageUrl =
-    hidePublicTrustFields ? null : String(row.facebookPageUrl || "").trim() || null;
-  const xUrl = hidePublicTrustFields ? null : String(row.xUrl || "").trim() || null;
+    isRejected("social_links") ||
+    (hidePublicTrustFields && !isAccepted("social_links"))
+      ? null
+      : String(row.facebookPageUrl || "").trim() || null;
+  const xUrl =
+    isRejected("social_links") ||
+    (hidePublicTrustFields && !isAccepted("social_links"))
+      ? null
+      : String(row.xUrl || "").trim() || null;
   const hoursValue =
     String(
       row.hours ||
@@ -230,7 +263,10 @@ export function toPublicRestaurantProfile(input: {
     : Array.isArray(row?.socialAutopostSettings?.publicGalleryImages)
       ? row.socialAutopostSettings.publicGalleryImages
       : [];
-  const mappedGalleryImages = (hideMedia ? [] : rawGalleryImages)
+  const mappedGalleryImages =
+    hideMedia && !isAccepted("media_gallery")
+      ? ([] as any[])
+      : rawGalleryImages
     .map((entry: any) => {
       if (!entry) return null;
       if (typeof entry === "string") {
@@ -578,7 +614,7 @@ export function toPublicRestaurantProfile(input: {
       imageAsset(logoUrl, "logo"),
       ...mappedGalleryImages,
     ].filter(Boolean) as PublicRestaurantProfile["galleryImages"],
-    verifiedProfile: hidePublicTrustFields
+    verifiedProfile: hidePublicTrustFields && !isAccepted("identity_verification")
       ? false
       : Boolean(
           row.verifiedProfile ??
