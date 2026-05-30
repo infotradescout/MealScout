@@ -91,6 +91,9 @@ const isDuperOrRootUserType = (userType?: string | null) =>
 const isRootSuperAdminUserType = (userType?: string | null) =>
   userType === "super_admin";
 
+const isBusinessUserType = (userType?: string | null) =>
+  userType === "food_truck" || userType === "restaurant_owner";
+
 interface PendingRestaurant {
   id: string;
   name: string;
@@ -2270,6 +2273,8 @@ export default function AdminDashboard() {
   const [userBusinessOnly, setUserBusinessOnly] = useState(false);
   const [userCityFilter, setUserCityFilter] = useState("");
   const [userStateFilter, setUserStateFilter] = useState("");
+  const [attachBusinessSearch, setAttachBusinessSearch] = useState("");
+  const [attachBusinessSelectedId, setAttachBusinessSelectedId] = useState("");
   const [verificationSearch, setVerificationSearch] = useState("");
   const [messageSubject, setMessageSubject] = useState("");
   const [messageBody, setMessageBody] = useState("");
@@ -3548,6 +3553,20 @@ export default function AdminDashboard() {
   const { data: userRestaurants = [] } = useQuery<any[]>({
     queryKey: ["/api/admin/users", selectedUser?.id, "restaurants"],
     enabled: !!adminUser && !!selectedUser?.id && userDetailsOpen,
+  });
+
+  const { data: attachBusinessCandidates = [] } = useQuery<any[]>({
+    queryKey: ["/api/admin/restaurants/pending", "attach-candidates"],
+    enabled:
+      !!adminUser &&
+      !!selectedUser?.id &&
+      userDetailsOpen &&
+      isBusinessUserType(selectedUser?.userType),
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/admin/restaurants/pending");
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    },
   });
 
   const { data: userDeals = [] } = useQuery<any[]>({
@@ -5402,6 +5421,45 @@ export default function AdminDashboard() {
       toast({
         title: "Error",
         description: error.message || "Failed to update user.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const attachBusinessToUser = useMutation({
+    mutationFn: async (payload: { userId: string; restaurantId: string }) => {
+      const res = await apiRequest(
+        "POST",
+        `/api/admin/business-users/${payload.userId}/attach-restaurant`,
+        {
+          restaurantId: payload.restaurantId,
+        },
+      );
+      return await res.json();
+    },
+    onSuccess: async (data: any, payload) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/admin/users", payload.userId, "restaurants"],
+      });
+      const refreshedUser = users.find((u: any) => u?.id === payload.userId);
+      if (refreshedUser) {
+        setSelectedUser(refreshedUser);
+      }
+      setAttachBusinessSelectedId("");
+      setAttachBusinessSearch("");
+      toast({
+        title: "Business attached",
+        description:
+          data?.accessContext?.primaryRestaurant?.name
+            ? `Attached to ${data.accessContext.primaryRestaurant.name}.`
+            : "Business user linked successfully.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Attach failed",
+        description: error?.message || "Unable to attach business user.",
         variant: "destructive",
       });
     },
@@ -8650,6 +8708,10 @@ export default function AdminDashboard() {
                           <span>
                             {Number(user.activityEventCount || 0)} tracked events
                           </span>
+                          {isBusinessUserType(user.userType) &&
+                            !user.hasRestaurant && (
+                              <Badge variant="destructive">not_attached</Badge>
+                            )}
                         </div>
                       </div>
                       <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center sm:gap-3">
@@ -8764,12 +8826,35 @@ export default function AdminDashboard() {
                           onClick={() => {
                             setSelectedUser(user);
                             setUserDetailsOpen(true);
+                            if (
+                              isBusinessUserType(user.userType) &&
+                              !user.hasRestaurant
+                            ) {
+                              setAttachBusinessSearch("");
+                              setAttachBusinessSelectedId("");
+                            }
                           }}
                           data-testid={`button-view-user-${user.id}`}
                         >
                           <Eye className="w-4 h-4 mr-1" />
                           Details
                         </Button>
+                        {isBusinessUserType(user.userType) &&
+                          !user.hasRestaurant && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                setSelectedUser(user);
+                                setUserDetailsOpen(true);
+                                setAttachBusinessSearch("");
+                                setAttachBusinessSelectedId("");
+                              }}
+                              data-testid={`button-attach-business-${user.id}`}
+                            >
+                              Attach Business
+                            </Button>
+                          )}
                         <Button
                           size="sm"
                           variant="outline"
@@ -10151,6 +10236,89 @@ export default function AdminDashboard() {
                 <div className="rounded-md border border-border/60 bg-muted/30 p-3 text-xs text-muted-foreground">
                   Parking Pass + Host Location editing lives in the{" "}
                   <span className="font-semibold">Host Locations</span> tab.
+                </div>
+              )}
+
+              {isBusinessUserType(selectedUser?.userType) && (
+                <div className="rounded-lg border p-3 space-y-3">
+                  <h3 className="font-semibold flex items-center text-sm text-muted-foreground">
+                    <Store className="w-4 h-4 mr-2" />
+                    BUSINESS LINK
+                  </h3>
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                    <span className="text-muted-foreground">Link state:</span>
+                    <Badge
+                      variant={userRestaurants.length > 0 ? "default" : "destructive"}
+                    >
+                      {userRestaurants.length > 0 ? "linked" : "not_attached"}
+                    </Badge>
+                  </div>
+
+                  {userRestaurants.length === 0 &&
+                    isDuperOrRootUserType(adminUser?.userType) && (
+                      <div className="space-y-2">
+                        <p className="text-xs text-muted-foreground">
+                          Attach this user to a restaurant/food truck profile.
+                        </p>
+                        <input
+                          value={attachBusinessSearch}
+                          onChange={(e) =>
+                            setAttachBusinessSearch(e.target.value)
+                          }
+                          placeholder="Search pending business name"
+                          className="w-full px-2 py-1 border rounded-md text-sm"
+                        />
+                        <select
+                          value={attachBusinessSelectedId}
+                          onChange={(e) =>
+                            setAttachBusinessSelectedId(e.target.value)
+                          }
+                          className="w-full px-2 py-1 border rounded-md text-sm bg-background"
+                        >
+                          <option value="">Select restaurant/truck</option>
+                          {attachBusinessCandidates
+                            .filter((row: any) => {
+                              const q = attachBusinessSearch
+                                .trim()
+                                .toLowerCase();
+                              if (!q) return true;
+                              const haystack = `${row?.name || ""} ${row?.email || ""} ${row?.cuisineType || ""}`.toLowerCase();
+                              return haystack.includes(q);
+                            })
+                            .slice(0, 50)
+                            .map((row: any) => (
+                              <option key={row.id} value={row.id}>
+                                {row.name}
+                                {row.email ? ` (${row.email})` : ""}
+                              </option>
+                            ))}
+                        </select>
+                        <Button
+                          size="sm"
+                          onClick={() => {
+                            if (!attachBusinessSelectedId) {
+                              toast({
+                                title: "Select a business",
+                                description:
+                                  "Choose a restaurant/truck before attaching.",
+                                variant: "destructive",
+                              });
+                              return;
+                            }
+                            attachBusinessToUser.mutate({
+                              userId: selectedUser.id,
+                              restaurantId: attachBusinessSelectedId,
+                            });
+                          }}
+                          disabled={attachBusinessToUser.isPending}
+                          data-testid={`button-attach-selected-business-${selectedUser.id}`}
+                        >
+                          {attachBusinessToUser.isPending
+                            ? "Attaching..."
+                            : "Attach selected business"}
+                        </Button>
+                      </div>
+                    )}
                 </div>
               )}
 
