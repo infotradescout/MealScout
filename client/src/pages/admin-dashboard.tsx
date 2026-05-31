@@ -314,6 +314,39 @@ interface QuarantineSuspectItem {
   hasHardIdentityAnchor?: boolean;
 }
 
+interface FoodTruckInventoryItem {
+  id: string;
+  name: string;
+  city: string | null;
+  phone: string | null;
+  ownerUserId: string | null;
+  ownerEmail: string | null;
+  publicProfileUrl: string;
+  hasLogo: boolean;
+  logoUrl: string | null;
+  hasCoverImage: boolean;
+  coverImageUrl: string | null;
+  menuItemCount: number;
+  hasMenu: boolean;
+  hasEmail: boolean;
+  hasSocials: boolean;
+  isVerified: boolean;
+  isQuarantined: boolean;
+  missingFields: string[];
+  lastUpdatedAt: string | null;
+}
+
+interface FoodTruckInventoryResponse {
+  trucks: FoodTruckInventoryItem[];
+  counts: {
+    total: number;
+    missingMenu: number;
+    missingLogo: number;
+    missingOwner: number;
+    quarantined: number;
+  };
+}
+
 const FOOT_TRAFFIC_OPTIONS = [
   { value: "50", label: "Low (1-50/day)", min: 1, max: 50 },
   { value: "200", label: "Medium (51-200/day)", min: 51, max: 200 },
@@ -1075,6 +1108,30 @@ function ProfileEvidenceApplyPanel({ enabled }: { enabled: boolean }) {
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [result, setResult] = useState<any | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const parsedPayload = (() => {
+    try {
+      return JSON.parse(payloadText);
+    } catch {
+      return null;
+    }
+  })();
+  const markMenuDeferred = (value: boolean) => {
+    if (!parsedPayload) return;
+    const next = {
+      ...parsedPayload,
+      rawSource: {
+        ...(parsedPayload.rawSource || {}),
+        evidenceIngest: {
+          ...((parsedPayload.rawSource || {}).evidenceIngest || {}),
+          extracted: {
+            ...(((parsedPayload.rawSource || {}).evidenceIngest || {}).extracted || {}),
+            menuDeferred: value,
+          },
+        },
+      },
+    };
+    setPayloadText(JSON.stringify(next, null, 2));
+  };
 
   const submit = async (targetMode: "dry_run" | "apply") => {
     if (!enabled || isSubmitting) return;
@@ -1167,8 +1224,73 @@ function ProfileEvidenceApplyPanel({ enabled }: { enabled: boolean }) {
 
         {result && (
           <div className="rounded-md border bg-muted/40 p-3 text-sm space-y-1">
+            {(() => {
+              const debug = (result?.debug || {}) as any;
+              const existingTruckId =
+                String(result?.existingTruckId || debug?.existingTruckId || "").trim();
+              const matchStrength =
+                String(result?.matchStrength || debug?.matchStrength || "none").trim();
+              const matchedBy = Array.isArray(result?.matchedBy)
+                ? result.matchedBy
+                : Array.isArray(debug?.matchedBy)
+                  ? debug.matchedBy
+                  : [];
+              const classification = String(debug?.classification || result?.status || "unknown");
+              const classificationReasons = Array.isArray(debug?.classificationReasons)
+                ? debug.classificationReasons
+                : [];
+              const identitySignals =
+                debug?.identitySignals && typeof debug.identitySignals === "object"
+                  ? debug.identitySignals
+                  : {};
+              const menuSignals =
+                debug?.menuSignals && typeof debug.menuSignals === "object"
+                  ? debug.menuSignals
+                  : {};
+              const missingFields = Array.isArray(debug?.missingFields)
+                ? debug.missingFields
+                : Array.isArray(result?.missingInfo)
+                  ? result.missingInfo
+                  : [];
+              const publishWarnings = Array.isArray(debug?.publishWarnings)
+                ? debug.publishWarnings
+                : Array.isArray(result?.publishWarnings)
+                  ? result.publishWarnings
+                  : [];
+              const publishAuditNotes = Array.isArray(debug?.publishAuditNotes)
+                ? debug.publishAuditNotes
+                : Array.isArray(result?.publishAuditNotes)
+                  ? result.publishAuditNotes
+                  : [];
+              const whyUnknown = Array.isArray(debug?.whyUnknown)
+                ? debug.whyUnknown
+                : [];
+              const ocrTextSnippet = String(debug?.ocrTextSnippet || "").trim();
+              const ocrConfidence = Number(debug?.ocrConfidence || 0);
+              const menuDeferredOverrideActive = Boolean(
+                debug?.menuDeferredOverrideActive || result?.menuDeferredOverrideActive,
+              );
+              return (
+                <>
             <div>
               <strong>Status:</strong> {result.status || "unknown"}
+            </div>
+            <div>
+              <strong>Existing truck:</strong> {existingTruckId || "(none)"}
+            </div>
+            <div>
+              <strong>Match strength:</strong> {matchStrength || "none"}
+            </div>
+            <div>
+              <strong>Matched by:</strong>{" "}
+              {matchedBy.length ? matchedBy.join(", ") : "(none)"}
+            </div>
+            <div>
+              <strong>Classification:</strong> {classification}
+            </div>
+            <div>
+              <strong>Classification reasons:</strong>{" "}
+              {classificationReasons.length ? classificationReasons.join(", ") : "(none)"}
             </div>
             <div>
               <strong>Matched restaurant:</strong>{" "}
@@ -1202,6 +1324,79 @@ function ProfileEvidenceApplyPanel({ enabled }: { enabled: boolean }) {
               <strong>Conflicts:</strong>{" "}
               {Array.isArray(result.conflicts) ? result.conflicts.length : 0}
             </div>
+            <div>
+              <strong>Identity signals:</strong>{" "}
+              {Object.keys(identitySignals).length
+                ? JSON.stringify(identitySignals)
+                : "(none)"}
+            </div>
+            <div>
+              <strong>Menu signals:</strong>{" "}
+              {Object.keys(menuSignals).length ? JSON.stringify(menuSignals) : "(none)"}
+            </div>
+            <div>
+              <strong>Missing fields:</strong>{" "}
+              {missingFields.length ? missingFields.join(", ") : "(none)"}
+            </div>
+            <div>
+              <strong>Menu deferred override:</strong>{" "}
+              {menuDeferredOverrideActive ? "active" : "inactive"}
+            </div>
+            <div>
+              <strong>Publish warnings:</strong>{" "}
+              {publishWarnings.length ? publishWarnings.join(" | ") : "(none)"}
+            </div>
+            <div>
+              <strong>Publish audit notes:</strong>{" "}
+              {publishAuditNotes.length ? publishAuditNotes.join(" | ") : "(none)"}
+            </div>
+            <div>
+              <strong>Why unknown:</strong>{" "}
+              {whyUnknown.length ? whyUnknown.join(", ") : "(none)"}
+            </div>
+            <div>
+              <strong>OCR text snippet:</strong> {ocrTextSnippet || "(none)"}
+            </div>
+            <div>
+              <strong>OCR confidence:</strong> {Number.isFinite(ocrConfidence) ? ocrConfidence : 0}
+            </div>
+            <div className="pt-2 flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={isSubmitting}
+                onClick={() => submit("apply")}
+              >
+                Approve updates to existing truck
+              </Button>
+              <Button size="sm" disabled={isSubmitting} onClick={() => submit("apply")}>
+                Approve new truck draft
+              </Button>
+              <Button
+                size="sm"
+                variant="destructive"
+                disabled
+                title="Use existing review/apply path and keep as dry run to reject weak or unknown evidence."
+              >
+                Reject weak/unknown evidence
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={!parsedPayload}
+                onClick={() => markMenuDeferred(true)}
+              >
+                Mark menuDeferred=true
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={!parsedPayload}
+                onClick={() => markMenuDeferred(false)}
+              >
+                Require menu before publish
+              </Button>
+            </div>
             {result.matchedRestaurantId && (
               <div>
                 <a
@@ -1214,6 +1409,9 @@ function ProfileEvidenceApplyPanel({ enabled }: { enabled: boolean }) {
                 </a>
               </div>
             )}
+                </>
+              );
+            })()}
           </div>
         )}
       </CardContent>
@@ -2291,6 +2489,12 @@ export default function AdminDashboard() {
   const [userBusinessOnly, setUserBusinessOnly] = useState(false);
   const [userCityFilter, setUserCityFilter] = useState("");
   const [userStateFilter, setUserStateFilter] = useState("");
+  const [truckInventorySearch, setTruckInventorySearch] = useState("");
+  const [truckFilterMissingMenu, setTruckFilterMissingMenu] = useState(false);
+  const [truckFilterMissingLogo, setTruckFilterMissingLogo] = useState(false);
+  const [truckFilterMissingOwner, setTruckFilterMissingOwner] = useState(false);
+  const [truckFilterQuarantined, setTruckFilterQuarantined] = useState(false);
+  const [truckFilterVerified, setTruckFilterVerified] = useState(false);
   const [attachBusinessSearch, setAttachBusinessSearch] = useState("");
   const [attachBusinessSelectedId, setAttachBusinessSelectedId] = useState("");
   const [verificationSearch, setVerificationSearch] = useState("");
@@ -2461,6 +2665,41 @@ export default function AdminDashboard() {
     if (Array.isArray(usersPayload?.users)) return usersPayload.users;
     return [];
   }, [usersPayload]);
+
+  const {
+    data: foodTruckInventoryPayload,
+    isLoading: foodTruckInventoryLoading,
+    error: foodTruckInventoryError,
+    refetch: refetchFoodTruckInventory,
+  } = useQuery<FoodTruckInventoryResponse>({
+    queryKey: [
+      "/api/admin/food-trucks/inventory",
+      truckInventorySearch,
+      truckFilterMissingMenu,
+      truckFilterMissingLogo,
+      truckFilterMissingOwner,
+      truckFilterQuarantined,
+      truckFilterVerified,
+    ],
+    enabled: !!adminUser && selectedTab === "food-trucks",
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (truckInventorySearch.trim()) params.set("q", truckInventorySearch.trim());
+      if (truckFilterMissingMenu) params.set("missingMenu", "true");
+      if (truckFilterMissingLogo) params.set("missingLogo", "true");
+      if (truckFilterMissingOwner) params.set("missingOwner", "true");
+      if (truckFilterQuarantined) params.set("quarantined", "true");
+      if (truckFilterVerified) params.set("verified", "true");
+      const suffix = params.toString() ? `?${params.toString()}` : "";
+      const res = await apiRequest("GET", `/api/admin/food-trucks/inventory${suffix}`);
+      return (await res.json()) as FoodTruckInventoryResponse;
+    },
+  });
+
+  const foodTruckInventoryRows = useMemo<FoodTruckInventoryItem[]>(() => {
+    if (Array.isArray(foodTruckInventoryPayload?.trucks)) return foodTruckInventoryPayload.trucks;
+    return [];
+  }, [foodTruckInventoryPayload]);
 
   const {
     data: quarantinePayload,
@@ -5510,6 +5749,41 @@ export default function AdminDashboard() {
     },
   });
 
+  const createAndAttachBusinessForUser = useMutation({
+    mutationFn: async (payload: {
+      userId: string;
+      businessName: string;
+      address: string;
+      city: string;
+      state: string;
+      phone?: string;
+    }) => {
+      const res = await apiRequest(
+        "POST",
+        `/api/admin/business-users/${payload.userId}/create-and-attach`,
+        payload,
+      );
+      return await res.json();
+    },
+    onSuccess: async (_data: any, payload) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/admin/users", payload.userId, "restaurants"],
+      });
+      toast({
+        title: "Business created and attached",
+        description: "New business profile is now linked to this user.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Create failed",
+        description: error?.message || "Unable to create and attach business profile.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const updateParkingPass = useMutation({
     mutationFn: async (payload: { eventId: string; updates: any }) => {
       const res = await apiRequest(
@@ -6622,6 +6896,13 @@ export default function AdminDashboard() {
               className="px-6 py-2.5 rounded-xl transition-all data-[state=active]:bg-primary data-[state=active]:text-black data-[state=active]:shadow-[0_0_20px_rgba(245,158,11,0.4)] text-white/60 hover:text-white"
             >
               Users
+            </TabsTrigger>
+            <TabsTrigger
+              value="food-trucks"
+              data-testid="tab-food-trucks"
+              className="px-6 py-2.5 rounded-xl transition-all data-[state=active]:bg-primary data-[state=active]:text-black data-[state=active]:shadow-[0_0_20px_rgba(245,158,11,0.4)] text-white/60 hover:text-white"
+            >
+              Food Trucks
             </TabsTrigger>
             <TabsTrigger
               value="quarantine"
@@ -8330,6 +8611,248 @@ export default function AdminDashboard() {
                     ))}
                   </div>
                 )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Food Trucks Tab */}
+          <TabsContent value="food-trucks" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Food Truck Profile Inventory</CardTitle>
+                <CardDescription>
+                  Operational completeness snapshot for truck public profiles.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-3 md:grid-cols-5">
+                  <div className="rounded-lg border p-3">
+                    <div className="text-xs text-muted-foreground">Total</div>
+                    <div className="text-lg font-semibold">
+                      {Number(foodTruckInventoryPayload?.counts?.total || 0)}
+                    </div>
+                  </div>
+                  <div className="rounded-lg border p-3">
+                    <div className="text-xs text-muted-foreground">Missing Menu</div>
+                    <div className="text-lg font-semibold">
+                      {Number(foodTruckInventoryPayload?.counts?.missingMenu || 0)}
+                    </div>
+                  </div>
+                  <div className="rounded-lg border p-3">
+                    <div className="text-xs text-muted-foreground">Missing Logo</div>
+                    <div className="text-lg font-semibold">
+                      {Number(foodTruckInventoryPayload?.counts?.missingLogo || 0)}
+                    </div>
+                  </div>
+                  <div className="rounded-lg border p-3">
+                    <div className="text-xs text-muted-foreground">Missing Owner</div>
+                    <div className="text-lg font-semibold">
+                      {Number(foodTruckInventoryPayload?.counts?.missingOwner || 0)}
+                    </div>
+                  </div>
+                  <div className="rounded-lg border p-3">
+                    <div className="text-xs text-muted-foreground">Quarantined</div>
+                    <div className="text-lg font-semibold">
+                      {Number(foodTruckInventoryPayload?.counts?.quarantined || 0)}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid gap-3 lg:grid-cols-3">
+                  <input
+                    className="h-10 rounded-md border bg-background px-3 text-sm"
+                    value={truckInventorySearch}
+                    onChange={(event) => setTruckInventorySearch(event.target.value)}
+                    placeholder="Search truck, owner email, phone, city"
+                  />
+                  <label className="inline-flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={truckFilterMissingMenu}
+                      onChange={(event) => setTruckFilterMissingMenu(event.target.checked)}
+                    />
+                    Missing menu
+                  </label>
+                  <label className="inline-flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={truckFilterMissingLogo}
+                      onChange={(event) => setTruckFilterMissingLogo(event.target.checked)}
+                    />
+                    Missing logo
+                  </label>
+                  <label className="inline-flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={truckFilterMissingOwner}
+                      onChange={(event) => setTruckFilterMissingOwner(event.target.checked)}
+                    />
+                    Missing owner
+                  </label>
+                  <label className="inline-flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={truckFilterQuarantined}
+                      onChange={(event) => setTruckFilterQuarantined(event.target.checked)}
+                    />
+                    Quarantined
+                  </label>
+                  <label className="inline-flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={truckFilterVerified}
+                      onChange={(event) => setTruckFilterVerified(event.target.checked)}
+                    />
+                    Verified
+                  </label>
+                </div>
+
+                {foodTruckInventoryLoading ? (
+                  <div className="text-sm text-muted-foreground">Loading food truck inventory...</div>
+                ) : null}
+                {foodTruckInventoryError ? (
+                  <div className="text-sm text-red-500">
+                    Failed to load food truck inventory.{" "}
+                    <button
+                      className="underline"
+                      onClick={() => refetchFoodTruckInventory()}
+                    >
+                      Retry
+                    </button>
+                  </div>
+                ) : null}
+
+                {!foodTruckInventoryLoading && !foodTruckInventoryError ? (
+                  <div className="overflow-x-auto rounded-lg border">
+                    <table className="w-full min-w-[1200px] text-sm">
+                      <thead className="bg-muted/30 text-left">
+                        <tr>
+                          <th className="px-3 py-2">Truck</th>
+                          <th className="px-3 py-2">Owner</th>
+                          <th className="px-3 py-2">City</th>
+                          <th className="px-3 py-2">Logo</th>
+                          <th className="px-3 py-2">Cover</th>
+                          <th className="px-3 py-2">Menu</th>
+                          <th className="px-3 py-2">Phone</th>
+                          <th className="px-3 py-2">Email / Socials</th>
+                          <th className="px-3 py-2">Verification</th>
+                          <th className="px-3 py-2">Updated</th>
+                          <th className="px-3 py-2">Missing</th>
+                          <th className="px-3 py-2">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {foodTruckInventoryRows.map((truck) => (
+                          <tr key={truck.id} className="border-t align-top">
+                            <td className="px-3 py-2">
+                              <div className="font-medium">{truck.name}</div>
+                              <div className="text-xs text-muted-foreground">{truck.id}</div>
+                            </td>
+                            <td className="px-3 py-2">
+                              {truck.ownerEmail || (
+                                <span className="text-muted-foreground">Missing owner</span>
+                              )}
+                            </td>
+                            <td className="px-3 py-2">{truck.city || "Missing"}</td>
+                            <td className="px-3 py-2">
+                              <div className="flex items-center gap-2">
+                                <Badge variant={truck.hasLogo ? "default" : "secondary"}>
+                                  {truck.hasLogo ? "Yes" : "No"}
+                                </Badge>
+                                {truck.logoUrl ? (
+                                  <img
+                                    src={getOptimizedImageUrl(truck.logoUrl, 40)}
+                                    alt=""
+                                    className="h-8 w-8 rounded object-cover"
+                                  />
+                                ) : null}
+                              </div>
+                            </td>
+                            <td className="px-3 py-2">
+                              <div className="flex items-center gap-2">
+                                <Badge variant={truck.hasCoverImage ? "default" : "secondary"}>
+                                  {truck.hasCoverImage ? "Yes" : "No"}
+                                </Badge>
+                                {truck.coverImageUrl ? (
+                                  <img
+                                    src={getOptimizedImageUrl(truck.coverImageUrl, 40)}
+                                    alt=""
+                                    className="h-8 w-8 rounded object-cover"
+                                  />
+                                ) : null}
+                              </div>
+                            </td>
+                            <td className="px-3 py-2">
+                              {truck.menuItemCount} {truck.hasMenu ? "" : "(Missing)"}
+                            </td>
+                            <td className="px-3 py-2">{truck.phone || "Missing"}</td>
+                            <td className="px-3 py-2">
+                              <div className="flex flex-col gap-1">
+                                <Badge variant={truck.hasEmail ? "default" : "secondary"}>
+                                  {truck.hasEmail ? "Email" : "No email"}
+                                </Badge>
+                                <Badge variant={truck.hasSocials ? "default" : "secondary"}>
+                                  {truck.hasSocials ? "Socials" : "No socials"}
+                                </Badge>
+                              </div>
+                            </td>
+                            <td className="px-3 py-2">
+                              <div className="flex flex-col gap-1">
+                                <Badge variant={truck.isVerified ? "default" : "secondary"}>
+                                  {truck.isVerified ? "Verified" : "Pending"}
+                                </Badge>
+                                <Badge variant={truck.isQuarantined ? "destructive" : "outline"}>
+                                  {truck.isQuarantined ? "Quarantined" : "Clear"}
+                                </Badge>
+                              </div>
+                            </td>
+                            <td className="px-3 py-2">
+                              {truck.lastUpdatedAt
+                                ? new Date(truck.lastUpdatedAt).toLocaleString()
+                                : "Unknown"}
+                            </td>
+                            <td className="px-3 py-2">
+                              <div className="flex flex-wrap gap-1">
+                                {truck.missingFields.length ? (
+                                  truck.missingFields.slice(0, 4).map((field) => (
+                                    <Badge key={`${truck.id}:${field}`} variant="secondary">
+                                      {field}
+                                    </Badge>
+                                  ))
+                                ) : (
+                                  <Badge variant="outline">Complete</Badge>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-3 py-2">
+                              <div className="flex flex-col items-start gap-1">
+                                <a className="underline" href={truck.publicProfileUrl} target="_blank" rel="noreferrer">
+                                  View
+                                </a>
+                                <a className="underline" href={`/restaurant/${encodeURIComponent(truck.id)}`} target="_blank" rel="noreferrer">
+                                  Edit
+                                </a>
+                                <a className="underline" href={`/admin/dashboard?tab=users`} target="_blank" rel="noreferrer">
+                                  Attach owner
+                                </a>
+                                <a className="underline" href={`/admin/dashboard?tab=quarantine`} target="_blank" rel="noreferrer">
+                                  Review evidence
+                                </a>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                        {foodTruckInventoryRows.length === 0 ? (
+                          <tr>
+                            <td colSpan={12} className="px-3 py-8 text-center text-muted-foreground">
+                              No food trucks match the current filters.
+                            </td>
+                          </tr>
+                        ) : null}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : null}
               </CardContent>
             </Card>
           </TabsContent>
@@ -10521,6 +11044,47 @@ export default function AdminDashboard() {
                               : "Attach selected business"}
                           </Button>
                         </LongPressHelp>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            const defaultAddress = (userAddresses.find((row: any) => row?.isDefault) || userAddresses[0] || {}) as any;
+                            const seedBusinessName =
+                              String(selectedUser?.businessName || "").trim() ||
+                              `${selectedUser?.firstName || ""} ${selectedUser?.lastName || ""}`.trim() ||
+                              "";
+                            const businessName = window
+                              .prompt("Business name", seedBusinessName)
+                              ?.trim();
+                            if (!businessName) return;
+                            const address = window
+                              .prompt("Address", String(defaultAddress?.address || "").trim())
+                              ?.trim();
+                            if (!address) return;
+                            const city = window
+                              .prompt("City", String(defaultAddress?.city || "").trim())
+                              ?.trim();
+                            if (!city) return;
+                            const state = window
+                              .prompt("State", String(defaultAddress?.state || "").trim())
+                              ?.trim();
+                            if (!state) return;
+                            createAndAttachBusinessForUser.mutate({
+                              userId: selectedUser.id,
+                              businessName,
+                              address,
+                              city,
+                              state,
+                              phone: String(selectedUser?.phone || "").trim() || undefined,
+                            });
+                          }}
+                          disabled={createAndAttachBusinessForUser.isPending}
+                          data-testid={`button-create-business-from-user-${selectedUser.id}`}
+                        >
+                          {createAndAttachBusinessForUser.isPending
+                            ? "Creating..."
+                            : "Create business from user"}
+                        </Button>
                       </div>
                     )}
                 </div>
