@@ -3029,6 +3029,11 @@ export default function RestaurantOwnerDashboard() {
                   const completionStatus = computeProfileCompletionStatus(currentRestaurant as any, {
                     hasActiveDeal: Number(stats?.activeDeals || 0) > 0,
                   });
+                  const canonicalMenuItemCount = Math.max(
+                    Number((currentRestaurant as any)?.menuItemCount || 0),
+                    Number((currentRestaurant as any)?.publicMenuItemCount || 0),
+                  );
+                  const isMenuGatedFromScoutDiscoverability = canonicalMenuItemCount <= 0;
                   const completionItems = [
                     {
                       id: "menu",
@@ -3153,6 +3158,16 @@ export default function RestaurantOwnerDashboard() {
                         </div>
                         <div className="mt-4 rounded-md border border-border bg-background p-3">
                           <p className="text-sm font-semibold">Profile completion loop</p>
+                          {isMenuGatedFromScoutDiscoverability ? (
+                            <div className="mt-2 rounded-md border border-amber-300 bg-amber-50 p-2">
+                              <p className="text-xs font-semibold text-amber-900">
+                                Not discoverable in Scout yet.
+                              </p>
+                              <p className="mt-1 text-xs text-amber-800">
+                                Add at least one menu item so customers can discover your business.
+                              </p>
+                            </div>
+                          ) : null}
                           <p className="mt-1 text-xs text-muted-foreground">
                             Complete profiles are easier for people to evaluate when they find you through MealScout.
                           </p>
@@ -3313,6 +3328,16 @@ export default function RestaurantOwnerDashboard() {
                         </div>
                         <div className="rounded-md border border-border p-3">
                           <p className="text-sm font-semibold">Profile completion loop</p>
+                          {isMenuGatedFromScoutDiscoverability ? (
+                            <div className="mt-2 rounded-md border border-amber-300 bg-amber-50 p-2">
+                              <p className="text-xs font-semibold text-amber-900">
+                                Not discoverable in Scout yet.
+                              </p>
+                              <p className="mt-1 text-xs text-amber-800">
+                                Add at least one menu item so customers can discover your business.
+                              </p>
+                            </div>
+                          ) : null}
                           <p className="mt-1 text-xs text-muted-foreground">
                             Complete profiles are easier for people to evaluate when they find you through MealScout.
                           </p>
