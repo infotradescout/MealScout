@@ -55,6 +55,16 @@ const TRACTION_FUNNEL_EVENT_NAMES = [
   "funnel_activation_started",
 ] as const;
 
+const DIRECT_CONNECT_HOME_RECORD_EVENT_NAMES = [
+  "direct_connect_request_started",
+  "direct_connect_home_record_prompt_viewed",
+  "direct_connect_home_record_link_selected",
+  "direct_connect_home_record_create_selected",
+  "direct_connect_home_record_skipped",
+  "direct_connect_request_submitted_after_home_record_skip",
+  "direct_connect_homeid_link_selected",
+] as const;
+
 const IMPORT_SYSTEM_EMAIL =
   process.env.IMPORT_SYSTEM_EMAIL || "system-import@mealscout.us";
 
@@ -675,6 +685,7 @@ router.get("/funnel", isAdmin, async (req, res) => {
             gte(telemetryEvents.createdAt, startDate),
             inArray(telemetryEvents.eventName, [
               ...TRACTION_FUNNEL_EVENT_NAMES,
+              ...DIRECT_CONNECT_HOME_RECORD_EVENT_NAMES,
             ]),
           ),
         )
@@ -727,6 +738,22 @@ router.get("/funnel", isAdmin, async (req, res) => {
       signupCompleted: totalsByEvent.funnel_signup_completed?.count || 0,
       activationStarted: totalsByEvent.funnel_activation_started?.count || 0,
     };
+    const homeRecordCounts = {
+      requestStarted:
+        totalsByEvent.direct_connect_request_started?.count || 0,
+      promptViewed:
+        totalsByEvent.direct_connect_home_record_prompt_viewed?.count || 0,
+      linkSelected:
+        totalsByEvent.direct_connect_home_record_link_selected?.count || 0,
+      createSelected:
+        totalsByEvent.direct_connect_home_record_create_selected?.count || 0,
+      skipped: totalsByEvent.direct_connect_home_record_skipped?.count || 0,
+      submittedAfterSkip:
+        totalsByEvent
+          .direct_connect_request_submitted_after_home_record_skip?.count || 0,
+      homeIdLinkSelected:
+        totalsByEvent.direct_connect_homeid_link_selected?.count || 0,
+    };
 
     const rate = (numerator: number, denominator: number) => {
       if (!denominator || denominator <= 0) return 0;
@@ -774,6 +801,63 @@ router.get("/funnel", isAdmin, async (req, res) => {
         accountType: String(row.accountType || "unknown"),
         count: Number(row.count || 0),
       })),
+      directConnectHomeRecord: {
+        counts: homeRecordCounts,
+        rates: {
+          promptViewRateFromRequestStarted: rate(
+            homeRecordCounts.promptViewed,
+            homeRecordCounts.requestStarted,
+          ),
+          linkSelectRateFromPromptViewed: rate(
+            homeRecordCounts.linkSelected,
+            homeRecordCounts.promptViewed,
+          ),
+          createSelectRateFromPromptViewed: rate(
+            homeRecordCounts.createSelected,
+            homeRecordCounts.promptViewed,
+          ),
+          skipRateFromPromptViewed: rate(
+            homeRecordCounts.skipped,
+            homeRecordCounts.promptViewed,
+          ),
+          submitAfterSkipRate: rate(
+            homeRecordCounts.submittedAfterSkip,
+            homeRecordCounts.skipped,
+          ),
+          requestAbandonmentAfterPromptRate: rate(
+            Math.max(
+              0,
+              homeRecordCounts.promptViewed -
+                (homeRecordCounts.linkSelected +
+                  homeRecordCounts.createSelected +
+                  homeRecordCounts.skipped),
+            ),
+            homeRecordCounts.promptViewed,
+          ),
+        },
+        actorCounts: {
+          requestStarted:
+            totalsByEvent.direct_connect_request_started?.uniqueActors || 0,
+          promptViewed:
+            totalsByEvent.direct_connect_home_record_prompt_viewed
+              ?.uniqueActors || 0,
+          linkSelected:
+            totalsByEvent.direct_connect_home_record_link_selected
+              ?.uniqueActors || 0,
+          createSelected:
+            totalsByEvent.direct_connect_home_record_create_selected
+              ?.uniqueActors || 0,
+          skipped:
+            totalsByEvent.direct_connect_home_record_skipped?.uniqueActors || 0,
+          submittedAfterSkip:
+            totalsByEvent
+              .direct_connect_request_submitted_after_home_record_skip
+              ?.uniqueActors || 0,
+          homeIdLinkSelected:
+            totalsByEvent.direct_connect_homeid_link_selected?.uniqueActors ||
+            0,
+        },
+      },
     });
   } catch (error) {
     console.error("Error fetching traction funnel telemetry:", error);
