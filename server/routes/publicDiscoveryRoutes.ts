@@ -50,6 +50,13 @@ const resolvePublicBaseUrl = () =>
       "https://www.mealscout.us",
   ).replace(/\/+$/, "");
 
+const isMissingRelationError = (error: unknown, relationName?: string) => {
+  const err = error as { code?: string; message?: string } | null;
+  if (!err || err.code !== "42P01") return false;
+  if (!relationName) return true;
+  return err.message?.includes(`"${relationName}"`) ?? false;
+};
+
 const hoursSince = (value?: string | Date | null) => {
   if (!value) return null;
   const date = new Date(value);
@@ -838,8 +845,16 @@ const buildPublicMenuPayload = async (
     );
 
   const itemIds = itemRows.map((row: any) => String(row.id || "")).filter(Boolean);
-  const publicPhotoRows = itemIds.length
-    ? await db
+  let publicPhotoRows: Array<{
+    menuItemId: string | null;
+    imageUrl: string | null;
+    status: string | null;
+    featuredByBusiness: boolean | null;
+    createdAt: Date | null;
+  }> = [];
+  if (itemIds.length) {
+    try {
+      publicPhotoRows = await db
         .select({
           menuItemId: menuItemPhotos.menuItemId,
           imageUrl: menuItemPhotos.imageUrl,
@@ -853,8 +868,17 @@ const buildPublicMenuPayload = async (
             inArray(menuItemPhotos.menuItemId, itemIds),
             inArray(menuItemPhotos.status, ["accepted", "featured"] as any),
           ),
-        )
-    : [];
+        );
+    } catch (error) {
+      if (isMissingRelationError(error, "menu_item_photos")) {
+        console.warn(
+          "[public-profile] menu_item_photos missing; continuing without menu photos",
+        );
+      } else {
+        throw error;
+      }
+    }
+  }
   const photosByMenuItem = new Map<string, Array<any>>();
   for (const photo of publicPhotoRows) {
     const key = String(photo.menuItemId || "");
