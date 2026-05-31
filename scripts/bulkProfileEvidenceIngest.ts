@@ -40,6 +40,7 @@ const adminPassword =
   getArg("--password") || process.env.ADMIN_SMOKE_PASSWORD || "";
 const applySafe = hasFlag("--apply-safe");
 const onlyBusiness = getArg("--only");
+const sourceFolderId = getArg("--source-folder-id") || process.env.INTAKE_SOURCE_FOLDER_ID || "";
 
 if (!inputPath) throw new Error("Missing required --input ./batch.json");
 if (!adminEmail || !adminPassword) {
@@ -75,6 +76,24 @@ const businessNameOf = (record: IngestRecord) =>
       record.fillIfBlank?.name ||
       record.match?.name ||
       "Unknown business",
+  ).trim();
+
+const getSourceFileId = (record: IngestRecord) =>
+  String(
+    record.sourceFileId ||
+      record.source_file_id ||
+      record.fileId ||
+      record.rawSource?.fileId ||
+      "",
+  ).trim();
+
+const getSourceFileName = (record: IngestRecord) =>
+  String(
+    record.sourceFileName ||
+      record.source_file_name ||
+      record.fileName ||
+      record.rawSource?.fileName ||
+      "",
   ).trim();
 
 const toPayload = (record: IngestRecord, mode: "dry_run" | "apply") => ({
@@ -135,7 +154,36 @@ const classifyDryRun = (record: IngestRecord, dry: any): Classification => {
   return "needs_review";
 };
 
+const computePublishGate = (record: IngestRecord, dry: any) => {
+  const match = record.match || {};
+  const fill = record.fillIfBlank || {};
+  const debug = (dry?.debug || {}) as any;
+  const name = String(fill.name || match.name || record.business_name || "").trim();
+  const city = String(fill.city || match.city || "").trim();
+  const state = String(fill.state || match.state || "").trim();
+  const cuisine = String(fill.category || fill.cuisineType || match.category || "").trim();
+  const phone = normalizePhone(fill.phone || match.phone);
+  const email = normalize(fill.email || match.email);
+  const menuItems = Array.isArray(record.menuItems) ? record.menuItems : [];
+  const hasMenuItem = menuItems.length > 0 || Boolean(debug?.menuSignals?.hasMenuItems);
+  const menuDeferred = Boolean(
+    record?.rawSource?.evidenceIngest?.extracted?.menuDeferred ||
+      record?.menuDeferred ||
+      record?.fillIfBlank?.menuDeferred,
+  );
+  const publishBlockedReasons: string[] = [];
+  if (!name) publishBlockedReasons.push("missing_name");
+  if (!city && !state) publishBlockedReasons.push("missing_city_or_state");
+  if (!cuisine) publishBlockedReasons.push("missing_cuisine");
+  if (!phone && !email) publishBlockedReasons.push("missing_phone_or_email");
+  if (!hasMenuItem && !menuDeferred) publishBlockedReasons.push("missing_menu_or_menuDeferred");
+  const publishEligible = publishBlockedReasons.length === 0;
+  return { publishEligible, publishBlockedReasons, menuDeferred };
+};
+
 const run = async () => {
+  const startedAt = new Date().toISOString();
+  const runId = `intake_${Date.now()}`;
   const raw = readFileSync(path.resolve(process.cwd(), inputPath), "utf8");
   const parsed = JSON.parse(raw);
   if (!Array.isArray(parsed)) {
@@ -196,6 +244,15 @@ const run = async () => {
   let skippedDuplicateCount = 0;
   let needsReviewCount = 0;
   let rejectedCount = 0;
+  let menuDeferredCount = 0;
+  let publishBlockedCount = 0;
+  let publishEligibleCount = 0;
+  let existingProfilesMatched = 0;
+  let draftsCreated = 0;
+  let updatesQueued = 0;
+  let weakMatchesNeedingReview = 0;
+  let duplicateCandidatesAvoided = 0;
+  const errors: Array<{ sourceFileName: string; error: string }> = [];
 
   for (const record of records) {
     const businessName = businessNameOf(record);
@@ -207,29 +264,66 @@ const run = async () => {
       ...(Array.isArray(record.source_files) ? record.source_files : []),
     ];
 
+    const publishGate = computePublishGate(record, dry);
+    if (publishGate.menuDeferred) menuDeferredCount += 1;
+    if (publishGate.publishEligible) publishEligibleCount += 1;
+    else publishBlockedCount += 1;
+    const debug = (dry?.debug || {}) as any;
+    const matchedBy = Array.isArray(dry?.matchedBy)
+      ? dry.matchedBy
+      : Array.isArray(debug?.matchedBy)
+        ? debug.matchedBy
+        : [];
+    const matchStrength = String(dry?.matchStrength || debug?.matchStrength || "none");
+    const classificationReasons = Array.isArray(debug?.classificationReasons)
+      ? debug.classificationReasons
+      : [];
+    const whyUnknown = Array.isArray(debug?.whyUnknown) ? debug.whyUnknown : [];
     const baseRow = {
+      sourceFileId: getSourceFileId(record),
+      sourceFileName: getSourceFileName(record),
       businessName,
       classification,
+      classificationReasons,
       status: String(dry.status || "dry_run"),
+      existingTruckId: String(dry.existingTruckId || debug?.existingTruckId || ""),
+      matchStrength,
+      matchedBy,
       matchedRestaurantId: String(dry.matchedRestaurantId || ""),
       matchedImportListingId: String(dry.matchedImportListingId || ""),
+      draftId: String(dry.createdDraftId || ""),
       fieldsApplied: Array.isArray(dry.fieldsApplied) ? dry.fieldsApplied : [],
       fieldsSkipped: Array.isArray(dry.fieldsSkipped) ? dry.fieldsSkipped : [],
       menuStatus: String(dry.menuStatus || "none"),
       scheduleStatus: String(dry.scheduleStatus || "none"),
       logoStatus: String(dry.logoStatus || "none"),
       conflicts: Array.isArray(dry.conflicts) ? dry.conflicts : [],
-      missingInfo: Array.isArray(dry.missingInfo) ? dry.missingInfo : [],
+      missingFields: Array.isArray(debug?.missingFields)
+        ? debug.missingFields
+        : Array.isArray(dry.missingInfo)
+          ? dry.missingInfo
+          : [],
+      publishEligible: publishGate.publishEligible,
+      publishBlockedReasons: publishGate.publishBlockedReasons,
+      whyUnknown,
+      ocrConfidence: Number(debug?.ocrConfidence || 0),
       sourceEvidenceLinks,
       phase: "dry_run",
     };
+    if (baseRow.existingTruckId) existingProfilesMatched += 1;
+    if (baseRow.draftId) draftsCreated += 1;
+    if (classification === "update_existing") updatesQueued += 1;
+    if (classification === "needs_review" && matchStrength === "weak") {
+      weakMatchesNeedingReview += 1;
+      duplicateCandidatesAvoided += 1;
+    }
 
     if (classification === "reject") {
       rejectedCount += 1;
       reportRows.push(baseRow);
       missingInfoReport.push({
         businessName,
-        missingInfo: baseRow.missingInfo,
+        missingInfo: baseRow.missingFields,
       });
       continue;
     }
@@ -244,10 +338,10 @@ const run = async () => {
           conflicts: baseRow.conflicts,
         });
       }
-      if (baseRow.missingInfo.length) {
+      if (baseRow.missingFields.length) {
         missingInfoReport.push({
           businessName,
-          missingInfo: baseRow.missingInfo,
+          missingInfo: baseRow.missingFields,
         });
       }
       continue;
@@ -262,8 +356,12 @@ const run = async () => {
     const appliedRow = {
       ...baseRow,
       status: String(applied.status || "applied"),
+      existingTruckId: String(applied.existingTruckId || baseRow.existingTruckId || ""),
+      matchStrength: String(applied.matchStrength || baseRow.matchStrength || "none"),
+      matchedBy: Array.isArray(applied.matchedBy) ? applied.matchedBy : baseRow.matchedBy,
       matchedRestaurantId: String(applied.matchedRestaurantId || ""),
       matchedImportListingId: String(applied.matchedImportListingId || ""),
+      draftId: String(applied.createdDraftId || baseRow.draftId || ""),
       fieldsApplied: Array.isArray(applied.fieldsApplied)
         ? applied.fieldsApplied
         : [],
@@ -274,7 +372,17 @@ const run = async () => {
       scheduleStatus: String(applied.scheduleStatus || "none"),
       logoStatus: String(applied.logoStatus || "none"),
       conflicts: Array.isArray(applied.conflicts) ? applied.conflicts : [],
-      missingInfo: Array.isArray(applied.missingInfo) ? applied.missingInfo : [],
+      missingFields: Array.isArray(applied?.debug?.missingFields)
+        ? applied.debug.missingFields
+        : Array.isArray(applied.missingInfo)
+          ? applied.missingInfo
+          : baseRow.missingFields,
+      publishEligible: baseRow.publishEligible,
+      publishBlockedReasons: baseRow.publishBlockedReasons,
+      whyUnknown: Array.isArray(applied?.debug?.whyUnknown)
+        ? applied.debug.whyUnknown
+        : baseRow.whyUnknown,
+      ocrConfidence: Number(applied?.debug?.ocrConfidence || baseRow.ocrConfidence || 0),
       phase: "apply",
     };
 
@@ -289,10 +397,10 @@ const run = async () => {
         conflicts: appliedRow.conflicts,
       });
     }
-    if (appliedRow.missingInfo.length) {
+    if (appliedRow.missingFields.length) {
       missingInfoReport.push({
         businessName,
-        missingInfo: appliedRow.missingInfo,
+        missingInfo: appliedRow.missingFields,
       });
     }
   }
@@ -302,11 +410,27 @@ const run = async () => {
     (row) => row.classification === "needs_review" || row.classification === "reject",
   ).length;
 
+  const completedAt = new Date().toISOString();
   const report = {
-    generatedAt: new Date().toISOString(),
+    runId,
+    startedAt,
+    completedAt,
+    sourceFolderId: sourceFolderId || null,
+    generatedAt: completedAt,
     inputPath: path.resolve(process.cwd(), inputPath),
     applySafe,
     totals: {
+      totalFiles: records.length,
+      processedFiles: reportRows.length,
+      unknownFiles: reportRows.filter((row) => row.classification === "reject").length,
+      draftsCreated,
+      existingProfilesMatched,
+      updatesQueued,
+      weakMatchesNeedingReview,
+      menuDeferredCount,
+      publishBlockedCount,
+      publishEligibleCount,
+      duplicateCandidatesAvoided,
       createdCount,
       updatedCount,
       skippedDuplicateCount,
@@ -314,6 +438,7 @@ const run = async () => {
       rejectedCount,
       processedCount: records.length,
     },
+    errors,
     reviewQueue,
     conflictsReport,
     missingInfoReport,
