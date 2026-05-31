@@ -185,6 +185,7 @@ const evaluateListing = async (listing: ListingRow) => {
     Boolean((listing as any)?.rawData?.evidenceIngest?.extracted?.menuItems?.length) ||
     Boolean((listing as any)?.rawData?.evidenceIngest?.extracted?.menu?.length);
   const menuDeferred = Boolean((listing as any)?.rawData?.evidenceIngest?.extracted?.menuDeferred);
+  const menuDeferredOverrideActive = Boolean(!hasMenu && menuDeferred);
   const [linkedUser] = await db
     .select({
       id: users.id,
@@ -295,6 +296,12 @@ const evaluateListing = async (listing: ListingRow) => {
     hasPhoneOrEmail,
     hasMenuOrDeferred: hasMenu || menuDeferred,
   };
+  const publishWarnings: string[] = [];
+  const publishAuditNotes: string[] = [];
+  if (menuDeferredOverrideActive) {
+    publishWarnings.push("Menu deferred by admin approval.");
+    publishAuditNotes.push("publish_gate.menu_deferred_override=true");
+  }
   const publishable = Object.values(publishGate).every(Boolean);
 
   return {
@@ -308,6 +315,9 @@ const evaluateListing = async (listing: ListingRow) => {
     contactEvidenceSource: contactEvidenceSources[0] || "",
     contactEvidenceSources,
     publishGate,
+    menuDeferredOverrideActive,
+    publishWarnings,
+    publishAuditNotes,
     publishable,
     candidates: [],
     action: publishable ? "publishable_preview" : "none",
