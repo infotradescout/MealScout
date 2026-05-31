@@ -421,6 +421,19 @@ export function registerTruckImportAdminRoutes(
         const missingInfo = Array.isArray(requestBody?.missingInfo)
           ? requestBody.missingInfo.map((v: any) => String(v || "").trim()).filter(Boolean)
           : [];
+        const evidenceFieldProposals = Array.isArray(requestBody?.evidenceFieldProposals)
+          ? requestBody.evidenceFieldProposals
+              .filter((proposal: any) => proposal && typeof proposal === "object")
+              .map((proposal: any) => ({
+                field: String(proposal.field || "").trim(),
+                proposedValue: String(proposal.proposedValue || "").trim(),
+                confidence: String(proposal.confidence || "low").trim(),
+                source: String(proposal.source || "screenshot").trim(),
+                evidenceText: String(proposal.evidenceText || "").trim(),
+                imageRef: String(proposal.imageRef || "").trim(),
+              }))
+              .filter((proposal: any) => proposal.field && proposal.proposedValue)
+          : [];
         const logoUpload = requestBody?.logoUpload || {};
         const logoEnabled = Boolean(logoUpload?.enabled);
 
@@ -428,6 +441,29 @@ export function registerTruckImportAdminRoutes(
           String(value || "")
             .trim()
             .toLowerCase();
+        const normalizeName = (value: unknown) =>
+          normalize(value)
+            .replace(/[^a-z0-9\s]/g, " ")
+            .replace(/\s+/g, " ")
+            .trim();
+        const normalizeUrlIdentity = (value: unknown) => {
+          const raw = String(value || "").trim();
+          if (!raw) return "";
+          const withProtocol = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+          try {
+            const parsed = new URL(withProtocol);
+            const host = parsed.hostname.replace(/^www\./i, "").toLowerCase();
+            const path = parsed.pathname
+              .replace(/\/+$/, "")
+              .toLowerCase();
+            return `${host}${path}`;
+          } catch {
+            return normalize(raw)
+              .replace(/^https?:\/\//i, "")
+              .replace(/^www\./i, "")
+              .replace(/\/+$/, "");
+          }
+        };
         const normalizePhone = (value: unknown) =>
           String(value || "").replace(/[^\d]/g, "");
 
@@ -436,15 +472,22 @@ export function registerTruckImportAdminRoutes(
         const matchName = String(match.name || fillIfBlank.name || "").trim();
         const matchCity = normalize(match.city || fillIfBlank.city);
         const matchState = normalize(match.state || fillIfBlank.state);
-        const matchWebsite = normalize(match.website || fillIfBlank.websiteUrl || fillIfBlank.website);
-        const matchFacebook = normalize(match.facebook || fillIfBlank.facebook || fillIfBlank.facebookPageUrl);
-        const matchInstagram = normalize(match.instagram || fillIfBlank.instagram || fillIfBlank.instagramUrl);
+        const matchWebsite = normalizeUrlIdentity(
+          match.website || fillIfBlank.websiteUrl || fillIfBlank.website,
+        );
+        const matchFacebook = normalizeUrlIdentity(
+          match.facebook || fillIfBlank.facebook || fillIfBlank.facebookPageUrl,
+        );
+        const matchInstagram = normalizeUrlIdentity(
+          match.instagram || fillIfBlank.instagram || fillIfBlank.instagramUrl,
+        );
+        const normalizedMatchName = normalizeName(matchName);
 
         const restaurantWhere = or(
           matchPhone ? eq(sql`regexp_replace(coalesce(${restaurants.phone}, ''), '[^0-9]', '', 'g')`, matchPhone) : sql`false`,
-          matchWebsite ? sql`lower(coalesce(${restaurants.websiteUrl}, '')) like ${`%${matchWebsite}%`}` : sql`false`,
-          matchFacebook ? sql`lower(coalesce(${restaurants.facebookPageUrl}, '')) like ${`%${matchFacebook}%`}` : sql`false`,
-          matchInstagram ? sql`lower(coalesce(${restaurants.instagramUrl}, '')) like ${`%${matchInstagram}%`}` : sql`false`,
+          matchWebsite ? sql`replace(replace(lower(coalesce(${restaurants.websiteUrl}, '')), 'https://', ''), 'http://', '') like ${`%${matchWebsite}%`}` : sql`false`,
+          matchFacebook ? sql`replace(replace(lower(coalesce(${restaurants.facebookPageUrl}, '')), 'https://', ''), 'http://', '') like ${`%${matchFacebook}%`}` : sql`false`,
+          matchInstagram ? sql`replace(replace(lower(coalesce(${restaurants.instagramUrl}, '')), 'https://', ''), 'http://', '') like ${`%${matchInstagram}%`}` : sql`false`,
           matchName
             ? and(
                 sql`lower(${restaurants.name}) = ${normalize(matchName)}`,
@@ -467,13 +510,15 @@ export function registerTruckImportAdminRoutes(
         const scoredRestaurants = restaurantCandidates
           .map((row: any) => {
             let score = 0;
-            if (matchEmail && normalize(row.email) === matchEmail) score += 5;
+            const matchedBy = new Set<string>();
+            const rowNameNormalized = normalizeName(row.name);
             if (
               matchPhone &&
               normalizePhone(row.phone) &&
               normalizePhone(row.phone) === matchPhone
             ) {
-              score += 5;
+              score += 12;
+              matchedBy.add("phone_exact");
             }
             if (
               matchName &&
@@ -481,23 +526,62 @@ export function registerTruckImportAdminRoutes(
               (!matchCity || normalize(row.city) === matchCity) &&
               (!matchState || normalize(row.state) === matchState)
             ) {
-              score += 4;
-            }
-            if (matchWebsite && normalize(row.websiteUrl).includes(matchWebsite))
+              score += 9;
+              matchedBy.add("name_city_exact");
+            } else if (
+              normalizedMatchName &&
+              rowNameNormalized &&
+              rowNameNormalized.includes(normalizedMatchName)
+            ) {
               score += 3;
-            if (matchFacebook && normalize(row.facebookPageUrl).includes(matchFacebook))
-              score += 2;
-            if (matchInstagram && normalize(row.instagramUrl).includes(matchInstagram))
-              score += 2;
-            return { row, score };
+              matchedBy.add("name_similar");
+              if (matchCity && normalize(row.city) === matchCity) {
+                score += 2;
+                matchedBy.add("city_exact");
+              }
+            }
+            if (
+              matchWebsite &&
+              normalizeUrlIdentity(row.websiteUrl) &&
+              normalizeUrlIdentity(row.websiteUrl) === matchWebsite
+            ) {
+              score += 12;
+              matchedBy.add("website_exact");
+            }
+            if (
+              matchFacebook &&
+              normalizeUrlIdentity(row.facebookPageUrl) &&
+              normalizeUrlIdentity(row.facebookPageUrl) === matchFacebook
+            ) {
+              score += 12;
+              matchedBy.add("facebook_exact");
+            }
+            if (
+              matchInstagram &&
+              normalizeUrlIdentity(row.instagramUrl) &&
+              normalizeUrlIdentity(row.instagramUrl) === matchInstagram
+            ) {
+              score += 12;
+              matchedBy.add("instagram_exact");
+            }
+            return { row, score, matchedBy: Array.from(matchedBy) };
           })
-          .filter((row: any) => row.score >= 4)
+          .filter((row: any) => row.score >= 3)
           .sort((a: any, b: any) => b.score - a.score);
 
         let matchedRestaurant = scoredRestaurants[0]?.row || null;
+        let matchedBy = scoredRestaurants[0]?.matchedBy || [];
+        let matchStrength: "strongest" | "strong" | "medium" | "weak" | "none" =
+          "none";
+        const topRestaurantScore = Number(scoredRestaurants[0]?.score || 0);
+        if (topRestaurantScore >= 12) matchStrength = "strongest";
+        else if (topRestaurantScore >= 9) matchStrength = "strong";
+        else if (topRestaurantScore >= 5) matchStrength = "medium";
+        else if (topRestaurantScore >= 3) matchStrength = "weak";
         const multipleRestaurantStrongMatches =
           scoredRestaurants.length > 1 &&
-          scoredRestaurants[0].score === scoredRestaurants[1].score;
+          scoredRestaurants[0].score === scoredRestaurants[1].score &&
+          scoredRestaurants[0].score >= 9;
 
         let matchedImportListing: any = null;
         if (profileType === "food_truck") {
@@ -540,7 +624,79 @@ export function registerTruckImportAdminRoutes(
             .from(truckImportListings)
             .where(listingWhere)
             .limit(10);
-          matchedImportListing = importCandidates[0] || null;
+          const scoredImportCandidates = importCandidates
+            .map((row: any) => {
+              let score = 0;
+              const matchedBySignals = new Set<string>();
+              const rowNameNormalized = normalizeName(row.name);
+              if (matchEmail && normalize(row.email) === matchEmail) {
+                score += 12;
+                matchedBySignals.add("email_exact");
+              }
+              if (
+                matchPhone &&
+                normalizePhone(row.phone) &&
+                normalizePhone(row.phone) === matchPhone
+              ) {
+                score += 12;
+                matchedBySignals.add("phone_exact");
+              }
+              if (
+                matchWebsite &&
+                normalizeUrlIdentity(row.websiteUrl) &&
+                normalizeUrlIdentity(row.websiteUrl) === matchWebsite
+              ) {
+                score += 12;
+                matchedBySignals.add("website_exact");
+              }
+              if (
+                matchFacebook &&
+                normalizeUrlIdentity(row.facebookPageUrl) &&
+                normalizeUrlIdentity(row.facebookPageUrl) === matchFacebook
+              ) {
+                score += 12;
+                matchedBySignals.add("facebook_exact");
+              }
+              if (
+                matchInstagram &&
+                normalizeUrlIdentity(row.instagramUrl) &&
+                normalizeUrlIdentity(row.instagramUrl) === matchInstagram
+              ) {
+                score += 12;
+                matchedBySignals.add("instagram_exact");
+              }
+              if (
+                normalizedMatchName &&
+                rowNameNormalized &&
+                rowNameNormalized === normalizedMatchName &&
+                (!matchCity || normalize(row.city) === matchCity)
+              ) {
+                score += 9;
+                matchedBySignals.add("name_city_exact");
+              } else if (
+                normalizedMatchName &&
+                rowNameNormalized &&
+                rowNameNormalized.includes(normalizedMatchName)
+              ) {
+                score += 3;
+                matchedBySignals.add("name_similar");
+              }
+              return { row, score, matchedBy: Array.from(matchedBySignals) };
+            })
+            .filter((row: any) => row.score >= 3)
+            .sort((a: any, b: any) => b.score - a.score);
+          if ((scoredImportCandidates[0]?.score || 0) > topRestaurantScore) {
+            matchStrength =
+              scoredImportCandidates[0].score >= 12
+                ? "strongest"
+                : scoredImportCandidates[0].score >= 9
+                  ? "strong"
+                  : scoredImportCandidates[0].score >= 5
+                    ? "medium"
+                    : "weak";
+            matchedBy = scoredImportCandidates[0].matchedBy;
+          }
+          matchedImportListing = scoredImportCandidates[0]?.row || null;
           if (!matchedRestaurant && matchedImportListing) {
             const [linked] = await db
               .select()
@@ -554,12 +710,34 @@ export function registerTruckImportAdminRoutes(
         if (multipleRestaurantStrongMatches) {
           return res.json({
             status: "needs_review",
+            existingTruckId: null,
             matchedRestaurantId: null,
             matchedImportListingId: null,
             createdDraftId: "",
+            matchStrength,
+            matchedBy,
             fieldsApplied: [],
             fieldsSkipped: [],
             conflicts: [{ field: "match", reason: "multiple_strong_matches" }],
+            menuStatus: "none",
+            scheduleStatus: "none",
+            logoStatus: "none",
+            missingInfo,
+            sourceNotes,
+          });
+        }
+        if (matchStrength === "weak" && matchedRestaurant) {
+          return res.json({
+            status: "needs_review",
+            existingTruckId: matchedRestaurant.id,
+            matchedRestaurantId: matchedRestaurant.id,
+            matchedImportListingId: "",
+            createdDraftId: "",
+            matchStrength,
+            matchedBy,
+            fieldsApplied: [],
+            fieldsSkipped: [],
+            conflicts: [{ field: "match", reason: "weak_name_only_review_required" }],
             menuStatus: "none",
             scheduleStatus: "none",
             logoStatus: "none",
@@ -573,9 +751,12 @@ export function registerTruckImportAdminRoutes(
           if (mode === "dry_run") {
             return res.json({
               status: "needs_review",
+              existingTruckId: "",
               matchedRestaurantId: "",
               matchedImportListingId: "",
               createdDraftId: "",
+              matchStrength,
+              matchedBy,
               fieldsApplied: [],
               fieldsSkipped: [],
               conflicts: [],
@@ -604,6 +785,7 @@ export function registerTruckImportAdminRoutes(
                   evidenceApply: {
                     sourceNotes,
                     missingInfo,
+                    evidenceFieldProposals,
                     queuedMenuItems: incomingMenuItems,
                     queuedScheduleItems: incomingScheduleItems,
                   },
@@ -642,6 +824,7 @@ export function registerTruckImportAdminRoutes(
                   evidenceApply: {
                     sourceNotes,
                     missingInfo,
+                    evidenceFieldProposals,
                     queuedMenuItems: incomingMenuItems,
                     queuedScheduleItems: incomingScheduleItems,
                   },
@@ -653,9 +836,12 @@ export function registerTruckImportAdminRoutes(
           } else {
             return res.json({
               status: "needs_review",
+              existingTruckId: "",
               matchedRestaurantId: "",
               matchedImportListingId: "",
               createdDraftId: "",
+              matchStrength,
+              matchedBy,
               fieldsApplied: [],
               fieldsSkipped: [],
               conflicts: [],
@@ -834,6 +1020,7 @@ export function registerTruckImportAdminRoutes(
             updatedAt: new Date().toISOString(),
             sourceNotes,
             missingInfo,
+            evidenceFieldProposals,
             queuedMenuItems: incomingMenuItems,
             queuedScheduleItems: incomingScheduleItems,
           },
@@ -1031,9 +1218,12 @@ export function registerTruckImportAdminRoutes(
 
         res.json({
           status: mode === "apply" ? "applied" : "dry_run",
+          existingTruckId: matchedRestaurant?.id || "",
           matchedRestaurantId: matchedRestaurant?.id || "",
           matchedImportListingId: matchedImportListing?.id || "",
           createdDraftId,
+          matchStrength,
+          matchedBy,
           fieldsApplied: Array.from(new Set(fieldsApplied)),
           fieldsSkipped: Array.from(new Set(fieldsSkipped)),
           conflicts,
