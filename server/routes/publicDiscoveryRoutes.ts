@@ -489,6 +489,9 @@ const normalizePublicProfileEntity = (value: string | null | undefined) => {
   return normalized;
 };
 
+const isTruckRestaurantRow = (row: any) =>
+  Boolean(row && (row.isFoodTruck || row.businessType === "food_truck"));
+
 const resolveTruckRestaurantForPublicId = async (id: string) => {
   const direct = await storage.getRestaurant(id);
   if (direct) return direct;
@@ -1414,13 +1417,20 @@ export function registerPublicDiscoveryRoutes(app: Express) {
       const safeBase = resolvePublicBaseUrl();
 
       if (["restaurant", "truck", "bar"].includes(entity)) {
-        let row: any = await storage.getRestaurant(idHint);
+        let row: any =
+          entity === "truck"
+            ? await resolveTruckRestaurantForPublicId(idHint)
+            : await storage.getRestaurant(idHint);
         if (!row || !row.isActive) {
           const allRows = (await storage.getAllRestaurants()).filter(
             (candidate: any) => Boolean(candidate?.isActive),
           );
           const slugKey = toSlug(slugOrId.replace(/--[0-9a-f-]{36}$/i, ""));
-          row = allRows.find((candidate: any) => toSlug(candidate?.name) === slugKey);
+          row = allRows.find((candidate: any) => {
+            if (entity === "truck" && !isTruckRestaurantRow(candidate)) return false;
+            if (entity === "bar" && String(candidate?.businessType || "") !== "bar") return false;
+            return toSlug(candidate?.name) === slugKey;
+          });
         }
         if (!row) {
           return res.status(404).json({ exists: false, reason: "not_found" });
@@ -1432,7 +1442,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
             ? "truck"
             : entity === "bar"
               ? "bar"
-              : row.isFoodTruck || row.businessType === "food_truck"
+              : isTruckRestaurantRow(row)
                 ? "truck"
                 : row.businessType === "bar"
                   ? "bar"
@@ -1824,7 +1834,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
         if (
           !row ||
           !row.isActive ||
-          !(row.isFoodTruck || row.businessType === "food_truck")
+          !isTruckRestaurantRow(row)
         ) {
           return res.status(404).json({ message: "Profile not found" });
         }
@@ -1855,7 +1865,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
         });
         return sendPublicJson(res, {
           ...mapped,
-          entity: "restaurant",
+          entity: "truck",
           title: mapped.displayName,
           subtitle: mapped.serviceType || "Food Truck",
           address: mapped.addressPublicLabel,
@@ -2786,9 +2796,9 @@ export function registerPublicDiscoveryRoutes(app: Express) {
         .select()
         .from(restaurants)
         .where(eq(restaurants.city, city.name));
-      const trucks = cityRestaurants.filter((row: any) => row.isFoodTruck);
+      const trucks = cityRestaurants.filter((row: any) => isTruckRestaurantRow(row));
       const restaurantsOnly = cityRestaurants.filter(
-        (row: any) => !row.isFoodTruck,
+        (row: any) => !isTruckRestaurantRow(row),
       );
 
       const hostRows = await db.select().from(hosts).where(eq(hosts.city, city.name));

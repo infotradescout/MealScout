@@ -27,6 +27,27 @@ export function useAuth() {
         restaurantCount?: number;
         primaryRestaurantId?: string | null;
       } | null;
+      accountOnboardingComplete?: boolean;
+      primaryBusinessId?: string | null;
+      profileComplete?: boolean;
+      verificationRequired?: boolean;
+      emailVerified?: boolean;
+      businessInsuranceSubmitted?: boolean;
+      menuRequired?: boolean;
+      menuItemCount?: number;
+      scheduleRequired?: boolean;
+      hasSchedule?: boolean;
+      nextRequiredStep?:
+        | "account_onboarding"
+        | "business_setup"
+        | "profile"
+        | "profile_visual"
+        | "verification"
+        | "menu"
+        | "schedule"
+        | "complete";
+      continuationPath?: string | null;
+      continuationReason?: string | null;
     }
   >({
     queryKey: ["/api/auth/user"],
@@ -66,34 +87,46 @@ export function useAuth() {
   }, [user, setLocation]);
 
   useEffect(() => {
+    if (!user) return;
+    const pathname = window.location.pathname || "";
+    const continuationPath = String(user.continuationPath || "").trim();
+    if (!continuationPath) return;
+    const continuationUrl = new URL(continuationPath, window.location.origin);
+    const continuationTarget =
+      continuationUrl.pathname + continuationUrl.search + continuationUrl.hash;
+
+    const ignoredPrefixes = ["/logout", "/login", "/post-verification"];
+    if (ignoredPrefixes.some((prefix) => pathname.startsWith(prefix))) return;
+    if (pathname.includes("/callback")) return;
+    if (window.location.pathname + window.location.search === continuationTarget) {
+      return;
+    }
+
+    const isAdminUser = ["admin", "duper_admin", "super_admin"].includes(
+      String(user.userType || "").toLowerCase(),
+    );
+    if (isAdminUser && pathname.startsWith("/admin")) return;
+
+    setLocation(continuationTarget);
+  }, [user, setLocation]);
+
+  useEffect(() => {
     if (!user?.businessOnboardingRequired) return;
     const pathname = window.location.pathname || "";
-    const isOnboardingPage =
-      pathname.startsWith("/restaurant-signup") ||
-      pathname.startsWith("/claim-truck") ||
-      pathname.startsWith("/profile");
-    if (isOnboardingPage) return;
-
-    const requiresLinkedBusinessRoute =
+    const setupOnlyRoutes =
       pathname.startsWith("/parking-pass") ||
       pathname.startsWith("/restaurant-owner-dashboard") ||
       pathname.startsWith("/deal-creation") ||
       pathname.startsWith("/kitchen") ||
       pathname.startsWith("/orders");
-    if (!requiresLinkedBusinessRoute) return;
-
+    if (!setupOnlyRoutes) return;
     const target =
       user.businessOnboardingPath ||
       (user.userType === "food_truck"
         ? "/restaurant-signup?businessType=food_truck&source=auth-guard&claim=1"
         : "/restaurant-signup?businessType=restaurant&source=auth-guard&claim=1");
     setLocation(target);
-  }, [
-    user?.businessOnboardingRequired,
-    user?.businessOnboardingPath,
-    user?.userType,
-    setLocation,
-  ]);
+  }, [user?.businessOnboardingRequired, user?.businessOnboardingPath, user?.userType, setLocation]);
 
   useEffect(() => {
     if (user?.affiliateTag || user?.id) {

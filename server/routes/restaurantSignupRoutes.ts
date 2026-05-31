@@ -9,6 +9,7 @@ import { emailService } from "../emailService";
 import { storage } from "../storage";
 import { isPasswordStrong, PASSWORD_REQUIREMENTS } from "../utils/passwordPolicy";
 import { vacEvaluateRestaurantSignup } from "../vacLite";
+import { promoteBusinessSetupToProfile } from "../services/businessOnboardingPromotion";
 import { users, insertRestaurantSchema, type User } from "@shared/schema";
 
 type RestaurantSignupRouteDependencies = {
@@ -114,10 +115,28 @@ export function registerRestaurantSignupRoutes(
       const validatedRestaurantData = insertRestaurantSchema
         .omit({ ownerId: true })
         .parse(restaurantData);
-      const restaurant = await storage.createRestaurant({
-        ...validatedRestaurantData,
-        ownerId: user.id,
+      const promoted = await promoteBusinessSetupToProfile(user.id, {
+        businessName: validatedRestaurantData.name,
+        businessType: validatedRestaurantData.businessType,
+        address: validatedRestaurantData.address,
+        city: validatedRestaurantData.city,
+        state: validatedRestaurantData.state,
+        phone: validatedRestaurantData.phone,
+        cuisineType: validatedRestaurantData.cuisineType,
+        description: validatedRestaurantData.description || null,
+        websiteUrl: validatedRestaurantData.websiteUrl || null,
+        instagramUrl: validatedRestaurantData.instagramUrl || null,
+        facebookPageUrl: validatedRestaurantData.facebookPageUrl || null,
+        logoUrl: validatedRestaurantData.logoUrl || null,
+        coverImageUrl: validatedRestaurantData.coverImageUrl || null,
+        menuItems:
+          restaurantData?.menuItems ||
+          restaurantData?.menu ||
+          restaurantData?.menuDraft ||
+          restaurantData?.truck?.menu ||
+          [],
       });
+      const restaurant = promoted.restaurant as any;
 
       if (String((restaurant as any)?.businessType || "") === "food_truck") {
         const currentType = String((user as any)?.userType || "");
@@ -270,6 +289,7 @@ export function registerRestaurantSignupRoutes(
       res.json({
         user,
         restaurant,
+        menuInsertedCount: promoted.menuInsertedCount,
         message: "Restaurant owner account created successfully",
       });
     } catch (error: any) {

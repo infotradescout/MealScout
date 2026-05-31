@@ -1,6 +1,6 @@
 import type { Express } from "express";
 import Stripe from "stripe";
-import { and, eq, gte, isNotNull, isNull, lt, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, isNotNull, isNull, lt, sql } from "drizzle-orm";
 import { isAuthenticated, isStaffOrAdmin } from "../../unifiedAuth";
 import { storage } from "../../storage";
 import { sanitizeUsers } from "../../utils/sanitize";
@@ -14,8 +14,10 @@ import {
   eventSeries,
   foodTruckLocations,
   foodTruckSessions,
+  menuItems,
   restaurants,
   telemetryEvents,
+  users,
   userAddresses,
 } from "@shared/schema";
 import { parseAdminBroadcastMaxRecipients } from "../../utils/notificationPreferences";
@@ -207,6 +209,183 @@ const bodyToHtml = (body: string) =>
     .join("");
 
 export function registerAdminCoreOpsRoutes(app: Express) {
+  app.get(
+    "/api/admin/food-trucks/inventory",
+    isAuthenticated,
+    isStaffOrAdmin,
+    async (req: any, res) => {
+      try {
+        const q = normalizeSearch(req.query?.q);
+        const filterMissingMenu = String(req.query?.missingMenu || "").toLowerCase() === "true";
+        const filterMissingLogo = String(req.query?.missingLogo || "").toLowerCase() === "true";
+        const filterMissingOwner = String(req.query?.missingOwner || "").toLowerCase() === "true";
+        const filterQuarantined = String(req.query?.quarantined || "").toLowerCase() === "true";
+        const filterVerified = String(req.query?.verified || "").toLowerCase() === "true";
+
+        const truckRows = await db
+          .select({
+            id: restaurants.id,
+            name: restaurants.name,
+            city: restaurants.city,
+            phone: restaurants.phone,
+            ownerId: restaurants.ownerId,
+            email: sql<string>`coalesce(${restaurants}.email, '')`,
+            logoUrl: restaurants.logoUrl,
+            coverImageUrl: restaurants.coverImageUrl,
+            instagramUrl: restaurants.instagramUrl,
+            facebookPageUrl: restaurants.facebookPageUrl,
+            isVerified: restaurants.isVerified,
+            rawData: sql<any>`coalesce(${restaurants}.raw_data, '{}'::jsonb)`,
+            updatedAt: restaurants.updatedAt,
+            createdAt: restaurants.createdAt,
+          })
+          .from(restaurants)
+          .where(
+            and(
+              eq(restaurants.isActive, true),
+              sql`(${restaurants}.is_food_truck = true or ${restaurants}.business_type = 'food_truck')`,
+            ),
+          );
+
+        const truckIds = truckRows
+          .map((row: any) => String(row.id || "").trim())
+          .filter(Boolean);
+        const ownerIds = truckRows
+          .map((row: any) => String(row.ownerId || "").trim())
+          .filter(Boolean);
+
+        const [menuCountRows, ownerRows] = await Promise.all([
+          truckIds.length
+            ? db
+                .select({
+                  restaurantId: menuItems.restaurantId,
+                  count: sql<number>`count(*)`.mapWith(Number),
+                })
+                .from(menuItems)
+                .where(inArray(menuItems.restaurantId, truckIds))
+                .groupBy(menuItems.restaurantId)
+            : Promise.resolve([]),
+          ownerIds.length
+            ? db
+                .select({
+                  id: users.id,
+                  email: users.email,
+                })
+                .from(users)
+                .where(inArray(users.id, ownerIds))
+            : Promise.resolve([]),
+        ]);
+
+        const menuCountByTruck = new Map<string, number>();
+        for (const row of menuCountRows as any[]) {
+          menuCountByTruck.set(String(row.restaurantId || ""), Number(row.count || 0));
+        }
+        const ownerById = new Map<string, string | null>();
+        for (const row of ownerRows as any[]) {
+          ownerById.set(String(row.id || ""), String(row.email || "").trim() || null);
+        }
+
+        const toSlug = (value: string | null | undefined) =>
+          String(value || "")
+            .toLowerCase()
+            .trim()
+            .replace(/[^a-z0-9]+/g, "-")
+            .replace(/(^-|-$)+/g, "")
+            .slice(0, 80);
+
+        const trucks = truckRows
+          .map((row: any) => {
+            const id = String(row.id || "").trim();
+            const name = String(row.name || "").trim();
+            const menuItemCount = Number(menuCountByTruck.get(id) || 0);
+            const hasMenu = menuItemCount > 0;
+            const hasLogo = Boolean(String(row.logoUrl || "").trim());
+            const hasCoverImage = Boolean(String(row.coverImageUrl || "").trim());
+            const hasPhone = Boolean(String(row.phone || "").trim());
+            const ownerUserId = String(row.ownerId || "").trim() || null;
+            const ownerEmail = ownerUserId ? ownerById.get(ownerUserId) || null : null;
+            const hasOwner = Boolean(ownerUserId);
+            const hasEmail = Boolean(String(row.email || "").trim()) || Boolean(ownerEmail);
+            const hasSocials =
+              Boolean(String(row.instagramUrl || "").trim()) ||
+              Boolean(String(row.facebookPageUrl || "").trim());
+            const quarantineReview = buildQuarantineReview(row);
+            const isQuarantined = Boolean(quarantineReview.isQuarantined);
+            const isVerified = Boolean(row.isVerified);
+
+            const missingFields: string[] = [];
+            if (!hasLogo) missingFields.push("logo");
+            if (!hasCoverImage) missingFields.push("cover_image");
+            if (!hasMenu) missingFields.push("menu");
+            if (!hasPhone) missingFields.push("phone");
+            if (!hasEmail) missingFields.push("email");
+            if (!hasSocials) missingFields.push("socials");
+            if (!String(row.city || "").trim()) missingFields.push("city");
+            if (!hasOwner) missingFields.push("owner");
+            if (!isVerified) missingFields.push("verification");
+            if (isQuarantined) missingFields.push("quarantine_review");
+
+            return {
+              id,
+              name: name || "Unnamed truck",
+              city: String(row.city || "").trim() || null,
+              phone: String(row.phone || "").trim() || null,
+              ownerUserId,
+              ownerEmail,
+              publicProfileUrl: `/p/truck/${id}/${toSlug(name) || id}`,
+              hasLogo,
+              logoUrl: String(row.logoUrl || "").trim() || null,
+              hasCoverImage,
+              coverImageUrl: String(row.coverImageUrl || "").trim() || null,
+              menuItemCount,
+              hasMenu,
+              hasEmail,
+              hasSocials,
+              isVerified,
+              isQuarantined,
+              missingFields,
+              lastUpdatedAt: row.updatedAt || row.createdAt || null,
+            };
+          })
+          .filter((truck: any) => {
+            if (!q) return true;
+            const haystack = [
+              truck.name,
+              truck.city || "",
+              truck.phone || "",
+              truck.ownerEmail || "",
+            ]
+              .join(" ")
+              .toLowerCase();
+            return haystack.includes(q);
+          })
+          .filter((truck: any) => (filterMissingMenu ? !truck.hasMenu : true))
+          .filter((truck: any) => (filterMissingLogo ? !truck.hasLogo : true))
+          .filter((truck: any) => (filterMissingOwner ? !truck.ownerUserId : true))
+          .filter((truck: any) => (filterQuarantined ? truck.isQuarantined : true))
+          .filter((truck: any) => (filterVerified ? truck.isVerified : true))
+          .sort(
+            (a: any, b: any) =>
+              new Date(String(b.lastUpdatedAt || 0)).getTime() -
+              new Date(String(a.lastUpdatedAt || 0)).getTime(),
+          );
+
+        const counts = {
+          total: trucks.length,
+          missingMenu: trucks.filter((truck: any) => !truck.hasMenu).length,
+          missingLogo: trucks.filter((truck: any) => !truck.hasLogo).length,
+          missingOwner: trucks.filter((truck: any) => !truck.ownerUserId).length,
+          quarantined: trucks.filter((truck: any) => truck.isQuarantined).length,
+        };
+
+        res.json({ trucks, counts });
+      } catch (error) {
+        console.error("Error fetching admin food truck inventory:", error);
+        res.status(500).json({ message: "Failed to fetch food truck inventory" });
+      }
+    },
+  );
+
   app.get(
     "/api/admin/stats",
     isAuthenticated,

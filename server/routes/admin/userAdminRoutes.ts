@@ -10,6 +10,7 @@ import { emailService } from "../../emailService";
 import { db } from "../../db";
 import { logAudit } from "../../auditLogger";
 import { ensurePremiumTrialForUserId } from "../../services/premiumTrial";
+import { promoteBusinessSetupToProfile } from "../../services/businessOnboardingPromotion";
 import {
   computeParkingPassQualityFlags,
   isParkingPassPublicReady,
@@ -154,6 +155,93 @@ export function registerUserAdminRoutes(
         console.error("Error attaching business user to restaurant:", error);
         res.status(500).json({
           message: error?.message || "Failed to attach business user",
+        });
+      }
+    },
+  );
+
+  app.post(
+    "/api/admin/business-users/:userId/create-and-attach",
+    isAuthenticated,
+    isStaffOrAdmin,
+    async (req: any, res) => {
+      if (!requireAdminUser(req, res)) return;
+      try {
+        const actorType = String(req.user?.userType || "").toLowerCase();
+        if (actorType !== "super_admin" && actorType !== "duper_admin") {
+          return res.status(403).json({
+            message: "Only super admin can create and attach a business profile.",
+          });
+        }
+
+        const userId = String(req.params.userId || "").trim();
+        if (!userId) {
+          return res.status(400).json({ message: "userId is required." });
+        }
+
+        const targetUser = await storage.getUser(userId);
+        if (!targetUser) {
+          return res.status(404).json({ message: "User not found" });
+        }
+
+        const existing = await storage.getRestaurantsByOwner(userId);
+        if (Array.isArray(existing) && existing.length > 0) {
+          return res.status(409).json({
+            message: "User already has an attached business profile.",
+            restaurants: existing,
+          });
+        }
+
+        const userType = String(targetUser.userType || "").toLowerCase();
+        if (!["restaurant_owner", "food_truck"].includes(userType)) {
+          return res.status(400).json({
+            message:
+              "Target user must be restaurant_owner or food_truck to create a business profile.",
+          });
+        }
+
+        const promoted = await promoteBusinessSetupToProfile(userId, {
+          businessName: req.body?.businessName,
+          businessType: req.body?.businessType || userType,
+          address: req.body?.address,
+          city: req.body?.city,
+          state: req.body?.state,
+          phone: req.body?.phone || targetUser.phone || null,
+          cuisineType: req.body?.cuisineType || "Various",
+          description: req.body?.description || null,
+          websiteUrl: req.body?.websiteUrl || null,
+          instagramUrl: req.body?.instagramUrl || null,
+          facebookPageUrl: req.body?.facebookPageUrl || null,
+          logoUrl: req.body?.logoUrl || null,
+          coverImageUrl: req.body?.coverImageUrl || null,
+          menuItems: req.body?.menuItems || [],
+        });
+        await logAudit(
+          req.user?.id || "",
+          "admin_create_and_attach_business_profile",
+          "restaurant",
+          String(promoted.restaurant.id),
+          req.ip || "",
+          String(req.get("user-agent") || ""),
+          {
+            attachedUserId: userId,
+            restaurantId: promoted.restaurant.id,
+            businessType: promoted.restaurant.businessType,
+            menuInsertedCount: promoted.menuInsertedCount,
+          },
+        );
+
+        res.status(201).json({
+          success: true,
+          userId,
+          restaurant: promoted.restaurant,
+          accessContext: promoted.accessContext,
+          menuInsertedCount: promoted.menuInsertedCount,
+        });
+      } catch (error: any) {
+        console.error("Error creating and attaching business profile:", error);
+        res.status(500).json({
+          message: error?.message || "Failed to create and attach business profile",
         });
       }
     },
