@@ -35,6 +35,7 @@ const hasFlag = (flag: string) => process.argv.includes(flag);
 const inputPath = getArg("--input");
 const baseUrl =
   getArg("--base-url") || process.env.ADMIN_SMOKE_BASE_URL || "http://127.0.0.1:5000";
+const baseOrigin = new URL(baseUrl).origin;
 const adminEmail = getArg("--email") || process.env.ADMIN_SMOKE_EMAIL || "";
 const adminPassword =
   getArg("--password") || process.env.ADMIN_SMOKE_PASSWORD || "";
@@ -201,6 +202,8 @@ const run = async () => {
     headers: {
       "Content-Type": "application/json",
       Accept: "application/json",
+      Origin: baseOrigin,
+      Referer: `${baseOrigin}/`,
     },
     body: JSON.stringify({ email: adminEmail, password: adminPassword }),
   });
@@ -221,6 +224,8 @@ const run = async () => {
         headers: {
           Cookie: cookie,
           Accept: "application/json",
+          Origin: baseOrigin,
+          Referer: `${baseOrigin}/`,
         },
         body: buildFormData(record, mode),
       },
