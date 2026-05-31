@@ -421,6 +421,8 @@ export function registerTruckImportAdminRoutes(
         const missingInfo = Array.isArray(requestBody?.missingInfo)
           ? requestBody.missingInfo.map((v: any) => String(v || "").trim()).filter(Boolean)
           : [];
+        const rawSource = requestBody?.rawSource;
+        const evidence = Array.isArray(requestBody?.evidence) ? requestBody.evidence : [];
         const evidenceFieldProposals = Array.isArray(requestBody?.evidenceFieldProposals)
           ? requestBody.evidenceFieldProposals
               .filter((proposal: any) => proposal && typeof proposal === "object")
@@ -434,6 +436,26 @@ export function registerTruckImportAdminRoutes(
               }))
               .filter((proposal: any) => proposal.field && proposal.proposedValue)
           : [];
+        const ocrTextCandidates = [
+          String(
+            requestBody?.ocrTextSnippet ||
+              requestBody?.ocrText ||
+              requestBody?.ocr?.text ||
+              "",
+          ).trim(),
+          String(rawSource?.ocrText || rawSource?.text || "").trim(),
+          ...sourceNotes,
+          ...evidenceFieldProposals
+            .map((proposal: any) => String(proposal.evidenceText || "").trim())
+            .filter(Boolean),
+        ].filter(Boolean);
+        const ocrTextSnippet = String(ocrTextCandidates[0] || "").slice(0, 240);
+        const ocrConfidence = Number(
+          requestBody?.ocrConfidence ||
+            requestBody?.ocr?.confidence ||
+            rawSource?.ocrConfidence ||
+            0,
+        );
         const logoUpload = requestBody?.logoUpload || {};
         const logoEnabled = Boolean(logoUpload?.enabled);
 
@@ -482,6 +504,50 @@ export function registerTruckImportAdminRoutes(
           match.instagram || fillIfBlank.instagram || fillIfBlank.instagramUrl,
         );
         const normalizedMatchName = normalizeName(matchName);
+        const identitySignals = {
+          phone: Boolean(matchPhone),
+          email: Boolean(matchEmail),
+          website: Boolean(matchWebsite),
+          facebook: Boolean(matchFacebook),
+          instagram: Boolean(matchInstagram),
+          exactNameCity: Boolean(normalizedMatchName && matchCity),
+          nameOnly: Boolean(normalizedMatchName && !matchCity && !matchPhone && !matchEmail),
+        };
+        const menuSignals = {
+          menuItemCount: incomingMenuItems.length,
+          hasMenuItems: incomingMenuItems.length > 0,
+          hasMenuKeywords:
+            sourceNotes.some((note: string) => /menu|price|item|dish/i.test(note)) ||
+            evidenceFieldProposals.some((proposal: any) =>
+              /menu|item|price|dish|food/i.test(String(proposal.field || "")),
+            ),
+        };
+        const whyUnknownReasons: string[] = [];
+        if (!matchName) whyUnknownReasons.push("missing_name");
+        if (!matchCity && !matchState) whyUnknownReasons.push("missing_city_or_state");
+        if (!matchPhone && !matchEmail && !matchWebsite && !matchFacebook && !matchInstagram) {
+          whyUnknownReasons.push("missing_hard_identity_anchors");
+        }
+        const buildDebug = (input: {
+          classification: string;
+          classificationReasons: string[];
+          whyUnknown?: string[];
+        }) => ({
+          ocrTextSnippet,
+          ocrConfidence: Number.isFinite(ocrConfidence) ? ocrConfidence : 0,
+          classification: input.classification,
+          classificationReasons: input.classificationReasons,
+          identitySignals,
+          menuSignals,
+          matchStrength,
+          matchedBy,
+          existingTruckId: matchedRestaurant?.id || "",
+          missingFields: missingInfo,
+          whyUnknown:
+            input.whyUnknown && input.whyUnknown.length > 0
+              ? input.whyUnknown
+              : whyUnknownReasons,
+        });
 
         const restaurantWhere = or(
           matchPhone ? eq(sql`regexp_replace(coalesce(${restaurants.phone}, ''), '[^0-9]', '', 'g')`, matchPhone) : sql`false`,
@@ -724,6 +790,10 @@ export function registerTruckImportAdminRoutes(
             logoStatus: "none",
             missingInfo,
             sourceNotes,
+            debug: buildDebug({
+              classification: "needs_review",
+              classificationReasons: ["multiple_strong_matches"],
+            }),
           });
         }
         if (matchStrength === "weak" && matchedRestaurant) {
@@ -743,6 +813,10 @@ export function registerTruckImportAdminRoutes(
             logoStatus: "none",
             missingInfo,
             sourceNotes,
+            debug: buildDebug({
+              classification: "needs_review",
+              classificationReasons: ["weak_name_only_review_required"],
+            }),
           });
         }
 
@@ -765,6 +839,11 @@ export function registerTruckImportAdminRoutes(
               logoStatus: "none",
               missingInfo,
               sourceNotes,
+              debug: buildDebug({
+                classification: "needs_review",
+                classificationReasons: ["no_existing_match", "dry_run_only"],
+                whyUnknown: whyUnknownReasons,
+              }),
             });
           }
 
@@ -850,6 +929,11 @@ export function registerTruckImportAdminRoutes(
               logoStatus: "none",
               missingInfo,
               sourceNotes,
+              debug: buildDebug({
+                classification: "needs_review",
+                classificationReasons: ["unsupported_profile_type"],
+                whyUnknown: whyUnknownReasons,
+              }),
             });
           }
         }
@@ -1232,6 +1316,24 @@ export function registerTruckImportAdminRoutes(
           logoStatus,
           missingInfo,
           sourceNotes,
+          debug: buildDebug({
+            classification:
+              mode === "apply"
+                ? "apply"
+                : matchedRestaurant || matchedImportListing
+                  ? "update_existing"
+                  : createdDraftId
+                    ? "create_draft"
+                    : "needs_review",
+            classificationReasons: [
+              matchedRestaurant || matchedImportListing
+                ? "existing_match_found"
+                : createdDraftId
+                  ? "draft_created"
+                  : "no_match",
+              mode === "apply" ? "apply_mode" : "dry_run_mode",
+            ],
+          }),
         });
       } catch (error: any) {
         console.error("Error applying profile evidence:", error);
