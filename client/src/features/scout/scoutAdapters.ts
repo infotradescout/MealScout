@@ -4,6 +4,21 @@ function toMiles(value?: number | null): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
+function slugify(value: unknown): string {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function truckProfilePath(truck: any): string | null {
+  const id = String(truck?.id || "").trim();
+  if (!id) return null;
+  const slug = slugify(truck?.slug || truck?.name || "");
+  return slug ? `/p/truck/${id}/${slug}` : `/p/truck/${id}`;
+}
+
 export function adaptRestaurantToSceneItem(restaurant: any): ScoutSceneItem {
   return {
     id: `restaurant-${String(restaurant?.id ?? "")}`,
@@ -25,7 +40,7 @@ export function adaptTruckToSceneItem(truck: any): ScoutSceneItem {
     title: truck?.name || "Food truck",
     subtitle: truck?.cuisineType || null,
     imageUrl: truck?.heroImageUrl || truck?.coverImageUrl || truck?.imageUrl || truck?.logoUrl || null,
-    href: truck?.id ? `/truck/${truck.id}` : null,
+    href: truckProfilePath(truck),
     distanceMiles: toMiles(truck?.distanceMiles),
   };
 }

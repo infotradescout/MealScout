@@ -76,6 +76,20 @@ type AffiliateTag = {
   sharePath: string;
 };
 
+const slugify = (value: unknown) =>
+  String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+const truckPublicProfilePath = (truck: { id?: string; slug?: string; name?: string }) => {
+  const id = String(truck?.id || "").trim();
+  if (!id) return null;
+  const slug = slugify(truck?.slug || truck?.name || "");
+  return slug ? `/p/truck/${id}/${slug}` : `/p/truck/${id}`;
+};
+
 function fetchCity(slug: string) {
   return fetch(apiUrl(`/api/cities/${encodeURIComponent(slug)}`)).then(
     async (r) => {
@@ -267,7 +281,7 @@ export default function CityLanding() {
           "@type": "ListItem",
           position: index + 1,
           name: truck.name,
-          url: `https://www.mealscout.us/restaurant/${truck.id}`,
+          url: `https://www.mealscout.us${truckPublicProfilePath(truck) || `/p/truck/${truck.id}`}`,
         })),
       },
       {
@@ -403,7 +417,10 @@ export default function CityLanding() {
           ) : (
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               {filtered.trucks.slice(0, 10).map((truck) => (
-                <Link key={truck.id} href={`/restaurant/${truck.id}`}>
+                <Link
+                  key={truck.id}
+                  href={truckPublicProfilePath(truck) || `/p/truck/${truck.id}`}
+                >
                   <Card className="h-full border-[color:var(--border-subtle)] bg-[var(--bg-surface)] shadow-clean hover:shadow-clean-lg transition-shadow">
                     <CardContent className="p-4">
                       <div className="font-medium text-foreground">

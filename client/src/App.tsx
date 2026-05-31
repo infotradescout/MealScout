@@ -14,6 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/login";
 import Welcome from "@/pages/welcome";
+import RestaurantDetail from "@/pages/restaurant-detail";
 
 // Lazy load all other pages - they only download when the user navigates to them
 const CustomerSignup = lazy(() => import("@/pages/customer-signup"));
@@ -70,7 +71,6 @@ const EmptyCountyExperience = lazy(
 const CategoryPage = lazy(() => import("@/pages/category"));
 const FeaturedDealsPage = lazy(() => import("@/pages/deals-featured"));
 const DealsCityPage = lazy(() => import("@/pages/deals-city"));
-const RestaurantDetail = lazy(() => import("@/pages/restaurant-detail"));
 const LocationDetailPage = lazy(() => import("@/pages/location-detail"));
 const LocationDiscoveryPage = lazy(() => import("@/pages/location-discovery"));
 const PublicSeoLandingPage = lazy(() => import("@/pages/public-seo-landing"));
