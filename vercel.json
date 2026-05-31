@@ -56,7 +56,7 @@
       "destination": "https://mealscout.onrender.com/:kind/:path*"
     },
     {
-      "source": "/(.*)",
+      "source": "/:path((?!assets/|static/).*)",
       "destination": "/index.html"
     }
   ]

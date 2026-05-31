@@ -21,6 +21,11 @@ if (!hasStaticPassThrough) {
   throw new Error("vercel.json must preserve /static/* as static assets before SPA fallback");
 }
 
+const spaFallbackRule = rewrites.find((rule) => rule.destination === "/index.html");
+if (!spaFallbackRule?.source || !spaFallbackRule.source.includes("(?!assets/|static/)")) {
+  throw new Error("SPA fallback must explicitly exclude /assets and /static paths");
+}
+
 const scoutAdapters = readFileSync("client/src/features/scout/scoutAdapters.ts", "utf8");
 if (!scoutAdapters.includes("`/p/truck/${id}`")) {
   throw new Error("Scout truck scene links must target /p/truck canonical paths");
