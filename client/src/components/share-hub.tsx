@@ -41,7 +41,7 @@ const USER_ITEMS: ShareHubItem[] = [
     key: "host-partner",
     title: "3) Host Location Signup",
     description: "Direct intake page for non-food businesses with usable parking.",
-    href: "/host-location-partner",
+    href: "/host-signup",
     audience: "Potential Hosts",
     priority: 3,
     outreachText:
@@ -51,14 +51,14 @@ const USER_ITEMS: ShareHubItem[] = [
     key: "for-restaurants",
     title: "Restaurant Growth Page",
     description: "Share this with restaurant owners ready for monthly growth.",
-    href: "/for-restaurants",
+    href: "/restaurant-signup?businessType=restaurant",
     audience: "Restaurant Owners",
   },
   {
     key: "for-hosts",
     title: "Host Program Page",
     description: "Great for businesses with parking lots that can host trucks.",
-    href: "/for-hosts",
+    href: "/host-signup",
     audience: "Potential Hosts",
   },
   {
@@ -120,6 +120,7 @@ export default function ShareHub({
 }) {
   const { toast } = useToast();
   const [affiliateTag, setAffiliateTag] = useState("");
+  const [affiliateTagUnavailable, setAffiliateTagUnavailable] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -129,9 +130,15 @@ export default function ShareHub({
         if (cancelled) return;
         if (data?.tag) {
           setAffiliateTag(String(data.tag));
+          setAffiliateTagUnavailable(false);
+        } else {
+          setAffiliateTagUnavailable(true);
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        if (cancelled) return;
+        setAffiliateTagUnavailable(true);
+      });
     return () => {
       cancelled = true;
     };
@@ -154,6 +161,31 @@ export default function ShareHub({
     if (href.startsWith("http://") || href.startsWith("https://")) return href;
     if (typeof window === "undefined") return href;
     return `${window.location.origin}${href}`;
+  };
+
+  const generateTrackedShareUrl = async (href: string) => {
+    try {
+      const response = await fetch("/api/share/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          path: href,
+          ref: affiliateTag || undefined,
+        }),
+      });
+      if (!response.ok) {
+        throw new Error("Failed to generate tracked share link");
+      }
+      const data = await response.json();
+      const shareLink = String(data?.shareLink || "").trim();
+      if (!shareLink) {
+        throw new Error("Tracked share link missing");
+      }
+      return shareLink;
+    } catch {
+      return absoluteUrl(href);
+    }
   };
 
   const trackShareHubEvent = async (
@@ -182,7 +214,7 @@ export default function ShareHub({
   };
 
   const copyLink = async (href: string) => {
-    const value = absoluteUrl(href);
+    const value = await generateTrackedShareUrl(href);
     try {
       await navigator.clipboard.writeText(value);
       toast({ title: "Copied", description: value });
@@ -196,7 +228,7 @@ export default function ShareHub({
   };
 
   const copyOutreachText = async (item: ShareHubItem) => {
-    const value = absoluteUrl(item.href);
+    const value = await generateTrackedShareUrl(item.href);
     const text = item.outreachText ? `${item.outreachText}${value}` : value;
     try {
       await navigator.clipboard.writeText(text);
@@ -213,10 +245,10 @@ export default function ShareHub({
 
   const shareLink = async (titleValue: string, href: string) => {
     const item = items.find((entry) => entry.title === titleValue && entry.href === href);
-    const value = absoluteUrl(href);
+    const value = await generateTrackedShareUrl(href);
     if (!navigator.share) {
       if (item) void trackShareHubEvent("share", item);
-      await copyLink(href);
+      await navigator.clipboard.writeText(value);
       return;
     }
     try {
@@ -238,6 +270,11 @@ export default function ShareHub({
         <CardDescription>{description}</CardDescription>
       </CardHeader>
       <CardContent>
+        {affiliateTagUnavailable ? (
+          <div className="mb-3 rounded-md border border-amber-300/50 bg-amber-100/40 p-3 text-xs text-amber-900">
+            Referral tracking is temporarily unavailable. You can still share this page, but attribution may not be attached.
+          </div>
+        ) : null}
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           {items.map((item) => (
             <div
@@ -255,36 +292,38 @@ export default function ShareHub({
               </div>
               <p className="mb-3 text-sm text-muted-foreground">{item.description}</p>
               <div className="flex flex-wrap gap-2">
-                <Button size="sm" asChild>
-                  <a
-                    href={item.href}
-                    target={item.href.startsWith("http") ? "_blank" : undefined}
-                    rel={
-                      item.href.startsWith("http")
-                        ? "noopener noreferrer"
-                        : undefined
-                    }
-                    onClick={() => void trackShareHubEvent("open", item)}
-                  >
-                    Open
-                  </a>
+                <Button
+                  size="sm"
+                  onClick={() => shareLink(item.title, item.href)}
+                >
+                  Share tracked link
                 </Button>
                 <Button
                   size="sm"
                   variant="outline"
+                  onClick={async () => {
+                    const trackedUrl = await generateTrackedShareUrl(item.href);
+                    window.open(
+                      trackedUrl,
+                      item.href.startsWith("http") ? "_blank" : "_self",
+                      item.href.startsWith("http")
+                        ? "noopener,noreferrer"
+                        : undefined,
+                    );
+                    void trackShareHubEvent("open", item);
+                  }}
+                >
+                  Open
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
                   onClick={async () => {
                     await copyLink(item.href);
                     void trackShareHubEvent("copy_link", item);
                   }}
                 >
                   Copy Link
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => shareLink(item.title, item.href)}
-                >
-                  Share
                 </Button>
                 <Button
                   size="sm"
