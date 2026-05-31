@@ -36,6 +36,7 @@ import {
   isRootAdminUserType,
   shouldAssignAffiliateTagForUserType,
 } from "./roleAccess";
+import { authLog } from "./utils/authLog";
 
 // Extend session to include app context for multi-app OAuth
 declare module "express-session" {
@@ -814,10 +815,9 @@ export async function setupUnifiedAuth(app: Express) {
     });
 
     app.get("/api/auth/google/customer/callback", (req, res, next) => {
-      console.log("🔍 Google customer OAuth callback reached:", {
-        query: req.query,
+      authLog("google_customer_oauth_callback", {
         hasError: !!req.query.error,
-        errorDescription: req.query.error_description,
+        error: req.query.error || null,
       });
 
       passport.authenticate("google-customer", (err: any, user: User | false) => {
@@ -887,10 +887,9 @@ export async function setupUnifiedAuth(app: Express) {
     });
 
     app.get("/api/auth/google/restaurant/callback", (req, res, next) => {
-      console.log("🔍 Google restaurant OAuth callback reached:", {
-        query: req.query,
+      authLog("google_restaurant_oauth_callback", {
         hasError: !!req.query.error,
-        errorDescription: req.query.error_description,
+        error: req.query.error || null,
       });
 
       passport.authenticate("google-restaurant", (err: any, user: User | false) => {
@@ -1136,11 +1135,10 @@ export async function setupUnifiedAuth(app: Express) {
     app.get(
       "/api/auth/facebook/callback",
       (req, res, next) => {
-        console.log("🔍 Facebook OAuth callback reached:", {
-          query: req.query,
+        authLog("facebook_oauth_callback", {
           hasError: !!req.query.error,
-          errorDescription: req.query.error_description,
-          sessionAppContext: req.session.fbAppContext,
+          error: req.query.error || null,
+          appContext: req.session.fbAppContext || null,
         });
         next();
       },

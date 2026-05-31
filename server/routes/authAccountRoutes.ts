@@ -26,6 +26,7 @@ import {
   suppliers,
 } from "@shared/schema";
 import { resolveEffectiveLocationContext } from "../services/sessionLocationContext";
+import { authLog } from "../utils/authLog";
 
 const FIRST_PARTNER_MESSAGE =
   "As an appreciation of being our first MealScout Partner, 3D Eats now has lifetime free access to all paid features. Keep killin it.";
@@ -294,15 +295,14 @@ const accountSettingsSchema = z.object({
 export function registerAuthAccountRoutes(app: Express) {
   app.get("/api/auth/user", async (req: any, res) => {
     try {
-      console.log(
-        "📋 /api/auth/user called, isAuthenticated:",
-        req.isAuthenticated(),
-      );
-      console.log("📋 Session ID:", req.sessionID);
-      console.log("📋 Session data:", req.session);
+      authLog("auth_user_request", {
+        isAuthenticated: req.isAuthenticated(),
+        sessionId: req.sessionID || null,
+        hasSession: Boolean(req.session),
+      });
 
       if (!req.isAuthenticated()) {
-        console.log("❌ User not authenticated");
+        authLog("auth_user_unauthenticated", { isAuthenticated: false });
         return res.status(401).json({ error: "Not authenticated" });
       }
 
@@ -332,7 +332,11 @@ export function registerAuthAccountRoutes(app: Express) {
 
       user = await ensureFirstPartnerLifetimeAccess(user);
 
-      console.log("✅ Returning user:", user.id, user.email, user.userType);
+      authLog("auth_user_authenticated", {
+        userId: user.id,
+        email: user.email || null,
+        userType: user.userType || null,
+      });
 
       const safeUser: any = sanitizeUser(user) || {};
       const partnerProgram =
