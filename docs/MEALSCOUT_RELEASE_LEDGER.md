@@ -1,6 +1,6 @@
 # MealScout Release Ledger
 
-Last updated: 2026-05-26 (America/Chicago)
+Last updated: 2026-05-30 (America/Chicago)
 
 ## Locked release stack
 
@@ -240,4 +240,36 @@ Know which public discovery pages create profile traffic and customer action.
   - PDA-2.11 — Deterministic completion reconciliation runtime test
 - Goal:
   - Ensure targeted test execution matches intended scripts exactly and does not pull in prefix-sharing scripts unintentionally.
+
+19. P0 Role-Aware Onboarding + Role Correction
+- Status: PASS — code-side
+- Commit: `c02173c3`
+- Goal:
+  - Allow safe role correction during onboarding, preserve setup draft data, and provide a codebase audit entrypoint for onboarding-role integrity.
+- Validation:
+  - `node scripts/role-onboarding-role-correction.contract.test.ts` ✅
+  - `npm run check` ✅
+  - `npm run build` ✅
+  - `npx tsx scripts/role-onboarding-integrity-audit.ts` N/A locally (`DATABASE_URL` not set)
+
+20. P0 Scout Discoverability Menu Gate
+- Status: PASS
+- Commit: `650e9f8d`
+- Goal:
+  - Require at least one canonical menu item for customer-facing Scout discovery while keeping admin/owner/direct-profile visibility intact.
+- Implemented:
+  - Customer-facing Scout discovery requires `menuItemCount > 0`
+  - Live truck discovery requires at least one canonical menu item
+  - Direct public profile routes remain resolvable
+  - Admin/owner surfaces are not gated
+  - Linked zero-menu businesses route to menu setup
+- Validation:
+  - `node scripts/scout-discoverability-menu-gate.contract.test.ts` ✅
+  - `npm run check` ✅
+  - `npm run build` ✅
+
+Issue #17 closure note
+- Closed for:
+  - role correction
+  - menu-gated Scout discoverability
 
