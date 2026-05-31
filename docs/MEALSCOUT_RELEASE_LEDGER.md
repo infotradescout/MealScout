@@ -273,3 +273,35 @@ Issue #17 closure note
   - role correction
   - menu-gated Scout discoverability
 
+21. P0 Batch Intake Smoke Auth Preflight (CSRF-safe local runner)
+- Status: PASS
+- Commit: `2999df72`
+- Goal:
+  - Ensure local admin smoke runs can authenticate through CSRF origin guard without weakening runtime protections.
+- Implemented:
+  - Added `Origin` and `Referer` headers in `scripts/bulkProfileEvidenceIngest.ts` login/apply requests.
+  - Preserved preview-mode safety boundaries (no publish/trash mutations).
+- Validation:
+  - Authenticated preview smoke completed with report output.
+  - `npm run check` ✅
+  - `npm run build` ✅
+
+22. P0 Onboarding Promotion + Menu Discovery Contracts
+- Status: PASS
+- Commit: `259204b4`
+- Goal:
+  - Promote business onboarding/setup data into canonical profile records, attach owner linkage, preserve menu promotion behavior, and enforce continuation/discovery contract coverage.
+- Implemented:
+  - Added shared onboarding promotion service: `promoteBusinessSetupToProfile(...)`.
+  - Wired promotion into signup flow and admin create+attach repair action.
+  - Added continuation/readiness fields in auth hook consumption.
+  - Added admin food-truck inventory endpoint for profile completeness operations.
+  - Hardened public truck entity handling in discovery/profile resolution paths.
+  - Added contract coverage for signup menu attachment, login continuation, and public truck discovery menu behavior.
+- Validation:
+  - `node scripts/business-signup-menu-attachment.contract.test.ts` ✅
+  - `node scripts/login-continuation.contract.test.ts` ✅
+  - `node scripts/public-food-truck-discovery-menu.contract.test.ts` ✅
+  - `npm run check` ✅
+  - `npm run build` ✅
+
