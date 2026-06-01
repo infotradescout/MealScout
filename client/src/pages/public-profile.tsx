@@ -69,6 +69,9 @@ const normalizePublicProfileEntity = (value: string | null | undefined) => {
   return normalized;
 };
 
+const isRestaurantLikeEntity = (entity: string | null | undefined) =>
+  entity === "restaurant" || entity === "truck";
+
 type LocationDiscoveryTruck = {
   id: string;
   name: string;
@@ -213,10 +216,19 @@ function HeroBlock({ profile, safeCtas }: { profile: PublicProfilePayload; safeC
   const secondary = filteredCtas.find((cta) => cta !== primary) || null;
   const heroImage =
     profile.entity === "host"
-      ? profile.spotImageUrl || profile.coverImageUrl || profile.logoUrl || profile.imageUrl
-      : profile.entity === "restaurant"
-        ? profile.coverImageUrl || profile.logoUrl || profile.imageUrl
-        : profile.logoUrl || profile.imageUrl;
+      ? profile.spotImageUrl ||
+        profile.coverImageUrl ||
+        profile.logoUrl ||
+        (profile as any).profileImageUrl ||
+        (profile as any).truckPhotoLogo ||
+        profile.imageUrl
+      : isRestaurantLikeEntity(profile.entity)
+        ? (profile as any).coverImageUrl ||
+          (profile as any).logoUrl ||
+          (profile as any).profileImageUrl ||
+          (profile as any).truckPhotoLogo ||
+          (profile as any).imageUrl
+        : (profile as any).logoUrl || (profile as any).profileImageUrl || (profile as any).imageUrl;
   const initials = String(profile.displayName || "MS")
     .split(" ")
     .map((part) => part[0] || "")
@@ -271,9 +283,9 @@ function HeroBlock({ profile, safeCtas }: { profile: PublicProfilePayload; safeC
         <p className="text-sm text-white/80">
           {profile.entity === "host"
             ? "Food trucks, pop-ups, and local eats here"
-            : profile.entity === "restaurant" && profile.profileType === "truck"
+            : isRestaurantLikeEntity(profile.entity) && profile.profileType === "truck"
               ? "Track this truck, browse menu evidence, and catch upcoming stops."
-              : profile.entity === "restaurant"
+              : isRestaurantLikeEntity(profile.entity)
               ? "Open near you, menu updates, and local favorites."
               : "Local supply and support for nearby food businesses."}
         </p>
@@ -1278,6 +1290,7 @@ function RestaurantSchedule({ profile }: { profile: PublicRestaurantProfile }) {
     Boolean(todayStop) ||
     Boolean(nextStop) ||
     upcomingStops.length > 0 ||
+    Boolean(String(schedule?.statusLabel || "").trim()) ||
     Boolean(String(schedule?.nextWindowLabel || "").trim()) ||
     Number(schedule?.upcomingCount || 0) > 0;
   if (!hasHours && !hasTruckSchedule) return null;
@@ -1567,13 +1580,23 @@ export default function PublicProfilePage() {
     "Find local food activity, menus, deals, and nearby places on MealScout.";
   const canonicalUrl = data.seo?.canonicalUrl || data.canonicalUrl;
   const citySlug = String((data as any).citySlug || "").trim() || null;
+  const restaurantProfile = isRestaurantLikeEntity(data.entity)
+    ? (data as PublicRestaurantProfile)
+    : null;
   const ogImage =
     data.seo?.ogImageUrl ||
     (data.entity === "host"
-      ? data.spotImageUrl || data.coverImageUrl || data.logoUrl
-      : data.entity === "restaurant"
-        ? data.coverImageUrl || data.logoUrl
-        : data.logoUrl) ||
+      ? data.spotImageUrl ||
+        data.coverImageUrl ||
+        data.logoUrl ||
+        (data as any).profileImageUrl ||
+        (data as any).truckPhotoLogo
+      : isRestaurantLikeEntity(data.entity)
+        ? (data as any).coverImageUrl ||
+          (data as any).logoUrl ||
+          (data as any).profileImageUrl ||
+          (data as any).truckPhotoLogo
+        : data.logoUrl || (data as any).profileImageUrl) ||
     DEFAULT_IMAGE;
 
   return (
@@ -1644,12 +1667,14 @@ export default function PublicProfilePage() {
                   </a>
                 </>
               ) : null}
-              {data.entity === "restaurant" && Array.isArray(data.cuisineTags) && data.cuisineTags.length > 0 ? (
+              {restaurantProfile &&
+              Array.isArray(restaurantProfile.cuisineTags) &&
+              restaurantProfile.cuisineTags.length > 0 ? (
                 <a
-                  href={`/cuisine/${encodeURIComponent(String(data.cuisineTags[0] || "").toLowerCase().replace(/[^a-z0-9]+/g, "-"))}${citySlug ? `/${encodeURIComponent(citySlug)}` : ""}`}
+                  href={`/cuisine/${encodeURIComponent(String(restaurantProfile.cuisineTags[0] || "").toLowerCase().replace(/[^a-z0-9]+/g, "-"))}${citySlug ? `/${encodeURIComponent(citySlug)}` : ""}`}
                   className="underline text-white/85"
                 >
-                  More {String(data.cuisineTags[0] || "local food").toLowerCase()}
+                  More {String(restaurantProfile.cuisineTags[0] || "local food").toLowerCase()}
                 </a>
               ) : null}
             </CardContent>
@@ -1664,17 +1689,17 @@ export default function PublicProfilePage() {
             <LocationMapSection profile={data} />
             <LocationAmenitiesSection profile={data} />
           </>
-        ) : data.entity === "restaurant" ? (
+        ) : restaurantProfile ? (
           <>
-            <AboutFoodStyle profile={data} />
-            <MenuSection profile={data} safeCtas={safeCtas} />
-            <RestaurantSignals profile={data} />
-            <DealsSection profile={data} />
-            <GalleryStrip profile={data} />
-            <RestaurantSchedule profile={data} />
-            <EventsSection profile={data} />
-            <ProofSection profile={data} />
-            <RestaurantSocial profile={data} safeCtas={safeCtas} />
+            <AboutFoodStyle profile={restaurantProfile} />
+            <MenuSection profile={restaurantProfile} safeCtas={safeCtas} />
+            <RestaurantSignals profile={restaurantProfile} />
+            <DealsSection profile={restaurantProfile} />
+            <GalleryStrip profile={restaurantProfile} />
+            <RestaurantSchedule profile={restaurantProfile} />
+            <EventsSection profile={restaurantProfile} />
+            <ProofSection profile={restaurantProfile} />
+            <RestaurantSocial profile={restaurantProfile} safeCtas={safeCtas} />
           </>
         ) : (
           <Card className="border-white/10 bg-[#0f0d0b]">
@@ -1683,8 +1708,8 @@ export default function PublicProfilePage() {
             </CardHeader>
             <CardContent className="space-y-3 text-sm text-white/80">
               {data.description ? <p>{data.description}</p> : null}
-              {typeof data.metrics?.activeProductCount === "number" ? (
-                <p>Active products: {data.metrics.activeProductCount}</p>
+              {typeof (data as any).metrics?.activeProductCount === "number" ? (
+                <p>Active products: {(data as any).metrics.activeProductCount}</p>
               ) : null}
             </CardContent>
           </Card>
