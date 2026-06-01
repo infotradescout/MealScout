@@ -3521,17 +3521,151 @@ export default function RestaurantOwnerDashboard() {
             (currentRestaurant as any).hours ||
             (currentRestaurant as any).schedulePublished,
           );
-          const hasTruckScheduleSignals = Boolean(
-            (currentRestaurant as any).currentStop ||
-            (currentRestaurant as any).todayStop ||
-            (currentRestaurant as any).nextStop ||
-            Number((currentRestaurant as any).upcomingStopCount || 0) > 0 ||
-            Number((currentRestaurant as any).truckScheduleCount || 0) > 0,
-          );
           const parseDateCandidate = (value: unknown) => {
             if (!value) return null;
             const parsed = new Date(String(value));
             return Number.isNaN(parsed.getTime()) ? null : parsed;
+          };
+          const parseTimeToMinutes = (value: unknown) => {
+            const text = String(value || "").trim();
+            if (!text) return null;
+            const match = text.match(/^(\d{1,2}):(\d{2})/);
+            if (!match) return null;
+            const hours = Number(match[1]);
+            const minutes = Number(match[2]);
+            if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null;
+            if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null;
+            return hours * 60 + minutes;
+          };
+          const weekdayToIndex = (value: unknown) => {
+            const day = String(value || "").trim().toLowerCase();
+            const map: Record<string, number> = {
+              sun: 0,
+              sunday: 0,
+              mon: 1,
+              monday: 1,
+              tue: 2,
+              tues: 2,
+              tuesday: 2,
+              wed: 3,
+              weds: 3,
+              wednesday: 3,
+              thu: 4,
+              thur: 4,
+              thurs: 4,
+              thursday: 4,
+              fri: 5,
+              friday: 5,
+              sat: 6,
+              saturday: 6,
+            };
+            return Number.isFinite(map[day]) ? map[day] : null;
+          };
+          const resolveNextDateForDay = (value: unknown) => {
+            const weekday = weekdayToIndex(value);
+            if (weekday == null) return null;
+            const now = new Date();
+            const candidate = new Date(now);
+            candidate.setHours(0, 0, 0, 0);
+            const delta = (weekday - candidate.getDay() + 7) % 7;
+            candidate.setDate(candidate.getDate() + delta);
+            return candidate;
+          };
+          const getScheduleDate = (entry: any) =>
+            parseDateCandidate(entry?.date || entry?.startDate || entry?.dayDate) ||
+            resolveNextDateForDay(entry?.day || entry?.weekday || entry?.dayOfWeek);
+          const scheduleStatusAllows = (value: unknown) => {
+            const normalized = String(value || "scheduled").trim().toLowerCase();
+            if (!normalized) return true;
+            return !["cancelled", "canceled", "closed", "inactive"].includes(normalized);
+          };
+          const hasScheduleLocation = (entry: any) =>
+            Boolean(
+              String(
+                entry?.locationName ||
+                  entry?.location ||
+                  entry?.address ||
+                  entry?.serviceArea ||
+                  entry?.city ||
+                  entry?.label ||
+                  "",
+              ).trim(),
+            );
+          const collectTruckScheduleEntries = () => {
+            const truckSchedule = (currentRestaurant as any).truckSchedule || {};
+            const pool = [
+              ...(Array.isArray((currentRestaurant as any).upcomingStops)
+                ? (currentRestaurant as any).upcomingStops
+                : []),
+              ...(Array.isArray((currentRestaurant as any).schedules)
+                ? (currentRestaurant as any).schedules
+                : []),
+              ...(Array.isArray((currentRestaurant as any).truckSchedules)
+                ? (currentRestaurant as any).truckSchedules
+                : []),
+              ...(Array.isArray(truckSchedule?.upcomingStops)
+                ? truckSchedule.upcomingStops
+                : []),
+            ];
+            for (const single of [
+              (currentRestaurant as any).todayStop,
+              (currentRestaurant as any).currentStop,
+              (currentRestaurant as any).nextStop,
+              truckSchedule?.todayStop,
+              truckSchedule?.currentStop,
+              truckSchedule?.nextStop,
+            ]) {
+              if (single && typeof single === "object") {
+                pool.push(single);
+              }
+            }
+            return pool;
+          };
+          const hasValidTruckOperatingWindow = (entries: any[]) => {
+            const now = new Date();
+            const weekAhead = new Date(now);
+            weekAhead.setDate(weekAhead.getDate() + 7);
+            return entries.some((entry) => {
+              if (!scheduleStatusAllows(entry?.status)) return false;
+              const date = getScheduleDate(entry);
+              if (!date) return false;
+              const startMinutes = parseTimeToMinutes(
+                entry?.startTime || entry?.start || entry?.opensAt,
+              );
+              const endMinutes = parseTimeToMinutes(
+                entry?.endTime || entry?.end || entry?.closesAt,
+              );
+              if (startMinutes == null || endMinutes == null) return false;
+              if (!hasScheduleLocation(entry)) return false;
+              const startAt = new Date(date);
+              startAt.setHours(Math.floor(startMinutes / 60), startMinutes % 60, 0, 0);
+              const endAt = new Date(date);
+              endAt.setHours(Math.floor(endMinutes / 60), endMinutes % 60, 0, 0);
+              if (!(endAt > startAt)) return false;
+              return startAt >= now && startAt <= weekAhead;
+            });
+          };
+          const isTruckLiveBySchedule = (entries: any[]) => {
+            const now = new Date();
+            return entries.some((entry) => {
+              if (!scheduleStatusAllows(entry?.status)) return false;
+              const date = getScheduleDate(entry);
+              if (!date) return false;
+              const startMinutes = parseTimeToMinutes(
+                entry?.startTime || entry?.start || entry?.opensAt,
+              );
+              const endMinutes = parseTimeToMinutes(
+                entry?.endTime || entry?.end || entry?.closesAt,
+              );
+              if (startMinutes == null || endMinutes == null) return false;
+              if (!hasScheduleLocation(entry)) return false;
+              const startAt = new Date(date);
+              startAt.setHours(Math.floor(startMinutes / 60), startMinutes % 60, 0, 0);
+              const endAt = new Date(date);
+              endAt.setHours(Math.floor(endMinutes / 60), endMinutes % 60, 0, 0);
+              if (!(endAt > startAt)) return false;
+              return now >= startAt && now <= endAt;
+            });
           };
           const daysSince = (date: Date) =>
             Math.floor((Date.now() - date.getTime()) / (1000 * 60 * 60 * 24));
@@ -3540,6 +3674,16 @@ export default function RestaurantOwnerDashboard() {
           const truckMenuStaleDays = 30;
           const restaurantMenuWarningDays = 60;
           const restaurantMenuStaleDays = 90;
+          const truckScheduleEntries = collectTruckScheduleEntries();
+          const hasValidTruckScheduleWindow =
+            hasValidTruckOperatingWindow(truckScheduleEntries);
+          const liveByTruckScheduleNow = isTruckLiveBySchedule(truckScheduleEntries);
+          const liveByMobileSignal = Boolean(
+            (currentRestaurant as any).mobileOnline &&
+              parseDateCandidate((currentRestaurant as any).liveUntilAt) &&
+              parseDateCandidate((currentRestaurant as any).liveUntilAt)!.getTime() >
+                Date.now(),
+          );
           const operatingUpdatedAtCandidate = [
             (currentRestaurant as any).truckScheduleUpdatedAt,
             (currentRestaurant as any).scheduleUpdatedAt,
@@ -3553,8 +3697,9 @@ export default function RestaurantOwnerDashboard() {
               daysSince(operatingUpdatedAtCandidate) <= scheduleFreshnessDays,
           );
           const hasOperatingTimeRequirement = isFoodTruck
-            ? hasTruckScheduleSignals || scheduleUpdatedRecently
+            ? hasValidTruckScheduleWindow || scheduleUpdatedRecently
             : hasSchedule;
+          const truckLiveNow = liveByMobileSignal || liveByTruckScheduleNow;
           const menuFreshnessDateCandidate = [
             (currentRestaurant as any).menuReviewedAt,
             (currentRestaurant as any).menuUpdatedAt,
@@ -3638,7 +3783,7 @@ export default function RestaurantOwnerDashboard() {
             ...(isFoodTruck
               ? [
                   {
-                    label: "Truck schedule current",
+                    label: "Schedule this week",
                     done: hasOperatingTimeRequirement,
                     href: "/restaurant-owner-dashboard?setup=schedule&truck=1",
                   },
@@ -3661,13 +3806,22 @@ export default function RestaurantOwnerDashboard() {
               href: "/events",
             },
             {
-              label: "Public profile ready",
-              done: publicReady,
-              href: profileSetupHref,
-            },
-            {
-              label: isVerifiedProfile
-                ? "Verified profile badge"
+                label: "Public profile ready",
+                done: publicReady,
+                href: profileSetupHref,
+              },
+              ...(isFoodTruck
+                ? [
+                    {
+                      label: truckLiveNow ? "Live now status" : "Live now status pending",
+                      done: truckLiveNow,
+                      href: "/restaurant-owner-dashboard?setup=schedule&truck=1",
+                    },
+                  ]
+                : []),
+              {
+                label: isVerifiedProfile
+                  ? "Verified profile badge"
                 : "Verification pending (non-blocking)",
               done: isVerifiedProfile,
               href: profileSetupHref,
