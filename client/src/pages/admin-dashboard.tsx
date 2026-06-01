@@ -1842,10 +1842,11 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
     | "restaurant_owner"
     | "bar_owner"
     | "brewery_taproom_owner"
-    | "caterer_private_chef_owner"
+    | "caterer_owner"
+    | "private_chef_owner"
     | "host_venue_operator"
     | "supplier"
-    | "event_coordinator"
+    | "event_organizer"
     | "staff"
     | "admin"
     | "duper_admin"
@@ -1860,13 +1861,17 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
     restaurant_owner: { userType: "restaurant_owner", businessType: "restaurant" },
     bar_owner: { userType: "restaurant_owner", businessType: "bar" },
     brewery_taproom_owner: { userType: "restaurant_owner", businessType: "brewery_taproom" },
-    caterer_private_chef_owner: {
+    caterer_owner: {
       userType: "restaurant_owner",
-      businessType: "caterer_private_chef",
+      businessType: "caterer",
     },
-    host_venue_operator: { userType: "host", businessType: "venue" },
+    private_chef_owner: {
+      userType: "restaurant_owner",
+      businessType: "private_chef",
+    },
+    host_venue_operator: { userType: "host", businessType: "host_venue" },
     supplier: { userType: "supplier", businessType: "supplier" },
-    event_coordinator: { userType: "event_coordinator" },
+    event_organizer: { userType: "event_organizer", businessType: "event_organizer" },
     staff: { userType: "staff" },
     admin: { userType: "admin" },
     duper_admin: { userType: "duper_admin" },
@@ -1886,6 +1891,15 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
     locationType: "private_residence",
     footTraffic: "low",
     amenities: [] as string[],
+    servesFood: true,
+    hostsFoodTrucks: false,
+    wantsFoodTrucks: false,
+    runsEvents: false,
+    postsSpecials: false,
+    allowsPrivateEvents: false,
+    hasFeaturedStaff: false,
+    staffBusinessId: "",
+    staffInviteMode: "attach_existing",
     accountType: "customer" as AccountType,
   });
   const [geocoding, setGeocoding] = useState(false);
@@ -1920,6 +1934,15 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
         locationType: "private_residence",
         footTraffic: "low",
         amenities: [],
+        servesFood: true,
+        hostsFoodTrucks: false,
+        wantsFoodTrucks: false,
+        runsEvents: false,
+        postsSpecials: false,
+        allowsPrivateEvents: false,
+        hasFeaturedStaff: false,
+        staffBusinessId: "",
+        staffInviteMode: "attach_existing",
         accountType: "customer",
       });
     },
@@ -1982,6 +2005,15 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
       locationType: "private_residence",
       footTraffic: "low",
       amenities: [],
+      servesFood: true,
+      hostsFoodTrucks: false,
+      wantsFoodTrucks: false,
+      runsEvents: false,
+      postsSpecials: false,
+      allowsPrivateEvents: false,
+      hasFeaturedStaff: false,
+      staffBusinessId: "",
+      staffInviteMode: "attach_existing",
     });
   };
 
@@ -2060,11 +2092,12 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
             <option value="restaurant_owner">Restaurant Owner</option>
             <option value="bar_owner">Bar Owner</option>
             <option value="brewery_taproom_owner">Brewery / Taproom Owner</option>
-            <option value="caterer_private_chef_owner">Caterer / Private Chef</option>
+            <option value="caterer_owner">Caterer</option>
+            <option value="private_chef_owner">Private Chef</option>
             <option value="host_venue_operator">Host / Venue Operator</option>
             <option value="supplier">Supplier</option>
             <option value="customer">Customer</option>
-            <option value="event_coordinator">Event Coordinator</option>
+            <option value="event_organizer">Event Organizer</option>
             <option value="staff">Staff</option>
             {canAssignAdminRole && <option value="admin">Admin</option>}
             {canAssignDuperAdminRole && (
@@ -2089,16 +2122,18 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
               "Bar owner - set up bar profile, menu, and specials"}
             {formData.accountType === "brewery_taproom_owner" &&
               "Brewery/taproom owner - publish menu, events, and updates"}
-            {formData.accountType === "caterer_private_chef_owner" &&
-              "Caterer/private chef - manage catering profile and offers"}
+            {formData.accountType === "caterer_owner" &&
+              "Caterer - manage catering profile, offers, and bookings"}
+            {formData.accountType === "private_chef_owner" &&
+              "Private chef - manage chef profile, services, and availability"}
             {formData.accountType === "host_venue_operator" &&
               "Host/venue operator - rent parking/event space to trucks"}
             {formData.accountType === "supplier" &&
               "Supplier - manage products and supplier marketplace presence"}
             {formData.accountType === "staff" &&
               "Business staff - attach to an existing business or send pending invite"}
-            {formData.accountType === "event_coordinator" &&
-              "Event coordinator - organize events (NO PAYMENTS through us)"}
+            {formData.accountType === "event_organizer" &&
+              "Event organizer - manage event operations and event workflows"}
             {formData.accountType === "admin" &&
               "Admin - manage platform operations and internal workflows"}
             {formData.accountType === "duper_admin" &&
@@ -2167,7 +2202,9 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
           formData.accountType === "food_truck_owner" ||
           formData.accountType === "bar_owner" ||
           formData.accountType === "brewery_taproom_owner" ||
-          formData.accountType === "caterer_private_chef_owner") && (
+          formData.accountType === "caterer_owner" ||
+          formData.accountType === "private_chef_owner" ||
+          formData.accountType === "event_organizer") && (
           <>
             <div className="pt-3 border-t">
               <h4 className="text-sm font-semibold mb-3">
@@ -2226,6 +2263,34 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
                 owner to the business.
               </p>
             </div>
+            {formData.accountType === "bar_owner" && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Bar Capabilities</label>
+                {[
+                  ["servesFood", "Serves food"],
+                  ["hostsFoodTrucks", "Hosts food trucks"],
+                  ["wantsFoodTrucks", "Wants food trucks"],
+                  ["runsEvents", "Runs events"],
+                  ["postsSpecials", "Posts specials"],
+                  ["allowsPrivateEvents", "Allows private events"],
+                  ["hasFeaturedStaff", "Has featured staff"],
+                ].map(([key, label]) => (
+                  <label key={key} className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={Boolean((formData as any)[key])}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          [key]: e.target.checked,
+                        } as any)
+                      }
+                    />
+                    {label}
+                  </label>
+                ))}
+              </div>
+            )}
           </>
         )}
 
@@ -2237,19 +2302,30 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
 
               <div className="space-y-3">
                 <div>
-                  <label className="text-sm font-medium">
-                    Restaurant/Business Name
-                  </label>
+                  <label className="text-sm font-medium">Target Business ID</label>
                   <input
                     type="text"
                     required
-                    value={formData.businessName}
+                    value={formData.staffBusinessId}
                     onChange={(e) =>
-                      setFormData({ ...formData, businessName: e.target.value })
+                      setFormData({ ...formData, staffBusinessId: e.target.value })
                     }
                     className="w-full px-3 py-2 border rounded-md"
-                    placeholder="Which restaurant will they work for?"
+                    placeholder="Existing business id to attach staff"
                   />
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Staff Provisioning Mode</label>
+                  <select
+                    value={formData.staffInviteMode}
+                    onChange={(e) =>
+                      setFormData({ ...formData, staffInviteMode: e.target.value })
+                    }
+                    className="w-full px-3 py-2 border rounded-md"
+                  >
+                    <option value="attach_existing">Attach to existing business</option>
+                    <option value="pending_invite">Pending invite (target required)</option>
+                  </select>
                 </div>
               </div>
             </div>
@@ -2264,7 +2340,7 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
         )}
 
         {/* Event Coordinator Specific Fields */}
-        {formData.accountType === "event_coordinator" && (
+        {formData.accountType === "event_organizer" && (
           <>
             <div className="pt-3 border-t">
               <h4 className="text-sm font-semibold mb-3">

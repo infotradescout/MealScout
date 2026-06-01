@@ -32,7 +32,7 @@ const requiredRoutesSnippets = [
   "food_truck_owner: { userType: \"food_truck\", businessType: \"food_truck\" }",
   "restaurant_owner: { userType: \"restaurant_owner\", businessType: \"restaurant\" }",
   "bar_owner: { userType: \"restaurant_owner\", businessType: \"bar\" }",
-  "host_venue_operator: { userType: \"host\", businessType: \"venue\" }",
+  "host_venue_operator: { userType: \"host\", businessType: \"host_venue\" }",
 ];
 
 for (const snippet of requiredDashboardSnippets) {

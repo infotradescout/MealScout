@@ -1033,6 +1033,13 @@ router.post("/users/create", isAdmin, async (req: any, res) => {
       amenities,
       businessType,
       accountType,
+      servesFood,
+      hostsFoodTrucks,
+      wantsFoodTrucks,
+      runsEvents,
+      postsSpecials,
+      allowsPrivateEvents,
+      hasFeaturedStaff,
     } = req.body;
 
     const normalizedAccountType = String(accountType || "")
@@ -1052,31 +1059,45 @@ router.post("/users/create", isAdmin, async (req: any, res) => {
       restaurant_owner: { userType: "restaurant_owner", businessType: "restaurant" },
       bar_owner: { userType: "restaurant_owner", businessType: "bar" },
       brewery_taproom_owner: { userType: "restaurant_owner", businessType: "brewery_taproom" },
-      caterer_private_chef_owner: {
-        userType: "restaurant_owner",
-        businessType: "caterer_private_chef",
-      },
-      host_venue_operator: { userType: "host", businessType: "venue" },
+      caterer_owner: { userType: "restaurant_owner", businessType: "caterer" },
+      private_chef_owner: { userType: "restaurant_owner", businessType: "private_chef" },
+      host_venue_operator: { userType: "host", businessType: "host_venue" },
       supplier: { userType: "supplier", businessType: "supplier" },
       staff: { userType: "staff", businessType: null },
-      event_coordinator: { userType: "event_coordinator", businessType: null },
+      event_organizer: { userType: "event_organizer", businessType: "event_organizer" },
       customer: { userType: "customer", businessType: null },
       admin: { userType: "admin", businessType: null },
       duper_admin: { userType: "duper_admin", businessType: null },
       super_admin: { userType: "super_admin", businessType: null },
     };
     const mappedType = accountTypeMap[normalizedAccountType] || null;
+    if (normalizedAccountType && !mappedType) {
+      return res.status(400).json({ message: "Unknown account type" });
+    }
     const resolvedUserType = mappedType?.userType || normalizedRequestedUserType;
-    const shouldCreateBusinessShell =
-      resolvedUserType === "restaurant_owner" || resolvedUserType === "food_truck";
+    const businessTypesRequiringShell = new Set([
+      "food_truck",
+      "restaurant",
+      "bar",
+      "brewery_taproom",
+      "caterer",
+      "private_chef",
+      "host_venue",
+      "supplier",
+      "event_organizer",
+    ]);
     const resolvedBusinessType =
       normalizedRequestedBusinessType ||
       mappedType?.businessType ||
       (resolvedUserType === "food_truck"
         ? "food_truck"
-        : shouldCreateBusinessShell
+        : resolvedUserType === "restaurant_owner"
           ? "restaurant"
           : null);
+    const shouldCreateBusinessShell =
+      resolvedUserType === "restaurant_owner" ||
+      resolvedUserType === "food_truck" ||
+      businessTypesRequiringShell.has(String(resolvedBusinessType || "").toLowerCase());
 
     if (!email || !resolvedUserType) {
       return res.status(400).json({
@@ -1088,9 +1109,11 @@ router.post("/users/create", isAdmin, async (req: any, res) => {
       "customer",
       "restaurant_owner",
       "food_truck",
+      "caterer",
+      "private_chef",
       "supplier",
       "host",
-      "event_coordinator",
+      "event_organizer",
       "staff",
       "admin",
       "duper_admin",
@@ -1108,21 +1131,16 @@ router.post("/users/create", isAdmin, async (req: any, res) => {
 
     const normalizedEmail = String(email).trim().toLowerCase();
 
-    // Check if user already exists
-    const existingUser = await storage.getUserByEmail(normalizedEmail);
-    if (existingUser) {
-      return res
-        .status(400)
-        .json({ message: "User with this email already exists" });
+    let user = await storage.getUserByEmail(normalizedEmail);
+    if (!user) {
+      user = await storage.createUserInvite({
+        email: normalizedEmail,
+        firstName: firstName?.trim() || null,
+        lastName: lastName?.trim() || null,
+        phone: phone?.trim() || null,
+        userType: resolvedUserType as any,
+      });
     }
-
-    const user = await storage.createUserInvite({
-      email: normalizedEmail,
-      firstName: firstName?.trim() || null,
-      lastName: lastName?.trim() || null,
-      phone: phone?.trim() || null,
-      userType: resolvedUserType as any,
-    });
 
     // Internal staff/admin onboarding should not block on email verification.
     if (isInternalTeamUserType(resolvedUserType)) {
@@ -1140,11 +1158,18 @@ router.post("/users/create", isAdmin, async (req: any, res) => {
       await storage.updateRestaurant(createdBusiness.id, {
         businessType: String(resolvedBusinessType || "restaurant"),
         isFoodTruck: String(resolvedBusinessType || "") === "food_truck",
+        servesFood: Boolean(servesFood ?? true),
+        hostsFoodTrucks: Boolean(hostsFoodTrucks),
+        wantsFoodTrucks: Boolean(wantsFoodTrucks),
+        runsEvents: Boolean(runsEvents),
+        postsSpecials: Boolean(postsSpecials),
+        allowsPrivateEvents: Boolean(allowsPrivateEvents),
+        hasFeaturedStaff: Boolean(hasFeaturedStaff),
       } as any, { allowIdentityChange: true });
     }
 
     if (
-      (resolvedUserType === "host" || resolvedUserType === "event_coordinator") &&
+      (resolvedUserType === "host" || resolvedUserType === "event_organizer") &&
       businessName &&
       address
     ) {
@@ -1162,8 +1187,8 @@ router.post("/users/create", isAdmin, async (req: any, res) => {
       }
 
       const resolvedLocationType =
-        resolvedUserType === "event_coordinator"
-          ? "event_coordinator"
+        resolvedUserType === "event_organizer"
+          ? "event_organizer"
           : locationType || "other";
 
       const hostData: any = {
@@ -1185,10 +1210,13 @@ router.post("/users/create", isAdmin, async (req: any, res) => {
       await storage.createHost(hostData);
     }
 
-    const emailSent = await sendAccountSetupInvite({
+    const inviteResult = await sendAccountSetupInvite({
       user,
       createdBy: req.user,
       req,
+      setupPath: `/account-setup?source=admin_provisioning&email=${encodeURIComponent(
+        normalizedEmail,
+      )}${resolvedBusinessType ? `&businessType=${encodeURIComponent(String(resolvedBusinessType))}` : ""}&role=${encodeURIComponent(String(resolvedUserType || ""))}`,
     });
 
     await logAudit(
@@ -1201,14 +1229,14 @@ router.post("/users/create", isAdmin, async (req: any, res) => {
       {
         userType: resolvedUserType,
         businessType: resolvedBusinessType,
-        setupEmailSent: emailSent,
+        setupEmailSent: inviteResult.emailSent,
       },
     );
 
     res.status(201).json({
       message: "User created successfully",
       user: { id: user.id, email: user.email, userType: resolvedUserType },
-      setupEmailSent: emailSent,
+      setupEmailSent: inviteResult.emailSent,
     });
   } catch (error: any) {
     console.error("Error creating user manually:", error);

@@ -315,7 +315,7 @@ export function registerStaffRoutes(app: Express) {
           await storage.createHost(hostData);
         }
 
-        const emailSent = await sendAccountSetupInvite({
+        const inviteResult = await sendAccountSetupInvite({
           user,
           createdBy: staffUser,
           req,
@@ -339,7 +339,7 @@ export function registerStaffRoutes(app: Express) {
           success: true,
           userId: user.id,
           email: normalizedEmail,
-          setupEmailSent: emailSent,
+          setupEmailSent: inviteResult.emailSent,
           message: `${targetUserType.replace(
             "_",
             " ",
@@ -423,7 +423,7 @@ export function registerStaffRoutes(app: Express) {
         }
 
         // Audit log
-        const emailSent = await sendAccountSetupInvite({
+        const inviteResult = await sendAccountSetupInvite({
           user,
           createdBy: staffUser,
           req,
@@ -448,7 +448,7 @@ export function registerStaffRoutes(app: Express) {
           success: true,
           userId: user.id,
           email: normalizedEmail,
-          setupEmailSent: emailSent,
+          setupEmailSent: inviteResult.emailSent,
           restaurantId,
           message: restaurantId
             ? "Restaurant owner and restaurant shell created. Setup instructions sent by email."

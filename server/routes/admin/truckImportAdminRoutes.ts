@@ -1688,7 +1688,7 @@ export function registerTruckImportAdminRoutes(
           .where(eq(truckImportListings.id, listingId))
           .returning();
 
-        const emailSent = await sendAccountSetupInvite({
+        const inviteResult = await sendAccountSetupInvite({
           user: inviteUser,
           createdBy: req.user,
           req,
@@ -1697,12 +1697,12 @@ export function registerTruckImportAdminRoutes(
         await recordListingInviteEvidence(listingId, {
           invitedUserId: inviteUser.id,
           inviteEmail: email,
-          emailSent,
+          emailSent: inviteResult.emailSent,
           source: "manual_invite",
           invitedAt: new Date().toISOString(),
         });
 
-        res.json({ success: true, emailSent, listing: updated });
+        res.json({ success: true, emailSent: inviteResult.emailSent, listing: updated });
       } catch (error: any) {
         if (
           isMissingRelationError(error, "truck_import_listings") ||
@@ -2087,13 +2087,13 @@ export function registerTruckImportAdminRoutes(
                 userType: "food_truck",
               }));
             invitedOwnerByEmail.set(email, user.id);
-            const emailSent = await sendAccountSetupInvite({
+            const inviteResult = await sendAccountSetupInvite({
               user,
               createdBy: req.user,
               req,
               setupPath: "/owner/verify",
             });
-            invitedOwnerByEmailSent.set(email, emailSent);
+            invitedOwnerByEmailSent.set(email, inviteResult.emailSent);
           }
 
           const restaurantsToInsert = insertedListingRows.map(

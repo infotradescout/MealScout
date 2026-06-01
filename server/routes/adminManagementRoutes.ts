@@ -1570,6 +1570,15 @@ export function registerAdminManagementRoutes(app: Express) {
           userType,
           businessType,
           accountType,
+          servesFood,
+          hostsFoodTrucks,
+          wantsFoodTrucks,
+          runsEvents,
+          postsSpecials,
+          allowsPrivateEvents,
+          hasFeaturedStaff,
+          staffBusinessId,
+          staffInviteMode,
         } = req.body;
 
         // Validate required fields
@@ -1583,6 +1592,10 @@ export function registerAdminManagementRoutes(app: Express) {
         const normalizedRequestedBusinessType = String(businessType || "")
           .trim()
           .toLowerCase();
+        const normalizedStaffBusinessId = String(staffBusinessId || "").trim();
+        const normalizedStaffInviteMode = String(staffInviteMode || "")
+          .trim()
+          .toLowerCase();
 
         const accountTypeMap: Record<
           string,
@@ -1591,28 +1604,47 @@ export function registerAdminManagementRoutes(app: Express) {
           food_truck_owner: { userType: "food_truck", businessType: "food_truck" },
           restaurant_owner: { userType: "restaurant_owner", businessType: "restaurant" },
           bar_owner: { userType: "restaurant_owner", businessType: "bar" },
-          brewery_taproom_owner: { userType: "restaurant_owner", businessType: "brewery" },
-          caterer_private_chef_owner: {
-            userType: "restaurant_owner",
-            businessType: "caterer",
-          },
-          host_venue_operator: { userType: "host", businessType: "venue" },
+          brewery_taproom_owner: { userType: "restaurant_owner", businessType: "brewery_taproom" },
+          caterer_owner: { userType: "restaurant_owner", businessType: "caterer" },
+          private_chef_owner: { userType: "restaurant_owner", businessType: "private_chef" },
+          host_venue_operator: { userType: "host", businessType: "host_venue" },
+          event_organizer: { userType: "event_organizer", businessType: "event_organizer" },
         };
 
         const mappedType = accountTypeMap[normalizedAccountType] || null;
+        if (normalizedAccountType && !mappedType) {
+          return res.status(400).json({ message: "Unknown account type" });
+        }
         const resolvedUserType = mappedType?.userType || normalizedRequestedUserType;
+        const businessTypesRequiringShell = new Set([
+          "food_truck",
+          "restaurant",
+          "bar",
+          "brewery_taproom",
+          "caterer",
+          "private_chef",
+          "host_venue",
+          "supplier",
+          "event_organizer",
+        ]);
         const resolvedBusinessType =
           normalizedRequestedBusinessType ||
           mappedType?.businessType ||
-          (resolvedUserType === "food_truck" ? "food_truck" : "restaurant");
+          (resolvedUserType === "food_truck"
+            ? "food_truck"
+            : resolvedUserType === "restaurant_owner"
+              ? "restaurant"
+              : null);
 
         const validUserTypes = [
           "customer",
           "restaurant_owner",
           "food_truck",
+          "caterer",
+          "private_chef",
           "supplier",
           "host",
-          "event_coordinator",
+          "event_organizer",
           "staff",
           "admin",
           "duper_admin",
@@ -1634,11 +1666,23 @@ export function registerAdminManagementRoutes(app: Express) {
             message: getRoleAssignmentDeniedMessage(resolvedUserType),
           });
         }
+        if (
+          resolvedUserType === "staff" &&
+          !normalizedStaffBusinessId &&
+          normalizedStaffInviteMode !== "pending_invite"
+        ) {
+          return res.status(400).json({
+            message:
+              "Staff provisioning requires selected businessId or pending_invite mode.",
+          });
+        }
 
         const isRestaurantProvisionType =
-          resolvedUserType === "restaurant_owner" || resolvedUserType === "food_truck";
+          resolvedUserType === "restaurant_owner" ||
+          resolvedUserType === "food_truck" ||
+          businessTypesRequiringShell.has(String(resolvedBusinessType || "").toLowerCase());
         const isHostProvisionType =
-          resolvedUserType === "host" || resolvedUserType === "event_coordinator";
+          resolvedUserType === "host" || resolvedUserType === "event_organizer";
         const normalizedBusinessName = String(businessName || "").trim();
         const normalizedAddress = String(address || "").trim();
 
@@ -1695,33 +1739,11 @@ export function registerAdminManagementRoutes(app: Express) {
         const userIsInternalTeam = isInternalTeamUserType(resolvedUserType);
 
         let createdHostId: string | null = null;
+        let createdBusinessId: string | null = null;
+        let createdBusinessType: string | null = null;
         const [user] = await db.transaction(async (tx: any) => {
-          const insertedUserResult = await tx.execute(sql`
-            insert into users (
-              email,
-              first_name,
-              last_name,
-              phone,
-              user_type,
-              password_hash,
-              must_reset_password,
-              email_verified,
-              created_at,
-              updated_at
-            )
-            values (
-              ${normalizedEmail},
-              ${firstName?.trim() || null},
-              ${lastName?.trim() || null},
-              ${phone?.trim() || null},
-              ${resolvedUserType},
-              ${null},
-              ${false},
-              ${userIsInternalTeam},
-              now(),
-              now()
-            )
-            returning
+          const existingUserResult = await tx.execute(sql`
+            select
               id,
               email,
               first_name as "firstName",
@@ -1729,25 +1751,77 @@ export function registerAdminManagementRoutes(app: Express) {
               phone,
               user_type as "userType",
               email_verified as "emailVerified"
+            from users
+            where lower(email) = ${normalizedEmail}
+            limit 1
           `);
-          const insertedUser = (insertedUserResult as any)?.rows?.[0];
+          let insertedUser = (existingUserResult as any)?.rows?.[0];
+          if (!insertedUser?.id) {
+            const insertedUserResult = await tx.execute(sql`
+              insert into users (
+                email,
+                first_name,
+                last_name,
+                phone,
+                user_type,
+                password_hash,
+                must_reset_password,
+                email_verified,
+                created_at,
+                updated_at
+              )
+              values (
+                ${normalizedEmail},
+                ${firstName?.trim() || null},
+                ${lastName?.trim() || null},
+                ${phone?.trim() || null},
+                ${resolvedUserType},
+                ${null},
+                ${false},
+                ${userIsInternalTeam},
+                now(),
+                now()
+              )
+              returning
+                id,
+                email,
+                first_name as "firstName",
+                last_name as "lastName",
+                phone,
+                user_type as "userType",
+                email_verified as "emailVerified"
+            `);
+            insertedUser = (insertedUserResult as any)?.rows?.[0];
+          }
           if (!insertedUser?.id) {
             throw new Error("Failed to create admin-provisioned user");
           }
 
           if (isRestaurantProvisionType) {
-            await tx.insert(restaurants).values({
-              ownerId: insertedUser.id,
-              name: normalizedBusinessName,
-              address: normalizedAddress,
-              cuisineType: cuisineType || "Various",
-              businessType: resolvedBusinessType,
-              isFoodTruck:
-                resolvedUserType === "food_truck" ||
-                resolvedBusinessType === "food_truck",
-              isActive: true,
-              isVerified: true,
-            });
+            const [createdBusiness] = await tx
+              .insert(restaurants)
+              .values({
+                ownerId: insertedUser.id,
+                name: normalizedBusinessName,
+                address: normalizedAddress,
+                cuisineType: cuisineType || "Various",
+                businessType: resolvedBusinessType,
+                isFoodTruck:
+                  resolvedUserType === "food_truck" ||
+                  resolvedBusinessType === "food_truck",
+                servesFood: Boolean(servesFood ?? true),
+                hostsFoodTrucks: Boolean(hostsFoodTrucks),
+                wantsFoodTrucks: Boolean(wantsFoodTrucks),
+                runsEvents: Boolean(runsEvents),
+                postsSpecials: Boolean(postsSpecials),
+                allowsPrivateEvents: Boolean(allowsPrivateEvents),
+                hasFeaturedStaff: Boolean(hasFeaturedStaff),
+                isActive: true,
+                isVerified: true,
+              })
+              .returning({ id: restaurants.id, businessType: restaurants.businessType });
+            createdBusinessId = createdBusiness?.id || null;
+            createdBusinessType = createdBusiness?.businessType || null;
           }
 
           if (isHostProvisionType) {
@@ -1770,8 +1844,8 @@ export function registerAdminManagementRoutes(app: Express) {
                 businessName: normalizedBusinessName,
                 address: normalizedAddress,
                 locationType:
-                  resolvedUserType === "event_coordinator"
-                    ? "event_coordinator"
+                  resolvedUserType === "event_organizer"
+                    ? "event_organizer"
                     : locationType || "other",
                 expectedFootTraffic: footTrafficMap[footTraffic] || 100,
                 amenities:
@@ -1809,15 +1883,33 @@ export function registerAdminManagementRoutes(app: Express) {
         }
         void syncUserToBrevo(user).catch(() => {});
 
-        const emailSent = await sendAccountSetupInvite({
+        const setupParams = new URLSearchParams();
+        setupParams.set("source", "admin_provisioning");
+        setupParams.set("role", String(resolvedUserType || ""));
+        setupParams.set("email", normalizedEmail);
+        if (createdBusinessId) setupParams.set("businessId", createdBusinessId);
+        if (createdBusinessType || resolvedBusinessType) {
+          setupParams.set(
+            "businessType",
+            String(createdBusinessType || resolvedBusinessType),
+          );
+        }
+        const setupQuery = setupParams.toString();
+        const inviteResult = await sendAccountSetupInvite({
           user,
           createdBy: req.user,
           req,
+          setupPath: `/account-setup?${setupQuery}`,
         });
 
         res.json({
           success: true,
-          setupEmailSent: emailSent,
+          userId: user.id,
+          businessId: createdBusinessId,
+          businessType: createdBusinessType || resolvedBusinessType || null,
+          ownerAccessCreated: Boolean(createdBusinessId),
+          setupEmailSent: inviteResult.emailSent,
+          setupLink: inviteResult.setupUrl,
           message: `${resolvedUserType} account created successfully. Setup link emailed to ${email}.`,
         });
       } catch (error: any) {

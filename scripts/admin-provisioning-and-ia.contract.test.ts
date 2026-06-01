@@ -11,7 +11,8 @@ const requiredDashboardSnippets = [
   "<option value=\"brewery_taproom_owner\">Brewery / Taproom Owner</option>",
   "businessType: \"bar\"",
   "businessType: \"brewery_taproom\"",
-  "businessType: \"caterer_private_chef\"",
+  "businessType: \"caterer\"",
+  "businessType: \"private_chef\"",
   "Business Information",
   "Business staff - attach to an existing business or send pending invite",
 ];
@@ -19,8 +20,11 @@ const requiredDashboardSnippets = [
 const requiredRouteSnippets = [
   "bar_owner: { userType: \"restaurant_owner\", businessType: \"bar\" }",
   "brewery_taproom_owner: { userType: \"restaurant_owner\", businessType: \"brewery_taproom\" }",
-  "caterer_private_chef_owner: {",
-  "businessType: \"caterer_private_chef\"",
+  "caterer_owner: {",
+  "businessType: \"caterer\"",
+  "private_chef_owner: {",
+  "businessType: \"private_chef\"",
+  "event_organizer: { userType: \"event_organizer\", businessType: \"event_organizer\" }",
   "shouldCreateBusinessShell =",
   "const createdBusiness = await storage.createRestaurantForUser({",
   "await storage.updateRestaurant(createdBusiness.id, {",
@@ -32,7 +36,8 @@ const requiredRouteSnippets = [
 const forbiddenSnippets = [
   "Duperrr Admin",
   "businessType: \"brewery\"",
-  "businessType: \"caterer\",",
+  "businessType: \"caterer_private_chef\"",
+  "businessType: \"venue\"",
 ];
 
 for (const snippet of requiredDashboardSnippets) {
@@ -54,4 +59,3 @@ for (const snippet of forbiddenSnippets) {
 }
 
 console.log("admin-provisioning-and-ia.contract: PASS");
-

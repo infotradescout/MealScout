@@ -264,7 +264,7 @@ export function registerTruckClaimRoutes(app: Express) {
         return res.status(500).json({ message: "Unable to send reminder." });
       }
 
-      const emailSent = await sendAccountSetupInvite({
+      const inviteResult = await sendAccountSetupInvite({
         user: inviteUser,
         createdBy: null,
         req,
@@ -281,7 +281,7 @@ export function registerTruckClaimRoutes(app: Express) {
 
       res.json({
         success: true,
-        emailSent,
+        emailSent: inviteResult.emailSent,
         hadEmail,
         cooldownMinutes: 0,
         status: "claim_requested",

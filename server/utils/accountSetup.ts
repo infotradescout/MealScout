@@ -12,12 +12,17 @@ type InviteOptions = {
   setupPath?: string;
 };
 
+export type AccountSetupInviteResult = {
+  emailSent: boolean;
+  setupUrl: string;
+};
+
 export async function sendAccountSetupInvite({
   user,
   createdBy,
   req,
   setupPath,
-}: InviteOptions): Promise<boolean> {
+}: InviteOptions): Promise<AccountSetupInviteResult> {
   const setupToken = crypto.randomBytes(32).toString("hex");
   const tokenHash = crypto.createHash("sha256").update(setupToken).digest("hex");
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
@@ -63,5 +68,8 @@ export async function sendAccountSetupInvite({
     console.error("[email] Failed to send verification for invite:", error),
   );
 
-  return ok;
+  return {
+    emailSent: ok,
+    setupUrl,
+  };
 }
