@@ -48,9 +48,19 @@ const PIN_SVGS: Record<string, string> = {
 /* ─── types ─── */
 interface Restaurant {
   id: string;
+  businessId?: string | null;
+  restaurantId?: string | null;
+  truckId?: string | null;
+  profileId?: string | null;
+  publicProfileId?: string | null;
+  canonicalBusinessId?: string | null;
   businessName?: string | null;
   name?: string | null;
   cuisineType?: string | null;
+  logoUrl?: string | null;
+  profileImageUrl?: string | null;
+  truckPhotoLogo?: string | null;
+  galleryImages?: string[] | null;
   coverImageUrl?: string | null;
   heroImageUrl?: string | null;
   imageUrl?: string | null;
@@ -84,8 +94,18 @@ interface Restaurant {
 
 interface Truck {
   id: string;
+  businessId?: string | null;
+  restaurantId?: string | null;
+  truckId?: string | null;
+  profileId?: string | null;
+  publicProfileId?: string | null;
+  canonicalBusinessId?: string | null;
   name?: string | null;
   cuisineType?: string | null;
+  logoUrl?: string | null;
+  profileImageUrl?: string | null;
+  truckPhotoLogo?: string | null;
+  galleryImages?: string[] | null;
   coverImageUrl?: string | null;
   heroImageUrl?: string | null;
   imageUrl?: string | null;
@@ -178,8 +198,76 @@ function routeUrl(lat?: number | null, lng?: number | null, name?: string | null
   return `https://www.google.com/maps/dir/?api=1&destination=${dest}&destination_place_id=${label}&travelmode=driving`;
 }
 
-function imgSrc(r: { coverImageUrl?: string | null; heroImageUrl?: string | null; imageUrl?: string | null }) {
-  return r.coverImageUrl || r.heroImageUrl || r.imageUrl || null;
+function canonicalScoutEntityKey(entity: {
+  canonicalBusinessId?: string | null;
+  businessId?: string | null;
+  profileId?: string | null;
+  publicProfileId?: string | null;
+  restaurantId?: string | null;
+  truckId?: string | null;
+  id?: string | null;
+  businessName?: string | null;
+  name?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  lat?: number | null;
+  lng?: number | null;
+}) {
+  const idCandidates = [
+    entity.canonicalBusinessId,
+    entity.businessId,
+    entity.profileId,
+    entity.publicProfileId,
+    entity.restaurantId,
+    entity.truckId,
+    entity.id,
+  ]
+    .map((value) => String(value || "").trim().toLowerCase())
+    .filter(Boolean);
+  if (idCandidates.length > 0) return idCandidates[0];
+  const name = String(entity.businessName || entity.name || "")
+    .trim()
+    .toLowerCase();
+  const lat = Number(entity.latitude ?? entity.lat);
+  const lng = Number(entity.longitude ?? entity.lng);
+  if (name && Number.isFinite(lat) && Number.isFinite(lng)) {
+    return `${name}:${lat.toFixed(4)}:${lng.toFixed(4)}`;
+  }
+  return name || "";
+}
+
+function getBestBusinessImage(r: {
+  logoUrl?: string | null;
+  profileImageUrl?: string | null;
+  coverImageUrl?: string | null;
+  truckPhotoLogo?: string | null;
+  heroImageUrl?: string | null;
+  imageUrl?: string | null;
+  galleryImages?: string[] | null;
+}) {
+  const galleryFirst = Array.isArray(r.galleryImages) ? r.galleryImages[0] : null;
+  return (
+    r.logoUrl ||
+    r.profileImageUrl ||
+    r.coverImageUrl ||
+    r.truckPhotoLogo ||
+    r.heroImageUrl ||
+    r.imageUrl ||
+    galleryFirst ||
+    null
+  );
+}
+
+function imgSrc(r: {
+  logoUrl?: string | null;
+  profileImageUrl?: string | null;
+  coverImageUrl?: string | null;
+  truckPhotoLogo?: string | null;
+  heroImageUrl?: string | null;
+  imageUrl?: string | null;
+  galleryImages?: string[] | null;
+}) {
+  return getBestBusinessImage(r);
 }
 
 function isDiscoverableTruckProfile(restaurant: Restaurant) {
@@ -571,6 +659,14 @@ export default function ScoutPrototype() {
     return {
       ...truck,
       ...liveState,
+      canonicalBusinessId:
+        truck.canonicalBusinessId ||
+        truck.businessId ||
+        truck.profileId ||
+        truck.publicProfileId ||
+        truck.restaurantId ||
+        truck.truckId ||
+        truck.id,
       source: "live" as const,
       menuAvailable: Number.isFinite(menuCount) && menuCount > 0,
       photosAvailable,
@@ -585,8 +681,25 @@ export default function ScoutPrototype() {
     .map<Truck>((restaurant) => {
       const truckDraft: Truck = {
         id: restaurant.id,
+        businessId: restaurant.businessId || restaurant.id,
+        restaurantId: restaurant.restaurantId || restaurant.id,
+        truckId: restaurant.truckId || restaurant.id,
+        profileId: restaurant.profileId || restaurant.id,
+        publicProfileId: restaurant.publicProfileId || restaurant.profileId || restaurant.id,
+        canonicalBusinessId:
+          restaurant.canonicalBusinessId ||
+          restaurant.businessId ||
+          restaurant.profileId ||
+          restaurant.publicProfileId ||
+          restaurant.restaurantId ||
+          restaurant.truckId ||
+          restaurant.id,
         name: restaurant.businessName || restaurant.name || "Food Truck",
         cuisineType: restaurant.cuisineType || null,
+        logoUrl: restaurant.logoUrl || null,
+        profileImageUrl: restaurant.profileImageUrl || null,
+        truckPhotoLogo: restaurant.truckPhotoLogo || null,
+        galleryImages: restaurant.galleryImages || null,
         coverImageUrl: restaurant.coverImageUrl || null,
         heroImageUrl: restaurant.heroImageUrl || null,
         imageUrl: restaurant.imageUrl || null,
@@ -622,10 +735,43 @@ export default function ScoutPrototype() {
     });
   const trucksById = new Map<string, Truck>();
   discoverableTruckProfiles.forEach((truck) => {
-    trucksById.set(truck.id, truck);
+    const key = canonicalScoutEntityKey(truck);
+    if (!key) return;
+    trucksById.set(key, truck);
   });
   liveTrucks.forEach((truck) => {
-    trucksById.set(truck.id, truck);
+    const key = canonicalScoutEntityKey(truck);
+    if (!key) return;
+    const existing = trucksById.get(key);
+    if (!existing) {
+      trucksById.set(key, truck);
+      return;
+    }
+    const existingImage = getBestBusinessImage(existing);
+    const incomingImage = getBestBusinessImage(truck);
+    trucksById.set(key, {
+      ...existing,
+      ...truck,
+      id: existing.id || truck.id,
+      canonicalBusinessId: existing.canonicalBusinessId || truck.canonicalBusinessId || key,
+      liveNow: Boolean(existing.liveNow || truck.liveNow),
+      liveSource:
+        truck.liveSource === "location_update" ||
+        existing.liveSource !== "location_update"
+          ? truck.liveSource
+          : existing.liveSource,
+      scheduledToday: Boolean(existing.scheduledToday || truck.scheduledToday),
+      menuAvailable: Boolean(existing.menuAvailable || truck.menuAvailable),
+      photosAvailable: Boolean(existing.photosAvailable || truck.photosAvailable),
+      source: truck.source === "live" || existing.source === "live" ? "live" : "discoverable",
+      logoUrl: existing.logoUrl || truck.logoUrl || null,
+      profileImageUrl: existing.profileImageUrl || truck.profileImageUrl || null,
+      coverImageUrl: existing.coverImageUrl || truck.coverImageUrl || null,
+      truckPhotoLogo: existing.truckPhotoLogo || truck.truckPhotoLogo || null,
+      heroImageUrl: existing.heroImageUrl || truck.heroImageUrl || null,
+      imageUrl: existingImage || incomingImage,
+      galleryImages: existing.galleryImages || truck.galleryImages || null,
+    });
   });
   const trucks = Array.from(trucksById.values())
     .sort((a, b) => {
@@ -644,7 +790,19 @@ export default function ScoutPrototype() {
       return String(a.name || "").localeCompare(String(b.name || ""));
     })
     .slice(0, 20);
-  const restaurants = filterByResolvedLocation(restaurantsRaw).slice(0, 20);
+  const truckCanonicalKeys = new Set(
+    trucks.map((truck) => canonicalScoutEntityKey(truck)).filter(Boolean),
+  );
+  const restaurants = filterByResolvedLocation(restaurantsRaw)
+    .filter((restaurant) => {
+      const restaurantKey = canonicalScoutEntityKey(restaurant);
+      const isTruckType =
+        String(restaurant.businessType || "").toLowerCase() === "food_truck" ||
+        restaurant.isFoodTruck === true;
+      if (isTruckType && truckCanonicalKeys.has(restaurantKey)) return false;
+      return true;
+    })
+    .slice(0, 20);
   const deals = dealsRaw.slice(0, 10);
   const events = eventsRaw.slice(0, 10);
 

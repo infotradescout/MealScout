@@ -24,7 +24,8 @@ const requiredSnippets = [
   "\"Scheduled today\"",
   "\"Serving area\"",
   "\"Not live now\"",
-  "liveTrucks.forEach((truck) => {\n    trucksById.set(truck.id, truck);",
+  "const key = canonicalScoutEntityKey(truck);",
+  "const existing = trucksById.get(key);",
 ];
 
 for (const snippet of requiredSnippets) {
