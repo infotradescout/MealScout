@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import {
   Card,
@@ -199,6 +199,7 @@ export default function RestaurantOwnerDashboard() {
       : new URLSearchParams();
   const requestedRestaurantId = dashboardParams.get("restaurantId");
   const setupMode = dashboardParams.get("setup");
+  const setupRefParam = dashboardParams.get("ref");
   const [analyticsDateRange, setAnalyticsDateRange] = useState({
     start: format(subDays(new Date(), 30), "yyyy-MM-dd"),
     end: format(new Date(), "yyyy-MM-dd"),
@@ -235,6 +236,7 @@ export default function RestaurantOwnerDashboard() {
     coverImageUrl: "",
   });
   const [mediaCategory, setMediaCategory] = useState<string>("food");
+  const setupPanelRef = useRef<HTMLDivElement | null>(null);
 
   // Food truck state
   const [isBroadcasting, setIsBroadcasting] = useState(false);
@@ -626,6 +628,25 @@ export default function RestaurantOwnerDashboard() {
       setSelectedRestaurant(restaurants[0].id);
     }
   }, [requestedRestaurantId, restaurants, selectedRestaurant]);
+
+  useEffect(() => {
+    if (!setupMode) return;
+    const hasCurrentRestaurant = restaurants.some(
+      (restaurant) => restaurant.id === selectedRestaurant,
+    );
+    if (!hasCurrentRestaurant) return;
+    if (setupMode === "menu") {
+      const menuParams = new URLSearchParams();
+      menuParams.set("restaurantId", String(selectedRestaurant));
+      menuParams.set("src", "onboarding");
+      if (setupRefParam) menuParams.set("ref", setupRefParam);
+      setLocation(`/menu-builder?${menuParams.toString()}`);
+      return;
+    }
+    if (setupPanelRef.current) {
+      setupPanelRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [setupMode, restaurants, selectedRestaurant, setLocation, setupRefParam]);
 
   // Get current restaurant data
   const currentRestaurant = restaurants.find(
@@ -1805,6 +1826,28 @@ export default function RestaurantOwnerDashboard() {
     requestedDefaultTab && availableTabs.includes(requestedDefaultTab as any)
       ? requestedDefaultTab
       : availableTabs[0] ?? "analytics";
+  const buildSetupHref = (
+    setup: "profile" | "profile-media" | "schedule" | "menu",
+    extras?: Record<string, string>,
+  ) => {
+    const params = new URLSearchParams();
+    params.set("setup", setup);
+    params.set("restaurantId", String(selectedRestaurant));
+    if (setupRefParam) params.set("ref", setupRefParam);
+    if (extras) {
+      for (const [key, value] of Object.entries(extras)) {
+        if (value) params.set(key, value);
+      }
+    }
+    return `/restaurant-owner-dashboard?${params.toString()}`;
+  };
+  const menuBuilderHref = (() => {
+    const params = new URLSearchParams();
+    params.set("restaurantId", String(selectedRestaurant));
+    params.set("src", "onboarding");
+    if (setupRefParam) params.set("ref", setupRefParam);
+    return `/menu-builder?${params.toString()}`;
+  })();
 
   if (loadingRestaurants) {
     return (
@@ -1966,11 +2009,7 @@ export default function RestaurantOwnerDashboard() {
           </div>
 
           <div className="mt-4 grid gap-2 sm:grid-cols-4">
-            <Link
-              href={`/restaurant-owner-dashboard?setup=profile&restaurantId=${encodeURIComponent(
-                String(selectedRestaurant),
-              )}`}
-            >
+            <Link href={buildSetupHref("profile")}>
               <div className="flex w-full items-center gap-2 rounded-md border border-orange-200 bg-white px-3 py-2 text-orange-900 hover:bg-orange-100">
                 <Store className="h-4 w-4 text-orange-900" />
                 <span className="text-sm font-semibold text-orange-900">
@@ -1978,11 +2017,7 @@ export default function RestaurantOwnerDashboard() {
                 </span>
               </div>
             </Link>
-            <Link
-              href={`/menu-builder?src=onboarding&restaurantId=${encodeURIComponent(
-                String(selectedRestaurant),
-              )}`}
-            >
+            <Link href={buildSetupHref("menu")}>
               <div className="flex w-full items-center gap-2 rounded-md border border-orange-200 bg-white px-3 py-2 text-orange-900 hover:bg-orange-100">
                 <ShoppingCart className="h-4 w-4 text-orange-900" />
                 <span className="text-sm font-semibold text-orange-900">
@@ -1991,9 +2026,10 @@ export default function RestaurantOwnerDashboard() {
               </div>
             </Link>
             <Link
-              href={`/restaurant-owner-dashboard?setup=schedule&restaurantId=${encodeURIComponent(
-                String(selectedRestaurant),
-              )}${isFoodTruck ? "&truck=1" : ""}`}
+              href={buildSetupHref(
+                "schedule",
+                isFoodTruck ? { truck: "1" } : undefined,
+              )}
             >
               <div className="flex w-full items-center gap-2 rounded-md border border-orange-200 bg-white px-3 py-2 text-orange-900 hover:bg-orange-100">
                 <Clock className="h-4 w-4 text-orange-900" />
@@ -2002,11 +2038,7 @@ export default function RestaurantOwnerDashboard() {
                 </span>
               </div>
             </Link>
-            <Link
-              href={`/restaurant-owner-dashboard?setup=profile-media&restaurantId=${encodeURIComponent(
-                String(selectedRestaurant),
-              )}`}
-            >
+            <Link href={buildSetupHref("profile-media")}>
               <div className="flex w-full items-center gap-2 rounded-md border border-orange-200 bg-white px-3 py-2 text-orange-900 hover:bg-orange-100">
                 <Calendar className="h-4 w-4 text-orange-900" />
                 <span className="text-sm font-semibold text-orange-900">
@@ -2016,8 +2048,11 @@ export default function RestaurantOwnerDashboard() {
             </Link>
           </div>
 
-          {setupMode === "profile" ? (
-            <div className="mt-4 rounded-xl border border-orange-200 bg-white p-4">
+          {setupMode === "profile" || setupMode === "profile-media" ? (
+            <div
+              ref={setupPanelRef}
+              className="mt-4 rounded-xl border border-orange-200 bg-white p-4"
+            >
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <h3 className="text-sm font-black uppercase tracking-[0.14em] text-orange-800">
@@ -2407,9 +2442,7 @@ export default function RestaurantOwnerDashboard() {
                   )}
                   Save profile basics
                 </Button>
-                <Link
-                  href={`/menu-builder?restaurantId=${encodeURIComponent(String(selectedRestaurant))}`}
-                >
+                <Link href={menuBuilderHref}>
                   <Button variant="outline">Update menu</Button>
                 </Link>
                 <Link href="/deal-creation">
@@ -3420,6 +3453,30 @@ export default function RestaurantOwnerDashboard() {
                     </>
                   );
                 })()}
+              </div>
+            </div>
+          ) : setupMode === "schedule" ? (
+            <div
+              ref={setupPanelRef}
+              className="mt-4 rounded-xl border border-orange-200 bg-white p-4"
+            >
+              <h3 className="text-sm font-black uppercase tracking-[0.14em] text-orange-800">
+                Schedule and live status
+              </h3>
+              <p className="mt-1 text-xs text-orange-900/75">
+                Use the Food Truck tab below to set schedule windows and live status.
+              </p>
+              <div className="mt-3">
+                <Button
+                  variant="outline"
+                  onClick={() =>
+                    document
+                      .querySelector('[data-testid="tab-food-truck"]')
+                      ?.scrollIntoView({ behavior: "smooth", block: "center" })
+                  }
+                >
+                  Jump to schedule/live tools
+                </Button>
               </div>
             </div>
           ) : null}
