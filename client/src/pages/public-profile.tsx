@@ -1210,6 +1210,71 @@ function EventsSection({
   );
 }
 
+function FeaturedBartendersSection({ profile }: { profile: PublicRestaurantProfile }) {
+  if (profile.profileType !== "bar") return null;
+  const raw = Array.isArray((profile as any).featuredBartenders)
+    ? (profile as any).featuredBartenders
+    : [];
+  const featured = raw
+    .filter(
+      (entry: any) =>
+        entry &&
+        (entry.isActive ?? true) &&
+        Boolean(String(entry.name || "").trim()),
+    )
+    .sort((a: any, b: any) => Number(a?.displayOrder || 0) - Number(b?.displayOrder || 0));
+  if (featured.length === 0) return null;
+
+  return (
+    <Card className="border-white/10 bg-[#0f0d0b]">
+      <CardHeader>
+        <CardTitle className="text-xl text-white">Featured bartenders</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-2.5">
+        {featured.map((entry: any, index: number) => (
+          <div
+            key={`${String(entry?.name || "bartender")}:${index}`}
+            className="rounded-lg border border-white/10 bg-black/20 p-3"
+          >
+            <div className="flex items-center gap-3">
+              {entry.photo ? (
+                <img
+                  src={String(entry.photo)}
+                  alt={String(entry.name)}
+                  loading="lazy"
+                  className="h-12 w-12 rounded-full object-cover border border-white/15"
+                />
+              ) : null}
+              <div>
+                <p className="text-sm font-semibold text-white">{String(entry.name)}</p>
+                {entry.role || entry.title ? (
+                  <p className="text-xs text-white/70">{String(entry.role || entry.title)}</p>
+                ) : null}
+              </div>
+            </div>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {entry.featuredNights ? <Badge variant="secondary">{String(entry.featuredNights)}</Badge> : null}
+              {entry.signatureDrink ? (
+                <Badge variant="outline" className="border-white/15 text-white/80">
+                  Signature: {String(entry.signatureDrink)}
+                </Badge>
+              ) : null}
+              {entry.specialty ? (
+                <Badge variant="outline" className="border-white/15 text-white/80">
+                  {String(entry.specialty)}
+                </Badge>
+              ) : null}
+            </div>
+            {entry.bio || entry.tagline ? (
+              <p className="mt-2 text-xs text-white/75">{String(entry.bio || entry.tagline)}</p>
+            ) : null}
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
 function ProofSection({ profile }: { profile: PublicRestaurantProfile }) {
   const metrics = [
     { label: "Recommendations", value: Number(profile.recommendations.total || 0) },
@@ -1698,6 +1763,7 @@ export default function PublicProfilePage() {
             <GalleryStrip profile={restaurantProfile} />
             <RestaurantSchedule profile={restaurantProfile} />
             <EventsSection profile={restaurantProfile} />
+            <FeaturedBartendersSection profile={restaurantProfile} />
             <ProofSection profile={restaurantProfile} />
             <RestaurantSocial profile={restaurantProfile} safeCtas={safeCtas} />
           </>

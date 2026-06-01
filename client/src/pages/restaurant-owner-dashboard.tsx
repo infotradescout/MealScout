@@ -3515,11 +3515,22 @@ export default function RestaurantOwnerDashboard() {
               (currentRestaurant as any).instagramUrl ||
               hasActionLinks,
           );
+          const isBarBusiness =
+            String((currentRestaurant as any).businessType || "").toLowerCase() === "bar";
           const hasSchedule = Boolean(
             (currentRestaurant as any).operatingHours ||
             (currentRestaurant as any).businessHours ||
             (currentRestaurant as any).hours ||
             (currentRestaurant as any).schedulePublished,
+          );
+          const servesFood = Boolean(
+            (currentRestaurant as any).servesFood ??
+              (currentRestaurant as any).hasKitchen ??
+              (currentRestaurant as any).hasMenu,
+          );
+          const hostsFoodTrucks = Boolean(
+            (currentRestaurant as any).hostsFoodTrucks ??
+              (currentRestaurant as any).wantsFoodTrucks,
           );
           const parseDateCandidate = (value: unknown) => {
             if (!value) return null;
@@ -3731,102 +3742,189 @@ export default function RestaurantOwnerDashboard() {
           const hasEvents =
             Number((currentRestaurant as any).upcomingPublicEventCount || 0) > 0 ||
             Number((currentRestaurant as any).upcomingEventCount || 0) > 0;
+          const hasBarMarketing = hasDeal || hasEvents;
+          const featuredBartenders = Array.isArray((currentRestaurant as any).featuredBartenders)
+            ? (currentRestaurant as any).featuredBartenders
+            : [];
+          const hasActiveFeaturedBartender = featuredBartenders.some((entry: any) =>
+            Boolean(entry && (entry.isActive ?? true) && String(entry.name || "").trim()),
+          );
           const verificationState = (currentRestaurant as any).verificationState;
           const isVerifiedProfile = Boolean(
             verificationState?.isVerifiedForSetup ?? (currentRestaurant as any).isVerified,
           );
-          const publicReady =
-            hasBasics &&
-            hasAddress &&
-            hasContact &&
-            hasMenu &&
-            hasPhoto &&
-            hasOperatingTimeRequirement &&
-            (isFoodTruck ? true : hasDeal);
+          const barScheduleReady = hostsFoodTrucks ? hasOperatingTimeRequirement : true;
+          const publicReady = isBarBusiness
+            ? hasBasics &&
+              hasAddress &&
+              hasContact &&
+              hasPhoto &&
+              hasSchedule &&
+              hasBarMarketing &&
+              (!servesFood || hasMenu) &&
+              barScheduleReady
+            : hasBasics &&
+              hasAddress &&
+              hasContact &&
+              hasMenu &&
+              hasPhoto &&
+              hasOperatingTimeRequirement &&
+              (isFoodTruck ? true : hasDeal);
           const profileSetupHref = `/restaurant-owner-dashboard?setup=profile&restaurantId=${encodeURIComponent(
             String(selectedRestaurant),
           )}`;
-          const checklistItems = [
-            {
-              label: "Basics complete",
-              done: hasBasics,
-              href: profileSetupHref,
-            },
-            {
-              label: "Photos complete (add logo, cover photo, or food/truck photos)",
-              done: hasPhoto,
-              href: profileSetupHref,
-            },
-            {
-              label: "Address or service area set",
-              done: hasAddress,
-              href: profileSetupHref,
-            },
-            {
-              label: "Contact links complete",
-              done: hasContact,
-              href: profileSetupHref,
-            },
-            {
-              label: menuNeedsReview
-                ? "Menu current (needs review timestamp)"
-                : menuIsStale
-                  ? "Menu current (stale - refresh needed)"
-                  : menuNeedsNudge
-                    ? "Menu current (review soon)"
-                    : "Menu current",
-              done: menuIsCurrent,
-              href: `/menu-builder?restaurantId=${encodeURIComponent(
-                String(selectedRestaurant),
-              )}`,
-            },
-            ...(isFoodTruck
-              ? [
-                  {
-                    label: "Schedule this week",
-                    done: hasOperatingTimeRequirement,
-                    href: "/restaurant-owner-dashboard?setup=schedule&truck=1",
-                  },
-                ]
-              : [
-                  {
-                    label: "Hours complete",
-                    done: hasOperatingTimeRequirement,
-                    href: "/restaurant-owner-dashboard?setup=schedule",
-                  },
-                ]),
-            {
-              label: "Deals or specials added",
-              done: hasDeal,
-              href: "/deal-creation",
-            },
-            {
-              label: "Events added (if relevant)",
-              done: hasEvents,
-              href: "/events",
-            },
-            {
-                label: "Public profile ready",
-                done: publicReady,
-                href: profileSetupHref,
-              },
-              ...(isFoodTruck
-                ? [
-                    {
-                      label: truckLiveNow ? "Live now status" : "Live now status pending",
-                      done: truckLiveNow,
-                      href: "/restaurant-owner-dashboard?setup=schedule&truck=1",
-                    },
-                  ]
-                : []),
-              {
-                label: isVerifiedProfile
-                  ? "Verified profile badge"
-                : "Verification pending (non-blocking)",
-              done: isVerifiedProfile,
-              href: profileSetupHref,
-            },
-          ];
+          const checklistItems = isBarBusiness
+            ? [
+                {
+                  label: "Bar profile complete",
+                  done: hasBasics && hasAddress,
+                  href: profileSetupHref,
+                },
+                {
+                  label: "Hours complete",
+                  done: hasSchedule,
+                  href: "/restaurant-owner-dashboard?setup=schedule",
+                },
+                {
+                  label: "Photos/logo complete",
+                  done: hasPhoto,
+                  href: profileSetupHref,
+                },
+                {
+                  label: "Contact/social links complete",
+                  done: hasContact,
+                  href: profileSetupHref,
+                },
+                {
+                  label: "Events or specials current",
+                  done: hasBarMarketing,
+                  href: hasEvents ? "/events" : "/deal-creation",
+                },
+                ...(servesFood
+                  ? [
+                      {
+                        label: menuNeedsReview
+                          ? "Food menu complete (needs review timestamp)"
+                          : menuIsStale
+                            ? "Food menu complete (stale - refresh needed)"
+                            : menuNeedsNudge
+                              ? "Food menu complete (review soon)"
+                              : "Food menu complete",
+                        done: menuIsCurrent,
+                        href: `/menu-builder?restaurantId=${encodeURIComponent(
+                          String(selectedRestaurant),
+                        )}`,
+                      },
+                    ]
+                  : []),
+                ...(hostsFoodTrucks
+                  ? [
+                      {
+                        label: "Truck hosting availability complete",
+                        done: hasOperatingTimeRequirement,
+                        href: "/restaurant-owner-dashboard?setup=schedule&truck=1",
+                      },
+                      {
+                        label: "Event/truck schedule current",
+                        done: hasOperatingTimeRequirement,
+                        href: "/restaurant-owner-dashboard?setup=schedule&truck=1",
+                      },
+                    ]
+                  : []),
+                {
+                  label: "Public profile ready",
+                  done: publicReady,
+                  href: profileSetupHref,
+                },
+                {
+                  label: isVerifiedProfile
+                    ? "Verified profile badge"
+                    : "Verification pending (non-blocking)",
+                  done: isVerifiedProfile,
+                  href: profileSetupHref,
+                },
+              ]
+            : [
+                {
+                  label: "Basics complete",
+                  done: hasBasics,
+                  href: profileSetupHref,
+                },
+                {
+                  label: "Photos complete (add logo, cover photo, or food/truck photos)",
+                  done: hasPhoto,
+                  href: profileSetupHref,
+                },
+                {
+                  label: "Address or service area set",
+                  done: hasAddress,
+                  href: profileSetupHref,
+                },
+                {
+                  label: "Contact links complete",
+                  done: hasContact,
+                  href: profileSetupHref,
+                },
+                {
+                  label: menuNeedsReview
+                    ? "Menu current (needs review timestamp)"
+                    : menuIsStale
+                      ? "Menu current (stale - refresh needed)"
+                      : menuNeedsNudge
+                        ? "Menu current (review soon)"
+                        : "Menu current",
+                  done: menuIsCurrent,
+                  href: `/menu-builder?restaurantId=${encodeURIComponent(
+                    String(selectedRestaurant),
+                  )}`,
+                },
+                ...(isFoodTruck
+                  ? [
+                      {
+                        label: "Schedule this week",
+                        done: hasOperatingTimeRequirement,
+                        href: "/restaurant-owner-dashboard?setup=schedule&truck=1",
+                      },
+                    ]
+                  : [
+                      {
+                        label: "Hours complete",
+                        done: hasOperatingTimeRequirement,
+                        href: "/restaurant-owner-dashboard?setup=schedule",
+                      },
+                    ]),
+                {
+                  label: "Deals or specials added",
+                  done: hasDeal,
+                  href: "/deal-creation",
+                },
+                {
+                  label: "Events added (if relevant)",
+                  done: hasEvents,
+                  href: "/events",
+                },
+                {
+                  label: "Public profile ready",
+                  done: publicReady,
+                  href: profileSetupHref,
+                },
+                ...(isFoodTruck
+                  ? [
+                      {
+                        label: truckLiveNow ? "Live now status" : "Live now status pending",
+                        done: truckLiveNow,
+                        href: "/restaurant-owner-dashboard?setup=schedule&truck=1",
+                      },
+                    ]
+                  : []),
+                {
+                  label: isVerifiedProfile
+                    ? "Verified profile badge"
+                    : "Verification pending (non-blocking)",
+                  done: isVerifiedProfile,
+                  href: profileSetupHref,
+                },
+              ];
           const completedCount = checklistItems.filter((i) => i.done).length;
           if (completedCount === checklistItems.length) return null;
           return (
@@ -3874,6 +3972,11 @@ export default function RestaurantOwnerDashboard() {
                   </li>
                 ))}
               </ul>
+              {isBarBusiness && !hasActiveFeaturedBartender ? (
+                <p className="mt-3 text-xs text-blue-700">
+                  Optional boost: feature a bartender to highlight signature drinks and featured nights.
+                </p>
+              ) : null}
             </div>
           );
         })()}
