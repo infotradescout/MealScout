@@ -1833,6 +1833,12 @@ export default function RestaurantOwnerDashboard() {
     }
     return `/restaurant-owner-dashboard?${params.toString()}`;
   };
+  const buildDashboardHref = () => {
+    const params = new URLSearchParams();
+    params.set("restaurantId", String(selectedRestaurant));
+    if (setupRefParam) params.set("ref", setupRefParam);
+    return `/restaurant-owner-dashboard?${params.toString()}`;
+  };
   const menuBuilderHref = (() => {
     const params = new URLSearchParams();
     params.set("restaurantId", String(selectedRestaurant));
@@ -2047,6 +2053,15 @@ export default function RestaurantOwnerDashboard() {
               </div>
             </Link>
           </div>
+          {setupMode ? (
+            <div className="mt-3 flex items-center justify-end">
+              <Link href={buildDashboardHref()}>
+                <Button variant="outline" data-testid="button-exit-setup-mode">
+                  Exit setup
+                </Button>
+              </Link>
+            </div>
+          ) : null}
 
           {setupMode === "profile" || setupMode === "profile-media" ? (
             <div
@@ -2367,6 +2382,14 @@ export default function RestaurantOwnerDashboard() {
                 </Link>
                 <Link href="/events">
                   <Button variant="outline">Add event</Button>
+                </Link>
+                <Link href={buildDashboardHref()}>
+                  <Button
+                    variant="secondary"
+                    data-testid="button-back-to-dashboard-from-setup"
+                  >
+                    Back to dashboard
+                  </Button>
                 </Link>
               </div>
 
