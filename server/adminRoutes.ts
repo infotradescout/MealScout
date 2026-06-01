@@ -1051,19 +1051,32 @@ router.post("/users/create", isAdmin, async (req: any, res) => {
       food_truck_owner: { userType: "food_truck", businessType: "food_truck" },
       restaurant_owner: { userType: "restaurant_owner", businessType: "restaurant" },
       bar_owner: { userType: "restaurant_owner", businessType: "bar" },
-      brewery_taproom_owner: { userType: "restaurant_owner", businessType: "brewery" },
+      brewery_taproom_owner: { userType: "restaurant_owner", businessType: "brewery_taproom" },
       caterer_private_chef_owner: {
         userType: "restaurant_owner",
-        businessType: "caterer",
+        businessType: "caterer_private_chef",
       },
       host_venue_operator: { userType: "host", businessType: "venue" },
+      supplier: { userType: "supplier", businessType: "supplier" },
+      staff: { userType: "staff", businessType: null },
+      event_coordinator: { userType: "event_coordinator", businessType: null },
+      customer: { userType: "customer", businessType: null },
+      admin: { userType: "admin", businessType: null },
+      duper_admin: { userType: "duper_admin", businessType: null },
+      super_admin: { userType: "super_admin", businessType: null },
     };
     const mappedType = accountTypeMap[normalizedAccountType] || null;
     const resolvedUserType = mappedType?.userType || normalizedRequestedUserType;
+    const shouldCreateBusinessShell =
+      resolvedUserType === "restaurant_owner" || resolvedUserType === "food_truck";
     const resolvedBusinessType =
       normalizedRequestedBusinessType ||
       mappedType?.businessType ||
-      (resolvedUserType === "food_truck" ? "food_truck" : "restaurant");
+      (resolvedUserType === "food_truck"
+        ? "food_truck"
+        : shouldCreateBusinessShell
+          ? "restaurant"
+          : null);
 
     if (!email || !resolvedUserType) {
       return res.status(400).json({
@@ -1117,17 +1130,17 @@ router.post("/users/create", isAdmin, async (req: any, res) => {
     }
 
     // Optional profile creation for business users.
-    if (
-      (resolvedUserType === "restaurant_owner" || resolvedUserType === "food_truck") &&
-      businessName &&
-      address
-    ) {
-      await storage.createRestaurantForUser({
+    if (shouldCreateBusinessShell && businessName && address) {
+      const createdBusiness = await storage.createRestaurantForUser({
         userId: user.id,
         name: businessName,
         address,
         cuisineType: cuisineType || "Various",
       });
+      await storage.updateRestaurant(createdBusiness.id, {
+        businessType: String(resolvedBusinessType || "restaurant"),
+        isFoodTruck: String(resolvedBusinessType || "") === "food_truck",
+      } as any, { allowIdentityChange: true });
     }
 
     if (

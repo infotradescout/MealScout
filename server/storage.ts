@@ -294,6 +294,7 @@ export interface IStorage {
   updateRestaurant(
     id: string,
     restaurant: Partial<InsertRestaurant>,
+    options?: { allowIdentityChange?: boolean },
   ): Promise<Restaurant>;
   getNearbyRestaurants(
     lat: number,
@@ -1919,8 +1920,9 @@ export class DatabaseStorage implements IStorage {
   async updateRestaurant(
     id: string,
     restaurant: Partial<InsertRestaurant>,
+    options?: { allowIdentityChange?: boolean },
   ): Promise<Restaurant> {
-    return this.restaurantsDealsRepository.updateRestaurant(id, restaurant);
+    return this.restaurantsDealsRepository.updateRestaurant(id, restaurant, options);
   }
 
   async getAllRestaurants(): Promise<Restaurant[]> {

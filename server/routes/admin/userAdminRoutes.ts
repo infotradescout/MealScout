@@ -2064,7 +2064,11 @@ export function registerUserAdminRoutes(
           }
         });
 
-        const updated = await storage.updateRestaurant(req.params.id, updates);
+        const updated = await storage.updateRestaurant(
+          req.params.id,
+          updates,
+          { allowIdentityChange: true },
+        );
         res.json(updated);
       } catch (error: any) {
         console.error("Error updating restaurant:", error);

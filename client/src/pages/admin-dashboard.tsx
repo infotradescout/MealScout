@@ -1859,8 +1859,11 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
     food_truck_owner: { userType: "food_truck", businessType: "food_truck" },
     restaurant_owner: { userType: "restaurant_owner", businessType: "restaurant" },
     bar_owner: { userType: "restaurant_owner", businessType: "bar" },
-    brewery_taproom_owner: { userType: "restaurant_owner", businessType: "brewery" },
-    caterer_private_chef_owner: { userType: "restaurant_owner", businessType: "caterer" },
+    brewery_taproom_owner: { userType: "restaurant_owner", businessType: "brewery_taproom" },
+    caterer_private_chef_owner: {
+      userType: "restaurant_owner",
+      businessType: "caterer_private_chef",
+    },
     host_venue_operator: { userType: "host", businessType: "venue" },
     supplier: { userType: "supplier", businessType: "supplier" },
     event_coordinator: { userType: "event_coordinator" },
@@ -1917,7 +1920,7 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
         locationType: "private_residence",
         footTraffic: "low",
         amenities: [],
-        accountType: "food_truck_owner",
+        accountType: "customer",
       });
     },
     onError: (error: any) => {
@@ -2072,6 +2075,10 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
             )}
           </select>
           <p className="text-xs text-muted-foreground mt-1">
+            Role/account type is separate from business category and discovery
+            filters.
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">
             {formData.accountType === "food_truck_owner" &&
               "Food truck owner - mobile restaurant, create deals, manage location"}
             {formData.accountType === "customer" &&
@@ -2089,7 +2096,7 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
             {formData.accountType === "supplier" &&
               "Supplier - manage products and supplier marketplace presence"}
             {formData.accountType === "staff" &&
-              "Staff member - help manage restaurant operations"}
+              "Business staff - attach to an existing business or send pending invite"}
             {formData.accountType === "event_coordinator" &&
               "Event coordinator - organize events (NO PAYMENTS through us)"}
             {formData.accountType === "admin" &&
@@ -2164,7 +2171,7 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
           <>
             <div className="pt-3 border-t">
               <h4 className="text-sm font-semibold mb-3">
-                Restaurant Information
+                Business Information
               </h4>
 
               <div className="space-y-3">
@@ -2178,7 +2185,7 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
                       setFormData({ ...formData, businessName: e.target.value })
                     }
                     className="w-full px-3 py-2 border rounded-md"
-                    placeholder="Joe's Pizza"
+                    placeholder="Business name"
                   />
                 </div>
 
@@ -2206,7 +2213,7 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
                       setFormData({ ...formData, cuisineType: e.target.value })
                     }
                     className="w-full px-3 py-2 border rounded-md"
-                    placeholder="Italian, Mexican, American, etc."
+                    placeholder="Type/category for internal admin context"
                   />
                 </div>
               </div>
@@ -2214,9 +2221,9 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
 
             <div className="p-3 bg-[color:var(--accent-text)]/10 border border-[color:var(--border-subtle)] rounded-md">
               <p className="text-xs text-[color:var(--accent-text)]">
-                <strong>Note:</strong> Restaurant will be created as verified
-                and active. No document verification required for manual
-                onboarding.
+                <strong>Provisioning:</strong> This creates a user account, a
+                business shell with the selected business type, and links that
+                owner to the business.
               </p>
             </div>
           </>
@@ -4146,7 +4153,7 @@ export default function AdminDashboard() {
       base.push({ value: "admin", label: "Admins" });
     }
     if (isDuperOrSuper) {
-      base.push({ value: "duper_admin", label: "Duperrr Admins" });
+      base.push({ value: "duper_admin", label: "Duper Admins" });
     }
     if (isSuperAdmin) {
       base.push({ value: "super_admin", label: "Super Admins" });
@@ -6829,7 +6836,7 @@ export default function AdminDashboard() {
                 </p>
               </div>
               <div>
-                <p className="text-muted-foreground">Duperrr Admins</p>
+                <p className="text-muted-foreground">Duper Admins</p>
                 <p className="font-semibold">
                   {dashboardStats.memberCounts?.duperAdmin ?? 0}
                 </p>
@@ -10289,12 +10296,12 @@ export default function AdminDashboard() {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <Users className="w-5 h-5" />
-                    Create Account
+                    Provision User + Business Access
                   </CardTitle>
                   <CardDescription>
-                    Manually onboard a new user, host, event coordinator,
-                    restaurant owner, or staff member. We'll email a setup link
-                    so they can finish their profile and set a password.
+                    Users are people accounts. Businesses are separate entities.
+                    Provisioning creates the right account and, for business
+                    owners, the linked business shell and access relationship.
                   </CardDescription>
                 </CardHeader>
                 <CardContent>

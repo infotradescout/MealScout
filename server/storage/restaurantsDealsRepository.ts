@@ -29,6 +29,29 @@ export function createRestaurantsDealsRepository(
   deps: RestaurantsDealsRepositoryDependencies,
 ) {
   const { ensureCityExists } = deps;
+  const PROTECTED_IDENTITY_FIELDS = new Set([
+    "ownerId",
+    "businessType",
+    "isFoodTruck",
+    "isActive",
+    "isVerified",
+  ]);
+
+  function preserveCanonicalBusinessIdentity(
+    existingBusiness: Restaurant,
+    patch: Partial<InsertRestaurant>,
+    allowIdentityChange: boolean,
+  ): Partial<InsertRestaurant> {
+    if (allowIdentityChange) return patch;
+    const normalizedPatch: Partial<InsertRestaurant> = { ...patch };
+    for (const field of PROTECTED_IDENTITY_FIELDS) {
+      if (field in normalizedPatch) {
+        const currentValue = (existingBusiness as any)[field];
+        (normalizedPatch as any)[field] = currentValue;
+      }
+    }
+    return normalizedPatch;
+  }
 
   return {
     async createRestaurant(restaurant: InsertRestaurant): Promise<Restaurant> {
@@ -83,11 +106,25 @@ export function createRestaurantsDealsRepository(
     async updateRestaurant(
       id: string,
       restaurant: Partial<InsertRestaurant>,
+      options?: { allowIdentityChange?: boolean },
     ): Promise<Restaurant> {
+      const [existingBusiness] = await db
+        .select()
+        .from(restaurants)
+        .where(eq(restaurants.id, id))
+        .limit(1);
+      if (!existingBusiness) {
+        throw new Error("Business not found");
+      }
+      const safePatch = preserveCanonicalBusinessIdentity(
+        existingBusiness,
+        restaurant,
+        options?.allowIdentityChange === true,
+      );
       const [updated] = await db
         .update(restaurants)
         .set({
-          ...restaurant,
+          ...safePatch,
           updatedAt: new Date(),
         })
         .where(eq(restaurants.id, id))
