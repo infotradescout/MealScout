@@ -76,6 +76,10 @@
       "continue": true
     },
     {
+      "src": "/api/(.*)",
+      "dest": "https://mealscout.onrender.com/api/$1"
+    },
+    {
       "handle": "filesystem"
     },
     {
