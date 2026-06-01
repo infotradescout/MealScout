@@ -1898,6 +1898,12 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
     postsSpecials: false,
     allowsPrivateEvents: false,
     hasFeaturedStaff: false,
+    useBusinessAddressForHost: true,
+    hostBusinessName: "",
+    hostAddress: "",
+    hostLocationType: "bar_venue",
+    hostLatitude: "",
+    hostLongitude: "",
     staffBusinessId: "",
     staffInviteMode: "attach_existing",
     accountType: "customer" as AccountType,
@@ -1941,6 +1947,12 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
         postsSpecials: false,
         allowsPrivateEvents: false,
         hasFeaturedStaff: false,
+        useBusinessAddressForHost: true,
+        hostBusinessName: "",
+        hostAddress: "",
+        hostLocationType: "bar_venue",
+        hostLatitude: "",
+        hostLongitude: "",
         staffBusinessId: "",
         staffInviteMode: "attach_existing",
         accountType: "customer",
@@ -1985,8 +1997,18 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
       }
     }
 
+    const useHostOverride =
+      formData.accountType === "bar_owner" &&
+      !formData.useBusinessAddressForHost &&
+      formData.hostAddress.trim().length > 0;
+
     createUser.mutate({
       ...formData,
+      hostBusinessName: useHostOverride ? formData.hostBusinessName : "",
+      hostAddress: useHostOverride ? formData.hostAddress : "",
+      hostLocationType: useHostOverride ? formData.hostLocationType : "",
+      hostLatitude: useHostOverride ? formData.hostLatitude : "",
+      hostLongitude: useHostOverride ? formData.hostLongitude : "",
       userType: selectedConfig.userType as any,
       businessType: selectedConfig.businessType || null,
     } as any);
@@ -2012,6 +2034,12 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
       postsSpecials: false,
       allowsPrivateEvents: false,
       hasFeaturedStaff: false,
+      useBusinessAddressForHost: true,
+      hostBusinessName: "",
+      hostAddress: "",
+      hostLocationType: "bar_venue",
+      hostLatitude: "",
+      hostLongitude: "",
       staffBusinessId: "",
       staffInviteMode: "attach_existing",
     });
@@ -2289,6 +2317,56 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
                     {label}
                   </label>
                 ))}
+                <div className="pt-2 space-y-2">
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(formData.useBusinessAddressForHost)}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          useBusinessAddressForHost: e.target.checked,
+                        } as any)
+                      }
+                    />
+                    Use business address for parking-pass host profile
+                  </label>
+                  <p className="text-xs text-muted-foreground">
+                    Uncheck to set a different host parking-pass address.
+                  </p>
+                  {!formData.useBusinessAddressForHost && (
+                    <div className="space-y-2 rounded-md border p-3">
+                      <div>
+                        <label className="text-sm font-medium">
+                          Host Display Name (optional)
+                        </label>
+                        <input
+                          type="text"
+                          value={formData.hostBusinessName}
+                          onChange={(e) =>
+                            setFormData({ ...formData, hostBusinessName: e.target.value })
+                          }
+                          className="w-full px-3 py-2 border rounded-md"
+                          placeholder="Parking-pass venue name"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium">
+                          Host Address
+                        </label>
+                        <input
+                          type="text"
+                          value={formData.hostAddress}
+                          onChange={(e) =>
+                            setFormData({ ...formData, hostAddress: e.target.value })
+                          }
+                          className="w-full px-3 py-2 border rounded-md"
+                          placeholder="456 Host Lot Ave, City, State"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </>

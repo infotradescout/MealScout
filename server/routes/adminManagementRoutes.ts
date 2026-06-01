@@ -1567,6 +1567,11 @@ export function registerAdminManagementRoutes(app: Express) {
           locationType,
           footTraffic,
           amenities,
+          hostAddress,
+          hostBusinessName,
+          hostLocationType,
+          hostLatitude,
+          hostLongitude,
           userType,
           businessType,
           accountType,
@@ -1681,13 +1686,17 @@ export function registerAdminManagementRoutes(app: Express) {
           resolvedUserType === "restaurant_owner" ||
           resolvedUserType === "food_truck" ||
           businessTypesRequiringShell.has(String(resolvedBusinessType || "").toLowerCase());
-        const isHostProvisionType =
-          resolvedUserType === "host" || resolvedUserType === "event_organizer";
+        const shouldCreateHostProfile =
+          resolvedUserType === "host" ||
+          resolvedUserType === "event_organizer" ||
+          (resolvedUserType === "restaurant_owner" &&
+            String(resolvedBusinessType || "").toLowerCase() === "bar" &&
+            Boolean(hostsFoodTrucks || wantsFoodTrucks));
         const normalizedBusinessName = String(businessName || "").trim();
         const normalizedAddress = String(address || "").trim();
 
         if (
-          (isRestaurantProvisionType || isHostProvisionType) &&
+          (isRestaurantProvisionType || shouldCreateHostProfile) &&
           (!normalizedBusinessName || !normalizedAddress)
         ) {
           return res.status(400).json({
@@ -1824,7 +1833,12 @@ export function registerAdminManagementRoutes(app: Express) {
             createdBusinessType = createdBusiness?.businessType || null;
           }
 
-          if (isHostProvisionType) {
+          if (shouldCreateHostProfile) {
+            const existingHostResult = await tx.execute(sql`
+              select id from hosts where user_id = ${insertedUser.id} limit 1
+            `);
+            const existingHost = (existingHostResult as any)?.rows?.[0];
+            if (!existingHost?.id) {
             const footTrafficMap: Record<string, number> = {
               low: 50,
               medium: 150,
@@ -1837,31 +1851,50 @@ export function registerAdminManagementRoutes(app: Express) {
               });
             }
 
+            const trimmedHostAddress = String(hostAddress || "").trim();
+            const trimmedHostBusinessName = String(hostBusinessName || "").trim();
+            const resolvedHostAddress = trimmedHostAddress || normalizedAddress;
+            const resolvedHostBusinessName = trimmedHostBusinessName || normalizedBusinessName;
+            const resolvedHostLocationType =
+              resolvedUserType === "event_organizer"
+                ? "event_organizer"
+                : String(hostLocationType || "").trim() || locationType || "other";
+            const resolvedHostLatitude =
+              hostLatitude !== undefined &&
+              hostLatitude !== null &&
+              `${hostLatitude}`.trim() !== ""
+                ? Number(hostLatitude)
+                : parsedLatitude;
+            const resolvedHostLongitude =
+              hostLongitude !== undefined &&
+              hostLongitude !== null &&
+              `${hostLongitude}`.trim() !== ""
+                ? Number(hostLongitude)
+                : parsedLongitude;
+
             const [insertedHost] = await tx
               .insert(hosts)
               .values({
                 userId: insertedUser.id,
-                businessName: normalizedBusinessName,
-                address: normalizedAddress,
-                locationType:
-                  resolvedUserType === "event_organizer"
-                    ? "event_organizer"
-                    : locationType || "other",
+                businessName: resolvedHostBusinessName,
+                address: resolvedHostAddress,
+                locationType: resolvedHostLocationType,
                 expectedFootTraffic: footTrafficMap[footTraffic] || 100,
                 amenities:
                   Object.keys(amenitiesObj).length > 0 ? amenitiesObj : null,
                 isVerified: true,
                 adminCreated: true,
-                ...(parsedLatitude !== null && parsedLongitude !== null
+                ...(resolvedHostLatitude !== null && resolvedHostLongitude !== null
                   ? {
-                      latitude: parsedLatitude.toString(),
-                      longitude: parsedLongitude.toString(),
+                      latitude: resolvedHostLatitude.toString(),
+                      longitude: resolvedHostLongitude.toString(),
                     }
                   : {}),
               })
               .returning({ id: hosts.id });
 
             createdHostId = insertedHost?.id || null;
+            }
           }
 
           return [insertedUser];

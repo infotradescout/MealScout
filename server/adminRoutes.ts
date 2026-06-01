@@ -1031,6 +1031,11 @@ router.post("/users/create", isAdmin, async (req: any, res) => {
       locationType,
       footTraffic,
       amenities,
+      hostAddress,
+      hostBusinessName,
+      hostLocationType,
+      hostLatitude,
+      hostLongitude,
       businessType,
       accountType,
       servesFood,
@@ -1168,11 +1173,15 @@ router.post("/users/create", isAdmin, async (req: any, res) => {
       } as any, { allowIdentityChange: true });
     }
 
-    if (
-      (resolvedUserType === "host" || resolvedUserType === "event_organizer") &&
-      businessName &&
-      address
-    ) {
+    const shouldCreateHostProfile =
+      (resolvedUserType === "host" || resolvedUserType === "event_organizer") ||
+      (resolvedUserType === "restaurant_owner" &&
+        String(resolvedBusinessType || "").toLowerCase() === "bar" &&
+        Boolean(hostsFoodTrucks || wantsFoodTrucks));
+
+    if (shouldCreateHostProfile && businessName && address) {
+      const existingHost = await storage.getHostByUserId(user.id);
+      if (!existingHost) {
       const footTrafficMap: Record<string, number> = {
         low: 50,
         medium: 150,
@@ -1186,15 +1195,19 @@ router.post("/users/create", isAdmin, async (req: any, res) => {
         });
       }
 
+      const trimmedHostAddress = String(hostAddress || "").trim();
+      const trimmedHostBusinessName = String(hostBusinessName || "").trim();
+      const resolvedHostAddress = trimmedHostAddress || address;
+      const resolvedHostBusinessName = trimmedHostBusinessName || businessName;
       const resolvedLocationType =
         resolvedUserType === "event_organizer"
           ? "event_organizer"
-          : locationType || "other";
+          : String(hostLocationType || "").trim() || locationType || "other";
 
       const hostData: any = {
         userId: user.id,
-        businessName,
-        address,
+        businessName: resolvedHostBusinessName,
+        address: resolvedHostAddress,
         locationType: resolvedLocationType,
         expectedFootTraffic: footTrafficMap[footTraffic] || 100,
         amenities: Object.keys(amenitiesObj).length > 0 ? amenitiesObj : null,
@@ -1202,12 +1215,28 @@ router.post("/users/create", isAdmin, async (req: any, res) => {
         adminCreated: true,
       };
 
-      if (latitude && longitude) {
-        hostData.latitude = String(latitude);
-        hostData.longitude = String(longitude);
+      const resolvedHostLatitude =
+        hostLatitude !== undefined && hostLatitude !== null && `${hostLatitude}`.trim() !== ""
+          ? hostLatitude
+          : latitude;
+      const resolvedHostLongitude =
+        hostLongitude !== undefined && hostLongitude !== null && `${hostLongitude}`.trim() !== ""
+          ? hostLongitude
+          : longitude;
+
+      if (resolvedHostLatitude && resolvedHostLongitude) {
+        hostData.latitude = String(resolvedHostLatitude);
+        hostData.longitude = String(resolvedHostLongitude);
       }
 
-      await storage.createHost(hostData);
+      const createdHost = await storage.createHost(hostData);
+      await storage.ensureDraftParkingPassForHost(createdHost.id).catch((e) => {
+        console.warn(
+          "ensureDraftParkingPassForHost failed for admin-created host",
+          e,
+        );
+      });
+      }
     }
 
     const inviteResult = await sendAccountSetupInvite({
