@@ -6,8 +6,9 @@ const nav = readFileSync("client/src/components/navigation.tsx", "utf8");
 const requiredPageSnippets = [
   "const setupMode = dashboardParams.get(\"setup\");",
   "const buildDashboardHref = () => {",
-  "params.set(\"restaurantId\", String(selectedRestaurant));",
-  "if (setupRefParam) params.set(\"ref\", setupRefParam);",
+  "return buildOwnerToolHref(\"/restaurant-owner-dashboard\");",
+  "const buildOwnerToolHref = (",
+  "const buildOwnerSetupHref = (",
   "data-testid=\"button-exit-setup-mode\"",
   "data-testid=\"button-back-to-dashboard-from-setup\"",
   "<Link href={buildDashboardHref()}>",
@@ -47,4 +48,3 @@ for (const snippet of forbiddenSnippets) {
 }
 
 console.log("owner-dashboard-setup-exit-navigation.contract: PASS");
-

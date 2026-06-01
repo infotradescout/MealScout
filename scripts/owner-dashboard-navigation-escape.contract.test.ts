@@ -4,9 +4,9 @@ const navigation = readFileSync("client/src/components/navigation.tsx", "utf8");
 const useAuth = readFileSync("client/src/hooks/useAuth.ts", "utf8");
 
 const requiredNavigationSnippets = [
-  "const sanitizeOwnerNavHref = (href: string) => {",
+  "const buildOwnerToolHref = (destination: string) => {",
   "\"setup\", \"ref\", \"setupStep\", \"setupPanel\", \"onboarding\"",
-  "href={sanitizeOwnerNavHref(item.path)}",
+  "href={buildOwnerToolHref(item.path)}",
   "{ path: \"/scout\", icon: Compass, label: \"Scout\" }",
   "{ path: \"/parking-pass\", icon: ParkingSquare, label: \"Parking Pass\" }",
   "{ path: \"/orders\", icon: ShoppingCart, label: \"Orders\" }",

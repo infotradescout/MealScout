@@ -199,7 +199,6 @@ export default function RestaurantOwnerDashboard() {
       : new URLSearchParams();
   const requestedRestaurantId = dashboardParams.get("restaurantId");
   const setupMode = dashboardParams.get("setup");
-  const setupRefParam = dashboardParams.get("ref");
   const [analyticsDateRange, setAnalyticsDateRange] = useState({
     start: format(subDays(new Date(), 30), "yyyy-MM-dd"),
     end: format(new Date(), "yyyy-MM-dd"),
@@ -1818,14 +1817,33 @@ export default function RestaurantOwnerDashboard() {
     requestedDefaultTab && availableTabs.includes(requestedDefaultTab as any)
       ? requestedDefaultTab
       : availableTabs[0] ?? "analytics";
-  const buildSetupHref = (
+  const buildOwnerToolHref = (
+    destination: string,
+    extras?: Record<string, string>,
+  ) => {
+    const url = new URL(destination, "https://www.mealscout.us");
+    const params = new URLSearchParams(url.search);
+    ["setup", "ref", "onboarding", "setupStep", "setupPanel"].forEach((key) =>
+      params.delete(key),
+    );
+    if (selectedRestaurant) {
+      params.set("restaurantId", String(selectedRestaurant));
+    }
+    if (extras) {
+      for (const [key, value] of Object.entries(extras)) {
+        if (value) params.set(key, value);
+      }
+    }
+    const query = params.toString();
+    return `${url.pathname}${query ? `?${query}` : ""}`;
+  };
+  const buildOwnerSetupHref = (
     setup: "profile" | "profile-media" | "schedule" | "menu",
     extras?: Record<string, string>,
   ) => {
     const params = new URLSearchParams();
     params.set("setup", setup);
     params.set("restaurantId", String(selectedRestaurant));
-    if (setupRefParam) params.set("ref", setupRefParam);
     if (extras) {
       for (const [key, value] of Object.entries(extras)) {
         if (value) params.set(key, value);
@@ -1834,17 +1852,10 @@ export default function RestaurantOwnerDashboard() {
     return `/restaurant-owner-dashboard?${params.toString()}`;
   };
   const buildDashboardHref = () => {
-    const params = new URLSearchParams();
-    params.set("restaurantId", String(selectedRestaurant));
-    if (setupRefParam) params.set("ref", setupRefParam);
-    return `/restaurant-owner-dashboard?${params.toString()}`;
+    return buildOwnerToolHref("/restaurant-owner-dashboard");
   };
   const menuBuilderHref = (() => {
-    const params = new URLSearchParams();
-    params.set("restaurantId", String(selectedRestaurant));
-    params.set("src", "onboarding");
-    if (setupRefParam) params.set("ref", setupRefParam);
-    return `/menu-builder?${params.toString()}`;
+    return buildOwnerToolHref("/menu-builder", { src: "onboarding" });
   })();
 
   if (loadingRestaurants) {
@@ -2011,7 +2022,7 @@ export default function RestaurantOwnerDashboard() {
           </div>
 
           <div className="mt-4 grid gap-2 sm:grid-cols-4">
-            <Link href={buildSetupHref("profile")}>
+            <Link href={buildOwnerSetupHref("profile")}>
               <div className="flex w-full items-center gap-2 rounded-md border border-orange-200 bg-white px-3 py-2 text-orange-900 hover:bg-orange-100">
                 <Store className="h-4 w-4 text-orange-900" />
                 <span className="text-sm font-semibold text-orange-900">
@@ -2023,7 +2034,7 @@ export default function RestaurantOwnerDashboard() {
                 </span>
               </div>
             </Link>
-            <Link href={buildSetupHref("menu")}>
+            <Link href={buildOwnerSetupHref("menu")}>
               <div className="flex w-full items-center gap-2 rounded-md border border-orange-200 bg-white px-3 py-2 text-orange-900 hover:bg-orange-100">
                 <ShoppingCart className="h-4 w-4 text-orange-900" />
                 <span className="text-sm font-semibold text-orange-900">
@@ -2032,7 +2043,7 @@ export default function RestaurantOwnerDashboard() {
               </div>
             </Link>
             <Link
-              href={buildSetupHref(
+              href={buildOwnerSetupHref(
                 "schedule",
                 isFoodTruck ? { truck: "1" } : undefined,
               )}
@@ -2044,7 +2055,7 @@ export default function RestaurantOwnerDashboard() {
                 </span>
               </div>
             </Link>
-            <Link href={buildSetupHref("profile-media")}>
+            <Link href={buildOwnerSetupHref("profile-media")}>
               <div className="flex w-full items-center gap-2 rounded-md border border-orange-200 bg-white px-3 py-2 text-orange-900 hover:bg-orange-100">
                 <Calendar className="h-4 w-4 text-orange-900" />
                 <span className="text-sm font-semibold text-orange-900">
@@ -2374,7 +2385,7 @@ export default function RestaurantOwnerDashboard() {
                 <Link href={menuBuilderHref}>
                   <Button variant="outline">Open menu builder</Button>
                 </Link>
-                <Link href={buildSetupHref("schedule", isFoodTruck ? { truck: "1" } : undefined)}>
+                <Link href={buildOwnerSetupHref("schedule", isFoodTruck ? { truck: "1" } : undefined)}>
                   <Button variant="outline">Open schedule/live tools</Button>
                 </Link>
                 <Link href="/deal-creation">
@@ -3410,7 +3421,7 @@ export default function RestaurantOwnerDashboard() {
                 <Link href={menuBuilderHref}>
                   <Button>Open menu builder</Button>
                 </Link>
-                <Link href={buildSetupHref("profile")}>
+                <Link href={buildOwnerSetupHref("profile")}>
                   <Button variant="outline">Back to profile basics</Button>
                 </Link>
               </div>
