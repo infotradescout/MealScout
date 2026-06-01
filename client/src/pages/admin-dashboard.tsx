@@ -99,8 +99,8 @@ const businessTypeOptions = [
   { value: "food_truck", label: "Food Truck" },
   { value: "restaurant", label: "Restaurant" },
   { value: "bar", label: "Bar" },
-  { value: "brewery", label: "Brewery / Taproom" },
-  { value: "caterer", label: "Caterer / Private Chef" },
+  { value: "brewery_taproom", label: "Brewery / Taproom" },
+  { value: "caterer_private_chef", label: "Caterer / Private Chef" },
   { value: "venue", label: "Host / Venue" },
   { value: "supplier", label: "Supplier" },
 ];
@@ -116,6 +116,98 @@ const toIdentityRole = (userType?: string | null) => {
   if (type === "restaurant_owner" || type === "food_truck") return "business_owner";
   return type || "unknown";
 };
+
+type BusinessTypeIntent =
+  | "food_truck"
+  | "restaurant"
+  | "bar"
+  | "brewery_taproom"
+  | "caterer_private_chef"
+  | "host_venue"
+  | "supplier"
+  | "unknown"
+  | "conflict";
+
+function resolveAdminUserBusinessIdentity(
+  user: any,
+  attachedBusiness: any | null,
+  journeySignals: string[],
+) {
+  const userType = String(user?.userType || "").toLowerCase();
+  const attachedType = String(attachedBusiness?.businessType || "")
+    .trim()
+    .toLowerCase();
+  const joinedSignals = journeySignals.join(" ").toLowerCase();
+
+  const signalIntent: BusinessTypeIntent =
+    joinedSignals.includes("truck")
+      ? "food_truck"
+      : joinedSignals.includes("bar")
+        ? "bar"
+        : joinedSignals.includes("brewery") || joinedSignals.includes("taproom")
+          ? "brewery_taproom"
+          : joinedSignals.includes("caterer") || joinedSignals.includes("chef")
+            ? "caterer_private_chef"
+            : joinedSignals.includes("host") || joinedSignals.includes("venue")
+              ? "host_venue"
+              : joinedSignals.includes("supplier")
+                ? "supplier"
+                : joinedSignals.includes("restaurant")
+                  ? "restaurant"
+                  : "unknown";
+
+  const roleIntent: BusinessTypeIntent =
+    userType === "food_truck"
+      ? "food_truck"
+      : userType === "host"
+        ? "host_venue"
+        : userType === "supplier"
+          ? "supplier"
+          : userType === "restaurant_owner"
+            ? "restaurant"
+            : "unknown";
+
+  const attachedIntent: BusinessTypeIntent =
+    attachedType === "food_truck" || attachedType === "truck"
+      ? "food_truck"
+      : attachedType === "bar"
+        ? "bar"
+        : attachedType === "brewery" || attachedType === "brewery_taproom"
+          ? "brewery_taproom"
+          : attachedType === "caterer" || attachedType === "private_chef"
+            ? "caterer_private_chef"
+            : attachedType === "venue" || attachedType === "host"
+              ? "host_venue"
+              : attachedType === "supplier"
+                ? "supplier"
+                : attachedType === "restaurant"
+                  ? "restaurant"
+                  : "unknown";
+
+  const attachmentState = attachedBusiness
+    ? "attached"
+    : user?.businessName
+      ? "needs_business_shell"
+      : "not_attached";
+
+  const candidates = [attachedIntent, signalIntent, roleIntent].filter(
+    (value) => value !== "unknown",
+  );
+  const unique = new Set(candidates);
+  const businessTypeIntent: BusinessTypeIntent =
+    unique.size > 1 ? "conflict" : candidates[0] || "unknown";
+
+  return {
+    userRole: toIdentityRole(userType),
+    businessTypeIntent,
+    attachmentState,
+    onboardingSignals: journeySignals,
+    conflict: businessTypeIntent === "conflict",
+    roleIntent,
+    signalIntent,
+    attachedIntent,
+  };
+}
 
 interface PendingRestaurant {
   id: string;
@@ -2564,6 +2656,9 @@ export default function AdminDashboard() {
   const [truckFilterVerified, setTruckFilterVerified] = useState(false);
   const [attachBusinessSearch, setAttachBusinessSearch] = useState("");
   const [attachBusinessSelectedId, setAttachBusinessSelectedId] = useState("");
+  const [businessIntentByUserId, setBusinessIntentByUserId] = useState<
+    Record<string, string>
+  >({});
   const [verificationSearch, setVerificationSearch] = useState("");
   const [messageSubject, setMessageSubject] = useState("");
   const [messageBody, setMessageBody] = useState("");
@@ -3947,6 +4042,27 @@ export default function AdminDashboard() {
     queryKey: ["/api/admin/users", selectedUser?.id, "activity"],
     enabled: !!adminUser && !!selectedUser?.id && userDetailsOpen,
   });
+
+  const selectedUserIdentity = useMemo(() => {
+    if (!selectedUser) return null;
+    const attachedBusiness = Array.isArray(userRestaurants) ? userRestaurants[0] : null;
+    const journeySignals = [
+      ...(Array.isArray(userActivity?.journeySummary)
+        ? userActivity.journeySummary.map((entry: any) => String(entry?.category || ""))
+        : []),
+      ...(Array.isArray(userActivity?.eventCounts)
+        ? userActivity.eventCounts.map((entry: any) => String(entry?.eventName || ""))
+        : []),
+    ]
+      .map((value) => value.trim())
+      .filter(Boolean)
+      .slice(0, 20);
+    return resolveAdminUserBusinessIdentity(
+      selectedUser,
+      attachedBusiness,
+      journeySignals,
+    );
+  }, [selectedUser, userRestaurants, userActivity]);
 
   const sortedUsers = useMemo(() => {
     const typeOrder = [
@@ -10867,6 +10983,50 @@ export default function AdminDashboard() {
                       </div>
                     </div>
                   )}
+                {selectedUserIdentity && (
+                  <div className="mt-4 rounded-lg border p-3 space-y-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Identity Resolver
+                    </p>
+                    <div className="flex flex-wrap gap-2 text-xs">
+                      <Badge variant="outline">Role: {selectedUserIdentity.userRole}</Badge>
+                      <Badge variant="outline">
+                        Business intent: {selectedUserIdentity.businessTypeIntent}
+                      </Badge>
+                      <Badge
+                        variant={
+                          selectedUserIdentity.attachmentState === "attached"
+                            ? "default"
+                            : "destructive"
+                        }
+                      >
+                        Business attachment: {selectedUserIdentity.attachmentState}
+                      </Badge>
+                      <Badge variant="outline">
+                        Onboarding signal: {selectedUserIdentity.signalIntent}
+                      </Badge>
+                      <Badge variant="outline">
+                        Email: {selectedUser?.emailVerified ? "verified" : "unverified"}
+                      </Badge>
+                      <Badge variant="outline">
+                        Business verification: {selectedUser?.businessIsVerified ? "verified" : "pending"}
+                      </Badge>
+                      <Badge variant="outline">
+                        Insurance: {selectedUser?.insuranceVerified ? "verified" : "unknown"}
+                      </Badge>
+                      <Badge variant="outline">
+                        Admin approved: {selectedUser?.businessIsActive ? "yes" : "no"}
+                      </Badge>
+                    </div>
+                    {selectedUserIdentity.conflict && (
+                      <div className="rounded-md border border-destructive/40 bg-destructive/10 px-2 py-1 text-xs text-destructive">
+                        Conflict detected: account role intent ({selectedUserIdentity.roleIntent})
+                        does not match onboarding signal ({selectedUserIdentity.signalIntent}).
+                        Resolve business type intent before continuing.
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Saved Addresses */}
@@ -11161,8 +11321,53 @@ export default function AdminDashboard() {
                     isDuperOrRootUserType(adminUser?.userType) && (
                       <div className="space-y-2">
                         <p className="text-xs text-muted-foreground">
-                          Attach this user to a restaurant/food truck profile.
+                          Attach existing business, create a business shell, or
+                          correct business type intent before continuing.
                         </p>
+                        <select
+                          value={businessIntentByUserId[selectedUser.id] || ""}
+                          onChange={(e) =>
+                            setBusinessIntentByUserId({
+                              ...businessIntentByUserId,
+                              [selectedUser.id]: e.target.value,
+                            })
+                          }
+                          className="w-full px-2 py-1 border rounded-md text-sm bg-background"
+                        >
+                          <option value="">Select business type intent</option>
+                          {businessTypeOptions.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            const intent =
+                              businessIntentByUserId[selectedUser.id] || "";
+                            if (!intent) return;
+                            updateUserType.mutate({
+                              userId: selectedUser.id,
+                              userType:
+                                intent === "food_truck"
+                                  ? "food_truck"
+                                  : intent === "host_venue"
+                                    ? "host"
+                                    : intent === "supplier"
+                                      ? "supplier"
+                                      : "restaurant_owner",
+                            });
+                          }}
+                          disabled={
+                            updateUserType.isPending ||
+                            !businessIntentByUserId[selectedUser.id]
+                          }
+                          data-testid={`button-correct-business-intent-${selectedUser.id}`}
+                        >
+                          Correct business type intent
+                        </Button>
                         <input
                           value={attachBusinessSearch}
                           onChange={(e) =>
@@ -11261,7 +11466,21 @@ export default function AdminDashboard() {
                         >
                           {createAndAttachBusinessForUser.isPending
                             ? "Creating..."
-                            : "Create business from user"}
+                            : "Create business shell"}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() =>
+                            updateUserType.mutate({
+                              userId: selectedUser.id,
+                              userType: "customer",
+                            })
+                          }
+                          data-testid={`button-mark-customer-only-${selectedUser.id}`}
+                          disabled={updateUserType.isPending}
+                        >
+                          Mark as customer only
                         </Button>
                       </div>
                     )}
