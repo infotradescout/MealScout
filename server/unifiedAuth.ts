@@ -1718,6 +1718,28 @@ export async function setupUnifiedAuth(app: Express) {
     }
   });
 
+  // Check email verification status (public, non-enumerating)
+  app.post("/api/auth/verification-status", async (req, res) => {
+    try {
+      const emailRaw =
+        typeof req.body?.email === "string" ? req.body.email : "";
+      const email = emailRaw.trim().toLowerCase();
+      if (!email) {
+        return res.status(400).json({ error: "Email is required" });
+      }
+
+      const user = await storage.getUserByEmail(email);
+      if (!user) {
+        return res.json({ verified: false });
+      }
+
+      res.json({ verified: user.emailVerified === true });
+    } catch (error) {
+      console.error("Verification status check error:", error);
+      res.status(500).json({ error: "Unable to check verification status" });
+    }
+  });
+
   // TradeScout SSO endpoint - accepts a signed JWT from TradeScout and
   // creates/links a MealScout user, then establishes a session.
   app.post("/api/auth/tradescout/sso", async (req, res) => {

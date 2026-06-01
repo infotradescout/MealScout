@@ -45,12 +45,28 @@ function getLoginHref(redirectPath: string, verified: boolean) {
   return `/login?${params.toString()}`;
 }
 
-function getSetupBrief(redirectPath: string) {
+type SetupBrief = {
+  label: string;
+  description: string;
+  steps: string[];
+  optionalSteps: string[];
+};
+
+function getSetupBrief(redirectPath: string): SetupBrief {
   const lowerRedirectPath = redirectPath.toLowerCase();
+  const signupPath = redirectPath.startsWith("/restaurant-signup")
+    ? new URLSearchParams(redirectPath.split("?")[1] || "")
+    : null;
+  const redirectBusinessType = String(
+    signupPath?.get("businessType") || "",
+  ).toLowerCase();
   const isFoodTruckSetup =
     redirectPath.startsWith("/truck-onboarding") ||
     (redirectPath.startsWith("/restaurant-signup") &&
       lowerRedirectPath.includes("businesstype=food_truck"));
+  const isBarSetup =
+    redirectPath.startsWith("/restaurant-signup") &&
+    redirectBusinessType === "bar";
 
   if (isFoodTruckSetup) {
     return {
@@ -58,6 +74,20 @@ function getSetupBrief(redirectPath: string) {
       description:
         "Claim or create the truck, confirm service area, add or import the menu, then publish schedule and live status.",
       steps: ["Personal login", "Truck profile", "Menu import", "Schedule"],
+      optionalSteps: [],
+    };
+  }
+  if (isBarSetup) {
+    return {
+      label: "Bar setup",
+      description:
+        "Finish your bar profile, set hours, then publish events or specials. Food menu, truck hosting, and staff showcase are optional.",
+      steps: ["Personal login", "Bar profile", "Hours", "Events or specials"],
+      optionalSteps: [
+        "Food menu (if serves food)",
+        "Host food trucks (if enabled)",
+        "Staff showcase",
+      ],
     };
   }
   if (redirectPath.startsWith("/restaurant-signup")) {
@@ -66,6 +96,7 @@ function getSetupBrief(redirectPath: string) {
       description:
         "Finish the business profile, add location and hours, then build or import the menu customers will see on Scout.",
       steps: ["Personal login", "Business profile", "Menu setup", "Hours"],
+      optionalSteps: [],
     };
   }
   if (redirectPath.startsWith("/host-signup")) {
@@ -74,6 +105,7 @@ function getSetupBrief(redirectPath: string) {
       description:
         "Create the host location where food trucks can park, set availability, and publish only when the listing is ready.",
       steps: ["Personal login", "Host location", "Availability", "Publish"],
+      optionalSteps: [],
     };
   }
   if (
@@ -84,6 +116,7 @@ function getSetupBrief(redirectPath: string) {
       description:
         "Create the organizer profile, add the first event, and invite or request food vendors without skipping account ownership.",
       steps: ["Personal login", "Organizer profile", "First event", "Vendor needs"],
+      optionalSteps: [],
     };
   }
   if (redirectPath.startsWith("/supplier")) {
@@ -92,6 +125,7 @@ function getSetupBrief(redirectPath: string) {
       description:
         "Finish the supplier profile, add product/service areas, and connect with local restaurants and trucks.",
       steps: ["Personal login", "Supplier profile", "Products", "Service area"],
+      optionalSteps: [],
     };
   }
   return {
@@ -99,6 +133,7 @@ function getSetupBrief(redirectPath: string) {
     description:
       "Scout is your local food dashboard for live trucks, restaurants, menus, deals, hosts, and saved spots.",
     steps: ["Personal login", "Location", "Preferences", "Scout"],
+    optionalSteps: [],
   };
 }
 
@@ -106,6 +141,7 @@ export default function PostVerification() {
   const { isAuthenticated, isLoading } = useAuth();
   const { toast } = useToast();
   const [isResending, setIsResending] = useState(false);
+  const [isCheckingVerification, setIsCheckingVerification] = useState(false);
 
   const params = useMemo(() => new URLSearchParams(window.location.search), []);
   const redirectPath = useMemo(() => getBestRedirect(params), [params]);
@@ -155,6 +191,44 @@ export default function PostVerification() {
       });
     } finally {
       setIsResending(false);
+    }
+  };
+
+  const handleVerifiedContinue = async () => {
+    if (!email) {
+      toast({
+        title: "Email needed",
+        description: "Use the login page with your signup email to continue.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsCheckingVerification(true);
+    try {
+      const response = await apiRequest("POST", "/api/auth/verification-status", {
+        email,
+      });
+      const payload = await response.json();
+      if (!payload?.verified) {
+        toast({
+          title: "Email not verified yet",
+          description:
+            "Please click the verification link in your inbox first, then try again.",
+          variant: "destructive",
+        });
+        return;
+      }
+      clearStoredRedirect();
+      window.location.href = loginHref;
+    } catch (error: any) {
+      toast({
+        title: "Could not verify status",
+        description: error?.message || "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsCheckingVerification(false);
     }
   };
 
@@ -245,6 +319,16 @@ export default function PostVerification() {
                 </div>
               ))}
             </div>
+            {setupBrief.optionalSteps.length > 0 ? (
+              <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2">
+                <div className="text-[10px] font-black uppercase tracking-[0.18em] text-amber-200/60">
+                  Optional
+                </div>
+                <div className="mt-1 text-xs font-medium text-white/70">
+                  {setupBrief.optionalSteps.join(" • ")}
+                </div>
+              </div>
+            ) : null}
           </div>
 
           {isLoading ? (
@@ -262,14 +346,15 @@ export default function PostVerification() {
             </Link>
           ) : needsEmailCheck ? (
             <div className="space-y-3">
-              <Link
-                href={loginHref}
-                onClick={clearStoredRedirect}
+              <button
+                type="button"
+                onClick={handleVerifiedContinue}
+                disabled={isCheckingVerification}
                 className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-amber-400 font-black text-black shadow-[0_12px_40px_rgba(251,191,36,0.28)] transition active:scale-[0.98]"
               >
-                I verified, log in
+                {isCheckingVerification ? "Checking verification..." : "I verified, log in"}
                 <ArrowRight className="h-5 w-5" />
-              </Link>
+              </button>
               <button
                 type="button"
                 onClick={handleResendVerification}
