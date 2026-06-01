@@ -463,11 +463,12 @@ export default function RestaurantOwnerDashboard() {
     ],
     queryFn: async () => {
       const response = await fetch(
-        `/api/restaurants/${selectedRestaurant}/analytics/timeseries?start=${encodeURIComponent(
+        `/api/restaurants/${selectedRestaurant}/analytics/timeseries?startDate=${encodeURIComponent(
           analyticsDateRange.start,
-        )}&end=${encodeURIComponent(analyticsDateRange.end)}`,
+        )}&endDate=${encodeURIComponent(analyticsDateRange.end)}`,
         { credentials: "include" },
       );
+      if (response.status === 400) return [];
       if (!response.ok) throw new Error("Failed to load analytics timeseries");
       return response.json();
     },
@@ -1970,7 +1971,10 @@ export default function RestaurantOwnerDashboard() {
                 String(selectedRestaurant),
               )}`}
             >
-              <Button variant="outline" className="w-full justify-start bg-white">
+              <Button
+                variant="outline"
+                className="w-full justify-start border-orange-200 bg-white text-orange-900 hover:bg-orange-100"
+              >
                 <Store className="mr-2 h-4 w-4" />
                 Profile
               </Button>
@@ -1980,7 +1984,10 @@ export default function RestaurantOwnerDashboard() {
                 String(selectedRestaurant),
               )}`}
             >
-              <Button variant="outline" className="w-full justify-start bg-white">
+              <Button
+                variant="outline"
+                className="w-full justify-start border-orange-200 bg-white text-orange-900 hover:bg-orange-100"
+              >
                 <ShoppingCart className="mr-2 h-4 w-4" />
                 Menu
               </Button>
@@ -1990,7 +1997,10 @@ export default function RestaurantOwnerDashboard() {
                 String(selectedRestaurant),
               )}${isFoodTruck ? "&truck=1" : ""}`}
             >
-              <Button variant="outline" className="w-full justify-start bg-white">
+              <Button
+                variant="outline"
+                className="w-full justify-start border-orange-200 bg-white text-orange-900 hover:bg-orange-100"
+              >
                 <Clock className="mr-2 h-4 w-4" />
                 Schedule
               </Button>
@@ -2000,7 +2010,10 @@ export default function RestaurantOwnerDashboard() {
                 String(selectedRestaurant),
               )}`}
             >
-              <Button variant="outline" className="w-full justify-start bg-white">
+              <Button
+                variant="outline"
+                className="w-full justify-start border-orange-200 bg-white text-orange-900 hover:bg-orange-100"
+              >
                 <Calendar className="mr-2 h-4 w-4" />
                 Bookings
               </Button>
@@ -3523,7 +3536,10 @@ export default function RestaurantOwnerDashboard() {
           const hasEvents =
             Number((currentRestaurant as any).upcomingPublicEventCount || 0) > 0 ||
             Number((currentRestaurant as any).upcomingEventCount || 0) > 0;
-          const isVerifiedProfile = Boolean((currentRestaurant as any).isVerified);
+          const verificationState = (currentRestaurant as any).verificationState;
+          const isVerifiedProfile = Boolean(
+            verificationState?.isVerifiedForSetup ?? (currentRestaurant as any).isVerified,
+          );
           const publicReady =
             hasBasics &&
             hasAddress &&
@@ -3593,7 +3609,9 @@ export default function RestaurantOwnerDashboard() {
               href: profileSetupHref,
             },
             {
-              label: "Verified profile badge",
+              label: isVerifiedProfile
+                ? "Verified profile badge"
+                : "Verification pending (non-blocking)",
               done: isVerifiedProfile,
               href: profileSetupHref,
             },

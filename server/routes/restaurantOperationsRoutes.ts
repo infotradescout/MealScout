@@ -26,12 +26,14 @@ import {
   telemetryEvents,
   truckManualSchedules,
   truckParkingReports,
+  verificationRequests,
   updateRestaurantLocationSchema,
   updateRestaurantMobileSettingsSchema,
   updateRestaurantOperatingHoursSchema,
 } from "@shared/schema";
 import { computeProfileCompletionStatus } from "@shared/profileCompletionStatus";
 import { getBusinessAccessContext } from "../services/businessTeamAccess";
+import { getBusinessVerificationState } from "../services/businessVerificationState";
 
 type AnalyticsAccessResult = {
   hasAccess: boolean;
@@ -294,9 +296,51 @@ export function registerRestaurantOperationsRoutes(
     isAuthenticated,
     async (req: any, res) => {
       try {
+        const attachVerificationState = async (rows: any[]) => {
+          if (!rows.length) return rows;
+          const ids = rows.map((row) => row.id);
+          const verificationRows = await db
+            .select({
+              restaurantId: verificationRequests.restaurantId,
+              status: verificationRequests.status,
+              documents: verificationRequests.documents,
+              licenseNumber: verificationRequests.licenseNumber,
+              submittedAt: verificationRequests.submittedAt,
+            })
+            .from(verificationRequests)
+            .where(inArray(verificationRequests.restaurantId, ids))
+            .orderBy(sql`${verificationRequests.submittedAt} desc nulls last`);
+
+          const latestByRestaurant = new Map<string, any>();
+          for (const row of verificationRows) {
+            const restaurantId = String(row.restaurantId || "");
+            if (!restaurantId || latestByRestaurant.has(restaurantId)) continue;
+            latestByRestaurant.set(restaurantId, row);
+          }
+
+          return rows.map((restaurant) => {
+            const latestVerification = latestByRestaurant.get(String(restaurant.id));
+            const businessInsuranceSubmitted =
+              Boolean(String(latestVerification?.licenseNumber || "").trim()) ||
+              (Array.isArray(latestVerification?.documents) &&
+                latestVerification.documents.length > 0) ||
+              String(latestVerification?.status || "").toLowerCase() === "approved";
+            return {
+              ...restaurant,
+              verificationState: getBusinessVerificationState({
+                isActive: restaurant.isActive,
+                isVerified: restaurant.isVerified,
+                emailVerified: req.user?.emailVerified === true,
+                businessInsuranceSubmitted,
+                claimedFromImportId: restaurant.claimedFromImportId,
+              }),
+            };
+          });
+        };
+
         if (isAdminLikeUserType(req.user?.userType)) {
           const allRestaurants = await storage.getAllRestaurants();
-          return res.json(allRestaurants);
+          return res.json(await attachVerificationState(allRestaurants as any[]));
         }
 
         const restaurantsByOwner = await storage.getRestaurantsByOwner(req.user.id);
@@ -308,7 +352,7 @@ export function registerRestaurantOperationsRoutes(
           .map((r) => r.id);
 
         if (!collaboratorRestaurantIds.length) {
-          return res.json(restaurantsByOwner);
+          return res.json(await attachVerificationState(restaurantsByOwner as any[]));
         }
 
         const collaboratorRestaurants = await db
@@ -323,7 +367,7 @@ export function registerRestaurantOperationsRoutes(
           }
         }
 
-        res.json(merged);
+        res.json(await attachVerificationState(merged as any[]));
       } catch (error) {
         console.error("Error fetching user restaurants:", error);
         res.status(500).json({ message: "Failed to fetch restaurants" });

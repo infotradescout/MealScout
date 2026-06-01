@@ -6,6 +6,7 @@ import {
   truckManualSchedules,
   verificationRequests,
 } from "@shared/schema";
+import { getBusinessVerificationState } from "./businessVerificationState";
 
 type LinkState = "linked" | "not_attached";
 
@@ -148,6 +149,8 @@ export async function resolveUserContinuation(params: {
         businessType: restaurants.businessType,
         isFoodTruck: restaurants.isFoodTruck,
         isVerified: restaurants.isVerified,
+        isActive: restaurants.isActive,
+        claimedFromImportId: restaurants.claimedFromImportId,
       })
       .from(restaurants)
       .where(eq(restaurants.id, primaryBusinessId))
@@ -191,7 +194,14 @@ export async function resolveUserContinuation(params: {
         hasText(verificationRow?.licenseNumber) ||
         (Array.isArray(verificationRow?.documents) &&
           verificationRow!.documents.length > 0);
-      verificationRequired = restaurantRow.isVerified !== true;
+      const verificationState = getBusinessVerificationState({
+        isActive: restaurantRow.isActive,
+        isVerified: restaurantRow.isVerified,
+        emailVerified,
+        businessInsuranceSubmitted,
+        claimedFromImportId: restaurantRow.claimedFromImportId,
+      });
+      verificationRequired = !verificationState.isVerifiedForSetup;
 
       scheduleRequired = isFoodTruckBusinessType(
         restaurantRow.businessType,
