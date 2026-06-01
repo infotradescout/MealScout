@@ -10,7 +10,6 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { useAuth } from "@/hooks/useAuth";
 import { getReverseGeocodedLocationName } from "@/utils/locationUtils";
-import Navigation from "@/components/navigation";
 import { isBarBusinessType } from "@shared/businessTypes";
 
 /* ─── styles ─── */
@@ -382,6 +381,57 @@ function truckIsLiveNow(truck: Truck, nowMs: number) {
   return { liveNow: false, liveSource: "not_live" as const };
 }
 
+function normalizeScoutSearchText(value: unknown): string {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+type ScoutSearchableRecord = {
+  title: string;
+  subtitle?: string;
+  type?: string;
+  tag?: string;
+  city?: string;
+  description?: string;
+};
+
+function scoreScoutSearchResult(record: ScoutSearchableRecord, query: string): number {
+  const q = normalizeScoutSearchText(query);
+  if (!q) return 0;
+
+  const normalizedTitle = normalizeScoutSearchText(record.title);
+  const normalizedSubtitle = normalizeScoutSearchText(record.subtitle);
+  const normalizedType = normalizeScoutSearchText(record.type);
+  const normalizedTag = normalizeScoutSearchText(record.tag);
+  const normalizedCity = normalizeScoutSearchText(record.city);
+  const normalizedDescription = normalizeScoutSearchText(record.description);
+  const haystack = [
+    normalizedSubtitle,
+    normalizedType,
+    normalizedTag,
+    normalizedCity,
+    normalizedDescription,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  if (normalizedTitle === q) return 1200;
+  if (normalizedTitle.startsWith(`${q} `) || normalizedTitle.startsWith(q)) return 1000;
+  if (normalizedTitle.includes(q)) return 850;
+  if (haystack.includes(q)) return 550;
+
+  const qTokens = q.split(" ").filter(Boolean);
+  if (qTokens.length === 0) return 0;
+  const titleTokenHits = qTokens.filter((token) => normalizedTitle.includes(token)).length;
+  const metaTokenHits = qTokens.filter((token) => haystack.includes(token)).length;
+  if (titleTokenHits > 0) return 400 + titleTokenHits * 40 + metaTokenHits * 10;
+  if (metaTokenHits > 0) return 200 + metaTokenHits * 20;
+  return 0;
+}
+
 /* ─── feed card ─── */
 function FeedCard({
   type, typeColor, image, title, subtitle, tag, tagColor,
@@ -458,9 +508,11 @@ export default function ScoutPrototype() {
   const GLOBAL_NAV_HEIGHT = 58;
   const SCOUT_SCENE_RAIL_HEIGHT = 50;
   const SCOUT_SEARCH_DOCK_HEIGHT = 46;
-  const SCOUT_DOCK_GAP = 0;
-  const scoutDockBottom = `calc(env(safe-area-inset-bottom) + ${GLOBAL_NAV_HEIGHT}px)`;
-  const feedBottomClearance = `calc(env(safe-area-inset-bottom) + ${GLOBAL_NAV_HEIGHT + SCOUT_SCENE_RAIL_HEIGHT + SCOUT_SEARCH_DOCK_HEIGHT + SCOUT_DOCK_GAP + 18}px)`;
+  const SCOUT_DOCK_GAP = 12;
+  // Keep Scout dock clearly above the global nav hit area to avoid collisions.
+  const scoutDockBottom = `calc(env(safe-area-inset-bottom) + ${GLOBAL_NAV_HEIGHT + SCOUT_DOCK_GAP}px)`;
+  // Reserve enough feed space for nav + safe area + dock stack so cards are never trapped behind controls.
+  const feedBottomClearance = `calc(env(safe-area-inset-bottom) + ${GLOBAL_NAV_HEIGHT + SCOUT_SCENE_RAIL_HEIGHT + SCOUT_SEARCH_DOCK_HEIGHT + SCOUT_DOCK_GAP + 28}px)`;
 
   const scoutPreviewCity = useMemo(() => {
     if (typeof window === "undefined") return "";
@@ -815,7 +867,11 @@ export default function ScoutPrototype() {
       id: string; type: string; typeColor: string; image: string | null;
       title: string; subtitle: string; tag?: string; tagColor?: string;
       distance: string | null; href: string; routeHref: string | null; restaurantId?: string;
+      searchCity?: string;
+      searchDescription?: string;
+      searchOrder?: number;
     }> = [];
+    let sourceOrder = 0;
 
     if (activeScene === "food_trucks" || activeScene === "for_you" || activeScene === "nearby_now") {
       trucks.forEach(t => {
@@ -850,6 +906,9 @@ export default function ScoutPrototype() {
           distance: distLabel(t),
           href: `/truck/${t.id}`,
           routeHref: routeUrl(t.latitude ?? t.lat, t.longitude ?? t.lng, name),
+          searchCity: "",
+          searchDescription: [t.cuisineType, t.liveSource, t.source].filter(Boolean).join(" "),
+          searchOrder: sourceOrder++,
         });
       });
     }
@@ -882,6 +941,9 @@ export default function ScoutPrototype() {
           href: isBar ? `/p/bar/${r.id}` : `/restaurant/${r.id}`,
           routeHref: routeUrl(r.latitude ?? r.lat, r.longitude ?? r.lng, name),
           restaurantId: r.id,
+          searchCity: String(r.city || r.state || ""),
+          searchDescription: [r.cuisineType, r.neighborhood, r.businessType].filter(Boolean).join(" "),
+          searchOrder: sourceOrder++,
         });
       });
     }
@@ -894,6 +956,9 @@ export default function ScoutPrototype() {
           subtitle: [d.restaurantName, d.discountText || d.description].filter(Boolean).join(" • "),
           tag: d.discountText || "Deal today", tagColor: "#10b981",
           distance: null, href: `/search?q=deals`, routeHref: null,
+          searchCity: "",
+          searchDescription: [d.restaurantName, d.description, d.discountText].filter(Boolean).join(" "),
+          searchOrder: sourceOrder++,
         });
       });
     }
@@ -909,12 +974,44 @@ export default function ScoutPrototype() {
           distance: null,
           href: `/event/${e.id}`,
           routeHref: routeUrl(e.latitude ?? e.lat, e.longitude ?? e.lng, name),
+          searchCity: "",
+          searchDescription: [e.venueName].filter(Boolean).join(" "),
+          searchOrder: sourceOrder++,
         });
       });
     }
+    const query = submittedQuery.trim();
+    if (!query) return items.slice(0, 15);
 
+    const withScores = items.map((item) => ({
+      item,
+      score: scoreScoutSearchResult(
+        {
+          title: item.title,
+          subtitle: item.subtitle,
+          type: item.type,
+          tag: item.tag,
+          city: item.searchCity,
+          description: item.searchDescription,
+        },
+        query,
+      ),
+    }));
+
+    const relevant = withScores
+      .filter((entry) => entry.score > 0)
+      .sort((a, b) => {
+        if (a.score !== b.score) return b.score - a.score;
+        const aDistance = Number(a.item.distance?.replace(" mi", "") || Number.POSITIVE_INFINITY);
+        const bDistance = Number(b.item.distance?.replace(" mi", "") || Number.POSITIVE_INFINITY);
+        if (aDistance !== bDistance) return aDistance - bDistance;
+        return Number(a.item.searchOrder || 0) - Number(b.item.searchOrder || 0);
+      })
+      .map((entry) => entry.item);
+
+    if (relevant.length > 0) return relevant.slice(0, 15);
     return items.slice(0, 15);
-  }, [activeScene, trucks, restaurants, deals, events]);
+  }, [activeScene, trucks, restaurants, deals, events, submittedQuery]);
 
   /* ─── toggle saved ─── */
   const toggleSaved = useCallback(async (id: string) => {
@@ -1123,7 +1220,11 @@ export default function ScoutPrototype() {
       </div>
 
       {/* ── Unified Scout bottom control dock ── */}
-      <div className="fixed inset-x-0 z-[1000] pointer-events-none" style={{ bottom: scoutDockBottom }}>
+      <div
+        data-scout-search-dock="true"
+        className="fixed inset-x-0 z-[1000] pointer-events-none"
+        style={{ bottom: scoutDockBottom }}
+      >
         <div className="w-full px-0 pointer-events-auto">
           {searchOpen && (
             <section
@@ -1211,7 +1312,11 @@ export default function ScoutPrototype() {
       </div>
 
       {/* ── Feed ── */}
-      <div className="flex-1 overflow-y-auto px-4 no-scrollbar" style={{ paddingBottom: feedBottomClearance }}>
+      <div
+        data-scout-feed="true"
+        className="flex-1 overflow-y-auto px-4 no-scrollbar"
+        style={{ paddingBottom: feedBottomClearance }}
+      >
         {submittedQuery.trim().length > 0 && (
           <section className="mb-3 mt-3 rounded-2xl border border-white/8 bg-[#151210] px-4 py-3">
             <h3 className="text-sm font-bold text-white">Results for "{submittedQuery}"</h3>
