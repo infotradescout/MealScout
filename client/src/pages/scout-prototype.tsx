@@ -72,6 +72,13 @@ interface Restaurant {
   isActive?: boolean | null;
   menuItemCount?: number | null;
   canonicalMenuCount?: number | null;
+  emailVerified?: boolean | null;
+  adminVerified?: boolean | null;
+  insuranceVerified?: boolean | null;
+  isSuspended?: boolean | null;
+  isBanned?: boolean | null;
+  serviceArea?: unknown;
+  serviceAreas?: unknown;
 }
 
 interface Truck {
@@ -101,6 +108,11 @@ interface Truck {
   liveSource?: "location_update" | "scheduled_now" | "not_live";
   source?: "live" | "discoverable";
   menuAvailable?: boolean;
+  photosAvailable?: boolean;
+  insuranceVerified?: boolean;
+  verifiedTruck?: boolean;
+  scheduledToday?: boolean;
+  hasServiceArea?: boolean;
 }
 
 interface Deal {
@@ -173,10 +185,20 @@ function isDiscoverableTruckProfile(restaurant: Restaurant) {
   const businessType = String(restaurant.businessType || "").toLowerCase();
   const isFoodTruckType = businessType === "food_truck" || restaurant.isFoodTruck === true;
   const active = restaurant.isActive !== false;
-  const verified = restaurant.isVerified !== false;
-  const menuCount = Number(restaurant.menuItemCount ?? restaurant.canonicalMenuCount ?? 1);
-  const hasMenu = Number.isFinite(menuCount) && menuCount > 0;
-  return isFoodTruckType && active && verified && hasMenu;
+  const notSuspended = restaurant.isSuspended !== true && restaurant.isBanned !== true;
+  const verified =
+    restaurant.adminVerified === true ||
+    restaurant.emailVerified === true ||
+    restaurant.isVerified === true;
+  const insured = restaurant.insuranceVerified !== false;
+  const hasCoords = [restaurant.latitude, restaurant.lat].some((v) => Number.isFinite(Number(v))) &&
+    [restaurant.longitude, restaurant.lng].some((v) => Number.isFinite(Number(v)));
+  const hasServiceArea =
+    Boolean(restaurant.city && String(restaurant.city).trim()) ||
+    Boolean(restaurant.state && String(restaurant.state).trim()) ||
+    Boolean(restaurant.serviceArea) ||
+    (Array.isArray(restaurant.serviceAreas) && restaurant.serviceAreas.length > 0);
+  return isFoodTruckType && active && notSuspended && verified && insured && (hasCoords || hasServiceArea);
 }
 
 function hasRestaurantScheduleData(restaurant: Restaurant) {
@@ -251,6 +273,14 @@ function truckScheduleIndicatesLiveNow(truck: Truck) {
   if (truck.truckSchedule?.currentStop) return true;
   const status = String(truck.truckSchedule?.status || "").toLowerCase();
   return status === "live";
+}
+
+function truckScheduleIndicatesScheduledToday(truck: Truck) {
+  if (truck.liveNow) return false;
+  if (truck.truckSchedule?.todayStop) return true;
+  const statusLabel = String(truck.truckSchedule?.statusLabel || "").toLowerCase();
+  const status = String(truck.truckSchedule?.status || "").toLowerCase();
+  return statusLabel.includes("today") || status.includes("scheduled");
 }
 
 function truckIsLiveNow(truck: Truck, nowMs: number) {
@@ -525,11 +555,24 @@ export default function ScoutPrototype() {
   const nowMs = Date.now();
   const liveTrucks = filterByResolvedLocation(trucksRaw).map((truck) => {
     const liveState = truckIsLiveNow(truck, nowMs);
+    const menuCount = Number((truck as unknown as { menuItemCount?: number; canonicalMenuCount?: number }).menuItemCount ??
+      (truck as unknown as { menuItemCount?: number; canonicalMenuCount?: number }).canonicalMenuCount ??
+      0);
+    const photosAvailable = Boolean(imgSrc(truck));
+    const hasServiceArea =
+      Boolean((truck as unknown as { city?: string; state?: string; serviceArea?: unknown }).city) ||
+      Boolean((truck as unknown as { city?: string; state?: string; serviceArea?: unknown }).state) ||
+      Boolean((truck as unknown as { city?: string; state?: string; serviceArea?: unknown }).serviceArea);
     return {
       ...truck,
       ...liveState,
       source: "live" as const,
-      menuAvailable: true,
+      menuAvailable: Number.isFinite(menuCount) && menuCount > 0,
+      photosAvailable,
+      verifiedTruck: true,
+      insuranceVerified: true,
+      scheduledToday: false,
+      hasServiceArea,
     };
   });
   const discoverableTruckProfiles = filterByResolvedLocation(restaurantsRaw)
@@ -549,12 +592,27 @@ export default function ScoutPrototype() {
         lng: restaurant.lng ?? restaurant.longitude ?? null,
         mobileOnline: false,
         source: "discoverable",
-        menuAvailable: true,
+        menuAvailable: Number(restaurant.menuItemCount ?? restaurant.canonicalMenuCount ?? 0) > 0,
+        photosAvailable: Boolean(imgSrc(restaurant)),
+        verifiedTruck:
+          restaurant.adminVerified === true ||
+          restaurant.emailVerified === true ||
+          restaurant.isVerified === true,
+        insuranceVerified: restaurant.insuranceVerified !== false,
+        hasServiceArea:
+          Boolean(restaurant.city && String(restaurant.city).trim()) ||
+          Boolean(restaurant.state && String(restaurant.state).trim()) ||
+          Boolean(restaurant.serviceArea) ||
+          (Array.isArray(restaurant.serviceAreas) && restaurant.serviceAreas.length > 0),
       };
       const liveState = truckIsLiveNow(truckDraft, nowMs);
       return {
         ...truckDraft,
         ...liveState,
+        scheduledToday: truckScheduleIndicatesScheduledToday({
+          ...truckDraft,
+          ...liveState,
+        }),
       };
     });
   const trucksById = new Map<string, Truck>();
@@ -569,9 +627,15 @@ export default function ScoutPrototype() {
       const aLiveRank = a.liveNow ? (a.liveSource === "location_update" ? 2 : 1) : 0;
       const bLiveRank = b.liveNow ? (b.liveSource === "location_update" ? 2 : 1) : 0;
       if (aLiveRank !== bLiveRank) return bLiveRank - aLiveRank;
+      const aScheduledRank = a.scheduledToday ? 1 : 0;
+      const bScheduledRank = b.scheduledToday ? 1 : 0;
+      if (aScheduledRank !== bScheduledRank) return bScheduledRank - aScheduledRank;
       const aDistance = Number(a.distanceMiles ?? Number.POSITIVE_INFINITY);
       const bDistance = Number(b.distanceMiles ?? Number.POSITIVE_INFINITY);
       if (aDistance !== bDistance) return aDistance - bDistance;
+      const aCompleteness = (a.menuAvailable ? 1 : 0) + (a.photosAvailable ? 1 : 0);
+      const bCompleteness = (b.menuAvailable ? 1 : 0) + (b.photosAvailable ? 1 : 0);
+      if (aCompleteness !== bCompleteness) return bCompleteness - aCompleteness;
       return String(a.name || "").localeCompare(String(b.name || ""));
     })
     .slice(0, 20);
@@ -606,9 +670,13 @@ export default function ScoutPrototype() {
               ? t.liveSource === "scheduled_now"
                 ? "Live now · Scheduled"
                 : "Live now"
+              : t.scheduledToday
+                ? "Scheduled today"
               : "Serving area",
             t.liveNow ? null : "Not live now",
-            t.menuAvailable ? "Menu available" : null,
+            t.menuAvailable ? "Menu available" : "Menu coming soon",
+            t.photosAvailable ? null : "Photos coming soon",
+            t.verifiedTruck ? "Verified truck" : null,
           ]
             .filter(Boolean)
             .join(" • "),
@@ -616,6 +684,8 @@ export default function ScoutPrototype() {
             ? t.liveSource === "scheduled_now"
               ? "Live now · Scheduled"
               : "Live now"
+            : t.scheduledToday
+              ? "Scheduled today"
             : "Not live now",
           tagColor: t.liveNow ? "#10b981" : "#9333ea",
           distance: distLabel(t),
