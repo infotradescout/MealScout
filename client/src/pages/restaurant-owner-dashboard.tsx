@@ -3528,9 +3528,60 @@ export default function RestaurantOwnerDashboard() {
             Number((currentRestaurant as any).upcomingStopCount || 0) > 0 ||
             Number((currentRestaurant as any).truckScheduleCount || 0) > 0,
           );
+          const parseDateCandidate = (value: unknown) => {
+            if (!value) return null;
+            const parsed = new Date(String(value));
+            return Number.isNaN(parsed.getTime()) ? null : parsed;
+          };
+          const daysSince = (date: Date) =>
+            Math.floor((Date.now() - date.getTime()) / (1000 * 60 * 60 * 24));
+          const scheduleFreshnessDays = 7;
+          const truckMenuWarningDays = 14;
+          const truckMenuStaleDays = 30;
+          const restaurantMenuWarningDays = 60;
+          const restaurantMenuStaleDays = 90;
+          const operatingUpdatedAtCandidate = [
+            (currentRestaurant as any).truckScheduleUpdatedAt,
+            (currentRestaurant as any).scheduleUpdatedAt,
+            (currentRestaurant as any).operatingHoursUpdatedAt,
+            (currentRestaurant as any).updatedAt,
+          ]
+            .map(parseDateCandidate)
+            .find(Boolean) as Date | null;
+          const scheduleUpdatedRecently = Boolean(
+            operatingUpdatedAtCandidate &&
+              daysSince(operatingUpdatedAtCandidate) <= scheduleFreshnessDays,
+          );
           const hasOperatingTimeRequirement = isFoodTruck
-            ? hasSchedule || hasTruckScheduleSignals
+            ? hasTruckScheduleSignals || scheduleUpdatedRecently
             : hasSchedule;
+          const menuFreshnessDateCandidate = [
+            (currentRestaurant as any).menuReviewedAt,
+            (currentRestaurant as any).menuUpdatedAt,
+            (currentRestaurant as any).menuLastUpdatedAt,
+            (currentRestaurant as any).menuLastReviewedAt,
+          ]
+            .map(parseDateCandidate)
+            .find(Boolean) as Date | null;
+          const menuFreshnessDays = menuFreshnessDateCandidate
+            ? daysSince(menuFreshnessDateCandidate)
+            : null;
+          const menuWarningDays = isFoodTruck
+            ? truckMenuWarningDays
+            : restaurantMenuWarningDays;
+          const menuStaleDays = isFoodTruck
+            ? truckMenuStaleDays
+            : restaurantMenuStaleDays;
+          const menuNeedsReview = menuFreshnessDays == null;
+          const menuIsStale = Boolean(
+            menuFreshnessDays != null && menuFreshnessDays > menuStaleDays,
+          );
+          const menuNeedsNudge = Boolean(
+            menuFreshnessDays != null &&
+              menuFreshnessDays > menuWarningDays &&
+              menuFreshnessDays <= menuStaleDays,
+          );
+          const menuIsCurrent = hasMenu && !menuNeedsReview && !menuIsStale;
           const hasDeal = (stats?.activeDeals || 0) > 0;
           const hasEvents =
             Number((currentRestaurant as any).upcomingPublicEventCount || 0) > 0 ||
@@ -3572,8 +3623,14 @@ export default function RestaurantOwnerDashboard() {
               href: profileSetupHref,
             },
             {
-              label: "Menu complete",
-              done: hasMenu,
+              label: menuNeedsReview
+                ? "Menu current (needs review timestamp)"
+                : menuIsStale
+                  ? "Menu current (stale - refresh needed)"
+                  : menuNeedsNudge
+                    ? "Menu current (review soon)"
+                    : "Menu current",
+              done: menuIsCurrent,
               href: `/menu-builder?restaurantId=${encodeURIComponent(
                 String(selectedRestaurant),
               )}`,
@@ -3581,7 +3638,7 @@ export default function RestaurantOwnerDashboard() {
             ...(isFoodTruck
               ? [
                   {
-                    label: "Truck schedule complete",
+                    label: "Truck schedule current",
                     done: hasOperatingTimeRequirement,
                     href: "/restaurant-owner-dashboard?setup=schedule&truck=1",
                   },
