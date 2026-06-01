@@ -635,18 +635,10 @@ export default function RestaurantOwnerDashboard() {
       (restaurant) => restaurant.id === selectedRestaurant,
     );
     if (!hasCurrentRestaurant) return;
-    if (setupMode === "menu") {
-      const menuParams = new URLSearchParams();
-      menuParams.set("restaurantId", String(selectedRestaurant));
-      menuParams.set("src", "onboarding");
-      if (setupRefParam) menuParams.set("ref", setupRefParam);
-      setLocation(`/menu-builder?${menuParams.toString()}`);
-      return;
-    }
     if (setupPanelRef.current) {
       setupPanelRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
     }
-  }, [setupMode, restaurants, selectedRestaurant, setLocation, setupRefParam]);
+  }, [setupMode, restaurants, selectedRestaurant]);
 
   // Get current restaurant data
   const currentRestaurant = restaurants.find(
@@ -2004,7 +1996,11 @@ export default function RestaurantOwnerDashboard() {
               </p>
             </div>
             <Badge className="w-fit bg-orange-600 text-white">
-              {isFoodTruck ? "Truck profile" : "Business profile"}
+              {isFoodTruck
+                ? "Truck setup workspace"
+                : String(currentRestaurant?.businessType || "").toLowerCase() === "bar"
+                  ? "Bar setup workspace"
+                  : "Business setup workspace"}
             </Badge>
           </div>
 
@@ -2013,7 +2009,11 @@ export default function RestaurantOwnerDashboard() {
               <div className="flex w-full items-center gap-2 rounded-md border border-orange-200 bg-white px-3 py-2 text-orange-900 hover:bg-orange-100">
                 <Store className="h-4 w-4 text-orange-900" />
                 <span className="text-sm font-semibold text-orange-900">
-                  Complete truck profile
+                  {String(currentRestaurant?.businessType || "").toLowerCase() === "bar"
+                    ? "Complete bar profile"
+                    : isFoodTruck
+                      ? "Complete truck profile"
+                      : "Complete business profile"}
                 </span>
               </div>
             </Link>
@@ -2021,7 +2021,7 @@ export default function RestaurantOwnerDashboard() {
               <div className="flex w-full items-center gap-2 rounded-md border border-orange-200 bg-white px-3 py-2 text-orange-900 hover:bg-orange-100">
                 <ShoppingCart className="h-4 w-4 text-orange-900" />
                 <span className="text-sm font-semibold text-orange-900">
-                  Add menu items
+                  Open menu builder
                 </span>
               </div>
             </Link>
@@ -2056,10 +2056,12 @@ export default function RestaurantOwnerDashboard() {
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <h3 className="text-sm font-black uppercase tracking-[0.14em] text-orange-800">
-                    Profile completion
+                    {setupMode === "profile-media" ? "Media workspace" : "Profile basics workspace"}
                   </h3>
                   <p className="text-xs text-orange-900/75">
-                    Complete public profile basics, contact, and media in one place.
+                    {setupMode === "profile-media"
+                      ? "Upload logo, cover, and truck/food photos. External platform links stay optional."
+                      : "Complete MealScout profile basics first. External links are optional and not required for setup completion."}
                   </p>
                 </div>
                 {isAdmin || isStaff ? (
@@ -2069,7 +2071,8 @@ export default function RestaurantOwnerDashboard() {
                 ) : null}
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-2">
+              {setupMode === "profile" ? (
+                <div className="grid gap-3 sm:grid-cols-2">
                 <Input
                   value={profileDraft.name}
                   onChange={(e) =>
@@ -2127,123 +2130,6 @@ export default function RestaurantOwnerDashboard() {
                   placeholder="State"
                 />
                 <Input
-                  value={profileDraft.websiteUrl}
-                  onChange={(e) =>
-                    setProfileDraft((prev) => ({
-                      ...prev,
-                      websiteUrl: e.target.value,
-                    }))
-                  }
-                  placeholder="Website URL"
-                />
-                <Input
-                  value={profileDraft.menuUrl}
-                  onChange={(e) =>
-                    setProfileDraft((prev) => ({ ...prev, menuUrl: e.target.value }))
-                  }
-                  placeholder="Menu URL"
-                />
-                <Input
-                  value={profileDraft.onlineOrderingUrl}
-                  onChange={(e) =>
-                    setProfileDraft((prev) => ({
-                      ...prev,
-                      onlineOrderingUrl: e.target.value,
-                    }))
-                  }
-                  placeholder="Online ordering URL"
-                />
-                <Input
-                  value={profileDraft.deliveryUrl}
-                  onChange={(e) =>
-                    setProfileDraft((prev) => ({
-                      ...prev,
-                      deliveryUrl: e.target.value,
-                    }))
-                  }
-                  placeholder="Delivery URL"
-                />
-                <Input
-                  value={profileDraft.doordashUrl}
-                  onChange={(e) =>
-                    setProfileDraft((prev) => ({
-                      ...prev,
-                      doordashUrl: e.target.value,
-                    }))
-                  }
-                  placeholder="DoorDash URL"
-                />
-                <Input
-                  value={profileDraft.uberEatsUrl}
-                  onChange={(e) =>
-                    setProfileDraft((prev) => ({
-                      ...prev,
-                      uberEatsUrl: e.target.value,
-                    }))
-                  }
-                  placeholder="Uber Eats URL"
-                />
-                <Input
-                  value={profileDraft.toastUrl}
-                  onChange={(e) =>
-                    setProfileDraft((prev) => ({
-                      ...prev,
-                      toastUrl: e.target.value,
-                    }))
-                  }
-                  placeholder="Toast URL"
-                />
-                <Input
-                  value={profileDraft.squareUrl}
-                  onChange={(e) =>
-                    setProfileDraft((prev) => ({
-                      ...prev,
-                      squareUrl: e.target.value,
-                    }))
-                  }
-                  placeholder="Square URL"
-                />
-                <Input
-                  value={profileDraft.chowNowUrl}
-                  onChange={(e) =>
-                    setProfileDraft((prev) => ({
-                      ...prev,
-                      chowNowUrl: e.target.value,
-                    }))
-                  }
-                  placeholder="ChowNow URL"
-                />
-                <Input
-                  value={profileDraft.grubhubUrl}
-                  onChange={(e) =>
-                    setProfileDraft((prev) => ({
-                      ...prev,
-                      grubhubUrl: e.target.value,
-                    }))
-                  }
-                  placeholder="Grubhub URL"
-                />
-                <Input
-                  value={profileDraft.cateringInquiryUrl}
-                  onChange={(e) =>
-                    setProfileDraft((prev) => ({
-                      ...prev,
-                      cateringInquiryUrl: e.target.value,
-                    }))
-                  }
-                  placeholder="Catering inquiry URL"
-                />
-                <Input
-                  value={profileDraft.truckBookingInquiryUrl}
-                  onChange={(e) =>
-                    setProfileDraft((prev) => ({
-                      ...prev,
-                      truckBookingInquiryUrl: e.target.value,
-                    }))
-                  }
-                  placeholder="Truck booking inquiry URL"
-                />
-                <Input
                   value={profileDraft.facebookPageUrl}
                   onChange={(e) =>
                     setProfileDraft((prev) => ({
@@ -2299,8 +2185,35 @@ export default function RestaurantOwnerDashboard() {
                   placeholder="Description"
                   className="sm:col-span-2 min-h-[96px] rounded-md border border-input bg-background px-3 py-2 text-sm"
                 />
-              </div>
+                </div>
+              ) : null}
 
+              {setupMode === "profile" ? (
+                <details className="mt-4 rounded-lg border border-orange-200 bg-orange-50/50 p-3">
+                  <summary className="cursor-pointer text-xs font-black uppercase tracking-[0.12em] text-orange-800">
+                    External links (optional)
+                  </summary>
+                  <p className="mt-2 text-xs text-orange-900/75">
+                    These links are optional secondary fields. They are not required to complete MealScout setup.
+                  </p>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    <Input value={profileDraft.websiteUrl} onChange={(e) => setProfileDraft((prev) => ({ ...prev, websiteUrl: e.target.value }))} placeholder="Website URL (optional)" />
+                    <Input value={profileDraft.menuUrl} onChange={(e) => setProfileDraft((prev) => ({ ...prev, menuUrl: e.target.value }))} placeholder="Menu URL (optional)" />
+                    <Input value={profileDraft.onlineOrderingUrl} onChange={(e) => setProfileDraft((prev) => ({ ...prev, onlineOrderingUrl: e.target.value }))} placeholder="Online ordering URL (optional)" />
+                    <Input value={profileDraft.deliveryUrl} onChange={(e) => setProfileDraft((prev) => ({ ...prev, deliveryUrl: e.target.value }))} placeholder="Delivery URL (optional)" />
+                    <Input value={profileDraft.doordashUrl} onChange={(e) => setProfileDraft((prev) => ({ ...prev, doordashUrl: e.target.value }))} placeholder="DoorDash URL (optional)" />
+                    <Input value={profileDraft.uberEatsUrl} onChange={(e) => setProfileDraft((prev) => ({ ...prev, uberEatsUrl: e.target.value }))} placeholder="Uber Eats URL (optional)" />
+                    <Input value={profileDraft.toastUrl} onChange={(e) => setProfileDraft((prev) => ({ ...prev, toastUrl: e.target.value }))} placeholder="Toast URL (optional)" />
+                    <Input value={profileDraft.squareUrl} onChange={(e) => setProfileDraft((prev) => ({ ...prev, squareUrl: e.target.value }))} placeholder="Square URL (optional)" />
+                    <Input value={profileDraft.chowNowUrl} onChange={(e) => setProfileDraft((prev) => ({ ...prev, chowNowUrl: e.target.value }))} placeholder="ChowNow URL (optional)" />
+                    <Input value={profileDraft.grubhubUrl} onChange={(e) => setProfileDraft((prev) => ({ ...prev, grubhubUrl: e.target.value }))} placeholder="Grubhub URL (optional)" />
+                    <Input value={profileDraft.cateringInquiryUrl} onChange={(e) => setProfileDraft((prev) => ({ ...prev, cateringInquiryUrl: e.target.value }))} placeholder="Catering inquiry URL (optional)" />
+                    <Input value={profileDraft.truckBookingInquiryUrl} onChange={(e) => setProfileDraft((prev) => ({ ...prev, truckBookingInquiryUrl: e.target.value }))} placeholder="Truck booking inquiry URL (optional)" />
+                  </div>
+                </details>
+              ) : null}
+
+              {setupMode === "profile-media" ? (
               <div className="mt-4 rounded-lg border border-orange-200 bg-orange-50/50 p-3">
                 <h4 className="text-xs font-black uppercase tracking-[0.12em] text-orange-800">
                   Media manager
@@ -2429,6 +2342,7 @@ export default function RestaurantOwnerDashboard() {
                   );
                 })()}
               </div>
+              ) : null}
 
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <Button
@@ -2443,7 +2357,10 @@ export default function RestaurantOwnerDashboard() {
                   Save profile basics
                 </Button>
                 <Link href={menuBuilderHref}>
-                  <Button variant="outline">Update menu</Button>
+                  <Button variant="outline">Open menu builder</Button>
+                </Link>
+                <Link href={buildSetupHref("schedule", isFoodTruck ? { truck: "1" } : undefined)}>
+                  <Button variant="outline">Open schedule/live tools</Button>
                 </Link>
                 <Link href="/deal-creation">
                   <Button variant="outline">Add deal</Button>
@@ -3455,18 +3372,38 @@ export default function RestaurantOwnerDashboard() {
                 })()}
               </div>
             </div>
+          ) : setupMode === "menu" ? (
+            <div
+              ref={setupPanelRef}
+              className="mt-4 rounded-xl border border-orange-200 bg-white p-4"
+            >
+              <h3 className="text-sm font-black uppercase tracking-[0.14em] text-orange-800">
+                MealScout menu builder
+              </h3>
+              <p className="mt-1 text-xs text-orange-900/75">
+                Add menu items directly in MealScout. External menu URLs are optional and do not replace this setup step.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Link href={menuBuilderHref}>
+                  <Button>Open menu builder</Button>
+                </Link>
+                <Link href={buildSetupHref("profile")}>
+                  <Button variant="outline">Back to profile basics</Button>
+                </Link>
+              </div>
+            </div>
           ) : setupMode === "schedule" ? (
             <div
               ref={setupPanelRef}
               className="mt-4 rounded-xl border border-orange-200 bg-white p-4"
             >
               <h3 className="text-sm font-black uppercase tracking-[0.14em] text-orange-800">
-                Schedule and live status
+                Schedule and live workspace
               </h3>
               <p className="mt-1 text-xs text-orange-900/75">
-                Use the Food Truck tab below to set schedule windows and live status.
+                Use MealScout schedule tools to set operating windows with date, start/end times, and location/service area.
               </p>
-              <div className="mt-3">
+              <div className="mt-3 flex flex-wrap gap-2">
                 <Button
                   variant="outline"
                   onClick={() =>
@@ -3477,6 +3414,9 @@ export default function RestaurantOwnerDashboard() {
                 >
                   Jump to schedule/live tools
                 </Button>
+                <Link href="/parking-pass-manage">
+                  <Button variant="outline">Open parking pass schedule manager</Button>
+                </Link>
               </div>
             </div>
           ) : null}

@@ -6,12 +6,11 @@ const requiredSnippets = [
   'const setupRefParam = dashboardParams.get("ref");',
   "const buildSetupHref = (",
   'if (setupRefParam) params.set("ref", setupRefParam);',
-  'if (setupMode === "menu") {',
-  'setLocation(`/menu-builder?${menuParams.toString()}`);',
   'href={buildSetupHref("profile")}',
   'href={buildSetupHref("menu")}',
   'href={buildSetupHref("profile-media")}',
   'setupMode === "profile" || setupMode === "profile-media"',
+  'setupMode === "menu" ? (',
   'setupMode === "schedule" ? (',
   "setupPanelRef.current.scrollIntoView",
 ];
