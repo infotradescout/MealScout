@@ -517,6 +517,13 @@ interface OneMarketLaunchBoardResponse {
     publicProfileViews: number;
     publicProfileActions: number;
     affiliateLinkOpens: number;
+    claimPitchesCreated: number;
+    claimPitchesOpened: number;
+    claimPitchesStarted: number;
+    claimPitchesCompleted: number;
+    claimPitchOpenRate: number;
+    claimPitchStartRate: number;
+    claimPitchCompletionRate: number;
   };
   generatedAt: string;
 }
@@ -8515,6 +8522,43 @@ export default function AdminDashboard() {
                         launchBoardData?.metrics?.publicProfileActions,
                       ],
                       ["Affiliate Link Opens", launchBoardData?.metrics?.affiliateLinkOpens],
+                      [
+                        "Claim Pitches Created",
+                        launchBoardData?.metrics?.claimPitchesCreated,
+                      ],
+                      [
+                        "Claim Pitches Opened",
+                        launchBoardData?.metrics?.claimPitchesOpened,
+                      ],
+                      [
+                        "Claim Pitches Started",
+                        launchBoardData?.metrics?.claimPitchesStarted,
+                      ],
+                      [
+                        "Claim Pitches Completed",
+                        launchBoardData?.metrics?.claimPitchesCompleted,
+                      ],
+                      [
+                        "Claim Pitch Open Rate %",
+                        Number(
+                          (launchBoardData?.metrics?.claimPitchOpenRate || 0) *
+                            100,
+                        ).toFixed(1),
+                      ],
+                      [
+                        "Claim Pitch Start Rate %",
+                        Number(
+                          (launchBoardData?.metrics?.claimPitchStartRate || 0) *
+                            100,
+                        ).toFixed(1),
+                      ],
+                      [
+                        "Claim Pitch Completion Rate %",
+                        Number(
+                          (launchBoardData?.metrics?.claimPitchCompletionRate ||
+                            0) * 100,
+                        ).toFixed(1),
+                      ],
                     ].map(([label, value]) => (
                       <div key={String(label)} className="rounded-lg border p-3">
                         <div className="text-xs text-muted-foreground">{label}</div>

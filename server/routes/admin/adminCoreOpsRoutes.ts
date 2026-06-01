@@ -20,6 +20,7 @@ import {
   requestLogs,
   restaurants,
   telemetryEvents,
+  truckImportListings,
   truckManualSchedules,
   users,
   userAddresses,
@@ -247,6 +248,7 @@ export function registerAdminCoreOpsRoutes(app: Express) {
           [publicViewsRow],
           [publicActionsRow],
           [affiliateOpensRow],
+          [claimPitchRollupRow],
           cityOptionsRows,
         ] = await Promise.all([
           db
@@ -439,6 +441,27 @@ export function registerAdminCoreOpsRoutes(app: Express) {
                 ? sql`lower(${affiliateShareEvents.destinationUrl}) like ${`%${cityKey}%`}`
                 : sql`true`,
             ),
+          db
+            .select({
+              claimPitchesCreated: sql<number>`count(*) filter (where ${truckImportListings.rawData} ? 'claimPitch')`.mapWith(
+                Number,
+              ),
+              claimPitchesOpened: sql<number>`count(*) filter (where (${truckImportListings.rawData}->'claimPitch'->>'pitchOpenedAt') is not null)`.mapWith(
+                Number,
+              ),
+              claimPitchesStarted: sql<number>`count(*) filter (where (${truckImportListings.rawData}->'claimPitch'->>'claimStartedAt') is not null)`.mapWith(
+                Number,
+              ),
+              claimPitchesCompleted: sql<number>`count(*) filter (where (${truckImportListings.rawData}->'claimPitch'->>'claimCompletedAt') is not null)`.mapWith(
+                Number,
+              ),
+            })
+            .from(truckImportListings)
+            .where(
+              hasCityFilter
+                ? sql`lower(trim(coalesce(${truckImportListings.city}, ''))) = ${cityKey}`
+                : sql`true`,
+            ),
           db.execute(sql`
             select city from (
               select distinct trim(coalesce(r.city, '')) as city
@@ -470,6 +493,30 @@ export function registerAdminCoreOpsRoutes(app: Express) {
           Number(manualScheduleProfilesRow?.withManualSchedule || 0),
           Number(bookedScheduleProfilesRow?.withBookedSchedule || 0),
         );
+        const claimPitchesCreated = Number(
+          claimPitchRollupRow?.claimPitchesCreated || 0,
+        );
+        const claimPitchesOpened = Number(
+          claimPitchRollupRow?.claimPitchesOpened || 0,
+        );
+        const claimPitchesStarted = Number(
+          claimPitchRollupRow?.claimPitchesStarted || 0,
+        );
+        const claimPitchesCompleted = Number(
+          claimPitchRollupRow?.claimPitchesCompleted || 0,
+        );
+        const claimPitchOpenRate =
+          claimPitchesCreated > 0
+            ? Number((claimPitchesOpened / claimPitchesCreated).toFixed(4))
+            : 0;
+        const claimPitchStartRate =
+          claimPitchesCreated > 0
+            ? Number((claimPitchesStarted / claimPitchesCreated).toFixed(4))
+            : 0;
+        const claimPitchCompletionRate =
+          claimPitchesCreated > 0
+            ? Number((claimPitchesCompleted / claimPitchesCreated).toFixed(4))
+            : 0;
 
         const marketCities = ((cityOptionsRows as any)?.rows || [])
           .map((row: any) => String(row.city || "").trim())
@@ -499,6 +546,13 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             publicProfileViews: Number(publicViewsRow?.views || 0),
             publicProfileActions: Number(publicActionsRow?.actions || 0),
             affiliateLinkOpens: Number(affiliateOpensRow?.opens || 0),
+            claimPitchesCreated,
+            claimPitchesOpened,
+            claimPitchesStarted,
+            claimPitchesCompleted,
+            claimPitchOpenRate,
+            claimPitchStartRate,
+            claimPitchCompletionRate,
           },
           generatedAt: new Date().toISOString(),
         });
