@@ -58,8 +58,6 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
   const [moreOpen, setMoreOpen] = useState(false);
   const [location] = useLocation();
   const currentPath = location.split("?")[0];
-  const isScoutRoute =
-    currentPath === "/scout" || currentPath.startsWith("/scout/");
   const { user } = useAuth();
   const { toast } = useToast();
   const [isReporting, setIsReporting] = useState(false);
@@ -406,6 +404,23 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
   const isActive = (path: string) =>
     location === path || location.startsWith(`${path}/`) || location.startsWith(`${path}?`);
 
+  const sanitizeOwnerNavHref = (href: string) => {
+    try {
+      const url = new URL(href, window.location.origin);
+      const current = new URL(window.location.href);
+      const isLeavingOwnerDashboard =
+        current.pathname.startsWith("/restaurant-owner-dashboard") &&
+        !url.pathname.startsWith("/restaurant-owner-dashboard");
+      if (!isLeavingOwnerDashboard) return href;
+      ["setup", "ref", "setupStep", "setupPanel", "onboarding"].forEach((key) =>
+        url.searchParams.delete(key),
+      );
+      return `${url.pathname}${url.search}${url.hash}`;
+    } catch {
+      return href;
+    }
+  };
+
   return (
     <>
       <div
@@ -421,7 +436,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
                   description={NAV_HELP[item.label] || `${item.label} navigation`}
                 >
                   <Link
-                    href={item.path}
+                    href={sanitizeOwnerNavHref(item.path)}
                     className={`inline-flex h-11 items-center gap-2 rounded-xl px-3 text-sm font-bold transition-all ${
                       isActive(item.path)
                         ? "bg-primary text-[#1a0d08] shadow-[0_0_20px_rgba(255,90,47,0.4)]"
@@ -486,7 +501,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
                     description={NAV_HELP[item.label] || `${item.label} navigation`}
                   >
                     <Link
-                      href={item.path}
+                      href={sanitizeOwnerNavHref(item.path)}
                       aria-label={item.label}
                       aria-current={active ? "page" : undefined}
                       className={`flex flex-col items-center justify-end gap-0.5 flex-1 min-w-0 h-full transition-colors ${isPrimary ? "pb-0.5" : "pb-1"} ${
@@ -550,12 +565,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
           />
           <div
             ref={sheetRef}
-            className="absolute left-0 right-0 mx-4 rounded-3xl bg-[#120805]/80 backdrop-blur-2xl border border-white/10 shadow-[0_-16px_48px_rgba(0,0,0,0.7)] overflow-hidden"
-            style={{
-              bottom: isScoutRoute
-                ? "calc(env(safe-area-inset-bottom) + 11.5rem)"
-                : "calc(env(safe-area-inset-bottom) + 5.5rem)",
-            }}
+            className="absolute left-0 right-0 bottom-[calc(env(safe-area-inset-bottom)+5.5rem)] mx-4 rounded-3xl bg-[#120805]/80 backdrop-blur-2xl border border-white/10 shadow-[0_-16px_48px_rgba(0,0,0,0.7)] overflow-hidden"
           >
             <div className="flex items-center justify-between px-5 pt-4 pb-2">
               <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-white/40">
@@ -608,7 +618,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
                 return item.path ? (
                   <Link
                     key={item.path}
-                    href={item.path}
+                    href={sanitizeOwnerNavHref(item.path)}
                     aria-label={item.label}
                     aria-current={active ? "page" : undefined}
                     className="flex flex-col items-center justify-start pt-3 px-1 rounded-2xl hover:bg-white/5 transition-colors"

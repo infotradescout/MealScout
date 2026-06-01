@@ -107,6 +107,12 @@ export function useAuth() {
     );
     if (isAdminUser && pathname.startsWith("/admin")) return;
 
+    const nextRequiredStep = String(user.nextRequiredStep || "").toLowerCase();
+    const hardBlockingStep =
+      nextRequiredStep === "account_onboarding" ||
+      nextRequiredStep === "business_setup";
+    if (!hardBlockingStep) return;
+
     setLocation(continuationTarget);
   }, [user, setLocation]);
 

@@ -455,16 +455,12 @@ export default function ScoutPrototype() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [submittedQuery, setSubmittedQuery] = useState("");
-  const MOBILE_SAFE_BOTTOM = "env(safe-area-inset-bottom)";
   const GLOBAL_NAV_HEIGHT = 58;
-  const GLOBAL_NAV_OVERHANG = 14;
   const SCOUT_SCENE_RAIL_HEIGHT = 50;
   const SCOUT_SEARCH_DOCK_HEIGHT = 46;
-  const SCOUT_DOCK_FRAME_HEIGHT = 14;
-  const SCOUT_DOCK_GAP = 6;
-  const scoutBottomStackBase = `calc(${MOBILE_SAFE_BOTTOM} + ${GLOBAL_NAV_HEIGHT + GLOBAL_NAV_OVERHANG}px)`;
-  const scoutDockBottom = `calc(${scoutBottomStackBase} + ${SCOUT_DOCK_GAP}px)`;
-  const feedBottomClearance = `calc(${scoutBottomStackBase} + ${SCOUT_SCENE_RAIL_HEIGHT + SCOUT_SEARCH_DOCK_HEIGHT + SCOUT_DOCK_FRAME_HEIGHT + SCOUT_DOCK_GAP + 28}px)`;
+  const SCOUT_DOCK_GAP = 0;
+  const scoutDockBottom = `calc(env(safe-area-inset-bottom) + ${GLOBAL_NAV_HEIGHT}px)`;
+  const feedBottomClearance = `calc(env(safe-area-inset-bottom) + ${GLOBAL_NAV_HEIGHT + SCOUT_SCENE_RAIL_HEIGHT + SCOUT_SEARCH_DOCK_HEIGHT + SCOUT_DOCK_GAP + 18}px)`;
 
   const scoutPreviewCity = useMemo(() => {
     if (typeof window === "undefined") return "";
@@ -1068,15 +1064,7 @@ export default function ScoutPrototype() {
   };
 
   return (
-    <div
-      className="h-screen w-full bg-[#0d0d0d] text-white flex flex-col overflow-hidden font-sans"
-      style={
-        {
-          "--scout-bottom-stack-base": scoutBottomStackBase,
-          "--scout-bottom-stack-clearance": feedBottomClearance,
-        } as Record<string, string>
-      }
-    >
+    <div className="h-screen w-full bg-[#0d0d0d] text-white flex flex-col overflow-hidden font-sans">
       <style>{customStyles}</style>
 
       {/* ── Header ── */}
@@ -1135,7 +1123,7 @@ export default function ScoutPrototype() {
       </div>
 
       {/* ── Unified Scout bottom control dock ── */}
-      <div className="fixed inset-x-0 z-[1200] pointer-events-none" style={{ bottom: scoutDockBottom }}>
+      <div className="fixed inset-x-0 z-[1000] pointer-events-none" style={{ bottom: scoutDockBottom }}>
         <div className="w-full px-0 pointer-events-auto">
           {searchOpen && (
             <section
