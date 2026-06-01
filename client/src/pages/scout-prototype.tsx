@@ -66,6 +66,12 @@ interface Restaurant {
   activeDealCount?: number;
   homeRankingScore?: number | null;
   homeRankingReason?: string | null;
+  businessType?: string | null;
+  isFoodTruck?: boolean | null;
+  isVerified?: boolean | null;
+  isActive?: boolean | null;
+  menuItemCount?: number | null;
+  canonicalMenuCount?: number | null;
 }
 
 interface Truck {
@@ -81,6 +87,20 @@ interface Truck {
   lat?: number | null;
   lng?: number | null;
   mobileOnline?: boolean;
+  liveUntilAt?: string | null;
+  currentStop?: unknown;
+  schedule?: unknown;
+  truckSchedule?: {
+    currentStop?: unknown;
+    todayStop?: unknown;
+    nextStop?: unknown;
+    status?: string | null;
+    statusLabel?: string | null;
+  } | null;
+  liveNow?: boolean;
+  liveSource?: "location_update" | "scheduled_now" | "not_live";
+  source?: "live" | "discoverable";
+  menuAvailable?: boolean;
 }
 
 interface Deal {
@@ -149,6 +169,16 @@ function imgSrc(r: { coverImageUrl?: string | null; heroImageUrl?: string | null
   return r.coverImageUrl || r.heroImageUrl || r.imageUrl || null;
 }
 
+function isDiscoverableTruckProfile(restaurant: Restaurant) {
+  const businessType = String(restaurant.businessType || "").toLowerCase();
+  const isFoodTruckType = businessType === "food_truck" || restaurant.isFoodTruck === true;
+  const active = restaurant.isActive !== false;
+  const verified = restaurant.isVerified !== false;
+  const menuCount = Number(restaurant.menuItemCount ?? restaurant.canonicalMenuCount ?? 1);
+  const hasMenu = Number.isFinite(menuCount) && menuCount > 0;
+  return isFoodTruckType && active && verified && hasMenu;
+}
+
 function hasRestaurantScheduleData(restaurant: Restaurant) {
   const candidate = restaurant as Restaurant & {
     operatingHours?: unknown;
@@ -214,6 +244,23 @@ function distanceMilesBetween(
     Math.cos(toRad(aLat)) * Math.cos(toRad(bLat)) * s2 * s2;
   const c = 2 * Math.atan2(Math.sqrt(aa), Math.sqrt(1 - aa));
   return R * c;
+}
+
+function truckScheduleIndicatesLiveNow(truck: Truck) {
+  if (truck.currentStop) return true;
+  if (truck.truckSchedule?.currentStop) return true;
+  const status = String(truck.truckSchedule?.status || "").toLowerCase();
+  return status === "live";
+}
+
+function truckIsLiveNow(truck: Truck, nowMs: number) {
+  const liveUntilMs = truck.liveUntilAt ? Date.parse(truck.liveUntilAt) : NaN;
+  const locationUpdateLive =
+    truck.mobileOnline === true && Number.isFinite(liveUntilMs) && liveUntilMs > nowMs;
+  const scheduleLive = truckScheduleIndicatesLiveNow(truck);
+  if (locationUpdateLive) return { liveNow: true, liveSource: "location_update" as const };
+  if (scheduleLive) return { liveNow: true, liveSource: "scheduled_now" as const };
+  return { liveNow: false, liveSource: "not_live" as const };
 }
 
 /* ─── feed card ─── */
@@ -475,15 +522,65 @@ export default function ScoutPrototype() {
     [location.lat, location.lng],
   );
 
-  const trucks = filterByResolvedLocation(trucksRaw)
-    .filter((truck) => truck.mobileOnline === true)
+  const nowMs = Date.now();
+  const liveTrucks = filterByResolvedLocation(trucksRaw).map((truck) => {
+    const liveState = truckIsLiveNow(truck, nowMs);
+    return {
+      ...truck,
+      ...liveState,
+      source: "live" as const,
+      menuAvailable: true,
+    };
+  });
+  const discoverableTruckProfiles = filterByResolvedLocation(restaurantsRaw)
+    .filter((restaurant) => isDiscoverableTruckProfile(restaurant))
+    .map<Truck>((restaurant) => {
+      const truckDraft: Truck = {
+        id: restaurant.id,
+        name: restaurant.businessName || restaurant.name || "Food Truck",
+        cuisineType: restaurant.cuisineType || null,
+        coverImageUrl: restaurant.coverImageUrl || null,
+        heroImageUrl: restaurant.heroImageUrl || null,
+        imageUrl: restaurant.imageUrl || null,
+        distanceMiles: restaurant.distanceMiles ?? restaurant.distance ?? null,
+        latitude: restaurant.latitude ?? restaurant.lat ?? null,
+        longitude: restaurant.longitude ?? restaurant.lng ?? null,
+        lat: restaurant.lat ?? restaurant.latitude ?? null,
+        lng: restaurant.lng ?? restaurant.longitude ?? null,
+        mobileOnline: false,
+        source: "discoverable",
+        menuAvailable: true,
+      };
+      const liveState = truckIsLiveNow(truckDraft, nowMs);
+      return {
+        ...truckDraft,
+        ...liveState,
+      };
+    });
+  const trucksById = new Map<string, Truck>();
+  discoverableTruckProfiles.forEach((truck) => {
+    trucksById.set(truck.id, truck);
+  });
+  liveTrucks.forEach((truck) => {
+    trucksById.set(truck.id, truck);
+  });
+  const trucks = Array.from(trucksById.values())
+    .sort((a, b) => {
+      const aLiveRank = a.liveNow ? (a.liveSource === "location_update" ? 2 : 1) : 0;
+      const bLiveRank = b.liveNow ? (b.liveSource === "location_update" ? 2 : 1) : 0;
+      if (aLiveRank !== bLiveRank) return bLiveRank - aLiveRank;
+      const aDistance = Number(a.distanceMiles ?? Number.POSITIVE_INFINITY);
+      const bDistance = Number(b.distanceMiles ?? Number.POSITIVE_INFINITY);
+      if (aDistance !== bDistance) return aDistance - bDistance;
+      return String(a.name || "").localeCompare(String(b.name || ""));
+    })
     .slice(0, 20);
   const restaurants = filterByResolvedLocation(restaurantsRaw).slice(0, 20);
   const deals = dealsRaw.slice(0, 10);
   const events = eventsRaw.slice(0, 10);
 
   const tileCounts = useMemo(() => ({
-    food_trucks: trucks.length > 0 ? `${trucks.length} now` : "",
+    food_trucks: trucks.length > 0 ? `${trucks.length} nearby` : "",
     restaurants: restaurants.length > 0 ? `${restaurants.length} nearby` : "",
     deals: deals.length > 0 ? `${deals.length} today` : "",
     events: events.length > 0 ? `${events.length} tonight` : "",
@@ -503,9 +600,24 @@ export default function ScoutPrototype() {
         items.push({
           id: `truck-${t.id}`, type: "FOOD TRUCK", typeColor: "#9333ea",
           image: imgSrc(t), title: name,
-          subtitle: [t.cuisineType, t.mobileOnline ? "Serving now" : "Posted up"].filter(Boolean).join(" • "),
-          tag: t.mobileOnline ? "Serving now" : "Posted up",
-          tagColor: t.mobileOnline ? "#10b981" : "#9333ea",
+          subtitle: [
+            t.cuisineType,
+            t.liveNow
+              ? t.liveSource === "scheduled_now"
+                ? "Live now · Scheduled"
+                : "Live now"
+              : "Serving area",
+            t.liveNow ? null : "Not live now",
+            t.menuAvailable ? "Menu available" : null,
+          ]
+            .filter(Boolean)
+            .join(" • "),
+          tag: t.liveNow
+            ? t.liveSource === "scheduled_now"
+              ? "Live now · Scheduled"
+              : "Live now"
+            : "Not live now",
+          tagColor: t.liveNow ? "#10b981" : "#9333ea",
           distance: distLabel(t),
           href: `/truck/${t.id}`,
           routeHref: routeUrl(t.latitude ?? t.lat, t.longitude ?? t.lng, name),
@@ -645,7 +757,7 @@ export default function ScoutPrototype() {
     });
     L.marker([location.lat, location.lng], { icon: userIcon }).addTo(map.current);
 
-    // Truck pins (only actively serving trucks are rendered)
+    // Truck pins (live and discoverable truck profiles)
     trucks.slice(0, 8).forEach(t => {
       const lat = t.latitude ?? t.lat;
       const lng = t.longitude ?? t.lng;
