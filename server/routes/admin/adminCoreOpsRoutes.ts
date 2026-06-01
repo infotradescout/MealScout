@@ -814,6 +814,7 @@ export function registerAdminCoreOpsRoutes(app: Express) {
         // Attach business name from restaurants table (left join by owner_id)
         const restaurantRows = await db
           .select({
+            id: restaurants.id,
             ownerId: restaurants.ownerId,
             name: restaurants.name,
             city: restaurants.city,
@@ -868,6 +869,7 @@ export function registerAdminCoreOpsRoutes(app: Express) {
           ...u,
           businessName:
             u.businessName || restaurantByOwner.get(u.id)?.name || null,
+          restaurantId: restaurantByOwner.get(u.id)?.id || null,
           businessCity: restaurantByOwner.get(u.id)?.city || null,
           businessState: restaurantByOwner.get(u.id)?.state || null,
           businessType: restaurantByOwner.get(u.id)?.businessType || null,

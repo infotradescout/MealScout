@@ -95,6 +95,28 @@ const isRootSuperAdminUserType = (userType?: string | null) =>
 const isBusinessUserType = (userType?: string | null) =>
   userType === "food_truck" || userType === "restaurant_owner";
 
+const businessTypeOptions = [
+  { value: "food_truck", label: "Food Truck" },
+  { value: "restaurant", label: "Restaurant" },
+  { value: "bar", label: "Bar" },
+  { value: "brewery", label: "Brewery / Taproom" },
+  { value: "caterer", label: "Caterer / Private Chef" },
+  { value: "venue", label: "Host / Venue" },
+  { value: "supplier", label: "Supplier" },
+];
+
+const toIdentityRole = (userType?: string | null) => {
+  const type = String(userType || "").toLowerCase();
+  if (type === "customer") return "customer";
+  if (type === "host") return "host_operator";
+  if (type === "event_coordinator") return "event_coordinator";
+  if (type === "staff") return "staff";
+  if (type === "admin" || type === "duper_admin") return "admin";
+  if (type === "super_admin") return "super_admin";
+  if (type === "restaurant_owner" || type === "food_truck") return "business_owner";
+  return type || "unknown";
+};
+
 interface PendingRestaurant {
   id: string;
   name: string;
@@ -5755,6 +5777,34 @@ export default function AdminDashboard() {
     },
   });
 
+  const updateUserBusinessType = useMutation({
+    mutationFn: async ({
+      restaurantId,
+      businessType,
+    }: {
+      restaurantId: string;
+      businessType: string;
+    }) => {
+      return await apiRequest("PATCH", `/api/admin/restaurants/${restaurantId}`, {
+        businessType,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      toast({
+        title: "Business Type Updated",
+        description: "Business profile type has been updated.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update business type.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const attachBusinessToUser = useMutation({
     mutationFn: async (payload: { userId: string; restaurantId: string }) => {
       const res = await apiRequest(
@@ -9338,6 +9388,45 @@ export default function AdminDashboard() {
                           <span>
                             {Number(user.activityEventCount || 0)} tracked events
                           </span>
+                          <Badge variant="outline">
+                            role:{toIdentityRole(user.userType)}
+                          </Badge>
+                          <Badge variant="outline">
+                            attachment:
+                            {user.hasRestaurant
+                              ? "attached"
+                              : user.businessName
+                                ? "needs_business_shell"
+                                : "not_attached"}
+                          </Badge>
+                          {user.hasRestaurant && (
+                            <Badge variant="outline">
+                              business:{String(user.businessType || "unknown")}
+                            </Badge>
+                          )}
+                          <Badge variant="outline">
+                            email:{user.emailVerified ? "verified" : "unverified"}
+                          </Badge>
+                          {user.hasRestaurant && (
+                            <Badge
+                              variant={
+                                user.businessIsVerified ? "default" : "secondary"
+                              }
+                            >
+                              business:
+                              {user.businessIsVerified ? "verified" : "pending"}
+                            </Badge>
+                          )}
+                          {user.hasRestaurant && (
+                            <Badge
+                              variant={
+                                user.businessIsActive ? "default" : "secondary"
+                              }
+                            >
+                              adminApproved:
+                              {user.businessIsActive ? "yes" : "no"}
+                            </Badge>
+                          )}
                           {isBusinessUserType(user.userType) &&
                             !user.hasRestaurant && (
                               <Badge variant="destructive">not_attached</Badge>
@@ -9358,10 +9447,8 @@ export default function AdminDashboard() {
                             disabled={updateUserType.isPending || isStaff}
                           >
                             <option value="customer">Customer</option>
-                            <option value="food_truck">Food Truck</option>
-                            <option value="restaurant_owner">
-                              Restaurant Owner
-                            </option>
+                            <option value="restaurant_owner">Business Owner</option>
+                            <option value="food_truck">Business Owner (Truck)</option>
                             <option value="host">Host</option>
                             <option value="event_coordinator">
                               Event Coordinator
@@ -9371,12 +9458,35 @@ export default function AdminDashboard() {
                               <option value="admin">Admin</option>
                             )}
                             {isDuperOrRootUserType(adminUser?.userType) && (
-                              <option value="duper_admin">Duperrr Admin</option>
+                              <option value="duper_admin">Duper Admin</option>
                             )}
                             {isRootSuperAdminUserType(adminUser?.userType) && (
                               <option value="super_admin">Super Admin</option>
                             )}
                           </select>
+                          {user.hasRestaurant && isBusinessUserType(user.userType) && (
+                            <select
+                              value={String(user.businessType || "restaurant")}
+                              onChange={(e) =>
+                                updateUserBusinessType.mutate({
+                                  restaurantId: String(user.restaurantId || ""),
+                                  businessType: e.target.value,
+                                })
+                              }
+                              className="text-xs px-2 py-1 border rounded-md"
+                              disabled={
+                                updateUserBusinessType.isPending ||
+                                isStaff ||
+                                !user.restaurantId
+                              }
+                            >
+                              {businessTypeOptions.map((option) => (
+                                <option key={option.value} value={option.value}>
+                                  {option.label}
+                                </option>
+                              ))}
+                            </select>
+                          )}
                           <Button
                             size="sm"
                             variant="outline"
@@ -9471,19 +9581,42 @@ export default function AdminDashboard() {
                         </Button>
                         {isBusinessUserType(user.userType) &&
                           !user.hasRestaurant && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => {
-                                setSelectedUser(user);
-                                setUserDetailsOpen(true);
-                                setAttachBusinessSearch("");
-                                setAttachBusinessSelectedId("");
-                              }}
-                              data-testid={`button-attach-business-${user.id}`}
-                            >
-                              Attach Business
-                            </Button>
+                            <>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  setSelectedUser(user);
+                                  setUserDetailsOpen(true);
+                                  setAttachBusinessSearch("");
+                                  setAttachBusinessSelectedId("");
+                                }}
+                                data-testid={`button-attach-business-${user.id}`}
+                              >
+                                Attach Business
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() =>
+                                  createAndAttachBusinessForUser.mutate({
+                                    userId: user.id,
+                                    businessName:
+                                      String(user.businessName || "").trim() ||
+                                      `${String(user.firstName || "").trim()} ${String(user.lastName || "").trim()}`.trim() ||
+                                      "Business Profile",
+                                    address: "Address pending",
+                                    city: String(user.defaultCity || "Unknown").trim(),
+                                    state: String(user.defaultState || "NA").trim(),
+                                    phone: String(user.phone || "").trim() || undefined,
+                                  })
+                                }
+                                data-testid={`button-create-business-shell-${user.id}`}
+                                disabled={createAndAttachBusinessForUser.isPending}
+                              >
+                                Create Business Shell
+                              </Button>
+                            </>
                           )}
                         <Button
                           size="sm"
