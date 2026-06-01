@@ -6,6 +6,8 @@ const rewrites: Array<{ source?: string; destination?: string }> = Array.isArray
 )
   ? vercelConfig.rewrites
   : [];
+const routes: Array<{ src?: string; dest?: string; status?: number; handle?: string }> =
+  Array.isArray(vercelConfig?.routes) ? vercelConfig.routes : [];
 
 const hasAssetsPassThrough = rewrites.some(
   (rule) => rule.source === "/assets/:path*" && rule.destination === "/assets/:path*",
@@ -24,6 +26,44 @@ if (!hasStaticPassThrough) {
 const spaFallbackRule = rewrites.find((rule) => rule.destination === "/index.html");
 if (!spaFallbackRule?.source || !spaFallbackRule.source.includes("(?!assets/|static/)")) {
   throw new Error("SPA fallback must explicitly exclude /assets and /static paths");
+}
+
+const filesystemHandleIndex = routes.findIndex((rule) => rule.handle === "filesystem");
+if (filesystemHandleIndex < 0) {
+  throw new Error("vercel.json routes must include handle=filesystem before SPA route fallback");
+}
+
+const assetJsCss404RuleIndex = routes.findIndex(
+  (rule) => rule.src === "/assets/(.*\\.(?:js|css))" && rule.status === 404,
+);
+if (assetJsCss404RuleIndex < 0) {
+  throw new Error("vercel.json routes must return 404 for missing /assets/*.js and /assets/*.css");
+}
+if (assetJsCss404RuleIndex <= filesystemHandleIndex) {
+  throw new Error("Asset 404 guard must be evaluated after filesystem static lookup");
+}
+
+const staticJsCss404RuleIndex = routes.findIndex(
+  (rule) => rule.src === "/static/(.*\\.(?:js|css))" && rule.status === 404,
+);
+if (staticJsCss404RuleIndex < 0) {
+  throw new Error("vercel.json routes must return 404 for missing /static/*.js and /static/*.css");
+}
+if (staticJsCss404RuleIndex <= filesystemHandleIndex) {
+  throw new Error("Static 404 guard must be evaluated after filesystem static lookup");
+}
+
+const routesSpaFallbackRuleIndex = routes.findIndex(
+  (rule) => rule.src === "/(.*)" && rule.dest === "/index.html",
+);
+if (routesSpaFallbackRuleIndex < 0) {
+  throw new Error("vercel.json routes must include SPA fallback to /index.html");
+}
+if (
+  routesSpaFallbackRuleIndex <= assetJsCss404RuleIndex ||
+  routesSpaFallbackRuleIndex <= staticJsCss404RuleIndex
+) {
+  throw new Error("SPA fallback must be evaluated after JS/CSS asset 404 guards");
 }
 
 const scoutAdapters = readFileSync("client/src/features/scout/scoutAdapters.ts", "utf8");
