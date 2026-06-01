@@ -101,6 +101,25 @@ export function registerTruckImportAdminRoutes(
     }
   };
 
+  const resolvePublicBaseUrl = () =>
+    String(
+      process.env.PUBLIC_BASE_URL ||
+        process.env.SERVICE_URL ||
+        "https://www.mealscout.us",
+    ).replace(/\/+$/, "");
+
+  const extractClaimPitch = (listing: any) => {
+    const rawData =
+      listing && typeof listing.rawData === "object" && listing.rawData
+        ? (listing.rawData as Record<string, any>)
+        : {};
+    const pitch =
+      rawData && typeof rawData.claimPitch === "object" && rawData.claimPitch
+        ? (rawData.claimPitch as Record<string, any>)
+        : null;
+    return pitch;
+  };
+
   app.get(
     "/api/admin/truck-imports",
     isAuthenticated,
@@ -1591,6 +1610,228 @@ export function registerTruckImportAdminRoutes(
         }
         console.error("Error filling missing listing fields from evidence:", error);
         res.status(500).json({ message: "Failed to apply evidence update" });
+      }
+    },
+  );
+
+  app.post(
+    "/api/admin/claim-pitches",
+    isAuthenticated,
+    isStaffOrAdmin,
+    async (req: any, res) => {
+      if (!requireAdminUser(req, res)) return;
+      try {
+        await ensureTruckImportTables();
+
+        const listingId = String(req.body?.listingId || "").trim();
+        const source = String(req.body?.source || "admin_inventory").trim() || "admin_inventory";
+        if (!listingId) {
+          return res.status(400).json({ message: "listingId is required" });
+        }
+
+        const [listing] = await db
+          .select()
+          .from(truckImportListings)
+          .where(eq(truckImportListings.id, listingId))
+          .limit(1);
+        if (!listing) {
+          return res.status(404).json({ message: "Import listing not found" });
+        }
+
+        const profileType = "truck";
+        const profileId = String(listing.id);
+        const businessName = String(listing.name || "").trim() || "Unnamed truck";
+        const city = String(listing.city || "").trim() || null;
+        const claimUrl = `${resolvePublicBaseUrl()}/claim-truck?q=${encodeURIComponent(
+          String(listing.externalId || businessName),
+        )}`;
+        const pitchCreatedAt = new Date().toISOString();
+        const existingRaw =
+          listing && typeof listing.rawData === "object" && listing.rawData
+            ? (listing.rawData as Record<string, any>)
+            : {};
+        const priorPitch =
+          existingRaw && typeof existingRaw.claimPitch === "object" && existingRaw.claimPitch
+            ? (existingRaw.claimPitch as Record<string, any>)
+            : {};
+
+        const claimPitch = {
+          profileId,
+          profileType,
+          businessName,
+          city,
+          claimUrl,
+          pitchStatus: "created",
+          pitchCreatedAt,
+          pitchOpenedAt: priorPitch.pitchOpenedAt || null,
+          claimStartedAt: priorPitch.claimStartedAt || null,
+          claimCompletedAt: priorPitch.claimCompletedAt || null,
+          source,
+          createdByUserId: String(req.user?.id || ""),
+          pitchMessage:
+            "Your MealScout profile is already live. Claim it to update your menu, schedule, photos, and booking info.",
+        };
+
+        const [updated] = await db
+          .update(truckImportListings)
+          .set({
+            rawData: {
+              ...existingRaw,
+              claimPitch,
+            },
+            updatedAt: new Date(),
+          } as any)
+          .where(eq(truckImportListings.id, listingId))
+          .returning();
+
+        return res.json({
+          listingId,
+          claimPitch: extractClaimPitch(updated),
+        });
+      } catch (error: any) {
+        if (isMissingRelationError(error, "truck_import_listings")) {
+          return res.status(503).json({
+            message:
+              "Truck import tables are missing in the database. Run `npm run migrate:sql -- 042_create_truck_import_tables.sql`.",
+            code: "migration_required",
+          });
+        }
+        console.error("Error creating claim pitch:", error);
+        return res.status(500).json({ message: "Failed to create claim pitch" });
+      }
+    },
+  );
+
+  app.patch(
+    "/api/admin/claim-pitches/:listingId/status",
+    isAuthenticated,
+    isStaffOrAdmin,
+    async (req: any, res) => {
+      if (!requireAdminUser(req, res)) return;
+      try {
+        await ensureTruckImportTables();
+        const listingId = String(req.params?.listingId || "").trim();
+        const status = String(req.body?.status || "").trim().toLowerCase();
+        const allowedStatuses = new Set([
+          "opened",
+          "claim_started",
+          "claim_completed",
+        ]);
+        if (!listingId || !allowedStatuses.has(status)) {
+          return res.status(400).json({ message: "Invalid listingId or status" });
+        }
+
+        const [listing] = await db
+          .select()
+          .from(truckImportListings)
+          .where(eq(truckImportListings.id, listingId))
+          .limit(1);
+        if (!listing) {
+          return res.status(404).json({ message: "Import listing not found" });
+        }
+
+        const existingRaw =
+          listing && typeof listing.rawData === "object" && listing.rawData
+            ? (listing.rawData as Record<string, any>)
+            : {};
+        const currentPitch =
+          existingRaw && typeof existingRaw.claimPitch === "object" && existingRaw.claimPitch
+            ? (existingRaw.claimPitch as Record<string, any>)
+            : null;
+        if (!currentPitch) {
+          return res.status(404).json({ message: "Claim pitch not found" });
+        }
+
+        const nowIso = new Date().toISOString();
+        const nextPitch = {
+          ...currentPitch,
+          pitchStatus:
+            status === "opened"
+              ? "opened"
+              : status === "claim_started"
+                ? "claim_started"
+                : "claim_completed",
+          pitchOpenedAt:
+            status === "opened"
+              ? currentPitch.pitchOpenedAt || nowIso
+              : currentPitch.pitchOpenedAt || null,
+          claimStartedAt:
+            status === "claim_started"
+              ? currentPitch.claimStartedAt || nowIso
+              : currentPitch.claimStartedAt || null,
+          claimCompletedAt:
+            status === "claim_completed"
+              ? currentPitch.claimCompletedAt || nowIso
+              : currentPitch.claimCompletedAt || null,
+          lastStatusUpdatedByUserId: String(req.user?.id || ""),
+          lastStatusUpdatedAt: nowIso,
+        };
+
+        const [updated] = await db
+          .update(truckImportListings)
+          .set({
+            rawData: {
+              ...existingRaw,
+              claimPitch: nextPitch,
+            },
+            updatedAt: new Date(),
+          } as any)
+          .where(eq(truckImportListings.id, listingId))
+          .returning();
+
+        return res.json({
+          listingId,
+          claimPitch: extractClaimPitch(updated),
+        });
+      } catch (error: any) {
+        console.error("Error updating claim pitch status:", error);
+        return res.status(500).json({ message: "Failed to update claim pitch status" });
+      }
+    },
+  );
+
+  app.get(
+    "/api/admin/claim-pitches",
+    isAuthenticated,
+    isStaffOrAdmin,
+    async (req: any, res) => {
+      if (!requireAdminUser(req, res)) return;
+      try {
+        await ensureTruckImportTables();
+        const limit = Math.min(200, Math.max(1, Number(req.query?.limit ?? 100)));
+        const rows = await db
+          .select()
+          .from(truckImportListings)
+          .where(sql`${truckImportListings.rawData} ? 'claimPitch'`)
+          .orderBy(desc(truckImportListings.updatedAt))
+          .limit(limit);
+
+        const items = rows
+          .map((listing: any) => {
+            const claimPitch = extractClaimPitch(listing);
+            if (!claimPitch) return null;
+            return {
+              listingId: String(listing.id),
+              profileId: claimPitch.profileId || String(listing.id),
+              profileType: claimPitch.profileType || "truck",
+              businessName: claimPitch.businessName || String(listing.name || ""),
+              city: claimPitch.city || String(listing.city || ""),
+              claimUrl: claimPitch.claimUrl || null,
+              pitchStatus: claimPitch.pitchStatus || "created",
+              pitchCreatedAt: claimPitch.pitchCreatedAt || null,
+              pitchOpenedAt: claimPitch.pitchOpenedAt || null,
+              claimStartedAt: claimPitch.claimStartedAt || null,
+              claimCompletedAt: claimPitch.claimCompletedAt || null,
+              source: claimPitch.source || null,
+              createdByUserId: claimPitch.createdByUserId || null,
+            };
+          })
+          .filter(Boolean);
+
+        return res.json({ items });
+      } catch (error: any) {
+        console.error("Error listing claim pitches:", error);
+        return res.status(500).json({ message: "Failed to load claim pitches" });
       }
     },
   );

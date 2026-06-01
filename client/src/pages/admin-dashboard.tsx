@@ -1689,6 +1689,49 @@ function UnclaimedImportedTrucksTab({ enabled }: { enabled: boolean }) {
     },
   });
 
+  const createClaimPitch = useMutation({
+    mutationFn: async (payload: { listingId: string; source: string }) => {
+      const res = await apiRequest("POST", "/api/admin/claim-pitches", payload);
+      return await res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Claim pitch created" });
+      void loadPage(offset, "replace");
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Claim pitch failed",
+        description: error.message || "Unable to create claim pitch.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateClaimPitchStatus = useMutation({
+    mutationFn: async (payload: {
+      listingId: string;
+      status: "opened" | "claim_started" | "claim_completed";
+    }) => {
+      const res = await apiRequest(
+        "PATCH",
+        `/api/admin/claim-pitches/${payload.listingId}/status`,
+        { status: payload.status },
+      );
+      return await res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Claim pitch status updated" });
+      void loadPage(offset, "replace");
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Status update failed",
+        description: error.message || "Unable to update claim pitch status.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const canLoadMore = items.length < total;
 
   return (
@@ -1727,6 +1770,10 @@ function UnclaimedImportedTrucksTab({ enabled }: { enabled: boolean }) {
           {items.map((row) => {
             const edits = editsById[row.id];
             if (!edits) return null;
+            const claimPitch =
+              row?.rawData && typeof row.rawData === "object"
+                ? (row.rawData as any).claimPitch || null
+                : null;
             return (
               <Card key={row.id}>
                 <CardContent className="p-4 space-y-2">
@@ -1764,8 +1811,104 @@ function UnclaimedImportedTrucksTab({ enabled }: { enabled: boolean }) {
                       >
                         Send setup email
                       </Button>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        disabled={createClaimPitch.isPending}
+                        onClick={() =>
+                          createClaimPitch.mutate({
+                            listingId: row.id,
+                            source: "admin_inventory",
+                          })
+                        }
+                      >
+                        Create claim pitch
+                      </Button>
                     </div>
                   </div>
+
+                  {claimPitch ? (
+                    <div className="rounded-md border bg-muted/20 p-2 text-xs space-y-1">
+                      <div className="font-medium">
+                        Claim pitch status: {String(claimPitch.pitchStatus || "created")}
+                      </div>
+                      <div className="text-muted-foreground">
+                        {String(
+                          claimPitch.pitchMessage ||
+                            "Your MealScout profile is already live. Claim it to update your menu, schedule, photos, and booking info.",
+                        )}
+                      </div>
+                      {claimPitch.claimUrl ? (
+                        <a
+                          className="underline"
+                          href={String(claimPitch.claimUrl)}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Open claim URL
+                        </a>
+                      ) : null}
+                      <div className="text-muted-foreground">
+                        Created:{" "}
+                        {claimPitch.pitchCreatedAt
+                          ? new Date(claimPitch.pitchCreatedAt).toLocaleString()
+                          : "-"}{" "}
+                        • Opened:{" "}
+                        {claimPitch.pitchOpenedAt
+                          ? new Date(claimPitch.pitchOpenedAt).toLocaleString()
+                          : "-"}{" "}
+                        • Started:{" "}
+                        {claimPitch.claimStartedAt
+                          ? new Date(claimPitch.claimStartedAt).toLocaleString()
+                          : "-"}{" "}
+                        • Completed:{" "}
+                        {claimPitch.claimCompletedAt
+                          ? new Date(claimPitch.claimCompletedAt).toLocaleString()
+                          : "-"}
+                      </div>
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={updateClaimPitchStatus.isPending}
+                          onClick={() =>
+                            updateClaimPitchStatus.mutate({
+                              listingId: row.id,
+                              status: "opened",
+                            })
+                          }
+                        >
+                          Mark opened
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={updateClaimPitchStatus.isPending}
+                          onClick={() =>
+                            updateClaimPitchStatus.mutate({
+                              listingId: row.id,
+                              status: "claim_started",
+                            })
+                          }
+                        >
+                          Mark claim started
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={updateClaimPitchStatus.isPending}
+                          onClick={() =>
+                            updateClaimPitchStatus.mutate({
+                              listingId: row.id,
+                              status: "claim_completed",
+                            })
+                          }
+                        >
+                          Mark claim completed
+                        </Button>
+                      </div>
+                    </div>
+                  ) : null}
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <input
