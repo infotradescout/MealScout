@@ -58,6 +58,8 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
   const [moreOpen, setMoreOpen] = useState(false);
   const [location] = useLocation();
   const currentPath = location.split("?")[0];
+  const isScoutRoute =
+    currentPath === "/scout" || currentPath.startsWith("/scout/");
   const { user } = useAuth();
   const { toast } = useToast();
   const [isReporting, setIsReporting] = useState(false);
@@ -548,7 +550,12 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
           />
           <div
             ref={sheetRef}
-            className="absolute left-0 right-0 bottom-[calc(env(safe-area-inset-bottom)+5.5rem)] mx-4 rounded-3xl bg-[#120805]/80 backdrop-blur-2xl border border-white/10 shadow-[0_-16px_48px_rgba(0,0,0,0.7)] overflow-hidden"
+            className="absolute left-0 right-0 mx-4 rounded-3xl bg-[#120805]/80 backdrop-blur-2xl border border-white/10 shadow-[0_-16px_48px_rgba(0,0,0,0.7)] overflow-hidden"
+            style={{
+              bottom: isScoutRoute
+                ? "calc(env(safe-area-inset-bottom) + 11.5rem)"
+                : "calc(env(safe-area-inset-bottom) + 5.5rem)",
+            }}
           >
             <div className="flex items-center justify-between px-5 pt-4 pb-2">
               <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-white/40">
