@@ -1568,14 +1568,49 @@ export function registerAdminManagementRoutes(app: Express) {
           footTraffic,
           amenities,
           userType,
+          businessType,
+          accountType,
         } = req.body;
 
         // Validate required fields
         const normalizedEmail = email?.trim().toLowerCase();
+        const normalizedAccountType = String(accountType || "")
+          .trim()
+          .toLowerCase();
+        const normalizedRequestedUserType = String(userType || "")
+          .trim()
+          .toLowerCase();
+        const normalizedRequestedBusinessType = String(businessType || "")
+          .trim()
+          .toLowerCase();
+
+        const accountTypeMap: Record<
+          string,
+          { userType: string; businessType?: string | null }
+        > = {
+          food_truck_owner: { userType: "food_truck", businessType: "food_truck" },
+          restaurant_owner: { userType: "restaurant_owner", businessType: "restaurant" },
+          bar_owner: { userType: "restaurant_owner", businessType: "bar" },
+          brewery_taproom_owner: { userType: "restaurant_owner", businessType: "brewery" },
+          caterer_private_chef_owner: {
+            userType: "restaurant_owner",
+            businessType: "caterer",
+          },
+          host_venue_operator: { userType: "host", businessType: "venue" },
+        };
+
+        const mappedType = accountTypeMap[normalizedAccountType] || null;
+        const resolvedUserType = mappedType?.userType || normalizedRequestedUserType;
+        const resolvedBusinessType =
+          normalizedRequestedBusinessType ||
+          mappedType?.businessType ||
+          (resolvedUserType === "food_truck" ? "food_truck" : "restaurant");
+
         const validUserTypes = [
           "customer",
           "restaurant_owner",
           "food_truck",
+          "supplier",
           "host",
           "event_coordinator",
           "staff",
@@ -1586,24 +1621,24 @@ export function registerAdminManagementRoutes(app: Express) {
 
         if (
           !normalizedEmail ||
-          !userType ||
-          !validUserTypes.includes(userType)
+          !resolvedUserType ||
+          !validUserTypes.includes(resolvedUserType)
         ) {
           return res.status(400).json({
             message: "Valid email and userType are required",
           });
         }
 
-        if (!canAssignUserType(req.user?.userType, userType)) {
+        if (!canAssignUserType(req.user?.userType, resolvedUserType)) {
           return res.status(403).json({
-            message: getRoleAssignmentDeniedMessage(userType),
+            message: getRoleAssignmentDeniedMessage(resolvedUserType),
           });
         }
 
         const isRestaurantProvisionType =
-          userType === "restaurant_owner" || userType === "food_truck";
+          resolvedUserType === "restaurant_owner" || resolvedUserType === "food_truck";
         const isHostProvisionType =
-          userType === "host" || userType === "event_coordinator";
+          resolvedUserType === "host" || resolvedUserType === "event_coordinator";
         const normalizedBusinessName = String(businessName || "").trim();
         const normalizedAddress = String(address || "").trim();
 
@@ -1657,7 +1692,7 @@ export function registerAdminManagementRoutes(app: Express) {
           }
         }
 
-        const userIsInternalTeam = isInternalTeamUserType(userType);
+        const userIsInternalTeam = isInternalTeamUserType(resolvedUserType);
 
         let createdHostId: string | null = null;
         const [user] = await db.transaction(async (tx: any) => {
@@ -1679,7 +1714,7 @@ export function registerAdminManagementRoutes(app: Express) {
               ${firstName?.trim() || null},
               ${lastName?.trim() || null},
               ${phone?.trim() || null},
-              ${userType},
+              ${resolvedUserType},
               ${null},
               ${false},
               ${userIsInternalTeam},
@@ -1706,6 +1741,10 @@ export function registerAdminManagementRoutes(app: Express) {
               name: normalizedBusinessName,
               address: normalizedAddress,
               cuisineType: cuisineType || "Various",
+              businessType: resolvedBusinessType,
+              isFoodTruck:
+                resolvedUserType === "food_truck" ||
+                resolvedBusinessType === "food_truck",
               isActive: true,
               isVerified: true,
             });
@@ -1731,7 +1770,7 @@ export function registerAdminManagementRoutes(app: Express) {
                 businessName: normalizedBusinessName,
                 address: normalizedAddress,
                 locationType:
-                  userType === "event_coordinator"
+                  resolvedUserType === "event_coordinator"
                     ? "event_coordinator"
                     : locationType || "other",
                 expectedFootTraffic: footTrafficMap[footTraffic] || 100,
@@ -1779,7 +1818,7 @@ export function registerAdminManagementRoutes(app: Express) {
         res.json({
           success: true,
           setupEmailSent: emailSent,
-          message: `${userType} account created successfully. Setup link emailed to ${email}.`,
+          message: `${resolvedUserType} account created successfully. Setup link emailed to ${email}.`,
         });
       } catch (error: any) {
         console.error("Error creating user manually:", error);

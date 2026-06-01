@@ -1695,6 +1695,40 @@ function UnclaimedImportedTrucksTab({ enabled }: { enabled: boolean }) {
 function ManualUserCreation({ adminUser }: { adminUser?: any }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  type AccountType =
+    | "customer"
+    | "food_truck_owner"
+    | "restaurant_owner"
+    | "bar_owner"
+    | "brewery_taproom_owner"
+    | "caterer_private_chef_owner"
+    | "host_venue_operator"
+    | "supplier"
+    | "event_coordinator"
+    | "staff"
+    | "admin"
+    | "duper_admin"
+    | "super_admin";
+
+  const accountTypeConfig: Record<
+    AccountType,
+    { userType: string; businessType?: string | null }
+  > = {
+    customer: { userType: "customer" },
+    food_truck_owner: { userType: "food_truck", businessType: "food_truck" },
+    restaurant_owner: { userType: "restaurant_owner", businessType: "restaurant" },
+    bar_owner: { userType: "restaurant_owner", businessType: "bar" },
+    brewery_taproom_owner: { userType: "restaurant_owner", businessType: "brewery" },
+    caterer_private_chef_owner: { userType: "restaurant_owner", businessType: "caterer" },
+    host_venue_operator: { userType: "host", businessType: "venue" },
+    supplier: { userType: "supplier", businessType: "supplier" },
+    event_coordinator: { userType: "event_coordinator" },
+    staff: { userType: "staff" },
+    admin: { userType: "admin" },
+    duper_admin: { userType: "duper_admin" },
+    super_admin: { userType: "super_admin" },
+  };
+
   const [formData, setFormData] = useState({
     email: "",
     firstName: "",
@@ -1708,16 +1742,7 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
     locationType: "private_residence",
     footTraffic: "low",
     amenities: [] as string[],
-    userType: "customer" as
-      | "customer"
-      | "food_truck"
-      | "restaurant_owner"
-      | "staff"
-      | "event_coordinator"
-      | "host"
-      | "admin"
-      | "duper_admin"
-      | "super_admin",
+    accountType: "customer" as AccountType,
   });
   const [geocoding, setGeocoding] = useState(false);
   const [inviteSentEmail, setInviteSentEmail] = useState("");
@@ -1751,7 +1776,7 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
         locationType: "private_residence",
         footTraffic: "low",
         amenities: [],
-        userType: "food_truck",
+        accountType: "food_truck_owner",
       });
     },
     onError: (error: any) => {
@@ -1767,8 +1792,9 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
     e.preventDefault();
 
     // Auto-geocode for hosts if address provided
+    const selectedConfig = accountTypeConfig[formData.accountType];
     if (
-      formData.userType === "host" &&
+      selectedConfig.userType === "host" &&
       formData.address &&
       !formData.latitude
     ) {
@@ -1792,14 +1818,18 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
       }
     }
 
-    createUser.mutate(formData);
+    createUser.mutate({
+      ...formData,
+      userType: selectedConfig.userType as any,
+      businessType: selectedConfig.businessType || null,
+    } as any);
   };
 
-  const handleUserTypeChange = (newType: typeof formData.userType) => {
+  const handleUserTypeChange = (newType: AccountType) => {
     // Reset conditional fields when type changes
     setFormData({
       ...formData,
-      userType: newType,
+      accountType: newType,
       businessName: "",
       address: "",
       cuisineType: "",
@@ -1878,42 +1908,54 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
         <div>
           <label className="text-sm font-medium">Account Type</label>
           <select
-            value={formData.userType}
+            value={formData.accountType}
             onChange={(e) => handleUserTypeChange(e.target.value as any)}
             className="w-full px-3 py-2 border rounded-md"
           >
-            <option value="food_truck">Food Truck</option>
+            <option value="food_truck_owner">Food Truck Owner</option>
             <option value="restaurant_owner">Restaurant Owner</option>
+            <option value="bar_owner">Bar Owner</option>
+            <option value="brewery_taproom_owner">Brewery / Taproom Owner</option>
+            <option value="caterer_private_chef_owner">Caterer / Private Chef</option>
+            <option value="host_venue_operator">Host / Venue Operator</option>
+            <option value="supplier">Supplier</option>
             <option value="customer">Customer</option>
-            <option value="host">Host (Parking/Events)</option>
             <option value="event_coordinator">Event Coordinator</option>
             <option value="staff">Staff</option>
             {canAssignAdminRole && <option value="admin">Admin</option>}
             {canAssignDuperAdminRole && (
-              <option value="duper_admin">Duperrr Admin</option>
+              <option value="duper_admin">Duper Admin</option>
             )}
             {canAssignSuperAdminRole && (
               <option value="super_admin">Super Admin</option>
             )}
           </select>
           <p className="text-xs text-muted-foreground mt-1">
-            {formData.userType === "food_truck" &&
+            {formData.accountType === "food_truck_owner" &&
               "Food truck owner - mobile restaurant, create deals, manage location"}
-            {formData.userType === "customer" &&
+            {formData.accountType === "customer" &&
               "Regular customer - can claim deals and browse restaurants"}
-            {formData.userType === "restaurant_owner" &&
+            {formData.accountType === "restaurant_owner" &&
               "Business owner - manage restaurant and create deals"}
-            {formData.userType === "staff" &&
+            {formData.accountType === "bar_owner" &&
+              "Bar owner - set up bar profile, menu, and specials"}
+            {formData.accountType === "brewery_taproom_owner" &&
+              "Brewery/taproom owner - publish menu, events, and updates"}
+            {formData.accountType === "caterer_private_chef_owner" &&
+              "Caterer/private chef - manage catering profile and offers"}
+            {formData.accountType === "host_venue_operator" &&
+              "Host/venue operator - rent parking/event space to trucks"}
+            {formData.accountType === "supplier" &&
+              "Supplier - manage products and supplier marketplace presence"}
+            {formData.accountType === "staff" &&
               "Staff member - help manage restaurant operations"}
-            {formData.userType === "event_coordinator" &&
+            {formData.accountType === "event_coordinator" &&
               "Event coordinator - organize events (NO PAYMENTS through us)"}
-            {formData.userType === "host" &&
-              "Host - rent parking spots/lots to food trucks (hourly/daily/weekly/monthly)"}
-            {formData.userType === "admin" &&
+            {formData.accountType === "admin" &&
               "Admin - manage platform operations and internal workflows"}
-            {formData.userType === "duper_admin" &&
-              "Duperrr Admin - elevated admin access without super admin grants"}
-            {formData.userType === "super_admin" &&
+            {formData.accountType === "duper_admin" &&
+              "Duper Admin - elevated admin access without super admin grants"}
+            {formData.accountType === "super_admin" &&
               "Super Admin - root platform administration"}
           </p>
         </div>
@@ -1973,8 +2015,11 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
         </div>
 
         {/* Restaurant Owner & Food Truck Specific Fields */}
-        {(formData.userType === "restaurant_owner" ||
-          formData.userType === "food_truck") && (
+        {(formData.accountType === "restaurant_owner" ||
+          formData.accountType === "food_truck_owner" ||
+          formData.accountType === "bar_owner" ||
+          formData.accountType === "brewery_taproom_owner" ||
+          formData.accountType === "caterer_private_chef_owner") && (
           <>
             <div className="pt-3 border-t">
               <h4 className="text-sm font-semibold mb-3">
@@ -2037,7 +2082,7 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
         )}
 
         {/* Staff Specific Fields */}
-        {formData.userType === "staff" && (
+        {formData.accountType === "staff" && (
           <>
             <div className="pt-3 border-t">
               <h4 className="text-sm font-semibold mb-3">Staff Information</h4>
@@ -2071,7 +2116,7 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
         )}
 
         {/* Event Coordinator Specific Fields */}
-        {formData.userType === "event_coordinator" && (
+        {formData.accountType === "event_coordinator" && (
           <>
             <div className="pt-3 border-t">
               <h4 className="text-sm font-semibold mb-3">
@@ -2094,7 +2139,7 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
         )}
 
         {/* Host Specific Fields */}
-        {formData.userType === "host" && (
+        {formData.accountType === "host_venue_operator" && (
           <>
             <div className="pt-3 border-t">
               <h4 className="text-sm font-semibold mb-3">

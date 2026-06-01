@@ -1031,9 +1031,41 @@ router.post("/users/create", isAdmin, async (req: any, res) => {
       locationType,
       footTraffic,
       amenities,
+      businessType,
+      accountType,
     } = req.body;
 
-    if (!email || !userType) {
+    const normalizedAccountType = String(accountType || "")
+      .trim()
+      .toLowerCase();
+    const normalizedRequestedUserType = String(userType || "")
+      .trim()
+      .toLowerCase();
+    const normalizedRequestedBusinessType = String(businessType || "")
+      .trim()
+      .toLowerCase();
+    const accountTypeMap: Record<
+      string,
+      { userType: string; businessType?: string | null }
+    > = {
+      food_truck_owner: { userType: "food_truck", businessType: "food_truck" },
+      restaurant_owner: { userType: "restaurant_owner", businessType: "restaurant" },
+      bar_owner: { userType: "restaurant_owner", businessType: "bar" },
+      brewery_taproom_owner: { userType: "restaurant_owner", businessType: "brewery" },
+      caterer_private_chef_owner: {
+        userType: "restaurant_owner",
+        businessType: "caterer",
+      },
+      host_venue_operator: { userType: "host", businessType: "venue" },
+    };
+    const mappedType = accountTypeMap[normalizedAccountType] || null;
+    const resolvedUserType = mappedType?.userType || normalizedRequestedUserType;
+    const resolvedBusinessType =
+      normalizedRequestedBusinessType ||
+      mappedType?.businessType ||
+      (resolvedUserType === "food_truck" ? "food_truck" : "restaurant");
+
+    if (!email || !resolvedUserType) {
       return res.status(400).json({
         message: "Email and userType are required",
       });
@@ -1051,14 +1083,14 @@ router.post("/users/create", isAdmin, async (req: any, res) => {
       "duper_admin",
       "super_admin",
     ];
-    if (!validUserTypes.includes(userType)) {
+    if (!validUserTypes.includes(resolvedUserType)) {
       return res.status(400).json({ message: "Invalid user type" });
     }
 
-    if (!canAssignUserType(req.user?.userType, userType)) {
+    if (!canAssignUserType(req.user?.userType, resolvedUserType)) {
       return res
         .status(403)
-        .json({ message: getRoleAssignmentDeniedMessage(userType) });
+        .json({ message: getRoleAssignmentDeniedMessage(resolvedUserType) });
     }
 
     const normalizedEmail = String(email).trim().toLowerCase();
@@ -1076,17 +1108,17 @@ router.post("/users/create", isAdmin, async (req: any, res) => {
       firstName: firstName?.trim() || null,
       lastName: lastName?.trim() || null,
       phone: phone?.trim() || null,
-      userType: userType as any,
+      userType: resolvedUserType as any,
     });
 
     // Internal staff/admin onboarding should not block on email verification.
-    if (isInternalTeamUserType(userType)) {
+    if (isInternalTeamUserType(resolvedUserType)) {
       await storage.updateUser(user.id, { emailVerified: true });
     }
 
     // Optional profile creation for business users.
     if (
-      (userType === "restaurant_owner" || userType === "food_truck") &&
+      (resolvedUserType === "restaurant_owner" || resolvedUserType === "food_truck") &&
       businessName &&
       address
     ) {
@@ -1099,7 +1131,7 @@ router.post("/users/create", isAdmin, async (req: any, res) => {
     }
 
     if (
-      (userType === "host" || userType === "event_coordinator") &&
+      (resolvedUserType === "host" || resolvedUserType === "event_coordinator") &&
       businessName &&
       address
     ) {
@@ -1117,7 +1149,7 @@ router.post("/users/create", isAdmin, async (req: any, res) => {
       }
 
       const resolvedLocationType =
-        userType === "event_coordinator"
+        resolvedUserType === "event_coordinator"
           ? "event_coordinator"
           : locationType || "other";
 
@@ -1153,12 +1185,16 @@ router.post("/users/create", isAdmin, async (req: any, res) => {
       user.id,
       req.ip,
       req.headers["user-agent"],
-      { userType, setupEmailSent: emailSent },
+      {
+        userType: resolvedUserType,
+        businessType: resolvedBusinessType,
+        setupEmailSent: emailSent,
+      },
     );
 
     res.status(201).json({
       message: "User created successfully",
-      user: { id: user.id, email: user.email, userType: userType },
+      user: { id: user.id, email: user.email, userType: resolvedUserType },
       setupEmailSent: emailSent,
     });
   } catch (error: any) {
