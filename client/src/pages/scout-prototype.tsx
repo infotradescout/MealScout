@@ -505,14 +505,19 @@ export default function ScoutPrototype() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [submittedQuery, setSubmittedQuery] = useState("");
-  const GLOBAL_NAV_HEIGHT = 58;
-  const SCOUT_SCENE_RAIL_HEIGHT = 50;
-  const SCOUT_SEARCH_DOCK_HEIGHT = 46;
-  const SCOUT_DOCK_GAP = 12;
-  // Keep Scout dock clearly above the global nav hit area to avoid collisions.
-  const scoutDockBottom = `calc(env(safe-area-inset-bottom) + ${GLOBAL_NAV_HEIGHT + SCOUT_DOCK_GAP}px)`;
-  // Reserve enough feed space for nav + safe area + dock stack so cards are never trapped behind controls.
-  const feedBottomClearance = `calc(env(safe-area-inset-bottom) + ${GLOBAL_NAV_HEIGHT + SCOUT_SCENE_RAIL_HEIGHT + SCOUT_SEARCH_DOCK_HEIGHT + SCOUT_DOCK_GAP + 28}px)`;
+  const scoutLayoutVars = {
+    "--scout-safe-bottom": "env(safe-area-inset-bottom, 0px)",
+    "--scout-nav-height": "58px",
+    "--scout-search-height": "46px",
+    "--scout-chip-height": "50px",
+    "--scout-dock-gap": "12px",
+    "--scout-bottom-dock-height":
+      "calc(var(--scout-safe-bottom) + var(--scout-nav-height) + var(--scout-search-height) + var(--scout-chip-height) + var(--scout-dock-gap))",
+    "--scout-help-bottom-clearance":
+      "calc(var(--scout-bottom-dock-height) + 16px)",
+  } as React.CSSProperties;
+  const scoutDockBottom = "calc(var(--scout-safe-bottom) + var(--scout-nav-height) + var(--scout-dock-gap))";
+  const feedBottomClearance = "calc(var(--scout-bottom-dock-height) + 28px)";
 
   const scoutPreviewCity = useMemo(() => {
     if (typeof window === "undefined") return "";
@@ -1161,7 +1166,11 @@ export default function ScoutPrototype() {
   };
 
   return (
-    <div className="h-screen w-full bg-[#0d0d0d] text-white flex flex-col overflow-hidden font-sans">
+    <div
+      data-scout-layout-contract="true"
+      className="h-screen w-full bg-[#0d0d0d] text-white flex flex-col overflow-hidden font-sans"
+      style={scoutLayoutVars}
+    >
       <style>{customStyles}</style>
 
       {/* ── Header ── */}

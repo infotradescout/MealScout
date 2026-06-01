@@ -496,8 +496,9 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
       >
         <div className="w-full px-0">
           <div
-            className="relative flex items-end justify-between gap-1 h-[58px] px-1.5 rounded-none border-t border-orange-500/20 bg-[#0b0b0b] pb-[env(safe-area-inset-bottom)]"
+            className="relative flex items-end justify-between gap-1 px-1.5 rounded-none border-t border-orange-500/20 bg-[#0b0b0b] pb-[env(safe-area-inset-bottom)]"
             style={{
+              height: "var(--scout-nav-height, 58px)",
               boxShadow: "0 -8px 22px rgba(0,0,0,0.42)",
             }}
           >

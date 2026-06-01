@@ -4,10 +4,11 @@ const scoutPrototype = readFileSync("client/src/pages/scout-prototype.tsx", "utf
 const navigation = readFileSync("client/src/components/navigation.tsx", "utf8");
 
 const requiredScoutSnippets = [
-  "const GLOBAL_NAV_HEIGHT = 58;",
-  "const SCOUT_DOCK_GAP = 12;",
-  "scoutDockBottom = `calc(env(safe-area-inset-bottom) + ${GLOBAL_NAV_HEIGHT + SCOUT_DOCK_GAP}px)`",
-  "feedBottomClearance = `calc(env(safe-area-inset-bottom) + ${GLOBAL_NAV_HEIGHT + SCOUT_SCENE_RAIL_HEIGHT + SCOUT_SEARCH_DOCK_HEIGHT + SCOUT_DOCK_GAP + 28}px)`",
+  "data-scout-layout-contract=\"true\"",
+  "\"--scout-safe-bottom\": \"env(safe-area-inset-bottom, 0px)\"",
+  "\"--scout-nav-height\": \"58px\"",
+  "const scoutDockBottom = \"calc(var(--scout-safe-bottom) + var(--scout-nav-height) + var(--scout-dock-gap))\"",
+  "const feedBottomClearance = \"calc(var(--scout-bottom-dock-height) + 28px)\"",
   "data-scout-search-dock=\"true\"",
   "data-scout-feed=\"true\"",
   "className=\"fixed inset-x-0 z-[1000] pointer-events-none\"",
