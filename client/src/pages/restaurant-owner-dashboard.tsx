@@ -3528,6 +3528,9 @@ export default function RestaurantOwnerDashboard() {
             Number((currentRestaurant as any).upcomingStopCount || 0) > 0 ||
             Number((currentRestaurant as any).truckScheduleCount || 0) > 0,
           );
+          const hasOperatingTimeRequirement = isFoodTruck
+            ? hasSchedule || hasTruckScheduleSignals
+            : hasSchedule;
           const hasDeal = (stats?.activeDeals || 0) > 0;
           const hasEvents =
             Number((currentRestaurant as any).upcomingPublicEventCount || 0) > 0 ||
@@ -3542,7 +3545,7 @@ export default function RestaurantOwnerDashboard() {
             hasContact &&
             hasMenu &&
             hasPhoto &&
-            hasSchedule &&
+            hasOperatingTimeRequirement &&
             (isFoodTruck ? true : hasDeal);
           const profileSetupHref = `/restaurant-owner-dashboard?setup=profile&restaurantId=${encodeURIComponent(
             String(selectedRestaurant),
@@ -3575,25 +3578,26 @@ export default function RestaurantOwnerDashboard() {
                 String(selectedRestaurant),
               )}`,
             },
-            {
-              label: "Hours complete",
-              done: hasSchedule,
-              href: "/restaurant-owner-dashboard?setup=schedule",
-            },
+            ...(isFoodTruck
+              ? [
+                  {
+                    label: "Truck schedule complete",
+                    done: hasOperatingTimeRequirement,
+                    href: "/restaurant-owner-dashboard?setup=schedule&truck=1",
+                  },
+                ]
+              : [
+                  {
+                    label: "Hours complete",
+                    done: hasOperatingTimeRequirement,
+                    href: "/restaurant-owner-dashboard?setup=schedule",
+                  },
+                ]),
             {
               label: "Deals or specials added",
               done: hasDeal,
               href: "/deal-creation",
             },
-            ...(isFoodTruck
-              ? [
-                  {
-                    label: "Truck schedule complete",
-                    done: hasSchedule || hasTruckScheduleSignals,
-                    href: "/restaurant-owner-dashboard?setup=schedule&truck=1",
-                  },
-                ]
-              : []),
             {
               label: "Events added (if relevant)",
               done: hasEvents,
