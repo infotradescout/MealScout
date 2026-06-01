@@ -2946,7 +2946,15 @@ export function registerRestaurantOperationsRoutes(
     async (req: any, res) => {
       try {
         const { restaurantId } = req.params;
-        const { startDate, endDate, interval = "day" } = req.query;
+        const {
+          startDate,
+          endDate,
+          start,
+          end,
+          interval = "day",
+        } = req.query as Record<string, string | undefined>;
+        const normalizedStart = startDate || start;
+        const normalizedEnd = endDate || end;
 
         const isAuthorized = await storage.verifyRestaurantOwnership(
           restaurantId,
@@ -2968,7 +2976,7 @@ export function registerRestaurantOperationsRoutes(
           });
         }
 
-        if (!startDate || !endDate) {
+        if (!normalizedStart || !normalizedEnd) {
           return res
             .status(400)
             .json({ message: "startDate and endDate are required" });
@@ -2977,8 +2985,8 @@ export function registerRestaurantOperationsRoutes(
         const timeseries = await storage.getRestaurantAnalyticsTimeseries(
           restaurantId,
           {
-            start: new Date(startDate as string),
-            end: new Date(endDate as string),
+            start: new Date(normalizedStart),
+            end: new Date(normalizedEnd),
           },
           interval as "day" | "week",
         );

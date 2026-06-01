@@ -1971,52 +1971,48 @@ export default function RestaurantOwnerDashboard() {
                 String(selectedRestaurant),
               )}`}
             >
-              <Button
-                variant="outline"
-                className="w-full justify-start border-orange-200 bg-white text-orange-900 hover:bg-orange-100"
-              >
-                <Store className="mr-2 h-4 w-4" />
-                Profile
-              </Button>
+              <div className="flex w-full items-center gap-2 rounded-md border border-orange-200 bg-white px-3 py-2 text-orange-900 hover:bg-orange-100">
+                <Store className="h-4 w-4 text-orange-900" />
+                <span className="text-sm font-semibold text-orange-900">
+                  Complete truck profile
+                </span>
+              </div>
             </Link>
             <Link
               href={`/menu-builder?src=onboarding&restaurantId=${encodeURIComponent(
                 String(selectedRestaurant),
               )}`}
             >
-              <Button
-                variant="outline"
-                className="w-full justify-start border-orange-200 bg-white text-orange-900 hover:bg-orange-100"
-              >
-                <ShoppingCart className="mr-2 h-4 w-4" />
-                Menu
-              </Button>
+              <div className="flex w-full items-center gap-2 rounded-md border border-orange-200 bg-white px-3 py-2 text-orange-900 hover:bg-orange-100">
+                <ShoppingCart className="h-4 w-4 text-orange-900" />
+                <span className="text-sm font-semibold text-orange-900">
+                  Add menu items
+                </span>
+              </div>
             </Link>
             <Link
               href={`/restaurant-owner-dashboard?setup=schedule&restaurantId=${encodeURIComponent(
                 String(selectedRestaurant),
               )}${isFoodTruck ? "&truck=1" : ""}`}
             >
-              <Button
-                variant="outline"
-                className="w-full justify-start border-orange-200 bg-white text-orange-900 hover:bg-orange-100"
-              >
-                <Clock className="mr-2 h-4 w-4" />
-                Schedule
-              </Button>
+              <div className="flex w-full items-center gap-2 rounded-md border border-orange-200 bg-white px-3 py-2 text-orange-900 hover:bg-orange-100">
+                <Clock className="h-4 w-4 text-orange-900" />
+                <span className="text-sm font-semibold text-orange-900">
+                  Set schedule/live status
+                </span>
+              </div>
             </Link>
             <Link
-              href={`/restaurant-owner-dashboard?setup=bookings&restaurantId=${encodeURIComponent(
+              href={`/restaurant-owner-dashboard?setup=profile-media&restaurantId=${encodeURIComponent(
                 String(selectedRestaurant),
               )}`}
             >
-              <Button
-                variant="outline"
-                className="w-full justify-start border-orange-200 bg-white text-orange-900 hover:bg-orange-100"
-              >
-                <Calendar className="mr-2 h-4 w-4" />
-                Bookings
-              </Button>
+              <div className="flex w-full items-center gap-2 rounded-md border border-orange-200 bg-white px-3 py-2 text-orange-900 hover:bg-orange-100">
+                <Calendar className="h-4 w-4 text-orange-900" />
+                <span className="text-sm font-semibold text-orange-900">
+                  Add photos or logo
+                </span>
+              </div>
             </Link>
           </div>
 
