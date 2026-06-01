@@ -110,6 +110,7 @@ export function registerUserAdminRoutes(
         const allowedBusinessTypes = new Set([
           "restaurant_owner",
           "food_truck",
+          "bar_owner",
           "admin",
           "duper_admin",
           "super_admin",
@@ -117,7 +118,7 @@ export function registerUserAdminRoutes(
         if (!allowedBusinessTypes.has(String(targetUser.userType || ""))) {
           return res.status(400).json({
             message:
-              "Target user must be a business-capable account (restaurant_owner or food_truck).",
+              "Target user must be a business-capable account (restaurant_owner, food_truck, or bar_owner).",
           });
         }
 
@@ -193,16 +194,25 @@ export function registerUserAdminRoutes(
         }
 
         const userType = String(targetUser.userType || "").toLowerCase();
-        if (!["restaurant_owner", "food_truck"].includes(userType)) {
+        if (!["restaurant_owner", "food_truck", "bar_owner"].includes(userType)) {
           return res.status(400).json({
             message:
-              "Target user must be restaurant_owner or food_truck to create a business profile.",
+              "Target user must be restaurant_owner, food_truck, or bar_owner to create a business profile.",
           });
         }
 
+        const requestedBusinessType = String(req.body?.businessType || "").trim().toLowerCase();
+        const businessTypeFallback =
+          requestedBusinessType ||
+          (userType === "food_truck"
+            ? "food_truck"
+            : userType === "bar_owner"
+              ? "bar"
+              : "restaurant");
+
         const promoted = await promoteBusinessSetupToProfile(userId, {
           businessName: req.body?.businessName,
-          businessType: req.body?.businessType || userType,
+          businessType: businessTypeFallback,
           address: req.body?.address,
           city: req.body?.city,
           state: req.body?.state,
@@ -1007,6 +1017,7 @@ export function registerUserAdminRoutes(
           "customer",
           "restaurant_owner",
           "food_truck",
+          "bar_owner",
           "host",
           "event_coordinator",
           "staff",

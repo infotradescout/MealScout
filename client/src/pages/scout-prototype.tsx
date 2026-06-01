@@ -11,6 +11,7 @@ import "leaflet/dist/leaflet.css";
 import { useAuth } from "@/hooks/useAuth";
 import { getReverseGeocodedLocationName } from "@/utils/locationUtils";
 import Navigation from "@/components/navigation";
+import { isBarBusinessType } from "@shared/businessTypes";
 
 /* ─── styles ─── */
 const customStyles = `
@@ -701,7 +702,8 @@ export default function ScoutPrototype() {
 
     if (activeScene === "restaurants" || activeScene === "for_you" || activeScene === "nearby_now") {
       restaurants.forEach(r => {
-        const name = r.businessName || r.name || "Restaurant";
+        const isBar = isBarBusinessType(r.businessType);
+        const name = r.businessName || r.name || (isBar ? "Bar" : "Restaurant");
         const hasDeals = (r.activeDealsCount ?? r.activeDealCount ?? 0) > 0;
         const serviceStatus = restaurantServingStatus(r);
         const statusTag =
@@ -717,13 +719,13 @@ export default function ScoutPrototype() {
               ? "#f59e0b"
               : "#94a3b8";
         items.push({
-          id: `rest-${r.id}`, type: "RESTAURANT", typeColor: "#ff5c00",
+          id: `rest-${r.id}`, type: isBar ? "BAR" : "RESTAURANT", typeColor: "#ff5c00",
           image: imgSrc(r), title: name,
-          subtitle: [r.cuisineType, r.neighborhood || r.city, statusTag].filter(Boolean).join(" • "),
+          subtitle: [isBar ? "Bar" : r.cuisineType, r.neighborhood || r.city, statusTag].filter(Boolean).join(" • "),
           tag: hasDeals ? "Deal available" : statusTag,
           tagColor: hasDeals ? "#10b981" : statusColor,
           distance: distLabel(r),
-          href: `/restaurant/${r.id}`,
+          href: isBar ? `/p/bar/${r.id}` : `/restaurant/${r.id}`,
           routeHref: routeUrl(r.latitude ?? r.lat, r.longitude ?? r.lng, name),
           restaurantId: r.id,
         });
