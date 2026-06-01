@@ -224,10 +224,6 @@ export async function resolveUserContinuation(params: {
     continuationPath = "/restaurant-owner-dashboard?setup=profile-media";
     reason =
       "Add a logo, profile photo, or banner so customers can recognize your business.";
-  } else if (isBusinessUser && verificationRequired && !businessInsuranceSubmitted) {
-    nextRequiredStep = "verification";
-    continuationPath = "/restaurant-owner-dashboard?setup=verification";
-    reason = "Verification details are still missing.";
   } else if (isBusinessUser && menuRequired) {
     nextRequiredStep = "menu";
     continuationPath = "/menu-builder";
@@ -236,6 +232,10 @@ export async function resolveUserContinuation(params: {
     nextRequiredStep = "schedule";
     continuationPath = "/parking-pass-manage";
     reason = "Schedule and location setup is still required.";
+  } else if (isBusinessUser && verificationRequired && !businessInsuranceSubmitted) {
+    nextRequiredStep = "verification";
+    continuationPath = "/restaurant-owner-dashboard?setup=verification";
+    reason = "Verification details are still missing, but setup can continue.";
   }
 
   return {

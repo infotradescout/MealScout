@@ -1931,7 +1931,7 @@ export default function RestaurantSignup() {
                   {COPY.verification.backButton}
                 </Button>
                 <div className="flex flex-col gap-2 sm:flex-row">
-                  {(!claimSelection || isAutoBusinessVerified) && (
+                  {
                     <Button
                       type="button"
                       variant="outline"
@@ -1942,7 +1942,7 @@ export default function RestaurantSignup() {
                         ? "Continue"
                         : COPY.verification.skipButton}
                     </Button>
-                  )}
+                  }
                   {!isAutoBusinessVerified ? (
                     <Button
                       type="button"
