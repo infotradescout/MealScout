@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { apiUrl } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "wouter";
 import type {
@@ -409,8 +410,7 @@ function LocationTruckOptionsSection({
     queryKey: ["/api/public/discovery/location", hostId, "now"],
     enabled: Boolean(hostId),
     queryFn: async () => {
-      const res = await fetch(
-        `/api/public/discovery/location/${encodeURIComponent(hostId)}/time/now`,
+      const res = await fetch(apiUrl(`/api/public/discovery/location/${encodeURIComponent(hostId)}/time/now`),
       );
       if (!res.ok) return { totalTrucks: 0, trucks: [] };
       return res.json();
@@ -422,8 +422,7 @@ function LocationTruckOptionsSection({
       queryKey: ["/api/public/discovery/location", hostId, "tonight"],
       enabled: Boolean(hostId),
       queryFn: async () => {
-        const res = await fetch(
-          `/api/public/discovery/location/${encodeURIComponent(hostId)}/time/tonight`,
+        const res = await fetch(apiUrl(`/api/public/discovery/location/${encodeURIComponent(hostId)}/time/tonight`),
         );
         if (!res.ok) return { totalTrucks: 0, trucks: [] };
         return res.json();
@@ -813,7 +812,7 @@ function MenuSection({
       formData.append("comment", recommendComment);
       formData.append("rating", recommendRating);
       if (recommendPhoto) formData.append("image", recommendPhoto);
-      const res = await fetch(`/api/menu-items/${encodeURIComponent(menuItemId)}/recommend`, {
+      const res = await fetch(apiUrl(`/api/menu-items/${encodeURIComponent(menuItemId)}/recommend`), {
         method: "POST",
         credentials: "include",
         body: formData,
@@ -1551,8 +1550,7 @@ export default function PublicProfilePage() {
     queryKey: ["/api/public/profiles", normalizedProfileType, profileId, locationSearch],
     enabled: !!normalizedProfileType && !!profileId,
     queryFn: async () => {
-      const res = await fetch(
-        `/api/public/profiles/${encodeURIComponent(String(normalizedProfileType || ""))}/${encodeURIComponent(String(profileId || ""))}${locationSearch || ""}`,
+      const res = await fetch(apiUrl(`/api/public/profiles/${encodeURIComponent(String(normalizedProfileType || ""))}/${encodeURIComponent(String(profileId || ""))}${locationSearch || ""}`),
       );
       if (!res.ok) throw new Error("Profile not found");
       return res.json();
@@ -1589,7 +1587,7 @@ export default function PublicProfilePage() {
         }
       })();
 
-      void fetch("/api/public/profile-analytics", {
+      void fetch(apiUrl("/api/public/profile-analytics"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         keepalive: true,

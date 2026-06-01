@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { apiUrl } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 
@@ -172,8 +173,7 @@ export default function HostLocationManager({
 
     setGeocoding(true);
     try {
-      const response = await fetch(
-        `/api/location/search?limit=1&q=${encodeURIComponent(query)}`,
+      const response = await fetch(apiUrl(`/api/location/search?limit=1&q=${encodeURIComponent(query)}`),
       );
       const data = await response.json();
 

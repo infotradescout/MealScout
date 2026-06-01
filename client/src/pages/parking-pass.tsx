@@ -1434,10 +1434,9 @@ export default function ParkingPassPage() {
       try {
         let status: "pending" | "confirmed" | "credited" = "pending";
         if (intentId) {
-          const res = await fetch(
-            `/api/bookings/payment-intent/${encodeURIComponent(
+          const res = await fetch(apiUrl(`/api/bookings/payment-intent/${encodeURIComponent(
               intentId,
-            )}?truckId=${encodeURIComponent(truckId)}`,
+            )}?truckId=${encodeURIComponent(truckId)}`),
           );
           if (res.ok) {
             const data = await res.json();
@@ -1535,7 +1534,7 @@ export default function ParkingPassPage() {
     }
     const fetchBlackouts = async () => {
       try {
-        const res = await fetch(`/api/hosts/${selectedHostId}/blackout-dates`);
+        const res = await fetch(apiUrl(`/api/hosts/${selectedHostId}/blackout-dates`));
         if (res.status === 404) {
           setBlackoutDates([]);
           setHasActiveParkingPass(false);
@@ -1632,7 +1631,7 @@ export default function ParkingPassPage() {
     let cancelled = false;
     const loadManualSchedules = async () => {
       try {
-        const res = await fetch(`/api/trucks/${truckId}/manual-schedule`);
+        const res = await fetch(apiUrl(`/api/trucks/${truckId}/manual-schedule`));
         if (!res.ok) {
           throw new Error("Failed to load schedule");
         }
@@ -1668,7 +1667,7 @@ export default function ParkingPassPage() {
     let cancelled = false;
     const loadBookedSchedule = async () => {
       try {
-        const res = await fetch(`/api/bookings/truck/${truckId}/schedule`);
+        const res = await fetch(apiUrl(`/api/bookings/truck/${truckId}/schedule`));
         if (!res.ok) {
           throw new Error("Failed to load booked schedule");
         }
@@ -1715,8 +1714,7 @@ export default function ParkingPassPage() {
         const start = new Date();
         start.setDate(start.getDate() - 120);
         const startKey = format(start, "yyyy-MM-dd");
-        const res = await fetch(
-          `/api/trucks/${truckId}/parking-reports?startDate=${startKey}`,
+        const res = await fetch(apiUrl(`/api/trucks/${truckId}/parking-reports?startDate=${startKey}`),
         );
         if (!res.ok) {
           throw new Error("Failed to load reports");
@@ -1750,8 +1748,7 @@ export default function ParkingPassPage() {
   };
 
   const hydrateFromPlaceDetails = async (placeId: string) => {
-    const res = await fetch(
-      `/api/map/place-details/${encodeURIComponent(placeId)}`,
+    const res = await fetch(apiUrl(`/api/map/place-details/${encodeURIComponent(placeId)}`),
       {
         credentials: "include",
       },
@@ -1852,7 +1849,7 @@ export default function ParkingPassPage() {
 
     setIsSavingSchedule(true);
     try {
-      const res = await fetch(`/api/trucks/${truckId}/manual-schedule`, {
+      const res = await fetch(apiUrl(`/api/trucks/${truckId}/manual-schedule`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1935,8 +1932,7 @@ export default function ParkingPassPage() {
 
     if (!truckId) return;
     try {
-      const res = await fetch(
-        `/api/trucks/${truckId}/manual-schedule/${scheduleId}`,
+      const res = await fetch(apiUrl(`/api/trucks/${truckId}/manual-schedule/${scheduleId}`),
         { method: "DELETE" },
       );
       if (!res.ok) {
@@ -2154,7 +2150,7 @@ export default function ParkingPassPage() {
         notes: reportDraft.notes?.trim() || undefined,
       };
 
-      const res = await fetch(`/api/trucks/${truckId}/parking-reports`, {
+      const res = await fetch(apiUrl(`/api/trucks/${truckId}/parking-reports`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -2228,7 +2224,9 @@ export default function ParkingPassPage() {
     const provider = platform === "x" ? "x" : "meta";
     const redirect = encodeURIComponent("/parking-pass?tab=schedule");
     const platformParam = encodeURIComponent(platform);
-    window.location.href = `/api/restaurants/${truckId}/social-connections/${provider}/start?platform=${platformParam}&redirect=${redirect}`;
+    window.location.href = apiUrl(
+      `/api/restaurants/${truckId}/social-connections/${provider}/start?platform=${platformParam}&redirect=${redirect}`,
+    );
   };
 
   const handleDisconnectSocialPlatform = async (
@@ -2275,7 +2273,7 @@ export default function ParkingPassPage() {
       let manualRequiredCount = 0;
       if (truckId) {
         try {
-          const queueRes = await fetch(`/api/restaurants/${truckId}/social-posts`, {
+          const queueRes = await fetch(apiUrl(`/api/restaurants/${truckId}/social-posts`), {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             credentials: "include",
@@ -2391,8 +2389,7 @@ export default function ParkingPassPage() {
 
   const geocodeAddress = async (address: string): Promise<GeoPoint | null> => {
     if (!address) return null;
-    const res = await fetch(
-      `/api/location/search?q=${encodeURIComponent(address)}&limit=1`,
+    const res = await fetch(apiUrl(`/api/location/search?q=${encodeURIComponent(address)}&limit=1`),
     );
     if (!res.ok) return null;
     const data = (await res.json()) as Array<{ lat: string; lon: string }>;
@@ -2404,7 +2401,7 @@ export default function ParkingPassPage() {
     if (!host) return;
     setIsSavingAmenities(true);
     try {
-      const res = await fetch(`/api/hosts/${host.id}`, {
+      const res = await fetch(apiUrl(`/api/hosts/${host.id}`), {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ amenities }),
@@ -2498,7 +2495,7 @@ export default function ParkingPassPage() {
 
     setIsSavingLocation(true);
     try {
-      const res = await fetch("/api/hosts", {
+      const res = await fetch(apiUrl("/api/hosts"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -2556,7 +2553,7 @@ export default function ParkingPassPage() {
     }
     setIsUpdatingLocation(true);
     try {
-      const res = await fetch(`/api/hosts/${host.id}`, {
+      const res = await fetch(apiUrl(`/api/hosts/${host.id}`), {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -2607,7 +2604,7 @@ export default function ParkingPassPage() {
       const formData = new FormData();
       formData.append("image", spotImageFile);
 
-      const res = await fetch(`/api/hosts/${host.id}/spot-image`, {
+      const res = await fetch(apiUrl(`/api/hosts/${host.id}/spot-image`), {
         method: "POST",
         body: formData,
       });
@@ -2638,7 +2635,7 @@ export default function ParkingPassPage() {
     if (!host || !pinPosition) return;
     setIsSavingPin(true);
     try {
-      const res = await fetch(`/api/hosts/${host.id}/coordinates`, {
+      const res = await fetch(apiUrl(`/api/hosts/${host.id}/coordinates`), {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -2713,7 +2710,7 @@ export default function ParkingPassPage() {
 
     setIsDeletingLocation(true);
     try {
-      const res = await fetch(`/api/hosts/${host.id}`, { method: "DELETE" });
+      const res = await fetch(apiUrl(`/api/hosts/${host.id}`), { method: "DELETE" });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.message || "Failed to delete location");
@@ -2755,7 +2752,7 @@ export default function ParkingPassPage() {
     if (!host || !blackoutDateInput || !hasActiveParkingPass) return;
     setIsSavingBlackout(true);
     try {
-      const res = await fetch(`/api/hosts/${host.id}/blackout-dates`, {
+      const res = await fetch(apiUrl(`/api/hosts/${host.id}/blackout-dates`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ date: blackoutDateInput }),
@@ -2788,7 +2785,7 @@ export default function ParkingPassPage() {
     if (!host) return;
     setIsSavingBlackout(true);
     try {
-      const res = await fetch(`/api/hosts/${host.id}/blackout-dates`, {
+      const res = await fetch(apiUrl(`/api/hosts/${host.id}/blackout-dates`), {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ date: dateKey }),
@@ -2912,7 +2909,7 @@ export default function ParkingPassPage() {
     }
 
     try {
-      const res = await fetch("/api/hosts/parking-pass", {
+      const res = await fetch(apiUrl("/api/hosts/parking-pass"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -3193,7 +3190,7 @@ export default function ParkingPassPage() {
     if (!truckId) return;
     setIsSavingSocialSettings(true);
     try {
-      const res = await fetch(`/api/restaurants/${truckId}/social-settings`, {
+      const res = await fetch(apiUrl(`/api/restaurants/${truckId}/social-settings`), {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -3323,7 +3320,7 @@ export default function ParkingPassPage() {
       };
       const safeLiveMinutes = Math.max(15, Math.min(240, computeLiveMinutes()));
       if (isLive) {
-        await fetch(`/api/restaurants/${truckId}/mobile-settings`, {
+        await fetch(apiUrl(`/api/restaurants/${truckId}/mobile-settings`), {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ mobileOnline: false }),
@@ -3346,13 +3343,13 @@ export default function ParkingPassPage() {
         },
       );
 
-      await fetch(`/api/restaurants/${truckId}/mobile-settings`, {
+      await fetch(apiUrl(`/api/restaurants/${truckId}/mobile-settings`), {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ mobileOnline: true }),
       });
 
-      const locationRes = await fetch(`/api/restaurants/${truckId}/location`, {
+      const locationRes = await fetch(apiUrl(`/api/restaurants/${truckId}/location`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -3383,8 +3380,7 @@ export default function ParkingPassPage() {
         imageUrl?: string | null;
       } | null = null;
       try {
-        const cardRes = await fetch(
-          `/api/restaurants/${truckId}/live-share-card`,
+        const cardRes = await fetch(apiUrl(`/api/restaurants/${truckId}/live-share-card`),
           { credentials: "include" },
         );
         if (cardRes.ok) {

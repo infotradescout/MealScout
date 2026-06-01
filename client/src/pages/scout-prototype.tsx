@@ -11,6 +11,7 @@ import "leaflet/dist/leaflet.css";
 import { useAuth } from "@/hooks/useAuth";
 import { getReverseGeocodedLocationName } from "@/utils/locationUtils";
 import { isBarBusinessType } from "@shared/businessTypes";
+import { apiUrl } from "@/lib/api";
 
 /* ─── styles ─── */
 const customStyles = `
@@ -639,7 +640,7 @@ export default function ScoutPrototype() {
   const { data: trucksRaw = [] } = useQuery<Truck[]>({
     queryKey: ["/api/trucks/live", location.lat, location.lng],
     queryFn: async () => {
-      const r = await fetch(`/api/trucks/live?lat=${location.lat}&lng=${location.lng}&radiusKm=25`, { credentials: "include" });
+      const r = await fetch(apiUrl(`/api/trucks/live?lat=${location.lat}&lng=${location.lng}&radiusKm=25`), { credentials: "include" });
       if (!r.ok) return [];
       const d = await r.json();
       return Array.isArray(d) ? d : (d?.trucks ?? []);
@@ -651,7 +652,7 @@ export default function ScoutPrototype() {
   const { data: restaurantsRaw = [] } = useQuery<Restaurant[]>({
     queryKey: ["/api/restaurants/subscribed", location.lat, location.lng],
     queryFn: async () => {
-      const r = await fetch(`/api/restaurants/subscribed/${location.lat}/${location.lng}?radius=25`, { credentials: "include" });
+      const r = await fetch(apiUrl(`/api/restaurants/subscribed/${location.lat}/${location.lng}?radius=25`), { credentials: "include" });
       if (!r.ok) return [];
       return r.json();
     },
@@ -661,7 +662,7 @@ export default function ScoutPrototype() {
   const { data: dealsRaw = [] } = useQuery<Deal[]>({
     queryKey: ["/api/deals/nearby", location.lat, location.lng],
     queryFn: async () => {
-      const r = await fetch(`/api/deals/nearby/${location.lat}/${location.lng}?radius=25`, { credentials: "include" });
+      const r = await fetch(apiUrl(`/api/deals/nearby/${location.lat}/${location.lng}?radius=25`), { credentials: "include" });
       if (!r.ok) return [];
       const d = await r.json();
       return Array.isArray(d) ? d : (d?.deals ?? []);
@@ -672,7 +673,7 @@ export default function ScoutPrototype() {
   const { data: eventsRaw = [] } = useQuery<ScoutEvent[]>({
     queryKey: ["/api/events/public"],
     queryFn: async () => {
-      const r = await fetch("/api/events/public", { credentials: "include" });
+      const r = await fetch(apiUrl("/api/events/public"), { credentials: "include" });
       if (!r.ok) return [];
       const d = await r.json();
       return Array.isArray(d) ? d : (d?.events ?? []);
@@ -1026,7 +1027,7 @@ export default function ScoutPrototype() {
       return next;
     });
     try {
-      await fetch(`/api/favorites/restaurants/${id}`, {
+      await fetch(apiUrl(`/api/favorites/restaurants/${id}`), {
         method: savedIds.has(id) ? "DELETE" : "POST",
         credentials: "include",
       });

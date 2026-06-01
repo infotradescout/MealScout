@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
+import { apiUrl } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Link } from "wouter";
@@ -77,7 +78,7 @@ function trackMenuItemSearchEngagement(payload: {
   discoveryScore?: number | null;
   discoveryReasons?: string[] | null;
 }) {
-  void fetch("/api/menus/local-items/engagement", {
+  void fetch(apiUrl("/api/menus/local-items/engagement"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     keepalive: true,
@@ -348,8 +349,7 @@ export default function SearchPage() {
       : ["/api/deals/featured"],
     queryFn: userLocation
       ? async () => {
-          const response = await fetch(
-            `/api/deals/nearby/${userLocation.lat}/${userLocation.lng}?radius=${discoveryRadiusKm}`,
+          const response = await fetch(apiUrl(`/api/deals/nearby/${userLocation.lat}/${userLocation.lng}?radius=${discoveryRadiusKm}`),
           );
           if (!response.ok) throw new Error("Failed to fetch nearby deals");
           return response.json();
@@ -367,7 +367,7 @@ export default function SearchPage() {
     queryKey: ["/api/search", debouncedSearchQuery],
     queryFn: async () => {
       const params = new URLSearchParams({ q: debouncedSearchQuery });
-      const res = await fetch(`/api/search?${params}`);
+      const res = await fetch(apiUrl(`/api/search?${params}`));
       if (!res.ok) throw new Error("Failed to search");
       return res.json();
     },
@@ -390,7 +390,7 @@ export default function SearchPage() {
         params.set("lng", String(userLocation.lng));
         params.set("radius", String(discoveryRadiusKm));
       }
-      const res = await fetch(`/api/restaurants/search?${params.toString()}`);
+      const res = await fetch(apiUrl(`/api/restaurants/search?${params.toString()}`));
       if (!res.ok) throw new Error("Failed to search restaurants");
       return res.json();
     },
@@ -417,7 +417,7 @@ export default function SearchPage() {
           params.set("lat", String(userLocation.lat));
           params.set("lng", String(userLocation.lng));
         }
-        const res = await fetch(`/api/menus/local-items?${params.toString()}`);
+        const res = await fetch(apiUrl(`/api/menus/local-items?${params.toString()}`));
         if (!res.ok) throw new Error("Failed to search menu items");
         const data = await res.json();
         return Array.isArray(data?.items) ? data.items : [];
@@ -740,7 +740,7 @@ export default function SearchPage() {
   const { data: trendingSearches = [] } = useQuery<TrendingSearchRow[]>({
     queryKey: ["/api/search/trending", "search-discovery"],
     queryFn: async () => {
-      const res = await fetch("/api/search/trending?limit=8");
+      const res = await fetch(apiUrl("/api/search/trending?limit=8"));
       if (!res.ok) throw new Error("Failed to fetch trending searches");
       return res.json();
     },
@@ -795,7 +795,7 @@ export default function SearchPage() {
 
   async function trackSearch(query: string, source: string) {
     try {
-      await fetch("/api/search/track", {
+      await fetch(apiUrl("/api/search/track"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query, source }),
