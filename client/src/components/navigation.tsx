@@ -224,6 +224,9 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
   const dashboardPath = !user
     ? "/customer-signup"
     : "/dashboard";
+  const isScoutRoute =
+    currentPath === "/scout" || currentPath.startsWith("/scout/");
+  const disableScoutHelpBubbles = isScoutRoute;
 
   const lane: "guest" | "admin_staff" | "event" | "supplier" | "food_truck" | "restaurant" | "host" | "customer" =
     !user
@@ -241,6 +244,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
                 : isHost
                   ? "host"
                   : "customer";
+  const isRestaurantHostCapable = lane === "restaurant" && isHost;
 
   const primarySlotsByLane: Record<typeof lane, NavItem[]> = {
     guest: [
@@ -267,7 +271,9 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     restaurant: [
       businessOnboardingRequired
         ? { path: businessOnboardingPath, icon: Store, label: "Set Up" }
-        : { path: "/orders", icon: ShoppingCart, label: "Orders" },
+        : isRestaurantHostCapable
+          ? { path: "/parking-pass", icon: ParkingSquare, label: "Parking Pass" }
+          : { path: "/orders", icon: ShoppingCart, label: "Orders" },
       businessOnboardingRequired
         ? { path: businessOnboardingPath, icon: UserPlus, label: "Claim" }
         : { path: "/kitchen", icon: ChefHat, label: "Kitchen" },
@@ -349,6 +355,9 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
       );
     } else if (lane === "restaurant") {
       items.push(
+        ...(isRestaurantHostCapable
+          ? [{ path: "/parking-pass", icon: ParkingSquare, label: "Parking Pass" } as NavItem]
+          : []),
         { path: "/events", icon: Calendar, label: "Events" },
         { path: "/suppliers", icon: Truck, label: "Suppliers" },
         { path: "/subscribe", icon: BarChart3, label: "Subscription" },
@@ -404,20 +413,20 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
   const isActive = (path: string) =>
     location === path || location.startsWith(`${path}/`) || location.startsWith(`${path}?`);
 
-  const sanitizeOwnerNavHref = (href: string) => {
+  const buildOwnerToolHref = (destination: string) => {
     try {
-      const url = new URL(href, window.location.origin);
+      const url = new URL(destination, window.location.origin);
       const current = new URL(window.location.href);
       const isLeavingOwnerDashboard =
         current.pathname.startsWith("/restaurant-owner-dashboard") &&
         !url.pathname.startsWith("/restaurant-owner-dashboard");
-      if (!isLeavingOwnerDashboard) return href;
+      if (!isLeavingOwnerDashboard) return destination;
       ["setup", "ref", "setupStep", "setupPanel", "onboarding"].forEach((key) =>
         url.searchParams.delete(key),
       );
       return `${url.pathname}${url.search}${url.hash}`;
     } catch {
-      return href;
+      return destination;
     }
   };
 
@@ -432,11 +441,12 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
             {sixSlotNav.map((item, idx) =>
               item.path ? (
                 <LongPressHelp
+                  disabled={disableScoutHelpBubbles}
                   key={`${item.path}-${idx}`}
                   description={NAV_HELP[item.label] || `${item.label} navigation`}
                 >
                   <Link
-                    href={sanitizeOwnerNavHref(item.path)}
+                    href={buildOwnerToolHref(item.path)}
                     className={`inline-flex h-11 items-center gap-2 rounded-xl px-3 text-sm font-bold transition-all ${
                       isActive(item.path)
                         ? "bg-primary text-[#1a0d08] shadow-[0_0_20px_rgba(255,90,47,0.4)]"
@@ -452,6 +462,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
                 </LongPressHelp>
               ) : (
                 <LongPressHelp
+                  disabled={disableScoutHelpBubbles}
                   key={`more-${idx}`}
                   description={NAV_HELP[item.label] || `${item.label} options`}
                 >
@@ -497,11 +508,12 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
               if (item.path) {
                 return (
                   <LongPressHelp
+                    disabled={disableScoutHelpBubbles}
                     key={`${item.path}-${index}`}
                     description={NAV_HELP[item.label] || `${item.label} navigation`}
                   >
                     <Link
-                      href={sanitizeOwnerNavHref(item.path)}
+                      href={buildOwnerToolHref(item.path)}
                       aria-label={item.label}
                       aria-current={active ? "page" : undefined}
                       className={`flex flex-col items-center justify-end gap-0.5 flex-1 min-w-0 h-full transition-colors ${isPrimary ? "pb-0.5" : "pb-1"} ${
@@ -530,6 +542,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
 
               return (
                 <LongPressHelp
+                  disabled={disableScoutHelpBubbles}
                   key={`more-${index}`}
                   description={NAV_HELP[item.label] || `${item.label} options`}
                 >
@@ -618,7 +631,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
                 return item.path ? (
                   <Link
                     key={item.path}
-                    href={sanitizeOwnerNavHref(item.path)}
+                    href={buildOwnerToolHref(item.path)}
                     aria-label={item.label}
                     aria-current={active ? "page" : undefined}
                     className="flex flex-col items-center justify-start pt-3 px-1 rounded-2xl hover:bg-white/5 transition-colors"

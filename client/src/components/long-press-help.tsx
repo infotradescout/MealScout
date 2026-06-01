@@ -12,12 +12,16 @@ type LongPressHelpProps = {
   description: string;
   children: ReactElement;
   longPressMs?: number;
+  autoHideMs?: number;
+  disabled?: boolean;
 };
 
 export default function LongPressHelp({
   description,
   children,
   longPressMs = 450,
+  autoHideMs = 2200,
+  disabled = false,
 }: LongPressHelpProps) {
   const rootRef = useRef<HTMLSpanElement | null>(null);
   const pressTimerRef = useRef<number | null>(null);
@@ -65,6 +69,9 @@ export default function LongPressHelp({
 
   useEffect(() => {
     if (!open) return;
+    const autoHideTimer = window.setTimeout(() => {
+      close();
+    }, autoHideMs);
     const onDocPointerDown = (event: PointerEvent) => {
       if (!rootRef.current) return;
       if (rootRef.current.contains(event.target as Node)) return;
@@ -76,16 +83,21 @@ export default function LongPressHelp({
     window.addEventListener("pointerdown", onDocPointerDown);
     window.addEventListener("keydown", onKeyDown);
     return () => {
+      window.clearTimeout(autoHideTimer);
       window.removeEventListener("pointerdown", onDocPointerDown);
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, [open]);
+  }, [open, autoHideMs]);
 
   const trigger = isValidElement(children)
     ? cloneElement(children as ReactElement<any>, {
-        title: description,
+        title: disabled ? undefined : description,
       })
     : children;
+
+  if (disabled) {
+    return <span className="relative inline-flex">{trigger as ReactNode}</span>;
+  }
 
   return (
     <span
