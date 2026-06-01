@@ -11,7 +11,7 @@ const requiredSnippets = [
   "<option value=\"unknown\">Needs review</option>",
   "role:{toIdentityRole(user.userType)}",
   "attachment:",
-  "not_attached",
+  "needs_business_shell",
   "Conflict detected: account role intent",
   "Select business type intent",
 ];

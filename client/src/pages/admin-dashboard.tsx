@@ -128,6 +128,37 @@ type BusinessTypeIntent =
   | "unknown"
   | "conflict";
 
+type BusinessAttachmentState =
+  | "attached"
+  | "pending_invite"
+  | "pending_claim"
+  | "admin_import_draft"
+  | "orphan_needs_repair"
+  | "needs_business_shell"
+  | "invalid_missing_business";
+
+function resolveBusinessAttachmentState(
+  user: any,
+  attachedBusiness: any | null,
+): BusinessAttachmentState {
+  if (attachedBusiness) return "attached";
+  const linkState = String(user?.linkState || "").toLowerCase();
+  if (linkState === "pending_invite") return "pending_invite";
+  if (linkState === "pending_claim" || user?.claimStatus === "pending") {
+    return "pending_claim";
+  }
+  if (user?.adminImportDraft || user?.importDraft) return "admin_import_draft";
+
+  const userType = String(user?.userType || "").toLowerCase();
+  const businessName = String(user?.businessName || "").trim();
+  if (isBusinessUserType(userType)) {
+    if (businessName) return "needs_business_shell";
+    return "invalid_missing_business";
+  }
+
+  return "invalid_missing_business";
+}
+
 function resolveAdminUserBusinessIdentity(
   user: any,
   attachedBusiness: any | null,
@@ -184,11 +215,7 @@ function resolveAdminUserBusinessIdentity(
                   ? "restaurant"
                   : "unknown";
 
-  const attachmentState = attachedBusiness
-    ? "attached"
-    : user?.businessName
-      ? "needs_business_shell"
-      : "not_attached";
+  const attachmentState = resolveBusinessAttachmentState(user, attachedBusiness);
 
   const candidates = [attachedIntent, signalIntent, roleIntent].filter(
     (value) => value !== "unknown",
@@ -9513,7 +9540,7 @@ export default function AdminDashboard() {
                               ? "attached"
                               : user.businessName
                                 ? "needs_business_shell"
-                                : "not_attached"}
+                                : "invalid_missing_business"}
                           </Badge>
                           {user.hasRestaurant && (
                             <Badge variant="outline">
@@ -9545,7 +9572,11 @@ export default function AdminDashboard() {
                           )}
                           {isBusinessUserType(user.userType) &&
                             !user.hasRestaurant && (
-                              <Badge variant="destructive">not_attached</Badge>
+                              <Badge variant="destructive">
+                                {user.businessName
+                                  ? "needs_business_shell"
+                                  : "invalid_missing_business"}
+                              </Badge>
                             )}
                         </div>
                       </div>
@@ -11315,7 +11346,9 @@ export default function AdminDashboard() {
                     <Badge
                       variant={userRestaurants.length > 0 ? "default" : "destructive"}
                     >
-                      {userRestaurants.length > 0 ? "linked" : "not_attached"}
+                      {userRestaurants.length > 0
+                        ? "linked"
+                        : "needs_business_shell"}
                     </Badge>
                   </div>
 
