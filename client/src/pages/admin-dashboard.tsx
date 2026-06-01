@@ -14,6 +14,13 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import Navigation from "@/components/navigation";
 import {
@@ -486,6 +493,32 @@ interface FoodTruckInventoryResponse {
     missingOwner: number;
     quarantined: number;
   };
+}
+
+interface OneMarketLaunchBoardResponse {
+  market: {
+    city: string;
+    cityFilterApplied: boolean;
+    cityOptions: string[];
+  };
+  metrics: {
+    profilesTotal: number;
+    claimableProfiles: number;
+    claimedProfiles: number;
+    profilesWithMenu: number;
+    profilesWithSchedule: number;
+    profilesWithContact: number;
+    profilesWithPhotoLogo: number;
+    activeFoodTrucks: number;
+    activeHosts: number;
+    parkingPassListings: number;
+    bookingStarts: number;
+    bookingConfirmations: number;
+    publicProfileViews: number;
+    publicProfileActions: number;
+    affiliateLinkOpens: number;
+  };
+  generatedAt: string;
 }
 
 const FOOT_TRAFFIC_OPTIONS = [
@@ -2805,6 +2838,7 @@ export default function AdminDashboard() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [selectedTab, setSelectedTab] = useState("overview");
+  const [launchBoardCity, setLaunchBoardCity] = useState("all");
   const { effectiveLocationContext } = useEffectiveLocationContext();
   const [briefStatus, setBriefStatus] = useState<
     Record<string, { until: number }>
@@ -3077,6 +3111,23 @@ export default function AdminDashboard() {
       return quarantinePayload.profiles;
     return [];
   }, [quarantinePayload]);
+
+  const { data: launchBoardData, isLoading: launchBoardLoading } =
+    useQuery<OneMarketLaunchBoardResponse>({
+      queryKey: ["/api/admin/launch-board", launchBoardCity],
+      enabled: !!adminUser && selectedTab === "launch-board",
+      queryFn: async () => {
+        const params = new URLSearchParams();
+        if (launchBoardCity !== "all") params.set("city", launchBoardCity);
+        const suffix = params.toString() ? `?${params.toString()}` : "";
+        const res = await fetch(apiUrl(`/api/admin/launch-board${suffix}`), {
+          credentials: "include",
+        });
+        if (!res.ok) throw new Error("Failed to fetch launch board");
+        return res.json();
+      },
+      staleTime: 30 * 1000,
+    });
 
   const openAdminUserProfile = (userId: string, inNewTab = false) => {
     const href = `/admin/dashboard?tab=users&focusUser=${encodeURIComponent(userId)}`;
@@ -7276,6 +7327,13 @@ export default function AdminDashboard() {
               Overview
             </TabsTrigger>
             <TabsTrigger
+              value="launch-board"
+              data-testid="tab-launch-board"
+              className="px-6 py-2.5 rounded-xl transition-all data-[state=active]:bg-primary data-[state=active]:text-black data-[state=active]:shadow-[0_0_20px_rgba(245,158,11,0.4)] text-white/60 hover:text-white"
+            >
+              Launch Board
+            </TabsTrigger>
+            <TabsTrigger
               value="restaurants"
               data-testid="tab-restaurants"
               className="px-6 py-2.5 rounded-xl transition-all data-[state=active]:bg-primary data-[state=active]:text-black data-[state=active]:shadow-[0_0_20px_rgba(245,158,11,0.4)] text-white/60 hover:text-white"
@@ -8228,6 +8286,100 @@ export default function AdminDashboard() {
                 ) : (
                   <div className="text-sm text-muted-foreground">
                     No host payout requests yet.
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="launch-board" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>One-Market Launch Board</CardTitle>
+                <CardDescription>
+                  City-level launch metrics for supply, activation, and booking
+                  momentum.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="text-xs text-muted-foreground">
+                    Generated:{" "}
+                    {launchBoardData?.generatedAt
+                      ? new Date(launchBoardData.generatedAt).toLocaleString()
+                      : "—"}
+                  </div>
+                  <Select
+                    value={launchBoardCity}
+                    onValueChange={setLaunchBoardCity}
+                  >
+                    <SelectTrigger className="w-full sm:w-[240px]">
+                      <SelectValue placeholder="Select market city" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Cities</SelectItem>
+                      {(launchBoardData?.market?.cityOptions || []).map(
+                        (city) => (
+                          <SelectItem key={city} value={city}>
+                            {city}
+                          </SelectItem>
+                        ),
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {launchBoardLoading ? (
+                  <div className="text-sm text-muted-foreground">
+                    Loading launch board...
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+                    {[
+                      ["Profiles Total", launchBoardData?.metrics?.profilesTotal],
+                      [
+                        "Claimable Profiles",
+                        launchBoardData?.metrics?.claimableProfiles,
+                      ],
+                      ["Claimed Profiles", launchBoardData?.metrics?.claimedProfiles],
+                      ["Profiles w/ Menu", launchBoardData?.metrics?.profilesWithMenu],
+                      [
+                        "Profiles w/ Schedule",
+                        launchBoardData?.metrics?.profilesWithSchedule,
+                      ],
+                      [
+                        "Profiles w/ Contact",
+                        launchBoardData?.metrics?.profilesWithContact,
+                      ],
+                      [
+                        "Profiles w/ Photo/Logo",
+                        launchBoardData?.metrics?.profilesWithPhotoLogo,
+                      ],
+                      ["Active Food Trucks", launchBoardData?.metrics?.activeFoodTrucks],
+                      ["Active Hosts", launchBoardData?.metrics?.activeHosts],
+                      [
+                        "Parking Pass Listings",
+                        launchBoardData?.metrics?.parkingPassListings,
+                      ],
+                      ["Booking Starts", launchBoardData?.metrics?.bookingStarts],
+                      [
+                        "Booking Confirmations",
+                        launchBoardData?.metrics?.bookingConfirmations,
+                      ],
+                      ["Public Profile Views", launchBoardData?.metrics?.publicProfileViews],
+                      [
+                        "Public Profile Actions",
+                        launchBoardData?.metrics?.publicProfileActions,
+                      ],
+                      ["Affiliate Link Opens", launchBoardData?.metrics?.affiliateLinkOpens],
+                    ].map(([label, value]) => (
+                      <div key={String(label)} className="rounded-lg border p-3">
+                        <div className="text-xs text-muted-foreground">{label}</div>
+                        <div className="text-2xl font-semibold">
+                          {Number(value || 0).toLocaleString()}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 )}
               </CardContent>

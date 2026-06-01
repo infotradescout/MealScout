@@ -9,14 +9,18 @@ import { emailService } from "../../emailService";
 import { isAdminUserType } from "../../roleAccess";
 import { db } from "../../db";
 import {
+  affiliateShareEvents,
   eventBookings,
   events,
   eventSeries,
   foodTruckLocations,
   foodTruckSessions,
+  hosts,
   menuItems,
+  requestLogs,
   restaurants,
   telemetryEvents,
+  truckManualSchedules,
   users,
   userAddresses,
 } from "@shared/schema";
@@ -209,6 +213,302 @@ const bodyToHtml = (body: string) =>
     .join("");
 
 export function registerAdminCoreOpsRoutes(app: Express) {
+  app.get(
+    "/api/admin/launch-board",
+    isAuthenticated,
+    isStaffOrAdmin,
+    async (req: any, res) => {
+      try {
+        const cityFilter = String(req.query?.city || "").trim();
+        const cityKey = cityFilter.toLowerCase();
+        const hasCityFilter = cityKey.length > 0;
+        const cityWhereRestaurants = hasCityFilter
+          ? sql`lower(trim(coalesce(${restaurants.city}, ''))) = ${cityKey}`
+          : sql`true`;
+        const cityWhereHosts = hasCityFilter
+          ? sql`lower(trim(coalesce(${hosts.city}, ''))) = ${cityKey}`
+          : sql`true`;
+
+        const [
+          [restaurantTotalsRow],
+          [restaurantClaimStatsRow],
+          [restaurantContactRow],
+          [restaurantPhotoRow],
+          [activeTrucksRow],
+          [hostsTotalRow],
+          [hostsContactRow],
+          [hostsPhotoRow],
+          [menuProfilesRow],
+          [manualScheduleProfilesRow],
+          [bookedScheduleProfilesRow],
+          [parkingPassListingsRow],
+          [bookingStartsRow],
+          [bookingConfirmationsRow],
+          [publicViewsRow],
+          [publicActionsRow],
+          [affiliateOpensRow],
+          cityOptionsRows,
+        ] = await Promise.all([
+          db
+            .select({ total: sql<number>`count(*)`.mapWith(Number) })
+            .from(restaurants)
+            .where(and(eq(restaurants.isActive, true), cityWhereRestaurants)),
+          db
+            .select({
+              claimed: sql<number>`count(*) filter (where ${users.userType} in ('restaurant_owner', 'food_truck'))`.mapWith(Number),
+            })
+            .from(restaurants)
+            .leftJoin(users, eq(users.id, restaurants.ownerId))
+            .where(and(eq(restaurants.isActive, true), cityWhereRestaurants)),
+          db
+            .select({
+              withContact: sql<number>`count(*) filter (where coalesce(nullif(trim(${restaurants.phone}), ''), nullif(trim(${restaurants.websiteUrl}), '')) is not null)`.mapWith(
+                Number,
+              ),
+            })
+            .from(restaurants)
+            .where(and(eq(restaurants.isActive, true), cityWhereRestaurants)),
+          db
+            .select({
+              withPhoto: sql<number>`count(*) filter (where coalesce(nullif(trim(${restaurants.logoUrl}), ''), nullif(trim(${restaurants.coverImageUrl}), '')) is not null)`.mapWith(
+                Number,
+              ),
+            })
+            .from(restaurants)
+            .where(and(eq(restaurants.isActive, true), cityWhereRestaurants)),
+          db
+            .select({
+              activeFoodTrucks: sql<number>`count(*)`.mapWith(Number),
+            })
+            .from(restaurants)
+            .where(
+              and(
+                eq(restaurants.isActive, true),
+                cityWhereRestaurants,
+                sql`(${restaurants.isFoodTruck} = true or ${restaurants.businessType} = 'food_truck')`,
+              ),
+            ),
+          db
+            .select({ total: sql<number>`count(*)`.mapWith(Number) })
+            .from(hosts)
+            .where(cityWhereHosts),
+          db
+            .select({
+              withContact: sql<number>`count(*) filter (where nullif(trim(${hosts.contactPhone}), '') is not null)`.mapWith(
+                Number,
+              ),
+            })
+            .from(hosts)
+            .where(cityWhereHosts),
+          db
+            .select({
+              withPhoto: sql<number>`count(*) filter (where nullif(trim(${hosts.spotImageUrl}), '') is not null)`.mapWith(
+                Number,
+              ),
+            })
+            .from(hosts)
+            .where(cityWhereHosts),
+          db
+            .select({
+              withMenu: sql<number>`count(distinct ${menuItems.restaurantId})`.mapWith(
+                Number,
+              ),
+            })
+            .from(menuItems)
+            .innerJoin(restaurants, eq(restaurants.id, menuItems.restaurantId))
+            .where(and(eq(restaurants.isActive, true), cityWhereRestaurants)),
+          db
+            .select({
+              withManualSchedule:
+                sql<number>`count(distinct ${truckManualSchedules.truckId})`.mapWith(
+                  Number,
+                ),
+            })
+            .from(truckManualSchedules)
+            .innerJoin(restaurants, eq(restaurants.id, truckManualSchedules.truckId))
+            .where(and(eq(restaurants.isActive, true), cityWhereRestaurants)),
+          db
+            .select({
+              withBookedSchedule:
+                sql<number>`count(distinct ${events.bookedRestaurantId})`.mapWith(
+                  Number,
+                ),
+            })
+            .from(events)
+            .innerJoin(hosts, eq(hosts.id, events.hostId))
+            .where(and(isNotNull(events.bookedRestaurantId), cityWhereHosts)),
+          db
+            .select({
+              listings: sql<number>`count(*)`.mapWith(Number),
+            })
+            .from(eventSeries)
+            .innerJoin(hosts, eq(hosts.id, eventSeries.hostId))
+            .where(
+              and(
+                eq(eventSeries.seriesType, "parking_pass"),
+                eq(eventSeries.status, "published"),
+                cityWhereHosts,
+              ),
+            ),
+          db
+            .select({
+              bookingStarts: sql<number>`count(*)`.mapWith(Number),
+            })
+            .from(eventBookings)
+            .innerJoin(events, eq(events.id, eventBookings.eventId))
+            .innerJoin(hosts, eq(hosts.id, events.hostId))
+            .where(and(eq(events.eventType, "parking_pass"), cityWhereHosts)),
+          db
+            .select({
+              bookingConfirmations:
+                sql<number>`count(*) filter (where ${eventBookings.status} = 'confirmed')`.mapWith(
+                  Number,
+                ),
+            })
+            .from(eventBookings)
+            .innerJoin(events, eq(events.id, eventBookings.eventId))
+            .innerJoin(hosts, eq(hosts.id, events.hostId))
+            .where(and(eq(events.eventType, "parking_pass"), cityWhereHosts)),
+          db
+            .select({
+              views: sql<number>`count(*)`.mapWith(Number),
+            })
+            .from(requestLogs)
+            .where(
+              and(
+                eq(requestLogs.surface, "public_profile"),
+                eq(requestLogs.eventType, "profile_view"),
+                hasCityFilter
+                  ? sql`(
+                      (${requestLogs.entityType} in ('restaurant', 'truck', 'bar')
+                        and exists (
+                          select 1
+                          from restaurants r
+                          where r.id = ${requestLogs.entityId}
+                            and lower(trim(coalesce(r.city, ''))) = ${cityKey}
+                        ))
+                      or
+                      (${requestLogs.entityType} = 'host'
+                        and exists (
+                          select 1
+                          from hosts h
+                          where h.id = ${requestLogs.entityId}
+                            and lower(trim(coalesce(h.city, ''))) = ${cityKey}
+                        ))
+                    )`
+                  : sql`true`,
+              ),
+            ),
+          db
+            .select({
+              actions: sql<number>`count(*)`.mapWith(Number),
+            })
+            .from(requestLogs)
+            .where(
+              and(
+                eq(requestLogs.surface, "public_profile"),
+                eq(requestLogs.eventType, "profile_action"),
+                hasCityFilter
+                  ? sql`(
+                      (${requestLogs.entityType} in ('restaurant', 'truck', 'bar')
+                        and exists (
+                          select 1
+                          from restaurants r
+                          where r.id = ${requestLogs.entityId}
+                            and lower(trim(coalesce(r.city, ''))) = ${cityKey}
+                        ))
+                      or
+                      (${requestLogs.entityType} = 'host'
+                        and exists (
+                          select 1
+                          from hosts h
+                          where h.id = ${requestLogs.entityId}
+                            and lower(trim(coalesce(h.city, ''))) = ${cityKey}
+                        ))
+                    )`
+                  : sql`true`,
+              ),
+            ),
+          db
+            .select({
+              opens: sql<number>`count(*)`.mapWith(Number),
+            })
+            .from(affiliateShareEvents)
+            .where(
+              hasCityFilter
+                ? sql`lower(${affiliateShareEvents.destinationUrl}) like ${`%${cityKey}%`}`
+                : sql`true`,
+            ),
+          db.execute(sql`
+            select city from (
+              select distinct trim(coalesce(r.city, '')) as city
+              from restaurants r
+              where coalesce(trim(r.city), '') <> ''
+              union
+              select distinct trim(coalesce(h.city, '')) as city
+              from hosts h
+              where coalesce(trim(h.city), '') <> ''
+            ) city_pool
+            order by city asc
+            limit 200
+          `),
+        ]);
+
+        const restaurantTotal = Number(restaurantTotalsRow?.total || 0);
+        const claimedProfiles = Number(restaurantClaimStatsRow?.claimed || 0);
+        const claimableProfiles = Math.max(0, restaurantTotal - claimedProfiles);
+        const hostsTotal = Number(hostsTotalRow?.total || 0);
+        const profilesTotal = restaurantTotal + hostsTotal;
+        const profilesWithContact =
+          Number(restaurantContactRow?.withContact || 0) +
+          Number(hostsContactRow?.withContact || 0);
+        const profilesWithPhotoLogo =
+          Number(restaurantPhotoRow?.withPhoto || 0) +
+          Number(hostsPhotoRow?.withPhoto || 0);
+        const profilesWithMenu = Number(menuProfilesRow?.withMenu || 0);
+        const profilesWithSchedule = Math.max(
+          Number(manualScheduleProfilesRow?.withManualSchedule || 0),
+          Number(bookedScheduleProfilesRow?.withBookedSchedule || 0),
+        );
+
+        const marketCities = ((cityOptionsRows as any)?.rows || [])
+          .map((row: any) => String(row.city || "").trim())
+          .filter(Boolean);
+
+        res.json({
+          market: {
+            city: cityFilter || "all",
+            cityFilterApplied: hasCityFilter,
+            cityOptions: marketCities,
+          },
+          metrics: {
+            profilesTotal,
+            claimableProfiles,
+            claimedProfiles,
+            profilesWithMenu,
+            profilesWithSchedule,
+            profilesWithContact,
+            profilesWithPhotoLogo,
+            activeFoodTrucks: Number(activeTrucksRow?.activeFoodTrucks || 0),
+            activeHosts: hostsTotal,
+            parkingPassListings: Number(parkingPassListingsRow?.listings || 0),
+            bookingStarts: Number(bookingStartsRow?.bookingStarts || 0),
+            bookingConfirmations: Number(
+              bookingConfirmationsRow?.bookingConfirmations || 0,
+            ),
+            publicProfileViews: Number(publicViewsRow?.views || 0),
+            publicProfileActions: Number(publicActionsRow?.actions || 0),
+            affiliateLinkOpens: Number(affiliateOpensRow?.opens || 0),
+          },
+          generatedAt: new Date().toISOString(),
+        });
+      } catch (error) {
+        console.error("Error building one-market launch board:", error);
+        res.status(500).json({ message: "Failed to build launch board" });
+      }
+    },
+  );
+
   app.get(
     "/api/admin/food-trucks/inventory",
     isAuthenticated,
