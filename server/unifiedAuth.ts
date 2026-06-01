@@ -8,6 +8,8 @@ import connectPg from "connect-pg-simple";
 import type { Express } from "express";
 import { storage } from "./storage";
 import { hasBusinessPermissionForRestaurant } from "./services/businessTeamAccess";
+import { getBusinessAccessContext } from "./services/businessTeamAccess";
+import { resolveUserContinuation } from "./services/loginContinuation";
 import { emailService } from "./emailService";
 import { sendSms } from "./smsService";
 import type {
@@ -362,6 +364,55 @@ export async function setupUnifiedAuth(app: Express) {
       console.error(`Failed to prepare ${welcomeLabel} welcome email:`, error);
       return false;
     }
+  };
+
+  const isBusinessCapableForContinuation = (userType: unknown) => {
+    const normalized = String(userType || "").toLowerCase();
+    return (
+      normalized === "food_truck" ||
+      normalized === "restaurant_owner" ||
+      normalized === "bar_owner" ||
+      normalized === "caterer" ||
+      normalized === "private_chef"
+    );
+  };
+
+  const resolveOAuthContinuationPath = async (user: User): Promise<string> => {
+    if (!isBusinessCapableForContinuation(user.userType)) {
+      return getDefaultPostVerificationRedirect(user);
+    }
+
+    let businessAccessSummary: {
+      linkState?: "linked" | "not_attached";
+      guidance?: string | null;
+      restaurantCount?: number;
+      primaryRestaurantId?: string | null;
+    } | null = null;
+
+    try {
+      const businessAccess = await getBusinessAccessContext(user.id);
+      businessAccessSummary = {
+        linkState:
+          businessAccess.linkState === "not_attached" ? "not_attached" : "linked",
+        guidance: businessAccess.guidance,
+        restaurantCount: Array.isArray(businessAccess.restaurants)
+          ? businessAccess.restaurants.length
+          : 0,
+        primaryRestaurantId: businessAccess.primaryRestaurant?.id || null,
+      };
+    } catch (error) {
+      console.warn("Unable to resolve OAuth business access context:", error);
+    }
+
+    const continuation = await resolveUserContinuation({
+      user,
+      businessAccessSummary,
+    });
+
+    return (
+      continuation.continuationPath ||
+      getDefaultPostVerificationRedirect(user)
+    );
   };
 
   const normalizeEmailForLookup = (value: unknown): string | null => {
@@ -841,7 +892,7 @@ export async function setupUnifiedAuth(app: Express) {
         if (!user) {
           return res.redirect("/?error=auth_failed");
         }
-        req.logIn(user, (loginErr: unknown) => {
+        req.logIn(user, async (loginErr: unknown) => {
           if (loginErr) {
             console.error("❌ Google customer login error:", loginErr);
             return res.redirect("/?error=session_error");
@@ -849,6 +900,8 @@ export async function setupUnifiedAuth(app: Express) {
           const appContext = req.session.googleAppContext || "mealscout";
           const redirectBase =
             appContext === "tradescout" ? tradeScoutBaseUrl : baseUrl;
+          const redirectPath =
+            getOAuthRedirectPath(req) || (await resolveOAuthContinuationPath(user));
           req.session.save((saveErr: unknown) => {
             if (saveErr) {
               console.error("❌ Session save error:", saveErr);
@@ -857,7 +910,6 @@ export async function setupUnifiedAuth(app: Express) {
             console.log(
               "✅ Google customer OAuth success, session saved, redirecting...",
             );
-            const redirectPath = getOAuthRedirectPath(req);
             req.session.oauthRedirectPath = undefined;
             return res.redirect(
               buildOAuthSuccessRedirect(redirectBase, redirectPath),
@@ -913,7 +965,7 @@ export async function setupUnifiedAuth(app: Express) {
         if (!user) {
           return res.redirect("/restaurant-signup?error=auth_failed");
         }
-        req.logIn(user, (loginErr: unknown) => {
+        req.logIn(user, async (loginErr: unknown) => {
           if (loginErr) {
             console.error("❌ Google restaurant login error:", loginErr);
             return res.redirect("/restaurant-signup?error=session_error");
@@ -921,6 +973,8 @@ export async function setupUnifiedAuth(app: Express) {
           const appContext = req.session.googleAppContext || "mealscout";
           const redirectBase =
             appContext === "tradescout" ? tradeScoutBaseUrl : baseUrl;
+          const redirectPath =
+            getOAuthRedirectPath(req) || (await resolveOAuthContinuationPath(user));
           req.session.save((saveErr: unknown) => {
             if (saveErr) {
               console.error("❌ Session save error:", saveErr);
@@ -929,8 +983,6 @@ export async function setupUnifiedAuth(app: Express) {
             console.log(
               "✅ Google restaurant OAuth success, session saved, redirecting...",
             );
-            const redirectPath =
-              getOAuthRedirectPath(req) || "/restaurant-signup";
             req.session.oauthRedirectPath = undefined;
             return res.redirect(
               buildOAuthSuccessRedirect(redirectBase, redirectPath),
@@ -1145,9 +1197,12 @@ export async function setupUnifiedAuth(app: Express) {
       passport.authenticate("facebook", {
         failureRedirect: "/?error=auth_failed&source=facebook",
       }),
-      (req, res) => {
+      async (req, res) => {
         const user = req.user as User;
         const appContext = req.session.fbAppContext || "mealscout";
+        const fallbackRedirectPath = await resolveOAuthContinuationPath(user);
+        const resolvedRedirectPath =
+          getOAuthRedirectPath(req) || fallbackRedirectPath;
 
         console.log("✅ Facebook OAuth callback success:", {
           userId: user?.id,
@@ -1165,10 +1220,11 @@ export async function setupUnifiedAuth(app: Express) {
           // Redirect to appropriate domain
           const frontendBase =
             process.env.PUBLIC_BASE_URL || "http://localhost:5000";
+
           const redirectUrls = {
             mealscout: buildOAuthSuccessRedirect(
               frontendBase,
-              getOAuthRedirectPath(req),
+              resolvedRedirectPath,
             ),
             tradescout:
               "https://www.thetradescout.com/?auth=success&t=" + Date.now(),
