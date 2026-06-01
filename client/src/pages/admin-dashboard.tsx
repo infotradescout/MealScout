@@ -5206,7 +5206,7 @@ export default function AdminDashboard() {
       gender: selectedUser.gender || "",
       isActive: !selectedUser.isDisabled,
       emailVerified: !!selectedUser.emailVerified,
-      userType: selectedUser.userType || "customer",
+      userType: selectedUser.userType || "unknown",
     });
   }, [selectedUser]);
 
@@ -9562,6 +9562,7 @@ export default function AdminDashboard() {
                             className="text-xs px-2 py-1 border rounded-md"
                             disabled={updateUserType.isPending || isStaff}
                           >
+                            <option value="unknown">Needs review</option>
                             <option value="customer">Customer</option>
                             <option value="restaurant_owner">Business Owner</option>
                             <option value="food_truck">Business Owner (Truck)</option>
@@ -10354,6 +10355,7 @@ export default function AdminDashboard() {
                           })
                         }
                       >
+                        <option value="unknown">Needs review</option>
                         <option value="customer">Customer</option>
                         <option value="food_truck">Food Truck</option>
                         <option value="restaurant_owner">
@@ -10368,7 +10370,7 @@ export default function AdminDashboard() {
                           <option value="admin">Admin</option>
                         )}
                         {isDuperOrRootUserType(adminUser?.userType) && (
-                          <option value="duper_admin">Duperrr Admin</option>
+                          <option value="duper_admin">Duper Admin</option>
                         )}
                         {isRootSuperAdminUserType(adminUser?.userType) && (
                           <option value="super_admin">Super Admin</option>
