@@ -1681,6 +1681,11 @@ export function registerTruckImportAdminRoutes(
           pitchStatus: "created",
           pitchCreatedAt,
           pitchOpenedAt: priorPitch.pitchOpenedAt || null,
+          sentAt: priorPitch.sentAt || null,
+          lastSentAt: priorPitch.lastSentAt || null,
+          sendCount: Number(priorPitch.sendCount || 0),
+          sentChannel: priorPitch.sentChannel || null,
+          sentByUserId: priorPitch.sentByUserId || null,
           claimStartedAt: priorPitch.claimStartedAt || null,
           claimCompletedAt: priorPitch.claimCompletedAt || null,
           source,
@@ -1733,13 +1738,28 @@ export function registerTruckImportAdminRoutes(
         await ensureTruckImportTables();
         const listingId = String(req.params?.listingId || "").trim();
         const status = String(req.body?.status || "").trim().toLowerCase();
+        const sentChannel = String(req.body?.sentChannel || "")
+          .trim()
+          .toLowerCase();
         const allowedStatuses = new Set([
+          "sent",
           "opened",
           "claim_started",
           "claim_completed",
         ]);
+        const allowedSentChannels = new Set([
+          "sms",
+          "email",
+          "facebook",
+          "instagram",
+          "manual",
+          "other",
+        ]);
         if (!listingId || !allowedStatuses.has(status)) {
           return res.status(400).json({ message: "Invalid listingId or status" });
+        }
+        if (status === "sent" && !allowedSentChannels.has(sentChannel)) {
+          return res.status(400).json({ message: "Invalid sentChannel" });
         }
 
         const [listing] = await db
@@ -1767,11 +1787,27 @@ export function registerTruckImportAdminRoutes(
         const nextPitch = {
           ...currentPitch,
           pitchStatus:
-            status === "opened"
+            status === "sent"
+              ? "sent"
+              : status === "opened"
               ? "opened"
               : status === "claim_started"
                 ? "claim_started"
                 : "claim_completed",
+          sentAt: status === "sent" ? currentPitch.sentAt || nowIso : currentPitch.sentAt || null,
+          lastSentAt: status === "sent" ? nowIso : currentPitch.lastSentAt || null,
+          sendCount:
+            status === "sent"
+              ? Math.max(1, Number(currentPitch.sendCount || 0) + 1)
+              : Math.max(0, Number(currentPitch.sendCount || 0)),
+          sentChannel:
+            status === "sent"
+              ? sentChannel
+              : currentPitch.sentChannel || null,
+          sentByUserId:
+            status === "sent"
+              ? String(req.user?.id || "")
+              : currentPitch.sentByUserId || null,
           pitchOpenedAt:
             status === "opened"
               ? currentPitch.pitchOpenedAt || nowIso
@@ -1844,6 +1880,11 @@ export function registerTruckImportAdminRoutes(
               claimUrl: claimPitch.claimUrl || null,
               pitchStatus: claimPitch.pitchStatus || "created",
               pitchCreatedAt: claimPitch.pitchCreatedAt || null,
+              sentAt: claimPitch.sentAt || null,
+              lastSentAt: claimPitch.lastSentAt || null,
+              sendCount: Number(claimPitch.sendCount || 0),
+              sentChannel: claimPitch.sentChannel || null,
+              sentByUserId: claimPitch.sentByUserId || null,
               pitchOpenedAt: claimPitch.pitchOpenedAt || null,
               claimStartedAt: claimPitch.claimStartedAt || null,
               claimCompletedAt: claimPitch.claimCompletedAt || null,

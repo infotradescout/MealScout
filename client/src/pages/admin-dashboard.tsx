@@ -518,9 +518,11 @@ interface OneMarketLaunchBoardResponse {
     publicProfileActions: number;
     affiliateLinkOpens: number;
     claimPitchesCreated: number;
+    claimPitchesSent: number;
     claimPitchesOpened: number;
     claimPitchesStarted: number;
     claimPitchesCompleted: number;
+    claimPitchSentRate: number;
     claimPitchOpenRate: number;
     claimPitchStartRate: number;
     claimPitchCompletionRate: number;
@@ -1717,12 +1719,13 @@ function UnclaimedImportedTrucksTab({ enabled }: { enabled: boolean }) {
   const updateClaimPitchStatus = useMutation({
     mutationFn: async (payload: {
       listingId: string;
-      status: "opened" | "claim_started" | "claim_completed";
+      status: "sent" | "opened" | "claim_started" | "claim_completed";
+      sentChannel?: "sms" | "email" | "facebook" | "instagram" | "manual" | "other";
     }) => {
       const res = await apiRequest(
         "PATCH",
         `/api/admin/claim-pitches/${payload.listingId}/status`,
-        { status: payload.status },
+        { status: payload.status, sentChannel: payload.sentChannel },
       );
       return await res.json();
     },
@@ -1781,6 +1784,9 @@ function UnclaimedImportedTrucksTab({ enabled }: { enabled: boolean }) {
               row?.rawData && typeof row.rawData === "object"
                 ? (row.rawData as any).claimPitch || null
                 : null;
+            const sentChannelValue = String(
+              edits.claimPitchSentChannel || claimPitch?.sentChannel || "manual",
+            );
             return (
               <Card key={row.id}>
                 <CardContent className="p-4 space-y-2">
@@ -1925,6 +1931,11 @@ function UnclaimedImportedTrucksTab({ enabled }: { enabled: boolean }) {
                         {claimPitch.pitchCreatedAt
                           ? new Date(claimPitch.pitchCreatedAt).toLocaleString()
                           : "-"}{" "}
+                        • Sent:{" "}
+                        {claimPitch.sentAt
+                          ? new Date(claimPitch.sentAt).toLocaleString()
+                          : "-"}{" "}
+                        • Send Count: {Number(claimPitch.sendCount || 0)}{" "}
                         • Opened:{" "}
                         {claimPitch.pitchOpenedAt
                           ? new Date(claimPitch.pitchOpenedAt).toLocaleString()
@@ -1939,6 +1950,48 @@ function UnclaimedImportedTrucksTab({ enabled }: { enabled: boolean }) {
                           : "-"}
                       </div>
                       <div className="flex flex-wrap gap-2 pt-1">
+                        <select
+                          className="h-8 rounded-md border bg-background px-2 text-xs"
+                          value={sentChannelValue}
+                          onChange={(e) =>
+                            setEditsById({
+                              ...editsById,
+                              [row.id]: {
+                                ...edits,
+                                claimPitchSentChannel: e.target.value,
+                              },
+                            })
+                          }
+                        >
+                          <option value="sms">sms</option>
+                          <option value="email">email</option>
+                          <option value="facebook">facebook</option>
+                          <option value="instagram">instagram</option>
+                          <option value="manual">manual</option>
+                          <option value="other">other</option>
+                        </select>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={updateClaimPitchStatus.isPending}
+                          onClick={() =>
+                            updateClaimPitchStatus.mutate({
+                              listingId: row.id,
+                              status: "sent",
+                              sentChannel: String(
+                                edits.claimPitchSentChannel || sentChannelValue,
+                              ) as
+                                | "sms"
+                                | "email"
+                                | "facebook"
+                                | "instagram"
+                                | "manual"
+                                | "other",
+                            })
+                          }
+                        >
+                          Mark sent
+                        </Button>
                         <Button
                           size="sm"
                           variant="outline"
@@ -8592,6 +8645,10 @@ export default function AdminDashboard() {
                         launchBoardData?.metrics?.claimPitchesCreated,
                       ],
                       [
+                        "Claim Pitches Sent",
+                        launchBoardData?.metrics?.claimPitchesSent,
+                      ],
+                      [
                         "Claim Pitches Opened",
                         launchBoardData?.metrics?.claimPitchesOpened,
                       ],
@@ -8602,6 +8659,13 @@ export default function AdminDashboard() {
                       [
                         "Claim Pitches Completed",
                         launchBoardData?.metrics?.claimPitchesCompleted,
+                      ],
+                      [
+                        "Claim Pitch Sent Rate %",
+                        Number(
+                          (launchBoardData?.metrics?.claimPitchSentRate || 0) *
+                            100,
+                        ).toFixed(1),
                       ],
                       [
                         "Claim Pitch Open Rate %",

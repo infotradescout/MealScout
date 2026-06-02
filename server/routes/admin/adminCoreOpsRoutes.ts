@@ -446,6 +446,9 @@ export function registerAdminCoreOpsRoutes(app: Express) {
               claimPitchesCreated: sql<number>`count(*) filter (where ${truckImportListings.rawData} ? 'claimPitch')`.mapWith(
                 Number,
               ),
+              claimPitchesSent: sql<number>`count(*) filter (where (${truckImportListings.rawData}->'claimPitch'->>'sentAt') is not null)`.mapWith(
+                Number,
+              ),
               claimPitchesOpened: sql<number>`count(*) filter (where (${truckImportListings.rawData}->'claimPitch'->>'pitchOpenedAt') is not null)`.mapWith(
                 Number,
               ),
@@ -499,6 +502,9 @@ export function registerAdminCoreOpsRoutes(app: Express) {
         const claimPitchesOpened = Number(
           claimPitchRollupRow?.claimPitchesOpened || 0,
         );
+        const claimPitchesSent = Number(
+          claimPitchRollupRow?.claimPitchesSent || 0,
+        );
         const claimPitchesStarted = Number(
           claimPitchRollupRow?.claimPitchesStarted || 0,
         );
@@ -508,6 +514,10 @@ export function registerAdminCoreOpsRoutes(app: Express) {
         const claimPitchOpenRate =
           claimPitchesCreated > 0
             ? Number((claimPitchesOpened / claimPitchesCreated).toFixed(4))
+            : 0;
+        const claimPitchSentRate =
+          claimPitchesCreated > 0
+            ? Number((claimPitchesSent / claimPitchesCreated).toFixed(4))
             : 0;
         const claimPitchStartRate =
           claimPitchesCreated > 0
@@ -547,9 +557,11 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             publicProfileActions: Number(publicActionsRow?.actions || 0),
             affiliateLinkOpens: Number(affiliateOpensRow?.opens || 0),
             claimPitchesCreated,
+            claimPitchesSent,
             claimPitchesOpened,
             claimPitchesStarted,
             claimPitchesCompleted,
+            claimPitchSentRate,
             claimPitchOpenRate,
             claimPitchStartRate,
             claimPitchCompletionRate,
