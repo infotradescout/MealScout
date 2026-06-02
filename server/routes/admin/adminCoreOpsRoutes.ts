@@ -250,6 +250,7 @@ export function registerAdminCoreOpsRoutes(app: Express) {
           [affiliateOpensRow],
           [claimPitchRollupRow],
           claimProfileReconciliationRows,
+          usefulProfileDemandLiftRows,
           cityOptionsRows,
         ] = await Promise.all([
           db
@@ -527,6 +528,79 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             join restaurants r on r.id = pc.restaurant_id
           `),
           db.execute(sql`
+            with city_restaurants as (
+              select r.*
+              from restaurants r
+              where r.is_active = true
+              ${hasCityFilter ? sql`and lower(trim(coalesce(r.city, ''))) = ${cityKey}` : sql``}
+            ),
+            cohort_flags as (
+              select
+                r.id,
+                (
+                  (coalesce(trim(r.phone), '') <> '' or coalesce(trim(r.email), '') <> '')
+                  and (
+                    exists (select 1 from menu_items mi where mi.restaurant_id = r.id)
+                    or exists (select 1 from truck_manual_schedules tms where tms.restaurant_id = r.id)
+                  )
+                  and (
+                    coalesce(trim(r.logo_url), '') <> ''
+                    or coalesce(trim(r.cover_image_url), '') <> ''
+                    or exists (
+                      select 1
+                      from request_logs rl
+                      where rl.entity_type = 'restaurant'
+                        and rl.entity_id = r.id
+                        and rl.surface = 'public_profile'
+                        and rl.event_type = 'profile_action'
+                    )
+                  )
+                ) as is_useful
+              from city_restaurants r
+            ),
+            profile_activity as (
+              select
+                cf.id,
+                cf.is_useful,
+                exists (
+                  select 1
+                  from request_logs rv
+                  where rv.entity_type = 'restaurant'
+                    and rv.entity_id = cf.id
+                    and rv.surface = 'public_profile'
+                    and rv.event_type = 'profile_view'
+                ) as has_view,
+                exists (
+                  select 1
+                  from request_logs ra
+                  where ra.entity_type = 'restaurant'
+                    and ra.entity_id = cf.id
+                    and ra.surface = 'public_profile'
+                    and ra.event_type = 'profile_action'
+                ) as has_action,
+                exists (
+                  select 1
+                  from request_logs rb
+                  where rb.entity_type = 'restaurant'
+                    and rb.entity_id = cf.id
+                    and rb.surface = 'public_profile'
+                    and rb.event_type in ('booking_click', 'menu_click', 'directions_click', 'call_click')
+                ) as has_booking_click
+              from cohort_flags cf
+            )
+            select
+              count(*) filter (where pa.is_useful)::int as "usefulProfilesTotal",
+              count(*) filter (where pa.is_useful and pa.has_view)::int as "usefulProfilesWithViews",
+              count(*) filter (where pa.is_useful and pa.has_action)::int as "usefulProfilesWithActions",
+              coalesce(avg(case when pa.is_useful then case when pa.has_view then 1.0 else 0.0 end end), 0)::numeric as "usefulViewRate",
+              coalesce(avg(case when not pa.is_useful then case when pa.has_view then 1.0 else 0.0 end end), 0)::numeric as "nonUsefulViewRate",
+              coalesce(avg(case when pa.is_useful then case when pa.has_action then 1.0 else 0.0 end end), 0)::numeric as "usefulActionRate",
+              coalesce(avg(case when not pa.is_useful then case when pa.has_action then 1.0 else 0.0 end end), 0)::numeric as "nonUsefulActionRate",
+              coalesce(avg(case when pa.is_useful then case when pa.has_booking_click then 1.0 else 0.0 end end), 0)::numeric as "usefulBookingClickRate",
+              coalesce(avg(case when not pa.is_useful then case when pa.has_booking_click then 1.0 else 0.0 end end), 0)::numeric as "nonUsefulBookingClickRate"
+            from profile_activity pa
+          `),
+          db.execute(sql`
             select city from (
               select distinct trim(coalesce(r.city, '')) as city
               from restaurants r
@@ -616,6 +690,43 @@ export function registerAdminCoreOpsRoutes(app: Express) {
           claimTrackedProfilesCount > 0
             ? Number((claimUsefulProfilesCount / claimTrackedProfilesCount).toFixed(4))
             : 0;
+        const usefulProfileDemandLiftRow = (
+          (usefulProfileDemandLiftRows as any)?.rows?.[0] || {}
+        ) as Record<string, any>;
+        const usefulProfilesTotal = Number(
+          usefulProfileDemandLiftRow.usefulProfilesTotal || 0,
+        );
+        const usefulProfilesWithViews = Number(
+          usefulProfileDemandLiftRow.usefulProfilesWithViews || 0,
+        );
+        const usefulProfilesWithActions = Number(
+          usefulProfileDemandLiftRow.usefulProfilesWithActions || 0,
+        );
+        const usefulViewRate = Number(usefulProfileDemandLiftRow.usefulViewRate || 0);
+        const nonUsefulViewRate = Number(
+          usefulProfileDemandLiftRow.nonUsefulViewRate || 0,
+        );
+        const usefulActionRate = Number(
+          usefulProfileDemandLiftRow.usefulActionRate || 0,
+        );
+        const nonUsefulActionRate = Number(
+          usefulProfileDemandLiftRow.nonUsefulActionRate || 0,
+        );
+        const usefulBookingClickRate = Number(
+          usefulProfileDemandLiftRow.usefulBookingClickRate || 0,
+        );
+        const nonUsefulBookingClickRate = Number(
+          usefulProfileDemandLiftRow.nonUsefulBookingClickRate || 0,
+        );
+        const usefulProfileViewLift = Number(
+          (usefulViewRate - nonUsefulViewRate).toFixed(4),
+        );
+        const usefulProfileActionLift = Number(
+          (usefulActionRate - nonUsefulActionRate).toFixed(4),
+        );
+        const usefulProfileBookingClickLift = Number(
+          (usefulBookingClickRate - nonUsefulBookingClickRate).toFixed(4),
+        );
 
         const marketCities = ((cityOptionsRows as any)?.rows || [])
           .map((row: any) => String(row.city || "").trim())
@@ -660,6 +771,12 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             claimedProfilesWithContactAfterPitch,
             claimedProfilesWithPhotoAfterPitch,
             claimToUsefulProfileRate,
+            usefulProfilesTotal,
+            usefulProfilesWithViews,
+            usefulProfilesWithActions,
+            usefulProfileViewLift,
+            usefulProfileActionLift,
+            usefulProfileBookingClickLift,
           },
           generatedAt: new Date().toISOString(),
         });

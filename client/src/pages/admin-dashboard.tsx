@@ -532,6 +532,12 @@ interface OneMarketLaunchBoardResponse {
     claimedProfilesWithContactAfterPitch: number;
     claimedProfilesWithPhotoAfterPitch: number;
     claimToUsefulProfileRate: number;
+    usefulProfilesTotal: number;
+    usefulProfilesWithViews: number;
+    usefulProfilesWithActions: number;
+    usefulProfileViewLift: number;
+    usefulProfileActionLift: number;
+    usefulProfileBookingClickLift: number;
   };
   generatedAt: string;
 }
@@ -8718,6 +8724,37 @@ export default function AdminDashboard() {
                         "Claim to Useful Profile Rate %",
                         Number(
                           (launchBoardData?.metrics?.claimToUsefulProfileRate || 0) *
+                            100,
+                        ).toFixed(1),
+                      ],
+                      [
+                        "Useful Profiles Total",
+                        launchBoardData?.metrics?.usefulProfilesTotal,
+                      ],
+                      [
+                        "Useful Profiles With Views",
+                        launchBoardData?.metrics?.usefulProfilesWithViews,
+                      ],
+                      [
+                        "Useful Profiles With Actions",
+                        launchBoardData?.metrics?.usefulProfilesWithActions,
+                      ],
+                      [
+                        "Useful Profile View Lift %",
+                        Number(
+                          (launchBoardData?.metrics?.usefulProfileViewLift || 0) * 100,
+                        ).toFixed(1),
+                      ],
+                      [
+                        "Useful Profile Action Lift %",
+                        Number(
+                          (launchBoardData?.metrics?.usefulProfileActionLift || 0) * 100,
+                        ).toFixed(1),
+                      ],
+                      [
+                        "Useful Profile Booking Click Lift %",
+                        Number(
+                          (launchBoardData?.metrics?.usefulProfileBookingClickLift || 0) *
                             100,
                         ).toFixed(1),
                       ],
