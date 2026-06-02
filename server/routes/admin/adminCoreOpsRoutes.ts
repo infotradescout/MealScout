@@ -543,11 +543,11 @@ export function registerAdminCoreOpsRoutes(app: Express) {
               )::int as "claimedProfilesWithMenuAfterPitch",
               count(*) filter (
                 where pc.pitched_at is not null
-                  and exists (select 1 from truck_manual_schedules tms where tms.restaurant_id = r.id)
+                  and exists (select 1 from truck_manual_schedules tms where tms.truck_id = r.id)
               )::int as "claimedProfilesWithScheduleAfterPitch",
               count(*) filter (
                 where pc.pitched_at is not null
-                  and (coalesce(trim(r.phone), '') <> '' or coalesce(trim(r.email), '') <> '')
+                  and (coalesce(trim(r.phone), '') <> '' or coalesce(trim(r.website_url), '') <> '')
               )::int as "claimedProfilesWithContactAfterPitch",
               count(*) filter (
                 where pc.pitched_at is not null
@@ -555,10 +555,10 @@ export function registerAdminCoreOpsRoutes(app: Express) {
               )::int as "claimedProfilesWithPhotoAfterPitch",
               count(*) filter (
                 where pc.pitched_at is not null
-                  and (coalesce(trim(r.phone), '') <> '' or coalesce(trim(r.email), '') <> '')
+                  and (coalesce(trim(r.phone), '') <> '' or coalesce(trim(r.website_url), '') <> '')
                   and (
                     exists (select 1 from menu_items mi2 where mi2.restaurant_id = r.id)
-                    or exists (select 1 from truck_manual_schedules tms2 where tms2.restaurant_id = r.id)
+                    or exists (select 1 from truck_manual_schedules tms2 where tms2.truck_id = r.id)
                   )
                   and (
                     coalesce(trim(r.logo_url), '') <> ''
@@ -588,10 +588,10 @@ export function registerAdminCoreOpsRoutes(app: Express) {
               select
                 r.id,
                 (
-                  (coalesce(trim(r.phone), '') <> '' or coalesce(trim(r.email), '') <> '')
+                  (coalesce(trim(r.phone), '') <> '' or coalesce(trim(r.website_url), '') <> '')
                   and (
                     exists (select 1 from menu_items mi where mi.restaurant_id = r.id)
-                    or exists (select 1 from truck_manual_schedules tms where tms.restaurant_id = r.id)
+                    or exists (select 1 from truck_manual_schedules tms where tms.truck_id = r.id)
                   )
                   and (
                     coalesce(trim(r.logo_url), '') <> ''
@@ -661,10 +661,10 @@ export function registerAdminCoreOpsRoutes(app: Express) {
               select
                 r.id,
                 (
-                  (coalesce(trim(r.phone), '') <> '' or coalesce(trim(r.email), '') <> '')
+                  (coalesce(trim(r.phone), '') <> '' or coalesce(trim(r.website_url), '') <> '')
                   and (
                     exists (select 1 from menu_items mi where mi.restaurant_id = r.id)
-                    or exists (select 1 from truck_manual_schedules tms where tms.restaurant_id = r.id)
+                    or exists (select 1 from truck_manual_schedules tms where tms.truck_id = r.id)
                   )
                   and (
                     coalesce(trim(r.logo_url), '') <> ''
@@ -764,10 +764,10 @@ export function registerAdminCoreOpsRoutes(app: Express) {
                     )
                 )
                 and not (
-                  (coalesce(trim(r.phone), '') <> '' or coalesce(trim(r.email), '') <> '')
+                  (coalesce(trim(r.phone), '') <> '' or coalesce(trim(r.website_url), '') <> '')
                   and (
                     exists (select 1 from menu_items mi where mi.restaurant_id = r.id)
-                    or exists (select 1 from truck_manual_schedules tms where tms.restaurant_id = r.id)
+                    or exists (select 1 from truck_manual_schedules tms where tms.truck_id = r.id)
                   )
                   and (
                     coalesce(trim(r.logo_url), '') <> ''

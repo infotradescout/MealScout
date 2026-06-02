@@ -18,6 +18,8 @@ const requiredRouteSnippets = [
   "bookingIntentToParkingPassClickRate",
   "booking_intent_cohorts",
   "is_useful",
+  "truck_manual_schedules tms where tms.truck_id = r.id",
+  "coalesce(trim(r.website_url), '') <> ''",
   "request_logs",
   "public_profile",
   "truck_booking_click",
@@ -57,6 +59,14 @@ for (const marker of disallowedMockMarkers) {
   if (adminCoreOpsRoutes.includes(marker)) {
     throw new Error("Booking intent lift appears to use sample/generated data.");
   }
+}
+
+if (adminCoreOpsRoutes.includes("truck_manual_schedules tms where tms.restaurant_id = r.id")) {
+  throw new Error("Booking intent lift must use truck_manual_schedules.truck_id, not restaurant_id.");
+}
+
+if (adminCoreOpsRoutes.includes("coalesce(trim(r.email), '')")) {
+  throw new Error("Booking intent lift must use real restaurant contact columns, not missing r.email.");
 }
 
 console.log("mealscout-booking-intent-lift.contract: PASS");
