@@ -12,11 +12,12 @@ const baseUrl = (process.env.SMOKE_BASE_URL || "http://127.0.0.1:5000").replace(
 
 const paths = [
   "/install",
+  "/scout",
+  "/p/food-truck/test-profile-id/test-profile-slug",
+  "/parking-pass",
   "/map",
-  "/deal/test-deal-id",
-  "/event/test-event-slug",
   "/menu/test-restaurant-id",
-  "/checkout/test-restaurant-id",
+  "/restaurant-owner-dashboard",
 ];
 
 function looksLikeHtml(body: string): boolean {

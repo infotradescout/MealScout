@@ -213,6 +213,7 @@ const publicRoutePrefixes = [
   "/golden-plate-winners",
   "/pensacola/spots",
   "/pensacola/report",
+  "/parking-pass",
   "/p/",
   "/forgot-password",
   "/reset-password",

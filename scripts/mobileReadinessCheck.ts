@@ -65,12 +65,12 @@ checks.push({
 
 const requiredRoutes = [
   "/install",
+  "/scout",
+  "/p/:profileType/:profileId/:profileSlug",
+  "/parking-pass",
   "/map",
-  "/deal/:id",
-  "/event/:slug",
-  "/events",
   "/menu/:restaurantId",
-  "/checkout/:restaurantId",
+  "/restaurant-owner-dashboard",
 ];
 for (const route of requiredRoutes) {
   checks.push({
@@ -81,16 +81,42 @@ for (const route of requiredRoutes) {
 }
 
 checks.push({
-  name: "Public deep-link allowlist includes /install",
-  ok: appTsx.includes('"/install"'),
-  detail: "Expect /install in public route prefixes",
+  name: "Public deep-link allowlist includes mobile shell paths",
+  ok:
+    appTsx.includes('"/install"') &&
+    appTsx.includes('"/scout"') &&
+    appTsx.includes('"/p/"') &&
+    appTsx.includes('"/parking-pass"'),
+  detail: "Expect /install, /scout, /p/, and /parking-pass in public route prefixes",
 });
 
 const locationButton = readText("client/src/components/location-button.tsx") ?? "";
 checks.push({
   name: "Geolocation runtime support",
-  ok: locationButton.includes("navigator.geolocation"),
-  detail: "Expect geolocation support in location-button",
+  ok:
+    locationButton.includes("navigator.geolocation") &&
+    locationButton.includes("permissions.query") &&
+    locationButton.includes("Location access is permanently denied"),
+  detail: "Expect geolocation permission prompt/check/recovery support in location-button",
+});
+
+const parkingPassPage = readText("client/src/pages/parking-pass.tsx") ?? "";
+checks.push({
+  name: "Parking Pass location permission path",
+  ok:
+    parkingPassPage.includes("navigator.geolocation") ||
+    parkingPassPage.includes("GeolocationPosition"),
+  detail: "Expect Parking Pass to support location-aware mobile behavior",
+});
+
+const mobileDeepLinkSmoke = readText("scripts/mobileDeepLinkSmoke.ts") ?? "";
+checks.push({
+  name: "Mobile smoke excludes admin-only surfaces",
+  ok:
+    !mobileDeepLinkSmoke.includes("/admin") &&
+    !mobileDeepLinkSmoke.includes("launch-board") &&
+    !mobileDeepLinkSmoke.includes("truck-import"),
+  detail: "Expect first mobile smoke surface to avoid admin dashboard/import tooling",
 });
 
 const notificationsPage = readText("client/src/pages/profile/notifications.tsx") ?? "";

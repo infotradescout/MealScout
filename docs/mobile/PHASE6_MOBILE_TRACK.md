@@ -24,6 +24,12 @@ npm run cap:add:android
 npm run cap:add:ios
 ```
 
+First release rule:
+
+- Capacitor is a deployment shell, not a product rewrite.
+- Mobile Release 1 focuses on Scout, public profiles, Parking Pass, location-aware discovery, and owner profile/schedule access.
+- Do not add full admin dashboard, Launch Board, import tooling, or Merlin workflows to the first mobile app surface.
+
 ## 2) Mobile Readiness Validation
 
 Run:
@@ -38,9 +44,17 @@ Current validation coverage:
 - Native Android/iOS scaffold presence.
 - Install route and install page availability.
 - Router auth/session loading guard.
-- Core deep-link routes remain registered.
+- Mobile shell deep-link routes remain registered:
+  - `/scout`
+  - `/p/:profileType/:profileId/:profileSlug`
+  - `/parking-pass`
+  - `/map`
+  - `/menu/:restaurantId`
+  - `/restaurant-owner-dashboard`
 - Geolocation runtime usage is present.
+- Parking Pass location-aware flow is present.
 - Push notification preference controls are present.
+- Mobile smoke does not include admin/import/Launch Board surfaces.
 
 Runtime deep-link smoke:
 
@@ -72,10 +86,12 @@ Use this before TestFlight/Internal testing submission:
 - Build + smoke pass for iOS and Android wrappers.
 - Auth/session sign-in persistence verified after app restart.
 - Deep-link entry checks run for:
-  - `/deal/:id`
-  - `/event/:slug`
+  - `/scout`
+  - `/p/:profileType/:profileId/:profileSlug`
+  - `/parking-pass`
+  - `/map`
   - `/menu/:restaurantId`
-  - `/checkout/:restaurantId`
+  - `/restaurant-owner-dashboard`
 - Geolocation permission flow verified:
   - first prompt
   - denied -> recovery UX
