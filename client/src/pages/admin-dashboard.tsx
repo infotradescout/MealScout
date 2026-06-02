@@ -501,6 +501,20 @@ interface OneMarketLaunchBoardResponse {
     cityFilterApplied: boolean;
     cityOptions: string[];
   };
+  leakFixQueue: Array<{
+    fixId: string;
+    marketCity: string;
+    leakReason: string;
+    fixType: string;
+    priority: "high" | "medium" | "low";
+    title: string;
+    description: string;
+    targetEntityType: string;
+    targetEntityId: string | null;
+    targetUrl: string;
+    status: "open" | "in_progress" | "resolved" | "dismissed";
+    createdAt: string;
+  }>;
   metrics: {
     profilesTotal: number;
     claimableProfiles: number;
@@ -8904,6 +8918,59 @@ export default function AdminDashboard() {
                     ))}
                   </div>
                 )}
+                {(launchBoardData?.leakFixQueue || []).length > 0 ? (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <div className="text-sm font-semibold">Leak Fix Queue</div>
+                        <div className="text-xs text-muted-foreground">
+                          Top fix priority:{" "}
+                          {launchBoardData?.leakFixQueue?.[0]?.priority || "none"}
+                        </div>
+                      </div>
+                      <Badge variant="outline">
+                        {launchBoardData?.leakFixQueue?.length || 0} open
+                      </Badge>
+                    </div>
+                    <div className="grid gap-2 lg:grid-cols-2">
+                      {(launchBoardData?.leakFixQueue || []).map((fix) => (
+                        <div
+                          key={fix.fixId}
+                          className="rounded-lg border p-3 text-sm"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <div className="font-medium">{fix.title}</div>
+                              <div className="text-xs text-muted-foreground">
+                                {fix.fixType.replaceAll("_", " ")} -{" "}
+                                {fix.leakReason.replaceAll("_", " ")}
+                              </div>
+                            </div>
+                            <Badge
+                              variant={
+                                fix.priority === "high" ? "destructive" : "outline"
+                              }
+                            >
+                              {fix.priority}
+                            </Badge>
+                          </div>
+                          <div className="mt-2 text-xs text-muted-foreground">
+                            {fix.description}
+                          </div>
+                          <div className="mt-3 flex items-center justify-between gap-2">
+                            <Badge variant="secondary">{fix.status}</Badge>
+                            <a
+                              className="text-xs font-medium underline"
+                              href={fix.targetUrl}
+                            >
+                              Open target
+                            </a>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
               </CardContent>
             </Card>
           </TabsContent>

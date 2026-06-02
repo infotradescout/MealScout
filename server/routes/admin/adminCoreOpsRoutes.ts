@@ -1031,6 +1031,128 @@ export function registerAdminCoreOpsRoutes(app: Express) {
                       : parkingPassMissingTruckProfileLeak > 0
                         ? "missing_truck_profile"
                         : "none";
+        const marketCity = cityFilter || "all";
+        const buildLeakFix = (
+          leakReason: string,
+          fixType: string,
+          priority: "high" | "medium" | "low",
+          title: string,
+          description: string,
+          targetEntityType: string,
+          targetEntityId: string | null,
+          targetUrl: string,
+        ) => ({
+          fixId: `parking-pass:${marketCity}:${fixType}`,
+          marketCity,
+          leakReason,
+          fixType,
+          priority,
+          title,
+          description,
+          targetEntityType,
+          targetEntityId,
+          targetUrl,
+          status: "open",
+          createdAt: new Date().toISOString(),
+        });
+        const leakFixQueue = [
+          parkingPassNoListingLeak > 0
+            ? buildLeakFix(
+                "no_active_parking_pass_listing",
+                "create_parking_pass_listing",
+                "high",
+                "Create a Parking Pass listing",
+                "Booking intent exists in this market, but there are no active Parking Pass listings to convert it.",
+                "market",
+                marketCity,
+                `/admin-dashboard?tab=parking-pass&city=${encodeURIComponent(marketCity)}`,
+              )
+            : null,
+          parkingPassPaymentDisabledLeak > 0
+            ? buildLeakFix(
+                "payment_disabled",
+                "enable_host_payments",
+                "high",
+                "Enable host payments",
+                "Active Parking Pass listings exist, but one or more hosts are not ready to accept Stripe payments.",
+                "host",
+                null,
+                `/admin-dashboard?tab=parking-pass&filter=payment-disabled&city=${encodeURIComponent(marketCity)}`,
+              )
+            : null,
+          parkingPassMissingHostCoordinateLeak > 0
+            ? buildLeakFix(
+                "missing_host_coordinates",
+                "add_host_coordinates",
+                "medium",
+                "Add host coordinates",
+                "Some Parking Pass hosts are missing usable latitude or longitude, which can suppress discovery and booking confidence.",
+                "host",
+                null,
+                `/admin-dashboard?tab=parking-pass&filter=missing-coordinates&city=${encodeURIComponent(marketCity)}`,
+              )
+            : null,
+          parkingPassHostCapacityLeak > 0
+            ? buildLeakFix(
+                "host_capacity",
+                "increase_or_open_capacity",
+                "medium",
+                "Increase or open host capacity",
+                "Parking Pass listings exist, but capacity is closed, zero, or already filled by confirmed bookings.",
+                "host",
+                null,
+                `/admin-dashboard?tab=parking-pass&filter=capacity&city=${encodeURIComponent(marketCity)}`,
+              )
+            : null,
+          parkingPassMissingTruckProfileLeak > 0
+            ? buildLeakFix(
+                "missing_truck_profile",
+                "complete_truck_profile",
+                "medium",
+                "Complete truck profiles",
+                "Booking intent exists from trucks or profiles that are still missing useful profile requirements.",
+                "restaurant",
+                null,
+                `/admin-dashboard?tab=food-trucks&filter=incomplete&city=${encodeURIComponent(marketCity)}`,
+              )
+            : null,
+          parkingPassMissingTruckProfileLeak > 0
+            ? buildLeakFix(
+                "missing_truck_profile",
+                "add_truck_schedule",
+                "low",
+                "Add truck schedules",
+                "Truck profiles with booking intent need schedule data so customers and hosts can trust availability.",
+                "restaurant",
+                null,
+                `/admin-dashboard?tab=food-trucks&filter=missing-schedule&city=${encodeURIComponent(marketCity)}`,
+              )
+            : null,
+          parkingPassStartNoConfirmLeak > 0
+            ? buildLeakFix(
+                "booking_start_no_confirmation",
+                "follow_up_booking_start_no_confirm",
+                "high",
+                "Follow up on unconfirmed starts",
+                "Parking Pass booking starts are happening, but none are converting into confirmed bookings.",
+                "booking",
+                null,
+                `/admin-dashboard?tab=bookings&filter=unconfirmed&city=${encodeURIComponent(marketCity)}`,
+              )
+            : null,
+          parkingPassClickNoStartLeak > 0
+            ? buildLeakFix(
+                "click_no_booking_start",
+                "review_missing_active_hosts",
+                "high",
+                "Review host booking path",
+                "Customers are clicking Parking Pass, but no booking starts are recorded for this market.",
+                "host",
+                null,
+                `/admin-dashboard?tab=parking-pass&filter=click-no-start&city=${encodeURIComponent(marketCity)}`,
+              )
+            : null,
+        ].filter(Boolean);
 
         const marketCities = ((cityOptionsRows as any)?.rows || [])
           .map((row: any) => String(row.city || "").trim())
@@ -1105,6 +1227,7 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             bookingIntentUsefulLift,
             bookingIntentToParkingPassClickRate,
           },
+          leakFixQueue,
           generatedAt: new Date().toISOString(),
         });
       } catch (error) {
