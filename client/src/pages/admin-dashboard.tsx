@@ -522,6 +522,14 @@ interface OneMarketLaunchBoardResponse {
     parkingPassStartToConfirmRate: number;
     bookingIntentToBookingStartRate: number;
     bookingIntentToBookingConfirmRate: number;
+    parkingPassNoListingLeak: number;
+    parkingPassClickNoStartLeak: number;
+    parkingPassStartNoConfirmLeak: number;
+    parkingPassPaymentDisabledLeak: number;
+    parkingPassHostCapacityLeak: number;
+    parkingPassMissingHostCoordinateLeak: number;
+    parkingPassMissingTruckProfileLeak: number;
+    parkingPassTopLeakReason: string;
     publicProfileViews: number;
     publicProfileActions: number;
     affiliateLinkOpens: number;
@@ -8699,6 +8707,39 @@ export default function AdminDashboard() {
                             ?.bookingIntentToBookingConfirmRate || 0) * 100,
                         ).toFixed(1),
                       ],
+                      [
+                        "Parking Pass No Listing Leak",
+                        launchBoardData?.metrics?.parkingPassNoListingLeak,
+                      ],
+                      [
+                        "Parking Pass Click No Start Leak",
+                        launchBoardData?.metrics?.parkingPassClickNoStartLeak,
+                      ],
+                      [
+                        "Parking Pass Start No Confirm Leak",
+                        launchBoardData?.metrics?.parkingPassStartNoConfirmLeak,
+                      ],
+                      [
+                        "Parking Pass Payment Disabled Leak",
+                        launchBoardData?.metrics?.parkingPassPaymentDisabledLeak,
+                      ],
+                      [
+                        "Parking Pass Host Capacity Leak",
+                        launchBoardData?.metrics?.parkingPassHostCapacityLeak,
+                      ],
+                      [
+                        "Parking Pass Missing Host Coordinate Leak",
+                        launchBoardData?.metrics
+                          ?.parkingPassMissingHostCoordinateLeak,
+                      ],
+                      [
+                        "Parking Pass Missing Truck Profile Leak",
+                        launchBoardData?.metrics?.parkingPassMissingTruckProfileLeak,
+                      ],
+                      [
+                        "Parking Pass Top Leak Reason",
+                        launchBoardData?.metrics?.parkingPassTopLeakReason || "none",
+                      ],
                       ["Public Profile Views", launchBoardData?.metrics?.publicProfileViews],
                       [
                         "Public Profile Actions",
@@ -8855,7 +8896,9 @@ export default function AdminDashboard() {
                       <div key={String(label)} className="rounded-lg border p-3">
                         <div className="text-xs text-muted-foreground">{label}</div>
                         <div className="text-2xl font-semibold">
-                          {Number(value || 0).toLocaleString()}
+                          {typeof value === "string"
+                            ? value.replaceAll("_", " ")
+                            : Number(value || 0).toLocaleString()}
                         </div>
                       </div>
                     ))}

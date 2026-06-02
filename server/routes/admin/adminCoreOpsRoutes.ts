@@ -253,6 +253,7 @@ export function registerAdminCoreOpsRoutes(app: Express) {
           claimProfileReconciliationRows,
           usefulProfileDemandLiftRows,
           bookingIntentLiftRows,
+          parkingPassLeakDiagnosticsRows,
           cityOptionsRows,
         ] = await Promise.all([
           db
@@ -714,6 +715,101 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             from booking_intent_cohorts
           `),
           db.execute(sql`
+            with active_parking_pass_listings as (
+              select
+                es.id as series_id,
+                es.default_max_trucks,
+                h.id as host_id,
+                h.latitude,
+                h.longitude,
+                h.spot_count,
+                h.stripe_connect_account_id,
+                h.stripe_onboarding_completed,
+                h.stripe_charges_enabled,
+                h.stripe_payouts_enabled
+              from event_series es
+              join hosts h on h.id = es.host_id
+              where es.series_type = 'parking_pass'
+                and es.status = 'published'
+                ${hasCityFilter ? sql`and lower(trim(coalesce(h.city, ''))) = ${cityKey}` : sql``}
+            ),
+            parking_pass_bookings_by_series as (
+              select
+                e.series_id,
+                count(eb.id) filter (where eb.status = 'confirmed')::int as confirmed_bookings
+              from events e
+              left join event_bookings eb on eb.event_id = e.id
+              where e.event_type = 'parking_pass'
+              group by e.series_id
+            ),
+            missing_truck_profiles as (
+              select count(*)::int as count
+              from restaurants r
+              where r.is_active = true
+                ${hasCityFilter ? sql`and lower(trim(coalesce(r.city, ''))) = ${cityKey}` : sql``}
+                and exists (
+                  select 1
+                  from request_logs ri
+                  where ri.entity_type = 'restaurant'
+                    and ri.entity_id = r.id
+                    and ri.surface = 'public_profile'
+                    and ri.event_type in (
+                      'truck_booking_click',
+                      'booking_click',
+                      'schedule_click',
+                      'parking_pass_click',
+                      'catering_click',
+                      'call_click',
+                      'directions_click'
+                    )
+                )
+                and not (
+                  (coalesce(trim(r.phone), '') <> '' or coalesce(trim(r.email), '') <> '')
+                  and (
+                    exists (select 1 from menu_items mi where mi.restaurant_id = r.id)
+                    or exists (select 1 from truck_manual_schedules tms where tms.restaurant_id = r.id)
+                  )
+                  and (
+                    coalesce(trim(r.logo_url), '') <> ''
+                    or coalesce(trim(r.cover_image_url), '') <> ''
+                    or exists (
+                      select 1
+                      from request_logs rl
+                      where rl.entity_type = 'restaurant'
+                        and rl.entity_id = r.id
+                        and rl.surface = 'public_profile'
+                        and rl.event_type = 'profile_action'
+                    )
+                  )
+                )
+            )
+            select
+              count(*) filter (
+                where coalesce(appl.stripe_connect_account_id, '') = ''
+                  or coalesce(appl.stripe_onboarding_completed, false) = false
+                  or coalesce(appl.stripe_charges_enabled, false) = false
+                  or coalesce(appl.stripe_payouts_enabled, false) = false
+              )::int as "parkingPassPaymentDisabledLeak",
+              count(*) filter (
+                where coalesce(appl.default_max_trucks, 0) <= 0
+                  or coalesce(appl.spot_count, 0) <= 0
+                  or coalesce(pbbs.confirmed_bookings, 0) >= greatest(
+                    coalesce(appl.default_max_trucks, 0),
+                    coalesce(appl.spot_count, 0)
+                  )
+              )::int as "parkingPassHostCapacityLeak",
+              count(*) filter (
+                where appl.latitude is null
+                  or appl.longitude is null
+                  or coalesce(trim(appl.latitude::text), '') = ''
+                  or coalesce(trim(appl.longitude::text), '') = ''
+              )::int as "parkingPassMissingHostCoordinateLeak",
+              coalesce((select count from missing_truck_profiles), 0)::int as "parkingPassMissingTruckProfileLeak"
+            from active_parking_pass_listings appl
+            left join parking_pass_bookings_by_series pbbs
+              on pbbs.series_id = appl.series_id
+          `),
+          db.execute(sql`
             select city from (
               select distinct trim(coalesce(r.city, '')) as city
               from restaurants r
@@ -897,6 +993,44 @@ export function registerAdminCoreOpsRoutes(app: Express) {
                 (parkingPassBookingConfirmations / bookingIntentProfilesTotal).toFixed(4),
               )
             : 0;
+        const parkingPassLeakDiagnosticsRow = (
+          (parkingPassLeakDiagnosticsRows as any)?.rows?.[0] || {}
+        ) as Record<string, any>;
+        const activeParkingPassListings = Number(parkingPassListingsRow?.listings || 0);
+        const parkingPassNoListingLeak =
+          bookingIntentProfilesTotal > 0 && activeParkingPassListings === 0 ? 1 : 0;
+        const parkingPassClickNoStartLeak =
+          parkingPassClicks > 0 && parkingPassBookingStarts === 0 ? 1 : 0;
+        const parkingPassStartNoConfirmLeak =
+          parkingPassBookingStarts > 0 && parkingPassBookingConfirmations === 0 ? 1 : 0;
+        const parkingPassPaymentDisabledLeak = Number(
+          parkingPassLeakDiagnosticsRow.parkingPassPaymentDisabledLeak || 0,
+        );
+        const parkingPassHostCapacityLeak = Number(
+          parkingPassLeakDiagnosticsRow.parkingPassHostCapacityLeak || 0,
+        );
+        const parkingPassMissingHostCoordinateLeak = Number(
+          parkingPassLeakDiagnosticsRow.parkingPassMissingHostCoordinateLeak || 0,
+        );
+        const parkingPassMissingTruckProfileLeak = Number(
+          parkingPassLeakDiagnosticsRow.parkingPassMissingTruckProfileLeak || 0,
+        );
+        const parkingPassTopLeakReason =
+          parkingPassNoListingLeak > 0
+            ? "no_active_parking_pass_listing"
+            : parkingPassClickNoStartLeak > 0
+              ? "click_no_booking_start"
+              : parkingPassStartNoConfirmLeak > 0
+                ? "booking_start_no_confirmation"
+                : parkingPassPaymentDisabledLeak > 0
+                  ? "payment_disabled"
+                  : parkingPassHostCapacityLeak > 0
+                    ? "host_capacity"
+                    : parkingPassMissingHostCoordinateLeak > 0
+                      ? "missing_host_coordinates"
+                      : parkingPassMissingTruckProfileLeak > 0
+                        ? "missing_truck_profile"
+                        : "none";
 
         const marketCities = ((cityOptionsRows as any)?.rows || [])
           .map((row: any) => String(row.city || "").trim())
@@ -931,6 +1065,14 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             parkingPassStartToConfirmRate,
             bookingIntentToBookingStartRate,
             bookingIntentToBookingConfirmRate,
+            parkingPassNoListingLeak,
+            parkingPassClickNoStartLeak,
+            parkingPassStartNoConfirmLeak,
+            parkingPassPaymentDisabledLeak,
+            parkingPassHostCapacityLeak,
+            parkingPassMissingHostCoordinateLeak,
+            parkingPassMissingTruckProfileLeak,
+            parkingPassTopLeakReason,
             publicProfileViews: Number(publicViewsRow?.views || 0),
             publicProfileActions: Number(publicActionsRow?.actions || 0),
             affiliateLinkOpens: Number(affiliateOpensRow?.opens || 0),
