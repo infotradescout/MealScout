@@ -34,6 +34,21 @@ const stripe = process.env.STRIPE_SECRET_KEY
 const normalizeSearch = (value: unknown) =>
   String(value || "").trim().toLowerCase();
 
+const leakFixOutcomeStatuses = new Set([
+  "resolved_improved",
+  "resolved_no_change",
+  "resolved_regressed",
+  "dismissed_not_applicable",
+  "needs_follow_up",
+]);
+
+const leakFixQueueStatuses = new Set([
+  "open",
+  "in_progress",
+  "resolved",
+  "dismissed",
+]);
+
 const normalizeLoose = (value: unknown) =>
   String(value || "")
     .toLowerCase()
@@ -254,6 +269,7 @@ export function registerAdminCoreOpsRoutes(app: Express) {
           usefulProfileDemandLiftRows,
           bookingIntentLiftRows,
           parkingPassLeakDiagnosticsRows,
+          leakFixOutcomeRows,
           cityOptionsRows,
         ] = await Promise.all([
           db
@@ -810,6 +826,22 @@ export function registerAdminCoreOpsRoutes(app: Express) {
               on pbbs.series_id = appl.series_id
           `),
           db.execute(sql`
+            select distinct on (rl.metadata->>'fixId')
+              rl.metadata->>'fixId' as "fixId",
+              rl.metadata->>'status' as "status",
+              rl.metadata->>'fixOutcomeStatus' as "fixOutcomeStatus",
+              rl.metadata->>'fixOutcomeNotes' as "fixOutcomeNotes",
+              rl.metadata->>'fixResolvedAt' as "fixResolvedAt",
+              rl.metadata->>'fixResolvedByUserId' as "fixResolvedByUserId",
+              nullif(rl.metadata->>'linkedMetricBefore', '')::numeric as "linkedMetricBefore",
+              rl.created_at as "createdAt"
+            from request_logs rl
+            where rl.surface = 'launch_board'
+              and rl.event_type = 'leak_fix_outcome'
+              ${hasCityFilter ? sql`and lower(trim(coalesce(rl.metadata->>'marketCity', ''))) = ${cityKey}` : sql``}
+            order by rl.metadata->>'fixId', rl.created_at desc
+          `),
+          db.execute(sql`
             select city from (
               select distinct trim(coalesce(r.city, '')) as city
               from restaurants r
@@ -1032,6 +1064,33 @@ export function registerAdminCoreOpsRoutes(app: Express) {
                         ? "missing_truck_profile"
                         : "none";
         const marketCity = cityFilter || "all";
+        const getLeakFixLinkedMetricValue = (fixType: string) => {
+          switch (fixType) {
+            case "create_parking_pass_listing":
+              return Number(parkingPassListingsRow?.listings || 0);
+            case "enable_host_payments":
+              return parkingPassPaymentDisabledLeak;
+            case "add_host_coordinates":
+              return parkingPassMissingHostCoordinateLeak;
+            case "increase_or_open_capacity":
+              return parkingPassHostCapacityLeak;
+            case "complete_truck_profile":
+            case "add_truck_schedule":
+              return parkingPassMissingTruckProfileLeak;
+            case "follow_up_booking_start_no_confirm":
+              return parkingPassBookingConfirmations;
+            case "review_missing_active_hosts":
+              return parkingPassBookingStarts;
+            default:
+              return 0;
+          }
+        };
+        const leakFixOutcomeById = new Map(
+          (((leakFixOutcomeRows as any)?.rows || []) as Array<Record<string, any>>)
+            .map((row) => [String(row.fixId || ""), row] as const)
+            .filter(([fixId]) => Boolean(fixId)),
+        );
+        const defaultLeakFixQueueState = { status: "open" } as const;
         const buildLeakFix = (
           leakReason: string,
           fixType: string,
@@ -1041,20 +1100,44 @@ export function registerAdminCoreOpsRoutes(app: Express) {
           targetEntityType: string,
           targetEntityId: string | null,
           targetUrl: string,
-        ) => ({
-          fixId: `parking-pass:${marketCity}:${fixType}`,
-          marketCity,
-          leakReason,
-          fixType,
-          priority,
-          title,
-          description,
-          targetEntityType,
-          targetEntityId,
-          targetUrl,
-          status: "open",
-          createdAt: new Date().toISOString(),
-        });
+        ) => {
+          const fixId = `parking-pass:${marketCity}:${fixType}`;
+          const outcome = leakFixOutcomeById.get(fixId);
+          const linkedMetricAfter = getLeakFixLinkedMetricValue(fixType);
+          const linkedMetricBefore =
+            outcome?.linkedMetricBefore !== undefined && outcome?.linkedMetricBefore !== null
+              ? Number(outcome.linkedMetricBefore)
+              : linkedMetricAfter;
+          return {
+            fixId,
+            marketCity,
+            leakReason,
+            fixType,
+            priority,
+            title,
+            description,
+            targetEntityType,
+            targetEntityId,
+            targetUrl,
+            status: leakFixQueueStatuses.has(String(outcome?.status || ""))
+              ? String(outcome?.status)
+              : defaultLeakFixQueueState.status,
+            createdAt: outcome?.createdAt
+              ? new Date(outcome.createdAt).toISOString()
+              : new Date().toISOString(),
+            fixResolvedAt: outcome?.fixResolvedAt || null,
+            fixResolvedByUserId: outcome?.fixResolvedByUserId || null,
+            fixOutcomeStatus: leakFixOutcomeStatuses.has(
+              String(outcome?.fixOutcomeStatus || ""),
+            )
+              ? String(outcome?.fixOutcomeStatus)
+              : "needs_follow_up",
+            fixOutcomeNotes: outcome?.fixOutcomeNotes || "",
+            linkedMetricBefore,
+            linkedMetricAfter,
+            linkedMetricDelta: Number((linkedMetricAfter - linkedMetricBefore).toFixed(4)),
+          };
+        };
         const leakFixQueue = [
           parkingPassNoListingLeak > 0
             ? buildLeakFix(
@@ -1153,6 +1236,26 @@ export function registerAdminCoreOpsRoutes(app: Express) {
               )
             : null,
         ].filter(Boolean);
+        const leakFixesOpen = leakFixQueue.filter(
+          (fix: any) => fix.status === "open",
+        ).length;
+        const leakFixesInProgress = leakFixQueue.filter(
+          (fix: any) => fix.status === "in_progress",
+        ).length;
+        const leakFixesResolved = leakFixQueue.filter(
+          (fix: any) => fix.status === "resolved",
+        ).length;
+        const leakFixesImproved = leakFixQueue.filter(
+          (fix: any) => fix.fixOutcomeStatus === "resolved_improved",
+        ).length;
+        const leakFixResolutionRate =
+          leakFixQueue.length > 0
+            ? Number((leakFixesResolved / leakFixQueue.length).toFixed(4))
+            : 0;
+        const leakFixImprovementRate =
+          leakFixesResolved > 0
+            ? Number((leakFixesImproved / leakFixesResolved).toFixed(4))
+            : 0;
 
         const marketCities = ((cityOptionsRows as any)?.rows || [])
           .map((row: any) => String(row.city || "").trim())
@@ -1195,6 +1298,12 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             parkingPassMissingHostCoordinateLeak,
             parkingPassMissingTruckProfileLeak,
             parkingPassTopLeakReason,
+            leakFixesOpen,
+            leakFixesInProgress,
+            leakFixesResolved,
+            leakFixesImproved,
+            leakFixResolutionRate,
+            leakFixImprovementRate,
             publicProfileViews: Number(publicViewsRow?.views || 0),
             publicProfileActions: Number(publicActionsRow?.actions || 0),
             affiliateLinkOpens: Number(affiliateOpensRow?.opens || 0),
@@ -1233,6 +1342,72 @@ export function registerAdminCoreOpsRoutes(app: Express) {
       } catch (error) {
         console.error("Error building one-market launch board:", error);
         res.status(500).json({ message: "Failed to build launch board" });
+      }
+    },
+  );
+
+  app.post(
+    "/api/admin/launch-board/leak-fixes/:fixId/outcome",
+    isAuthenticated,
+    isStaffOrAdmin,
+    async (req: any, res) => {
+      try {
+        const fixId = String(req.params?.fixId || "").trim();
+        const status = String(req.body?.status || "").trim();
+        const fixOutcomeStatus = String(req.body?.fixOutcomeStatus || "").trim();
+        const marketCity = String(req.body?.marketCity || "all").trim() || "all";
+        if (!fixId) {
+          return res.status(400).json({ message: "fixId is required" });
+        }
+        if (!leakFixQueueStatuses.has(status)) {
+          return res.status(400).json({ message: "Invalid leak fix status" });
+        }
+        if (!leakFixOutcomeStatuses.has(fixOutcomeStatus)) {
+          return res.status(400).json({ message: "Invalid leak fix outcome status" });
+        }
+        const now = new Date();
+        const resolved = status === "resolved" || status === "dismissed";
+        const metadata = {
+          fixId,
+          marketCity,
+          leakReason: String(req.body?.leakReason || ""),
+          fixType: String(req.body?.fixType || ""),
+          status,
+          fixOutcomeStatus,
+          fixOutcomeNotes: String(req.body?.fixOutcomeNotes || "").slice(0, 1000),
+          fixResolvedAt: resolved ? now.toISOString() : null,
+          fixResolvedByUserId: resolved ? String(req.user?.id || "") : null,
+          linkedMetricBefore:
+            req.body?.linkedMetricBefore === undefined
+              ? null
+              : Number(req.body.linkedMetricBefore),
+          targetEntityType: String(req.body?.targetEntityType || ""),
+          targetEntityId: req.body?.targetEntityId
+            ? String(req.body.targetEntityId)
+            : null,
+        };
+        await db.insert(requestLogs).values({
+          method: "POST",
+          path: `/api/admin/launch-board/leak-fixes/${encodeURIComponent(
+            fixId,
+          )}/outcome`,
+          statusCode: 200,
+          durationMs: 0,
+          userId: req.user?.id || null,
+          actorType: "human",
+          sourceType: "internal",
+          eventType: "leak_fix_outcome",
+          surface: "launch_board",
+          entityId: fixId,
+          entityType: "leak_fix",
+          ip: req.ip || null,
+          userAgent: req.headers?.["user-agent"] || null,
+          metadata,
+        });
+        res.json({ ok: true, mutationAllowed: true, outcome: metadata });
+      } catch (error) {
+        console.error("Error recording leak fix outcome:", error);
+        res.status(500).json({ message: "Failed to record leak fix outcome" });
       }
     },
   );

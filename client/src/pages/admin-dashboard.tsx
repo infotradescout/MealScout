@@ -514,6 +514,18 @@ interface OneMarketLaunchBoardResponse {
     targetUrl: string;
     status: "open" | "in_progress" | "resolved" | "dismissed";
     createdAt: string;
+    fixResolvedAt: string | null;
+    fixResolvedByUserId: string | null;
+    fixOutcomeStatus:
+      | "resolved_improved"
+      | "resolved_no_change"
+      | "resolved_regressed"
+      | "dismissed_not_applicable"
+      | "needs_follow_up";
+    fixOutcomeNotes: string;
+    linkedMetricBefore: number;
+    linkedMetricAfter: number;
+    linkedMetricDelta: number;
   }>;
   metrics: {
     profilesTotal: number;
@@ -544,6 +556,12 @@ interface OneMarketLaunchBoardResponse {
     parkingPassMissingHostCoordinateLeak: number;
     parkingPassMissingTruckProfileLeak: number;
     parkingPassTopLeakReason: string;
+    leakFixesOpen: number;
+    leakFixesInProgress: number;
+    leakFixesResolved: number;
+    leakFixesImproved: number;
+    leakFixResolutionRate: number;
+    leakFixImprovementRate: number;
     publicProfileViews: number;
     publicProfileActions: number;
     affiliateLinkOpens: number;
@@ -3445,6 +3463,64 @@ export default function AdminDashboard() {
       },
       staleTime: 30 * 1000,
     });
+
+  const updateLeakFixOutcome = useMutation({
+    mutationFn: async ({
+      fix,
+      status,
+      fixOutcomeStatus,
+      fixOutcomeNotes,
+    }: {
+      fix: OneMarketLaunchBoardResponse["leakFixQueue"][number];
+      status: "in_progress" | "resolved";
+      fixOutcomeStatus: OneMarketLaunchBoardResponse["leakFixQueue"][number]["fixOutcomeStatus"];
+      fixOutcomeNotes?: string;
+    }) => {
+      const res = await fetch(
+        apiUrl(
+          `/api/admin/launch-board/leak-fixes/${encodeURIComponent(
+            fix.fixId,
+          )}/outcome`,
+        ),
+        {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            status,
+            fixOutcomeStatus,
+            fixOutcomeNotes: fixOutcomeNotes || "",
+            marketCity: fix.marketCity,
+            leakReason: fix.leakReason,
+            fixType: fix.fixType,
+            linkedMetricBefore:
+              fix.linkedMetricBefore ?? fix.linkedMetricAfter ?? 0,
+            targetEntityType: fix.targetEntityType,
+            targetEntityId: fix.targetEntityId,
+          }),
+        },
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.message || "Failed to update leak fix outcome");
+      }
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/launch-board"] });
+      toast({
+        title: "Leak fix updated",
+        description: "Outcome tracking was recorded on the Launch Board.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Could not update leak fix",
+        description: error?.message || "Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
 
   const openAdminUserProfile = (userId: string, inNewTab = false) => {
     const href = `/admin/dashboard?tab=users&focusUser=${encodeURIComponent(userId)}`;
@@ -8754,6 +8830,33 @@ export default function AdminDashboard() {
                         "Parking Pass Top Leak Reason",
                         launchBoardData?.metrics?.parkingPassTopLeakReason || "none",
                       ],
+                      ["Leak Fixes Open", launchBoardData?.metrics?.leakFixesOpen],
+                      [
+                        "Leak Fixes In Progress",
+                        launchBoardData?.metrics?.leakFixesInProgress,
+                      ],
+                      [
+                        "Leak Fixes Resolved",
+                        launchBoardData?.metrics?.leakFixesResolved,
+                      ],
+                      [
+                        "Leak Fixes Improved",
+                        launchBoardData?.metrics?.leakFixesImproved,
+                      ],
+                      [
+                        "Leak Fix Resolution Rate %",
+                        Number(
+                          (launchBoardData?.metrics?.leakFixResolutionRate || 0) *
+                            100,
+                        ).toFixed(1),
+                      ],
+                      [
+                        "Leak Fix Improvement Rate %",
+                        Number(
+                          (launchBoardData?.metrics?.leakFixImprovementRate || 0) *
+                            100,
+                        ).toFixed(1),
+                      ],
                       ["Public Profile Views", launchBoardData?.metrics?.publicProfileViews],
                       [
                         "Public Profile Actions",
@@ -8957,6 +9060,40 @@ export default function AdminDashboard() {
                           <div className="mt-2 text-xs text-muted-foreground">
                             {fix.description}
                           </div>
+                          <div className="mt-3 grid gap-2 rounded-md bg-muted/40 p-2 text-xs">
+                            <div>
+                              Outcome status:{" "}
+                              <span className="font-medium text-foreground">
+                                {fix.fixOutcomeStatus.replaceAll("_", " ")}
+                              </span>
+                            </div>
+                            <div>
+                              Linked metric:{" "}
+                              <span className="font-medium text-foreground">
+                                {Number(
+                                  fix.linkedMetricBefore || 0,
+                                ).toLocaleString()}{" "}
+                                -&gt;{" "}
+                                {Number(
+                                  fix.linkedMetricAfter || 0,
+                                ).toLocaleString()}{" "}
+                                (
+                                {Number(
+                                  fix.linkedMetricDelta || 0,
+                                ).toLocaleString()}
+                                )
+                              </span>
+                            </div>
+                            {fix.fixOutcomeNotes ? (
+                              <div>Notes: {fix.fixOutcomeNotes}</div>
+                            ) : null}
+                            {fix.fixResolvedAt ? (
+                              <div>
+                                Resolved:{" "}
+                                {new Date(fix.fixResolvedAt).toLocaleString()}
+                              </div>
+                            ) : null}
+                          </div>
                           <div className="mt-3 flex items-center justify-between gap-2">
                             <Badge variant="secondary">{fix.status}</Badge>
                             <a
@@ -8965,6 +9102,41 @@ export default function AdminDashboard() {
                             >
                               Open target
                             </a>
+                          </div>
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              disabled={updateLeakFixOutcome.isPending}
+                              onClick={() =>
+                                updateLeakFixOutcome.mutate({
+                                  fix,
+                                  status: "in_progress",
+                                  fixOutcomeStatus: "needs_follow_up",
+                                  fixOutcomeNotes:
+                                    "Operator started this leak fix from the Launch Board.",
+                                })
+                              }
+                            >
+                              Mark in progress
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              disabled={updateLeakFixOutcome.isPending}
+                              onClick={() =>
+                                updateLeakFixOutcome.mutate({
+                                  fix,
+                                  status: "resolved",
+                                  fixOutcomeStatus: "resolved_improved",
+                                  fixOutcomeNotes:
+                                    "Marked resolved from the Launch Board.",
+                                })
+                              }
+                            >
+                              Mark resolved
+                            </Button>
                           </div>
                         </div>
                       ))}
