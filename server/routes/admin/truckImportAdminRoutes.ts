@@ -120,6 +120,23 @@ export function registerTruckImportAdminRoutes(
     return pitch;
   };
 
+  const buildClaimPitchSharePack = (listing: any, claimPitch: Record<string, any>) => {
+    const businessName = String(
+      claimPitch?.businessName || listing?.name || "this business",
+    ).trim();
+    const profileUrl = `${resolvePublicBaseUrl()}/p/${encodeURIComponent(String(listing?.id || ""))}`;
+    const claimPitchMessage =
+      "Your MealScout profile is already live. Claim it to update your menu, schedule, photos, and booking info.";
+    const claimPitchShortMessage = `Your MealScout profile for ${businessName} is live. Claim it to update menu, schedule, photos, and booking info.`;
+
+    return {
+      claimPitchMessage,
+      claimPitchShortMessage,
+      claimPitchUrl: claimPitch?.claimUrl || null,
+      profileUrl,
+    };
+  };
+
   app.get(
     "/api/admin/truck-imports",
     isAuthenticated,
@@ -1671,6 +1688,7 @@ export function registerTruckImportAdminRoutes(
           pitchMessage:
             "Your MealScout profile is already live. Claim it to update your menu, schedule, photos, and booking info.",
         };
+        const sharePack = buildClaimPitchSharePack(listing, claimPitch);
 
         const [updated] = await db
           .update(truckImportListings)
@@ -1686,7 +1704,10 @@ export function registerTruckImportAdminRoutes(
 
         return res.json({
           listingId,
-          claimPitch: extractClaimPitch(updated),
+          claimPitch: {
+            ...extractClaimPitch(updated),
+            ...sharePack,
+          },
         });
       } catch (error: any) {
         if (isMissingRelationError(error, "truck_import_listings")) {
@@ -1766,6 +1787,7 @@ export function registerTruckImportAdminRoutes(
           lastStatusUpdatedByUserId: String(req.user?.id || ""),
           lastStatusUpdatedAt: nowIso,
         };
+        const sharePack = buildClaimPitchSharePack(listing, nextPitch);
 
         const [updated] = await db
           .update(truckImportListings)
@@ -1781,7 +1803,10 @@ export function registerTruckImportAdminRoutes(
 
         return res.json({
           listingId,
-          claimPitch: extractClaimPitch(updated),
+          claimPitch: {
+            ...extractClaimPitch(updated),
+            ...sharePack,
+          },
         });
       } catch (error: any) {
         console.error("Error updating claim pitch status:", error);
@@ -1824,6 +1849,7 @@ export function registerTruckImportAdminRoutes(
               claimCompletedAt: claimPitch.claimCompletedAt || null,
               source: claimPitch.source || null,
               createdByUserId: claimPitch.createdByUserId || null,
+              ...buildClaimPitchSharePack(listing, claimPitch),
             };
           })
           .filter(Boolean);

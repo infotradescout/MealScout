@@ -1841,20 +1841,85 @@ function UnclaimedImportedTrucksTab({ enabled }: { enabled: boolean }) {
                       </div>
                       <div className="text-muted-foreground">
                         {String(
-                          claimPitch.pitchMessage ||
+                          claimPitch.claimPitchMessage ||
+                            claimPitch.pitchMessage ||
                             "Your MealScout profile is already live. Claim it to update your menu, schedule, photos, and booking info.",
                         )}
                       </div>
-                      {claimPitch.claimUrl ? (
-                        <a
-                          className="underline"
-                          href={String(claimPitch.claimUrl)}
-                          target="_blank"
-                          rel="noreferrer"
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={async () => {
+                            const message = String(
+                              claimPitch.claimPitchMessage ||
+                                claimPitch.pitchMessage ||
+                                "Your MealScout profile is already live. Claim it to update your menu, schedule, photos, and booking info.",
+                            );
+                            try {
+                              await navigator.clipboard.writeText(message);
+                              toast({ title: "Claim pitch message copied" });
+                            } catch {
+                              toast({
+                                title: "Copy failed",
+                                description: "Unable to copy pitch message.",
+                                variant: "destructive",
+                              });
+                            }
+                          }}
                         >
-                          Open claim URL
-                        </a>
-                      ) : null}
+                          Copy message
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={
+                            !String(
+                              claimPitch.claimPitchUrl || claimPitch.claimUrl || "",
+                            ).trim()
+                          }
+                          onClick={async () => {
+                            const url = String(
+                              claimPitch.claimPitchUrl || claimPitch.claimUrl || "",
+                            ).trim();
+                            if (!url) return;
+                            try {
+                              await navigator.clipboard.writeText(url);
+                              toast({ title: "Claim URL copied" });
+                            } catch {
+                              toast({
+                                title: "Copy failed",
+                                description: "Unable to copy claim URL.",
+                                variant: "destructive",
+                              });
+                            }
+                          }}
+                        >
+                          Copy claim URL
+                        </Button>
+                        {claimPitch.profileUrl ? (
+                          <a
+                            className="underline"
+                            href={String(claimPitch.profileUrl)}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            Open profile URL
+                          </a>
+                        ) : null}
+                        {(claimPitch.claimPitchUrl || claimPitch.claimUrl) ? (
+                          <a
+                            className="underline"
+                            href={String(
+                              claimPitch.claimPitchUrl || claimPitch.claimUrl,
+                            )}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            Open claim URL
+                          </a>
+                        ) : null}
+                      </div>
                       <div className="text-muted-foreground">
                         Created:{" "}
                         {claimPitch.pitchCreatedAt
