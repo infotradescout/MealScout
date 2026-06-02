@@ -251,6 +251,7 @@ export function registerAdminCoreOpsRoutes(app: Express) {
           [claimPitchRollupRow],
           claimProfileReconciliationRows,
           usefulProfileDemandLiftRows,
+          bookingIntentLiftRows,
           cityOptionsRows,
         ] = await Promise.all([
           db
@@ -601,6 +602,70 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             from profile_activity pa
           `),
           db.execute(sql`
+            with city_restaurants as (
+              select r.*
+              from restaurants r
+              where r.is_active = true
+              ${hasCityFilter ? sql`and lower(trim(coalesce(r.city, ''))) = ${cityKey}` : sql``}
+            ),
+            booking_intent_cohorts as (
+              select
+                r.id,
+                (
+                  (coalesce(trim(r.phone), '') <> '' or coalesce(trim(r.email), '') <> '')
+                  and (
+                    exists (select 1 from menu_items mi where mi.restaurant_id = r.id)
+                    or exists (select 1 from truck_manual_schedules tms where tms.restaurant_id = r.id)
+                  )
+                  and (
+                    coalesce(trim(r.logo_url), '') <> ''
+                    or coalesce(trim(r.cover_image_url), '') <> ''
+                    or exists (
+                      select 1
+                      from request_logs rl
+                      where rl.entity_type = 'restaurant'
+                        and rl.entity_id = r.id
+                        and rl.surface = 'public_profile'
+                        and rl.event_type = 'profile_action'
+                    )
+                  )
+                ) as is_useful,
+                exists (
+                  select 1
+                  from request_logs ri
+                  where ri.entity_type = 'restaurant'
+                    and ri.entity_id = r.id
+                    and ri.surface = 'public_profile'
+                    and ri.event_type in (
+                      'truck_booking_click',
+                      'booking_click',
+                      'schedule_click',
+                      'parking_pass_click',
+                      'catering_click',
+                      'call_click',
+                      'directions_click'
+                    )
+                ) as has_booking_intent,
+                exists (
+                  select 1
+                  from request_logs rp
+                  where rp.entity_type = 'restaurant'
+                    and rp.entity_id = r.id
+                    and rp.surface = 'public_profile'
+                    and rp.event_type = 'parking_pass_click'
+                ) as has_parking_pass_click
+              from city_restaurants r
+            )
+            select
+              count(*) filter (where has_booking_intent)::int as "bookingIntentProfilesTotal",
+              count(*) filter (where is_useful and has_booking_intent)::int as "bookingIntentFromUsefulProfiles",
+              count(*) filter (where not is_useful and has_booking_intent)::int as "bookingIntentFromNonUsefulProfiles",
+              coalesce(avg(case when is_useful then case when has_booking_intent then 1.0 else 0.0 end end), 0)::numeric as "bookingIntentUsefulProfileRate",
+              coalesce(avg(case when not is_useful then case when has_booking_intent then 1.0 else 0.0 end end), 0)::numeric as "bookingIntentNonUsefulProfileRate",
+              count(*) filter (where has_parking_pass_click)::int as "parkingPassClickProfilesTotal"
+            from booking_intent_cohorts
+          `),
+          db.execute(sql`
             select city from (
               select distinct trim(coalesce(r.city, '')) as city
               from restaurants r
@@ -727,6 +792,34 @@ export function registerAdminCoreOpsRoutes(app: Express) {
         const usefulProfileBookingClickLift = Number(
           (usefulBookingClickRate - nonUsefulBookingClickRate).toFixed(4),
         );
+        const bookingIntentLiftRow = (
+          (bookingIntentLiftRows as any)?.rows?.[0] || {}
+        ) as Record<string, any>;
+        const bookingIntentProfilesTotal = Number(
+          bookingIntentLiftRow.bookingIntentProfilesTotal || 0,
+        );
+        const bookingIntentFromUsefulProfiles = Number(
+          bookingIntentLiftRow.bookingIntentFromUsefulProfiles || 0,
+        );
+        const bookingIntentFromNonUsefulProfiles = Number(
+          bookingIntentLiftRow.bookingIntentFromNonUsefulProfiles || 0,
+        );
+        const bookingIntentUsefulProfileRate = Number(
+          Number(bookingIntentLiftRow.bookingIntentUsefulProfileRate || 0).toFixed(4),
+        );
+        const bookingIntentNonUsefulProfileRate = Number(
+          Number(bookingIntentLiftRow.bookingIntentNonUsefulProfileRate || 0).toFixed(4),
+        );
+        const bookingIntentUsefulLift = Number(
+          (bookingIntentUsefulProfileRate - bookingIntentNonUsefulProfileRate).toFixed(4),
+        );
+        const parkingPassClickProfilesTotal = Number(
+          bookingIntentLiftRow.parkingPassClickProfilesTotal || 0,
+        );
+        const bookingIntentToParkingPassClickRate =
+          bookingIntentProfilesTotal > 0
+            ? Number((parkingPassClickProfilesTotal / bookingIntentProfilesTotal).toFixed(4))
+            : 0;
 
         const marketCities = ((cityOptionsRows as any)?.rows || [])
           .map((row: any) => String(row.city || "").trim())
@@ -777,6 +870,13 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             usefulProfileViewLift,
             usefulProfileActionLift,
             usefulProfileBookingClickLift,
+            bookingIntentProfilesTotal,
+            bookingIntentFromUsefulProfiles,
+            bookingIntentFromNonUsefulProfiles,
+            bookingIntentUsefulProfileRate,
+            bookingIntentNonUsefulProfileRate,
+            bookingIntentUsefulLift,
+            bookingIntentToParkingPassClickRate,
           },
           generatedAt: new Date().toISOString(),
         });

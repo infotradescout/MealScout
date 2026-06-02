@@ -538,6 +538,13 @@ interface OneMarketLaunchBoardResponse {
     usefulProfileViewLift: number;
     usefulProfileActionLift: number;
     usefulProfileBookingClickLift: number;
+    bookingIntentProfilesTotal: number;
+    bookingIntentFromUsefulProfiles: number;
+    bookingIntentFromNonUsefulProfiles: number;
+    bookingIntentUsefulProfileRate: number;
+    bookingIntentNonUsefulProfileRate: number;
+    bookingIntentUsefulLift: number;
+    bookingIntentToParkingPassClickRate: number;
   };
   generatedAt: string;
 }
@@ -8756,6 +8763,46 @@ export default function AdminDashboard() {
                         Number(
                           (launchBoardData?.metrics?.usefulProfileBookingClickLift || 0) *
                             100,
+                        ).toFixed(1),
+                      ],
+                      [
+                        "Booking Intent Profiles Total",
+                        launchBoardData?.metrics?.bookingIntentProfilesTotal,
+                      ],
+                      [
+                        "Booking Intent From Useful Profiles",
+                        launchBoardData?.metrics?.bookingIntentFromUsefulProfiles,
+                      ],
+                      [
+                        "Booking Intent From Non-Useful Profiles",
+                        launchBoardData?.metrics?.bookingIntentFromNonUsefulProfiles,
+                      ],
+                      [
+                        "Booking Intent Useful Profile Rate %",
+                        Number(
+                          (launchBoardData?.metrics?.bookingIntentUsefulProfileRate ||
+                            0) * 100,
+                        ).toFixed(1),
+                      ],
+                      [
+                        "Booking Intent Non-Useful Profile Rate %",
+                        Number(
+                          (launchBoardData?.metrics?.bookingIntentNonUsefulProfileRate ||
+                            0) * 100,
+                        ).toFixed(1),
+                      ],
+                      [
+                        "Booking Intent Useful Lift %",
+                        Number(
+                          (launchBoardData?.metrics?.bookingIntentUsefulLift || 0) *
+                            100,
+                        ).toFixed(1),
+                      ],
+                      [
+                        "Booking Intent to Parking Pass Click Rate %",
+                        Number(
+                          (launchBoardData?.metrics
+                            ?.bookingIntentToParkingPassClickRate || 0) * 100,
                         ).toFixed(1),
                       ],
                     ].map(([label, value]) => (
