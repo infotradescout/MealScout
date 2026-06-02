@@ -249,6 +249,7 @@ export function registerAdminCoreOpsRoutes(app: Express) {
           [publicActionsRow],
           [affiliateOpensRow],
           [claimPitchRollupRow],
+          claimProfileReconciliationRows,
           cityOptionsRows,
         ] = await Promise.all([
           db
@@ -466,6 +467,66 @@ export function registerAdminCoreOpsRoutes(app: Express) {
                 : sql`true`,
             ),
           db.execute(sql`
+            with pitched_claims as (
+              select
+                l.id as listing_id,
+                r.id as restaurant_id,
+                coalesce(
+                  nullif(l.raw_data->'claimPitch'->>'claimCompletedAt', '')::timestamptz,
+                  nullif(l.raw_data->'claimPitch'->>'claimStartedAt', '')::timestamptz
+                ) as pitched_at
+              from truck_import_listings l
+              join restaurants r on r.claimed_from_import_id = l.id
+              where (l.raw_data->'claimPitch'->>'claimCompletedAt') is not null
+                 or (l.raw_data->'claimPitch'->>'claimStartedAt') is not null
+              ${hasCityFilter ? sql`and lower(trim(coalesce(l.city, ''))) = ${cityKey}` : sql``}
+            )
+            select
+              count(*) filter (
+                where pc.pitched_at is not null
+                  and r.updated_at >= pc.pitched_at
+              )::int as "claimedProfilesUpdatedAfterPitch",
+              count(*) filter (
+                where pc.pitched_at is not null
+                  and exists (select 1 from menu_items mi where mi.restaurant_id = r.id)
+              )::int as "claimedProfilesWithMenuAfterPitch",
+              count(*) filter (
+                where pc.pitched_at is not null
+                  and exists (select 1 from truck_manual_schedules tms where tms.restaurant_id = r.id)
+              )::int as "claimedProfilesWithScheduleAfterPitch",
+              count(*) filter (
+                where pc.pitched_at is not null
+                  and (coalesce(trim(r.phone), '') <> '' or coalesce(trim(r.email), '') <> '')
+              )::int as "claimedProfilesWithContactAfterPitch",
+              count(*) filter (
+                where pc.pitched_at is not null
+                  and (coalesce(trim(r.logo_url), '') <> '' or coalesce(trim(r.cover_image_url), '') <> '')
+              )::int as "claimedProfilesWithPhotoAfterPitch",
+              count(*) filter (
+                where pc.pitched_at is not null
+                  and (coalesce(trim(r.phone), '') <> '' or coalesce(trim(r.email), '') <> '')
+                  and (
+                    exists (select 1 from menu_items mi2 where mi2.restaurant_id = r.id)
+                    or exists (select 1 from truck_manual_schedules tms2 where tms2.restaurant_id = r.id)
+                  )
+                  and (
+                    coalesce(trim(r.logo_url), '') <> ''
+                    or coalesce(trim(r.cover_image_url), '') <> ''
+                    or exists (
+                      select 1
+                      from request_logs rl
+                      where rl.entity_type = 'restaurant'
+                        and rl.entity_id = r.id
+                        and rl.surface = 'public_profile'
+                        and rl.event_type = 'profile_action'
+                    )
+                  )
+              )::int as "claimUsefulProfilesCount",
+              count(*) filter (where pc.pitched_at is not null)::int as "claimTrackedProfilesCount"
+            from pitched_claims pc
+            join restaurants r on r.id = pc.restaurant_id
+          `),
+          db.execute(sql`
             select city from (
               select distinct trim(coalesce(r.city, '')) as city
               from restaurants r
@@ -527,6 +588,34 @@ export function registerAdminCoreOpsRoutes(app: Express) {
           claimPitchesCreated > 0
             ? Number((claimPitchesCompleted / claimPitchesCreated).toFixed(4))
             : 0;
+        const claimProfileReconciliationRow = (
+          (claimProfileReconciliationRows as any)?.rows?.[0] || {}
+        ) as Record<string, any>;
+        const claimedProfilesUpdatedAfterPitch = Number(
+          claimProfileReconciliationRow.claimedProfilesUpdatedAfterPitch || 0,
+        );
+        const claimedProfilesWithMenuAfterPitch = Number(
+          claimProfileReconciliationRow.claimedProfilesWithMenuAfterPitch || 0,
+        );
+        const claimedProfilesWithScheduleAfterPitch = Number(
+          claimProfileReconciliationRow.claimedProfilesWithScheduleAfterPitch || 0,
+        );
+        const claimedProfilesWithContactAfterPitch = Number(
+          claimProfileReconciliationRow.claimedProfilesWithContactAfterPitch || 0,
+        );
+        const claimedProfilesWithPhotoAfterPitch = Number(
+          claimProfileReconciliationRow.claimedProfilesWithPhotoAfterPitch || 0,
+        );
+        const claimUsefulProfilesCount = Number(
+          claimProfileReconciliationRow.claimUsefulProfilesCount || 0,
+        );
+        const claimTrackedProfilesCount = Number(
+          claimProfileReconciliationRow.claimTrackedProfilesCount || 0,
+        );
+        const claimToUsefulProfileRate =
+          claimTrackedProfilesCount > 0
+            ? Number((claimUsefulProfilesCount / claimTrackedProfilesCount).toFixed(4))
+            : 0;
 
         const marketCities = ((cityOptionsRows as any)?.rows || [])
           .map((row: any) => String(row.city || "").trim())
@@ -565,6 +654,12 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             claimPitchOpenRate,
             claimPitchStartRate,
             claimPitchCompletionRate,
+            claimedProfilesUpdatedAfterPitch,
+            claimedProfilesWithMenuAfterPitch,
+            claimedProfilesWithScheduleAfterPitch,
+            claimedProfilesWithContactAfterPitch,
+            claimedProfilesWithPhotoAfterPitch,
+            claimToUsefulProfileRate,
           },
           generatedAt: new Date().toISOString(),
         });

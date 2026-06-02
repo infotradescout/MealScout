@@ -526,6 +526,12 @@ interface OneMarketLaunchBoardResponse {
     claimPitchOpenRate: number;
     claimPitchStartRate: number;
     claimPitchCompletionRate: number;
+    claimedProfilesUpdatedAfterPitch: number;
+    claimedProfilesWithMenuAfterPitch: number;
+    claimedProfilesWithScheduleAfterPitch: number;
+    claimedProfilesWithContactAfterPitch: number;
+    claimedProfilesWithPhotoAfterPitch: number;
+    claimToUsefulProfileRate: number;
   };
   generatedAt: string;
 }
@@ -8686,6 +8692,33 @@ export default function AdminDashboard() {
                         Number(
                           (launchBoardData?.metrics?.claimPitchCompletionRate ||
                             0) * 100,
+                        ).toFixed(1),
+                      ],
+                      [
+                        "Claimed Profiles Updated After Pitch",
+                        launchBoardData?.metrics?.claimedProfilesUpdatedAfterPitch,
+                      ],
+                      [
+                        "Claimed Profiles w/ Menu After Pitch",
+                        launchBoardData?.metrics?.claimedProfilesWithMenuAfterPitch,
+                      ],
+                      [
+                        "Claimed Profiles w/ Schedule After Pitch",
+                        launchBoardData?.metrics?.claimedProfilesWithScheduleAfterPitch,
+                      ],
+                      [
+                        "Claimed Profiles w/ Contact After Pitch",
+                        launchBoardData?.metrics?.claimedProfilesWithContactAfterPitch,
+                      ],
+                      [
+                        "Claimed Profiles w/ Photo After Pitch",
+                        launchBoardData?.metrics?.claimedProfilesWithPhotoAfterPitch,
+                      ],
+                      [
+                        "Claim to Useful Profile Rate %",
+                        Number(
+                          (launchBoardData?.metrics?.claimToUsefulProfileRate || 0) *
+                            100,
                         ).toFixed(1),
                       ],
                     ].map(([label, value]) => (
