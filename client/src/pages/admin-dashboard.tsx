@@ -501,6 +501,18 @@ interface OneMarketLaunchBoardResponse {
     cityFilterApplied: boolean;
     cityOptions: string[];
   };
+  commandCenter: {
+    marketHealthStatus: "blocked" | "at_risk" | "building" | "ready" | "scaling";
+    topGrowthConstraint: string;
+    topRecommendedAction: string;
+    topRecommendedActionUrl: string;
+    highestPriorityFixType: string;
+    highestPriorityFixStatus: string;
+    openCriticalFixCount: number;
+    resolvedFixCount: number;
+    improvingFixCount: number;
+    bookingReadinessScore: number;
+  };
   leakFixQueue: Array<{
     fixId: string;
     marketCity: string;
@@ -8727,7 +8739,98 @@ export default function AdminDashboard() {
                     Loading launch board...
                   </div>
                 ) : (
-                  <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+                  <>
+                    <div className="rounded-xl border bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950 p-4 text-white shadow-sm">
+                      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                        <div className="space-y-2">
+                          <div className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-200">
+                            Launch Board Priority Command Center
+                          </div>
+                          <div className="text-2xl font-semibold">
+                            {launchBoardData?.commandCenter?.topRecommendedAction ||
+                              "Keep improving useful profiles and booking readiness"}
+                          </div>
+                          <div className="text-sm text-slate-200">
+                            Top growth constraint:{" "}
+                            <span className="font-medium text-white">
+                              {(
+                                launchBoardData?.commandCenter?.topGrowthConstraint ||
+                                "none"
+                              ).replaceAll("_", " ")}
+                            </span>
+                          </div>
+                          <a
+                            className="inline-flex text-sm font-semibold text-emerald-200 underline"
+                            href={
+                              launchBoardData?.commandCenter
+                                ?.topRecommendedActionUrl || "#"
+                            }
+                          >
+                            Open recommended action
+                          </a>
+                        </div>
+                        <div className="grid min-w-full gap-2 sm:grid-cols-2 lg:min-w-[520px]">
+                          {[
+                            [
+                              "Market Health Status",
+                              (
+                                launchBoardData?.commandCenter?.marketHealthStatus ||
+                                "blocked"
+                              ).replaceAll("_", " "),
+                            ],
+                            [
+                              "Booking Readiness Score",
+                              `${Number(
+                                launchBoardData?.commandCenter
+                                  ?.bookingReadinessScore || 0,
+                              ).toFixed(0)}/100`,
+                            ],
+                            [
+                              "Highest Priority Fix Type",
+                              (
+                                launchBoardData?.commandCenter
+                                  ?.highestPriorityFixType || "none"
+                              ).replaceAll("_", " "),
+                            ],
+                            [
+                              "Highest Priority Fix Status",
+                              (
+                                launchBoardData?.commandCenter
+                                  ?.highestPriorityFixStatus || "none"
+                              ).replaceAll("_", " "),
+                            ],
+                            [
+                              "Open Critical Fix Count",
+                              launchBoardData?.commandCenter?.openCriticalFixCount,
+                            ],
+                            [
+                              "Resolved Fix Count",
+                              launchBoardData?.commandCenter?.resolvedFixCount,
+                            ],
+                            [
+                              "Improving Fix Count",
+                              launchBoardData?.commandCenter?.improvingFixCount,
+                            ],
+                          ].map(([label, value]) => (
+                            <div
+                              key={String(label)}
+                              className="rounded-lg border border-white/15 bg-white/10 p-3"
+                            >
+                              <div className="text-[11px] uppercase tracking-wide text-emerald-100">
+                                {label}
+                              </div>
+                              <div className="mt-1 text-lg font-semibold">
+                                {typeof value === "number"
+                                  ? Number(value || 0).toLocaleString()
+                                  : value}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
                     {[
                       ["Profiles Total", launchBoardData?.metrics?.profilesTotal],
                       [
@@ -9019,7 +9122,8 @@ export default function AdminDashboard() {
                         </div>
                       </div>
                     ))}
-                  </div>
+                    </div>
+                  </>
                 )}
                 {(launchBoardData?.leakFixQueue || []).length > 0 ? (
                   <div className="space-y-2">

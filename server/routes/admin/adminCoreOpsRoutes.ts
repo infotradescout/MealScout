@@ -1256,6 +1256,70 @@ export function registerAdminCoreOpsRoutes(app: Express) {
           leakFixesResolved > 0
             ? Number((leakFixesImproved / leakFixesResolved).toFixed(4))
             : 0;
+        const openCriticalFixCount = leakFixQueue.filter(
+          (fix: any) => fix.priority === "high" && fix.status !== "resolved",
+        ).length;
+        const highestPriorityFix =
+          leakFixQueue.find(
+            (fix: any) => fix.priority === "high" && fix.status !== "resolved",
+          ) ||
+          leakFixQueue.find(
+            (fix: any) => fix.priority === "medium" && fix.status !== "resolved",
+          ) ||
+          leakFixQueue.find((fix: any) => fix.status !== "resolved") ||
+          leakFixQueue[0] ||
+          null;
+        const readinessComponents = [
+          usefulProfilesTotal > 0 ? 20 : 0,
+          bookingIntentProfilesTotal > 0 ? 20 : 0,
+          activeParkingPassListings > 0 ? 20 : 0,
+          parkingPassBookingStarts > 0 ? 15 : 0,
+          parkingPassBookingConfirmations > 0 ? 15 : 0,
+          parkingPassPaymentDisabledLeak === 0 ? 5 : 0,
+          parkingPassMissingHostCoordinateLeak === 0 ? 5 : 0,
+          leakFixesOpen === 0 ? 5 : 0,
+          leakFixesImproved > 0 ? 5 : 0,
+        ];
+        const bookingReadinessScore = Math.min(
+          100,
+          readinessComponents.reduce((total, value) => total + value, 0),
+        );
+        const marketHealthStatus =
+          openCriticalFixCount > 0 || parkingPassTopLeakReason !== "none"
+            ? "blocked"
+            : bookingReadinessScore >= 85
+              ? "scaling"
+              : bookingReadinessScore >= 70
+                ? "ready"
+                : bookingReadinessScore >= 40
+                  ? "building"
+                  : "at_risk";
+        const topGrowthConstraint =
+          parkingPassTopLeakReason !== "none"
+            ? parkingPassTopLeakReason
+            : bookingIntentProfilesTotal === 0
+              ? "booking_intent"
+              : usefulProfilesTotal === 0
+                ? "useful_profiles"
+                : parkingPassBookingConfirmations === 0
+                  ? "booking_confirmations"
+                  : "none";
+        const commandCenter = {
+          marketHealthStatus,
+          topGrowthConstraint,
+          topRecommendedAction:
+            highestPriorityFix?.title ||
+            "Keep improving useful profiles and booking readiness",
+          topRecommendedActionUrl:
+            highestPriorityFix?.targetUrl ||
+            `/admin-dashboard?tab=launch-board&city=${encodeURIComponent(marketCity)}`,
+          highestPriorityFixType: highestPriorityFix?.fixType || "none",
+          highestPriorityFixStatus: highestPriorityFix?.status || "none",
+          openCriticalFixCount,
+          resolvedFixCount: leakFixesResolved,
+          improvingFixCount: leakFixesImproved,
+          bookingReadinessScore,
+        };
 
         const marketCities = ((cityOptionsRows as any)?.rows || [])
           .map((row: any) => String(row.city || "").trim())
@@ -1267,6 +1331,7 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             cityFilterApplied: hasCityFilter,
             cityOptions: marketCities,
           },
+          commandCenter,
           metrics: {
             profilesTotal,
             claimableProfiles,
