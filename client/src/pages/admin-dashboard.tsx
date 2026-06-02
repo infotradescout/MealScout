@@ -514,6 +514,14 @@ interface OneMarketLaunchBoardResponse {
     parkingPassListings: number;
     bookingStarts: number;
     bookingConfirmations: number;
+    parkingPassViews: number;
+    parkingPassClicks: number;
+    parkingPassBookingStarts: number;
+    parkingPassBookingConfirmations: number;
+    parkingPassClickToStartRate: number;
+    parkingPassStartToConfirmRate: number;
+    bookingIntentToBookingStartRate: number;
+    bookingIntentToBookingConfirmRate: number;
     publicProfileViews: number;
     publicProfileActions: number;
     affiliateLinkOpens: number;
@@ -8652,6 +8660,44 @@ export default function AdminDashboard() {
                       [
                         "Booking Confirmations",
                         launchBoardData?.metrics?.bookingConfirmations,
+                      ],
+                      ["Parking Pass Views", launchBoardData?.metrics?.parkingPassViews],
+                      ["Parking Pass Clicks", launchBoardData?.metrics?.parkingPassClicks],
+                      [
+                        "Parking Pass Booking Starts",
+                        launchBoardData?.metrics?.parkingPassBookingStarts,
+                      ],
+                      [
+                        "Parking Pass Booking Confirmations",
+                        launchBoardData?.metrics?.parkingPassBookingConfirmations,
+                      ],
+                      [
+                        "Parking Pass Click to Start Rate %",
+                        Number(
+                          (launchBoardData?.metrics?.parkingPassClickToStartRate || 0) *
+                            100,
+                        ).toFixed(1),
+                      ],
+                      [
+                        "Parking Pass Start to Confirm Rate %",
+                        Number(
+                          (launchBoardData?.metrics?.parkingPassStartToConfirmRate ||
+                            0) * 100,
+                        ).toFixed(1),
+                      ],
+                      [
+                        "Booking Intent to Booking Start Rate %",
+                        Number(
+                          (launchBoardData?.metrics
+                            ?.bookingIntentToBookingStartRate || 0) * 100,
+                        ).toFixed(1),
+                      ],
+                      [
+                        "Booking Intent to Booking Confirm Rate %",
+                        Number(
+                          (launchBoardData?.metrics
+                            ?.bookingIntentToBookingConfirmRate || 0) * 100,
+                        ).toFixed(1),
                       ],
                       ["Public Profile Views", launchBoardData?.metrics?.publicProfileViews],
                       [

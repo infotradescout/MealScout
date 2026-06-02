@@ -245,6 +245,7 @@ export function registerAdminCoreOpsRoutes(app: Express) {
           [parkingPassListingsRow],
           [bookingStartsRow],
           [bookingConfirmationsRow],
+          parkingPassRequestLogRows,
           [publicViewsRow],
           [publicActionsRow],
           [affiliateOpensRow],
@@ -374,6 +375,53 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             .innerJoin(events, eq(events.id, eventBookings.eventId))
             .innerJoin(hosts, eq(hosts.id, events.hostId))
             .where(and(eq(events.eventType, "parking_pass"), cityWhereHosts)),
+          db.execute(sql`
+            select
+              count(*) filter (
+                where rl.event_type in ('parking_pass_view', 'parking_pass_listing_view')
+              )::int as "parkingPassViews",
+              count(*) filter (
+                where rl.event_type = 'parking_pass_click'
+              )::int as "parkingPassClicks"
+            from request_logs rl
+            where rl.surface in ('public_profile', 'parking_pass')
+              and rl.event_type in (
+                'parking_pass_view',
+                'parking_pass_listing_view',
+                'parking_pass_click'
+              )
+              ${
+                hasCityFilter
+                  ? sql`and (
+                      (rl.entity_type in ('restaurant', 'truck', 'bar')
+                        and exists (
+                          select 1
+                          from restaurants r
+                          where r.id = rl.entity_id
+                            and lower(trim(coalesce(r.city, ''))) = ${cityKey}
+                        ))
+                      or
+                      (rl.entity_type = 'host'
+                        and exists (
+                          select 1
+                          from hosts h
+                          where h.id = rl.entity_id
+                            and lower(trim(coalesce(h.city, ''))) = ${cityKey}
+                        ))
+                      or
+                      (rl.entity_type = 'event'
+                        and exists (
+                          select 1
+                          from events e
+                          join hosts h on h.id = e.host_id
+                          where e.id = rl.entity_id
+                            and lower(trim(coalesce(h.city, ''))) = ${cityKey}
+                        ))
+                      or lower(trim(coalesce(rl.metadata->>'city', ''))) = ${cityKey}
+                    )`
+                  : sql``
+              }
+          `),
           db
             .select({
               views: sql<number>`count(*)`.mapWith(Number),
@@ -820,6 +868,35 @@ export function registerAdminCoreOpsRoutes(app: Express) {
           bookingIntentProfilesTotal > 0
             ? Number((parkingPassClickProfilesTotal / bookingIntentProfilesTotal).toFixed(4))
             : 0;
+        const parkingPassRequestLogRow = (
+          (parkingPassRequestLogRows as any)?.rows?.[0] || {}
+        ) as Record<string, any>;
+        const parkingPassViews = Number(parkingPassRequestLogRow.parkingPassViews || 0);
+        const parkingPassClicks = Number(parkingPassRequestLogRow.parkingPassClicks || 0);
+        const parkingPassBookingStarts = Number(bookingStartsRow?.bookingStarts || 0);
+        const parkingPassBookingConfirmations = Number(
+          bookingConfirmationsRow?.bookingConfirmations || 0,
+        );
+        const parkingPassClickToStartRate =
+          parkingPassClicks > 0
+            ? Number((parkingPassBookingStarts / parkingPassClicks).toFixed(4))
+            : 0;
+        const parkingPassStartToConfirmRate =
+          parkingPassBookingStarts > 0
+            ? Number(
+                (parkingPassBookingConfirmations / parkingPassBookingStarts).toFixed(4),
+              )
+            : 0;
+        const bookingIntentToBookingStartRate =
+          bookingIntentProfilesTotal > 0
+            ? Number((parkingPassBookingStarts / bookingIntentProfilesTotal).toFixed(4))
+            : 0;
+        const bookingIntentToBookingConfirmRate =
+          bookingIntentProfilesTotal > 0
+            ? Number(
+                (parkingPassBookingConfirmations / bookingIntentProfilesTotal).toFixed(4),
+              )
+            : 0;
 
         const marketCities = ((cityOptionsRows as any)?.rows || [])
           .map((row: any) => String(row.city || "").trim())
@@ -846,6 +923,14 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             bookingConfirmations: Number(
               bookingConfirmationsRow?.bookingConfirmations || 0,
             ),
+            parkingPassViews,
+            parkingPassClicks,
+            parkingPassBookingStarts,
+            parkingPassBookingConfirmations,
+            parkingPassClickToStartRate,
+            parkingPassStartToConfirmRate,
+            bookingIntentToBookingStartRate,
+            bookingIntentToBookingConfirmRate,
             publicProfileViews: Number(publicViewsRow?.views || 0),
             publicProfileActions: Number(publicActionsRow?.actions || 0),
             affiliateLinkOpens: Number(affiliateOpensRow?.opens || 0),
