@@ -38,7 +38,7 @@ MealScout is a local food discovery, profile, scheduling, and booking platform f
 - Menu setup: `/menu-builder`, `/menu/:restaurantId`, `/kitchen`, `/checkout/:restaurantId`, order confirmation routes, menu APIs, and pickup order APIs manage online menu and pickup ordering.
 - Schedule/manual stop update: truck live location, manual schedule, operating windows, food truck session, and booking schedule APIs keep truck availability current.
 - Parking Pass host listing: `/host-signup`, `/host/dashboard`, `/parking-pass-manage`, host routes, event routes, open call series routes, and host interest routes publish and manage bookable host/event inventory.
-- Parking Pass truck booking: `/parking-pass`, `/event/:slug`, event booking modals, booking APIs, event APIs, Stripe payment endpoints, and webhook reconciliation support truck-to-host booking.
+- Parking Pass truck booking: `/parking-pass`, `/event/:slug`, event booking modals, booking APIs, event APIs, Stripe payment endpoints, and webhook reconciliation support truck-to-host booking. Booking requires non-expired stored insurance verification; uploaded insurance evidence alone is not sufficient.
 - Admin Launch Board: `/admin/dashboard`, `/admin/control-center`, `/admin/geo/heatmap`, admin management routes, admin core ops routes, admin market heatmap routes, and growth routes aggregate operational launch data.
 - Affiliate/claim pitch operator flow: `/share-hub`, `/affiliate/earnings`, admin affiliate routes, growth routes, claim pitch import/admin routes, affiliate share events, referrals, and claim tracking connect pitch sharing to operator conversion.
 - Mobile shell route surface: Capacitor is configured in `capacitor.config.ts`; mobile-safe public routes include `/scout`, `/search`, `/map`, `/parking-pass`, `/p/*`, `/menu/*`, `/checkout/*`, auth setup routes, and public SEO/customer routes from `client/src/App.tsx`.
@@ -164,6 +164,7 @@ The schema entrypoint is `shared/schema.ts`. It re-exports modular schema files,
 - Schema column assumptions: caused Launch Board regression; verify SQL/select references against `shared/schema.ts` and migrations.
 - Public/private route boundaries: `client/src/App.tsx` duplicates many routes across guest/authenticated surfaces and publicRoutePrefixes can accidentally expose or block pages.
 - Payment/webhook reconciliation: Stripe state spans Parking Pass bookings, host payouts, subscriptions, pickup orders, supplier orders, and webhooks.
+- Insurance verification gate: Parking Pass booking requires non-expired stored insurance verification, renewed every 365 days. Uploaded insurance evidence alone is not sufficient.
 - Claim pitch status in rawData JSON: imported listing workflow stores status in a flexible field, so contracts should guard any reads/writes.
 
 ## Validation Commands
