@@ -3,6 +3,7 @@ type VerificationStateInput = {
   isVerified?: boolean | null;
   emailVerified?: boolean | null;
   insuranceVerified?: boolean | null;
+  insuranceExpiresAt?: Date | string | null;
   businessInsuranceSubmitted?: boolean | null;
   claimedFromImportId?: string | null;
   isSuspended?: boolean | null;
@@ -25,15 +26,20 @@ export type BusinessVerificationState = {
 
 const hasText = (value: unknown) => String(value || "").trim().length > 0;
 
+const isFutureDate = (value: unknown) => {
+  if (!value) return false;
+  const time = value instanceof Date ? value.getTime() : new Date(String(value)).getTime();
+  return Number.isFinite(time) && time > Date.now();
+};
+
 export function getBusinessVerificationState(
   input: VerificationStateInput,
 ): BusinessVerificationState {
   const active = input.isActive !== false;
   const suspended = input.isSuspended === true || input.isBanned === true;
-  const hasInsurance =
-    input.insuranceVerified === true ||
-    input.businessInsuranceSubmitted === true ||
-    input.isVerified === true;
+  const insuranceNotExpired =
+    !input.insuranceExpiresAt || isFutureDate(input.insuranceExpiresAt);
+  const hasInsurance = input.insuranceVerified === true && insuranceNotExpired;
   const hasEmailOrAdminVerification =
     input.emailVerified === true || input.isVerified === true;
 

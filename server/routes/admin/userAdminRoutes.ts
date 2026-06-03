@@ -1551,6 +1551,60 @@ export function registerUserAdminRoutes(
     },
   );
 
+  app.post(
+    "/api/admin/users/:id/verify-insurance",
+    isAuthenticated,
+    isStaffOrAdmin,
+    async (req: any, res) => {
+      if (!requireAdminUser(req, res)) return;
+      try {
+        const user = await storage.getUser(req.params.id);
+        if (!user) {
+          return res.status(404).json({ message: "User not found" });
+        }
+
+        const now = new Date();
+        const expiresAt = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000);
+        const updatedBusinesses = await db
+          .update(restaurants)
+          .set({
+            insuranceVerified: true,
+            insuranceVerifiedAt: now,
+            insuranceExpiresAt: expiresAt,
+            insuranceVerifiedByUserId: req.user?.id || null,
+            updatedAt: now,
+          })
+          .where(eq(restaurants.ownerId, user.id))
+          .returning({
+            id: restaurants.id,
+            insuranceVerified: restaurants.insuranceVerified,
+            insuranceVerifiedAt: restaurants.insuranceVerifiedAt,
+            insuranceExpiresAt: restaurants.insuranceExpiresAt,
+          });
+
+        if (!updatedBusinesses.length) {
+          return res.status(404).json({
+            message: "User has no attached business profile to verify insurance for.",
+          });
+        }
+
+        res.json({
+          success: true,
+          userId: user.id,
+          insuranceVerified: true,
+          insuranceVerifiedAt: now,
+          insuranceExpiresAt: expiresAt,
+          businesses: updatedBusinesses,
+        });
+      } catch (error: any) {
+        console.error("Error verifying user insurance:", error);
+        res.status(500).json({
+          message: error.message || "Failed to verify insurance",
+        });
+      }
+    },
+  );
+
   app.get(
     "/api/admin/users/:id/deals",
     isAuthenticated,

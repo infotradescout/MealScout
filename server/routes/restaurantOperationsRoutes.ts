@@ -330,6 +330,8 @@ export function registerRestaurantOperationsRoutes(
               verificationState: getBusinessVerificationState({
                 isActive: restaurant.isActive,
                 isVerified: restaurant.isVerified,
+                insuranceVerified: restaurant.insuranceVerified,
+                insuranceExpiresAt: restaurant.insuranceExpiresAt,
                 emailVerified: req.user?.emailVerified === true,
                 businessInsuranceSubmitted,
                 claimedFromImportId: restaurant.claimedFromImportId,

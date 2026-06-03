@@ -1,6 +1,6 @@
 import type { Express } from "express";
 import Stripe from "stripe";
-import { and, eq, gte, inArray, isNotNull, isNull, lt, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 import { isAuthenticated, isStaffOrAdmin } from "../../unifiedAuth";
 import { storage } from "../../storage";
 import { sanitizeUsers } from "../../utils/sanitize";
@@ -1494,16 +1494,18 @@ export function registerAdminCoreOpsRoutes(app: Express) {
           .select({
             id: restaurants.id,
             name: restaurants.name,
+            address: restaurants.address,
             city: restaurants.city,
+            state: restaurants.state,
             phone: restaurants.phone,
             ownerId: restaurants.ownerId,
-            email: sql<string>`coalesce(${restaurants}.email, '')`,
+            websiteUrl: restaurants.websiteUrl,
             logoUrl: restaurants.logoUrl,
             coverImageUrl: restaurants.coverImageUrl,
             instagramUrl: restaurants.instagramUrl,
             facebookPageUrl: restaurants.facebookPageUrl,
             isVerified: restaurants.isVerified,
-            rawData: sql<any>`coalesce(${restaurants}.raw_data, '{}'::jsonb)`,
+            rawData: sql<any>`'{}'::jsonb`,
             updatedAt: restaurants.updatedAt,
             createdAt: restaurants.createdAt,
           })
@@ -1511,7 +1513,10 @@ export function registerAdminCoreOpsRoutes(app: Express) {
           .where(
             and(
               eq(restaurants.isActive, true),
-              sql`(${restaurants}.is_food_truck = true or ${restaurants}.business_type = 'food_truck')`,
+              or(
+                eq(restaurants.isFoodTruck, true),
+                eq(restaurants.businessType, "food_truck"),
+              ),
             ),
           );
 
@@ -1573,7 +1578,7 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             const ownerUserId = String(row.ownerId || "").trim() || null;
             const ownerEmail = ownerUserId ? ownerById.get(ownerUserId) || null : null;
             const hasOwner = Boolean(ownerUserId);
-            const hasEmail = Boolean(String(row.email || "").trim()) || Boolean(ownerEmail);
+            const hasEmail = Boolean(ownerEmail);
             const hasSocials =
               Boolean(String(row.instagramUrl || "").trim()) ||
               Boolean(String(row.facebookPageUrl || "").trim());
@@ -2091,6 +2096,9 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             isFoodTruck: restaurants.isFoodTruck,
             isActive: restaurants.isActive,
             isVerified: restaurants.isVerified,
+            insuranceVerified: restaurants.insuranceVerified,
+            insuranceVerifiedAt: restaurants.insuranceVerifiedAt,
+            insuranceExpiresAt: restaurants.insuranceExpiresAt,
           })
           .from(restaurants);
         const restaurantByOwner = new Map<string, any>();
@@ -2145,6 +2153,15 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             restaurantByOwner.get(u.id)?.isFoodTruck ?? null,
           businessIsActive: restaurantByOwner.get(u.id)?.isActive ?? null,
           businessIsVerified: restaurantByOwner.get(u.id)?.isVerified ?? null,
+          insuranceVerified:
+            restaurantByOwner.get(u.id)?.insuranceVerified === true &&
+            (!restaurantByOwner.get(u.id)?.insuranceExpiresAt ||
+              new Date(String(restaurantByOwner.get(u.id)?.insuranceExpiresAt)).getTime() >
+                Date.now()),
+          insuranceVerifiedAt:
+            restaurantByOwner.get(u.id)?.insuranceVerifiedAt || null,
+          insuranceExpiresAt:
+            restaurantByOwner.get(u.id)?.insuranceExpiresAt || null,
           hasRestaurant: restaurantByOwner.has(u.id),
           defaultCity: defaultAddressByUser.get(u.id)?.city || null,
           defaultState: defaultAddressByUser.get(u.id)?.state || null,

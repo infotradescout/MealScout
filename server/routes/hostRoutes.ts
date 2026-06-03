@@ -1286,26 +1286,11 @@ export function registerHostRoutes(app: Express) {
         const shouldBypassVerificationGate = isStaffOrAdminUser(req.user);
         if (!shouldBypassVerificationGate) {
           const emailVerified = req.user?.emailVerified === true;
-          const verificationRows = await db
-            .select({
-              status: verificationRequests.status,
-              documents: verificationRequests.documents,
-              submittedAt: verificationRequests.submittedAt,
-            })
-            .from(verificationRequests)
-            .where(eq(verificationRequests.restaurantId, truckId))
-            .orderBy(desc(verificationRequests.submittedAt))
-            .limit(5);
-
-          const hasInsuranceEvidence = verificationRows.some((row: any) =>
-            Array.isArray(row?.documents)
-              ? row.documents.some(
-                  (doc: unknown) => String(doc || "").trim().length > 0,
-                )
-              : false,
-          );
-
-          if (!emailVerified || !hasInsuranceEvidence) {
+          const storedInsuranceValid =
+            truck.insuranceVerified === true &&
+            (!truck.insuranceExpiresAt ||
+              new Date(String(truck.insuranceExpiresAt)).getTime() > Date.now());
+          if (!emailVerified || !storedInsuranceValid) {
             return res.status(409).json({
               code: "truck_verification_required",
               message:
@@ -1314,7 +1299,7 @@ export function registerHostRoutes(app: Express) {
                 "/restaurant-signup?businessType=food_truck&source=parking-pass&step=verification",
               requirements: {
                 emailVerified,
-                businessInsuranceSubmitted: hasInsuranceEvidence,
+                businessInsuranceSubmitted: storedInsuranceValid,
               },
             });
           }

@@ -97,6 +97,21 @@ export function registerVerificationAdminRoutes(
           }
         }
 
+        if (claimContext?.restaurantId) {
+          const now = new Date();
+          const insuranceExpiresAt = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000);
+          await db
+            .update(restaurants)
+            .set({
+              insuranceVerified: true,
+              insuranceVerifiedAt: now,
+              insuranceExpiresAt,
+              insuranceVerifiedByUserId: user.id,
+              updatedAt: now,
+            })
+            .where(eq(restaurants.id, claimContext.restaurantId));
+        }
+
         // Always send an approval email to the truck owner, regardless of whether
         // the truck was a claimed import or a fresh self-signup. Without this,
         // fresh-signup trucks that require manual review have no idea they've been

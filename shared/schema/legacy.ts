@@ -202,6 +202,13 @@ export const restaurants = pgTable("restaurants", {
   operatingHours: jsonb("operating_hours"),
   isActive: boolean("is_active").default(true),
   isVerified: boolean("is_verified").default(false),
+  insuranceVerified: boolean("insurance_verified").default(false),
+  insuranceVerifiedAt: timestamp("insurance_verified_at"),
+  insuranceExpiresAt: timestamp("insurance_expires_at"),
+  insuranceVerifiedByUserId: varchar("insurance_verified_by_user_id").references(
+    () => users.id,
+    { onDelete: "set null" },
+  ),
   // Image uploads
   logoUrl: varchar("logo_url"),
   coverImageUrl: varchar("cover_image_url"),

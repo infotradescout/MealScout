@@ -197,6 +197,8 @@ export async function resolveUserContinuation(params: {
       const verificationState = getBusinessVerificationState({
         isActive: restaurantRow.isActive,
         isVerified: restaurantRow.isVerified,
+        insuranceVerified: restaurantRow.insuranceVerified,
+        insuranceExpiresAt: restaurantRow.insuranceExpiresAt,
         emailVerified,
         businessInsuranceSubmitted,
         claimedFromImportId: restaurantRow.claimedFromImportId,

@@ -6565,6 +6565,42 @@ export default function AdminDashboard() {
     },
   });
 
+  const verifyUserInsurance = useMutation({
+    mutationFn: async (userId: string) => {
+      const res = await apiRequest(
+        "POST",
+        `/api/admin/users/${userId}/verify-insurance`,
+      );
+      return await res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      if (selectedUser?.id === data?.userId) {
+        setSelectedUser((current: any) =>
+          current
+            ? {
+                ...current,
+                insuranceVerified: true,
+                insuranceVerifiedAt: data?.insuranceVerifiedAt,
+                insuranceExpiresAt: data?.insuranceExpiresAt,
+              }
+            : current,
+        );
+      }
+      toast({
+        title: "Insurance Verified",
+        description: "Auto insurance verification is valid for 365 days.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to verify insurance.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const attachBusinessToUser = useMutation({
     mutationFn: async (payload: { userId: string; restaurantId: string }) => {
       const res = await apiRequest(
@@ -10842,6 +10878,23 @@ export default function AdminDashboard() {
                               Auto Verify
                             </Button>
                           )}
+                          {isAdminOrSuper && user.hasRestaurant && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => verifyUserInsurance.mutate(user.id)}
+                              disabled={
+                                verifyUserInsurance.isPending ||
+                                user.insuranceVerified
+                              }
+                              data-testid={`button-verify-insurance-${user.id}`}
+                            >
+                              <CheckCircle className="w-3 h-3 mr-1" />
+                              {user.insuranceVerified
+                                ? "Insurance Verified"
+                                : "Verify Insurance"}
+                            </Button>
+                          )}
                           <Button
                             size="sm"
                             variant="outline"
@@ -12224,6 +12277,9 @@ export default function AdminDashboard() {
                       </Badge>
                       <Badge variant="outline">
                         Insurance: {selectedUser?.insuranceVerified ? "verified" : "unknown"}
+                        {selectedUser?.insuranceExpiresAt
+                          ? ` until ${new Date(selectedUser.insuranceExpiresAt).toLocaleDateString()}`
+                          : ""}
                       </Badge>
                       <Badge variant="outline">
                         Admin approved: {selectedUser?.businessIsActive ? "yes" : "no"}
