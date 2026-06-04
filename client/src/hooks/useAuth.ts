@@ -120,7 +120,6 @@ export function useAuth() {
     if (!user?.businessOnboardingRequired) return;
     const pathname = window.location.pathname || "";
     const setupOnlyRoutes =
-      pathname.startsWith("/parking-pass") ||
       pathname.startsWith("/restaurant-owner-dashboard") ||
       pathname.startsWith("/deal-creation") ||
       pathname.startsWith("/kitchen") ||

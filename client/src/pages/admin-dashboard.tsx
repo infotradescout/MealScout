@@ -106,7 +106,6 @@ const businessBearingUserTypes = new Set([
   "host",
   "event_coordinator",
   "supplier",
-  "business_owner",
 ]);
 
 const monthlySubscriptionLinkUserTypes = new Set([
@@ -157,7 +156,8 @@ const toIdentityRole = (userType?: string | null) => {
   if (type === "staff") return "staff";
   if (type === "admin" || type === "duper_admin") return "admin";
   if (type === "super_admin") return "super_admin";
-  if (type === "restaurant_owner" || type === "food_truck") return "business_owner";
+  if (type === "restaurant_owner") return "restaurant_owner";
+  if (type === "food_truck") return "food_truck";
   return type || "unknown";
 };
 
@@ -2262,7 +2262,7 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
     | "private_chef_owner"
     | "host_venue_operator"
     | "supplier"
-    | "event_organizer"
+    | "event_coordinator"
     | "staff"
     | "admin"
     | "duper_admin"
@@ -2287,7 +2287,7 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
     },
     host_venue_operator: { userType: "host", businessType: "host_venue" },
     supplier: { userType: "supplier", businessType: "supplier" },
-    event_organizer: { userType: "event_organizer", businessType: "event_organizer" },
+    event_coordinator: { userType: "event_coordinator" },
     staff: { userType: "staff" },
     admin: { userType: "admin" },
     duper_admin: { userType: "duper_admin" },
@@ -2541,7 +2541,7 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
             <option value="host_venue_operator">Host / Venue Operator</option>
             <option value="supplier">Supplier</option>
             <option value="customer">Customer</option>
-            <option value="event_organizer">Event Organizer</option>
+            <option value="event_coordinator">Event Coordinator</option>
             <option value="staff">Staff</option>
             {canAssignAdminRole && <option value="admin">Admin</option>}
             {canAssignDuperAdminRole && (
@@ -2576,8 +2576,8 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
               "Supplier - manage products and supplier marketplace presence"}
             {formData.accountType === "staff" &&
               "Business staff - attach to an existing business or send pending invite"}
-            {formData.accountType === "event_organizer" &&
-              "Event organizer - manage event operations and event workflows"}
+            {formData.accountType === "event_coordinator" &&
+              "Event coordinator - manage event operations and event workflows"}
             {formData.accountType === "admin" &&
               "Admin - manage platform operations and internal workflows"}
             {formData.accountType === "duper_admin" &&
@@ -2648,7 +2648,7 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
           formData.accountType === "brewery_taproom_owner" ||
           formData.accountType === "caterer_owner" ||
           formData.accountType === "private_chef_owner" ||
-          formData.accountType === "event_organizer") && (
+          formData.accountType === "event_coordinator") && (
           <>
             <div className="pt-3 border-t">
               <h4 className="text-sm font-semibold mb-3">
@@ -2834,7 +2834,7 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
         )}
 
         {/* Event Coordinator Specific Fields */}
-        {formData.accountType === "event_organizer" && (
+        {formData.accountType === "event_coordinator" && (
           <>
             <div className="pt-3 border-t">
               <h4 className="text-sm font-semibold mb-3">
@@ -10847,8 +10847,8 @@ export default function AdminDashboard() {
                           >
                             <option value="unknown">Needs review</option>
                             <option value="customer">Customer</option>
-                            <option value="restaurant_owner">Business Owner</option>
-                            <option value="food_truck">Business Owner (Truck)</option>
+                            <option value="restaurant_owner">Restaurant Owner</option>
+                            <option value="food_truck">Food Truck</option>
                             <option value="host">Host</option>
                             <option value="event_coordinator">
                               Event Coordinator

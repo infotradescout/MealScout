@@ -1069,7 +1069,7 @@ router.post("/users/create", isAdmin, async (req: any, res) => {
       host_venue_operator: { userType: "host", businessType: "host_venue" },
       supplier: { userType: "supplier", businessType: "supplier" },
       staff: { userType: "staff", businessType: null },
-      event_organizer: { userType: "event_organizer", businessType: "event_organizer" },
+      event_coordinator: { userType: "event_coordinator", businessType: "event_organizer" },
       customer: { userType: "customer", businessType: null },
       admin: { userType: "admin", businessType: null },
       duper_admin: { userType: "duper_admin", businessType: null },
@@ -1114,11 +1114,9 @@ router.post("/users/create", isAdmin, async (req: any, res) => {
       "customer",
       "restaurant_owner",
       "food_truck",
-      "caterer",
-      "private_chef",
       "supplier",
       "host",
-      "event_organizer",
+      "event_coordinator",
       "staff",
       "admin",
       "duper_admin",
@@ -1174,7 +1172,7 @@ router.post("/users/create", isAdmin, async (req: any, res) => {
     }
 
     const shouldCreateHostProfile =
-      (resolvedUserType === "host" || resolvedUserType === "event_organizer") ||
+      (resolvedUserType === "host" || resolvedUserType === "event_coordinator") ||
       (resolvedUserType === "restaurant_owner" &&
         String(resolvedBusinessType || "").toLowerCase() === "bar" &&
         Boolean(hostsFoodTrucks || wantsFoodTrucks));
@@ -1200,7 +1198,7 @@ router.post("/users/create", isAdmin, async (req: any, res) => {
       const resolvedHostAddress = trimmedHostAddress || address;
       const resolvedHostBusinessName = trimmedHostBusinessName || businessName;
       const resolvedLocationType =
-        resolvedUserType === "event_organizer"
+        resolvedUserType === "event_coordinator"
           ? "event_organizer"
           : String(hostLocationType || "").trim() || locationType || "other";
 

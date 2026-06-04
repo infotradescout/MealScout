@@ -16,7 +16,7 @@ const requiredSnippets = [
   "private_chef_owner",
   "host_venue_operator",
   "supplier",
-  "event_organizer",
+  "event_coordinator",
   "customer",
   "staff",
   "admin",
@@ -26,7 +26,7 @@ const requiredSnippets = [
   "businessType: \"caterer\"",
   "businessType: \"private_chef\"",
   "businessType: \"host_venue\"",
-  "businessType: \"event_organizer\"",
+  "event_coordinator: { userType: \"event_coordinator\", businessType: \"event_organizer\" }",
   "servesFood",
   "hostsFoodTrucks",
   "wantsFoodTrucks",
@@ -50,6 +50,7 @@ for (const snippet of requiredSnippets) {
 const forbiddenSnippets = [
   "businessType: \"caterer_private_chef\"",
   "businessType: \"venue\"",
+  "userType: \"event_organizer\"",
 ];
 
 for (const snippet of forbiddenSnippets) {

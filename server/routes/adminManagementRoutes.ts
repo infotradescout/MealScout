@@ -1613,7 +1613,7 @@ export function registerAdminManagementRoutes(app: Express) {
           caterer_owner: { userType: "restaurant_owner", businessType: "caterer" },
           private_chef_owner: { userType: "restaurant_owner", businessType: "private_chef" },
           host_venue_operator: { userType: "host", businessType: "host_venue" },
-          event_organizer: { userType: "event_organizer", businessType: "event_organizer" },
+          event_coordinator: { userType: "event_coordinator", businessType: "event_organizer" },
         };
 
         const mappedType = accountTypeMap[normalizedAccountType] || null;
@@ -1645,11 +1645,9 @@ export function registerAdminManagementRoutes(app: Express) {
           "customer",
           "restaurant_owner",
           "food_truck",
-          "caterer",
-          "private_chef",
           "supplier",
           "host",
-          "event_organizer",
+          "event_coordinator",
           "staff",
           "admin",
           "duper_admin",
@@ -1688,7 +1686,7 @@ export function registerAdminManagementRoutes(app: Express) {
           businessTypesRequiringShell.has(String(resolvedBusinessType || "").toLowerCase());
         const shouldCreateHostProfile =
           resolvedUserType === "host" ||
-          resolvedUserType === "event_organizer" ||
+          resolvedUserType === "event_coordinator" ||
           (resolvedUserType === "restaurant_owner" &&
             String(resolvedBusinessType || "").toLowerCase() === "bar" &&
             Boolean(hostsFoodTrucks || wantsFoodTrucks));
@@ -1856,7 +1854,7 @@ export function registerAdminManagementRoutes(app: Express) {
             const resolvedHostAddress = trimmedHostAddress || normalizedAddress;
             const resolvedHostBusinessName = trimmedHostBusinessName || normalizedBusinessName;
             const resolvedHostLocationType =
-              resolvedUserType === "event_organizer"
+              resolvedUserType === "event_coordinator"
                 ? "event_organizer"
                 : String(hostLocationType || "").trim() || locationType || "other";
             const resolvedHostLatitude =

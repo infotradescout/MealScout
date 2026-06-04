@@ -98,21 +98,21 @@ Validation command: `node scripts/mealscout-email-copy-audit.contract.test.ts`.
 
 Handoff value: A developer knows which automated emails exist, what claims are allowed, and which copy regressions are blocked.
 
-## C5B - Role-Aware Business Attachment Audit
+## C5B - Code-Derived Role + Admin Display Audit
 
 Status: `DONE`
 
-Goal: Correct admin user-card role/business attachment assumptions so plain customer accounts are not flagged as missing business records.
+Goal: Audit code-derived role values and correct admin display assumptions for business attachment, affiliate links, role dropdowns, and Parking Pass access boundaries.
 
-Files likely touched: `client/src/pages/admin-dashboard.tsx`, `scripts/admin-user-role-business-attachment.contract.test.ts`, `CLEANUP_MAP.md`.
+Files likely touched: `MEALSCOUT_ROLE_ADMIN_DISPLAY_AUDIT.md`, `client/src/pages/admin-dashboard.tsx`, `client/src/hooks/useAuth.ts`, admin provisioning routes, role/display contract scripts, `CLEANUP_MAP.md`.
 
-Allowed changes: Narrow production-correctness fixes to role-aware admin badges/actions, static contracts, and cleanup map documentation.
+Allowed changes: Code-derived role inventory, narrow production-correctness admin UI fixes, canonical userType alignment, Parking Pass access guard correction, static contracts, and cleanup map documentation.
 
-Disallowed changes: New admin features, new subscription flows, broad user role redesigns, schema changes, or live admin mutations.
+Disallowed changes: New roles, renamed database values without compatibility handling, new admin features, new subscription flows, payout/attribution logic changes, schema changes, or live admin mutations.
 
-Validation command: `node scripts/admin-user-role-business-attachment.contract.test.ts`.
+Validation command: `node scripts/mealscout-role-admin-display-audit.contract.test.ts`.
 
-Handoff value: Admin user cards distinguish customer accounts from business-bearing accounts before broader admin cleanup continues.
+Handoff value: Admin operators see code-derived roles and usable assets instead of stale role assumptions or internal tokens.
 
 ## C5C - Affiliate Link Display Correction
 

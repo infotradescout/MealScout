@@ -24,7 +24,7 @@ const requiredRouteSnippets = [
   "businessType: \"caterer\"",
   "private_chef_owner: {",
   "businessType: \"private_chef\"",
-  "event_organizer: { userType: \"event_organizer\", businessType: \"event_organizer\" }",
+  "event_coordinator: { userType: \"event_coordinator\", businessType: \"event_organizer\" }",
   "shouldCreateBusinessShell =",
   "const createdBusiness = await storage.createRestaurantForUser({",
   "await storage.updateRestaurant(createdBusiness.id, {",
@@ -38,6 +38,7 @@ const forbiddenSnippets = [
   "businessType: \"brewery\"",
   "businessType: \"caterer_private_chef\"",
   "businessType: \"venue\"",
+  "userType: \"event_organizer\"",
 ];
 
 for (const snippet of requiredDashboardSnippets) {

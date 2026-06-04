@@ -10,7 +10,6 @@ const requiredDashboardSnippets = [
   "\"host\"",
   "\"event_coordinator\"",
   "\"supplier\"",
-  "\"business_owner\"",
   "const isBusinessBearingUserType = (userType?: string | null) =>",
   "const isBusinessUserType = (userType?: string | null) => {",
   "const monthlySubscriptionLinkUserTypes = new Set([",
@@ -30,6 +29,7 @@ const requiredDashboardSnippets = [
 const forbiddenDashboardSnippets = [
   "!user.email ||\n                              ![\"restaurant_owner\", \"food_truck\"].includes",
   "<Button\n                            size=\"sm\"\n                            variant=\"outline\"\n                            onClick={() => sendSubscriptionLink.mutate(user.id)}",
+  "\"business_owner\"",
 ];
 
 for (const snippet of requiredDashboardSnippets) {
@@ -74,7 +74,7 @@ if (roleDropdownIndex === -1) {
   throw new Error("Admin role dropdown must keep the customer role option");
 }
 
-const c5bStart = cleanupMap.indexOf("## C5B - Role-Aware Business Attachment Audit");
+const c5bStart = cleanupMap.indexOf("## C5B - Code-Derived Role + Admin Display Audit");
 const c6Start = cleanupMap.indexOf("## C6 - Parking Pass Page Decomposition Map");
 const c5bSection =
   c5bStart >= 0
