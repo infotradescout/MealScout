@@ -46,6 +46,7 @@ import {
   UserMinus,
   ExternalLink,
   MessageSquare,
+  Copy,
 } from "lucide-react";
 import { Link } from "wouter";
 import QuickDashboardAccess from "@/components/quick-dashboard-access";
@@ -123,6 +124,20 @@ const isBusinessUserType = (userType?: string | null) => {
 
 const canSendMonthlySubscriptionLink = (userType?: string | null) =>
   monthlySubscriptionLinkUserTypes.has(String(userType || "").toLowerCase());
+
+const canonicalMealScoutOrigin = (
+  import.meta.env.VITE_PUBLIC_BASE_URL ||
+  import.meta.env.VITE_PUBLIC_ORIGIN ||
+  "https://www.mealscout.us"
+).replace(/\/+$/, "");
+
+const buildCanonicalAffiliateLink = (affiliateTag?: string | null) => {
+  const tag = String(affiliateTag || "").trim();
+  if (!tag) return null;
+  const url = new URL(canonicalMealScoutOrigin);
+  url.searchParams.set("ref", tag);
+  return url.toString();
+};
 
 const businessTypeOptions = [
   { value: "food_truck", label: "Food Truck" },
@@ -11857,16 +11872,59 @@ export default function AdminDashboard() {
                       {selectedUser.email}
                     </p>
                   </div>
-                  {selectedUser.affiliateTag && (
-                    <div className="space-y-1">
-                      <p className="text-xs text-muted-foreground">
-                        Affiliate Tag
-                      </p>
-                      <p className="text-sm font-mono text-xs">
-                        {selectedUser.affiliateTag}
-                      </p>
-                    </div>
-                  )}
+                  <div className="space-y-1 col-span-2">
+                    <p className="text-xs text-muted-foreground">
+                      Affiliate Link
+                    </p>
+                    {(() => {
+                      const affiliateLink = buildCanonicalAffiliateLink(
+                        selectedUser.affiliateTag,
+                      );
+                      if (!affiliateLink) {
+                        return (
+                          <p className="text-sm text-muted-foreground">
+                            No affiliate link assigned
+                          </p>
+                        );
+                      }
+                      return (
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                          <p className="text-xs font-mono break-all">
+                            {affiliateLink}
+                          </p>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={async () => {
+                                await navigator.clipboard.writeText(affiliateLink);
+                                toast({ title: "Affiliate link copied" });
+                              }}
+                              data-testid={`button-copy-affiliate-link-${selectedUser.id}`}
+                            >
+                              <Copy className="w-3 h-3 mr-1" />
+                              Copy Link
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() =>
+                                window.open(
+                                  affiliateLink,
+                                  "_blank",
+                                  "noopener,noreferrer",
+                                )
+                              }
+                              data-testid={`button-open-affiliate-link-${selectedUser.id}`}
+                            >
+                              <ExternalLink className="w-3 h-3 mr-1" />
+                              Open Link
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
                   {(selectedUser.affiliateCloserUserId ||
                     selectedUser.affiliateBookerUserId) && (
                     <div className="space-y-1 col-span-2">

@@ -114,6 +114,22 @@ Validation command: `node scripts/admin-user-role-business-attachment.contract.t
 
 Handoff value: Admin user cards distinguish customer accounts from business-bearing accounts before broader admin cleanup continues.
 
+## C5C - Affiliate Link Display Correction
+
+Status: `DONE`
+
+Goal: Correct admin user detail display so affiliate tags render as full shareable MealScout referral links.
+
+Files likely touched: `client/src/pages/admin-dashboard.tsx`, `scripts/mealscout-affiliate-link-display.contract.test.ts`, `CLEANUP_MAP.md`.
+
+Allowed changes: Narrow display-only admin UI correction, canonical referral URL formatting, copy/open controls, and static contracts.
+
+Disallowed changes: Attribution logic changes, payout changes, fake tag generation, new affiliate features, schema changes, or live provider mutations.
+
+Validation command: `node scripts/mealscout-affiliate-link-display.contract.test.ts`.
+
+Handoff value: Admin operators see the usable referral asset instead of an internal token.
+
 ## C6 - Parking Pass Page Decomposition Map
 
 Status: `DONE`
