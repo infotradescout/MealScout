@@ -10,6 +10,7 @@ const accountSetup = readFileSync("client/src/pages/account-setup.tsx", "utf8");
 const login = readFileSync("client/src/pages/login.tsx", "utf8");
 const app = readFileSync("client/src/App.tsx", "utf8");
 const useAuth = readFileSync("client/src/hooks/useAuth.ts", "utf8");
+const postVerification = readFileSync("client/src/pages/post-verification.tsx", "utf8");
 const unifiedAuth = readFileSync("server/unifiedAuth.ts", "utf8");
 const authAccountRoutes = readFileSync("server/routes/authAccountRoutes.ts", "utf8");
 const restaurantSignupRoutes = readFileSync("server/routes/restaurantSignupRoutes.ts", "utf8");
@@ -33,11 +34,13 @@ const requiredAuditSnippets = [
   "Email verification, business/profile verification, insurance verification, and claim verification are separate checks.",
   "Customer accounts do not require business attachment.",
   "Host Parking Pass management must remain free from unrelated paid business gates",
-  "Missing token: show `Setup Link Required`",
+  "Missing token while unauthenticated: show `Setup Link Required`",
+  "Missing token while authenticated: show `Setup Link Required`",
   "Invalid token:",
   "Expired token:",
   "Used token:",
-  "`/account-setup` must not be used as an OAuth fallback without a `token`.",
+  "`/account-setup` must not be used as an OAuth fallback or account handoff target without a `token`.",
+  "must reject stored/query redirects back to `/account-setup` unless the URL includes a setup token.",
   "No roles were added.",
   "No payment, verification, claim, or permission logic was changed.",
 ];
@@ -54,9 +57,10 @@ const requiredAccountSetupSnippets = [
   "if (!token) {",
   "Setup Link Required",
   "Go to Login",
-  "Continue Setup Check",
+  "Continue to Dashboard",
+  "getNoTokenContinuationPath",
   "setLocation(\"/login\")",
-  "setLocation(\"/post-verification\")",
+  "!continuationPath.startsWith(\"/account-setup\")",
   "if (isValidatingToken) {",
   "Token not found or already used",
   "Token has expired",
@@ -81,9 +85,38 @@ if (missingTokenIndex === -1 || loadingIndex === -1 || missingTokenIndex > loadi
 const missingTokenSlice = accountSetup.slice(missingTokenIndex, loadingIndex);
 if (
   missingTokenSlice.includes("Validating setup link...") ||
-  !missingTokenSlice.includes("Setup Link Required")
+  !missingTokenSlice.includes("Setup Link Required") ||
+  missingTokenSlice.includes("setLocation(\"/post-verification\")") ||
+  missingTokenSlice.includes("setLocation(\"/account-setup")
 ) {
-  throw new Error("Missing setup token must not render the endless validating copy");
+  throw new Error("Missing setup token must not render endless validation or route back to account setup");
+}
+
+const noTokenContinuationIndex = accountSetup.indexOf("function getNoTokenContinuationPath");
+const noTokenContinuationSlice = accountSetup.slice(
+  noTokenContinuationIndex,
+  accountSetup.indexOf("export default function AccountSetup"),
+);
+if (
+  noTokenContinuationIndex === -1 ||
+  !noTokenContinuationSlice.includes("!continuationPath.startsWith(\"/account-setup\")") ||
+  noTokenContinuationSlice.includes("return \"/account-setup\"")
+) {
+  throw new Error("Authenticated no-token account setup continuation must never return /account-setup");
+}
+
+const postVerificationSafePathIndex = postVerification.indexOf("function getSafePath");
+const postVerificationSafePathSlice = postVerification.slice(
+  postVerificationSafePathIndex,
+  postVerification.indexOf("function getStoredValue"),
+);
+if (
+  postVerificationSafePathIndex === -1 ||
+  !postVerificationSafePathSlice.includes("path === \"/account-setup\"") ||
+  !postVerificationSafePathSlice.includes("path.startsWith(\"/account-setup?\")") ||
+  !postVerificationSafePathSlice.includes("if (!params.get(\"token\")) return null;")
+) {
+  throw new Error("Account handoff must reject /account-setup redirects unless a setup token is present");
 }
 
 const oauthSnippets = [
@@ -108,6 +141,7 @@ const routeInventory = [
   [login, "client facebook login", "buildAuthPath(\"/api/auth/facebook?userType=customer\")"],
   [app, "account setup route", "<Route path=\"/account-setup\" component={AccountSetup} />"],
   [app, "post verification route", "<Route path=\"/post-verification\" component={PostVerification} />"],
+  [postVerification, "account handoff safe redirect", "if (!params.get(\"token\")) return null;"],
   [useAuth, "oauth refresh", "OAuth redirect detected"],
   [authAccountRoutes, "auth account route continuation", "resolveUserContinuation"],
   [restaurantSignupRoutes, "restaurant signup route", "userType"],

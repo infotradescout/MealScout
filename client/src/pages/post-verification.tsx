@@ -15,6 +15,10 @@ function getSafePath(value: string | null): string | null {
   if (!path.startsWith("/")) return null;
   if (path.startsWith("//")) return null;
   if (path.includes("://")) return null;
+  if (path === "/account-setup" || path.startsWith("/account-setup?")) {
+    const params = new URLSearchParams(path.split("?")[1] || "");
+    if (!params.get("token")) return null;
+  }
   return path;
 }
 

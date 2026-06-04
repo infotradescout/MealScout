@@ -19,6 +19,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { Eye, EyeOff, CheckCircle, KeyRound, AlertTriangle } from "lucide-react";
 import { BackHeader } from "@/components/back-header";
 import { SEOHead } from "@/components/seo-head";
+import { useAuth } from "@/hooks/useAuth";
 import {
   PASSWORD_REGEX,
   PASSWORD_REQUIREMENTS,
@@ -42,9 +43,36 @@ const accountSetupSchema = z
 
 type AccountSetupFormData = z.infer<typeof accountSetupSchema>;
 
+function getNoTokenContinuationPath(user: any): string {
+  const continuationPath = String(user?.continuationPath || "").trim();
+  if (
+    continuationPath &&
+    !continuationPath.startsWith("/account-setup") &&
+    continuationPath.startsWith("/") &&
+    !continuationPath.startsWith("//") &&
+    !continuationPath.includes("://")
+  ) {
+    return continuationPath;
+  }
+
+  const userType = String(user?.userType || "").toLowerCase();
+  if (userType === "admin" || userType === "duper_admin" || userType === "super_admin") {
+    return "/admin/dashboard";
+  }
+  if (userType === "staff") return "/staff";
+  if (userType === "host") return "/host/dashboard";
+  if (userType === "event_coordinator") return "/event-coordinator/dashboard";
+  if (userType === "supplier") return "/supplier/dashboard";
+  if (userType === "restaurant_owner" || userType === "food_truck") {
+    return "/restaurant-owner-dashboard";
+  }
+  return "/scout";
+}
+
 export default function AccountSetup() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const { user, isAuthenticated } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [token, setToken] = useState<string | null>(null);
@@ -247,9 +275,15 @@ export default function AccountSetup() {
               <Button
                 className="w-full"
                 variant="outline"
-                onClick={() => setLocation("/post-verification")}
+                onClick={() =>
+                  setLocation(
+                    isAuthenticated
+                      ? getNoTokenContinuationPath(user)
+                      : "/login",
+                  )
+                }
               >
-                Continue Setup Check
+                {isAuthenticated ? "Continue to Dashboard" : "Continue Setup Check"}
               </Button>
             </CardContent>
           </Card>
