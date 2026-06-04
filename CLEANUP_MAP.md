@@ -36,7 +36,7 @@ Handoff value: The repo has one obvious cleanup operating path and one ordered t
 
 ## C3 - Route Map Consolidation
 
-Status: `NEXT`
+Status: `DONE`
 
 Goal: Reconcile `ROUTES_MAP.md`, `client/src/App.tsx`, `server/routes.ts`, and public/private route prefixes into one maintained route map.
 
@@ -46,13 +46,13 @@ Allowed changes: Documentation, route inventory, static contracts, and low-risk 
 
 Disallowed changes: Moving routes, changing auth behavior, deleting legacy routes, or changing SPA fallback behavior.
 
-Validation command: `node scripts/mealscout-handoff-spine.contract.test.ts`.
+Validation command: `node scripts/mealscout-route-map.contract.test.ts`.
 
 Handoff value: A developer can find public, owner, host, admin, and mobile route boundaries without reverse-engineering the app.
 
 ## C4 - Admin Dashboard Decomposition Map
 
-Status: `QUEUED`
+Status: `NEXT`
 
 Goal: Map `client/src/pages/admin-dashboard.tsx` into extraction zones without changing behavior.
 
