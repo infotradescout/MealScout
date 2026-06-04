@@ -10853,6 +10853,7 @@ export default function AdminDashboard() {
                             <option value="event_coordinator">
                               Event Coordinator
                             </option>
+                            <option value="supplier">Supplier</option>
                             <option value="staff">Staff</option>
                             {isAdminFamilyUserType(adminUser?.userType) && (
                               <option value="admin">Admin</option>
@@ -11664,6 +11665,7 @@ export default function AdminDashboard() {
                         <option value="event_coordinator">
                           Event Coordinator
                         </option>
+                        <option value="supplier">Supplier</option>
                         <option value="staff">Staff</option>
                         {isAdminFamilyUserType(adminUser?.userType) && (
                           <option value="admin">Admin</option>
