@@ -67,6 +67,7 @@
     "smoke:critical": "node scripts/smokeCriticalRoutes.mjs",
     "smoke:scout-surface": "node scripts/smokeScoutSurface.mjs",
     "gate:prelaunch": "node scripts/preLaunchGate.mjs",
+    "gate:production": "node scripts/productionReadinessGate.mjs",
     "smoke:parking-pass-stripe": "tsx scripts/smokeParkingPassStripeFlow.ts",
     "smoke:parking-pass-public-feed": "tsx scripts/smokeParkingPassPublicFeed.ts",
     "test": "tsx scripts/runTargetedTests.ts",
