@@ -196,6 +196,45 @@ async function probe({ name, url, expect, method = "GET", headers = {} }) {
   }
 }
 
+async function probeJson({ name, url, expect, validate, method = "GET", headers = {} }) {
+  addCheck(
+    `live probe is read-only: ${name}`,
+    !mutableMethods.includes(method.toUpperCase()),
+    `${method} ${url}`,
+  );
+  if (skipLiveProbes) {
+    addCheck(`live probe skipped: ${name}`, true, "SKIP_LIVE_PROBES=true");
+    return;
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 12000);
+  try {
+    const res = await fetch(url, {
+      method,
+      redirect: "follow",
+      headers: {
+        Accept: "application/json",
+        "User-Agent": "MealScoutProductionGate/1.0",
+        ...headers,
+      },
+      signal: controller.signal,
+    });
+    addCheck(
+      `live probe: ${name}`,
+      expect.includes(res.status),
+      `${res.status} ${url} expected ${expect.join("/")}`,
+    );
+    if (!expect.includes(res.status)) return;
+    const body = await res.json();
+    validate(body);
+  } catch (error) {
+    addCheck(`live probe: ${name}`, false, `${url} ${error.message}`);
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 function validateEnv() {
   for (const name of requiredEnvNames) {
     const requiredForThisRun =
@@ -378,6 +417,34 @@ async function run() {
     name: "health route",
     url: `${apiOrigin}/api/health`,
     expect: [200],
+  });
+  await probeJson({
+    name: "production version route",
+    url: `${apiOrigin}/api/version`,
+    expect: [200],
+    validate: (body) => {
+      const version = body?.version || {};
+      addCheck("version route exposes commit field", "commit" in version);
+      addCheck("version route exposes buildTime field", Boolean(version.buildTime));
+      addCheck(
+        "version route exposes environment field",
+        typeof version.environment === "string" && version.environment.length > 0,
+      );
+      addCheck(
+        "version route exposes frontend asset manifest flag",
+        typeof version.frontendAssetManifest === "boolean",
+      );
+      addCheck(
+        "version route documents commit env vars",
+        Array.isArray(version.commitEnvVars) &&
+          version.commitEnvVars.includes("RENDER_GIT_COMMIT") &&
+          version.commitEnvVars.includes("VERCEL_GIT_COMMIT_SHA"),
+      );
+      addCheck(
+        "version route does not expose secrets",
+        !JSON.stringify(body).match(/DATABASE_URL|SESSION_SECRET|STRIPE_SECRET|BREVO_API_KEY|CLOUDINARY_API_SECRET/),
+      );
+    },
   });
   await probe({
     name: "ready route",

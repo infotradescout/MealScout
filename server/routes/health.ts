@@ -1,4 +1,6 @@
 import { Router } from "express";
+import { existsSync } from "node:fs";
+import path from "node:path";
 import { db } from "../db";
 import { sql } from "drizzle-orm";
 import { getApiMetricsSnapshot } from "../observability";
@@ -8,6 +10,7 @@ import { getMapEndpointWatchdogSnapshot } from "../mapEndpointWatchdog";
 import { getPaymentHealthSnapshot } from "../services/paymentHealth";
 
 export const healthRouter = Router();
+const serverStartedAt = new Date().toISOString();
 
 function envPresent(name: string) {
   return Boolean(String(process.env[name] || "").trim());
@@ -67,12 +70,71 @@ function getBuildSnapshot() {
   };
 }
 
+function getBuildCommit() {
+  return (
+    String(
+      process.env.RENDER_GIT_COMMIT ||
+        process.env.VERCEL_GIT_COMMIT_SHA ||
+        process.env.GIT_COMMIT ||
+        process.env.COMMIT_SHA ||
+        process.env.SOURCE_VERSION ||
+        "",
+    ).trim() || null
+  );
+}
+
+function getBuildTime() {
+  return (
+    String(
+      process.env.BUILD_TIME ||
+        process.env.RENDER_DEPLOY_CREATED_AT ||
+        process.env.VERCEL_DEPLOYMENT_CREATED_AT ||
+        "",
+    ).trim() || serverStartedAt
+  );
+}
+
+function hasFrontendAssetManifest() {
+  const candidates = [
+    path.join(process.cwd(), "dist", "client", "assets"),
+    path.join(process.cwd(), "dist", "public", "assets"),
+    path.join(process.cwd(), "server", "public", "assets"),
+    path.join(process.cwd(), "client", "dist", "assets"),
+  ];
+  return candidates.some((candidate) => existsSync(candidate));
+}
+
+function getVersionSnapshot() {
+  return {
+    commit: getBuildCommit(),
+    buildTime: getBuildTime(),
+    environment: String(process.env.NODE_ENV || "development"),
+    frontendAssetManifest: hasFrontendAssetManifest(),
+    commitEnvVars: [
+      "RENDER_GIT_COMMIT",
+      "VERCEL_GIT_COMMIT_SHA",
+      "GIT_COMMIT",
+      "COMMIT_SHA",
+      "SOURCE_VERSION",
+    ],
+    buildTimeEnvVars: [
+      "BUILD_TIME",
+      "RENDER_DEPLOY_CREATED_AT",
+      "VERCEL_DEPLOYMENT_CREATED_AT",
+    ],
+  };
+}
+
 healthRouter.get("/health", (_req, res) => {
   res.json({ status: "ok", ts: Date.now() });
 });
 
 healthRouter.get("/health/build", (_req, res) => {
   res.json({ status: "ok", ts: Date.now(), build: getBuildSnapshot() });
+});
+
+healthRouter.get(["/api/version", "/health/version"], (_req, res) => {
+  res.json({ status: "ok", ts: Date.now(), version: getVersionSnapshot() });
 });
 
 healthRouter.get("/health/realtime", (_req, res) => {
