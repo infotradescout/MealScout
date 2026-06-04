@@ -6,7 +6,8 @@ const affiliateRoutes = readFileSync("server/affiliateRoutes.ts", "utf8");
 const affiliateService = readFileSync("server/affiliateService.ts", "utf8");
 
 const requiredDashboardSnippets = [
-  "const buildCanonicalAffiliateLink = (affiliateTag?: string | null) => {",
+  "const buildCanonicalAffiliateLink = (",
+  "const profilePath = getAdminUserPublicProfilePath(user, attachedHostProfile);",
   "if (!tag) return null;",
   "https://www.mealscout.us",
   "url.searchParams.set(\"ref\", tag);",

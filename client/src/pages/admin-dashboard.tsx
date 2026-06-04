@@ -53,6 +53,7 @@ import QuickDashboardAccess from "@/components/quick-dashboard-access";
 import HostLocationManager from "@/components/admin/host-location-manager";
 import ShareHub from "@/components/share-hub";
 import { getOptimizedImageUrl } from "@/lib/images";
+import { toSeoSlug } from "@/lib/seo-slug";
 import LongPressHelp from "@/components/long-press-help";
 import {
   Dialog,
@@ -130,10 +131,53 @@ const canonicalMealScoutOrigin = (
   "https://www.mealscout.us"
 ).replace(/\/+$/, "");
 
-const buildCanonicalAffiliateLink = (affiliateTag?: string | null) => {
+const isAffiliateEligibleUserType = (userType?: string | null) =>
+  !isAdminFamilyUserType(String(userType || "").toLowerCase());
+
+const getAdminUserPublicProfilePath = (
+  user: any,
+  attachedHostProfile?: any | null,
+) => {
+  const restaurantId = String(user?.restaurantId || "").trim();
+  if (restaurantId) {
+    const businessType = String(user?.businessType || "").toLowerCase();
+    const profileType =
+      user?.businessIsFoodTruck === true ||
+      user?.userType === "food_truck" ||
+      businessType === "food_truck"
+        ? "truck"
+        : "restaurant";
+    const slug = toSeoSlug(
+      user?.businessName ||
+        `${String(user?.firstName || "").trim()} ${String(user?.lastName || "").trim()}` ||
+        restaurantId,
+    );
+    return `/p/${profileType}/${encodeURIComponent(restaurantId)}/${encodeURIComponent(slug || restaurantId)}`;
+  }
+
+  const hostId = String(attachedHostProfile?.id || "").trim();
+  if (hostId) {
+    const slug = toSeoSlug(
+      attachedHostProfile?.businessName ||
+        attachedHostProfile?.name ||
+        user?.businessName ||
+        hostId,
+    );
+    return `/p/location/${encodeURIComponent(hostId)}/${encodeURIComponent(slug || hostId)}`;
+  }
+
+  return "/";
+};
+
+const buildCanonicalAffiliateLink = (
+  affiliateTag?: string | null,
+  user?: any,
+  attachedHostProfile?: any | null,
+) => {
   const tag = String(affiliateTag || "").trim();
   if (!tag) return null;
-  const url = new URL(canonicalMealScoutOrigin);
+  const profilePath = getAdminUserPublicProfilePath(user, attachedHostProfile);
+  const url = new URL(profilePath, canonicalMealScoutOrigin);
   url.searchParams.set("ref", tag);
   return url.toString();
 };
@@ -11838,12 +11882,12 @@ export default function AdminDashboard() {
                       const href = `${window.location.origin}/admin/dashboard?tab=users&focusUser=${encodeURIComponent(selectedUser.id)}`;
                       await navigator.clipboard.writeText(href);
                       toast({
-                        title: "Profile link copied",
-                        description: "Direct user profile link copied for admin access.",
+                        title: "Admin link copied",
+                        description: "Direct admin user link copied for internal access.",
                       });
                     }}
                   >
-                    Copy profile link
+                    Copy Admin Link
                   </Button>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
@@ -11879,8 +11923,17 @@ export default function AdminDashboard() {
                       Affiliate Link
                     </p>
                     {(() => {
+                      if (!isAffiliateEligibleUserType(selectedUser.userType)) {
+                        return (
+                          <p className="text-sm text-muted-foreground">
+                            Not applicable for internal admin accounts.
+                          </p>
+                        );
+                      }
                       const affiliateLink = buildCanonicalAffiliateLink(
                         selectedUser.affiliateTag,
+                        selectedUser,
+                        Array.isArray(userHosts) ? userHosts[0] : null,
                       );
                       if (!affiliateLink) {
                         return (
