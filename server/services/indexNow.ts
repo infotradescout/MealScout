@@ -8,6 +8,38 @@ type IndexNowSubmitResult = {
 
 const INDEXNOW_ENDPOINT = "https://api.indexnow.org/indexnow";
 
+function resolveIndexNowKeyLocation(params: {
+  configured: string;
+  host: string;
+  key: string;
+}) {
+  const defaultLocation = params.key
+    ? `https://${params.host}/${encodeURIComponent(params.key)}.txt`
+    : "";
+  const configured = params.configured.trim();
+  if (!configured) return defaultLocation;
+  try {
+    const parsed = new URL(configured);
+    const configuredHost = parsed.hostname.toLowerCase().replace(/^www\./, "");
+    const host = params.host.toLowerCase().replace(/^www\./, "");
+    const expectedPath = `/${params.key}.txt`;
+    if (
+      configured.includes("<") ||
+      configured.includes(">") ||
+      configuredHost !== host ||
+      parsed.pathname !== expectedPath
+    ) {
+      return defaultLocation;
+    }
+    parsed.protocol = "https:";
+    parsed.hash = "";
+    parsed.search = "";
+    return parsed.toString();
+  } catch {
+    return defaultLocation;
+  }
+}
+
 export function getIndexNowConfig() {
   const enabled =
     String(process.env.INDEXNOW_ENABLED || "").toLowerCase() === "true";
@@ -23,9 +55,7 @@ export function getIndexNowConfig() {
     enabled,
     key,
     host,
-    keyLocation:
-      keyLocation ||
-      (key ? `https://${host}/${encodeURIComponent(key)}.txt` : ""),
+    keyLocation: resolveIndexNowKeyLocation({ configured: keyLocation, host, key }),
   };
 }
 

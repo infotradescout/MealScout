@@ -28,6 +28,14 @@ const apiRouteIndex = routes.findIndex(
 if (apiRouteIndex < 0) {
   throw new Error("vercel routes must proxy /api/* to Render before SPA fallback");
 }
+const indexNowKeyRouteIndex = routes.findIndex(
+  (rule) =>
+    rule.src === "/([A-Za-z0-9_-]{8,128})\\.txt" &&
+    rule.dest === "https://mealscout.onrender.com/$1.txt",
+);
+if (indexNowKeyRouteIndex < 0) {
+  throw new Error("vercel routes must proxy root IndexNow key files to Render");
+}
 const spaFallbackIndex = routes.findIndex(
   (rule) => rule.src === "/(.*)" && rule.dest === "/index.html",
 );
@@ -36,6 +44,9 @@ if (spaFallbackIndex < 0) {
 }
 if (apiRouteIndex > spaFallbackIndex) {
   throw new Error("API route proxy must be evaluated before SPA fallback");
+}
+if (indexNowKeyRouteIndex > spaFallbackIndex) {
+  throw new Error("IndexNow key file proxy must be evaluated before SPA fallback");
 }
 
 console.log("login-api-routing-production.contract: PASS");

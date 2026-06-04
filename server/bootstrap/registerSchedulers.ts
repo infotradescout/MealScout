@@ -615,7 +615,8 @@ export async function registerSchedulers(app: Express): Promise<void> {
 
         const allUrls = [...staticUrls, ...cityUrls];
         const result = await submitIndexNowUrls(allUrls);
-        console.log(`[indexnow] daily submission: ${result.submitted} URLs, status ${result.status}`);
+        const detail = result.ok || !result.body ? "" : ` body=${result.body.slice(0, 240)}`;
+        console.log(`[indexnow] daily submission: ${result.submitted} URLs, status ${result.status}${detail}`);
       } catch (error) {
         console.error("[indexnow] daily cron failed:", error);
       }
