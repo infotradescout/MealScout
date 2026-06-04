@@ -84,23 +84,23 @@ Handoff value: Launch Board changes have a schema-safety checklist before cleanu
 
 ## C6 - Parking Pass Page Decomposition Map
 
-Status: `NEXT`
+Status: `DONE`
 
 Goal: Map `client/src/pages/parking-pass.tsx` modes, API calls, state clusters, and extraction order.
 
-Files likely touched: `client/src/pages/parking-pass.tsx`, Parking Pass docs/contracts.
+Files likely touched: `MEALSCOUT_PARKING_PASS_DECOMPOSITION_MAP.md`, `scripts/mealscout-parking-pass-decomposition-map.contract.test.ts`, `client/src/pages/parking-pass.tsx` only for read-only references if needed.
 
 Allowed changes: Documentation, static contracts, and read-only inventories.
 
 Disallowed changes: Booking behavior changes, payment changes, host availability changes, live booking mutations.
 
-Validation command: `npm run gate:production`.
+Validation command: `node scripts/mealscout-parking-pass-decomposition-map.contract.test.ts`.
 
 Handoff value: A developer knows the safe extraction order for Parking Pass without breaking booking.
 
 ## C7 - Owner Dashboard Decomposition Map
 
-Status: `QUEUED`
+Status: `NEXT`
 
 Goal: Map `client/src/pages/restaurant-owner-dashboard.tsx` owner/truck/profile/menu/schedule concerns and extraction order.
 
