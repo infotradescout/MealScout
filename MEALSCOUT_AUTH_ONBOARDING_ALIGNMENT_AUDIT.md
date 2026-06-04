@@ -17,8 +17,8 @@ This audit documents the current MealScout account lifecycle from entry source t
 | Entry source | Frontend route | Backend route/service | Expected auth state | Expected setup state | Expected verification state | Expected continuation route | Known failure mode | Test coverage |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Email/password login | `client/src/pages/login.tsx` | `server/routes/authAccountRoutes.ts`, `server/unifiedAuth.ts`, `server/services/loginContinuation.ts` | Authenticated via session after login | Existing profile fields and `mustResetPassword` determine account onboarding | Email verification remains separate from business/insurance checks | `continuationPath` from login continuation or role dashboard fallback | Wrong role or incomplete account can land on a dashboard without setup context | `scripts/mealscout-auth-onboarding-alignment.contract.test.ts` |
-| Google login | `client/src/pages/login.tsx`, `client/src/pages/restaurant-signup.tsx` | `server/unifiedAuth.ts` Google customer/restaurant OAuth routes | Authenticated after callback/session save | OAuth users must not be sent to setup-token validation unless a setup token exists | OAuth provider identity is not business or insurance verification | `resolveOAuthContinuationPath(user)` or safe redirect | OAuth redirect can trap a user on `/account-setup` without a token | `scripts/mealscout-auth-onboarding-alignment.contract.test.ts` |
-| Facebook login | `client/src/pages/login.tsx` | `server/unifiedAuth.ts` Facebook OAuth route/callback | Authenticated after callback/session save | OAuth-created users use existing captured `oauthUserType`/safe redirect state | OAuth provider identity is not business or insurance verification | `resolveOAuthContinuationPath(user)` or safe redirect | User can land on `/account-setup` and see `Validating setup link...` forever if no token exists | `scripts/mealscout-auth-onboarding-alignment.contract.test.ts` |
+| Google login | `client/src/pages/login.tsx`, `client/src/pages/restaurant-signup.tsx` | `server/unifiedAuth.ts` Google customer/restaurant OAuth routes | Authenticated after callback/session save | OAuth users must not be sent to setup-token validation unless a setup token exists | OAuth provider identity is not business or insurance verification | `resolveOAuthContinuationPath(user)` or safe redirect, sanitized away from bare `/account-setup` | OAuth redirect can trap a user on `/account-setup` without a token | `scripts/mealscout-auth-onboarding-alignment.contract.test.ts` |
+| Facebook login | `client/src/pages/login.tsx` | `server/unifiedAuth.ts` Facebook OAuth route/callback | Authenticated after callback/session save | OAuth-created users use existing captured `oauthUserType`/safe redirect state | OAuth provider identity is not business or insurance verification | `resolveOAuthContinuationPath(user)` or safe redirect, sanitized away from bare `/account-setup` | User can land on `/account-setup` and see setup-link/account-handoff UI after normal login | `scripts/mealscout-auth-onboarding-alignment.contract.test.ts` |
 | Customer signup | `client/src/pages/customer-signup.tsx` | `server/unifiedAuth.ts`, account routes | Account created; login may require email verification | Customer profile fields drive basic account completion only | Email verification only; no business attachment required | `/post-verification` then Scout/user route after login continuation | Customer treated like business-bearing user | `scripts/mealscout-admin-truth-correction.contract.test.ts` plus C5D contract |
 | Restaurant signup | `client/src/pages/restaurant-signup.tsx` | `server/routes/restaurantSignupRoutes.ts` | Authenticated or signup-created depending source | Business profile/setup may remain incomplete | Business/profile verification and insurance are separate from email verification | Restaurant owner dashboard/setup route | Deal/payment/verification state can be conflated with account creation | C5D contract and existing business verification contracts |
 | Claim truck | `client/src/pages/claim-truck.tsx` | `server/routes/truckClaimRoutes.ts`, `server/routes/claimRoutes.ts` | Authenticated user or claim-created/linked user | Food truck owner/truck setup continues after claim | Claim verification, email verification, business verification, and insurance are separate | Truck/owner dashboard or claim/setup continuation | Claim intent lost across auth/OAuth | C5D contract plus claim-flow contracts |
@@ -48,7 +48,7 @@ This audit documents the current MealScout account lifecycle from entry source t
 ## Account Setup Failure States
 
 - Missing token while unauthenticated: show `Setup Link Required` and provide `Go to Login`.
-- Missing token while authenticated: show `Setup Link Required` and route `Continue to Dashboard` through a safe non-`/account-setup` continuation/dashboard target.
+- Missing token while authenticated: immediately continue to the normal dashboard/continuation target; do not show `Setup Link Required`, setup-link UI, or account handoff as the final state.
 - Invalid token: show invalid setup link message.
 - Expired token: show invalid/expired setup link message using backend `Token has expired` state.
 - Used token: show already-used/invalid setup link message using backend `Token not found or already used` or complete-setup `Account has already been set up`.
@@ -57,6 +57,7 @@ This audit documents the current MealScout account lifecycle from entry source t
 ## Known Danger Zones
 
 - `/account-setup` must not be used as an OAuth fallback or account handoff target without a `token`.
+- Normal login must not route to `/account-setup` unless a setup token or explicit setup invite context exists.
 - `client/src/pages/post-verification.tsx` must reject stored/query redirects back to `/account-setup` unless the URL includes a setup token.
 - `server/services/loginContinuation.ts` returns `/account-setup` for incomplete account onboarding; that is only safe when the user has a setup token or a separate authenticated edit/setup route exists.
 - OAuth routes in `server/unifiedAuth.ts` must preserve safe redirect/userType intent and call continuation logic when no explicit redirect is present.
@@ -66,7 +67,8 @@ This audit documents the current MealScout account lifecycle from entry source t
 ## Correction In This Slice
 
 - `client/src/pages/account-setup.tsx` now treats missing `token` as a clear failure/escape state instead of showing `Validating setup link...` indefinitely.
-- Authenticated users who reach `/account-setup` without a token continue to a safe role/dashboard target rather than bouncing through `/post-verification` back to `/account-setup`.
+- Authenticated users who reach `/account-setup` without a token immediately continue to a safe role/dashboard target rather than seeing setup-link or account-handoff UI.
+- OAuth and normal-login redirects reject bare `/account-setup` unless the URL includes a setup token.
 - No roles were added.
 - No route names were changed.
 - No payment, verification, claim, or permission logic was changed.

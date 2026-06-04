@@ -35,7 +35,8 @@ const requiredAuditSnippets = [
   "Customer accounts do not require business attachment.",
   "Host Parking Pass management must remain free from unrelated paid business gates",
   "Missing token while unauthenticated: show `Setup Link Required`",
-  "Missing token while authenticated: show `Setup Link Required`",
+  "Missing token while authenticated: immediately continue to the normal dashboard/continuation target",
+  "Normal login must not route to `/account-setup` unless a setup token or explicit setup invite context exists.",
   "Invalid token:",
   "Expired token:",
   "Used token:",
@@ -57,10 +58,11 @@ const requiredAccountSetupSnippets = [
   "if (!token) {",
   "Setup Link Required",
   "Go to Login",
-  "Continue to Dashboard",
+  "Continuing to your dashboard...",
   "getNoTokenContinuationPath",
   "setLocation(\"/login\")",
   "!continuationPath.startsWith(\"/account-setup\")",
+  "isAuthLoading || isAuthenticated",
   "if (isValidatingToken) {",
   "Token not found or already used",
   "Token has expired",
@@ -76,7 +78,7 @@ for (const snippet of requiredAccountSetupSnippets) {
   }
 }
 
-const missingTokenIndex = accountSetup.indexOf("if (!token) {");
+const missingTokenIndex = accountSetup.indexOf("\n  if (!token) {", accountSetup.indexOf("Continuing to your dashboard..."));
 const loadingIndex = accountSetup.indexOf("if (isValidatingToken) {");
 if (missingTokenIndex === -1 || loadingIndex === -1 || missingTokenIndex > loadingIndex) {
   throw new Error("Missing setup token must resolve before validating/loading state");
@@ -90,6 +92,25 @@ if (
   missingTokenSlice.includes("setLocation(\"/account-setup")
 ) {
   throw new Error("Missing setup token must not render endless validation or route back to account setup");
+}
+
+const authenticatedNoTokenIndex = accountSetup.indexOf(
+  "if (!token && (isAuthLoading || isAuthenticated))",
+);
+if (authenticatedNoTokenIndex === -1 || authenticatedNoTokenIndex > missingTokenIndex) {
+  throw new Error("Authenticated no-token account setup must redirect before setup-link-required UI");
+}
+const authenticatedNoTokenSlice = accountSetup.slice(
+  authenticatedNoTokenIndex,
+  missingTokenIndex,
+);
+if (
+  authenticatedNoTokenSlice.includes("Setup Link Required") ||
+  authenticatedNoTokenSlice.includes("Account handoff") ||
+  !authenticatedNoTokenSlice.includes("Continuing to your dashboard...") ||
+  !accountSetup.includes("setLocation(getNoTokenContinuationPath(user))")
+) {
+  throw new Error("Authenticated no-token account setup must not render setup-link or handoff UI");
 }
 
 const noTokenContinuationIndex = accountSetup.indexOf("function getNoTokenContinuationPath");
@@ -128,12 +149,47 @@ const oauthSnippets = [
   "resolveOAuthContinuationPath",
   "getOAuthRedirectPath(req) ||",
   "buildOAuthSuccessRedirect",
+  "isAccountSetupPathWithoutToken",
 ];
 
 for (const snippet of oauthSnippets) {
   if (!unifiedAuth.includes(snippet)) {
     throw new Error(`OAuth route/continuation inventory missing: ${snippet}`);
   }
+}
+
+const safeRedirectIndex = unifiedAuth.indexOf("const getSafeRedirectPath");
+const safeRedirectSlice = unifiedAuth.slice(
+  safeRedirectIndex,
+  unifiedAuth.indexOf("const getOAuthRedirectPath"),
+);
+if (
+  safeRedirectIndex === -1 ||
+  !safeRedirectSlice.includes("isAccountSetupPathWithoutToken(path)") ||
+  !safeRedirectSlice.includes("return null")
+) {
+  throw new Error("Normal OAuth/login redirects must reject /account-setup without a token");
+}
+
+const oauthContinuationIndex = unifiedAuth.indexOf("const resolveOAuthContinuationPath");
+const oauthContinuationSlice = unifiedAuth.slice(
+  oauthContinuationIndex,
+  unifiedAuth.indexOf("const normalizeEmailForLookup"),
+);
+if (
+  oauthContinuationIndex === -1 ||
+  !oauthContinuationSlice.includes("getSafeRedirectPath(continuation.continuationPath)") ||
+  oauthContinuationSlice.includes("return (\n      continuation.continuationPath")
+) {
+  throw new Error("OAuth continuation must sanitize /account-setup without setup token/context");
+}
+
+if (
+  !useAuth.includes("isAccountSetupWithoutToken") ||
+  !useAuth.includes("nextRequiredStep === \"account_onboarding\" && isAccountSetupWithoutToken") ||
+  useAuth.includes("nextRequiredStep === \"account_onboarding\" ||")
+) {
+  throw new Error("Authenticated normal login must not be pushed to /account-setup by useAuth without token");
 }
 
 const routeInventory = [

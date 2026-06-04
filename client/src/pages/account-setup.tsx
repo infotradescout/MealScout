@@ -72,10 +72,13 @@ function getNoTokenContinuationPath(user: any): string {
 export default function AccountSetup() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, isLoading: isAuthLoading } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [token, setToken] = useState<string | null>(null);
+  const [token, setToken] = useState<string | null>(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    return urlParams.get("token");
+  });
   const [setupComplete, setSetupComplete] = useState(false);
 
   // Extract token from URL parameters
@@ -84,6 +87,11 @@ export default function AccountSetup() {
     const tokenParam = urlParams.get("token");
     setToken(tokenParam);
   }, []);
+
+  useEffect(() => {
+    if (token || isAuthLoading || !isAuthenticated) return;
+    setLocation(getNoTokenContinuationPath(user));
+  }, [token, isAuthLoading, isAuthenticated, user, setLocation]);
 
   const form = useForm<AccountSetupFormData>({
     resolver: zodResolver(accountSetupSchema),
@@ -239,7 +247,24 @@ export default function AccountSetup() {
             ? "text-[color:var(--status-success)]"
             : "text-[color:var(--text-muted)]";
 
-  // Missing setup token: OAuth/login redirects must not trap users here.
+  // Missing setup token: authenticated OAuth/login redirects must leave this setup-link surface.
+  if (!token && (isAuthLoading || isAuthenticated)) {
+    return (
+      <div className="min-h-screen bg-[var(--bg-layered)] flex items-center justify-center p-4">
+        <SEOHead
+          title="Continuing - MealScout"
+          description="Routing your signed-in MealScout account."
+          noIndex={true}
+        />
+        <Card className="w-full max-w-md border-[color:var(--border-subtle)] bg-[var(--bg-card)]">
+          <CardContent className="pt-6 text-center">
+            <p className="text-[color:var(--text-secondary)]">Continuing to your dashboard...</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   if (!token) {
     return (
       <div className="min-h-screen bg-[var(--bg-layered)]">

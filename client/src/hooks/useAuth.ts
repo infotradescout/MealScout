@@ -94,6 +94,9 @@ export function useAuth() {
     const continuationUrl = new URL(continuationPath, window.location.origin);
     const continuationTarget =
       continuationUrl.pathname + continuationUrl.search + continuationUrl.hash;
+    const isAccountSetupWithoutToken =
+      continuationUrl.pathname === "/account-setup" &&
+      !continuationUrl.searchParams.get("token");
 
     const ignoredPrefixes = ["/logout", "/login", "/post-verification"];
     if (ignoredPrefixes.some((prefix) => pathname.startsWith(prefix))) return;
@@ -109,8 +112,8 @@ export function useAuth() {
 
     const nextRequiredStep = String(user.nextRequiredStep || "").toLowerCase();
     const hardBlockingStep =
-      nextRequiredStep === "account_onboarding" ||
       nextRequiredStep === "business_setup";
+    if (nextRequiredStep === "account_onboarding" && isAccountSetupWithoutToken) return;
     if (!hardBlockingStep) return;
 
     setLocation(continuationTarget);

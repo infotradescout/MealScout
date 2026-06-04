@@ -219,12 +219,25 @@ export async function setupUnifiedAuth(app: Express) {
     return appContext === "tradescout" ? "tradescout" : "mealscout";
   };
 
+  const isAccountSetupPathWithoutToken = (path: string): boolean => {
+    try {
+      const parsed = new URL(path, "https://www.mealscout.us");
+      return (
+        parsed.pathname === "/account-setup" &&
+        !parsed.searchParams.get("token")
+      );
+    } catch {
+      return path === "/account-setup";
+    }
+  };
+
   const getSafeRedirectPath = (value: unknown): string | null => {
     const path = typeof value === "string" ? value.trim() : "";
     if (!path) return null;
     if (!path.startsWith("/")) return null;
     if (path.startsWith("//")) return null;
     if (path.includes("://")) return null;
+    if (isAccountSetupPathWithoutToken(path)) return null;
     return path;
   };
 
@@ -409,10 +422,8 @@ export async function setupUnifiedAuth(app: Express) {
       businessAccessSummary,
     });
 
-    return (
-      continuation.continuationPath ||
-      getDefaultPostVerificationRedirect(user)
-    );
+    const continuationPath = getSafeRedirectPath(continuation.continuationPath);
+    return continuationPath || getDefaultPostVerificationRedirect(user);
   };
 
   const normalizeEmailForLookup = (value: unknown): string | null => {
