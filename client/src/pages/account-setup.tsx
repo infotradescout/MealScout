@@ -16,7 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { Eye, EyeOff, CheckCircle, KeyRound } from "lucide-react";
+import { Eye, EyeOff, CheckCircle, KeyRound, AlertTriangle } from "lucide-react";
 import { BackHeader } from "@/components/back-header";
 import { SEOHead } from "@/components/seo-head";
 import {
@@ -211,8 +211,55 @@ export default function AccountSetup() {
             ? "text-[color:var(--status-success)]"
             : "text-[color:var(--text-muted)]";
 
+  // Missing setup token: OAuth/login redirects must not trap users here.
+  if (!token) {
+    return (
+      <div className="min-h-screen bg-[var(--bg-layered)]">
+        <SEOHead
+          title="Setup Link Required - MealScout"
+          description="A setup link token is required to complete invited account setup."
+          noIndex={true}
+        />
+        <h1 className="sr-only">MealScout setup link required</h1>
+        <BackHeader
+          title="Account Setup"
+          fallbackHref="/login"
+          icon={KeyRound}
+          className="bg-[hsl(var(--background))/0.94] border-b border-[color:var(--border-subtle)] shadow-clean"
+        />
+        <div className="flex items-center justify-center min-h-[calc(100vh-4rem)] p-4">
+          <Card className="w-full max-w-md border-[color:var(--border-subtle)] bg-[var(--bg-card)]">
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-[color:var(--status-warning)]" />
+                <CardTitle>Setup Link Required</CardTitle>
+              </div>
+              <CardDescription>
+                This page is only for account setup links from MealScout. If you
+                just signed in with Google, Facebook, or email, continue from
+                login so we can route you to the right dashboard.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <Button className="w-full" onClick={() => setLocation("/login")}>
+                Go to Login
+              </Button>
+              <Button
+                className="w-full"
+                variant="outline"
+                onClick={() => setLocation("/post-verification")}
+              >
+                Continue Setup Check
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
   // Loading state
-  if (!token || isValidatingToken) {
+  if (isValidatingToken) {
     return (
       <div className="min-h-screen bg-[var(--bg-layered)] flex items-center justify-center p-4">
         <Card className="w-full max-w-md border-[color:var(--border-subtle)] bg-[var(--bg-card)]">

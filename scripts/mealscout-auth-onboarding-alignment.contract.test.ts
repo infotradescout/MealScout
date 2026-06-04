@@ -1,0 +1,165 @@
+import { readFileSync, existsSync } from "node:fs";
+
+const auditPath = "MEALSCOUT_AUTH_ONBOARDING_ALIGNMENT_AUDIT.md";
+if (!existsSync(auditPath)) {
+  throw new Error("MEALSCOUT_AUTH_ONBOARDING_ALIGNMENT_AUDIT.md must exist");
+}
+
+const audit = readFileSync(auditPath, "utf8");
+const accountSetup = readFileSync("client/src/pages/account-setup.tsx", "utf8");
+const login = readFileSync("client/src/pages/login.tsx", "utf8");
+const app = readFileSync("client/src/App.tsx", "utf8");
+const useAuth = readFileSync("client/src/hooks/useAuth.ts", "utf8");
+const unifiedAuth = readFileSync("server/unifiedAuth.ts", "utf8");
+const authAccountRoutes = readFileSync("server/routes/authAccountRoutes.ts", "utf8");
+const restaurantSignupRoutes = readFileSync("server/routes/restaurantSignupRoutes.ts", "utf8");
+const truckClaimRoutes = readFileSync("server/routes/truckClaimRoutes.ts", "utf8");
+const accountSetupUtils = readFileSync("server/utils/accountSetup.ts", "utf8");
+const loginContinuation = readFileSync("server/services/loginContinuation.ts", "utf8");
+const adminTruth = readFileSync("MEALSCOUT_ADMIN_TRUTH_AUDIT.md", "utf8");
+
+const requiredAuditSnippets = [
+  "email/password login",
+  "Google login",
+  "Facebook login",
+  "customer signup",
+  "restaurant signup",
+  "claim truck",
+  "account setup invite",
+  "owner verification link",
+  "admin-created user",
+  "mobile/capacitor web session",
+  "Expected continuation route",
+  "Email verification, business/profile verification, insurance verification, and claim verification are separate checks.",
+  "Customer accounts do not require business attachment.",
+  "Host Parking Pass management must remain free from unrelated paid business gates",
+  "Missing token: show `Setup Link Required`",
+  "Invalid token:",
+  "Expired token:",
+  "Used token:",
+  "`/account-setup` must not be used as an OAuth fallback without a `token`.",
+  "No roles were added.",
+  "No payment, verification, claim, or permission logic was changed.",
+];
+
+const auditLower = audit.toLowerCase();
+for (const snippet of requiredAuditSnippets) {
+  if (!auditLower.includes(snippet.toLowerCase())) {
+    throw new Error(`Missing auth onboarding audit snippet: ${snippet}`);
+  }
+}
+
+const requiredAccountSetupSnippets = [
+  "Validating setup link...",
+  "if (!token) {",
+  "Setup Link Required",
+  "Go to Login",
+  "Continue Setup Check",
+  "setLocation(\"/login\")",
+  "setLocation(\"/post-verification\")",
+  "if (isValidatingToken) {",
+  "Token not found or already used",
+  "Token has expired",
+];
+
+for (const snippet of requiredAccountSetupSnippets) {
+  const source =
+    snippet === "Token not found or already used" || snippet === "Token has expired"
+      ? unifiedAuth
+      : accountSetup;
+  if (!source.includes(snippet)) {
+    throw new Error(`Missing account setup guard snippet: ${snippet}`);
+  }
+}
+
+const missingTokenIndex = accountSetup.indexOf("if (!token) {");
+const loadingIndex = accountSetup.indexOf("if (isValidatingToken) {");
+if (missingTokenIndex === -1 || loadingIndex === -1 || missingTokenIndex > loadingIndex) {
+  throw new Error("Missing setup token must resolve before validating/loading state");
+}
+
+const missingTokenSlice = accountSetup.slice(missingTokenIndex, loadingIndex);
+if (
+  missingTokenSlice.includes("Validating setup link...") ||
+  !missingTokenSlice.includes("Setup Link Required")
+) {
+  throw new Error("Missing setup token must not render the endless validating copy");
+}
+
+const oauthSnippets = [
+  "/api/auth/google/customer",
+  "/api/auth/google/restaurant",
+  "/api/auth/facebook",
+  "oauthUserType",
+  "oauthRedirectPath",
+  "resolveOAuthContinuationPath",
+  "getOAuthRedirectPath(req) ||",
+  "buildOAuthSuccessRedirect",
+];
+
+for (const snippet of oauthSnippets) {
+  if (!unifiedAuth.includes(snippet)) {
+    throw new Error(`OAuth route/continuation inventory missing: ${snippet}`);
+  }
+}
+
+const routeInventory = [
+  [login, "client login", "buildAuthPath(\"/api/auth/google/customer\")"],
+  [login, "client facebook login", "buildAuthPath(\"/api/auth/facebook?userType=customer\")"],
+  [app, "account setup route", "<Route path=\"/account-setup\" component={AccountSetup} />"],
+  [app, "post verification route", "<Route path=\"/post-verification\" component={PostVerification} />"],
+  [useAuth, "oauth refresh", "OAuth redirect detected"],
+  [authAccountRoutes, "auth account route continuation", "resolveUserContinuation"],
+  [restaurantSignupRoutes, "restaurant signup route", "userType"],
+  [truckClaimRoutes, "truck claim route", "userType: \"food_truck\""],
+  [accountSetupUtils, "account setup invite token", "setupToken"],
+  [loginContinuation, "login continuation path", "continuationPath"],
+];
+
+for (const [source, label, snippet] of routeInventory) {
+  if (!String(source).includes(String(snippet))) {
+    throw new Error(`Missing ${label} inventory snippet: ${snippet}`);
+  }
+}
+
+const verificationSnippets = [
+  "email verification",
+  "business/profile verification",
+  "insurance verification",
+  "claim verification",
+];
+
+for (const snippet of verificationSnippets) {
+  if (!auditLower.includes(snippet.toLowerCase())) {
+    throw new Error(`Verification separation missing: ${snippet}`);
+  }
+}
+
+if (
+  !auditLower.includes("customer accounts do not require business attachment") &&
+  !adminTruth.toLowerCase().includes("customer does not require business attachment")
+) {
+  throw new Error("Customer business-attachment truth must remain documented");
+}
+
+if (!audit.includes("Parking Pass management cannot be blocked by unrelated paid business onboarding gates.")) {
+  throw new Error("Host Parking Pass free-management boundary must be documented");
+}
+
+const forbiddenAuditSnippets = [
+  "new role",
+  "new OAuth provider",
+  "new payment gate",
+  "new verification shortcut",
+  "sample user",
+  "fake user",
+  "placeholder record",
+];
+
+for (const snippet of forbiddenAuditSnippets) {
+  if (auditLower.includes(snippet)) {
+    throw new Error(`Audit must not introduce product features or fake data: ${snippet}`);
+  }
+}
+
+console.log("mealscout-auth-onboarding-alignment.contract: PASS");
