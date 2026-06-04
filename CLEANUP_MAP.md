@@ -98,6 +98,22 @@ Validation command: `node scripts/mealscout-email-copy-audit.contract.test.ts`.
 
 Handoff value: A developer knows which automated emails exist, what claims are allowed, and which copy regressions are blocked.
 
+## C5B - Role-Aware Business Attachment Audit
+
+Status: `DONE`
+
+Goal: Correct admin user-card role/business attachment assumptions so plain customer accounts are not flagged as missing business records.
+
+Files likely touched: `client/src/pages/admin-dashboard.tsx`, `scripts/admin-user-role-business-attachment.contract.test.ts`, `CLEANUP_MAP.md`.
+
+Allowed changes: Narrow production-correctness fixes to role-aware admin badges/actions, static contracts, and cleanup map documentation.
+
+Disallowed changes: New admin features, new subscription flows, broad user role redesigns, schema changes, or live admin mutations.
+
+Validation command: `node scripts/admin-user-role-business-attachment.contract.test.ts`.
+
+Handoff value: Admin user cards distinguish customer accounts from business-bearing accounts before broader admin cleanup continues.
+
 ## C6 - Parking Pass Page Decomposition Map
 
 Status: `DONE`

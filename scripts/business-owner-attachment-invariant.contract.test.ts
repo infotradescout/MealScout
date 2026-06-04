@@ -7,6 +7,7 @@ const signupPage = readFileSync("client/src/pages/restaurant-signup.tsx", "utf8"
 const requiredDashboardSnippets = [
   "type BusinessAttachmentState =",
   "\"attached\"",
+  "\"not_required\"",
   "\"pending_invite\"",
   "\"pending_claim\"",
   "\"admin_import_draft\"",
@@ -14,7 +15,7 @@ const requiredDashboardSnippets = [
   "\"needs_business_shell\"",
   "\"invalid_missing_business\"",
   "function resolveBusinessAttachmentState(",
-  "if (isBusinessUserType(userType)) {",
+  "if (!isBusinessBearingUserType(userType)) return \"not_required\";",
   "return \"needs_business_shell\";",
   "return \"invalid_missing_business\";",
   "Business attachment:",

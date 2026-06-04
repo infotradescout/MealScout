@@ -99,8 +99,30 @@ const isDuperOrRootUserType = (userType?: string | null) =>
 const isRootSuperAdminUserType = (userType?: string | null) =>
   userType === "super_admin";
 
-const isBusinessUserType = (userType?: string | null) =>
-  userType === "food_truck" || userType === "restaurant_owner";
+const businessBearingUserTypes = new Set([
+  "restaurant_owner",
+  "food_truck",
+  "host",
+  "event_coordinator",
+  "supplier",
+  "business_owner",
+]);
+
+const monthlySubscriptionLinkUserTypes = new Set([
+  "restaurant_owner",
+  "food_truck",
+]);
+
+const isBusinessBearingUserType = (userType?: string | null) =>
+  businessBearingUserTypes.has(String(userType || "").toLowerCase());
+
+const isBusinessUserType = (userType?: string | null) => {
+  const type = String(userType || "").toLowerCase();
+  return type === "food_truck" || type === "restaurant_owner";
+};
+
+const canSendMonthlySubscriptionLink = (userType?: string | null) =>
+  monthlySubscriptionLinkUserTypes.has(String(userType || "").toLowerCase());
 
 const businessTypeOptions = [
   { value: "food_truck", label: "Food Truck" },
@@ -137,6 +159,7 @@ type BusinessTypeIntent =
 
 type BusinessAttachmentState =
   | "attached"
+  | "not_required"
   | "pending_invite"
   | "pending_claim"
   | "admin_import_draft"
@@ -157,12 +180,10 @@ function resolveBusinessAttachmentState(
   if (user?.adminImportDraft || user?.importDraft) return "admin_import_draft";
 
   const userType = String(user?.userType || "").toLowerCase();
-  const businessName = String(user?.businessName || "").trim();
-  if (isBusinessUserType(userType)) {
-    if (businessName) return "needs_business_shell";
-    return "invalid_missing_business";
-  }
+  if (!isBusinessBearingUserType(userType)) return "not_required";
 
+  const businessName = String(user?.businessName || "").trim();
+  if (businessName) return "needs_business_shell";
   return "invalid_missing_business";
 }
 
@@ -10748,14 +10769,16 @@ export default function AdminDashboard() {
                           <Badge variant="outline">
                             role:{toIdentityRole(user.userType)}
                           </Badge>
-                          <Badge variant="outline">
-                            attachment:
-                            {user.hasRestaurant
-                              ? "attached"
-                              : user.businessName
-                                ? "needs_business_shell"
-                                : "invalid_missing_business"}
-                          </Badge>
+                          {isBusinessBearingUserType(user.userType) && (
+                            <Badge variant="outline">
+                              attachment:
+                              {user.hasRestaurant
+                                ? "attached"
+                                : user.businessName
+                                  ? "needs_business_shell"
+                                  : "invalid_missing_business"}
+                            </Badge>
+                          )}
                           {user.hasRestaurant && (
                             <Badge variant="outline">
                               business:{String(user.businessType || "unknown")}
@@ -10784,7 +10807,7 @@ export default function AdminDashboard() {
                               {user.businessIsActive ? "yes" : "no"}
                             </Badge>
                           )}
-                          {isBusinessUserType(user.userType) &&
+                          {isBusinessBearingUserType(user.userType) &&
                             !user.hasRestaurant && (
                               <Badge variant="destructive">
                                 {user.businessName
@@ -10895,23 +10918,22 @@ export default function AdminDashboard() {
                                 : "Verify Insurance"}
                             </Button>
                           )}
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => sendSubscriptionLink.mutate(user.id)}
-                            disabled={
-                              sendSubscriptionLink.isPending ||
-                              isStaff ||
-                              !user.email ||
-                              !["restaurant_owner", "food_truck"].includes(
-                                user.userType,
-                              )
-                            }
-                            data-testid={`button-send-subscription-${user.id}`}
-                          >
-                            <DollarSign className="w-3 h-3 mr-1" />
-                            Send Monthly Link
-                          </Button>
+                          {canSendMonthlySubscriptionLink(user.userType) && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => sendSubscriptionLink.mutate(user.id)}
+                              disabled={
+                                sendSubscriptionLink.isPending ||
+                                isStaff ||
+                                !user.email
+                              }
+                              data-testid={`button-send-subscription-${user.id}`}
+                            >
+                              <DollarSign className="w-3 h-3 mr-1" />
+                              Send Monthly Link
+                            </Button>
+                          )}
                         </div>
                         <Button
                           size="sm"
@@ -12260,6 +12282,7 @@ export default function AdminDashboard() {
                       <Badge
                         variant={
                           selectedUserIdentity.attachmentState === "attached"
+                            || selectedUserIdentity.attachmentState === "not_required"
                             ? "default"
                             : "destructive"
                         }
