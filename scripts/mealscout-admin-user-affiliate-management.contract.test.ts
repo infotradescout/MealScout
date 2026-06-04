@@ -2,13 +2,18 @@ import { readFileSync } from "node:fs";
 
 const audit = readFileSync("MEALSCOUT_ADMIN_USER_AFFILIATE_MANAGEMENT_AUDIT.md", "utf8");
 const dashboard = readFileSync("client/src/pages/admin-dashboard.tsx", "utf8");
+const affiliatePage = readFileSync("client/src/pages/AdminAffiliateManagement.tsx", "utf8");
 const affiliateAdminRoutes = readFileSync("server/routes/admin/affiliateAdminRoutes.ts", "utf8");
 const roleAccess = readFileSync("server/roleAccess.ts", "utf8");
 
 const requiredAuditSnippets = [
   "Admins manage affiliates.",
   "Admins are not affiliates.",
+  "The admin user card includes an `Affiliate Management` section.",
+  "client/src/pages/AdminAffiliateManagement.tsx` remains an aggregate affiliate reporting/overview surface",
   "Not applicable for internal admin accounts.",
+  "The internal admin focus URL is not copied from the user card.",
+  "affiliatePercent`, `affiliateCloserUserId`, and `affiliateBookerUserId`",
   "No `Create Link`, `Regenerate Link`, `Remove Affiliate`, or `Disable Affiliate` control is added",
   "Customer users do not show `invalid_missing_business`.",
   "Parking Pass free-management access remains unchanged.",
@@ -31,13 +36,26 @@ const requiredDashboardSnippets = [
   "const buildCanonicalAffiliateLink = (",
   "const profilePath = getAdminUserPublicProfilePath(user, attachedHostProfile);",
   "url.searchParams.set(\"ref\", tag);",
+  "Affiliate Management",
   "Affiliate Link",
+  "Affiliate active",
+  "No affiliate link",
   "Not applicable for internal admin accounts.",
   "No affiliate link assigned",
   "Copy Link",
   "Open Link",
-  "navigator.clipboard.writeText(affiliateLink)",
+  "navigator.clipboard.writeText(",
   "window.open(",
+  "Internal token",
+  "Commission Percent",
+  "Closer User ID",
+  "Booker User ID",
+  "Save Affiliate Settings",
+  "updateUserAffiliateSettings",
+  "`/api/admin/affiliates/users/${payload.userId}`",
+  "affiliatePercent: Number(",
+  "affiliateCloserUserId:",
+  "affiliateBookerUserId:",
 ];
 
 for (const snippet of requiredDashboardSnippets) {
@@ -50,6 +68,10 @@ const affiliateSectionIndex = dashboard.indexOf("Affiliate Link");
 const affiliateCopyIndex = dashboard.indexOf("Copy Link", affiliateSectionIndex);
 if (affiliateSectionIndex === -1 || affiliateCopyIndex === -1) {
   throw new Error("Admin user card must contain Affiliate Link section with Copy Link");
+}
+const managementSectionIndex = dashboard.indexOf("Affiliate Management");
+if (managementSectionIndex === -1 || affiliateSectionIndex === -1) {
+  throw new Error("Affiliate management section must exist inside the admin user card");
 }
 if (dashboard.includes("Copy Admin Link")) {
   throw new Error("Admin user card must not expose Copy Admin Link");
@@ -74,7 +96,10 @@ const copyLinkHandler = dashboard.slice(copyLinkHandlerStart, affiliateCopyIndex
 if (copyLinkHandler.includes("/admin/dashboard") || !copyLinkHandler.includes("affiliateLink")) {
   throw new Error("Primary Copy Link must copy the public affiliate link, not admin dashboard URL");
 }
-if (!copyLinkHandler.includes("navigator.clipboard.writeText(affiliateLink)")) {
+if (
+  !copyLinkHandler.includes("navigator.clipboard.writeText(") ||
+  !copyLinkHandler.includes("affiliateLink")
+) {
   throw new Error("Copy Link must copy affiliateLink/publicProfileLink only");
 }
 
@@ -98,6 +123,35 @@ const notApplicableIndex = dashboard.indexOf("Not applicable for internal admin 
 const affiliateLinkConstructionIndex = dashboard.indexOf("const affiliateLink = buildCanonicalAffiliateLink", notApplicableIndex);
 if (notApplicableIndex === -1 || affiliateLinkConstructionIndex === -1 || notApplicableIndex > affiliateLinkConstructionIndex) {
   throw new Error("Internal admin not-applicable check must happen before affiliate link construction");
+}
+
+const notApplicableSlice = dashboard.slice(notApplicableIndex, affiliateLinkConstructionIndex);
+if (notApplicableSlice.includes("Copy Link") || notApplicableSlice.includes("Open Link")) {
+  throw new Error("Internal admin accounts must not render affiliate link controls");
+}
+
+const settingsEndpointIndex = dashboard.indexOf("`/api/admin/affiliates/users/${payload.userId}`");
+const settingsButtonIndex = dashboard.indexOf("Save Affiliate Settings", affiliateSectionIndex);
+if (settingsEndpointIndex === -1 || settingsButtonIndex === -1) {
+  throw new Error("Supported single-user affiliate settings must be editable from the admin user card");
+}
+
+const affiliatePageReportingSnippets = [
+  "Affiliate Performance",
+  "affiliateEarningsCents",
+  "mealScoutRevenueCents",
+  "subscriptionRevenueCents",
+  "bookingRevenueCents",
+];
+
+for (const snippet of affiliatePageReportingSnippets) {
+  if (!affiliatePage.includes(snippet)) {
+    throw new Error(`Aggregate affiliate page must remain a reporting/overview surface: ${snippet}`);
+  }
+}
+
+if (!affiliatePage.includes("/api/admin/affiliates/users")) {
+  throw new Error("Affiliate page may remain as aggregate affiliate user overview");
 }
 
 const forbiddenDashboardSnippets = [

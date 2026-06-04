@@ -3328,6 +3328,7 @@ export default function AdminDashboard() {
   const payoutPageSize = 12;
   const [extendDays, setExtendDays] = useState(7);
   const [userEdits, setUserEdits] = useState<any>(null);
+  const [affiliateEdits, setAffiliateEdits] = useState<any>(null);
   const [parkingPassEdits, setParkingPassEdits] = useState<Record<string, any>>(
     {},
   );
@@ -5918,6 +5919,7 @@ export default function AdminDashboard() {
   useEffect(() => {
     if (!selectedUser) {
       setUserEdits(null);
+      setAffiliateEdits(null);
       return;
     }
     setUserEdits({
@@ -5931,6 +5933,11 @@ export default function AdminDashboard() {
       isActive: !selectedUser.isDisabled,
       emailVerified: !!selectedUser.emailVerified,
       userType: selectedUser.userType || "unknown",
+    });
+    setAffiliateEdits({
+      affiliatePercent: selectedUser.affiliatePercent ?? 5,
+      affiliateCloserUserId: selectedUser.affiliateCloserUserId || "",
+      affiliateBookerUserId: selectedUser.affiliateBookerUserId || "",
     });
   }, [selectedUser]);
 
@@ -6612,6 +6619,42 @@ export default function AdminDashboard() {
       toast({
         title: "Error",
         description: error.message || "Failed to update user.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateUserAffiliateSettings = useMutation({
+    mutationFn: async (payload: { userId: string; updates: any }) => {
+      const res = await apiRequest(
+        "PATCH",
+        `/api/admin/affiliates/users/${payload.userId}`,
+        payload.updates,
+      );
+      return await res.json();
+    },
+    onSuccess: (updatedAffiliate) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-affiliates"] });
+      setSelectedUser((current: any) =>
+        current
+          ? {
+              ...current,
+              affiliatePercent: updatedAffiliate.affiliatePercent,
+              affiliateCloserUserId: updatedAffiliate.affiliateCloserUserId,
+              affiliateBookerUserId: updatedAffiliate.affiliateBookerUserId,
+            }
+          : current,
+      );
+      toast({
+        title: "Affiliate Settings Updated",
+        description: "Supported affiliate settings were saved for this user.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update affiliate settings.",
         variant: "destructive",
       });
     },
@@ -11904,10 +11947,19 @@ export default function AdminDashboard() {
                       {selectedUser.email}
                     </p>
                   </div>
-                  <div className="space-y-1 col-span-2">
-                    <p className="text-xs text-muted-foreground">
-                      Affiliate Link
-                    </p>
+                  <div className="space-y-2 col-span-2 rounded-md border p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-xs font-semibold text-muted-foreground">
+                        Affiliate Management
+                      </p>
+                      <Badge variant="outline">
+                        {isAffiliateEligibleUserType(selectedUser.userType)
+                          ? selectedUser.affiliateTag
+                            ? "Affiliate active"
+                            : "No affiliate link"
+                          : "Internal account"}
+                      </Badge>
+                    </div>
                     {(() => {
                       if (!isAffiliateEligibleUserType(selectedUser.userType)) {
                         return (
@@ -11916,51 +11968,158 @@ export default function AdminDashboard() {
                           </p>
                         );
                       }
+                      const rawAffiliateToken = String(
+                        selectedUser.affiliateTag || "",
+                      ).trim();
                       const affiliateLink = buildCanonicalAffiliateLink(
                         selectedUser.affiliateTag,
                         selectedUser,
                         Array.isArray(userHosts) ? userHosts[0] : null,
                       );
-                      if (!affiliateLink) {
-                        return (
-                          <p className="text-sm text-muted-foreground">
-                            No affiliate link assigned
-                          </p>
-                        );
-                      }
                       return (
-                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                          <p className="text-xs font-mono break-all">
-                            {affiliateLink}
-                          </p>
-                          <div className="flex gap-2">
+                        <div className="space-y-3">
+                          <div className="space-y-1">
+                            <p className="text-xs text-muted-foreground">
+                              Affiliate Link
+                            </p>
+                            {affiliateLink ? (
+                              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                                <p className="text-xs font-mono break-all">
+                                  {affiliateLink}
+                                </p>
+                                <div className="flex gap-2">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={async () => {
+                                      await navigator.clipboard.writeText(
+                                        affiliateLink,
+                                      );
+                                      toast({ title: "Affiliate link copied" });
+                                    }}
+                                    data-testid={`button-copy-affiliate-link-${selectedUser.id}`}
+                                  >
+                                    <Copy className="w-3 h-3 mr-1" />
+                                    Copy Link
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() =>
+                                      window.open(
+                                        affiliateLink,
+                                        "_blank",
+                                        "noopener,noreferrer",
+                                      )
+                                    }
+                                    data-testid={`button-open-affiliate-link-${selectedUser.id}`}
+                                  >
+                                    <ExternalLink className="w-3 h-3 mr-1" />
+                                    Open Link
+                                  </Button>
+                                </div>
+                              </div>
+                            ) : (
+                              <p className="text-sm text-muted-foreground">
+                                No affiliate link assigned
+                              </p>
+                            )}
+                          </div>
+                          {rawAffiliateToken && (
+                            <div className="space-y-1">
+                              <p className="text-xs text-muted-foreground">
+                                Internal token
+                              </p>
+                              <p className="text-xs font-mono text-muted-foreground break-all">
+                                {rawAffiliateToken}
+                              </p>
+                            </div>
+                          )}
+                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                            <div className="space-y-1">
+                              <p className="text-xs text-muted-foreground">
+                                Commission Percent
+                              </p>
+                              <input
+                                type="number"
+                                min="0"
+                                max="100"
+                                className="w-full px-3 py-2 border rounded-md text-sm"
+                                value={affiliateEdits?.affiliatePercent ?? ""}
+                                onChange={(event) =>
+                                  setAffiliateEdits({
+                                    ...affiliateEdits,
+                                    affiliatePercent: event.target.value,
+                                  })
+                                }
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <p className="text-xs text-muted-foreground">
+                                Closer User ID
+                              </p>
+                              <input
+                                type="text"
+                                className="w-full px-3 py-2 border rounded-md text-sm"
+                                value={affiliateEdits?.affiliateCloserUserId ?? ""}
+                                onChange={(event) =>
+                                  setAffiliateEdits({
+                                    ...affiliateEdits,
+                                    affiliateCloserUserId: event.target.value,
+                                  })
+                                }
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <p className="text-xs text-muted-foreground">
+                                Booker User ID
+                              </p>
+                              <input
+                                type="text"
+                                className="w-full px-3 py-2 border rounded-md text-sm"
+                                value={affiliateEdits?.affiliateBookerUserId ?? ""}
+                                onChange={(event) =>
+                                  setAffiliateEdits({
+                                    ...affiliateEdits,
+                                    affiliateBookerUserId: event.target.value,
+                                  })
+                                }
+                              />
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={async () => {
-                                await navigator.clipboard.writeText(affiliateLink);
-                                toast({ title: "Affiliate link copied" });
-                              }}
-                              data-testid={`button-copy-affiliate-link-${selectedUser.id}`}
-                            >
-                              <Copy className="w-3 h-3 mr-1" />
-                              Copy Link
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() =>
-                                window.open(
-                                  affiliateLink,
-                                  "_blank",
-                                  "noopener,noreferrer",
-                                )
+                              disabled={
+                                isStaff ||
+                                updateUserAffiliateSettings.isPending ||
+                                !affiliateEdits
                               }
-                              data-testid={`button-open-affiliate-link-${selectedUser.id}`}
+                              onClick={() =>
+                                updateUserAffiliateSettings.mutate({
+                                  userId: selectedUser.id,
+                                  updates: {
+                                    affiliatePercent: Number(
+                                      affiliateEdits?.affiliatePercent ?? 5,
+                                    ),
+                                    affiliateCloserUserId:
+                                      affiliateEdits?.affiliateCloserUserId || null,
+                                    affiliateBookerUserId:
+                                      affiliateEdits?.affiliateBookerUserId || null,
+                                  },
+                                })
+                              }
+                              data-testid={`button-save-affiliate-settings-${selectedUser.id}`}
                             >
-                              <ExternalLink className="w-3 h-3 mr-1" />
-                              Open Link
+                              {updateUserAffiliateSettings.isPending
+                                ? "Saving..."
+                                : "Save Affiliate Settings"}
                             </Button>
+                            <p className="text-xs text-muted-foreground">
+                              Tag creation, regeneration, and removal are not
+                              supported by the current backend.
+                            </p>
                           </div>
                         </div>
                       );
