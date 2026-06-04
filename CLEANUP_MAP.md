@@ -68,23 +68,23 @@ Handoff value: A developer knows how to split the admin dashboard safely later.
 
 ## C5 - Launch Board SQL Safety Map
 
-Status: `NEXT`
+Status: `DONE`
 
 Goal: Document and guard Launch Board SQL/select assumptions against schema drift.
 
-Files likely touched: `server/routes/admin/adminCoreOpsRoutes.ts`, `shared/schema.ts`, migrations, Launch Board contract scripts.
+Files likely touched: `MEALSCOUT_LAUNCH_BOARD_SQL_SAFETY_MAP.md`, `scripts/mealscout-launch-board-sql-safety-map.contract.test.ts`, `server/routes/admin/adminCoreOpsRoutes.ts` only for read-only references if needed.
 
 Allowed changes: Static contracts, documentation, and narrow safety checks for existing references.
 
 Disallowed changes: Metric redesign, query rewrites, new Launch Board features, or data backfills.
 
-Validation command: `npm run check`.
+Validation command: `node scripts/mealscout-launch-board-sql-safety-map.contract.test.ts`.
 
 Handoff value: Launch Board changes have a schema-safety checklist before cleanup starts.
 
 ## C6 - Parking Pass Page Decomposition Map
 
-Status: `QUEUED`
+Status: `NEXT`
 
 Goal: Map `client/src/pages/parking-pass.tsx` modes, API calls, state clusters, and extraction order.
 
