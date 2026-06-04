@@ -52,23 +52,23 @@ Handoff value: A developer can find public, owner, host, admin, and mobile route
 
 ## C4 - Admin Dashboard Decomposition Map
 
-Status: `NEXT`
+Status: `DONE`
 
 Goal: Map `client/src/pages/admin-dashboard.tsx` into extraction zones without changing behavior.
 
-Files likely touched: `MEALSCOUT_HANDOFF_SPINE.md`, admin docs/contracts, `client/src/pages/admin-dashboard.tsx` only for read-only references if needed.
+Files likely touched: `MEALSCOUT_ADMIN_DASHBOARD_DECOMPOSITION_MAP.md`, `scripts/mealscout-admin-dashboard-decomposition-map.contract.test.ts`, `client/src/pages/admin-dashboard.tsx` only for read-only references if needed.
 
 Allowed changes: Documentation, static analysis, contract tests around existing tabs and API calls.
 
 Disallowed changes: Component extraction, visual redesign, API behavior changes, or admin permission changes.
 
-Validation command: `npm run check`.
+Validation command: `node scripts/mealscout-admin-dashboard-decomposition-map.contract.test.ts`.
 
 Handoff value: A developer knows how to split the admin dashboard safely later.
 
 ## C5 - Launch Board SQL Safety Map
 
-Status: `QUEUED`
+Status: `NEXT`
 
 Goal: Document and guard Launch Board SQL/select assumptions against schema drift.
 
