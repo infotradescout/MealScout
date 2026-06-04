@@ -11875,20 +11875,6 @@ export default function AdminDashboard() {
                     <ExternalLink className="w-4 h-4 mr-1" />
                     Open profile in new tab
                   </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={async () => {
-                      const href = `${window.location.origin}/admin/dashboard?tab=users&focusUser=${encodeURIComponent(selectedUser.id)}`;
-                      await navigator.clipboard.writeText(href);
-                      toast({
-                        title: "Admin link copied",
-                        description: "Direct admin user link copied for internal access.",
-                      });
-                    }}
-                  >
-                    Copy Admin Link
-                  </Button>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">

@@ -36,10 +36,8 @@ const requiredDashboardSnippets = [
   "No affiliate link assigned",
   "Copy Link",
   "Open Link",
-  "Copy Admin Link",
   "navigator.clipboard.writeText(affiliateLink)",
   "window.open(",
-  "const href = `${window.location.origin}/admin/dashboard?tab=users&focusUser=${encodeURIComponent(selectedUser.id)}`;",
 ];
 
 for (const snippet of requiredDashboardSnippets) {
@@ -50,18 +48,34 @@ for (const snippet of requiredDashboardSnippets) {
 
 const affiliateSectionIndex = dashboard.indexOf("Affiliate Link");
 const affiliateCopyIndex = dashboard.indexOf("Copy Link", affiliateSectionIndex);
-const adminCopyIndex = dashboard.indexOf("Copy Admin Link");
 if (affiliateSectionIndex === -1 || affiliateCopyIndex === -1) {
   throw new Error("Admin user card must contain Affiliate Link section with Copy Link");
 }
-if (adminCopyIndex === -1) {
-  throw new Error("Internal admin focus URL must be exposed only as separate Copy Admin Link");
+if (dashboard.includes("Copy Admin Link")) {
+  throw new Error("Admin user card must not expose Copy Admin Link");
+}
+
+const clipboardCalls = [...dashboard.matchAll(/navigator\.clipboard\.writeText\(([^)]*)\)/g)];
+for (const match of clipboardCalls) {
+  const callStart = Math.max(0, match.index - 500);
+  const callEnd = Math.min(dashboard.length, match.index + 500);
+  const callContext = dashboard.slice(callStart, callEnd);
+  if (
+    callContext.includes("/admin/dashboard") ||
+    callContext.includes("admin/dashboard?tab=users") ||
+    callContext.includes("focusUser")
+  ) {
+    throw new Error("User-card copy/share handlers must not copy admin dashboard focus URLs");
+  }
 }
 
 const copyLinkHandlerStart = dashboard.lastIndexOf("onClick={async () =>", affiliateCopyIndex);
 const copyLinkHandler = dashboard.slice(copyLinkHandlerStart, affiliateCopyIndex + 200);
 if (copyLinkHandler.includes("/admin/dashboard") || !copyLinkHandler.includes("affiliateLink")) {
   throw new Error("Primary Copy Link must copy the public affiliate link, not admin dashboard URL");
+}
+if (!copyLinkHandler.includes("navigator.clipboard.writeText(affiliateLink)")) {
+  throw new Error("Copy Link must copy affiliateLink/publicProfileLink only");
 }
 
 const openLinkHandlerStart = dashboard.lastIndexOf("onClick={() =>", dashboard.indexOf("Open Link", affiliateSectionIndex));
@@ -70,9 +84,19 @@ if (openLinkHandler.includes("/admin/dashboard") || !openLinkHandler.includes("a
   throw new Error("Open Link must open the public affiliate link, not admin dashboard URL");
 }
 
+const affiliateBuilderIndex = dashboard.indexOf("const buildCanonicalAffiliateLink = (");
+const affiliateBuilderSlice = dashboard.slice(affiliateBuilderIndex, dashboard.indexOf("const businessTypeOptions"));
+if (
+  !affiliateBuilderSlice.includes("const profilePath = getAdminUserPublicProfilePath(user, attachedHostProfile);") ||
+  !affiliateBuilderSlice.includes("url.searchParams.set(\"ref\", tag);") ||
+  affiliateBuilderSlice.includes("/admin/dashboard")
+) {
+  throw new Error("Affiliate link fallback must be public profile/homepage with ref tag, never admin URL");
+}
+
 const notApplicableIndex = dashboard.indexOf("Not applicable for internal admin accounts.");
-const affiliateBuilderIndex = dashboard.indexOf("const affiliateLink = buildCanonicalAffiliateLink", notApplicableIndex);
-if (notApplicableIndex === -1 || affiliateBuilderIndex === -1 || notApplicableIndex > affiliateBuilderIndex) {
+const affiliateLinkConstructionIndex = dashboard.indexOf("const affiliateLink = buildCanonicalAffiliateLink", notApplicableIndex);
+if (notApplicableIndex === -1 || affiliateLinkConstructionIndex === -1 || notApplicableIndex > affiliateLinkConstructionIndex) {
   throw new Error("Internal admin not-applicable check must happen before affiliate link construction");
 }
 
