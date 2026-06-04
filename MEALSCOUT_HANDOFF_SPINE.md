@@ -17,6 +17,24 @@ KPI: after one day, the developer can explain what MealScout does, where the mai
 - `client/src/App.tsx` - frontend route surface.
 - `shared/schema.ts` - schema module export entrypoint.
 
+## Production Lockdown Baseline
+
+Feature work is frozen until production stabilization and cleanup have a repeatable baseline. Production deploys require `npm run gate:production` before release. In local dev, use `SKIP_LIVE_PROBES=true npm run gate:production` only when live probes are inappropriate; production deploys should run with live probes enabled.
+
+Current accepted production-lockdown commits:
+
+- `7aaa46f6` - `fix: harden indexnow key routing and config fallback`
+- `0c4faf0f` - `chore: add mealscout production readiness gate`
+
+Production truths that must remain true:
+
+- IndexNow key routing is protected by Vercel proxy rules and backend fallback logic in `server/services/indexNow.ts`.
+- `vercel.json` must route root IndexNow key files to Render before the SPA fallback.
+- Parking Pass booking requires non-expired stored insurance verification. Uploaded insurance evidence alone is not enough.
+- `migrations/105_restaurant_insurance_verification_expiry.sql` must be present and applied before code relying on `insurance_verified`, `insurance_verified_at`, `insurance_expires_at`, or `insurance_verified_by_user_id` deploys.
+- Live mutation smokes for admin insurance verification or booking allowed/blocked states require dedicated fixtures, staging, or explicit production-test-record approval.
+- Read-only production gate probes currently cover health, readiness, public profile, Scout, Parking Pass, IndexNow key URL, and admin launch-board auth protection.
+
 ## What MealScout Is
 
 MealScout is a local food discovery, profile, scheduling, and booking platform for food trucks, restaurants, hosts, customers, suppliers, and operators.
@@ -155,6 +173,8 @@ The schema entrypoint is `shared/schema.ts`. It re-exports modular schema files,
 
 ## Known Danger Zones
 
+- Production gate bypass: no production deploy should skip `npm run gate:production`; `SKIP_LIVE_PROBES=true` is for local/dev constraints only.
+- IndexNow routing/config: key URL, robots advertisement, backend fallback, and Vercel root `.txt` proxy must stay aligned.
 - `server/routes/admin/adminCoreOpsRoutes.ts`: large Launch Board aggregation surface with SQL schema drift risk.
 - `client/src/pages/admin-dashboard.tsx`: overloaded admin UI with many operational concerns in one page.
 - `client/src/pages/parking-pass.tsx`: large mixed-mode Parking Pass discovery, host, booking, map, payment, and operator page.
@@ -169,10 +189,12 @@ The schema entrypoint is `shared/schema.ts`. It re-exports modular schema files,
 
 ## Validation Commands
 
-Recommended first check: `npm run check` followed by `npm run build`. `npm run ci:quick` is not present in `package.json` in this checkout.
+Recommended first check: `npm run gate:production`, then `npm run check`, then `npm run build`. `npm run ci:quick` is not present in `package.json` in this checkout.
 
 Baseline commands:
 
+- `npm run gate:production`
+- `SKIP_LIVE_PROBES=true npm run gate:production` when live probes are inappropriate in dev
 - `npm run check`
 - `npm run build`
 - `npm run test`
@@ -182,6 +204,8 @@ Baseline commands:
 Fast targeted cleanup-chain tests:
 
 - `node scripts/mealscout-handoff-spine.contract.test.ts`
+- `node scripts/mealscout-production-readiness-gate.contract.test.ts`
+- `npx tsx scripts/admin-insurance-verification.contract.test.ts`
 - `node scripts/mealscout-growth-loop.contract.test.ts`
 - `node scripts/mealscout-one-market-launch-board.contract.test.ts`
 - `node scripts/mealscout-claim-pitch-flow.contract.test.ts`
@@ -203,6 +227,7 @@ Fast targeted cleanup-chain tests:
 - Read `CODEBASE_PATTERNS_OVERVIEW.md`.
 - Read `MEALSCOUT_HANDOFF_SPINE.md`.
 - Run `node scripts/repoDoctor.mjs`.
+- Run `npm run gate:production`; use `SKIP_LIVE_PROBES=true npm run gate:production` only for local environments where live probes are inappropriate.
 - Run `npm run check`.
 - Run `npm run build`.
 - Open `server/routes.ts`.

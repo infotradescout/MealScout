@@ -36,12 +36,29 @@ function requireMatch(pattern: RegExp, label: string) {
   "Validation Commands",
   "Developer Onboarding Checklist",
   "Cleanup Tickets",
+  "Production Lockdown Baseline",
 ].forEach((snippet) => requireIncludes(snippet));
 
 requireIncludes(
   "MealScout is a local food discovery, profile, scheduling, and booking platform for food trucks, restaurants, hosts, customers, suppliers, and operators.",
   "plain MealScout definition",
 );
+
+[
+  "Production deploys require `npm run gate:production`",
+  "SKIP_LIVE_PROBES=true npm run gate:production",
+  "7aaa46f6",
+  "0c4faf0f",
+  "IndexNow key routing is protected by Vercel proxy rules and backend fallback logic",
+  "vercel.json` must route root IndexNow key files to Render before the SPA fallback",
+  "Parking Pass booking requires non-expired stored insurance verification",
+  "Uploaded insurance evidence alone is not enough",
+  "migrations/105_restaurant_insurance_verification_expiry.sql",
+  "insurance_verified",
+  "insurance_expires_at",
+  "Live mutation smokes for admin insurance verification or booking allowed/blocked states require dedicated fixtures, staging, or explicit production-test-record approval",
+  "Read-only production gate probes currently cover health, readiness, public profile, Scout, Parking Pass, IndexNow key URL, and admin launch-board auth protection",
+].forEach((snippet) => requireIncludes(snippet));
 
 [
   "MealScout is not Merlin.",
@@ -135,11 +152,14 @@ requireIncludes(
 ].forEach((snippet) => requireIncludes(snippet));
 
 [
+  "npm run gate:production",
   "npm run check",
   "npm run build",
   "npm run test",
   "npm run verify:routes",
   "node scripts/repoDoctor.mjs",
+  "node scripts/mealscout-production-readiness-gate.contract.test.ts",
+  "npx tsx scripts/admin-insurance-verification.contract.test.ts",
 ].forEach((snippet) => requireIncludes(snippet));
 
 const cleanupTickets = [...spine.matchAll(/^- C\d+ - /gm)];
