@@ -1,8 +1,8 @@
 /**
  * restaurantActivationService.ts
  *
- * Prompts restaurant owners to create their first deal if they haven't within 7 days of signup.
- * A second nudge fires at 14 days if they still haven't created a deal.
+ * Prompts restaurant owners to optionally add a deal if they haven't within 7 days of signup.
+ * A second nudge fires at 14 days if they still haven't added one.
  *
  * Runs via daily cron (3:30 AM). Idempotency via telemetryEvents.
  * Respects accountSettings.notifications.channels.email opt-out.
@@ -169,8 +169,8 @@ export class RestaurantActivationService {
     const name = firstName || "Restaurant Owner";
     const isFollowUp = step === "day14";
     const subject = isFollowUp
-      ? "⏰ Last reminder: Add a deal to your MealScout listing"
-      : "🎉 Your MealScout listing is live — add your first deal!";
+      ? "Optional next step: add a deal to your MealScout listing"
+      : "Your MealScout business listing is live";
 
     const html = `<!DOCTYPE html>
 <html lang="en">
@@ -182,24 +182,24 @@ export class RestaurantActivationService {
       <div style="margin:8px 0 0;font-size:16px;opacity:0.9;">Grow Your Restaurant</div>
     </div>
     <div style="padding:40px;">
-      <h2 style="color:#ff6b35;font-size:24px;margin:0 0 16px;">${isFollowUp ? "You're this close 🎯" : "One step left 🚀"}</h2>
-      <p>Hey ${name}!</p>
+      <h2 style="color:#ff6b35;font-size:24px;margin:0 0 16px;">Your MealScout business listing is live.</h2>
+      <p>Hi ${name},</p>
       ${
         isFollowUp
-          ? `<p>We noticed you haven't added a deal to your MealScout listing yet. Businesses with active deals get <strong>3-5x more profile views</strong> than those without.</p>
-           <p>It takes less than 2 minutes — just set a title, discount amount, and expiry date. That's it.</p>`
-          : `<p>Your MealScout business listing is live! The only thing standing between you and new customers is your first deal.</p>
-           <p>Deals get discovered through search, map, and weekly customer emails. <strong>Adding one deal is the single highest-leverage thing you can do right now.</strong></p>`
+          ? `<p>Deals are optional. If you want to add one, it can help your business appear in the MealScout Deals feed and give customers another reason to check you out.</p>
+           <p>You can also improve discovery by keeping your menu, photos, hours, schedule, and contact info updated.</p>`
+          : `<p>Deals are optional. Adding a deal can help your business appear in the MealScout Deals feed and give customers another reason to check you out.</p>
+           <p>You can also improve discovery by keeping your menu, photos, hours, schedule, and contact info updated.</p>`
       }
       <div style="background:#fff8f5;border-left:4px solid #ff6b35;padding:20px;margin:20px 0;border-radius:4px;">
-        <strong>How to create a deal in 2 minutes:</strong><br>
+        <strong>If you choose to add a deal:</strong><br>
         1. Log into your dashboard<br>
         2. Click "Add Deal" or go to your restaurant profile<br>
         3. Enter a title (e.g. "10% off tacos Tuesday"), discount, and end date<br>
-        4. Hit publish — customers will see it immediately
+        4. Hit publish — it can appear in MealScout deal surfaces when eligible
       </div>
       <div style="text-align:center;margin:30px 0;">
-        <a href="https://www.mealscout.us/restaurant-owner-dashboard" style="background:linear-gradient(135deg,#ff6b35 0%,#f7931e 100%);color:white;padding:14px 32px;text-decoration:none;border-radius:6px;font-weight:600;">Create My First Deal</a>
+        <a href="https://www.mealscout.us/restaurant-owner-dashboard" style="background:linear-gradient(135deg,#ff6b35 0%,#f7931e 100%);color:white;padding:14px 32px;text-decoration:none;border-radius:6px;font-weight:600;">Open My Dashboard</a>
       </div>
       <p style="font-size:13px;color:#999;">To unsubscribe, update your <a href="https://www.mealscout.us/profile" style="color:#ff6b35;">notification settings</a>.</p>
     </div>
@@ -210,7 +210,17 @@ export class RestaurantActivationService {
 </body>
 </html>`;
 
-    const text = `Hey ${name}! Your MealScout profile is live. Add your first deal in 2 minutes: https://www.mealscout.us/restaurant-owner-dashboard`;
+    const text = `Hi ${name},
+
+Your MealScout business listing is live.
+
+Deals are optional. Adding a deal can help your business appear in the MealScout Deals feed and give customers another reason to check you out.
+
+You can also improve discovery by keeping your menu, photos, hours, schedule, and contact info updated.
+
+Open your dashboard: https://www.mealscout.us/restaurant-owner-dashboard
+
+To unsubscribe, update your notification settings: https://www.mealscout.us/profile`;
     return emailService.sendBasicEmail(to, subject, html, text, "marketing");
   }
 }

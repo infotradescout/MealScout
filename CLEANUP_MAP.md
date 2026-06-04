@@ -82,6 +82,22 @@ Validation command: `node scripts/mealscout-launch-board-sql-safety-map.contract
 
 Handoff value: Launch Board changes have a schema-safety checklist before cleanup starts.
 
+## C5A - MealScout Email + Copy Audit
+
+Status: `DONE`
+
+Goal: Audit automated MealScout email/user-facing notification copy and correct production-risky brand/deal activation claims.
+
+Files likely touched: `MEALSCOUT_EMAIL_COPY_AUDIT.md`, `scripts/mealscout-email-copy-audit.contract.test.ts`, email/template source files such as `server/restaurantActivationService.ts`.
+
+Allowed changes: Documentation, static copy contracts, and narrow production-correctness copy fixes.
+
+Disallowed changes: New product features, new email campaigns, provider changes, scheduler behavior changes, or live email sends.
+
+Validation command: `node scripts/mealscout-email-copy-audit.contract.test.ts`.
+
+Handoff value: A developer knows which automated emails exist, what claims are allowed, and which copy regressions are blocked.
+
 ## C6 - Parking Pass Page Decomposition Map
 
 Status: `DONE`
