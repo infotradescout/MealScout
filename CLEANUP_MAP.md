@@ -148,23 +148,23 @@ Handoff value: A developer knows the safe extraction order for Parking Pass with
 
 ## C7 - Owner Dashboard Decomposition Map
 
-Status: `NEXT`
+Status: `DONE`
 
 Goal: Map `client/src/pages/restaurant-owner-dashboard.tsx` owner/truck/profile/menu/schedule concerns and extraction order.
 
-Files likely touched: `client/src/pages/restaurant-owner-dashboard.tsx`, owner dashboard docs/contracts.
+Files likely touched: `MEALSCOUT_OWNER_DASHBOARD_DECOMPOSITION_MAP.md`, `scripts/mealscout-owner-dashboard-decomposition-map.contract.test.ts`, `client/src/pages/restaurant-owner-dashboard.tsx` only for read-only references if needed.
 
 Allowed changes: Documentation, static contracts, and read-only inventories.
 
 Disallowed changes: Owner access changes, profile save behavior changes, menu writes, schedule writes, or subscription gating changes.
 
-Validation command: `npm run check`.
+Validation command: `node scripts/mealscout-owner-dashboard-decomposition-map.contract.test.ts`.
 
 Handoff value: Owner dashboard cleanup can proceed in small verified slices.
 
 ## C8 - Public/Auth Route Boundary Audit
 
-Status: `QUEUED`
+Status: `NEXT`
 
 Goal: Verify guest/authenticated frontend routes, public route prefixes, and server auth middleware alignment.
 
