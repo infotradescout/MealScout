@@ -1,6 +1,6 @@
 # MealScout Affiliate Referral Capture Audit
 
-Status: `Production hotfix - Diner signup and affiliate referral public routing`
+Status: `Production hotfix - Customer signup and affiliate referral public routing`
 
 This audit documents current public referral capture for guest links such as `/scout?ref=<tag>`. It is a production stabilization note, not an affiliate product redesign.
 

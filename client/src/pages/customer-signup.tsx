@@ -105,7 +105,7 @@ const signupFlowOptions: SignupFlowOption[] = [
   {
     id: "diner",
     accountType: "diner",
-    label: "Diner",
+    label: "Customer",
     description: "Save favorite spots, deals, and local food finds.",
     href: "/customer-signup?role=diner",
     icon: UserPlus,
@@ -814,7 +814,7 @@ export default function CustomerSignup() {
       <div className="min-h-screen bg-[var(--bg-layered)] flex flex-col">
         <SEOHead
           title="Sign Up - MealScout | Choose Account Type"
-          description="Choose the MealScout account path that fits you: diner, food truck, restaurant, chef, host, event organizer, or supplier."
+          description="Choose the MealScout account path that fits you: customer, food truck, restaurant, chef, host, event organizer, or supplier."
           canonicalUrl="https://www.mealscout.us/customer-signup"
           noIndex={true}
         />
@@ -905,7 +905,7 @@ export default function CustomerSignup() {
                     : "bg-transparent text-[color:var(--text-secondary)] hover:bg-[var(--bg-surface-muted)]"
                 }`}
               >
-                Diner
+                Customer
               </button>
               <button
                 type="button"
@@ -1015,7 +1015,7 @@ export default function CustomerSignup() {
               {accountType === "business"
                 ? "Create your personal login first. Then we’ll attach and finish the business profile you manage."
                 : accountType === "host"
-                ? "Post and manage parking-host locations for trucks and local diners."
+                ? "Post and manage parking-host locations for trucks and local customers."
                 : accountType === "event_organizer"
                 ? "Publish events, coordinate vendor attendance, and manage event demand."
                 : accountType === "supplier"
@@ -1046,7 +1046,7 @@ export default function CustomerSignup() {
                           ? "Event organizer"
                           : accountType === "supplier"
                             ? "Supplier"
-                            : "Diner"}
+                            : "Customer"}
                   </div>
                   <p className="text-xs text-[color:var(--text-secondary)]">
                     Need a different path? Go back to the role picker.
@@ -1084,7 +1084,7 @@ export default function CustomerSignup() {
                       : "bg-transparent text-[color:var(--text-secondary)] hover:bg-[var(--bg-surface-muted)]"
                   }`}
                 >
-                  Diner
+                  Customer
                 </button>
                 <button
                   type="button"
@@ -1697,7 +1697,7 @@ export default function CustomerSignup() {
                 </svg>
                 <span>
                   {accountType === "business"
-                    ? "Local diners get the savings"
+                    ? "Local customers get the savings"
                     : "Instant Access"}
                 </span>
               </div>

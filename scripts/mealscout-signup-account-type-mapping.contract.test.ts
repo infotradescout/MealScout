@@ -10,8 +10,9 @@ const audit = readFileSync(auditPath, "utf8");
 const customerSignup = readFileSync("client/src/pages/customer-signup.tsx", "utf8");
 const app = readFileSync("client/src/App.tsx", "utf8");
 const unifiedAuth = readFileSync("server/unifiedAuth.ts", "utf8");
+const emailService = readFileSync("server/emailService.ts", "utf8");
 const schema = readFileSync("shared/schema.ts", "utf8");
-const combined = `${audit}\n${customerSignup}\n${app}\n${unifiedAuth}\n${schema}`;
+const combined = `${audit}\n${customerSignup}\n${app}\n${unifiedAuth}\n${emailService}\n${schema}`;
 
 function requireIncludes(source: string, snippet: string, label = snippet) {
   if (!source.toLowerCase().includes(snippet.toLowerCase())) {
@@ -20,21 +21,21 @@ function requireIncludes(source: string, snippet: string, label = snippet) {
 }
 
 [
-  "`Diner` is a user-facing label",
-  "`diner` in `/customer-signup?role=diner` maps to the existing `customer` registration behavior",
+  "`Customer` is the user-facing signup label",
+  "`diner` in `/customer-signup?role=diner` is a legacy alias that maps to the existing `customer` registration behavior",
   "No `diner` database role or `userType` is introduced",
   "`ref` is referral metadata only",
   "/customer-signup?role=diner` is a public, guest-safe route",
   "/customer-signup?role=diner` must enter the normal customer signup form instead of staying on the account-type chooser",
-  "Clicking the `Diner` card must mark the signup flow selected locally",
-  "Diner UI selection is normalized before chooser/form gating and still submits the canonical existing `customer` account type",
+  "Clicking the `Customer` card must mark the signup flow selected locally",
+  "Customer UI selection is normalized through the legacy `diner` flow key before chooser/form gating and still submits the canonical existing `customer` account type",
   "Unauthenticated `/api/auth/user` returning 401 on signup pages is guest-safe and non-fatal",
 ].forEach((snippet) => requireIncludes(audit, snippet, `audit ${snippet}`));
 
 [
   'id: "diner"',
   'accountType: "diner"',
-  'label: "Diner"',
+  'label: "Customer"',
   'href: "/customer-signup?role=diner"',
   'type AccountType = "diner" | "host" | "event_organizer" | "business" | "supplier"',
   "const normalizeSignupRole =",
@@ -53,6 +54,22 @@ function requireIncludes(source: string, snippet: string, label = snippet) {
   'preserveReferralHref(option.href)',
 ].forEach((snippet) => requireIncludes(customerSignup, snippet, `customer signup ${snippet}`));
 
+[
+  'label: "Diner"',
+  ">Diner<",
+  "Choose the MealScout account path that fits you: diner,",
+].forEach((snippet) => {
+  if (customerSignup.includes(snippet)) {
+    throw new Error(`Signup UI must not display Diner as the account type label: ${snippet}`);
+  }
+});
+
+[
+  "Customer",
+  "local customers",
+  "Local customers get the savings",
+].forEach((snippet) => requireIncludes(customerSignup, snippet, `customer signup visible copy ${snippet}`));
+
 if (!app.includes('<Route path="/customer-signup" component={CustomerSignup} />')) {
   throw new Error("/customer-signup route must exist and not route to 404.");
 }
@@ -67,6 +84,13 @@ if (/if\s*\(!hasExplicitSignupFlow\)/.test(customerSignup)) {
 
 if (!unifiedAuth.includes('app.post("/api/auth/customer/register"')) {
   throw new Error("Existing customer registration endpoint must remain present.");
+}
+
+if (
+  !emailService.includes('customer: "Customer"') ||
+  emailService.includes('customer: "Diner"')
+) {
+  throw new Error("Email/admin display copy must label canonical customer accounts as Customer.");
 }
 
 if (/\buserType\b[^;\n]*\bdiner\b/i.test(schema) || /\bdiner\b/.test(schema)) {

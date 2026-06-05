@@ -156,7 +156,7 @@ interface PremiumWeeklySummaryEmailData {
 class EmailTemplates {
   public static getUserTypeDisplay(userType?: string | null): string {
     const labels: Record<string, string> = {
-      customer: "Diner",
+      customer: "Customer",
       restaurant_owner: "Restaurant Owner",
       food_truck: "Food Truck",
       caterer: "Caterer",
