@@ -242,7 +242,7 @@ export async function resolveUserContinuation(params: {
     reason = "Add at least one menu item so customers can discover your business.";
   } else if (isBusinessUser && scheduleRequired && !hasSchedule) {
     nextRequiredStep = "schedule";
-    continuationPath = "/parking-pass-manage";
+    continuationPath = "/restaurant-owner-dashboard?setup=schedule";
     reason = "Schedule and location setup is still required.";
   } else if (isBusinessUser && verificationRequired && !businessInsuranceSubmitted) {
     nextRequiredStep = "verification";
