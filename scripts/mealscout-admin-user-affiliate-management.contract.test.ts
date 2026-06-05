@@ -10,6 +10,9 @@ const requiredAuditSnippets = [
   "Admins manage affiliates.",
   "Admins are not affiliates.",
   "The admin user card includes an `Affiliate Management` section.",
+  "The canonical primary affiliate link is always `https://www.mealscout.us/?ref=<affiliateTag>`.",
+  "`Copy Link` and `Open Link` use the canonical root referral URL.",
+  "Public truck, restaurant, or location profile URLs are not used as the primary `Affiliate Link`.",
   "client/src/pages/AdminAffiliateManagement.tsx` remains an aggregate affiliate reporting/overview surface",
   "Not applicable for internal admin accounts.",
   "The internal admin focus URL is not copied from the user card.",
@@ -34,7 +37,7 @@ const requiredDashboardSnippets = [
   "return `/p/${profileType}/${encodeURIComponent(restaurantId)}/${encodeURIComponent(slug || restaurantId)}`;",
   "return `/p/location/${encodeURIComponent(hostId)}/${encodeURIComponent(slug || hostId)}`;",
   "const buildCanonicalAffiliateLink = (",
-  "const profilePath = getAdminUserPublicProfilePath(user, attachedHostProfile);",
+  "const url = new URL(\"/\", canonicalMealScoutOrigin);",
   "url.searchParams.set(\"ref\", tag);",
   "Affiliate Management",
   "Affiliate Link",
@@ -64,12 +67,12 @@ for (const snippet of requiredDashboardSnippets) {
   }
 }
 
-const affiliateSectionIndex = dashboard.indexOf("Affiliate Link");
+const managementSectionIndex = dashboard.indexOf("Affiliate Management");
+const affiliateSectionIndex = dashboard.indexOf("Affiliate Link", managementSectionIndex);
 const affiliateCopyIndex = dashboard.indexOf("Copy Link", affiliateSectionIndex);
 if (affiliateSectionIndex === -1 || affiliateCopyIndex === -1) {
   throw new Error("Admin user card must contain Affiliate Link section with Copy Link");
 }
-const managementSectionIndex = dashboard.indexOf("Affiliate Management");
 if (managementSectionIndex === -1 || affiliateSectionIndex === -1) {
   throw new Error("Affiliate management section must exist inside the admin user card");
 }
@@ -112,11 +115,26 @@ if (openLinkHandler.includes("/admin/dashboard") || !openLinkHandler.includes("a
 const affiliateBuilderIndex = dashboard.indexOf("const buildCanonicalAffiliateLink = (");
 const affiliateBuilderSlice = dashboard.slice(affiliateBuilderIndex, dashboard.indexOf("const businessTypeOptions"));
 if (
-  !affiliateBuilderSlice.includes("const profilePath = getAdminUserPublicProfilePath(user, attachedHostProfile);") ||
+  !affiliateBuilderSlice.includes("const url = new URL(\"/\", canonicalMealScoutOrigin);") ||
   !affiliateBuilderSlice.includes("url.searchParams.set(\"ref\", tag);") ||
+  affiliateBuilderSlice.includes("getAdminUserPublicProfilePath(") ||
+  affiliateBuilderSlice.includes("/p/truck") ||
+  affiliateBuilderSlice.includes("/p/restaurant") ||
+  affiliateBuilderSlice.includes("/p/location") ||
   affiliateBuilderSlice.includes("/admin/dashboard")
 ) {
-  throw new Error("Affiliate link fallback must be public profile/homepage with ref tag, never admin URL");
+  throw new Error("Primary Affiliate Link must be the root referral URL, never profile/admin URL");
+}
+
+const affiliateDisplaySlice = dashboard.slice(affiliateSectionIndex, dashboard.indexOf("Internal token", affiliateSectionIndex));
+if (
+  affiliateDisplaySlice.includes("/p/truck") ||
+  affiliateDisplaySlice.includes("/p/restaurant") ||
+  affiliateDisplaySlice.includes("/p/location") ||
+  affiliateDisplaySlice.includes("focusUser") ||
+  affiliateDisplaySlice.includes("/admin/dashboard")
+) {
+  throw new Error("Primary Affiliate Link display/copy/open must not use profile or admin paths");
 }
 
 const notApplicableIndex = dashboard.indexOf("Not applicable for internal admin accounts.");

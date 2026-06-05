@@ -32,11 +32,9 @@ Affiliate management belongs inside the admin user card. This audit records the 
 
 - The admin user card includes an `Affiliate Management` section.
 - The primary user-facing link label remains `Affiliate Link`.
-- For affiliate-eligible users with an attached public profile, the public link is:
-  - `https://www.mealscout.us/p/truck/<profileId>/<slug>?ref=<affiliateTag>`
-  - `https://www.mealscout.us/p/restaurant/<profileId>/<slug>?ref=<affiliateTag>`
-  - `https://www.mealscout.us/p/location/<profileId>/<slug>?ref=<affiliateTag>`
-- For affiliate-eligible users with no attached public profile, the fallback is `https://www.mealscout.us/?ref=<affiliateTag>`.
+- The canonical primary affiliate link is always `https://www.mealscout.us/?ref=<affiliateTag>`.
+- `Copy Link` and `Open Link` use the canonical root referral URL.
+- Public truck, restaurant, or location profile URLs are not used as the primary `Affiliate Link`.
 - For eligible users without a tag, the card shows `No affiliate link assigned`.
 - For internal admin-family accounts, the card shows `Not applicable for internal admin accounts.` and hides `Copy Link` / `Open Link`.
 - The internal admin focus URL is not copied from the user card.
@@ -46,7 +44,7 @@ Affiliate management belongs inside the admin user card. This audit records the 
 
 ## Test Guarding It
 
-- `scripts/mealscout-admin-user-affiliate-management.contract.test.ts` verifies public affiliate URLs are built from existing profile fields and `?ref=`.
+- `scripts/mealscout-admin-user-affiliate-management.contract.test.ts` verifies the primary affiliate URL is the canonical root referral URL: `https://www.mealscout.us/?ref=<affiliateTag>`.
 - `scripts/mealscout-admin-user-affiliate-management.contract.test.ts` verifies `Copy Link` and `Open Link` operate on the public affiliate link, not `/admin/dashboard`.
 - `scripts/mealscout-admin-user-affiliate-management.contract.test.ts` verifies `Copy Admin Link` is absent.
 - `scripts/mealscout-admin-user-affiliate-management.contract.test.ts` verifies supported single-user affiliate settings are in the admin user card.

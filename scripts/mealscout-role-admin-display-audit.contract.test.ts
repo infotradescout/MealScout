@@ -72,7 +72,7 @@ const requiredDashboardSnippets = [
   "<option value=\"super_admin\">Super Admin</option>",
   "event_coordinator: { userType: \"event_coordinator\"",
   "const buildCanonicalAffiliateLink = (",
-  "const profilePath = getAdminUserPublicProfilePath(user, attachedHostProfile);",
+  "const url = new URL(\"/\", canonicalMealScoutOrigin);",
   "url.searchParams.set(\"ref\", tag);",
   "Affiliate Link",
   "Copy Link",
@@ -84,6 +84,24 @@ for (const snippet of requiredDashboardSnippets) {
   if (!adminDashboard.includes(snippet)) {
     throw new Error(`Missing admin dashboard role/display guard: ${snippet}`);
   }
+}
+
+const affiliateBuilderIndex = adminDashboard.indexOf("const buildCanonicalAffiliateLink = (");
+const affiliateBuilderSlice = adminDashboard.slice(
+  affiliateBuilderIndex,
+  adminDashboard.indexOf("const getSafeAuthProviderLabel", affiliateBuilderIndex),
+);
+if (
+  affiliateBuilderIndex === -1 ||
+  !affiliateBuilderSlice.includes("const url = new URL(\"/\", canonicalMealScoutOrigin);") ||
+  affiliateBuilderSlice.includes("getAdminUserPublicProfilePath(") ||
+  affiliateBuilderSlice.includes("/p/truck") ||
+  affiliateBuilderSlice.includes("/p/restaurant") ||
+  affiliateBuilderSlice.includes("/p/location") ||
+  affiliateBuilderSlice.includes("/admin/dashboard") ||
+  affiliateBuilderSlice.includes("focusUser")
+) {
+  throw new Error("Admin primary Affiliate Link must use root ?ref URL, not profile/admin paths");
 }
 
 const forbiddenDashboardSnippets = [
