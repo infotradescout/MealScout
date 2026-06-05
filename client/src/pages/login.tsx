@@ -44,6 +44,7 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [showRecoveryHelp, setShowRecoveryHelp] = useState(false);
   const redirectPath = getSafeRedirectPath();
   const buildAuthPath = (basePath: string) => {
     const params = new URLSearchParams(window.location.search);
@@ -124,6 +125,7 @@ export default function Login() {
 
     setIsLoggingIn(true);
     setNeedsVerification(false);
+    setShowRecoveryHelp(false);
     try {
       const { response, data: payload } = await attemptLoginWithRetry();
 
@@ -175,9 +177,12 @@ export default function Login() {
       } catch {}
       window.location.href = redirectPath || "/";
     } catch (error: any) {
+      setShowRecoveryHelp(true);
       toast({
         title: "Login Failed",
-        description: error.message || "Invalid email or password.",
+        description:
+          error.message ||
+          "Invalid email or password. If you cannot sign in, reset your password.",
         variant: "destructive",
       });
     } finally {
@@ -376,6 +381,16 @@ export default function Login() {
                   Create Account
                 </button>
               </Link>
+
+              <div className="text-center">
+                <Link
+                  href="/forgot-password"
+                  className="text-[color:var(--accent-text)] hover:text-[color:var(--accent-text-hover)] text-sm underline underline-offset-4"
+                  data-testid="link-forgot-password-options"
+                >
+                  Forgot or need to reset your password?
+                </Link>
+              </div>
             </div>
           ) : (
             <form onSubmit={handleEmailLogin} className="space-y-4">
@@ -422,6 +437,27 @@ export default function Login() {
                 ) : null}
                 {isLoggingIn ? "Signing In..." : "Sign In"}
               </button>
+
+              {showRecoveryHelp ? (
+                <div
+                  className="rounded-xl border border-[color:var(--status-warning)]/40 bg-[color:var(--status-warning)]/10 p-4 text-sm"
+                  data-testid="login-recovery-help"
+                >
+                  <p className="font-medium text-[color:var(--text-primary)]">
+                    Having trouble signing in?
+                  </p>
+                  <p className="mt-1 text-[color:var(--text-secondary)]">
+                    If your password is not working, request a secure reset link.
+                  </p>
+                  <Link
+                    href="/forgot-password"
+                    className="mt-3 inline-block text-[color:var(--accent-text)] underline underline-offset-4 hover:text-[color:var(--accent-text-hover)]"
+                    data-testid="link-login-error-reset-password"
+                  >
+                    Reset your password
+                  </Link>
+                </div>
+              ) : null}
 
               {needsVerification ? (
                 <div className="rounded-xl border border-[color:var(--status-warning)]/40 bg-[color:var(--status-warning)]/10 p-4 text-sm">
