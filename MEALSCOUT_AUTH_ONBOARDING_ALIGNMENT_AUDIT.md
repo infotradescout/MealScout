@@ -10,6 +10,7 @@ This audit documents the current MealScout account lifecycle from entry source t
 - Email verification, business/profile verification, insurance verification, and claim verification are separate checks.
 - Customer accounts do not require business attachment.
 - Host Parking Pass management must remain free from unrelated paid business gates where the current product intends free management access.
+- OAuth success query params are hints only; `/api/auth/user` is the only confirmed signed-in state.
 - Code-supported roles only: `customer`, `restaurant_owner`, `food_truck`, `host`, `event_coordinator`, `supplier`, `staff`, `admin`, `duper_admin`, `super_admin`, plus existing legacy/unknown handling where code already supports it.
 
 ## Entry Source Matrix
@@ -58,6 +59,8 @@ This audit documents the current MealScout account lifecycle from entry source t
 
 - `/account-setup` must not be used as an OAuth fallback or account handoff target without a `token`.
 - Normal login must not route to `/account-setup` unless a setup token or explicit setup invite context exists.
+- OAuth `auth=success` must not be treated as signed in until `/api/auth/user` returns a user.
+- Protected account endpoints such as `/api/affiliate/tag` and `/api/business-access/me` must wait for confirmed auth and use same-origin MealScout API routing so session cookies remain aligned.
 - `client/src/pages/post-verification.tsx` must reject stored/query redirects back to `/account-setup` unless the URL includes a setup token.
 - `server/services/loginContinuation.ts` returns `/account-setup` for incomplete account onboarding; that is only safe when the user has a setup token or a separate authenticated edit/setup route exists.
 - OAuth routes in `server/unifiedAuth.ts` must preserve safe redirect/userType intent and call continuation logic when no explicit redirect is present.
@@ -69,6 +72,9 @@ This audit documents the current MealScout account lifecycle from entry source t
 - `client/src/pages/account-setup.tsx` now treats missing `token` as a clear failure/escape state instead of showing `Validating setup link...` indefinitely.
 - Authenticated users who reach `/account-setup` without a token immediately continue to a safe role/dashboard target rather than seeing setup-link or account-handoff UI.
 - OAuth and normal-login redirects reject bare `/account-setup` unless the URL includes a setup token.
+- `client/src/hooks/useAuth.ts` keeps OAuth redirects in a pending auth state until `/api/auth/user` confirms the user; a null/401 result clears `auth=success` and routes to login recovery.
+- `client/src/lib/api.ts` keeps protected account calls same-origin on MealScout hosts, matching the `/api/auth/user` session-cookie path.
+- `client/src/pages/login.tsx` shows a session-not-completed recovery message after failed OAuth confirmation.
 - No roles were added.
 - No route names were changed.
 - No payment, verification, claim, or permission logic was changed.

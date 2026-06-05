@@ -1,14 +1,38 @@
 import { useQuery } from "@tanstack/react-query";
 import { getQueryFn } from "@/lib/queryClient";
 import type { User } from "@shared/schema";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { setAffiliateRef } from "@/lib/share";
 
 export type AuthState = "loading" | "authenticated" | "guest";
 
+function hasOAuthCompletionHint() {
+  if (typeof window === "undefined") return false;
+  const urlParams = new URLSearchParams(window.location.search);
+  return (
+    urlParams.has("code") ||
+    urlParams.has("state") ||
+    urlParams.get("auth") === "success" ||
+    window.location.pathname.includes("/callback")
+  );
+}
+
+function clearOAuthCompletionParams() {
+  if (typeof window === "undefined") return;
+  const url = new URL(window.location.href);
+  url.searchParams.delete("auth");
+  url.searchParams.delete("t");
+  url.searchParams.delete("code");
+  url.searchParams.delete("state");
+  window.history.replaceState({}, "", url.pathname + url.search + url.hash);
+}
+
 export function useAuth() {
   const [, setLocation] = useLocation();
+  const [oauthConfirmationPending, setOauthConfirmationPending] = useState(() =>
+    hasOAuthCompletionHint(),
+  );
   const {
     data: user,
     isLoading,
@@ -69,7 +93,7 @@ export function useAuth() {
   });
 
   const authState: AuthState =
-    isLoading || (isError && !user)
+    isLoading || oauthConfirmationPending || (isError && !user)
       ? "loading"
       : user
       ? "authenticated"
@@ -144,28 +168,40 @@ export function useAuth() {
     }
   }, [user?.affiliateTag, user?.id]);
 
-  // Check for OAuth redirect completion and refresh auth state
+  // Check for OAuth redirect completion and confirm the session with /api/auth/user.
   useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const hasAuthParams =
-      urlParams.has("code") ||
-      urlParams.has("state") ||
-      urlParams.has("auth") ||
-      window.location.pathname.includes("/callback");
+    const hasAuthParams = hasOAuthCompletionHint();
 
     if (hasAuthParams) {
       console.log("🔄 OAuth redirect detected, refreshing auth state");
       // Short delay to ensure session is established
       const timeoutId = setTimeout(() => {
-        refetch();
+        setOauthConfirmationPending(true);
+        refetch()
+          .then((result) => {
+            clearOAuthCompletionParams();
+            if (!result.data) {
+              setAffiliateRef(null);
+              setOauthConfirmationPending(false);
+              setLocation("/login?error=session_not_completed");
+              return;
+            }
+            setOauthConfirmationPending(false);
+          })
+          .catch(() => {
+            clearOAuthCompletionParams();
+            setAffiliateRef(null);
+            setOauthConfirmationPending(false);
+            setLocation("/login?error=session_not_completed");
+          });
       }, 500);
 
       return () => clearTimeout(timeoutId);
     }
-  }, [refetch]);
+  }, [refetch, setLocation]);
 
   return {
-    user,
+    user: oauthConfirmationPending ? undefined : user,
     isLoading,
     isError,
     error,

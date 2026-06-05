@@ -54,11 +54,14 @@ export function apiUrl(path: string): string {
       host.endsWith(".mealscout.us");
     const isAuthPath = path.startsWith("/api/auth/");
     const isAdminPath = path.startsWith("/api/admin/");
+    const isProtectedAccountPath =
+      path.startsWith("/api/affiliate/") ||
+      path.startsWith("/api/business-access/");
     // Keep auth/session bootstrap same-origin on MealScout hosts so OAuth/session
     // cookies remain first-party and survive mobile browser privacy rules.
-    // Keep admin routes same-origin as well because admin sessions are scoped to
-    // the frontend host and cross-origin calls can appear as anonymous.
-    if (isMealScoutHost && (isAuthPath || isAdminPath)) {
+    // Keep admin and protected account routes same-origin as well because sessions
+    // are scoped to the frontend host and cross-origin calls can appear anonymous.
+    if (isMealScoutHost && (isAuthPath || isAdminPath || isProtectedAccountPath)) {
       return path.startsWith("/") ? path : `/${path}`;
     }
   }

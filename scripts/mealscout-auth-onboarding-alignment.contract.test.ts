@@ -10,6 +10,7 @@ const accountSetup = readFileSync("client/src/pages/account-setup.tsx", "utf8");
 const login = readFileSync("client/src/pages/login.tsx", "utf8");
 const app = readFileSync("client/src/App.tsx", "utf8");
 const useAuth = readFileSync("client/src/hooks/useAuth.ts", "utf8");
+const api = readFileSync("client/src/lib/api.ts", "utf8");
 const postVerification = readFileSync("client/src/pages/post-verification.tsx", "utf8");
 const unifiedAuth = readFileSync("server/unifiedAuth.ts", "utf8");
 const authAccountRoutes = readFileSync("server/routes/authAccountRoutes.ts", "utf8");
@@ -34,6 +35,9 @@ const requiredAuditSnippets = [
   "Email verification, business/profile verification, insurance verification, and claim verification are separate checks.",
   "Customer accounts do not require business attachment.",
   "Host Parking Pass management must remain free from unrelated paid business gates",
+  "OAuth success query params are hints only",
+  "`/api/auth/user` is the only confirmed signed-in state",
+  "Protected account endpoints such as `/api/affiliate/tag` and `/api/business-access/me` must wait for confirmed auth",
   "Missing token while unauthenticated: show `Setup Link Required`",
   "Missing token while authenticated: immediately continue to the normal dashboard/continuation target",
   "Normal login must not route to `/account-setup` unless a setup token or explicit setup invite context exists.",
@@ -190,6 +194,45 @@ if (
   useAuth.includes("nextRequiredStep === \"account_onboarding\" ||")
 ) {
   throw new Error("Authenticated normal login must not be pushed to /account-setup by useAuth without token");
+}
+
+const oauthConfirmationSnippets = [
+  "oauthConfirmationPending",
+  "hasOAuthCompletionHint",
+  "clearOAuthCompletionParams",
+  "urlParams.get(\"auth\") === \"success\"",
+  "refetch()",
+  "if (!result.data)",
+  "setAffiliateRef(null)",
+  "setLocation(\"/login?error=session_not_completed\")",
+  "user: oauthConfirmationPending ? undefined : user",
+];
+
+for (const snippet of oauthConfirmationSnippets) {
+  if (!useAuth.includes(snippet)) {
+    throw new Error(`OAuth auth-success confirmation guard missing: ${snippet}`);
+  }
+}
+
+if (
+  !useAuth.includes("isLoading || oauthConfirmationPending") ||
+  !useAuth.includes("clearOAuthCompletionParams();") ||
+  !useAuth.includes("setOauthConfirmationPending(false)")
+) {
+  throw new Error("OAuth auth-success must remain pending until /api/auth/user confirms or fails");
+}
+
+if (!login.includes("session_not_completed") || !login.includes("Login Session Not Completed")) {
+  throw new Error("Login page must show recovery copy when OAuth session confirmation fails");
+}
+
+if (
+  !api.includes("isProtectedAccountPath") ||
+  !api.includes("path.startsWith(\"/api/affiliate/\")") ||
+  !api.includes("path.startsWith(\"/api/business-access/\")") ||
+  !api.includes("isAuthPath || isAdminPath || isProtectedAccountPath")
+) {
+  throw new Error("Protected affiliate/business-access calls must use same-origin routing on MealScout hosts");
 }
 
 const routeInventory = [

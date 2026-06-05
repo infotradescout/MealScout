@@ -230,6 +230,14 @@ export default function Login() {
         description: "Your email is verified. Log in to continue.",
       });
     }
+    if (params.get("error") === "session_not_completed") {
+      toast({
+        title: "Login Session Not Completed",
+        description:
+          "MealScout could not confirm your signed-in session. Please log in again.",
+        variant: "destructive",
+      });
+    }
   }, [toast]);
 
   if (isLoading) {
