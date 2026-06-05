@@ -311,6 +311,95 @@ export function registerUserAdminRoutes(
   );
 
   app.post(
+    "/api/admin/users/:id/send-password-reset",
+    isAuthenticated,
+    isStaffOrAdmin,
+    async (req: any, res) => {
+      if (denyStaffEdits(req, res)) return;
+      const genericMessage =
+        "If the account supports password reset, a reset link has been sent.";
+      try {
+        const user = await storage.getUser(req.params.id);
+        if (!user) {
+          return res.status(404).json({ message: "User not found" });
+        }
+        if (!user.email || !user.passwordHash || !emailService.isAvailable()) {
+          return res.json({ message: genericMessage });
+        }
+
+        const tokenId = crypto.randomBytes(16).toString("hex");
+        const verifier = crypto.randomBytes(32).toString("hex");
+        const resetToken = `${tokenId}.${verifier}`;
+        const tokenHash = crypto
+          .createHash("sha256")
+          .update(verifier)
+          .digest("hex");
+        const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+
+        await storage.deleteUserResetTokens(user.id);
+        await storage.createPasswordResetToken({
+          userId: user.id,
+          tokenHash,
+          expiresAt,
+          requestIp: req.ip || req.connection.remoteAddress || undefined,
+          userAgent: req.get("User-Agent") || undefined,
+        });
+
+        const baseUrl = (
+          process.env.PUBLIC_BASE_URL ||
+          process.env.CLIENT_ORIGIN ||
+          `${req.protocol}://${req.get("host")}` ||
+          "https://www.mealscout.us"
+        ).replace(/\/+$/, "");
+        const resetUrl = `${baseUrl}/reset-password?token=${encodeURIComponent(
+          resetToken,
+        )}`;
+
+        await emailService.sendPasswordResetEmail(user, resetUrl);
+
+        res.json({ message: genericMessage });
+      } catch (error: any) {
+        console.error("Error sending admin password reset email:", error);
+        res.status(500).json({
+          message: "Unable to send password reset email",
+        });
+      }
+    },
+  );
+
+  app.post(
+    "/api/admin/users/:id/force-password-reset",
+    isAuthenticated,
+    isStaffOrAdmin,
+    async (req: any, res) => {
+      if (denyStaffEdits(req, res)) return;
+      try {
+        const user = await storage.getUser(req.params.id);
+        if (!user) {
+          return res.status(404).json({ message: "User not found" });
+        }
+
+        if (user.passwordHash) {
+          await db
+            .update(users)
+            .set({ mustResetPassword: true, updatedAt: new Date() })
+            .where(eq(users.id, user.id));
+        }
+
+        res.json({
+          message:
+            "If the account supports password login, password reset will be required on next login.",
+        });
+      } catch (error: any) {
+        console.error("Error forcing password reset:", error);
+        res.status(500).json({
+          message: "Unable to force password reset",
+        });
+      }
+    },
+  );
+
+  app.post(
     "/api/admin/users/:id/verify",
     isAuthenticated,
     isStaffOrAdmin,

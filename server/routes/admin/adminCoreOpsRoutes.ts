@@ -73,6 +73,27 @@ const overlapRatio = (left: unknown, right: unknown) => {
   return shared / Math.max(leftTokens.size, rightTokens.size);
 };
 
+const getSafeAuthDiagnostics = (user: any) => {
+  const hasPasswordLogin = Boolean(user?.passwordHash);
+  const hasGoogleAuth = Boolean(user?.googleId);
+  const hasFacebookAuth = Boolean(user?.facebookId);
+  const authProvider = hasPasswordLogin
+    ? "password"
+    : hasGoogleAuth
+      ? "Google"
+      : hasFacebookAuth
+        ? "Facebook"
+        : "unknown";
+
+  return {
+    authProvider,
+    hasPasswordLogin,
+    hasGoogleAuth,
+    hasFacebookAuth,
+    requiresPasswordReset: Boolean(user?.mustResetPassword),
+  };
+};
+
 const normalizePhone = (value: unknown) => String(value || "").replace(/[^\d]/g, "");
 
 const normalizeDomain = (value: unknown) => {
@@ -2082,6 +2103,9 @@ export function registerAdminCoreOpsRoutes(app: Express) {
     async (_req: any, res) => {
       try {
         const allUsers = await storage.getAllUsers();
+        const authDiagnosticsByUserId = new Map(
+          allUsers.map((user: any) => [String(user.id), getSafeAuthDiagnostics(user)]),
+        );
         const sanitized = sanitizeUsers(allUsers, { includeStripe: true });
 
         // Attach business name from restaurants table (left join by owner_id)
@@ -2143,6 +2167,13 @@ export function registerAdminCoreOpsRoutes(app: Express) {
 
         const withBusiness = sanitized.map((u: any) => ({
           ...u,
+          ...(authDiagnosticsByUserId.get(String(u.id)) || {
+            authProvider: "unknown",
+            hasPasswordLogin: false,
+            hasGoogleAuth: false,
+            hasFacebookAuth: false,
+            requiresPasswordReset: false,
+          }),
           businessName:
             u.businessName || restaurantByOwner.get(u.id)?.name || null,
           restaurantId: restaurantByOwner.get(u.id)?.id || null,

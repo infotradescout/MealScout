@@ -182,6 +182,14 @@ const buildCanonicalAffiliateLink = (
   return url.toString();
 };
 
+const getSafeAuthProviderLabel = (user: any) => {
+  const provider = String(user?.authProvider || "").toLowerCase();
+  if (provider === "password") return "Password";
+  if (provider === "google") return "Google";
+  if (provider === "facebook") return "Facebook";
+  return "Unknown";
+};
+
 const businessTypeOptions = [
   { value: "food_truck", label: "Food Truck" },
   { value: "restaurant", label: "Restaurant" },
@@ -6555,6 +6563,53 @@ export default function AdminDashboard() {
     },
   });
 
+  const sendPasswordResetLink = useMutation({
+    mutationFn: async (userId: string) => {
+      return await apiRequest(
+        "POST",
+        `/api/admin/users/${userId}/send-password-reset`,
+      );
+    },
+    onSuccess: () => {
+      toast({
+        title: "Password Reset Sent",
+        description:
+          "If the account supports password reset, a reset link has been sent.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to send password reset link.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const forcePasswordReset = useMutation({
+    mutationFn: async (userId: string) => {
+      return await apiRequest(
+        "POST",
+        `/api/admin/users/${userId}/force-password-reset`,
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      toast({
+        title: "Password Reset Required",
+        description:
+          "If the account supports password login, reset will be required on next login.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to force password reset.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const verifyUserEmail = useMutation({
     mutationFn: async (userId: string) => {
       const res = await apiRequest("POST", `/api/admin/users/${userId}/verify`);
@@ -12307,40 +12362,119 @@ export default function AdminDashboard() {
                 </div>
               )}
 
-              {/* Authentication Methods */}
+              {/* Account Recovery */}
               <div>
                 <h3 className="font-semibold mb-3 flex items-center text-sm text-muted-foreground">
                   <Shield className="w-4 h-4 mr-2" />
-                  AUTHENTICATION METHODS
+                  ACCOUNT RECOVERY
                 </h3>
-                <div className="flex flex-wrap gap-2">
-                  {selectedUser.googleId && (
-                    <Badge
+                <div
+                  className="space-y-3 rounded-md border p-3"
+                  data-testid={`account-recovery-status-${selectedUser.id}`}
+                >
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    <div className="space-y-1">
+                      <p className="text-xs text-muted-foreground">
+                        Auth Provider
+                      </p>
+                      <Badge variant="outline">
+                        {getSafeAuthProviderLabel(selectedUser)}
+                      </Badge>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-xs text-muted-foreground">
+                        Password Login
+                      </p>
+                      <Badge
+                        variant={
+                          selectedUser.hasPasswordLogin ? "default" : "secondary"
+                        }
+                      >
+                        {selectedUser.hasPasswordLogin ? "Enabled" : "Not enabled"}
+                      </Badge>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-xs text-muted-foreground">
+                        Force Reset
+                      </p>
+                      <Badge
+                        variant={
+                          selectedUser.requiresPasswordReset
+                            ? "destructive"
+                            : "outline"
+                        }
+                      >
+                        {selectedUser.requiresPasswordReset ? "Required" : "No"}
+                      </Badge>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-xs text-muted-foreground">
+                        Email Verified
+                      </p>
+                      <Badge
+                        variant={
+                          selectedUser.emailVerified ? "default" : "secondary"
+                        }
+                      >
+                        {selectedUser.emailVerified ? "Yes" : "No"}
+                      </Badge>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
                       variant="outline"
-                      className="flex items-center gap-1"
+                      onClick={() => sendPasswordResetLink.mutate(selectedUser.id)}
+                      disabled={
+                        sendPasswordResetLink.isPending ||
+                        isStaff ||
+                        !selectedUser.email ||
+                        !selectedUser.hasPasswordLogin
+                      }
+                      data-testid={`button-send-password-reset-${selectedUser.id}`}
                     >
-                      <CheckCircle className="w-3 h-3" />
-                      Google OAuth
-                    </Badge>
-                  )}
-                  {selectedUser.facebookId && (
-                    <Badge
+                      <Mail className="w-3 h-3 mr-1" />
+                      Send Password Reset
+                    </Button>
+                    <Button
+                      size="sm"
                       variant="outline"
-                      className="flex items-center gap-1"
+                      onClick={() => forcePasswordReset.mutate(selectedUser.id)}
+                      disabled={
+                        forcePasswordReset.isPending ||
+                        isStaff ||
+                        !selectedUser.hasPasswordLogin ||
+                        selectedUser.requiresPasswordReset
+                      }
+                      data-testid={`button-force-password-reset-${selectedUser.id}`}
                     >
-                      <CheckCircle className="w-3 h-3" />
-                      Facebook OAuth
-                    </Badge>
-                  )}
-                  {selectedUser.passwordHash && (
-                    <Badge
+                      <Shield className="w-3 h-3 mr-1" />
+                      Force Password Reset
+                    </Button>
+                    <Button
+                      size="sm"
                       variant="outline"
-                      className="flex items-center gap-1"
+                      onClick={() =>
+                        resendVerificationEmail.mutate(selectedUser.id)
+                      }
+                      disabled={
+                        resendVerificationEmail.isPending ||
+                        isStaff ||
+                        !selectedUser.email ||
+                        selectedUser.emailVerified
+                      }
+                      data-testid={`button-card-resend-verification-${selectedUser.id}`}
                     >
-                      <CheckCircle className="w-3 h-3" />
-                      Email/Password
-                    </Badge>
-                  )}
+                      <Mail className="w-3 h-3 mr-1" />
+                      {selectedUser.emailVerified
+                        ? "Email Verified"
+                        : "Resend Verification"}
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Passwords, password hashes, reset tokens, OAuth tokens, and
+                    session secrets are never shown here.
+                  </p>
                 </div>
               </div>
 
