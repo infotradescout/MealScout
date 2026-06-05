@@ -2232,7 +2232,7 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             city: restaurants.city,
             state: restaurants.state,
             phone: restaurants.phone,
-            email: sql<string>`coalesce(${restaurants}.email, '')`,
+            email: users.email,
             websiteUrl: restaurants.websiteUrl,
             address: restaurants.address,
             isVerified: restaurants.isVerified,
@@ -2241,7 +2241,8 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             createdAt: restaurants.createdAt,
             updatedAt: restaurants.updatedAt,
           })
-          .from(restaurants);
+          .from(restaurants)
+          .leftJoin(users, eq(users.id, restaurants.ownerId));
 
         const suspects = rows
           .map((row: any) => {
