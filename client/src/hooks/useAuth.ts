@@ -28,6 +28,13 @@ function clearOAuthCompletionParams() {
   window.history.replaceState({}, "", url.pathname + url.search + url.hash);
 }
 
+function captureUrlAffiliateRef() {
+  if (typeof window === "undefined") return;
+  const urlParams = new URLSearchParams(window.location.search);
+  const ref = String(urlParams.get("ref") || "").trim();
+  if (ref) setAffiliateRef(ref);
+}
+
 export function useAuth() {
   const [, setLocation] = useLocation();
   const [oauthConfirmationPending, setOauthConfirmationPending] = useState(() =>
@@ -91,6 +98,10 @@ export function useAuth() {
     refetchOnMount: true,
     staleTime: 5 * 60_000, // Consider user data fresh for 5 minutes (reduce auth calls)
   });
+
+  useEffect(() => {
+    captureUrlAffiliateRef();
+  }, []);
 
   const authState: AuthState =
     isLoading || oauthConfirmationPending || (isError && !user)
@@ -161,12 +172,18 @@ export function useAuth() {
   }, [user?.businessOnboardingRequired, user?.businessOnboardingPath, user?.userType, setLocation]);
 
   useEffect(() => {
+    if (!user) return;
+    const isInternalAdmin = ["admin", "duper_admin", "super_admin"].includes(
+      String(user.userType || "").toLowerCase(),
+    );
+    if (isInternalAdmin) {
+      setAffiliateRef(null);
+      return;
+    }
     if (user?.affiliateTag || user?.id) {
       setAffiliateRef(user.affiliateTag || user.id);
-    } else {
-      setAffiliateRef(null);
     }
-  }, [user?.affiliateTag, user?.id]);
+  }, [user?.affiliateTag, user?.id, user?.userType]);
 
   // Check for OAuth redirect completion and confirm the session with /api/auth/user.
   useEffect(() => {
@@ -181,7 +198,6 @@ export function useAuth() {
           .then((result) => {
             clearOAuthCompletionParams();
             if (!result.data) {
-              setAffiliateRef(null);
               setOauthConfirmationPending(false);
               setLocation("/login?error=session_not_completed");
               return;
@@ -190,7 +206,6 @@ export function useAuth() {
           })
           .catch(() => {
             clearOAuthCompletionParams();
-            setAffiliateRef(null);
             setOauthConfirmationPending(false);
             setLocation("/login?error=session_not_completed");
           });

@@ -2322,8 +2322,11 @@ export async function setupUnifiedAuth(app: Express) {
 
 async function applyAffiliateReferral(req: any, user: User) {
   try {
+    if (isAdminUserType(user.userType)) return;
     const ref =
-      typeof req.cookies?.referralId === "string"
+      typeof req.body?.referralId === "string"
+        ? req.body.referralId.trim()
+        : typeof req.cookies?.referralId === "string"
         ? req.cookies.referralId.trim()
         : "";
     if (!ref) return;

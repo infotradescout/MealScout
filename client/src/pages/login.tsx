@@ -14,6 +14,7 @@ import {
   trackFunnelEvent,
   trackFunnelEventOncePerSession,
 } from "@/utils/funnelTelemetry";
+import { getStoredAffiliateRef, setAffiliateRef } from "@/lib/share";
 
 const getSafeRedirectPath = (): string | null => {
   try {
@@ -45,9 +46,14 @@ export default function Login() {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const redirectPath = getSafeRedirectPath();
   const buildAuthPath = (basePath: string) => {
-    if (!redirectPath) return basePath;
-    const separator = basePath.includes("?") ? "&" : "?";
-    return `${basePath}${separator}redirect=${encodeURIComponent(redirectPath)}`;
+    const params = new URLSearchParams(window.location.search);
+    const urlReferralTag = String(params.get("ref") || "").trim();
+    if (urlReferralTag) setAffiliateRef(urlReferralTag);
+    const storedRef = String(urlReferralTag || getStoredAffiliateRef() || "").trim();
+    const url = new URL(basePath, window.location.origin);
+    if (redirectPath) url.searchParams.set("redirect", redirectPath);
+    if (storedRef && !url.searchParams.has("ref")) url.searchParams.set("ref", storedRef);
+    return `${url.pathname}${url.search}${url.hash}`;
   };
 
   const attemptLoginWithRetry = async () =>

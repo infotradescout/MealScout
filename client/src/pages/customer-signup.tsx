@@ -49,6 +49,7 @@ import {
   trackFunnelEvent,
   trackFunnelEventOncePerSession,
 } from "@/utils/funnelTelemetry";
+import { getStoredAffiliateRef, setAffiliateRef } from "@/lib/share";
 
 const signupSchema = z
   .object({
@@ -182,6 +183,7 @@ export default function CustomerSignup() {
 
   const searchParams = new URLSearchParams(window.location.search);
   const role = searchParams.get("role");
+  const urlReferralTag = String(searchParams.get("ref") || "").trim();
   const initialAccountType: AccountType =
     role === "business"
       ? "business"
@@ -214,6 +216,12 @@ export default function CustomerSignup() {
   const EVENT_SIGNUP_DRAFT_KEY = "mealscout:event-signup-draft";
   const SUPPLIER_SIGNUP_DRAFT_KEY = "mealscout:supplier-signup-draft";
 
+  useEffect(() => {
+    if (urlReferralTag) {
+      setAffiliateRef(urlReferralTag);
+    }
+  }, [urlReferralTag]);
+
   const getCustomerRedirectPath = () =>
     accountType === "host"
       ? "/host-signup"
@@ -241,10 +249,23 @@ export default function CustomerSignup() {
         ? "event_coordinator"
         : "customer";
 
+  const getReferralId = () =>
+    String(urlReferralTag || getStoredAffiliateRef() || "").trim() || undefined;
+
+  const preserveReferralHref = (href: string) => {
+    const ref = getReferralId();
+    if (!ref) return href;
+    const url = new URL(href, window.location.origin);
+    if (!url.searchParams.has("ref")) {
+      url.searchParams.set("ref", ref);
+    }
+    return `${url.pathname}${url.search}${url.hash}`;
+  };
+
   const selectSignupFlow = (option: SignupFlowOption) => {
     setAccountType(option.accountType);
     setBusinessSubType(option.businessSubType || "restaurant");
-    setLocation(option.href);
+    setLocation(preserveReferralHref(option.href));
   };
 
   const goToVerificationHandoff = (redirectPath: string) => {
@@ -435,6 +456,7 @@ export default function CustomerSignup() {
         {
           ...signupData,
           accountType: getRegistrationUserType(),
+          referralId: getReferralId(),
           intendedNextPath: getCustomerRedirectPath(),
         }
       );
@@ -482,6 +504,7 @@ export default function CustomerSignup() {
           ...signupData,
           businessType: businessSubType,
           menuSourceUrl: signupData.menuSourceUrl || undefined,
+          referralId: getReferralId(),
           intendedNextPath: getBusinessRedirectPath(),
         }
       );
@@ -528,7 +551,7 @@ export default function CustomerSignup() {
       const res = await apiRequest(
         "POST",
         "/api/auth/supplier/register",
-        { ...signupData, intendedNextPath: "/supplier/dashboard" }
+        { ...signupData, referralId: getReferralId(), intendedNextPath: "/supplier/dashboard" }
       );
       return await res.json();
     },

@@ -11,7 +11,7 @@ export function setAffiliateRef(ref: string | null) {
   }
 }
 
-function getStoredAffiliateRef(): string | null {
+export function getStoredAffiliateRef(): string | null {
   if (typeof window === "undefined") return null;
   return window.localStorage.getItem(AFFILIATE_REF_STORAGE_KEY);
 }

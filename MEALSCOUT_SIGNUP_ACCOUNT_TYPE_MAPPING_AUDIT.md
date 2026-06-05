@@ -1,0 +1,51 @@
+# MealScout Signup Account Type Mapping Audit
+
+Status: `Production hotfix - Diner signup and affiliate referral public routing`
+
+This audit documents current signup account-type mapping for the Diner/customer path. It is not a role redesign, not a new signup product surface, and not a new affiliate system.
+
+## Production Rule
+
+- `Diner` is a user-facing label in `client/src/pages/customer-signup.tsx`.
+- `diner` in `/customer-signup?role=diner` maps to the existing `customer` registration behavior.
+- No `diner` database role or `userType` is introduced.
+- `ref` is referral metadata only; it is not a role, `userType`, business identity, profile email, or verification state.
+- `/customer-signup?role=diner` is a public, guest-safe route and must not require prior auth.
+- Unauthenticated `/api/auth/user` returning 401 on signup pages is guest-safe and non-fatal.
+
+## Current Code Says
+
+- `client/src/pages/customer-signup.tsx` lists a signup card with label `Diner` and `href: "/customer-signup?role=diner"`.
+- `client/src/pages/customer-signup.tsx` uses `AccountType = "diner" | "host" | "event_organizer" | "business" | "supplier"`.
+- `client/src/pages/customer-signup.tsx` maps non-host, non-event, non-business signup to `customer` through `getRegistrationUserType`.
+- `client/src/App.tsx` registers `/customer-signup` as a route in both guest and authenticated route sets.
+- `server/unifiedAuth.ts` handles `/api/auth/customer/register` using existing customer registration behavior.
+
+## Correction
+
+- Keep `Diner` as the label and `diner` as the UI account type.
+- Continue sending `accountType: "customer"` to `/api/auth/customer/register` for diner signup.
+- Preserve `ref` during signup path selection by appending it to selected signup-flow URLs when present.
+- Include the existing `referralId` input on signup payloads so server-side referral capture can use the same referral identifier if the cookie is missing.
+
+## Do-Not-Touch Rules
+
+- Do not add a `diner` role.
+- Do not rename `customer`.
+- Do not change role permissions.
+- Do not change Parking Pass access.
+- Do not change setup-token flow.
+- Do not add payout logic.
+- Do not add fake affiliate tags.
+- Do not treat `ref` as role/userType/business/profile/email data.
+
+## Validation
+
+- `node scripts/mealscout-signup-account-type-mapping.contract.test.ts`
+- `node scripts/mealscout-affiliate-referral-capture.contract.test.ts`
+- `node scripts/mealscout-auth-onboarding-alignment.contract.test.ts`
+- `node scripts/mealscout-admin-user-affiliate-management.contract.test.ts`
+- `node scripts/repoDoctor.mjs`
+- `npm run gate:production`
+- `npm run check`
+- `npm run build`
