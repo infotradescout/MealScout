@@ -6,6 +6,10 @@ const launchBoardSqlSafetyMap = readFileSync(
   "MEALSCOUT_LAUNCH_BOARD_SQL_SAFETY_MAP.md",
   "utf8",
 );
+const rawDataMigration = readFileSync(
+  "migrations/106_add_restaurants_raw_data.sql",
+  "utf8",
+);
 
 const routeStart = adminCoreOps.indexOf('"/api/admin/profile-quarantine/suspects"');
 const routeEnd = adminCoreOps.indexOf(
@@ -67,10 +71,24 @@ for (const requiredSchemaField of [
   'instagramUrl: varchar("instagram_url")',
   'facebookPageUrl: varchar("facebook_page_url")',
   'socialAutopostSettings: jsonb("social_autopost_settings")',
+  'rawData: jsonb("raw_data")',
 ]) {
   if (!restaurantsSchema.includes(requiredSchemaField)) {
     throw new Error(`restaurants schema missing expected existing contact/owner field: ${requiredSchemaField}`);
   }
+}
+
+for (const requiredMigrationSnippet of [
+  "ALTER TABLE restaurants",
+  "ADD COLUMN IF NOT EXISTS raw_data jsonb",
+]) {
+  if (!rawDataMigration.includes(requiredMigrationSnippet)) {
+    throw new Error(`restaurants.raw_data migration missing required schema guarantee: ${requiredMigrationSnippet}`);
+  }
+}
+
+if (rawDataMigration.includes("email")) {
+  throw new Error("restaurants.raw_data migration must not introduce restaurants.email");
 }
 
 for (const requiredMapSnippet of [

@@ -221,6 +221,7 @@ export const restaurants = pgTable("restaurants", {
   facebookPageUrl: varchar("facebook_page_url"), // Facebook business page
   xUrl: varchar("x_url"), // X profile
   socialAutopostSettings: jsonb("social_autopost_settings"),
+  rawData: jsonb("raw_data"),
   amenities: jsonb("amenities"), // { parking: boolean, wifi: boolean, outdoor_seating: boolean, etc }
   // Golden Plate Award for top-performing restaurants (awarded every 90 days)
   hasGoldenPlate: boolean("has_golden_plate").default(false),
