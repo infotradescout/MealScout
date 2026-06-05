@@ -11,21 +11,30 @@ This audit documents current signup account-type mapping for the Diner/customer 
 - No `diner` database role or `userType` is introduced.
 - `ref` is referral metadata only; it is not a role, `userType`, business identity, profile email, or verification state.
 - `/customer-signup?role=diner` is a public, guest-safe route and must not require prior auth.
+- `/customer-signup?role=diner` must enter the normal customer signup form instead of staying on the account-type chooser.
+- Clicking the `Diner` card must mark the signup flow selected locally, because the route may remain on the same mounted page while only query parameters change.
+- Diner UI selection is normalized before chooser/form gating and still submits the canonical existing `customer` account type to `/api/auth/customer/register`.
 - Unauthenticated `/api/auth/user` returning 401 on signup pages is guest-safe and non-fatal.
 
 ## Current Code Says
 
 - `client/src/pages/customer-signup.tsx` lists a signup card with label `Diner` and `href: "/customer-signup?role=diner"`.
 - `client/src/pages/customer-signup.tsx` uses `AccountType = "diner" | "host" | "event_organizer" | "business" | "supplier"`.
+- `client/src/pages/customer-signup.tsx` normalizes `role=diner` and `role=customer` to the UI-only `diner` account type before form gating.
+- `client/src/pages/customer-signup.tsx` uses local `signupFlowSelected` state so choosing Diner advances into the form even when the current route component is already mounted.
 - `client/src/pages/customer-signup.tsx` maps non-host, non-event, non-business signup to `customer` through `getRegistrationUserType`.
+- `client/src/pages/customer-signup.tsx` keeps referral metadata on the selected signup path and on the in-form `Change` path.
 - `client/src/App.tsx` registers `/customer-signup` as a route in both guest and authenticated route sets.
 - `server/unifiedAuth.ts` handles `/api/auth/customer/register` using existing customer registration behavior.
 
 ## Correction
 
 - Keep `Diner` as the label and `diner` as the UI account type.
+- Normalize incoming `role` values before any chooser/form gating.
+- Treat Diner card selection as a selected flow immediately, not as an unsupported role that waits for a remount.
 - Continue sending `accountType: "customer"` to `/api/auth/customer/register` for diner signup.
 - Preserve `ref` during signup path selection by appending it to selected signup-flow URLs when present.
+- Preserve `ref` when moving from the selected signup form back to the account-type chooser.
 - Include the existing `referralId` input on signup payloads so server-side referral capture can use the same referral identifier if the cookie is missing.
 
 ## Do-Not-Touch Rules

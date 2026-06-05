@@ -91,6 +91,16 @@ type SignupFlowOption = {
   icon: LucideIcon;
 };
 
+const normalizeSignupRole = (value: string | null): AccountType | null => {
+  const role = String(value || "").trim().toLowerCase();
+  if (role === "diner" || role === "customer") return "diner";
+  if (role === "host") return "host";
+  if (role === "event" || role === "event_coordinator") return "event_organizer";
+  if (role === "business") return "business";
+  if (role === "supplier") return "supplier";
+  return null;
+};
+
 const signupFlowOptions: SignupFlowOption[] = [
   {
     id: "diner",
@@ -182,20 +192,10 @@ export default function CustomerSignup() {
   const requirePhoneVerification = false;
 
   const searchParams = new URLSearchParams(window.location.search);
-  const role = searchParams.get("role");
+  const normalizedRole = normalizeSignupRole(searchParams.get("role"));
   const urlReferralTag = String(searchParams.get("ref") || "").trim();
   const initialAccountType: AccountType =
-    role === "business"
-      ? "business"
-      : role === "host"
-        ? "host"
-        : role === "event"
-          ? "event_organizer"
-          : role === "event_coordinator"
-            ? "event_organizer"
-        : role === "supplier"
-          ? "supplier"
-          : "diner";
+    normalizedRole || "diner";
   const businessTypeParam = searchParams.get("businessType");
   const initialBusinessSubType: BusinessSubType =
     businessTypeParam === "food_truck" ||
@@ -204,7 +204,8 @@ export default function CustomerSignup() {
     businessTypeParam === "private_chef"
       ? businessTypeParam
       : "restaurant";
-  const hasExplicitSignupFlow = Boolean(role || businessTypeParam);
+  const hasExplicitSignupFlow = Boolean(normalizedRole || businessTypeParam);
+  const [signupFlowSelected, setSignupFlowSelected] = useState(hasExplicitSignupFlow);
   const [accountType, setAccountType] = useState<AccountType>(initialAccountType);
   const [businessSubType, setBusinessSubType] = useState<BusinessSubType>(
     initialAccountType === "business" ? initialBusinessSubType : "restaurant"
@@ -265,6 +266,7 @@ export default function CustomerSignup() {
   const selectSignupFlow = (option: SignupFlowOption) => {
     setAccountType(option.accountType);
     setBusinessSubType(option.businessSubType || "restaurant");
+    setSignupFlowSelected(true);
     setLocation(preserveReferralHref(option.href));
   };
 
@@ -807,7 +809,7 @@ export default function CustomerSignup() {
     );
   }
 
-  if (!hasExplicitSignupFlow) {
+  if (!signupFlowSelected) {
     return (
       <div className="min-h-screen bg-[var(--bg-layered)] flex flex-col">
         <SEOHead
@@ -1051,7 +1053,8 @@ export default function CustomerSignup() {
                   </p>
                 </div>
                 <Link
-                  href="/customer-signup"
+                  href={preserveReferralHref("/customer-signup")}
+                  onClick={() => setSignupFlowSelected(false)}
                   className="shrink-0 rounded-full border border-[color:var(--border-subtle)] px-3 py-1 text-xs font-bold text-[color:var(--text-primary)] hover:bg-[var(--bg-surface)]"
                 >
                   Change

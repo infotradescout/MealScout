@@ -25,6 +25,9 @@ function requireIncludes(source: string, snippet: string, label = snippet) {
   "No `diner` database role or `userType` is introduced",
   "`ref` is referral metadata only",
   "/customer-signup?role=diner` is a public, guest-safe route",
+  "/customer-signup?role=diner` must enter the normal customer signup form instead of staying on the account-type chooser",
+  "Clicking the `Diner` card must mark the signup flow selected locally",
+  "Diner UI selection is normalized before chooser/form gating and still submits the canonical existing `customer` account type",
   "Unauthenticated `/api/auth/user` returning 401 on signup pages is guest-safe and non-fatal",
 ].forEach((snippet) => requireIncludes(audit, snippet, `audit ${snippet}`));
 
@@ -34,8 +37,15 @@ function requireIncludes(source: string, snippet: string, label = snippet) {
   'label: "Diner"',
   'href: "/customer-signup?role=diner"',
   'type AccountType = "diner" | "host" | "event_organizer" | "business" | "supplier"',
-  'const role = searchParams.get("role")',
-  ': "diner"',
+  "const normalizeSignupRole =",
+  'if (role === "diner" || role === "customer") return "diner"',
+  "const normalizedRole = normalizeSignupRole(searchParams.get(\"role\"))",
+  "const hasExplicitSignupFlow = Boolean(normalizedRole || businessTypeParam)",
+  "const [signupFlowSelected, setSignupFlowSelected] = useState(hasExplicitSignupFlow)",
+  "setSignupFlowSelected(true)",
+  'href={preserveReferralHref("/customer-signup")}',
+  "onClick={() => setSignupFlowSelected(false)}",
+  "if (!signupFlowSelected)",
   'const getRegistrationUserType = ()',
   ': "customer"',
   '"/api/auth/customer/register"',
@@ -45,6 +55,14 @@ function requireIncludes(source: string, snippet: string, label = snippet) {
 
 if (!app.includes('<Route path="/customer-signup" component={CustomerSignup} />')) {
   throw new Error("/customer-signup route must exist and not route to 404.");
+}
+
+if (/const\s+hasExplicitSignupFlow\s*=\s*Boolean\(role\s*\|\|/i.test(customerSignup)) {
+  throw new Error("Diner signup gating must use normalizedRole, not raw role.");
+}
+
+if (/if\s*\(!hasExplicitSignupFlow\)/.test(customerSignup)) {
+  throw new Error("Account-type chooser must not depend only on URL-derived hasExplicitSignupFlow.");
 }
 
 if (!unifiedAuth.includes('app.post("/api/auth/customer/register"')) {

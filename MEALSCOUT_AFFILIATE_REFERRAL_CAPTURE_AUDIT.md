@@ -12,6 +12,7 @@ This audit documents current public referral capture for guest links such as `/s
 - Authenticated non-internal users may still use existing affiliate tag behavior.
 - Internal `admin`, `duper_admin`, and `super_admin` accounts must not be affiliate-assigned through a public `ref`.
 - `ref` is referral metadata only; it is not role/userType/business/profile email data.
+- Protected account endpoints such as `/api/affiliate/tag` and `/api/business-access/me` must wait for confirmed auth; guest referral capture must not pretend those 401s mean a signed-in user.
 
 ## Current Code Says
 
@@ -19,6 +20,7 @@ This audit documents current public referral capture for guest links such as `/s
 - `client/src/App.tsx` registers `/scout` as a public route.
 - `client/src/hooks/useAuth.ts` confirms auth state via `/api/auth/user` and must not erase guest refs during guest state.
 - `client/src/lib/share.ts` stores the guest referral key as `affiliate_ref`.
+- `client/src/lib/api.ts` gates `/api/affiliate/*` and `/api/business-access/*` as protected account paths.
 - `server/unifiedAuth.ts` applies referral attribution from `referralId` and now rejects internal admin user types before assignment.
 
 ## Correction

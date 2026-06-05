@@ -12,9 +12,11 @@ const app = readFileSync("client/src/App.tsx", "utf8");
 const customerSignup = readFileSync("client/src/pages/customer-signup.tsx", "utf8");
 const login = readFileSync("client/src/pages/login.tsx", "utf8");
 const share = readFileSync("client/src/lib/share.ts", "utf8");
+const api = readFileSync("client/src/lib/api.ts", "utf8");
 const serverIndex = readFileSync("server/index.ts", "utf8");
 const unifiedAuth = readFileSync("server/unifiedAuth.ts", "utf8");
-const combined = `${audit}\n${useAuth}\n${app}\n${customerSignup}\n${login}\n${share}\n${serverIndex}\n${unifiedAuth}`;
+const authAudit = readFileSync("MEALSCOUT_AUTH_ONBOARDING_ALIGNMENT_AUDIT.md", "utf8");
+const combined = `${audit}\n${useAuth}\n${app}\n${customerSignup}\n${login}\n${share}\n${api}\n${serverIndex}\n${unifiedAuth}\n${authAudit}`;
 
 function requireIncludes(source: string, snippet: string, label = snippet) {
   if (!source.toLowerCase().includes(snippet.toLowerCase())) {
@@ -28,6 +30,7 @@ function requireIncludes(source: string, snippet: string, label = snippet) {
   "Guest referral refs must not be cleared merely because `/api/auth/user` returns 401 or `user` is undefined",
   "Internal `admin`, `duper_admin`, and `super_admin` accounts must not be affiliate-assigned through a public `ref`",
   "`ref` is referral metadata only",
+  "Protected account endpoints such as `/api/affiliate/tag` and `/api/business-access/me` must wait for confirmed auth",
 ].forEach((snippet) => requireIncludes(audit, snippet, `audit ${snippet}`));
 
 [
@@ -50,6 +53,21 @@ const userUndefinedClearPattern =
   /if\s*\(!user\)[\s\S]{0,80}setAffiliateRef\(null\)/;
 if (userUndefinedClearPattern.test(useAuth)) {
   throw new Error("Guest referral ref must not be cleared when user is undefined.");
+}
+
+const unguardedSetAffiliateRefNull = useAuth
+  .split(/\r?\n/)
+  .map((line, index) => ({ line, lineNumber: index + 1 }))
+  .filter(({ line }) => line.includes("setAffiliateRef(null)"))
+  .filter(({ line }) => !/isInternalAdmin|admin/i.test(line));
+for (const occurrence of unguardedSetAffiliateRefNull) {
+  const nearby = useAuth
+    .split(/\r?\n/)
+    .slice(Math.max(0, occurrence.lineNumber - 5), occurrence.lineNumber + 2)
+    .join("\n");
+  if (!nearby.includes("isInternalAdmin")) {
+    throw new Error(`setAffiliateRef(null) must stay limited to internal admin cleanup, found near line ${occurrence.lineNumber}.`);
+  }
 }
 
 const oauthFailureSections = [
@@ -101,10 +119,15 @@ if (!app.includes('"/scout"')) {
 ].forEach((snippet) => requireIncludes(unifiedAuth, snippet, `server affiliate guard ${snippet}`));
 
 [
-  "protected account endpoints",
-  "/api/affiliate/tag",
-  "/api/business-access/me",
-].forEach((snippet) => requireIncludes("protected account endpoints /api/affiliate/tag /api/business-access/me", snippet));
+  "const isProtectedAccountPath =",
+  'path.startsWith("/api/affiliate/")',
+  'path.startsWith("/api/business-access/")',
+].forEach((snippet) => requireIncludes(api, snippet, `api protected account guard ${snippet}`));
+
+[
+  "Protected account endpoints such as `/api/affiliate/tag` and `/api/business-access/me` must wait for confirmed auth",
+  "OAuth success query params are hints only; `/api/auth/user` is the only confirmed signed-in state",
+].forEach((snippet) => requireIncludes(authAudit, snippet, `auth audit protected endpoint ${snippet}`));
 
 [
   "new role",
