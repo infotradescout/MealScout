@@ -6,6 +6,7 @@ const loginPath = "client/src/pages/login.tsx";
 const forgotPasswordPath = "client/src/pages/forgot-password.tsx";
 const resetPasswordPath = "client/src/pages/reset-password.tsx";
 const changePasswordPath = "client/src/pages/change-password.tsx";
+const adminLoginPath = "client/src/pages/admin-login.tsx";
 const useAuthPath = "client/src/hooks/useAuth.ts";
 const unifiedAuthPath = "server/unifiedAuth.ts";
 const emailServicePath = "server/emailService.ts";
@@ -16,6 +17,7 @@ for (const path of [
   auditPath,
   appPath,
   loginPath,
+  adminLoginPath,
   forgotPasswordPath,
   resetPasswordPath,
   changePasswordPath,
@@ -33,8 +35,10 @@ for (const path of [
 const audit = readFileSync(auditPath, "utf8");
 const app = readFileSync(appPath, "utf8");
 const login = readFileSync(loginPath, "utf8");
+const adminLogin = readFileSync(adminLoginPath, "utf8");
 const forgotPassword = readFileSync(forgotPasswordPath, "utf8");
 const resetPassword = readFileSync(resetPasswordPath, "utf8");
+const changePassword = readFileSync(changePasswordPath, "utf8");
 const useAuth = readFileSync(useAuthPath, "utf8");
 const unifiedAuth = readFileSync(unifiedAuthPath, "utf8");
 const emailService = readFileSync(emailServicePath, "utf8");
@@ -62,6 +66,7 @@ const requiredLoginSnippets = [
   "Having trouble signing in?",
   "Reset your password",
   "link-login-error-reset-password",
+  'data-recovery-action="navigate-only"',
   "Invalid email or password. If you cannot sign in, reset your password.",
   "button-resend-verification",
 ];
@@ -71,11 +76,46 @@ for (const snippet of requiredLoginSnippets) {
   }
 }
 
+const forbiddenLoginResetTriggers = [
+  '"/api/auth/forgot-password"',
+  '"/api/auth/reset-password"',
+  "sendPasswordResetEmail",
+  "createPasswordResetToken",
+  "deleteUserResetTokens",
+  "forgotPasswordMutation",
+];
+for (const snippet of forbiddenLoginResetTriggers) {
+  if (login.includes(snippet)) {
+    throw new Error(`Login page must not trigger reset email flow: ${snippet}`);
+  }
+}
+
+if (
+  !adminLogin.includes('apiRequest("POST", "/api/auth/login"') ||
+  !adminLogin.includes('href="/forgot-password"') ||
+  !adminLogin.includes('data-recovery-action="navigate-only"')
+) {
+  throw new Error("Admin login must keep login separate from passive password recovery navigation");
+}
+for (const snippet of forbiddenLoginResetTriggers) {
+  if (adminLogin.includes(snippet)) {
+    throw new Error(`Admin/super_admin login surface must not trigger reset email flow: ${snippet}`);
+  }
+}
+
 if (
   !forgotPassword.includes('apiRequest("POST", "/api/auth/forgot-password"') ||
   !forgotPassword.includes("If an account with that email exists")
 ) {
   throw new Error("Forgot password page must use the existing generic reset request flow");
+}
+
+if (
+  !forgotPassword.includes("const onSubmit = (data: ForgotPasswordFormData) =>") ||
+  !forgotPassword.includes("forgotPasswordMutation.mutate(data)") ||
+  forgotPassword.includes("forgotPasswordMutation.mutate()")
+) {
+  throw new Error("Forgot password reset request must only run from explicit form submit data");
 }
 
 if (
@@ -93,11 +133,39 @@ if (
   throw new Error("Forced password reset behavior must remain documented by useAuth");
 }
 
+for (const snippet of [
+  '"/api/auth/forgot-password"',
+  "sendPasswordResetEmail",
+  "createPasswordResetToken",
+  "deleteUserResetTokens",
+]) {
+  if (useAuth.includes(snippet) || changePassword.includes(snippet)) {
+    throw new Error(`Forced password reset path must not email reset links automatically: ${snippet}`);
+  }
+}
+
 const forgotRouteIndex = unifiedAuth.indexOf('app.post("/api/auth/forgot-password"');
 const validateRouteIndex = unifiedAuth.indexOf('app.get("/api/auth/reset-password/validate"');
 const resetRouteIndex = unifiedAuth.indexOf('app.post("/api/auth/reset-password"');
+const loginRouteIndex = unifiedAuth.indexOf('app.post("/api/auth/login"');
+const resendVerificationRouteIndex = unifiedAuth.indexOf('app.post("/api/auth/resend-verification"');
 if (forgotRouteIndex === -1 || validateRouteIndex === -1 || resetRouteIndex === -1) {
   throw new Error("Backend password reset routes must exist");
+}
+if (loginRouteIndex === -1 || resendVerificationRouteIndex === -1) {
+  throw new Error("Backend login route boundary missing");
+}
+
+const loginRoute = unifiedAuth.slice(loginRouteIndex, resendVerificationRouteIndex);
+for (const snippet of [
+  "sendPasswordResetEmail",
+  "createPasswordResetToken",
+  "deleteUserResetTokens",
+  '"/api/auth/forgot-password"',
+]) {
+  if (loginRoute.includes(snippet)) {
+    throw new Error(`Normal/admin/super_admin login route must not trigger password reset email: ${snippet}`);
+  }
 }
 
 const forgotRoute = unifiedAuth.slice(forgotRouteIndex, validateRouteIndex);

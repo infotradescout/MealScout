@@ -185,6 +185,7 @@ export default function AdminLogin() {
                 <span
                   className="text-sm font-medium text-[color:var(--accent-text)] hover:text-[color:var(--accent-text-hover)] cursor-pointer"
                   data-testid="link-forgot-password"
+                  data-recovery-action="navigate-only"
                 >
                   Forgot your password?
                 </span>

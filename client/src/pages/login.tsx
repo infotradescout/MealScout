@@ -387,6 +387,7 @@ export default function Login() {
                   href="/forgot-password"
                   className="text-[color:var(--accent-text)] hover:text-[color:var(--accent-text-hover)] text-sm underline underline-offset-4"
                   data-testid="link-forgot-password-options"
+                  data-recovery-action="navigate-only"
                 >
                   Forgot or need to reset your password?
                 </Link>
@@ -453,6 +454,7 @@ export default function Login() {
                     href="/forgot-password"
                     className="mt-3 inline-block text-[color:var(--accent-text)] underline underline-offset-4 hover:text-[color:var(--accent-text-hover)]"
                     data-testid="link-login-error-reset-password"
+                    data-recovery-action="navigate-only"
                   >
                     Reset your password
                   </Link>
@@ -494,6 +496,7 @@ export default function Login() {
                 <Link
                   href="/forgot-password"
                   className="text-[color:var(--accent-text)] hover:text-[color:var(--accent-text-hover)] text-sm"
+                  data-recovery-action="navigate-only"
                 >
                   Forgot your password?
                 </Link>

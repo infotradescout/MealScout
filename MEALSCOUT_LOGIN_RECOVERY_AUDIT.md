@@ -1,12 +1,14 @@
 # MealScout Login Recovery Audit
 
-Status: `LOGIN RECOVERY HOTFIX`
+Status: `LOGIN RECOVERY HOTFIX + NORMAL LOGIN EMAIL GUARD`
 
 This audit documents the current login recovery path for production support. It does not introduce a new auth model, role model, onboarding model, payment model, affiliate model, Parking Pass behavior, fake users, or sample data.
 
 ## Incident
 
 A real user reported that login said the password was wrong and the app did not offer a reset or forgot-password path. The user was blocked from using MealScout.
+
+Follow-up objection: after exposing login recovery, a normal privileged login was reported to have triggered a password reset email. That must not happen. Login recovery links are navigation-only; reset email creation is allowed only after an explicit `/forgot-password` form submit.
 
 ## Current Code Says
 
@@ -29,8 +31,17 @@ A real user reported that login said the password was wrong and the app did not 
 
 - Login options now include a visible `/forgot-password` recovery link.
 - Failed email/password login now shows inline recovery help with a `/forgot-password` reset link.
+- Login and admin login recovery links are marked navigation-only and do not submit `/api/auth/forgot-password`.
 - The existing reset endpoints remain the only reset system.
 - No role, Parking Pass, affiliate, payout, verification, pricing, or onboarding behavior was changed.
+
+## Normal Login Email Guard
+
+- Normal successful login posts only to `/api/auth/login`; it must not call `/api/auth/forgot-password`.
+- Super admin/admin login uses the same login endpoint and must not send a reset email unless the user explicitly navigates to `/forgot-password` and submits the reset form.
+- Wrong-password rendering may show recovery copy and a `/forgot-password` link, but must not submit a reset request.
+- `requiresPasswordReset` may route to `/change-password`; it must not generate or email a password reset token.
+- `server/unifiedAuth.ts` sends password reset email only inside `POST /api/auth/forgot-password`.
 
 ## Privacy Rule
 
@@ -58,6 +69,9 @@ Password reset tokens use secure random token material, store only a hash, expir
 - route registration for `/forgot-password`, `/reset-password`, and `/change-password`,
 - visible login recovery links,
 - wrong-password recovery copy,
+- passive navigation-only recovery links on public and admin login,
+- no automatic forgot-password/reset email call from login render, login failure, login success, admin/super_admin login, or forced password reset routing,
+- password reset email sending only from the explicit forgot-password endpoint,
 - generic reset request response,
 - reset token expiry,
 - forced password reset routing,
