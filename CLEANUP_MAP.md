@@ -2,6 +2,29 @@
 
 This map is the cleanup authority. Work tickets in order unless production safety requires a narrow exception.
 
+## Production Incident Follow-Ups
+
+### Blessed Berry Bowls Parking Pass Routing
+
+Status: `CODE-FIXED / CONDITIONALLY RESOLVED`
+
+Production commit: `aadf0816` - `fix: repair blessed berry bowls parking pass routing`.
+
+Current evidence:
+
+- Production `/api/version` reported `aadf08167daa09a38bf572547685010811cf5cce`.
+- Schedule-required `food_truck` continuation now targets `/restaurant-owner-dashboard?setup=schedule`.
+- Safe route checks confirmed `/restaurant-owner-dashboard?setup=schedule` returns `200`.
+- Safe route checks confirmed `/parking-pass-manage` still returns `200` for existing host-oriented behavior.
+- `scripts/mealscout-blessed-berry-routing-parking-pass.contract.test.ts` passed.
+- No host rows, roles, pricing, payout logic, affiliate logic, insurance verification, or Parking Pass host behavior were changed.
+
+Remaining limitation: Direct Blessed Berry authenticated smoke is unavailable because we cannot log in as that customer account.
+
+Reopen condition: If Blessed Berry reports the issue again after `aadf0816`, capture the actual post-login URL and reopen as a targeted login continuation bug.
+
+Cleanup status: Do not block cleanup indefinitely on the unavailable customer login; resume from the next cleanup item.
+
 ## C1 - MealScout Handoff Spine
 
 Status: `DONE`
