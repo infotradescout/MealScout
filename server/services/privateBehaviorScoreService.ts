@@ -53,6 +53,14 @@ export async function getPrivateBehaviorScoresForRestaurants(
   const since7d = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
   const since30d = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
   const since90d = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+  const restaurantIdList = sql.join(
+    normalizedIds.map((id) => sql`${id}`),
+    sql`, `,
+  );
+  const restaurantIdValues = sql.join(
+    normalizedIds.map((id) => sql`(${id})`),
+    sql`, `,
+  );
 
   const [
     telemetryResult,
@@ -141,7 +149,7 @@ export async function getPrivateBehaviorScoresForRestaurants(
               )
           )::int as business_contact_intents_30d
         from mapped
-        where mapped.restaurant_id = any(${normalizedIds}::text[])
+        where mapped.restaurant_id in (${restaurantIdList})
         group by mapped.restaurant_id
       `),
     db.execute(sql<{
@@ -161,7 +169,7 @@ export async function getPrivateBehaviorScoresForRestaurants(
           )::int as completed_orders_30d
         from pickup_orders po
         where
-          po.restaurant_id = any(${normalizedIds}::text[])
+          po.restaurant_id in (${restaurantIdList})
           and po.created_at >= ${since90d}
         group by po.restaurant_id
       `),
@@ -176,7 +184,7 @@ export async function getPrivateBehaviorScoresForRestaurants(
             count(*)::int as order_count
           from pickup_orders po
           where
-            po.restaurant_id = any(${normalizedIds}::text[])
+            po.restaurant_id in (${restaurantIdList})
             and po.created_at >= ${since90d}
             and po.customer_id is not null
             and lower(coalesce(po.status, '')) in ('confirmed', 'ready', 'completed')
@@ -201,7 +209,7 @@ export async function getPrivateBehaviorScoresForRestaurants(
         from pickup_order_items poi
         inner join pickup_orders po on po.id = poi.order_id
         where
-          po.restaurant_id = any(${normalizedIds}::text[])
+          po.restaurant_id in (${restaurantIdList})
           and po.created_at >= ${since90d}
           and lower(coalesce(po.status, '')) in ('confirmed', 'ready', 'completed')
         group by po.restaurant_id
@@ -218,7 +226,7 @@ export async function getPrivateBehaviorScoresForRestaurants(
           from deal_views dv
           inner join deals d on d.id = dv.deal_id
           where
-            d.restaurant_id = any(${normalizedIds}::text[])
+            d.restaurant_id in (${restaurantIdList})
             and dv.viewed_at >= ${since30d}
           group by d.restaurant_id
         ),
@@ -229,7 +237,7 @@ export async function getPrivateBehaviorScoresForRestaurants(
           from deal_claims dc
           inner join deals d on d.id = dc.deal_id
           where
-            d.restaurant_id = any(${normalizedIds}::text[])
+            d.restaurant_id in (${restaurantIdList})
             and dc.is_used = true
             and coalesce(dc.used_at, dc.claimed_at) >= ${since30d}
           group by d.restaurant_id
@@ -238,7 +246,7 @@ export async function getPrivateBehaviorScoresForRestaurants(
           ids.restaurant_id,
           coalesce(view_rows.deal_views_30d, 0)::int as deal_views_30d,
           coalesce(used_claim_rows.deal_claims_used_30d, 0)::int as deal_claims_used_30d
-        from unnest(${normalizedIds}::text[]) as ids(restaurant_id)
+        from (values ${restaurantIdValues}) as ids(restaurant_id)
         left join view_rows on view_rows.restaurant_id = ids.restaurant_id
         left join used_claim_rows on used_claim_rows.restaurant_id = ids.restaurant_id
       `),
@@ -258,7 +266,7 @@ export async function getPrivateBehaviorScoresForRestaurants(
         from recommendation_reactions rr
         inner join restaurant_user_recommendations rur on rur.id = rr.recommendation_id
         where
-          rur.restaurant_id = any(${normalizedIds}::text[])
+          rur.restaurant_id in (${restaurantIdList})
           and rr.created_at >= ${since30d}
         group by rur.restaurant_id
       `),
@@ -351,6 +359,27 @@ export async function getPrivateBehaviorScoresForRestaurants(
       (menuFreshnessByRestaurant.get(restaurantId) || {}) as {
         menuUpdatedAt?: Date | null;
       };
+
+    const hasPrivateBehaviorSignals =
+      asNumber(telemetry.menu_views_7d) > 0 ||
+      asNumber(telemetry.menu_views_30d) > 0 ||
+      asNumber(telemetry.map_taps_7d) > 0 ||
+      asNumber(telemetry.map_taps_30d) > 0 ||
+      asNumber(telemetry.detail_views_7d) > 0 ||
+      asNumber(telemetry.detail_views_30d) > 0 ||
+      asNumber(telemetry.business_contact_intents_7d) > 0 ||
+      asNumber(telemetry.business_contact_intents_30d) > 0 ||
+      asNumber(orders.completed_orders_7d) > 0 ||
+      asNumber(orders.completed_orders_30d) > 0 ||
+      asNumber(repeats.repeat_customers_90d) > 0 ||
+      asNumber(itemVelocity.menu_items_sold_7d) > 0 ||
+      asNumber(itemVelocity.menu_items_sold_30d) > 0 ||
+      asNumber(dealSignals.deal_views_30d) > 0 ||
+      asNumber(dealSignals.deal_claims_used_30d) > 0 ||
+      asNumber(reactionSignals.dislikes_30d) > 0 ||
+      asNumber(reactionSignals.likes_30d) > 0;
+
+    if (!hasPrivateBehaviorSignals) continue;
 
     const computed = computePrivateBehaviorScoreFromSignals(
       {
