@@ -4794,6 +4794,20 @@ export default function AdminDashboard() {
     );
   }, [selectedUser, userRestaurants, userActivity]);
 
+  const selectedUserPublicProfilePath = useMemo(() => {
+    if (!selectedUser) return null;
+    const path = getAdminUserPublicProfilePath(
+      selectedUser,
+      Array.isArray(userHosts) && userHosts.length > 0 ? userHosts[0] : null,
+    );
+    return path && path !== "/" ? path : null;
+  }, [selectedUser, userHosts]);
+
+  const selectedUserPublicProfileUrl = useMemo(() => {
+    if (!selectedUserPublicProfilePath) return null;
+    return `${canonicalMealScoutOrigin}${selectedUserPublicProfilePath}`;
+  }, [selectedUserPublicProfilePath]);
+
   const sortedUsers = useMemo(() => {
     const typeOrder = [
       "super_admin",
@@ -11181,7 +11195,7 @@ export default function AdminDashboard() {
                           data-testid={`button-open-user-profile-${user.id}`}
                         >
                           <ExternalLink className="w-4 h-4 mr-1" />
-                          Open
+                          Open Admin
                         </Button>
                         {!isStaff && (
                           <div className="flex items-center gap-2">
@@ -11757,7 +11771,7 @@ export default function AdminDashboard() {
               <span>User Details</span>
             </DialogTitle>
             <DialogDescription>
-              Complete profile information and activity details
+              Account identity, recovery, linked entities, and support actions
             </DialogDescription>
           </DialogHeader>
 
@@ -11959,7 +11973,7 @@ export default function AdminDashboard() {
               <div>
                 <h3 className="font-semibold mb-3 flex items-center text-sm text-muted-foreground">
                   <Users className="w-4 h-4 mr-2" />
-                  BASIC INFORMATION
+                  ACCOUNT IDENTITY
                 </h3>
                 <div className="mb-3 flex flex-wrap gap-2">
                   <Button
@@ -11968,7 +11982,7 @@ export default function AdminDashboard() {
                     onClick={() => openAdminUserProfile(selectedUser.id, true)}
                   >
                     <ExternalLink className="w-4 h-4 mr-1" />
-                    Open profile in new tab
+                    Open Admin User View
                   </Button>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
@@ -11998,6 +12012,10 @@ export default function AdminDashboard() {
                       <Mail className="w-3 h-3" />
                       {selectedUser.email}
                     </p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs text-muted-foreground">User ID</p>
+                    <p className="text-xs font-mono break-all">{selectedUser.id}</p>
                   </div>
                   <div className="space-y-2 col-span-2 rounded-md border p-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -12247,6 +12265,24 @@ export default function AdminDashboard() {
                     </div>
                   )}
                   <div className="space-y-1">
+                    <p className="text-xs text-muted-foreground">Account Created</p>
+                    <p className="text-sm">
+                      {selectedUser.createdAt
+                        ? new Date(selectedUser.createdAt).toLocaleString()
+                        : "Unknown"}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs text-muted-foreground">Last Active</p>
+                    <p className="text-sm">
+                      {userActivity?.summary?.lastActiveAt
+                        ? new Date(userActivity.summary.lastActiveAt).toLocaleString()
+                        : selectedUser.lastActiveAt
+                          ? new Date(selectedUser.lastActiveAt).toLocaleString()
+                          : "No tracked activity yet"}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
                     <p className="text-xs text-muted-foreground">
                       Email Verified
                     </p>
@@ -12270,6 +12306,84 @@ export default function AdminDashboard() {
                       {!selectedUser.isDisabled ? "Active" : "Inactive"}
                     </Badge>
                   </div>
+                </div>
+              </div>
+
+              <div>
+                <h3 className="font-semibold mb-3 flex items-center text-sm text-muted-foreground">
+                  <ExternalLink className="w-4 h-4 mr-2" />
+                  PUBLIC + SUPPORT LINKS
+                </h3>
+                <div className="rounded-md border p-3 space-y-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => openAdminUserProfile(selectedUser.id, true)}
+                    >
+                      <ExternalLink className="w-4 h-4 mr-1" />
+                      Open Admin User View
+                    </Button>
+                    <p className="text-xs text-muted-foreground">
+                      Internal operator link only.
+                    </p>
+                  </div>
+
+                  {selectedUserPublicProfileUrl ? (
+                    <div className="space-y-2">
+                      <p className="text-xs text-muted-foreground">Public Profile Link</p>
+                      <p className="text-xs font-mono break-all">
+                        {selectedUserPublicProfileUrl}
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={async () => {
+                            await navigator.clipboard.writeText(
+                              selectedUserPublicProfileUrl,
+                            );
+                            toast({ title: "Public profile link copied" });
+                          }}
+                        >
+                          <Copy className="w-3 h-3 mr-1" />
+                          Copy Public Link
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            window.open(
+                              selectedUserPublicProfileUrl,
+                              "_blank",
+                              "noopener,noreferrer",
+                            )
+                          }
+                        >
+                          <ExternalLink className="w-3 h-3 mr-1" />
+                          Open Public Link
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Public profile link is not currently supported for this account type.
+                    </p>
+                  )}
+
+                  {String(selectedUser?.userType || "").toLowerCase() ===
+                    "customer" && (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Link href="/scout">
+                        <Button size="sm" variant="outline">
+                          Open Scout Discovery
+                        </Button>
+                      </Link>
+                      <p className="text-xs text-muted-foreground">
+                        Customer accounts use discovery and customer surfaces.
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -12541,6 +12655,10 @@ export default function AdminDashboard() {
                     </p>
                   </div>
                 </div>
+                <p className="mt-3 text-xs text-muted-foreground">
+                  Recent verification/reset email delivery attempts are not currently
+                  exposed by a dedicated admin endpoint.
+                </p>
                 {Array.isArray(userActivity?.signalSummary) &&
                   userActivity.signalSummary.length > 0 && (
                     <div className="mt-4">
@@ -12704,6 +12822,67 @@ export default function AdminDashboard() {
                     )}
                   </div>
                 )}
+              </div>
+
+              <div>
+                <h3 className="font-semibold mb-3 flex items-center text-sm text-muted-foreground">
+                  <Store className="w-4 h-4 mr-2" />
+                  LINKED ENTITIES
+                </h3>
+                <div className="rounded-md border p-3 space-y-3">
+                  <div className="flex flex-wrap gap-2">
+                    <Badge variant="outline">
+                      Restaurants/Trucks: {userRestaurants.length}
+                    </Badge>
+                    <Badge variant="outline">Hosts: {userHosts.length}</Badge>
+                    <Badge variant="outline">
+                      Parking Pass Listings: {parkingPasses.length}
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Relationship context: {String(selectedUser?.userType || "unknown")} account
+                    {isBusinessUserType(selectedUser?.userType)
+                      ? userRestaurants.length > 0
+                        ? " is linked to a business profile."
+                        : " requires business linkage for owner tooling."
+                      : " does not require business linkage by default."}
+                  </p>
+
+                  <div className="flex flex-wrap gap-2">
+                    {String(selectedUser?.userType || "").toLowerCase() ===
+                      "food_truck" && (
+                      <>
+                        <Link href="/restaurant-owner-dashboard?setup=schedule">
+                          <Button size="sm" variant="outline">
+                            Open Truck Setup Target
+                          </Button>
+                        </Link>
+                        <Link href="/parking-pass">
+                          <Button size="sm" variant="outline">
+                            Open Parking Pass
+                          </Button>
+                        </Link>
+                        <p className="text-xs text-muted-foreground w-full">
+                          Food truck accounts use truck setup and public Parking Pass flows,
+                          not host-only management.
+                        </p>
+                      </>
+                    )}
+                    {String(selectedUser?.userType || "").toLowerCase() ===
+                      "host" && (
+                      <>
+                        <Link href="/host/dashboard">
+                          <Button size="sm" variant="outline">
+                            Open Host Dashboard
+                          </Button>
+                        </Link>
+                        <p className="text-xs text-muted-foreground w-full">
+                          Host management remains host/account-bound.
+                        </p>
+                      </>
+                    )}
+                  </div>
+                </div>
               </div>
 
               {/* Saved Addresses */}
