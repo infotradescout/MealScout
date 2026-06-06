@@ -1,11 +1,14 @@
 import "dotenv/config";
+import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { and, eq, inArray, or, sql } from "drizzle-orm";
 
 import { db } from "../server/db";
-import { restaurants, truckImportListings, users } from "../shared/schema";
+import { restaurants, truckImportBatches, truckImportListings, users } from "../shared/schema";
+
+export const MERLIN_EVIDENCE_SEED_MAX_BATCH_SIZE = 500;
 
 type SeedRecord = {
   target_profile_id?: string;
@@ -36,6 +39,12 @@ type SeedRecord = {
   submission_flow?: string;
   attribution?: unknown;
   source_file_info?: unknown;
+  source_export_id?: string;
+  sourceExportId?: string;
+  export_id?: string;
+  exportId?: string;
+  row_id?: string;
+  rowId?: string;
   sourceNotes?: unknown;
   brand_lane?: string;
   brandLane?: string;
@@ -111,6 +120,38 @@ type ImportDecision = {
   listingId?: string;
   changedFields?: string[];
   droppedFields?: string[];
+  batchId?: string;
+  rowId?: string;
+  sourceExportId?: string;
+};
+
+type BatchRowOutcome = {
+  index: number;
+  rowId: string;
+  sourceExportId: string | null;
+  targetProfileId: string;
+  name: string;
+  action: "accepted" | "quarantined" | "rejected" | "duplicate_suppressed";
+  reason: string;
+  changedFields: string[];
+  droppedFields: string[];
+};
+
+type BatchClassification = {
+  batchId: string;
+  sourceExportId: string | null;
+  maxBatchSize: number;
+  totalRows: number;
+  outcome: "accepted" | "rejected_before_mutation" | "partial_classified";
+  shouldMutate: boolean;
+  counts: {
+    accepted: number;
+    quarantined: number;
+    rejected: number;
+    duplicatesSuppressed: number;
+  };
+  outcomes: BatchRowOutcome[];
+  noPartialSuccessAsFullSuccess: true;
 };
 
 type ValidationResult =
@@ -139,6 +180,44 @@ const isValidEmail = (value: unknown): boolean => {
   if (!EMAIL_RE.test(email)) return false;
   if (email.endsWith("@example.com")) return false;
   return true;
+};
+
+const getSourceExportId = (record: SeedRecord): string => {
+  const fromRoot = normalize(
+    record.source_export_id || record.sourceExportId || record.export_id || record.exportId,
+  );
+  if (fromRoot) return fromRoot;
+  const sourceFileInfo =
+    record.source_file_info && typeof record.source_file_info === "object"
+      ? (record.source_file_info as Record<string, unknown>)
+      : null;
+  return normalize(sourceFileInfo?.source_export_id || sourceFileInfo?.export_id);
+};
+
+const getStableRowId = (record: SeedRecord, index: number): string => {
+  const explicit = normalize(record.row_id || record.rowId || record.target_profile_id);
+  if (explicit) return explicit;
+  const hash = createHash("sha256")
+    .update(JSON.stringify(record))
+    .digest("hex")
+    .slice(0, 16);
+  return `row-${index}-${hash}`;
+};
+
+const buildBatchId = (
+  rows: SeedRecord[],
+  sourceExportId: string | null,
+  explicitBatchId = "",
+): string => {
+  const explicit = normalize(explicitBatchId);
+  if (explicit) return explicit;
+  const hash = createHash("sha256")
+    .update(sourceExportId || "merlin-evidence-seed")
+    .update("\n")
+    .update(JSON.stringify(rows))
+    .digest("hex")
+    .slice(0, 24);
+  return `merlin-${hash}`;
 };
 
 const normalizeUrlIdentity = (value: unknown): string => {
@@ -413,6 +492,135 @@ const validateSeed = (seed: NormalizedSeed): ValidationResult => {
   return { ok: true };
 };
 
+const classifyMerlinSeedBatch = (
+  records: SeedRecord[],
+  options: { batchId?: string } = {},
+): BatchClassification => {
+  const sourceExportIds = Array.from(
+    new Set(records.map(getSourceExportId).filter(Boolean)),
+  );
+  const sourceExportId = sourceExportIds.length === 1 ? sourceExportIds[0] : null;
+  const batchId = buildBatchId(records, sourceExportId, options.batchId || "");
+
+  if (records.length > MERLIN_EVIDENCE_SEED_MAX_BATCH_SIZE) {
+    return {
+      batchId,
+      sourceExportId,
+      maxBatchSize: MERLIN_EVIDENCE_SEED_MAX_BATCH_SIZE,
+      totalRows: records.length,
+      outcome: "rejected_before_mutation",
+      shouldMutate: false,
+      counts: {
+        accepted: 0,
+        quarantined: 0,
+        rejected: records.length,
+        duplicatesSuppressed: 0,
+      },
+      outcomes: records.map((record, index) => ({
+        index: index + 1,
+        rowId: getStableRowId(record, index + 1),
+        sourceExportId: getSourceExportId(record) || null,
+        targetProfileId: normalize(record.target_profile_id),
+        name: normalize(record.profile_name || record.business_name || record.name) || "(missing)",
+        action: "rejected",
+        reason: "batch_size_exceeds_limit",
+        changedFields: [],
+        droppedFields: [],
+      })),
+      noPartialSuccessAsFullSuccess: true,
+    };
+  }
+
+  const seenKeys = new Set<string>();
+  const outcomes: BatchRowOutcome[] = [];
+
+  records.forEach((record, index) => {
+    const rowIndex = index + 1;
+    const seed = normalizeSeed(record);
+    const duplicateKey =
+      seed.targetProfileId ||
+      seed.email ||
+      seed.phoneDigits ||
+      seed.website ||
+      seed.instagram ||
+      seed.facebook ||
+      `${normalizeLower(seed.name)}|${normalizeLower(seed.city)}|${normalizeLower(seed.state)}`;
+
+    if (duplicateKey && seenKeys.has(duplicateKey)) {
+      outcomes.push({
+        index: rowIndex,
+        rowId: getStableRowId(record, rowIndex),
+        sourceExportId: getSourceExportId(record) || sourceExportId,
+        targetProfileId: seed.targetProfileId,
+        name: seed.name || "(missing)",
+        action: "duplicate_suppressed",
+        reason: "duplicate_idempotency_lock",
+        changedFields: seed.changedFields,
+        droppedFields: seed.droppedFields,
+      });
+      return;
+    }
+    if (duplicateKey) seenKeys.add(duplicateKey);
+
+    const validation = validateSeed(seed);
+    if (!validation.ok) {
+      outcomes.push({
+        index: rowIndex,
+        rowId: getStableRowId(record, rowIndex),
+        sourceExportId: getSourceExportId(record) || sourceExportId,
+        targetProfileId: seed.targetProfileId,
+        name: seed.name || "(missing)",
+        action: validation.reason === "review_required" ? "quarantined" : "rejected",
+        reason: validation.reason,
+        changedFields: seed.changedFields,
+        droppedFields: seed.droppedFields,
+      });
+      return;
+    }
+
+    outcomes.push({
+      index: rowIndex,
+      rowId: getStableRowId(record, rowIndex),
+      sourceExportId: getSourceExportId(record) || sourceExportId,
+      targetProfileId: seed.targetProfileId,
+      name: seed.name,
+      action: "accepted",
+      reason: "safe_evidence_seed",
+      changedFields: seed.changedFields,
+      droppedFields: seed.droppedFields,
+    });
+  });
+
+  const counts = {
+    accepted: outcomes.filter((outcome) => outcome.action === "accepted").length,
+    quarantined: outcomes.filter((outcome) => outcome.action === "quarantined").length,
+    rejected: outcomes.filter((outcome) => outcome.action === "rejected").length,
+    duplicatesSuppressed: outcomes.filter((outcome) => outcome.action === "duplicate_suppressed").length,
+  };
+  const hasNonAcceptedRows =
+    counts.quarantined > 0 || counts.rejected > 0 || counts.duplicatesSuppressed > 0;
+
+  return {
+    batchId,
+    sourceExportId,
+    maxBatchSize: MERLIN_EVIDENCE_SEED_MAX_BATCH_SIZE,
+    totalRows: records.length,
+    outcome: hasNonAcceptedRows ? "partial_classified" : "accepted",
+    shouldMutate: !hasNonAcceptedRows,
+    counts,
+    outcomes,
+    noPartialSuccessAsFullSuccess: true,
+  };
+};
+
+const assertBatchCanApply = (classification: BatchClassification) => {
+  if (!classification.shouldMutate) {
+    throw new Error(
+      `Batch ${classification.batchId} is ${classification.outcome}; refusing --apply so partial success cannot be reported as full success.`,
+    );
+  }
+};
+
 const hasIdentityForUpsert = (seed: NormalizedSeed): boolean => {
   if (seed.targetProfileId) return true;
   if (seed.email) return true;
@@ -428,7 +636,14 @@ const hasRequiredForCreate = (seed: NormalizedSeed): boolean => {
   return true;
 };
 
-const mergeSeedRawData = (existing: unknown, seed: NormalizedSeed) => {
+const mergeSeedRawData = (
+  existing: unknown,
+  seed: NormalizedSeed,
+  outcome?: Pick<
+    BatchRowOutcome,
+    "index" | "rowId" | "sourceExportId" | "action" | "reason"
+  > & { batchId?: string },
+) => {
   const current =
     existing && typeof existing === "object"
       ? (existing as Record<string, unknown>)
@@ -451,6 +666,18 @@ const mergeSeedRawData = (existing: unknown, seed: NormalizedSeed) => {
     affiliate_user_id: null,
     affiliate_tag: null,
     referral_code: null,
+    import_batch: outcome
+      ? {
+          batch_id: outcome.batchId || null,
+          source_export_id: outcome.sourceExportId || null,
+          row_index: outcome.index,
+          row_id: outcome.rowId,
+          classification: outcome.action,
+          reason_code: outcome.reason,
+          manual_review_required: outcome.action === "quarantined",
+          trusted_public_state_created: false,
+        }
+      : null,
     imported_at: new Date().toISOString(),
   };
 
@@ -460,11 +687,11 @@ const mergeSeedRawData = (existing: unknown, seed: NormalizedSeed) => {
   };
 };
 
-const resolveSystemImportOwnerId = async (): Promise<string> => {
+const resolveSystemImportOwnerId = async (client: any = db): Promise<string> => {
   const importEmail = normalizeLower(
     process.env.IMPORT_SYSTEM_EMAIL || "system-import@mealscout.us",
   );
-  const [owner] = await db
+  const [owner] = await client
     .select({ id: users.id })
     .from(users)
     .where(eq(users.email, importEmail))
@@ -479,13 +706,16 @@ const resolveSystemImportOwnerId = async (): Promise<string> => {
   return String(owner.id);
 };
 
-const findMatches = async (seed: NormalizedSeed): Promise<MatchResult> => {
+const findMatches = async (
+  seed: NormalizedSeed,
+  client: any = db,
+): Promise<MatchResult> => {
   let matchedRestaurant: any | null = null;
   let matchedListing: any | null = null;
   let matchedBy = "none";
 
   if (seed.targetProfileId) {
-    const [restaurantById] = await db
+    const [restaurantById] = await client
       .select()
       .from(restaurants)
       .where(eq(restaurants.id, seed.targetProfileId))
@@ -494,7 +724,7 @@ const findMatches = async (seed: NormalizedSeed): Promise<MatchResult> => {
       matchedRestaurant = restaurantById;
       matchedBy = "target_profile_id:restaurant";
       if (restaurantById.claimedFromImportId) {
-        const [linked] = await db
+        const [linked] = await client
           .select()
           .from(truckImportListings)
           .where(
@@ -509,7 +739,7 @@ const findMatches = async (seed: NormalizedSeed): Promise<MatchResult> => {
       return { restaurant: matchedRestaurant, listing: matchedListing, matchedBy };
     }
 
-    const [listingById] = await db
+    const [listingById] = await client
       .select()
       .from(truckImportListings)
       .where(eq(truckImportListings.id, seed.targetProfileId))
@@ -517,7 +747,7 @@ const findMatches = async (seed: NormalizedSeed): Promise<MatchResult> => {
     if (listingById) {
       matchedListing = listingById;
       matchedBy = "target_profile_id:listing";
-      const [linkedRestaurant] = await db
+      const [linkedRestaurant] = await client
         .select()
         .from(restaurants)
         .where(eq(restaurants.claimedFromImportId, listingById.id))
@@ -528,7 +758,7 @@ const findMatches = async (seed: NormalizedSeed): Promise<MatchResult> => {
   }
 
   if (seed.email) {
-    const [listingByEmail] = await db
+    const [listingByEmail] = await client
       .select()
       .from(truckImportListings)
       .where(eq(sql`lower(coalesce(${truckImportListings.email}, ''))`, seed.email))
@@ -536,7 +766,7 @@ const findMatches = async (seed: NormalizedSeed): Promise<MatchResult> => {
     if (listingByEmail) {
       matchedListing = listingByEmail;
       matchedBy = "email";
-      const [linkedRestaurant] = await db
+      const [linkedRestaurant] = await client
         .select()
         .from(restaurants)
         .where(eq(restaurants.claimedFromImportId, listingByEmail.id))
@@ -547,7 +777,7 @@ const findMatches = async (seed: NormalizedSeed): Promise<MatchResult> => {
   }
 
   if (seed.phoneDigits) {
-    const [listingByPhone] = await db
+    const [listingByPhone] = await client
       .select()
       .from(truckImportListings)
       .where(
@@ -560,7 +790,7 @@ const findMatches = async (seed: NormalizedSeed): Promise<MatchResult> => {
     if (listingByPhone) {
       matchedListing = listingByPhone;
       matchedBy = "phone";
-      const [linkedRestaurant] = await db
+      const [linkedRestaurant] = await client
         .select()
         .from(restaurants)
         .where(eq(restaurants.claimedFromImportId, listingByPhone.id))
@@ -569,7 +799,7 @@ const findMatches = async (seed: NormalizedSeed): Promise<MatchResult> => {
       return { restaurant: matchedRestaurant, listing: matchedListing, matchedBy };
     }
 
-    const [restaurantByPhone] = await db
+    const [restaurantByPhone] = await client
       .select()
       .from(restaurants)
       .where(
@@ -583,7 +813,7 @@ const findMatches = async (seed: NormalizedSeed): Promise<MatchResult> => {
       matchedRestaurant = restaurantByPhone;
       matchedBy = "phone";
       if (restaurantByPhone.claimedFromImportId) {
-        const [linked] = await db
+        const [linked] = await client
           .select()
           .from(truckImportListings)
           .where(
@@ -600,7 +830,7 @@ const findMatches = async (seed: NormalizedSeed): Promise<MatchResult> => {
   }
 
   if (seed.website || seed.instagram || seed.facebook) {
-    const [listingByUrl] = await db
+    const [listingByUrl] = await client
       .select()
       .from(truckImportListings)
       .where(
@@ -630,7 +860,7 @@ const findMatches = async (seed: NormalizedSeed): Promise<MatchResult> => {
     if (listingByUrl) {
       matchedListing = listingByUrl;
       matchedBy = "website_or_social";
-      const [linkedRestaurant] = await db
+      const [linkedRestaurant] = await client
         .select()
         .from(restaurants)
         .where(eq(restaurants.claimedFromImportId, listingByUrl.id))
@@ -641,7 +871,7 @@ const findMatches = async (seed: NormalizedSeed): Promise<MatchResult> => {
   }
 
   if (seed.name && (seed.city || seed.state)) {
-    const [listingByNameLocation] = await db
+    const [listingByNameLocation] = await client
       .select()
       .from(truckImportListings)
       .where(
@@ -666,7 +896,7 @@ const findMatches = async (seed: NormalizedSeed): Promise<MatchResult> => {
     if (listingByNameLocation) {
       matchedListing = listingByNameLocation;
       matchedBy = "name_plus_location";
-      const [linkedRestaurant] = await db
+      const [linkedRestaurant] = await client
         .select()
         .from(restaurants)
         .where(eq(restaurants.claimedFromImportId, listingByNameLocation.id))
@@ -675,7 +905,7 @@ const findMatches = async (seed: NormalizedSeed): Promise<MatchResult> => {
       return { restaurant: matchedRestaurant, listing: matchedListing, matchedBy };
     }
 
-    const [restaurantByNameLocation] = await db
+    const [restaurantByNameLocation] = await client
       .select()
       .from(restaurants)
       .where(
@@ -701,7 +931,7 @@ const findMatches = async (seed: NormalizedSeed): Promise<MatchResult> => {
       matchedRestaurant = restaurantByNameLocation;
       matchedBy = "name_plus_location";
       if (restaurantByNameLocation.claimedFromImportId) {
-        const [linked] = await db
+        const [linked] = await client
           .select()
           .from(truckImportListings)
           .where(
@@ -723,9 +953,15 @@ const findMatches = async (seed: NormalizedSeed): Promise<MatchResult> => {
 const upsertListing = async (
   seed: NormalizedSeed,
   existingListing: any | null,
+  input: { batchId: string; outcome: BatchRowOutcome },
+  client: any = db,
 ) => {
-  const rawData = mergeSeedRawData(existingListing?.rawData, seed);
+  const rawData = mergeSeedRawData(existingListing?.rawData, seed, {
+    ...input.outcome,
+    batchId: input.batchId,
+  });
   const values = {
+    batchId: input.batchId,
     source: "merlin_seed_import",
     name: seed.name,
     address:
@@ -746,7 +982,7 @@ const upsertListing = async (
   } as any;
 
   if (existingListing) {
-    const [updated] = await db
+    const [updated] = await client
       .update(truckImportListings)
       .set(values)
       .where(eq(truckImportListings.id, existingListing.id))
@@ -754,7 +990,7 @@ const upsertListing = async (
     return updated;
   }
 
-  const [created] = await db.insert(truckImportListings).values(values).returning();
+  const [created] = await client.insert(truckImportListings).values(values).returning();
   return created;
 };
 
@@ -763,8 +999,13 @@ const upsertRestaurant = async (
   systemOwnerId: string,
   existingRestaurant: any | null,
   listingId: string,
+  input: { batchId: string; outcome: BatchRowOutcome },
+  client: any = db,
 ) => {
-  const rawData = mergeSeedRawData(existingRestaurant?.rawData, seed);
+  const rawData = mergeSeedRawData(existingRestaurant?.rawData, seed, {
+    ...input.outcome,
+    batchId: input.batchId,
+  });
   const values = {
     ownerId: systemOwnerId,
     name: seed.name,
@@ -787,7 +1028,7 @@ const upsertRestaurant = async (
   } as any;
 
   if (existingRestaurant) {
-    const [updated] = await db
+    const [updated] = await client
       .update(restaurants)
       .set(values)
       .where(eq(restaurants.id, existingRestaurant.id))
@@ -795,12 +1036,56 @@ const upsertRestaurant = async (
     return updated;
   }
 
-  const [created] = await db.insert(restaurants).values(values).returning();
+  const [created] = await client.insert(restaurants).values(values).returning();
   return created;
+};
+
+const createBatchAuditLedger = async (
+  client: any,
+  classification: BatchClassification,
+  inputFile: string,
+  systemOwnerId: string,
+) => {
+  const [batch] = await client
+    .insert(truckImportBatches)
+    .values({
+      id: classification.batchId,
+      source: "merlin_seed_import",
+      fileName: classification.sourceExportId || path.basename(inputFile),
+      uploadedBy: systemOwnerId,
+      totalRows: classification.totalRows,
+      importedRows: 0,
+      skippedRows:
+        classification.counts.quarantined +
+        classification.counts.rejected +
+        classification.counts.duplicatesSuppressed,
+      updatedAt: new Date(),
+    } as any)
+    .returning();
+  return batch;
+};
+
+const finalizeBatchAuditLedger = async (
+  client: any,
+  classification: BatchClassification,
+  importedRows: number,
+) => {
+  await client
+    .update(truckImportBatches)
+    .set({
+      importedRows,
+      skippedRows:
+        classification.counts.quarantined +
+        classification.counts.rejected +
+        classification.counts.duplicatesSuppressed,
+      updatedAt: new Date(),
+    } as any)
+    .where(eq(truckImportBatches.id, classification.batchId));
 };
 
 const buildReport = (input: {
   inputFile: string;
+  classification: BatchClassification;
   decisions: ImportDecision[];
   systemOwnerId: string;
   importedRestaurantIds: string[];
@@ -822,7 +1107,17 @@ const buildReport = (input: {
 
   return [
     `input_file: ${input.inputFile}`,
+    `batch_id: ${input.classification.batchId}`,
+    `source_export_id: ${input.classification.sourceExportId || "unavailable"}`,
+    `max_batch_size: ${input.classification.maxBatchSize}`,
+    `batch_outcome: ${input.classification.outcome}`,
+    `batch_should_mutate: ${input.classification.shouldMutate}`,
+    "no_partial_success_reported_as_full_success: true",
     `total_records_read: ${total}`,
+    `rows_accepted_count: ${input.classification.counts.accepted}`,
+    `rows_quarantined_count: ${input.classification.counts.quarantined}`,
+    `rows_rejected_count: ${input.classification.counts.rejected}`,
+    `duplicates_suppressed_count: ${input.classification.counts.duplicatesSuppressed}`,
     `records_imported_count: ${imported}`,
     `records_created_count: ${created}`,
     `records_updated_count: ${updated}`,
@@ -833,6 +1128,14 @@ const buildReport = (input: {
     `imported_truck_import_listing_ids: ${input.importedListingIds.join(",") || "none"}`,
     "safety_confirmation: seeded_from_evidence=true, profile_origin=evidence_seed, claim_status=unclaimed, owner_user_id=null, invitedUserId=null, email_verified=false, insurance_verified=false, affiliate_user_id=null",
     `blocked_reasons: ${JSON.stringify(blockedByReason)}`,
+    "manual_review_path: quarantined rows remain non-mutating batch outcomes until admin review; accepted writes remain unclaimed, unverified, unowned by a claimant, and unaffiliated",
+    `admin_quarantine_visibility: ${input.classification.counts.quarantined > 0 ? "audit_ledger_review_required" : "no_quarantined_rows"}`,
+    "rollback_noop_behavior: preflight classification runs before mutation; --apply refuses partial batches; accepted apply runs in one transaction",
+    "row_outcome_ledger:",
+    ...input.classification.outcomes.map(
+      (outcome) =>
+        `- batch_id=${input.classification.batchId} row=${outcome.index} row_id=${outcome.rowId} source_export_id=${outcome.sourceExportId || "unavailable"} action=${outcome.action} reason=${outcome.reason} name=${outcome.name}`,
+    ),
     "normalization_changes:",
     ...input.decisions.map(
       (d) =>
@@ -853,10 +1156,7 @@ const main = async () => {
   const reportPath =
     getArg("--report") ||
     path.resolve(process.cwd(), "mealscout-merlin-profile-seed-import-report.txt");
-
-  if (!db) {
-    throw new Error("DATABASE_URL is required.");
-  }
+  const batchIdArg = getArg("--batch-id");
 
   const absoluteInput = path.isAbsolute(inputFile)
     ? inputFile
@@ -869,6 +1169,79 @@ const main = async () => {
   }
 
   const sliced = limitArg > 0 ? parsed.slice(0, limitArg) : parsed;
+  const classification = classifyMerlinSeedBatch(sliced, { batchId: batchIdArg });
+
+  if (classification.outcome === "rejected_before_mutation") {
+    const report = buildReport({
+      inputFile: absoluteInput,
+      classification,
+      decisions: classification.outcomes.map((outcome) => ({
+        index: outcome.index,
+        name: outcome.name,
+        action: "blocked",
+        blockedReason: outcome.reason,
+        changedFields: outcome.changedFields,
+        droppedFields: outcome.droppedFields,
+        batchId: classification.batchId,
+        rowId: outcome.rowId,
+        sourceExportId: outcome.sourceExportId || undefined,
+      })),
+      systemOwnerId: "not_resolved_rejected_before_mutation",
+      importedRestaurantIds: [],
+      importedListingIds: [],
+    });
+    writeFileSync(
+      reportPath,
+      `${report}\nadmin_visibility_proof: audit ledger only; rejected before mutation\npublic_customer_visibility_proof: no-op; no trusted/public state created\n`,
+      "utf8",
+    );
+    console.error(
+      JSON.stringify(
+        {
+          ok: false,
+          apply,
+          inputFile: absoluteInput,
+          reportPath,
+          batch: classification,
+        },
+        null,
+        2,
+      ),
+    );
+    process.exit(1);
+  }
+
+  if (apply && !classification.shouldMutate) {
+    const report = buildReport({
+      inputFile: absoluteInput,
+      classification,
+      decisions: classification.outcomes.map((outcome) => ({
+        index: outcome.index,
+        name: outcome.name,
+        action: "blocked",
+        blockedReason: outcome.reason,
+        changedFields: outcome.changedFields,
+        droppedFields: outcome.droppedFields,
+        batchId: classification.batchId,
+        rowId: outcome.rowId,
+        sourceExportId: outcome.sourceExportId || undefined,
+      })),
+      systemOwnerId: "not_resolved_noop_before_mutation",
+      importedRestaurantIds: [],
+      importedListingIds: [],
+    });
+    writeFileSync(
+      reportPath,
+      `${report}\nadmin_visibility_proof: audit ledger only; --apply refused before mutation\npublic_customer_visibility_proof: no-op; no trusted/public state created\n`,
+      "utf8",
+    );
+    assertBatchCanApply(classification);
+  }
+
+  if (!db) {
+    throw new Error("DATABASE_URL is required.");
+  }
+
   const seeds = sliced.map((r: SeedRecord) => normalizeSeed(r));
 
   const systemOwnerId = await resolveSystemImportOwnerId();
@@ -876,88 +1249,129 @@ const main = async () => {
   const importedRestaurantIds = new Set<string>();
   const importedListingIds = new Set<string>();
 
-  for (let i = 0; i < seeds.length; i += 1) {
-    const seed = seeds[i];
-    const row = i + 1;
-
-    const validation = validateSeed(seed);
-    if (!validation.ok) {
-      decisions.push({
-        index: row,
-        name: seed.name || "(missing)",
-        action: "blocked",
-        blockedReason: validation.reason,
-        changedFields: seed.changedFields,
-        droppedFields: seed.droppedFields,
-      });
-      continue;
+  const processRows = async (client: any) => {
+    if (apply) {
+      await createBatchAuditLedger(client, classification, absoluteInput, systemOwnerId);
     }
 
-    if (!hasIdentityForUpsert(seed)) {
-      decisions.push({
-        index: row,
-        name: seed.name || "(missing)",
-        action: "blocked",
-        blockedReason: "missing_required_identity",
-        changedFields: seed.changedFields,
-        droppedFields: seed.droppedFields,
-      });
-      continue;
-    }
+    for (let i = 0; i < seeds.length; i += 1) {
+      const seed = seeds[i];
+      const row = i + 1;
+      const classified = classification.outcomes[i];
 
-    const match = await findMatches(seed);
+      if (classified.action !== "accepted") {
+        decisions.push({
+          index: row,
+          name: seed.name || "(missing)",
+          action: "blocked",
+          blockedReason: classified.reason,
+          changedFields: seed.changedFields,
+          droppedFields: seed.droppedFields,
+          batchId: classification.batchId,
+          rowId: classified.rowId,
+          sourceExportId: classified.sourceExportId || undefined,
+        });
+        continue;
+      }
 
-    const willCreate = !match.restaurant && !match.listing;
-    if (willCreate && !hasRequiredForCreate(seed)) {
-      decisions.push({
-        index: row,
-        name: seed.name || "(missing)",
-        action: "blocked",
-        blockedReason: "missing_required_fields_for_create",
-        matchedBy: match.matchedBy,
-        changedFields: seed.changedFields,
-        droppedFields: seed.droppedFields,
-      });
-      continue;
-    }
+      if (!hasIdentityForUpsert(seed)) {
+        decisions.push({
+          index: row,
+          name: seed.name || "(missing)",
+          action: "blocked",
+          blockedReason: "missing_required_identity",
+          changedFields: seed.changedFields,
+          droppedFields: seed.droppedFields,
+          batchId: classification.batchId,
+          rowId: classified.rowId,
+          sourceExportId: classified.sourceExportId || undefined,
+        });
+        continue;
+      }
 
-    if (!apply) {
+      const match = await findMatches(seed, client);
+
+      const willCreate = !match.restaurant && !match.listing;
+      if (willCreate && !hasRequiredForCreate(seed)) {
+        decisions.push({
+          index: row,
+          name: seed.name || "(missing)",
+          action: "blocked",
+          blockedReason: "missing_required_fields_for_create",
+          matchedBy: match.matchedBy,
+          changedFields: seed.changedFields,
+          droppedFields: seed.droppedFields,
+          batchId: classification.batchId,
+          rowId: classified.rowId,
+          sourceExportId: classified.sourceExportId || undefined,
+        });
+        continue;
+      }
+
+      if (!apply) {
+        decisions.push({
+          index: row,
+          name: seed.name || "(missing)",
+          action: willCreate ? "created" : "updated",
+          matchedBy: match.matchedBy,
+          restaurantId: match.restaurant?.id
+            ? String(match.restaurant.id)
+            : undefined,
+          listingId: match.listing?.id ? String(match.listing.id) : undefined,
+          changedFields: seed.changedFields,
+          droppedFields: seed.droppedFields,
+          batchId: classification.batchId,
+          rowId: classified.rowId,
+          sourceExportId: classified.sourceExportId || undefined,
+        });
+        continue;
+      }
+
+      const listing = await upsertListing(
+        seed,
+        match.listing,
+        { batchId: classification.batchId, outcome: classified },
+        client,
+      );
+      const restaurant = await upsertRestaurant(
+        seed,
+        systemOwnerId,
+        match.restaurant,
+        String(listing.id),
+        { batchId: classification.batchId, outcome: classified },
+        client,
+      );
+
+      importedListingIds.add(String(listing.id));
+      importedRestaurantIds.add(String(restaurant.id));
+
       decisions.push({
         index: row,
         name: seed.name || "(missing)",
         action: willCreate ? "created" : "updated",
         matchedBy: match.matchedBy,
-        restaurantId: match.restaurant?.id
-          ? String(match.restaurant.id)
-          : undefined,
-        listingId: match.listing?.id ? String(match.listing.id) : undefined,
+        restaurantId: String(restaurant.id),
+        listingId: String(listing.id),
         changedFields: seed.changedFields,
         droppedFields: seed.droppedFields,
+        batchId: classification.batchId,
+        rowId: classified.rowId,
+        sourceExportId: classified.sourceExportId || undefined,
       });
-      continue;
     }
 
-    const listing = await upsertListing(seed, match.listing);
-    const restaurant = await upsertRestaurant(
-      seed,
-      systemOwnerId,
-      match.restaurant,
-      String(listing.id),
-    );
+    if (apply) {
+      const importedRows = decisions.filter((d) => d.action !== "blocked").length;
+      await finalizeBatchAuditLedger(client, classification, importedRows);
+    }
+  };
 
-    importedListingIds.add(String(listing.id));
-    importedRestaurantIds.add(String(restaurant.id));
-
-    decisions.push({
-      index: row,
-      name: seed.name || "(missing)",
-      action: willCreate ? "created" : "updated",
-      matchedBy: match.matchedBy,
-      restaurantId: String(restaurant.id),
-      listingId: String(listing.id),
-      changedFields: seed.changedFields,
-      droppedFields: seed.droppedFields,
+  if (apply) {
+    await db.transaction(async (tx) => {
+      await processRows(tx);
     });
+  } else {
+    await processRows(db);
   }
 
   let adminVisibleCount = 0;
@@ -974,6 +1388,7 @@ const main = async () => {
 
   const report = buildReport({
     inputFile: absoluteInput,
+    classification,
     decisions,
     systemOwnerId,
     importedRestaurantIds: Array.from(importedRestaurantIds),
@@ -994,6 +1409,14 @@ const main = async () => {
         apply,
         inputFile: absoluteInput,
         reportPath,
+        batch: {
+          batchId: classification.batchId,
+          sourceExportId: classification.sourceExportId,
+          outcome: classification.outcome,
+          maxBatchSize: classification.maxBatchSize,
+          noPartialSuccessAsFullSuccess: classification.noPartialSuccessAsFullSuccess,
+          counts: classification.counts,
+        },
         totals: {
           totalRecordsRead: decisions.length,
           imported: decisions.filter((d) => d.action !== "blocked").length,
@@ -1020,8 +1443,14 @@ if (isDirectRun) {
 }
 
 export const __testables = {
+  MERLIN_EVIDENCE_SEED_MAX_BATCH_SIZE,
   normalizeSeed,
   validateSeed,
+  classifyMerlinSeedBatch,
+  buildBatchId,
+  getStableRowId,
+  getSourceExportId,
+  assertBatchCanApply,
   isValidEmail,
   isEmailLike,
   isGenericOrJunkName,

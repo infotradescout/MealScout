@@ -1,7 +1,7 @@
 {
   "repo": "infotradescout/MealScout",
-  "commit": "85184827f7098572094f3f24e978f790a7cf7263",
-  "short_sha": "85184827",
+  "commit": "c36823251d9c252d3aa3f8dedce6e1a0a587cea5",
+  "short_sha": "c3682325",
   "change": "Merlin import canary",
   "source": "Merlin evidence_seed export",
   "data_direction": "Merlin -> MealScout only",
