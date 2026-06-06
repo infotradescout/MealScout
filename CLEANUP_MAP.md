@@ -201,6 +201,22 @@ Validation command: `npm run gate:production`.
 
 Handoff value: Public/private access boundaries are explicit before cleanup moves code.
 
+## C9A - Account Lifecycle + Discovery Boundary Audit
+
+Status: `DONE`
+
+Goal: Document the existing account lifecycle, public discovery, referral, setup, verification, login recovery, dashboard continuation, and Parking Pass boundary map without runtime changes.
+
+Files touched: `MEALSCOUT_ACCOUNT_LIFECYCLE_DISCOVERY_AUDIT.md`, `scripts/mealscout-account-lifecycle-discovery-audit.contract.test.ts`, `CLEANUP_MAP.md`.
+
+Allowed changes: Documentation and static contract only.
+
+Disallowed changes: Runtime behavior, auth middleware, routes, role names, onboarding, registration, affiliate behavior, Parking Pass behavior, payment behavior, or sample data.
+
+Validation command: `node scripts/mealscout-account-lifecycle-discovery-audit.contract.test.ts`.
+
+Handoff value: Inserted stabilization audit; C8 remains `NEXT` and can still perform the public/auth route boundary audit. The queued payment/webhook safety map remains queued and is not renamed, advanced, or implied complete by this docs-only audit.
+
 ## C9 - Payment/Webhook Safety Map
 
 Status: `QUEUED`
