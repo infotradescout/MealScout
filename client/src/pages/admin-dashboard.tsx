@@ -171,10 +171,13 @@ const getAdminUserPublicProfilePath = (
 
 const buildCanonicalAffiliateLink = (
   affiliateTag?: string | null,
+  user?: any,
+  attachedHostProfile?: any | null,
 ) => {
   const tag = String(affiliateTag || "").trim();
   if (!tag) return null;
-  const url = new URL("/", canonicalMealScoutOrigin);
+  const profilePath = getAdminUserPublicProfilePath(user, attachedHostProfile);
+  const url = new URL(profilePath, canonicalMealScoutOrigin);
   url.searchParams.set("ref", tag);
   return url.toString();
 };
@@ -12043,6 +12046,10 @@ export default function AdminDashboard() {
                       ).trim();
                       const affiliateLink = buildCanonicalAffiliateLink(
                         selectedUser.affiliateTag,
+                        selectedUser,
+                        Array.isArray(userHosts) && userHosts.length > 0
+                          ? userHosts[0]
+                          : null,
                       );
                       return (
                         <div className="space-y-3">
@@ -12060,9 +12067,7 @@ export default function AdminDashboard() {
                                     size="sm"
                                     variant="outline"
                                     onClick={async () => {
-                                      await navigator.clipboard.writeText(
-                                        affiliateLink,
-                                      );
+                                      await navigator.clipboard.writeText(affiliateLink);
                                       toast({ title: "Affiliate link copied" });
                                     }}
                                     data-testid={`button-copy-affiliate-link-${selectedUser.id}`}
