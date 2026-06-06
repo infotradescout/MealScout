@@ -1,0 +1,67 @@
+{
+  "repo": "infotradescout/MealScout",
+  "commit": "85184827f7098572094f3f24e978f790a7cf7263",
+  "short_sha": "85184827",
+  "change": "Merlin import canary",
+  "source": "Merlin evidence_seed export",
+  "data_direction": "Merlin -> MealScout only",
+  "canary_result": {
+    "rows_received": 7,
+    "rows_accepted": 2,
+    "rows_quarantined": 1,
+    "rows_rejected": 3,
+    "duplicates_suppressed": 1,
+    "claim_escalations": 0,
+    "verification_escalations": 0,
+    "owner_escalations": 0,
+    "affiliate_escalations": 0
+  },
+  "quarantine_reasons": {
+    "review_required": 1
+  },
+  "decisions": [
+    {
+      "row": 1,
+      "name": "Canary Pupusa Truck",
+      "action": "accepted",
+      "reason": "safe_evidence_seed"
+    },
+    {
+      "row": 2,
+      "name": "Canary Pupusa Truck Duplicate",
+      "action": "duplicate_suppressed",
+      "reason": "duplicate_target_profile_id"
+    },
+    {
+      "row": 3,
+      "name": "Canary Admin Unattributed",
+      "action": "accepted",
+      "reason": "safe_evidence_seed"
+    },
+    {
+      "row": 4,
+      "name": "Canary Blocked Truck",
+      "action": "rejected",
+      "reason": "import_decision_blocked"
+    },
+    {
+      "row": 5,
+      "name": "Canary Review Truck",
+      "action": "quarantined",
+      "reason": "review_required"
+    },
+    {
+      "row": 6,
+      "name": "Canary Unsafe Origin",
+      "action": "rejected",
+      "reason": "invalid_safety_flags"
+    },
+    {
+      "row": 7,
+      "name": "Canary Bad Affiliate",
+      "action": "rejected",
+      "reason": "admin_unattributed_affiliate_attribution"
+    }
+  ],
+  "write_scope": "local synthetic canary; no MealScout -> Merlin writes; no production batch import"
+}
