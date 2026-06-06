@@ -46,8 +46,23 @@ type SeedRecord = {
   claim_status?: string;
   email_verified?: unknown;
   insurance_verified?: unknown;
+  import_decision?: string;
+  importDecision?: string;
+  owner_user_id?: unknown;
+  ownerUserId?: unknown;
   invited_user_id?: unknown;
   invitedUserId?: unknown;
+  source_actor?: string;
+  sourceActor?: string;
+  source_attribution?: string;
+  sourceAttribution?: string;
+  affiliate_user_id?: unknown;
+  affiliateUserId?: unknown;
+  affiliate_tag?: unknown;
+  affiliateTag?: unknown;
+  referral_code?: unknown;
+  referralCode?: unknown;
+  ref?: unknown;
   safety_flags?: unknown;
   safetyFlags?: unknown;
   [key: string]: unknown;
@@ -199,6 +214,45 @@ const isNullLike = (value: unknown): boolean => {
   return normalized === "" || normalized === "null" || normalized === "none";
 };
 
+const isAdminUnattributed = (raw: SeedRecord): boolean => {
+  const candidates = [
+    raw.source_actor,
+    raw.sourceActor,
+    raw.source_attribution,
+    raw.sourceAttribution,
+    getSafetyField(raw, "source_actor"),
+    getSafetyField(raw, "source_attribution"),
+  ];
+  return candidates.some((value) => normalizeLower(value) === "admin_unattributed");
+};
+
+const hasAffiliateAttribution = (raw: SeedRecord): boolean => {
+  const attribution =
+    raw.attribution && typeof raw.attribution === "object"
+      ? (raw.attribution as Record<string, unknown>)
+      : {};
+  const candidates = [
+    raw.affiliate_user_id,
+    raw.affiliateUserId,
+    raw.affiliate_tag,
+    raw.affiliateTag,
+    raw.referral_code,
+    raw.referralCode,
+    raw.ref,
+    getSafetyField(raw, "affiliate_user_id"),
+    getSafetyField(raw, "affiliate_tag"),
+    getSafetyField(raw, "referral_code"),
+    attribution.affiliate_user_id,
+    attribution.affiliateUserId,
+    attribution.affiliate_tag,
+    attribution.affiliateTag,
+    attribution.referral_code,
+    attribution.referralCode,
+    attribution.ref,
+  ];
+  return candidates.some((value) => !isNullLike(value));
+};
+
 const canonicalName = (name: string): string => {
   const trimmed = normalize(name);
   if (/^mann\s+kettle\s+corn\s+\d+$/i.test(trimmed)) {
@@ -305,8 +359,20 @@ const validateSeed = (seed: NormalizedSeed): ValidationResult => {
   }
 
   const raw = seed.raw;
-  if (normalizeLower(getSafetyField(raw, "profile_origin") ?? raw.profile_origin) !== "auto_onboarded") {
+  if (normalizeLower(getSafetyField(raw, "profile_origin") ?? raw.profile_origin) !== "evidence_seed") {
     return { ok: false, reason: "invalid_safety_flags" };
+  }
+  const importDecision = normalizeLower(
+    getSafetyField(raw, "import_decision") ?? raw.import_decision ?? raw.importDecision,
+  );
+  if (importDecision === "blocked") {
+    return { ok: false, reason: "import_decision_blocked" };
+  }
+  if (importDecision === "review_required") {
+    return { ok: false, reason: "review_required" };
+  }
+  if (importDecision && !["clean", "importable", "imported"].includes(importDecision)) {
+    return { ok: false, reason: "invalid_import_decision" };
   }
   if (normalizeLower(getSafetyField(raw, "claim_status") ?? raw.claim_status) !== "unclaimed") {
     return { ok: false, reason: "invalid_safety_flags" };
@@ -319,6 +385,12 @@ const validateSeed = (seed: NormalizedSeed): ValidationResult => {
   }
   if (!isNullLike(getSafetyField(raw, "invited_user_id") ?? raw.invited_user_id ?? raw.invitedUserId)) {
     return { ok: false, reason: "invalid_safety_flags" };
+  }
+  if (!isNullLike(getSafetyField(raw, "owner_user_id") ?? raw.owner_user_id ?? raw.ownerUserId)) {
+    return { ok: false, reason: "invalid_safety_flags" };
+  }
+  if (isAdminUnattributed(raw) && hasAffiliateAttribution(raw)) {
+    return { ok: false, reason: "admin_unattributed_affiliate_attribution" };
   }
 
   const rawSeeded = getSafetyField(raw, "seeded_from_evidence") ?? raw.seeded_from_evidence;
@@ -363,7 +435,7 @@ const mergeSeedRawData = (existing: unknown, seed: NormalizedSeed) => {
       : {};
   const merlinSeed = {
     seeded_from_evidence: true,
-    profile_origin: "auto_onboarded",
+    profile_origin: "evidence_seed",
     onboarding_source: seed.onboardingSource,
     source_refs: seed.sourceRefs,
     submission_flow: seed.submissionFlow,
@@ -374,7 +446,11 @@ const mergeSeedRawData = (existing: unknown, seed: NormalizedSeed) => {
     claim_status: "unclaimed",
     email_verified: false,
     insurance_verified: false,
+    owner_user_id: null,
     invited_user_id: null,
+    affiliate_user_id: null,
+    affiliate_tag: null,
+    referral_code: null,
     imported_at: new Date().toISOString(),
   };
 
@@ -755,7 +831,7 @@ const buildReport = (input: {
     `truck_import_listings_rows_touched: ${input.importedListingIds.length}`,
     `imported_restaurant_profile_ids: ${input.importedRestaurantIds.join(",") || "none"}`,
     `imported_truck_import_listing_ids: ${input.importedListingIds.join(",") || "none"}`,
-    "safety_confirmation: seeded_from_evidence=true, profile_origin=auto_onboarded, claim_status=unclaimed, invitedUserId=null, email_verified=false, insurance_verified=false",
+    "safety_confirmation: seeded_from_evidence=true, profile_origin=evidence_seed, claim_status=unclaimed, owner_user_id=null, invitedUserId=null, email_verified=false, insurance_verified=false, affiliate_user_id=null",
     `blocked_reasons: ${JSON.stringify(blockedByReason)}`,
     "normalization_changes:",
     ...input.decisions.map(
@@ -950,5 +1026,6 @@ export const __testables = {
   isEmailLike,
   isGenericOrJunkName,
   isInvalidSocialEmailFragment,
+  mergeSeedRawData,
   canonicalName,
 };

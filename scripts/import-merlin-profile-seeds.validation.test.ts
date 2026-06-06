@@ -12,11 +12,13 @@ const baseSeed = {
   brand_lane: "MEALSCOUT",
   target_profile_type: "food_truck",
   seeded_from_evidence: true,
-  profile_origin: "auto_onboarded",
+  profile_origin: "evidence_seed",
+  import_decision: "clean",
   onboarding_source: "screenshot_seed",
   claim_status: "unclaimed",
   email_verified: false,
   insurance_verified: false,
+  owner_user_id: null,
   invited_user_id: null,
   city: "Pensacola",
   state: "FL",
@@ -101,6 +103,14 @@ const badSafety = normalizeSeed({
   claim_status: "claimed",
 });
 assert.equal(validateSeed(badSafety).ok, false);
+
+const badOrigin = normalizeSeed({
+  ...baseSeed,
+  profile_name: "Auto Onboarded Truck",
+  profile_email: "owner@autoorigin.com",
+  profile_origin: "auto_onboarded",
+});
+assert.equal(validateSeed(badOrigin).ok, false);
 
 const importerScript = readFileSync("scripts/import-merlin-profile-seeds.ts", "utf8");
 assert.equal(
