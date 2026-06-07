@@ -235,16 +235,16 @@ Handoff value: Payment cleanup has an explicit safety map before any code moves.
 
 ## C10 - Production Smoke Fixture Plan
 
-Status: `QUEUED`
+Status: `DONE`
 
 Goal: Define safe staging or explicit production test fixtures for stateful admin insurance and booking allowed/blocked smokes.
 
-Files likely touched: smoke test docs/contracts, fixture plan docs.
+Files touched: `MEALSCOUT_PRODUCTION_SMOKE_FIXTURE_PLAN.md`, `scripts/mealscout-production-smoke-fixture-plan.contract.test.ts`, `CLEANUP_MAP.md`.
 
 Allowed changes: Fixture documentation, read-only fixture discovery, contract placeholders.
 
 Disallowed changes: Live production booking mutations, live insurance verification mutations, ad hoc user/payment creation.
 
-Validation command: `node scripts/mealscout-cleanup-map-authority.contract.test.ts`.
+Validation command: `node scripts/mealscout-production-smoke-fixture-plan.contract.test.ts` and `npm run gate:production`.
 
-Handoff value: Future stateful smokes are safe, repeatable, and approved before they touch production.
+Handoff value: Future stateful smokes have explicit notification isolation, payment no-op, reset, fixture, evidence, and env boundaries before they touch production. No queued cleanup items remain; any next phase must be intentionally added as a new scoped cleanup map section.
