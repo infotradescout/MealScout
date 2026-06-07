@@ -60,6 +60,8 @@ Run each once:
 
 ## 5. Payment flow smoke test
 
+Authenticated production smoke is blocked until `MEALSCOUT_AUTHENTICATED_PRODUCTION_SMOKE_READINESS_GATE.md` is `UNBLOCKED`. Do not use live customer, owner/business, admin/staff, payment, payout, or notification mutation smokes until approved smoke accounts, fixture quarantine, notification isolation, payment no-op boundaries, and reset dry-run evidence exist.
+
 1. Supplier pay-intent idempotency (existing flow):
    - Create unpaid supplier order with `paymentMethod="stripe"`.
    - Call pay-intent endpoint with `Idempotency-Key`.
