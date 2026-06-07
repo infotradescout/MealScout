@@ -1,0 +1,257 @@
+{
+  "status": "EVIDENCE_CAPTURED_APPEND_ONLY",
+  "tracker_issue": 113,
+  "business": {
+    "existing_account_required": true,
+    "business_display_name": "3-D Eats & Tea Pensacola",
+    "brand_name": "3-D Eats",
+    "logo_text": "3-D EATS",
+    "email": "threedtea@gmail.com",
+    "price_tier": "$$",
+    "recommendation_score": "98% recommend",
+    "review_count": 716,
+    "service_area": {
+      "city": "Pensacola",
+      "state": "FL"
+    },
+    "services": [
+      "Curbside pickup",
+      "In-store pickup",
+      "Takeout",
+      "Delivery",
+      "Contactless delivery",
+      "Outdoor seating"
+    ],
+    "service_modes": [
+      "Dine-in",
+      "Carry out",
+      "Catering"
+    ],
+    "social_candidates": {
+      "facebook": "3deatsandtea",
+      "instagram": "3deats",
+      "tiktok": "3deatspensacola",
+      "youtube_candidates": ["eatin3d", "@3deats"],
+      "messenger_label": "3-D Eats & Tea Pensacola"
+    },
+    "hours_candidate": {
+      "monday": "11:00 AM - 8:00 PM",
+      "tuesday": "11:00 AM - 8:00 PM",
+      "wednesday": "11:00 AM - 8:00 PM",
+      "thursday": "11:00 AM - 8:00 PM",
+      "friday": "11:00 AM - 8:00 PM",
+      "saturday": "11:00 AM - 8:00 PM",
+      "sunday": null,
+      "source_text": "Monday to Saturday 11:00AM to 8:00PM",
+      "note": "General hours only. Do not treat as scheduled stop/location data."
+    },
+    "static_business_address_candidate": {
+      "street": "6881 US 98 E",
+      "city": "Pensacola",
+      "state": "FL",
+      "zip": "32506",
+      "handling": "Candidate business/admin/static address only unless confirmed as active operating location."
+    },
+    "prior_location_text": {
+      "text": "Pensacola, FL, United States, 32505",
+      "handling": "Do not use as live map location without schedule, event, or owner-confirmed stop evidence."
+    }
+  },
+  "logo_evidence": {
+    "candidate_profile_logo": true,
+    "description": "Large blue 3, red D, black hyphen, turquoise/white EATS, cartoon hot dog/dog mascot with 3D glasses, loaded hot dog/sandwich graphic.",
+    "apply_rule": "Use only if existing logo field is blank. If a logo exists, queue replacement for owner/admin review.",
+    "alternate_logo_candidate": "Circular black logo appears on menu image; do not use unless approved."
+  },
+  "food_truck_location_rule": {
+    "do_not_use_static_address_as_live_map_location": true,
+    "live_customer_location_sources": [
+      "current active schedule stop",
+      "upcoming scheduled stop",
+      "owner-confirmed operating location",
+      "event booking location",
+      "verified live location update"
+    ]
+  },
+  "menu_categories": [
+    "Hot Dogs",
+    "3-D's Taste of Chicago",
+    "Sides",
+    "Beverages",
+    "Kid's Meals",
+    "Desserts",
+    "Starters",
+    "Signature Fries",
+    "3-D Melts",
+    "Cheesesteaks",
+    "Crafted Burgers",
+    "Sandwiches"
+  ],
+  "menu": [
+    {
+      "category": "Hot Dogs",
+      "section_note": "Featuring Vienna Beef Hot Dogs. Comes with choice of one side or regular drink.",
+      "items": [
+        {"name": "Classic", "description": "Sweet relish & onion", "variants": [{"label": "1 Dog", "price": 7.0}, {"label": "2 Dogs", "price": 10.0}]},
+        {"name": "Pulled Pork", "description": "Pulled pork with BBQ sauce", "variants": [{"label": "1 Dog", "price": 8.0}, {"label": "2 Dogs", "price": 11.0}]},
+        {"name": "Chili Cheese", "variants": [{"label": "1 Dog", "price": 8.0}, {"label": "2 Dogs", "price": 11.0}]},
+        {"name": "Bacon Cheddar Jalapeno", "variants": [{"label": "1 Dog", "price": 8.0}, {"label": "2 Dogs", "price": 11.0}]},
+        {"name": "Slaw Dog", "variants": [{"label": "1 Dog", "price": 8.0}, {"label": "2 Dogs", "price": 11.0}]}
+      ]
+    },
+    {
+      "category": "3-D's Taste of Chicago",
+      "section_note": "Comes with choice of one side or regular drink.",
+      "items": [
+        {"name": "Chicago Style Dog", "description": "Mustard, onion, Chicago relish, pickle spear, tomato, celery salt, sport pepper", "price": 8.0},
+        {"name": "Jumbo Beef Polish", "price": 10.0},
+        {"name": "Maxwell Street Polish", "description": "Grilled onions, mustard, & sport peppers", "price": 10.0},
+        {"name": "Italian Beef", "description": "Shaved oven-roasted beef, dipped in Italian gravy, dry or dipped. Baked with mozzarella add $2.", "price": 14.0},
+        {"name": "Italian Sausage", "description": "Sweet Italian sausage with onions & sweet peppers", "price": 10.0},
+        {"name": "Beef & Sausage Bomber", "description": "Italian sausage nestled inside an Italian beef", "price": 16.0},
+        {"name": "Gyro", "description": "Beef & lamb, onions, tomatoes, tzatziki", "price": 13.0},
+        {"name": "Chicago Pizza Puff", "description": "No side included", "price": 4.0}
+      ]
+    },
+    {
+      "category": "Sides",
+      "items": [
+        {"name": "French Fries", "price": 4.0},
+        {"name": "Side Salad", "price": 4.0},
+        {"name": "Baked Beans", "price": 4.0},
+        {"name": "Coleslaw", "price": 4.0},
+        {"name": "Potato Salad", "price": 4.0},
+        {"name": "Onion Rings", "price": 4.0},
+        {"name": "Buttered Baked Potato", "description": "Load it for $2 more", "price": 4.0}
+      ]
+    },
+    {
+      "category": "Beverages",
+      "section_note": "Refillable Mason Jar $10. Refills available for $1. Starred drinks show no refills.",
+      "items": [
+        {"name": "3D Tea", "no_refills": true, "variants": [{"label": "16oz", "price": 3.0}, {"label": "32oz", "price": 5.0}]},
+        {"name": "Lemonade", "no_refills": true, "variants": [{"label": "16oz", "price": 3.0}, {"label": "32oz", "price": 5.0}]},
+        {"name": "Arnold Palmer", "no_refills": true, "variants": [{"label": "16oz", "price": 3.0}, {"label": "32oz", "price": 5.0}]},
+        {"name": "16oz Drink", "size": "16oz", "price": 2.5, "brands_shown": ["Coca-Cola", "Diet Coke", "Coca-Cola Zero", "Sprite", "Dr Pepper", "Powerade"]},
+        {"name": "Refillable Mason Jar", "price": 10.0},
+        {"name": "Mason Jar Refill", "price": 1.0}
+      ]
+    },
+    {
+      "category": "Kid's Meals",
+      "section_note": "Comes with kid fry, drink, & treat.",
+      "items": [
+        {"name": "Small Burger", "price": 8.0},
+        {"name": "Hot Dog", "price": 8.0},
+        {"name": "Grilled Cheese", "price": 8.0},
+        {"name": "Kid's Chicken", "price": 8.0}
+      ]
+    },
+    {
+      "category": "Desserts",
+      "items": [
+        {"name": "Deep Fried Oreos (4)", "price": 5.0},
+        {"name": "Banana Pudding", "price": 5.0}
+      ]
+    },
+    {
+      "category": "Starters",
+      "items": [
+        {"name": "Mozzarella Sticks", "description": "With marinara", "price": 8.0},
+        {"name": "Jalapeno Cheddar Bites", "price": 8.0},
+        {"name": "Fried Pickles", "price": 8.0},
+        {"name": "Onion Ring Basket", "price": 8.0},
+        {"name": "Loaded Fries", "description": "Your choice of style", "price": 8.0, "options": ["Cheese", "Southwest", "Bacon Cheese", "Bacon Ranch Cheese", "Samurai", "Chili Cheese"]}
+      ]
+    },
+    {
+      "category": "Signature Fries",
+      "section_note": "All fries come with cheese sauce, shredded cheese, & choice of toppings.",
+      "items": [
+        {"name": "Chicken Fries", "description": "Choose your style", "price": 14.0, "options": ["Buffalo Ranch", "BBQ", "Bacon Ranch", "Southwest", "Samurai"]},
+        {"name": "Cheesesteak Fries", "description": "Choose your style", "price": 14.0, "options": ["Classic", "Southwest", "BBQ"]},
+        {"name": "Pulled Pork Fries", "price": 14.0}
+      ]
+    },
+    {
+      "category": "3-D Melts",
+      "section_note": "On crispy sourdough. Comes with choice of one side or regular drink.",
+      "items": [
+        {"name": "Grilled Cheese", "description": "American, Swiss, shredded cheddar jack", "price": 10.0},
+        {"name": "Pulled Pork Melt", "description": "With BBQ sauce", "price": 15.0},
+        {"name": "Cheesesteak Melt", "description": "Steak, grilled onions, American & Cooper Sharp cheese", "price": 15.0},
+        {"name": "B.F.C. Melt", "description": "B.F.C. on sourdough", "price": 15.0, "options": ["Buffalo Ranch", "BBQ", "Classic", "Southwest"]}
+      ]
+    },
+    {
+      "category": "Cheesesteaks",
+      "section_note": "Premium steak, Amoroso roll, Cooper Sharp cheese. Comes with choice of one side or regular drink.",
+      "items": [
+        {"name": "Classic", "description": "With onions", "price": 14.0},
+        {"name": "Club", "description": "With onions, lettuce, tomato", "price": 15.0},
+        {"name": "Southwest", "description": "With onions, jalapenos, & southwest sauce", "price": 15.0},
+        {"name": "Samurai", "description": "With onions, Samurai sauce", "price": 15.0}
+      ]
+    },
+    {
+      "category": "Crafted Burgers",
+      "section_note": "Comes with choice of one side or regular drink.",
+      "items": [
+        {"name": "Classic", "description": "Lettuce, tomato, onion, pickles", "variants": [{"label": "Single", "price": 9.0}, {"label": "Double", "price": 12.0}]},
+        {"name": "Bacon It Rain", "description": "Classic loaded with bacon", "variants": [{"label": "Single", "price": 11.0}, {"label": "Double", "price": 14.0}]},
+        {"name": "BBQ Bacon", "description": "Bacon, American cheese, 2 onion rings, BBQ sauce", "variants": [{"label": "Single", "price": 11.0}, {"label": "Double", "price": 14.0}]},
+        {"name": "Grilled Cheeseburger", "description": "Buttered grilled bun, Swiss & American cheese", "variants": [{"label": "Single", "price": 11.0}, {"label": "Double", "price": 14.0}]},
+        {"name": "Fire in the Hole", "description": "Pepper Jack cheese, grilled jalapeno, southwest sauce", "variants": [{"label": "Single", "price": 11.0}, {"label": "Double", "price": 14.0}]},
+        {"name": "Samurai Bacon", "description": "Bacon, American cheese, sweet chili sauce with a fight", "variants": [{"label": "Single", "price": 11.0}, {"label": "Double", "price": 14.0}]},
+        {"name": "Philly Burger", "description": "Cheesesteak topped burger", "variants": [{"label": "Single", "price": 12.0}, {"label": "Double", "price": 15.0}]},
+        {"name": "Patty Melt", "description": "On grilled sourdough, Swiss & American cheese, grilled onions", "price": 14.0}
+      ]
+    },
+    {
+      "category": "Sandwiches",
+      "section_note": "Comes with choice of one side or regular drink.",
+      "items": [
+        {"name": "B.L.T.", "description": "On crispy sourdough", "price": 12.0},
+        {"name": "Pulled Pork", "description": "Smokey pork with BBQ sauce", "price": 13.0},
+        {"name": "B.F.C.", "description": "Jumbo fried chicken sandwich with lettuce & tomato", "price": 12.0}
+      ]
+    }
+  ],
+  "conflicts": [
+    {
+      "field": "address_zip",
+      "evidence_a": "Pensacola, FL, United States, 32505",
+      "evidence_b": "6881 US 98 E, Pensacola, FL 32506",
+      "action": "Do not overwrite; review."
+    },
+    {
+      "field": "youtube",
+      "evidence_a": "eatin3d",
+      "evidence_b": "@3deats",
+      "action": "Do not overwrite; review."
+    },
+    {
+      "field": "logo",
+      "evidence_a": "Colorful mascot logo supplied",
+      "evidence_b": "Circular black logo appears on menu",
+      "action": "Do not overwrite existing logo; review if existing logo present."
+    }
+  ],
+  "missing_fields": [
+    "phone_number",
+    "website",
+    "confirmed_live_operating_location",
+    "current_scheduled_stops",
+    "owner_confirmation_menu_current",
+    "owner_confirmation_logo_approved",
+    "alternate_brand_mark_decision",
+    "existing_account_profile_field_comparison"
+  ],
+  "apply_rules": {
+    "mode": "append_only_enrichment",
+    "do_not_create_duplicate": true,
+    "fill_blank_fields_only": true,
+    "do_not_overwrite_without_review": ["menu", "hours", "contact", "logo", "location", "service_availability"],
+    "preserve": ["owner_user_id", "claim_status", "subscription_status", "payment_status", "profile_id", "business_id", "analytics_history", "reviews", "existing_metadata"]
+  }
+}
