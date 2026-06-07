@@ -60,7 +60,17 @@ Run each once:
 
 ## 5. Payment flow smoke test
 
-Authenticated production smoke is blocked until `MEALSCOUT_AUTHENTICATED_PRODUCTION_SMOKE_READINESS_GATE.md` is `UNBLOCKED`. Do not use live customer, owner/business, admin/staff, payment, payout, or notification mutation smokes until approved smoke accounts, fixture quarantine, notification isolation, payment no-op boundaries, and reset dry-run evidence exist.
+Authenticated production smoke is blocked until `MEALSCOUT_AUTHENTICATED_PRODUCTION_SMOKE_READINESS_GATE.md` is `UNBLOCKED` and P2 is externally complete per `MEALSCOUT_AUTHENTICATED_PRODUCTION_SMOKE_P2_ACCOUNTS_AND_SECRETS.md`. Do not use live customer, owner/business, admin/staff, payment, payout, or notification mutation smokes until approved smoke accounts, required production env/secrets, fixture quarantine, notification isolation, payment no-op boundaries, DB read-only verification, and reset dry-run evidence exist outside the repo.
+
+P2 smoke-account and production-secret definition:
+
+- Customer smoke account defined outside repo.
+- Owner smoke account and smoke business/profile fixture ids defined outside repo.
+- Admin/staff smoke account defined outside repo.
+- Production public/API base URLs defined outside repo.
+- Cookie/login secret strategy defined outside repo.
+- Read-only production DB verification path defined outside repo.
+- No credentials, cookies, passwords, tokens, database URLs, or production secrets committed.
 
 1. Supplier pay-intent idempotency (existing flow):
    - Create unpaid supplier order with `paymentMethod="stripe"`.
