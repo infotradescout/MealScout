@@ -187,19 +187,19 @@ Handoff value: Owner dashboard cleanup can proceed in small verified slices.
 
 ## C8 - Public/Auth Route Boundary Audit
 
-Status: `NEXT`
+Status: `DONE`
 
 Goal: Verify guest/authenticated frontend routes, public route prefixes, and server auth middleware alignment.
 
-Files likely touched: `client/src/App.tsx`, `server/routes.ts`, auth route docs/contracts.
+Files touched: `MEALSCOUT_PUBLIC_AUTH_ROUTE_BOUNDARY_AUDIT.md`, `scripts/mealscout-public-auth-route-boundary-audit.contract.test.ts`, `CLEANUP_MAP.md`.
 
 Allowed changes: Documentation, static contracts, and route boundary inventories.
 
 Disallowed changes: Auth middleware behavior, public route expansion, admin/staff route exposure, OAuth callback changes.
 
-Validation command: `npm run gate:production`.
+Validation command: `node scripts/mealscout-public-auth-route-boundary-audit.contract.test.ts` and `npm run gate:production`.
 
-Handoff value: Public/private access boundaries are explicit before cleanup moves code.
+Handoff value: Public/private access boundaries are explicit before cleanup moves code. No hard public/auth boundary mismatch was found in C8. C9 Payment/Webhook Safety Map and C10 Production Smoke Fixture Plan remain queued.
 
 ## C9A - Account Lifecycle + Discovery Boundary Audit
 
