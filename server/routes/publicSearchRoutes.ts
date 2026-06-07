@@ -13,7 +13,7 @@ import {
 import { db } from "../db";
 import { storage } from "../storage";
 import { computeParkingPassQualityFlags } from "../services/parkingPassQuality";
-import { isTruckDiscoverableForScout } from "../utils/truckListingEligibility";
+import { isPublicBusinessVisible } from "../utils/publicBusinessVisibility";
 import {
   deals,
   eventSeries,
@@ -277,13 +277,7 @@ export function registerPublicSearchRoutes(app: Express) {
       const restaurantsOut = restaurantMatches
         .filter((restaurant: any) => {
           if (!restaurant?.isActive) return false;
-          const isTruck = Boolean(
-            restaurant?.isFoodTruck ||
-              String(restaurant?.businessType || "").toLowerCase() === "food_truck",
-          );
-          if (isTruck && !isTruckDiscoverableForScout(restaurant)) {
-            return false;
-          }
+          if (!isPublicBusinessVisible(restaurant)) return false;
           const name = String(restaurant.name || "").toLowerCase();
           const cuisine = String(restaurant.cuisineType || "").toLowerCase();
           const address = String(restaurant.address || "").toLowerCase();
