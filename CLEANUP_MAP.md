@@ -219,19 +219,19 @@ Handoff value: Inserted stabilization audit; C8 remains `NEXT` and can still per
 
 ## C9 - Payment/Webhook Safety Map
 
-Status: `QUEUED`
+Status: `DONE`
 
 Goal: Document and guard Stripe booking, subscription, supplier, pickup order, payout, and webhook reconciliation paths.
 
-Files likely touched: Stripe route docs/contracts, `server/routes/stripeWebhookRoutes.ts`, payment-adjacent route inventories.
+Files touched: `MEALSCOUT_PAYMENT_WEBHOOK_SAFETY_MAP.md`, `scripts/mealscout-payment-webhook-safety-map.contract.test.ts`, `CLEANUP_MAP.md`.
 
 Allowed changes: Documentation, static contracts, read-only smoke plans.
 
 Disallowed changes: Payment intent creation, webhook mutation logic, payout math, live Stripe calls that mutate provider state.
 
-Validation command: `npm run gate:production`.
+Validation command: `node scripts/mealscout-payment-webhook-safety-map.contract.test.ts` and `npm run gate:production`.
 
-Handoff value: Payment cleanup has an explicit safety map before any code moves.
+Handoff value: Payment cleanup has an explicit safety map before any code moves. Follow-ups are documented as audit findings only; C10 remains queued for production smoke fixture planning.
 
 ## C10 - Production Smoke Fixture Plan
 
