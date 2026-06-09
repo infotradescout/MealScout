@@ -20,6 +20,7 @@ import { Eye, EyeOff, CheckCircle, KeyRound, AlertTriangle } from "lucide-react"
 import { BackHeader } from "@/components/back-header";
 import { SEOHead } from "@/components/seo-head";
 import { useAuth } from "@/hooks/useAuth";
+import { getAccountContinuationPath } from "@/lib/dashboard-route";
 import {
   PASSWORD_REGEX,
   PASSWORD_REQUIREMENTS,
@@ -43,31 +44,7 @@ const accountSetupSchema = z
 
 type AccountSetupFormData = z.infer<typeof accountSetupSchema>;
 
-function getNoTokenContinuationPath(user: any): string {
-  const continuationPath = String(user?.continuationPath || "").trim();
-  if (
-    continuationPath &&
-    !continuationPath.startsWith("/account-setup") &&
-    continuationPath.startsWith("/") &&
-    !continuationPath.startsWith("//") &&
-    !continuationPath.includes("://")
-  ) {
-    return continuationPath;
-  }
-
-  const userType = String(user?.userType || "").toLowerCase();
-  if (userType === "admin" || userType === "duper_admin" || userType === "super_admin") {
-    return "/admin/dashboard";
-  }
-  if (userType === "staff") return "/staff";
-  if (userType === "host") return "/host/dashboard";
-  if (userType === "event_coordinator") return "/event-coordinator/dashboard";
-  if (userType === "supplier") return "/supplier/dashboard";
-  if (userType === "restaurant_owner" || userType === "food_truck") {
-    return "/restaurant-owner-dashboard";
-  }
-  return "/scout";
-}
+const getNoTokenContinuationPath = getAccountContinuationPath;
 
 export default function AccountSetup() {
   const [, setLocation] = useLocation();

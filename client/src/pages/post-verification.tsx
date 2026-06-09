@@ -5,6 +5,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { SEOHead } from "@/components/seo-head";
+import { CANONICAL_DASHBOARD_ENTRY_PATH } from "@/lib/dashboard-route";
 
 const REDIRECT_STORAGE_KEY = "mealscout:post-verification-redirect";
 const EMAIL_STORAGE_KEY = "mealscout:lastSignupEmail";
@@ -36,10 +37,10 @@ function getBestRedirect(params: URLSearchParams): string {
   const verifiedFromEmail = params.get("verified") === "1";
 
   if (verifiedFromEmail) {
-    return queryRedirect || storedRedirect || "/scout";
+    return queryRedirect || storedRedirect || CANONICAL_DASHBOARD_ENTRY_PATH;
   }
 
-  return storedRedirect || queryRedirect || "/scout";
+  return storedRedirect || queryRedirect || CANONICAL_DASHBOARD_ENTRY_PATH;
 }
 
 function getLoginHref(redirectPath: string, verified: boolean) {

@@ -8,6 +8,7 @@ import { UserCheck, Eye, EyeOff } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { authUrl } from "@/lib/api";
+import { CANONICAL_DASHBOARD_ENTRY_PATH } from "@/lib/dashboard-route";
 import { SEOHead } from "@/components/seo-head";
 import {
   FUNNEL_EVENTS,
@@ -165,17 +166,17 @@ export default function Login() {
       trackFunnelEvent(FUNNEL_EVENTS.signupCompleted, {
         page: "login",
         stage: "login_success",
-        redirectPath: redirectPath || "/",
+        redirectPath: redirectPath || CANONICAL_DASHBOARD_ENTRY_PATH,
       });
       trackFunnelEvent(FUNNEL_EVENTS.activationStarted, {
         page: "login",
         stage: "post_login_redirect",
-        redirectPath: redirectPath || "/",
+        redirectPath: redirectPath || CANONICAL_DASHBOARD_ENTRY_PATH,
       });
       try {
         window.sessionStorage.removeItem("mealscout:post-verification-redirect");
       } catch {}
-      window.location.href = redirectPath || "/";
+      window.location.href = redirectPath || CANONICAL_DASHBOARD_ENTRY_PATH;
     } catch (error: any) {
       setShowRecoveryHelp(true);
       toast({
@@ -229,7 +230,7 @@ export default function Login() {
       try {
         window.sessionStorage.removeItem("mealscout:post-verification-redirect");
       } catch {}
-      window.location.href = redirectPath || "/";
+      window.location.href = redirectPath || CANONICAL_DASHBOARD_ENTRY_PATH;
     }
   }, [isAuthenticated, redirectPath]);
 
