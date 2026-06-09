@@ -72,6 +72,15 @@ P2 smoke-account and production-secret definition:
 - Read-only production DB verification path defined outside repo.
 - No credentials, cookies, passwords, tokens, database URLs, or production secrets committed.
 
+P3 guarded authenticated smoke runner:
+
+- Do not run the P3 authenticated smoke runner until `MEALSCOUT_AUTHENTICATED_PRODUCTION_SMOKE_P3_RUNNER.md` is reviewed and `scripts/mealscout-authenticated-production-smoke.ts` passes its contract.
+- Runner must fail closed unless `PROD_AUTH_SMOKE_ENABLED=true` is set outside the repo.
+- Runner must require all customer, owner, and staff/admin smoke env vars before any network call.
+- Runner must write redacted evidence only and must never print cookies, passwords, tokens, or production secrets.
+- Runner must keep customer, owner, and staff/admin checks separated.
+- Runner must avoid production mutations except approved login/session checks and read-only smoke fixture reads.
+
 1. Supplier pay-intent idempotency (existing flow):
    - Create unpaid supplier order with `paymentMethod="stripe"`.
    - Call pay-intent endpoint with `Idempotency-Key`.
