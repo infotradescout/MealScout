@@ -24,8 +24,6 @@ import {
   MenuSquare,
   Phone,
   Route,
-  Star,
-  Truck,
 } from "lucide-react";
 
 type PublicProfilePayload =
@@ -156,17 +154,24 @@ const pickActionCtas = (profile: PublicProfilePayload, safeCtas: PublicCta[], li
     .sort((a, b) => ctaPriorityForProfile(profile, b) - ctaPriorityForProfile(profile, a))
     .slice(0, limit);
 
-const pickPrimaryCta = (profile: PublicProfilePayload, ctas: PublicCta[]) => {
-  const sorted = [...ctas]
-    .filter((cta) => !isSelfProfileCta(profile, cta))
-    .sort((a, b) => ctaPriorityForProfile(profile, b) - ctaPriorityForProfile(profile, a));
-  return sorted[0] || null;
-};
-
 const locationLine = (profile: { addressPublicLabel?: string | null; city?: string | null; state?: string | null }) =>
   profile.addressPublicLabel ||
   [profile.city, profile.state].filter(Boolean).join(", ") ||
   null;
+
+const decisionLocationLine = (profile: PublicProfilePayload) => {
+  if (isRestaurantLikeEntity(profile.entity) && profile.profileType === "truck") {
+    const schedule = (profile as PublicRestaurantProfile).truckSchedule;
+    const stop = schedule?.currentStop || schedule?.todayStop || schedule?.nextStop || null;
+    const stopLabel = stop
+      ? stop.addressPublicLabel ||
+        stop.locationName ||
+        [stop.city, stop.state].filter(Boolean).join(", ")
+      : null;
+    if (stopLabel) return stopLabel;
+  }
+  return locationLine(profile);
+};
 
 const phoneLine = (profile: PublicProfilePayload) =>
   profile.entity === "supplier"
@@ -203,18 +208,15 @@ const renderCtaButton = (cta: PublicCta, variant: "default" | "outline", key: st
     rel={ctaRel(cta)}
     className={
       variant === "default"
-        ? "inline-flex items-center rounded-md bg-orange-500 px-4 py-2 text-sm font-semibold text-black hover:bg-orange-400"
-        : "inline-flex items-center rounded-md border border-white/20 px-4 py-2 text-sm font-semibold text-white hover:bg-white/10"
+        ? "inline-flex items-center justify-center rounded-md bg-orange-500 px-4 py-2 text-sm font-semibold text-black hover:bg-orange-400"
+        : "inline-flex items-center justify-center rounded-md border border-white/20 px-4 py-2 text-sm font-semibold text-white hover:bg-white/10"
     }
   >
     {cta.label}
   </a>
 );
 
-function HeroBlock({ profile, safeCtas }: { profile: PublicProfilePayload; safeCtas: PublicCta[] }) {
-  const filteredCtas = pickActionCtas(profile, safeCtas, 8);
-  const primary = pickPrimaryCta(profile, filteredCtas);
-  const secondary = filteredCtas.find((cta) => cta !== primary) || null;
+function HeroBlock({ profile }: { profile: PublicProfilePayload }) {
   const heroImage =
     profile.entity === "host"
       ? profile.spotImageUrl ||
@@ -236,81 +238,98 @@ function HeroBlock({ profile, safeCtas }: { profile: PublicProfilePayload; safeC
     .join("")
     .slice(0, 2)
     .toUpperCase();
+  const decisionLocation = decisionLocationLine(profile);
+  const hours = isRestaurantLikeEntity(profile.entity)
+    ? String((profile as PublicRestaurantProfile).hours || "").trim()
+    : "";
+  const truckSchedule = isRestaurantLikeEntity(profile.entity)
+    ? (profile as PublicRestaurantProfile).truckSchedule
+    : null;
+  const liveStatus =
+    profile.entity === "restaurant" && profile.openStatus
+      ? profile.openStatus
+      : truckSchedule?.statusLabel || null;
+  const profileTypeLabel =
+    profile.profileType === "location"
+      ? "Location"
+      : profile.profileType === "truck"
+        ? "Food Truck"
+        : profile.profileType === "bar"
+          ? "Bar"
+          : profile.profileType === "supplier"
+            ? "Supplier"
+            : "Restaurant";
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-white/10 bg-[#0f0d0b]">
+    <section className="overflow-hidden rounded-xl border border-white/10 bg-[#0f0d0b]">
       {heroImage ? (
         <div
-          className="h-52 w-full bg-cover bg-center md:h-64"
+          className="h-28 w-full bg-cover bg-center md:h-48"
           style={{
             backgroundImage: `linear-gradient(180deg, rgba(0,0,0,.16), rgba(0,0,0,.78)), url('${heroImage}')`,
           }}
         />
       ) : (
-        <div className="relative h-52 w-full bg-[radial-gradient(circle_at_22%_24%,rgba(255,96,35,0.34),transparent_48%),linear-gradient(145deg,#1d100a_0%,#120d09_48%,#0d0a08_100%)] md:h-64">
+        <div className="relative h-28 w-full bg-[radial-gradient(circle_at_22%_24%,rgba(255,96,35,0.34),transparent_48%),linear-gradient(145deg,#1d100a_0%,#120d09_48%,#0d0a08_100%)] md:h-48">
           <div className="absolute inset-0 flex items-center justify-center">
-            <div className="flex h-20 w-20 items-center justify-center rounded-full border border-orange-300/35 bg-black/30 text-2xl font-black text-orange-100">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full border border-orange-300/35 bg-black/30 text-xl font-black text-orange-100">
               {initials}
             </div>
           </div>
         </div>
       )}
-      <div className="space-y-3 p-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="outline" className="border-orange-400/50 text-orange-200">
-            {profile.profileType === "location"
-              ? "Location"
-              : profile.profileType === "truck"
-                ? "Food Truck"
-                : profile.profileType === "bar"
-                  ? "Bar"
-                  : profile.profileType === "supplier"
-                    ? "Supplier"
-                  : "Restaurant"}
+      <div className="space-y-3 p-4 sm:p-5">
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          {liveStatus ? <Badge variant="secondary">{liveStatus}</Badge> : null}
+          <Badge variant="outline" className="border-orange-400/45 text-orange-200">
+            {profileTypeLabel}
           </Badge>
           {"verifiedProfile" in profile && profile.verifiedProfile ? (
-            <Badge variant="secondary">Verified profile</Badge>
+            <Badge variant="outline" className="border-white/20 text-white/65">
+              Verified
+            </Badge>
           ) : null}
           {"locallyOwned" in profile && profile.locallyOwned ? (
-            <Badge variant="outline" className="border-emerald-300/45 text-emerald-200">
+            <Badge variant="outline" className="border-emerald-300/35 text-emerald-200/85">
               Locally owned
             </Badge>
           ) : null}
-          {profile.entity === "restaurant" && profile.openStatus ? (
-            <Badge variant="secondary">{profile.openStatus}</Badge>
+        </div>
+        <div className="space-y-2">
+          <h1 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
+            {profile.displayName}
+          </h1>
+          {profile.entity === "restaurant" && (profile.cuisineTags?.length || profile.serviceType) ? (
+            <p className="text-sm font-medium text-orange-100/85">
+              {[...(profile.cuisineTags || []).slice(0, 2), profile.serviceType]
+                .filter(Boolean)
+                .join(" · ")}
+            </p>
           ) : null}
         </div>
-        <h1 className="text-3xl font-bold tracking-tight text-white">{profile.displayName}</h1>
-        <p className="text-sm text-white/80">
-          {profile.entity === "host"
-            ? "Food trucks, pop-ups, and local eats here"
-            : isRestaurantLikeEntity(profile.entity) && profile.profileType === "truck"
-              ? "Track this truck, browse menu evidence, and catch upcoming stops."
-              : isRestaurantLikeEntity(profile.entity)
-              ? "Open near you, menu updates, and local favorites."
-              : "Local supply and support for nearby food businesses."}
-        </p>
-        <p className="text-xs text-white/65">
-          What to do first: check location and hours, then use menu/order/directions actions below.
-        </p>
-        <div className="flex flex-wrap items-center gap-3 text-sm text-white/75">
-          {locationLine(profile) ? (
-            <span className="inline-flex items-center gap-1">
-              <MapPin className="h-4 w-4" />
-              {locationLine(profile)}
-            </span>
+        <div className="space-y-2 text-sm text-white/78">
+          {decisionLocation ? (
+            <p className="flex items-start gap-2">
+              <MapPin className="mt-0.5 h-4 w-4 flex-none text-orange-200" />
+              <span>{decisionLocation}</span>
+            </p>
+          ) : null}
+          {hours ? (
+            <p className="flex items-start gap-2">
+              <Clock3 className="mt-0.5 h-4 w-4 flex-none text-orange-200" />
+              <span>{hours}</span>
+            </p>
           ) : null}
           {phoneLine(profile) ? (
-            <span className="inline-flex items-center gap-1">
-              <Phone className="h-4 w-4" />
-              {phoneLine(profile)}
-            </span>
+            <p className="flex items-start gap-2">
+              <Phone className="mt-0.5 h-4 w-4 flex-none text-orange-200" />
+              <span>{phoneLine(profile)}</span>
+            </p>
           ) : null}
         </div>
-        <div className="flex flex-wrap gap-2">
-          {primary ? renderCtaButton(primary, "default", "primary") : null}
-          {secondary ? renderCtaButton(secondary, "outline", "secondary") : null}
-        </div>
+        {profile.description ? (
+          <p className="line-clamp-3 text-sm leading-6 text-white/70">{profile.description}</p>
+        ) : null}
       </div>
     </section>
   );
@@ -363,17 +382,20 @@ function QuickActionRow({
   const preferredOrder: PublicCta["type"][] = [
     "menu",
     "map",
-    "phone",
     "order",
-    "external",
-    "social",
-    "share",
+    "phone",
     "catering",
     "booking",
   ];
+  const actionPool = pickActionCtas(profile, safeCtas, 16).filter(
+    (cta) =>
+      cta.type !== "social" &&
+      cta.type !== "share" &&
+      !(cta.type === "external" && /instagram|facebook|x\.com|twitter/i.test(cta.href)),
+  );
   const actions = preferredOrder
     .flatMap((type) =>
-      pickActionCtas(profile, safeCtas, 16).filter((cta) => cta.type === type),
+      actionPool.filter((cta) => cta.type === type),
     )
     .reduce((acc, cta) => {
       if (acc.find((existing) => existing.href === cta.href)) return acc;
@@ -383,9 +405,20 @@ function QuickActionRow({
     .slice(0, 7);
   if (actions.length === 0) return null;
   return (
-    <Card id="deals" className="border-white/10 bg-[#0f0d0b]">
-      <CardContent className="flex flex-wrap gap-2 p-4">
-        {actions.map((cta, idx) => renderCtaButton(cta, "outline", `${cta.href}-${idx}`))}
+    <Card id="actions" className="border-white/10 bg-[#0f0d0b]">
+      <CardContent className="space-y-3 p-4">
+        <p className="text-xs font-semibold uppercase tracking-wide text-white/60">
+          Get food
+        </p>
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+          {actions.map((cta, idx) =>
+            renderCtaButton(
+              cta,
+              idx === 0 ? "default" : "outline",
+              `${cta.href}-${idx}`,
+            ),
+          )}
+        </div>
       </CardContent>
     </Card>
   );
@@ -1461,12 +1494,12 @@ function RestaurantSocial({
   safeCtas: PublicCta[];
 }) {
   const grouped = {
-    contact: safeCtas.filter((cta) => cta.type === "phone" || cta.type === "map"),
-    order: safeCtas.filter(
-      (cta) => cta.type === "menu" || cta.type === "order" || cta.type === "external",
+    website: safeCtas.filter(
+      (cta) =>
+        cta.type === "external" &&
+        !/instagram|facebook|x\.com|twitter/i.test(String(cta.href || "")),
     ),
     follow: safeCtas.filter((cta) => cta.type === "social" || cta.type === "share"),
-    inquiries: safeCtas.filter((cta) => cta.type === "catering" || cta.type === "booking"),
   };
   const unique = (ctas: PublicCta[]) =>
     ctas.reduce((acc, cta) => {
@@ -1474,40 +1507,23 @@ function RestaurantSocial({
       acc.push(cta);
       return acc;
     }, [] as PublicCta[]);
-  const contactActions = unique(grouped.contact);
-  const orderActions = unique(grouped.order);
+  const websiteActions = unique(grouped.website);
   const followActions = unique(grouped.follow);
-  const inquiryActions = unique(grouped.inquiries);
-  if (
-    contactActions.length === 0 &&
-    orderActions.length === 0 &&
-    followActions.length === 0 &&
-    inquiryActions.length === 0
-  ) {
+  if (websiteActions.length === 0 && followActions.length === 0) {
     return null;
   }
   return (
     <Card className="border-white/10 bg-[#0f0d0b]">
       <CardHeader>
-        <CardTitle className="text-xl text-white">Contact and follow</CardTitle>
+        <CardTitle className="text-xl text-white">Social links</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
-        {contactActions.length > 0 ? (
+        {websiteActions.length > 0 ? (
           <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-white/60">Contact</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-white/60">Website</p>
             <div className="flex flex-wrap gap-2">
-              {contactActions.map((cta, idx) =>
-                renderCtaButton(cta, "outline", `contact-${cta.href}-${idx}`),
-              )}
-            </div>
-          </div>
-        ) : null}
-        {orderActions.length > 0 ? (
-          <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-white/60">Order and menu</p>
-            <div className="flex flex-wrap gap-2">
-              {orderActions.map((cta, idx) =>
-                renderCtaButton(cta, "outline", `order-${cta.href}-${idx}`),
+              {websiteActions.map((cta, idx) =>
+                renderCtaButton(cta, "outline", `website-${cta.href}-${idx}`),
               )}
             </div>
           </div>
@@ -1522,15 +1538,63 @@ function RestaurantSocial({
             </div>
           </div>
         ) : null}
-        {inquiryActions.length > 0 ? (
-          <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-white/60">Business inquiries</p>
-            <div className="flex flex-wrap gap-2">
-              {inquiryActions.map((cta, idx) =>
-                renderCtaButton(cta, "outline", `inquiry-${cta.href}-${idx}`),
-              )}
-            </div>
-          </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function RelatedLocalDiscovery({
+  data,
+  citySlug,
+  restaurantProfile,
+}: {
+  data: PublicProfilePayload;
+  citySlug: string | null;
+  restaurantProfile: PublicRestaurantProfile | null;
+}) {
+  if (!data.city || !citySlug) return null;
+  const cuisineTag = restaurantProfile?.cuisineTags?.find((tag) =>
+    String(tag || "").trim().length > 0,
+  );
+  return (
+    <Card className="border-white/10 bg-[#0f0d0b]">
+      <CardHeader>
+        <CardTitle className="text-base text-white">
+          Keep exploring {data.city}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
+        <a
+          href={`/city/${encodeURIComponent(citySlug)}/food`}
+          className="rounded-md border border-white/10 px-3 py-2 text-white/85 hover:bg-white/10"
+        >
+          Places to eat nearby
+        </a>
+        <a
+          href={`/food-trucks-today/${encodeURIComponent(citySlug)}`}
+          className="rounded-md border border-white/10 px-3 py-2 text-white/85 hover:bg-white/10"
+        >
+          Food trucks today
+        </a>
+        <a
+          href={`/deals-today/${encodeURIComponent(citySlug)}`}
+          className="rounded-md border border-white/10 px-3 py-2 text-white/85 hover:bg-white/10"
+        >
+          Deals today
+        </a>
+        <a
+          href={`/events-today/${encodeURIComponent(citySlug)}`}
+          className="rounded-md border border-white/10 px-3 py-2 text-white/85 hover:bg-white/10"
+        >
+          Local food events
+        </a>
+        {cuisineTag ? (
+          <a
+            href={`/cuisine/${encodeURIComponent(String(cuisineTag).toLowerCase().replace(/[^a-z0-9]+/g, "-"))}/${encodeURIComponent(citySlug)}`}
+            className="rounded-md border border-white/10 px-3 py-2 text-white/85 hover:bg-white/10 sm:col-span-2"
+          >
+            Find similar spots nearby
+          </a>
         ) : null}
       </CardContent>
     </Card>
@@ -1703,46 +1767,8 @@ export default function PublicProfilePage() {
           );
         }}
       >
-        <HeroBlock profile={data} safeCtas={safeCtas} />
+        <HeroBlock profile={data} />
         <QuickActionRow profile={data} safeCtas={safeCtas} />
-        {data.city ? (
-          <Card className="border-white/10 bg-[#0f0d0b]">
-            <CardHeader>
-              <CardTitle className="text-base text-white">Related local discovery</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-wrap gap-2 text-sm">
-              {citySlug ? (
-                <>
-                  <a href={`/city/${encodeURIComponent(citySlug)}/food`} className="underline text-white/85">
-                    Places to eat in {data.city}
-                  </a>
-                  <a href={`/food-trucks-today/${encodeURIComponent(citySlug)}`} className="underline text-white/85">
-                    Food trucks today
-                  </a>
-                  <a href={`/deals-today/${encodeURIComponent(citySlug)}`} className="underline text-white/85">
-                    Deals today
-                  </a>
-                  <a href={`/events-today/${encodeURIComponent(citySlug)}`} className="underline text-white/85">
-                    Events today
-                  </a>
-                  <a href={`/locations-with-trucks/${encodeURIComponent(citySlug)}`} className="underline text-white/85">
-                    Locations with trucks
-                  </a>
-                </>
-              ) : null}
-              {restaurantProfile &&
-              Array.isArray(restaurantProfile.cuisineTags) &&
-              restaurantProfile.cuisineTags.length > 0 ? (
-                <a
-                  href={`/cuisine/${encodeURIComponent(String(restaurantProfile.cuisineTags[0] || "").toLowerCase().replace(/[^a-z0-9]+/g, "-"))}${citySlug ? `/${encodeURIComponent(citySlug)}` : ""}`}
-                  className="underline text-white/85"
-                >
-                  More {String(restaurantProfile.cuisineTags[0] || "local food").toLowerCase()}
-                </a>
-              ) : null}
-            </CardContent>
-          </Card>
-        ) : null}
 
         {data.entity === "host" ? (
           <>
@@ -1754,13 +1780,13 @@ export default function PublicProfilePage() {
           </>
         ) : restaurantProfile ? (
           <>
-            <AboutFoodStyle profile={restaurantProfile} />
             <MenuSection profile={restaurantProfile} safeCtas={safeCtas} />
-            <RestaurantSignals profile={restaurantProfile} />
-            <DealsSection profile={restaurantProfile} />
-            <GalleryStrip profile={restaurantProfile} />
             <RestaurantSchedule profile={restaurantProfile} />
+            <DealsSection profile={restaurantProfile} />
+            <RestaurantSignals profile={restaurantProfile} />
+            <AboutFoodStyle profile={restaurantProfile} />
             <EventsSection profile={restaurantProfile} />
+            <GalleryStrip profile={restaurantProfile} />
             <FeaturedBartendersSection profile={restaurantProfile} />
             <ProofSection profile={restaurantProfile} />
             <RestaurantSocial profile={restaurantProfile} safeCtas={safeCtas} />
@@ -1778,6 +1804,11 @@ export default function PublicProfilePage() {
             </CardContent>
           </Card>
         )}
+        <RelatedLocalDiscovery
+          data={data}
+          citySlug={citySlug}
+          restaurantProfile={restaurantProfile}
+        />
       </main>
 
       <footer className="mt-8 border-t border-white/10 bg-[#0b0908]">
