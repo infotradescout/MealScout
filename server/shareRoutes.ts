@@ -10,6 +10,24 @@ import { db } from "./db";
 import { affiliateShareEvents } from "@shared/schema";
 import { ensureAffiliateTag, resolveAffiliateUserId } from "./affiliateTagService";
 
+async function requireShareAffiliateTag(
+  req: any,
+  ref: unknown,
+): Promise<{ affiliateUserId: string; affiliateTag: string } | null> {
+  const authenticatedUserId = String(req.user?.id || "").trim();
+  if (authenticatedUserId) {
+    const affiliateTag = await ensureAffiliateTag(authenticatedUserId);
+    return { affiliateUserId: authenticatedUserId, affiliateTag };
+  }
+
+  const suppliedRef = typeof ref === "string" ? ref.trim() : "";
+  if (!suppliedRef) return null;
+
+  const affiliateUserId = await resolveAffiliateUserId(suppliedRef);
+  if (!affiliateUserId) return null;
+  return { affiliateUserId, affiliateTag: suppliedRef };
+}
+
 function inferShareResource(path: string): {
   resourceType: string;
   resourceId: string | null;
@@ -39,32 +57,24 @@ export default function setupShareRoutes(app: Express) {
       }
 
       const baseUrl = resolveCanonicalShareOrigin(req);
-      let affiliateUserId: string | null = req.user?.id || null;
-      let affiliateTag: string | undefined;
-
-      if (affiliateUserId) {
-        affiliateTag = await ensureAffiliateTag(affiliateUserId);
-      } else if (typeof ref === "string" && ref.trim()) {
-        const trimmed = ref.trim();
-        const resolved = await resolveAffiliateUserId(trimmed);
-        if (resolved) {
-          affiliateUserId = resolved;
-          affiliateTag = trimmed;
-        }
-      }
-
-      const shareLink = generateShareableUrl(path, baseUrl, affiliateTag);
-
-      if (affiliateUserId) {
-        const resource = inferShareResource(path);
-        await db.insert(affiliateShareEvents).values({
-          affiliateUserId,
-          resourceType: resource.resourceType,
-          resourceId: resource.resourceId,
-          destinationUrl: path,
-          shareMethod: "link",
+      const affiliate = await requireShareAffiliateTag(req, ref);
+      if (!affiliate) {
+        return res.status(409).json({
+          error: "affiliate_tag_required",
+          message: "Affiliate tag unavailable — sharing disabled.",
         });
       }
+
+      const shareLink = generateShareableUrl(path, baseUrl, affiliate.affiliateTag);
+
+      const resource = inferShareResource(path);
+      await db.insert(affiliateShareEvents).values({
+        affiliateUserId: affiliate.affiliateUserId,
+        resourceType: resource.resourceType,
+        resourceId: resource.resourceId,
+        destinationUrl: path,
+        shareMethod: "link",
+      });
 
       res.json({
         shareLink,

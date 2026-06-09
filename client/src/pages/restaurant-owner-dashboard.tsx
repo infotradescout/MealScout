@@ -3111,12 +3111,20 @@ export default function RestaurantOwnerDashboard() {
                       }>)
                     : [];
                   if (!hasAnyData) {
-                    const publicProfilePath =
-                      currentPublicEntityType === "truck"
-                        ? `/p/truck/${encodeURIComponent(String(selectedRestaurant))}`
-                        : currentPublicEntityType === "bar"
-                          ? `/p/bar/${encodeURIComponent(String(selectedRestaurant))}`
-                          : `/p/restaurant/${encodeURIComponent(String(selectedRestaurant))}`;
+                    const publicProfilePath = (() => {
+                      const canonicalUrl = String(
+                        publicProfileForQr?.seo?.canonicalUrl || "",
+                      ).trim();
+                      if (!canonicalUrl) return null;
+                      try {
+                        const url = new URL(canonicalUrl, window.location.origin);
+                        const path = `${url.pathname}${url.search}${url.hash}`;
+                        return path.startsWith("/p/") ? path : null;
+                      } catch {
+                        return canonicalUrl.startsWith("/p/") ? canonicalUrl : null;
+                      }
+                    })();
+                    const hasPublicProfile = Boolean(publicProfilePath);
                     return (
                       <div className="mt-3 rounded-md border border-dashed border-border p-4">
                         <p className="text-sm font-medium">
@@ -3133,21 +3141,27 @@ export default function RestaurantOwnerDashboard() {
                               Open QR Kit
                             </Button>
                           </Link>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            onClick={async () => {
-                              const fullUrl = `${window.location.origin}${publicProfilePath}`;
-                              await navigator.clipboard.writeText(fullUrl);
-                              toast({
-                                title: "Profile link copied",
-                                description: "Public profile URL copied to clipboard.",
-                              });
-                            }}
-                          >
-                            Copy public profile link
-                          </Button>
+                          {hasPublicProfile ? (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={async () => {
+                                const fullUrl = `${window.location.origin}${publicProfilePath}`;
+                                await navigator.clipboard.writeText(fullUrl);
+                                toast({
+                                  title: "Profile link copied",
+                                  description: "Public profile URL copied to clipboard.",
+                                });
+                              }}
+                            >
+                              Copy public profile link
+                            </Button>
+                          ) : (
+                            <Button type="button" size="sm" variant="outline" disabled>
+                              No public profile yet
+                            </Button>
+                          )}
                         </div>
                         <div className="mt-4 rounded-md border border-border bg-background p-3">
                           <p className="text-sm font-semibold">Profile completion loop</p>

@@ -2891,7 +2891,8 @@ export function registerAdminManagementRoutes(app: Express) {
             claimed,
             verifiedProfile: Boolean(row?.isVerified),
             locallyOwned: Boolean(row?.hasGoldenPlate),
-            publicProfileUrl: canonicalPath,
+            hasPublicProfile: publicReady,
+            publicProfileUrl: publicReady ? canonicalPath : null,
             profileCompletenessScore: completenessScore,
             missingFields,
             menuStatus: {

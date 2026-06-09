@@ -16,35 +16,6 @@ export function getStoredAffiliateRef(): string | null {
   return window.localStorage.getItem(AFFILIATE_REF_STORAGE_KEY);
 }
 
-function appendRefParam(url: string, ref: string): string {
-  try {
-    const normalized = new URL(url, window.location.origin);
-    if (!normalized.searchParams.has("ref")) {
-      normalized.searchParams.set("ref", ref);
-    }
-    return normalized.toString();
-  } catch {
-    return url;
-  }
-}
-
-function normalizeHost(host: string) {
-  return host.replace(/^www\./, "");
-}
-
-function shouldAppendRef(input: string, ref: string | null): boolean {
-  if (!ref) return false;
-  if (!input.startsWith("http")) return true;
-  try {
-    const inputUrl = new URL(input);
-    return (
-      normalizeHost(inputUrl.host) === normalizeHost(window.location.host)
-    );
-  } catch {
-    return false;
-  }
-}
-
 function normalizeSharePath(input: string): string {
   if (!input) return "/";
 
@@ -66,27 +37,20 @@ function normalizeSharePath(input: string): string {
 
 export async function getAffiliateShareUrl(input: string): Promise<string> {
   if (typeof window === "undefined") {
-    return input;
+    throw new Error("Affiliate tag unavailable — sharing disabled.");
   }
 
   const path = normalizeSharePath(input);
-  const baseFallback = input.startsWith("http")
-    ? input
-    : `${window.location.origin}${path}`;
   const storedRef = getStoredAffiliateRef();
-  const fallback =
-    storedRef && shouldAppendRef(baseFallback, storedRef)
-      ? appendRefParam(baseFallback, storedRef)
-      : baseFallback;
 
-  try {
-    const res = await apiRequest("POST", "/api/share/generate", {
-      path,
-      ref: storedRef || undefined,
-    });
-    const data = await res.json();
-    return data?.shareLink || fallback;
-  } catch {
-    return fallback;
+  const res = await apiRequest("POST", "/api/share/generate", {
+    path,
+    ref: storedRef || undefined,
+  });
+  const data = await res.json().catch(() => ({}));
+  const shareLink = String(data?.shareLink || "").trim();
+  if (!shareLink || !/[?&]ref=/.test(shareLink)) {
+    throw new Error(data?.message || "Affiliate tag unavailable — sharing disabled.");
   }
+  return shareLink;
 }

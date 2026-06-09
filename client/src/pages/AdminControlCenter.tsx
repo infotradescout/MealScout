@@ -111,7 +111,8 @@ type BusinessProfileCompletionItem = {
   claimed: boolean;
   verifiedProfile: boolean;
   locallyOwned: boolean;
-  publicProfileUrl: string;
+  hasPublicProfile?: boolean;
+  publicProfileUrl: string | null;
   profileCompletenessScore: number;
   missingFields: string[];
   menuStatus: {
@@ -2542,14 +2543,20 @@ export default function AdminControlCenter() {
                             </td>
                             <td className="px-3 py-2">
                               <div className="flex flex-wrap gap-1">
-                                <a
-                                  href={item.publicProfileUrl}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="inline-flex items-center rounded border border-[var(--border-subtle)] px-2 py-1 text-[11px]"
-                                >
-                                  Open profile
-                                </a>
+                                {item.hasPublicProfile && item.publicProfileUrl ? (
+                                  <a
+                                    href={item.publicProfileUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="inline-flex items-center rounded border border-[var(--border-subtle)] px-2 py-1 text-[11px]"
+                                  >
+                                    Open profile
+                                  </a>
+                                ) : (
+                                  <span className="inline-flex items-center rounded border border-[var(--border-subtle)] px-2 py-1 text-[11px] text-[color:var(--text-muted)]">
+                                    No public profile yet
+                                  </span>
+                                )}
                                 <a
                                   href={`/restaurant-owner-dashboard?restaurantId=${encodeURIComponent(item.id)}&setup=1`}
                                   className="inline-flex items-center rounded border border-[var(--border-subtle)] px-2 py-1 text-[11px]"

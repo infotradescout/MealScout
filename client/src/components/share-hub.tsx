@@ -157,35 +157,25 @@ export default function ShareHub({
     return [referralItem, ...base];
   }, [mode, affiliateTag]);
 
-  const absoluteUrl = (href: string) => {
-    if (href.startsWith("http://") || href.startsWith("https://")) return href;
-    if (typeof window === "undefined") return href;
-    return `${window.location.origin}${href}`;
-  };
-
   const generateTrackedShareUrl = async (href: string) => {
-    try {
-      const response = await fetch("/api/share/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          path: href,
-          ref: affiliateTag || undefined,
-        }),
-      });
-      if (!response.ok) {
-        throw new Error("Failed to generate tracked share link");
-      }
-      const data = await response.json();
-      const shareLink = String(data?.shareLink || "").trim();
-      if (!shareLink) {
-        throw new Error("Tracked share link missing");
-      }
-      return shareLink;
-    } catch {
-      return absoluteUrl(href);
+    const response = await fetch("/api/share/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        path: href,
+        ref: affiliateTag || undefined,
+      }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data?.message || "Affiliate tag unavailable — sharing disabled.");
     }
+    const shareLink = String(data?.shareLink || "").trim();
+    if (!shareLink || !/[?&]ref=/.test(shareLink)) {
+      throw new Error("Tracked share link missing affiliate tag.");
+    }
+    return shareLink;
   };
 
   const trackShareHubEvent = async (
@@ -214,7 +204,17 @@ export default function ShareHub({
   };
 
   const copyLink = async (href: string) => {
-    const value = await generateTrackedShareUrl(href);
+    let value = "";
+    try {
+      value = await generateTrackedShareUrl(href);
+    } catch (error: any) {
+      toast({
+        title: "Sharing disabled",
+        description: error?.message || "Affiliate tag unavailable — sharing disabled.",
+        variant: "destructive",
+      });
+      return;
+    }
     try {
       await navigator.clipboard.writeText(value);
       toast({ title: "Copied", description: value });
@@ -228,8 +228,18 @@ export default function ShareHub({
   };
 
   const copyOutreachText = async (item: ShareHubItem) => {
-    const value = await generateTrackedShareUrl(item.href);
-    const text = item.outreachText ? `${item.outreachText}${value}` : value;
+    let text = "";
+    try {
+      const value = await generateTrackedShareUrl(item.href);
+      text = item.outreachText ? `${item.outreachText}${value}` : value;
+    } catch (error: any) {
+      toast({
+        title: "Sharing disabled",
+        description: error?.message || "Affiliate tag unavailable — sharing disabled.",
+        variant: "destructive",
+      });
+      return;
+    }
     try {
       await navigator.clipboard.writeText(text);
       void trackShareHubEvent("copy_outreach", item);
@@ -245,7 +255,17 @@ export default function ShareHub({
 
   const shareLink = async (titleValue: string, href: string) => {
     const item = items.find((entry) => entry.title === titleValue && entry.href === href);
-    const value = await generateTrackedShareUrl(href);
+    let value = "";
+    try {
+      value = await generateTrackedShareUrl(href);
+    } catch (error: any) {
+      toast({
+        title: "Sharing disabled",
+        description: error?.message || "Affiliate tag unavailable — sharing disabled.",
+        variant: "destructive",
+      });
+      return;
+    }
     if (!navigator.share) {
       if (item) void trackShareHubEvent("share", item);
       await navigator.clipboard.writeText(value);
@@ -272,7 +292,7 @@ export default function ShareHub({
       <CardContent>
         {affiliateTagUnavailable ? (
           <div className="mb-3 rounded-md border border-amber-300/50 bg-amber-100/40 p-3 text-xs text-amber-900">
-            Referral tracking is temporarily unavailable. You can still share this page, but attribution may not be attached.
+            Affiliate tag unavailable — sharing disabled.
           </div>
         ) : null}
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -294,6 +314,7 @@ export default function ShareHub({
               <div className="flex flex-wrap gap-2">
                 <Button
                   size="sm"
+                  disabled={affiliateTagUnavailable || !affiliateTag}
                   onClick={() => shareLink(item.title, item.href)}
                 >
                   Share tracked link
@@ -301,16 +322,26 @@ export default function ShareHub({
                 <Button
                   size="sm"
                   variant="outline"
+                  disabled={affiliateTagUnavailable || !affiliateTag}
                   onClick={async () => {
-                    const trackedUrl = await generateTrackedShareUrl(item.href);
-                    window.open(
-                      trackedUrl,
-                      item.href.startsWith("http") ? "_blank" : "_self",
-                      item.href.startsWith("http")
-                        ? "noopener,noreferrer"
-                        : undefined,
-                    );
-                    void trackShareHubEvent("open", item);
+                    try {
+                      const trackedUrl = await generateTrackedShareUrl(item.href);
+                      window.open(
+                        trackedUrl,
+                        item.href.startsWith("http") ? "_blank" : "_self",
+                        item.href.startsWith("http")
+                          ? "noopener,noreferrer"
+                          : undefined,
+                      );
+                      void trackShareHubEvent("open", item);
+                    } catch (error: any) {
+                      toast({
+                        title: "Sharing disabled",
+                        description:
+                          error?.message || "Affiliate tag unavailable — sharing disabled.",
+                        variant: "destructive",
+                      });
+                    }
                   }}
                 >
                   Open
@@ -318,6 +349,7 @@ export default function ShareHub({
                 <Button
                   size="sm"
                   variant="ghost"
+                  disabled={affiliateTagUnavailable || !affiliateTag}
                   onClick={async () => {
                     await copyLink(item.href);
                     void trackShareHubEvent("copy_link", item);
@@ -328,6 +360,7 @@ export default function ShareHub({
                 <Button
                   size="sm"
                   variant="secondary"
+                  disabled={affiliateTagUnavailable || !affiliateTag}
                   onClick={() => copyOutreachText(item)}
                 >
                   Copy Outreach

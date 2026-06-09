@@ -33,10 +33,24 @@ assert(
 );
 
 assert(
-  source.includes(
-    "Referral tracking is temporarily unavailable. You can still share this page, but attribution may not be attached.",
-  ),
-  "Share Hub must show visible affiliate-tracking fallback copy",
+  source.includes("Affiliate tag unavailable — sharing disabled."),
+  "Share Hub must show visible disabled-state copy when affiliate tag is unavailable",
+);
+
+assert(
+  source.includes("disabled={affiliateTagUnavailable || !affiliateTag}"),
+  "Share Hub share buttons must be disabled without a resolved affiliate tag",
+);
+
+assert(
+  source.includes("!/[?&]ref=/.test(shareLink)"),
+  "Share Hub must reject generated links that are missing a referral tag",
+);
+
+assert(
+  !source.includes("return absoluteUrl(href)") &&
+    !source.includes("Referral tracking is temporarily unavailable"),
+  "Share Hub must not fall back to untracked/untagged share URLs",
 );
 
 assert(
@@ -50,4 +64,3 @@ assert(
 );
 
 console.log("share-directory-conversion.contract: PASS");
-
