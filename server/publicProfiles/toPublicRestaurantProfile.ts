@@ -1,6 +1,7 @@
 import type { PublicRestaurantProfile } from "@shared/publicProfiles";
 import { toPublicProfileSeo } from "./toPublicProfileSeo";
 import { buildPublicCta, imageAsset, joinedAddressLabel, toSlug } from "./publicProfileUtils";
+import { shouldExposeStaticTruckProfileLocation } from "../utils/truckLocationSemantics";
 
 export function toPublicRestaurantProfile(input: {
   row: any;
@@ -152,9 +153,19 @@ export function toPublicRestaurantProfile(input: {
   const addressPublicLabel =
     input.showAddress === false ||
     isRejected("contact_address") ||
-    (hidePublicTrustFields && !isAccepted("contact_address"))
+    (hidePublicTrustFields && !isAccepted("contact_address")) ||
+    !shouldExposeStaticTruckProfileLocation(row)
       ? null
       : joinedAddressLabel(row.address, row.city, row.state);
+  const exposeProfileCoordinates = shouldExposeStaticTruckProfileLocation(row);
+  const publicLatitude =
+    exposeProfileCoordinates && Number.isFinite(Number(row.latitude))
+      ? Number(row.latitude)
+      : null;
+  const publicLongitude =
+    exposeProfileCoordinates && Number.isFinite(Number(row.longitude))
+      ? Number(row.longitude)
+      : null;
   const phonePublic =
     input.showContact === false ||
     isRejected("contact_phone") ||
@@ -555,8 +566,8 @@ export function toPublicRestaurantProfile(input: {
     buildPublicCta({
       label: "Get directions",
       href:
-        row.latitude != null && row.longitude != null
-          ? `https://maps.google.com/?q=${row.latitude},${row.longitude}`
+        publicLatitude != null && publicLongitude != null
+          ? `https://maps.google.com/?q=${publicLatitude},${publicLongitude}`
           : null,
       type: "map",
       priority: 92,
@@ -595,8 +606,8 @@ export function toPublicRestaurantProfile(input: {
     addressPublicLabel,
     city: String(row.city || "").trim() || null,
     state: String(row.state || "").trim() || null,
-    latitude: Number.isFinite(Number(row.latitude)) ? Number(row.latitude) : null,
-    longitude: Number.isFinite(Number(row.longitude)) ? Number(row.longitude) : null,
+    latitude: publicLatitude,
+    longitude: publicLongitude,
     distanceLabel: null,
     phonePublic,
     websiteUrl,

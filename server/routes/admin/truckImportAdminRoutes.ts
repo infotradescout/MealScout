@@ -11,6 +11,7 @@ import {
 } from "../../imageUpload";
 import { sendAccountSetupInvite } from "../../utils/accountSetup";
 import { parseTruckImportFile } from "../../utils/truckImport";
+import { buildTruckProfileLocationEvidence } from "../../utils/truckLocationSemantics";
 import {
   eventBookings,
   imageUploads,
@@ -358,6 +359,33 @@ export function registerTruckImportAdminRoutes(
         if (!updated) {
           return res.status(404).json({ message: "Import listing not found" });
         }
+        const updatedProfileLocations = buildTruckProfileLocationEvidence({
+          businessName: String(updated.name || ""),
+          address: String(updated.address || ""),
+          serviceArea: String(
+            (updated.rawData as any)?.profileLocations?.serviceArea ||
+              updated.city ||
+              "",
+          ),
+          source: "admin_truck_import_listing_edit",
+        });
+        await db
+          .update(truckImportListings)
+          .set({
+            rawData: {
+              ...((updated as any).rawData || {}),
+              profileLocations: updatedProfileLocations,
+              adminReview: {
+                ...(((updated as any).rawData || {}).adminReview || {}),
+                truckLocationAmbiguity:
+                  updatedProfileLocations.requiresOwnerReview ||
+                  updatedProfileLocations.addressPublicByDefault === false,
+                lastTruckLocationClassificationAt: new Date().toISOString(),
+              },
+            },
+            updatedAt: new Date(),
+          } as any)
+          .where(eq(truckImportListings.id, listingId));
 
         // Keep the seeded restaurant (if any) in sync with listing fields.
         const [seededRestaurant] = await db
@@ -385,6 +413,18 @@ export function registerTruckImportAdminRoutes(
               restaurantUpdates[restaurantField] = updates[listingField];
             }
           }
+          const profileLocations = updatedProfileLocations;
+          restaurantUpdates.rawData = {
+            ...((seededRestaurant as any).rawData || {}),
+            profileLocations,
+            adminReview: {
+              ...(((seededRestaurant as any).rawData || {}).adminReview || {}),
+              truckLocationAmbiguity:
+                profileLocations.requiresOwnerReview ||
+                profileLocations.addressPublicByDefault === false,
+              lastTruckLocationClassificationAt: new Date().toISOString(),
+            },
+          };
           if (Object.keys(restaurantUpdates).length > 0) {
             await db
               .update(restaurants)

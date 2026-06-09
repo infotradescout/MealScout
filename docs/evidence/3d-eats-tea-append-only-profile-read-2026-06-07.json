@@ -1,0 +1,268 @@
+{
+  "apply_mode": "append_only_enrichment",
+  "business_display_name": "3-D Eats & Tea Pensacola",
+  "brand_name": "3-D Eats",
+  "logo_text": "3-D Eats",
+  "established_text": "EST. 01",
+  "email": "threedtea@gmail.com",
+  "facebook_handle_candidate": "3deatsandtea",
+  "instagram_handle": "3deats",
+  "tiktok_handle": "3deatspensacola",
+  "youtube_candidates": ["eatin3d", "@3deats"],
+  "messenger_label": "3-D Eats & Tea Pensacola",
+  "business_type": ["Food Truck", "Restaurant / Food Service"],
+  "categories_shown": [
+    "Sandwiches",
+    "Burgers",
+    "Hot Dogs",
+    "Pizza",
+    "Libations",
+    "3-D Tea Slush"
+  ],
+  "price_tier": "$$",
+  "recommendation_score": "98% recommend",
+  "review_count": 716,
+  "service_area": {
+    "city": "Pensacola",
+    "state": "FL"
+  },
+  "static_business_address_candidate": {
+    "street": "6881 US 98 E",
+    "city": "Pensacola",
+    "state": "FL",
+    "zip": "32506",
+    "note": "Treat as business/admin/static listed address only unless confirmed as active operating location."
+  },
+  "prior_location_text_from_details_screenshot": {
+    "text": "Pensacola, FL, United States, 32505",
+    "note": "Do not use as live truck location without schedule/stop confirmation."
+  },
+  "cover_photo_upload": {
+    "image_upload_id": "5f663d13-88d5-41ca-9021-97873c591732",
+    "restaurant_id": "95c4e656-f3cc-46ab-ae18-53f549cecfd1",
+    "uploaded_by_user_id": "58ee83b9-b95c-42dc-95a4-7a285112d7f7",
+    "image_type": "restaurant_cover",
+    "entity_type": "restaurant",
+    "repo_path": "artifacts/mealscout-onboarding/3d-eats-and-tea/images/cover-photo.png",
+    "public_asset_path": "client/public/business-assets/3d-eats-and-tea/cover-photo.png",
+    "public_url": "/business-assets/3d-eats-and-tea/cover-photo.png",
+    "storage_mode": "local_public_asset_cloudinary_unconfigured",
+    "note": "Mirrors normal restaurant cover upload database shape locally. Cloudinary upload was not attempted because Cloudinary credentials were not configured in this shell."
+  },
+  "customer_location_rule": {
+    "value": "Use active scheduled stop, event location, owner-confirmed live location, or verified current location. Do not use static profile/menu address as live map location."
+  },
+  "services": [
+    "Curbside pickup",
+    "In-store pickup",
+    "Takeout",
+    "Delivery",
+    "Contactless delivery",
+    "Outdoor seating"
+  ],
+  "service_modes": ["Dine-in", "Carry out", "Catering"],
+  "hours_candidate": {
+    "monday": "11:00 AM - 8:00 PM",
+    "tuesday": "11:00 AM - 8:00 PM",
+    "wednesday": "11:00 AM - 8:00 PM",
+    "thursday": "11:00 AM - 8:00 PM",
+    "friday": "11:00 AM - 8:00 PM",
+    "saturday": "11:00 AM - 8:00 PM",
+    "sunday": null
+  },
+  "hours_source_text": "Monday to Saturday 11:00AM to 8:00PM",
+  "schedule_note": "These appear to be general business hours. Actual customer-facing truck location should still come from scheduled stops or live owner-confirmed location.",
+  "contact_conflicts": [
+    {
+      "field": "youtube",
+      "values": {
+        "prior_details_screenshot": "eatin3d",
+        "menu_screenshot": "@3deats"
+      },
+      "action": "Flag for review before replacing existing value."
+    }
+  ],
+  "address_conflicts": [
+    {
+      "field": "address",
+      "values": {
+        "prior_details_screenshot": "Pensacola, FL, United States, 32505",
+        "menu_screenshot": "6881 US 98 E, Pensacola, FL 32506"
+      },
+      "action": "Flag for review. Do not use either value as live truck map location without schedule/live confirmation."
+    }
+  ],
+  "do_not_replace": [
+    "existing_account",
+    "owner_user_id",
+    "claim_status",
+    "subscription_status",
+    "payment_status",
+    "profile_id",
+    "business_id",
+    "analytics_history",
+    "reviews",
+    "existing_customer_facing_fields_without_review"
+  ],
+  "safe_to_apply_if_blank": [
+    "email",
+    "service_modes",
+    "services",
+    "menu_categories",
+    "menu_items",
+    "menu_prices",
+    "general_hours",
+    "static_business_address_candidate",
+    "social_handles"
+  ],
+  "review_required_before_overwrite": [
+    "address",
+    "youtube",
+    "hours",
+    "logo",
+    "public map location",
+    "phone",
+    "website",
+    "existing menu values"
+  ],
+  "missing_fields": [
+    "phone_number",
+    "website",
+    "confirmed_logo_asset",
+    "confirmed_live_operating_location",
+    "current scheduled stops",
+    "owner approval that this menu is current",
+    "owner approval for logo usage"
+  ],
+  "menu": [
+    {
+      "category": "Hot Dogs",
+      "section_note": "Featuring Vienna Beef Hot Dogs. Comes with choice of one side or regular drink.",
+      "items": [
+        {"name": "Classic", "description": "Sweet relish & onion", "variants": [{"label": "1 Dog", "price": 7.00}, {"label": "2 Dogs", "price": 10.00}]},
+        {"name": "Pulled Pork", "description": "Pulled pork with BBQ sauce", "variants": [{"label": "1 Dog", "price": 8.00}, {"label": "2 Dogs", "price": 11.00}]},
+        {"name": "Chili Cheese", "variants": [{"label": "1 Dog", "price": 8.00}, {"label": "2 Dogs", "price": 11.00}]},
+        {"name": "Bacon Cheddar Jalapeno", "variants": [{"label": "1 Dog", "price": 8.00}, {"label": "2 Dogs", "price": 11.00}]},
+        {"name": "Slaw Dog", "variants": [{"label": "1 Dog", "price": 8.00}, {"label": "2 Dogs", "price": 11.00}]}
+      ]
+    },
+    {
+      "category": "3-D's Taste of Chicago",
+      "section_note": "Comes with choice of one side or regular drink.",
+      "items": [
+        {"name": "Chicago Style Dog", "description": "Mustard, onion, Chicago relish, pickle spear, tomato, celery salt, sport pepper", "price": 8.00},
+        {"name": "Jumbo Beef Polish", "price": 10.00},
+        {"name": "Maxwell Street Polish", "description": "Grilled onions, mustard, & sport peppers", "price": 10.00},
+        {"name": "Italian Beef", "description": "Shaved oven-roasted beef, dipped in Italian gravy, dry or dipped. Baked with mozzarella add $2.", "price": 14.00},
+        {"name": "Italian Sausage", "description": "Sweet Italian sausage with onions & sweet peppers", "price": 10.00},
+        {"name": "Beef & Sausage Bomber", "description": "Italian sausage nestled inside an Italian beef", "price": 16.00},
+        {"name": "Gyro", "description": "Beef & lamb, onions, tomatoes, tzatziki", "price": 13.00},
+        {"name": "Chicago Pizza Puff", "description": "No side included", "price": 4.00}
+      ]
+    },
+    {
+      "category": "Sides",
+      "items": [
+        {"name": "French Fries", "price": 4.00},
+        {"name": "Side Salad", "price": 4.00},
+        {"name": "Baked Beans", "price": 4.00},
+        {"name": "Coleslaw", "price": 4.00},
+        {"name": "Potato Salad", "price": 4.00},
+        {"name": "Onion Rings", "price": 4.00},
+        {"name": "Buttered Baked Potato", "description": "Load it for $2 more", "price": 4.00}
+      ]
+    },
+    {
+      "category": "Beverages",
+      "section_note": "Refillable Mason Jar $10. Refills available for $1. Starred drinks show No Refills.",
+      "items": [
+        {"name": "3D Tea", "no_refills": true, "variants": [{"label": "16oz", "price": 3.00}, {"label": "32oz", "price": 5.00}]},
+        {"name": "Lemonade", "no_refills": true, "variants": [{"label": "16oz", "price": 3.00}, {"label": "32oz", "price": 5.00}]},
+        {"name": "Arnold Palmer", "no_refills": true, "variants": [{"label": "16oz", "price": 3.00}, {"label": "32oz", "price": 5.00}]},
+        {"name": "16oz Drink", "size": "16oz", "price": 2.50},
+        {"name": "Refillable Mason Jar", "price": 10.00},
+        {"name": "Mason Jar Refill", "price": 1.00}
+      ],
+      "beverage_brands_shown": ["Coca-Cola", "Diet Coke", "Coca-Cola Zero", "Sprite", "Dr Pepper", "Powerade"]
+    },
+    {
+      "category": "Kid's Meals",
+      "section_note": "Comes with kid fry, drink, & treat.",
+      "items": [
+        {"name": "Small Burger", "price": 8.00},
+        {"name": "Hot Dog", "price": 8.00},
+        {"name": "Grilled Cheese", "price": 8.00},
+        {"name": "Kid's Chicken", "price": 8.00}
+      ]
+    },
+    {
+      "category": "Desserts",
+      "items": [
+        {"name": "Deep Fried Oreos (4)", "price": 5.00},
+        {"name": "Banana Pudding", "price": 5.00}
+      ]
+    },
+    {
+      "category": "Starters",
+      "items": [
+        {"name": "Mozzarella Sticks", "description": "With marinara", "price": 8.00},
+        {"name": "Jalapeno Cheddar Bites", "price": 8.00},
+        {"name": "Fried Pickles", "price": 8.00},
+        {"name": "Onion Ring Basket", "price": 8.00},
+        {"name": "Loaded Fries", "description": "Your choice of style", "price": 8.00, "options": ["Cheese", "Southwest", "Bacon Cheese", "Bacon Ranch Cheese", "Samurai", "Chili Cheese"]}
+      ]
+    },
+    {
+      "category": "Signature Fries",
+      "section_note": "All fries come with cheese sauce, shredded cheese, & your choice of toppings.",
+      "items": [
+        {"name": "Chicken Fries", "description": "Choose your style", "price": 14.00, "options": ["Buffalo Ranch", "BBQ", "Bacon Ranch", "Southwest", "Samurai"]},
+        {"name": "Cheesesteak Fries", "description": "Choose your style", "price": 14.00, "options": ["Classic", "Southwest", "BBQ"]},
+        {"name": "Pulled Pork Fries", "price": 14.00}
+      ]
+    },
+    {
+      "category": "3-D Melts",
+      "section_note": "On crispy sourdough. Comes with choice of one side or regular drink.",
+      "items": [
+        {"name": "Grilled Cheese", "description": "American, Swiss, shredded cheddar jack", "price": 10.00},
+        {"name": "Pulled Pork Melt", "description": "With BBQ sauce", "price": 15.00},
+        {"name": "Cheesesteak Melt", "description": "Steak, grilled onions, American & Cooper Sharp cheese", "price": 15.00},
+        {"name": "B.F.C. Melt", "description": "B.F.C. on sourdough", "price": 15.00, "options": ["Buffalo Ranch", "BBQ", "Classic", "Southwest"]}
+      ]
+    },
+    {
+      "category": "Cheesesteaks",
+      "section_note": "Premium steak, Amoroso roll, Cooper Sharp cheese. Comes with choice of one side or regular drink.",
+      "items": [
+        {"name": "Classic", "description": "With onions", "price": 14.00},
+        {"name": "Club", "description": "With onions, lettuce, tomato", "price": 15.00},
+        {"name": "Southwest", "description": "With onions, jalapenos, & southwest sauce", "price": 15.00},
+        {"name": "Samurai", "description": "With onions, Samurai sauce", "price": 15.00}
+      ]
+    },
+    {
+      "category": "Crafted Burgers",
+      "section_note": "Comes with choice of one side or regular drink.",
+      "items": [
+        {"name": "Classic", "description": "Lettuce, tomato, onion, pickles", "variants": [{"label": "Single", "price": 9.00}, {"label": "Double", "price": 12.00}]},
+        {"name": "Bacon It Rain", "description": "Classic loaded with bacon", "variants": [{"label": "Single", "price": 11.00}, {"label": "Double", "price": 14.00}]},
+        {"name": "BBQ Bacon", "description": "Bacon, American cheese, 2 onion rings, BBQ sauce", "variants": [{"label": "Single", "price": 11.00}, {"label": "Double", "price": 14.00}]},
+        {"name": "Grilled Cheeseburger", "description": "Buttered grilled bun, Swiss & American cheese", "variants": [{"label": "Single", "price": 11.00}, {"label": "Double", "price": 14.00}]},
+        {"name": "Fire in the Hole", "description": "Pepper Jack cheese, grilled jalapeno, southwest sauce", "variants": [{"label": "Single", "price": 11.00}, {"label": "Double", "price": 14.00}]},
+        {"name": "Samurai Bacon", "description": "Bacon, American cheese, sweet chili sauce with a fight", "variants": [{"label": "Single", "price": 11.00}, {"label": "Double", "price": 14.00}]},
+        {"name": "Philly Burger", "description": "Cheesesteak topped burger", "variants": [{"label": "Single", "price": 12.00}, {"label": "Double", "price": 15.00}]},
+        {"name": "Patty Melt", "description": "On grilled sourdough, Swiss & American cheese, grilled onions", "price": 14.00}
+      ]
+    },
+    {
+      "category": "Sandwiches",
+      "section_note": "Comes with choice of one side or regular drink.",
+      "items": [
+        {"name": "B.L.T.", "description": "On crispy sourdough", "price": 12.00},
+        {"name": "Pulled Pork", "description": "Smokey pork with BBQ sauce", "price": 13.00},
+        {"name": "B.F.C.", "description": "Jumbo fried chicken sandwich with lettuce & tomato", "price": 12.00}
+      ]
+    }
+  ]
+}

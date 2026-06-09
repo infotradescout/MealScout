@@ -12,6 +12,7 @@ import {
   truckImportListings,
   users,
 } from "../shared/schema";
+import { buildTruckProfileLocationEvidence } from "../server/utils/truckLocationSemantics";
 
 type InputRecord = {
   business_name?: string;
@@ -534,7 +535,19 @@ const run = async () => {
       action = "create_draft";
     }
 
+    const profileLocations = buildTruckProfileLocationEvidence({
+      businessName: record.businessName,
+      address: record.address,
+      serviceArea: record.serviceArea || record.city,
+      source: "bulk_evidence_ingest",
+      existingConflicts: conflicts,
+    });
+    for (const conflict of profileLocations.conflicts) {
+      if (!conflicts.includes(conflict)) conflicts.push(conflict);
+    }
+
     const baseEvidence = {
+      profileLocations,
       sourceNotes: record.sourceNotes,
       sourceUrls: record.sourceUrls,
       sourceFiles: record.sourceFiles,
@@ -585,8 +598,8 @@ const run = async () => {
           if (isBlank(restaurantMatch.phone) && record.phone) updates.phone = record.phone;
           if (isBlank(restaurantMatch.city) && record.city) updates.city = record.city;
           if (isBlank(restaurantMatch.state) && record.state) updates.state = record.state;
-          if (isBlank(restaurantMatch.address) && (record.address || record.serviceArea))
-            updates.address = record.address || record.serviceArea;
+          if (isBlank(restaurantMatch.address) && record.address)
+            updates.address = record.address;
           if (isBlank(restaurantMatch.cuisineType) && record.cuisineType)
             updates.cuisineType = record.cuisineType;
           if (isBlank(restaurantMatch.websiteUrl) && record.websiteUrl)
@@ -603,6 +616,14 @@ const run = async () => {
             updates.businessType = record.businessType;
           if ((restaurantMatch as any).isFoodTruck == null && record.businessType === "food_truck")
             updates.isFoodTruck = true;
+          updates.rawData = {
+            ...((restaurantMatch as any).rawData || {}),
+            profileLocations,
+            evidenceIngest: {
+              ...(((restaurantMatch as any).rawData || {}).evidenceIngest || {}),
+              ...baseEvidence,
+            },
+          };
           if (Object.keys(updates).length > 0) {
             await db
               .update(restaurants)
@@ -670,7 +691,7 @@ const run = async () => {
                 ownerId: importOwnerId,
                 name: listing.name || record.businessName,
                 address:
-                  listing.address || record.address || record.serviceArea || "Unknown",
+                  listing.address || record.address || "Unknown",
                 phone: listing.phone || record.phone || null,
                 businessType: record.businessType || "food_truck",
                 cuisineType: listing.cuisineType || record.cuisineType || null,
@@ -685,6 +706,10 @@ const run = async () => {
                 isActive: false,
                 isVerified: false,
                 claimedFromImportId: listing.id,
+                rawData: {
+                  profileLocations: baseEvidence.profileLocations,
+                  evidenceIngest: baseEvidence,
+                },
               } as any)
               .returning({ id: restaurants.id });
             createdRestaurantId = String(seeded.id);
@@ -697,7 +722,7 @@ const run = async () => {
         .values({
           source: "bulk_evidence_ingest",
           name: record.businessName,
-          address: record.address || record.serviceArea || "Unknown",
+          address: record.address || "Unknown",
           city: record.city || null,
           state: record.state || null,
           phone: record.phone || null,
@@ -720,7 +745,7 @@ const run = async () => {
         .values({
           ownerId: importOwnerId,
           name: record.businessName,
-          address: record.address || record.serviceArea || "Unknown",
+          address: record.address || "Unknown",
           phone: record.phone || null,
           businessType: record.businessType || "food_truck",
           cuisineType: record.cuisineType || null,
@@ -735,6 +760,10 @@ const run = async () => {
           isActive: false,
           isVerified: false,
           claimedFromImportId: createdListingId,
+          rawData: {
+            profileLocations: baseEvidence.profileLocations,
+            evidenceIngest: baseEvidence,
+          },
         } as any)
         .returning({ id: restaurants.id });
 

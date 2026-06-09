@@ -63,6 +63,18 @@
     "apply_rule": "Use only if existing logo field is blank. If a logo exists, queue replacement for owner/admin review.",
     "alternate_logo_candidate": "Circular black logo appears on menu image; do not use unless approved."
   },
+  "cover_photo_evidence": {
+    "candidate_cover_photo": true,
+    "repo_path": "artifacts/mealscout-onboarding/3d-eats-and-tea/images/cover-photo.png",
+    "public_asset_path": "client/public/business-assets/3d-eats-and-tea/cover-photo.png",
+    "public_url": "/business-assets/3d-eats-and-tea/cover-photo.png",
+    "image_upload_id": "5f663d13-88d5-41ca-9021-97873c591732",
+    "image_type": "restaurant_cover",
+    "entity_type": "restaurant",
+    "storage_mode": "local_public_asset_cloudinary_unconfigured",
+    "description": "3-D Eats wrapped food truck with service window open and large side mural/logo visible.",
+    "apply_rule": "Use only if existing coverImageUrl is blank and the image is uploaded to a public/served asset location. This local run mirrored the restaurant cover upload database shape with an image_uploads row because Cloudinary credentials were not configured."
+  },
   "food_truck_location_rule": {
     "do_not_use_static_address_as_live_map_location": true,
     "live_customer_location_sources": [

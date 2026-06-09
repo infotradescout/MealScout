@@ -3,6 +3,9 @@ type ParsedTruckRow = {
   email?: string | null;
   name?: string | null;
   address?: string | null;
+  businessAdminAddress?: string | null;
+  operatingLocationAddress?: string | null;
+  serviceArea?: string | null;
   city?: string | null;
   state?: string | null;
   phone?: string | null;
@@ -64,8 +67,34 @@ const FIELD_ALIASES: Record<string, string[]> = {
     "street address",
     "address1",
     "address 1",
-    "location address",
+  ],
+  businessAdminAddress: [
+    "business address",
+    "admin address",
+    "administrative address",
+    "static address",
     "mailing address",
+    "billing address",
+    "menu address",
+    "business/admin address",
+  ],
+  operatingLocationAddress: [
+    "operating location",
+    "operating address",
+    "location address",
+    "scheduled stop",
+    "schedule stop",
+    "stop address",
+    "event location",
+    "live location",
+    "current location",
+  ],
+  serviceArea: [
+    "service area",
+    "market",
+    "primary market",
+    "serving area",
+    "coverage area",
   ],
   city: ["city", "town", "municipality"],
   state: ["state", "st", "st.", "province", "region"],
@@ -404,6 +433,9 @@ export const parseTruckImportFile = async (
       email: row.email || null,
       name: row.name || null,
       address: row.address || null,
+      businessAdminAddress: row.businessAdminAddress || null,
+      operatingLocationAddress: row.operatingLocationAddress || null,
+      serviceArea: row.serviceArea || null,
       city: row.city || null,
       state: row.state || null,
       phone: row.phone || null,

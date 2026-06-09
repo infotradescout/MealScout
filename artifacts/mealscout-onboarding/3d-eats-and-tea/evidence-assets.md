@@ -1,8 +1,20 @@
 # 3D Eats & Tea Evidence Assets
 
-Status: `IMAGE_REFERENCES_CAPTURED`
+Status: `PARTIAL_IMAGES_CAPTURED`
 
 GitHub tracker: issue `#113`
+
+Restaurant cover upload-equivalent record:
+
+```text
+restaurant_id: 95c4e656-f3cc-46ab-ae18-53f549cecfd1
+owner_user_id / uploaded_by_user_id: 58ee83b9-b95c-42dc-95a4-7a285112d7f7
+image_upload_id: 5f663d13-88d5-41ca-9021-97873c591732
+image_type: restaurant_cover
+entity_type: restaurant
+public_url: /business-assets/3d-eats-and-tea/cover-photo.png
+storage_mode: local_public_asset_cloudinary_unconfigured
+```
 
 ## Important limitation
 
@@ -17,6 +29,8 @@ The images were supplied directly in the ChatGPT conversation. This artifact rec
 | Menu screenshot / reverse-side image | `file_00000000ef3071f5a24f50cd94b9d33c` | `/mnt/data/55f312e0-5e30-49e4-8ad2-4a94deecec90.png` | Starters, signature fries, melts, cheesesteaks, burgers, sandwiches |
 | Duplicate/menu evidence image | `file_00000000f51871f59b9a35271b71646a` | `/mnt/data/fa37b17e-7f80-47c2-8931-6b7c47e4684a.png` | Duplicate/reference copy of menu-side evidence |
 | Logo image | `file_0000000051fc71f589536b0cd20e7f06` | `/mnt/data/31b28e7d-76dd-481d-9986-e0b99645e4bc.png` | Candidate profile logo |
+| Cover photo | Chat follow-up screenshot | `C:\Users\flavo\Pictures\Screenshots\Screenshot 2026-06-07 104015.png` | Candidate public cover photo showing the wrapped 3-D Eats truck |
+| Details/contact screenshot local copy | Local screenshot | `C:\Users\flavo\Pictures\Screenshots\Screenshot 2026-06-07 100636.png` | Contact, socials, review count, services, location text |
 
 ## Desired repo asset paths
 
@@ -24,6 +38,31 @@ When the local shell/Codex session has the files, commit them here:
 
 ```text
 artifacts/mealscout-onboarding/3d-eats-and-tea/images/details-contact.png
+artifacts/mealscout-onboarding/3d-eats-and-tea/images/menu-front.png
+artifacts/mealscout-onboarding/3d-eats-and-tea/images/menu-back.png
+artifacts/mealscout-onboarding/3d-eats-and-tea/images/menu-duplicate-reference.png
+artifacts/mealscout-onboarding/3d-eats-and-tea/images/logo.png
+artifacts/mealscout-onboarding/3d-eats-and-tea/images/cover-photo.png
+```
+
+Captured locally in this repo:
+
+```text
+artifacts/mealscout-onboarding/3d-eats-and-tea/images/details-contact.png
+artifacts/mealscout-onboarding/3d-eats-and-tea/images/cover-photo.png
+client/public/business-assets/3d-eats-and-tea/cover-photo.png
+```
+
+The cover photo has a public app path and an `image_uploads` row matching the normal restaurant cover upload shape:
+
+```text
+/business-assets/3d-eats-and-tea/cover-photo.png
+image_uploads.id = 5f663d13-88d5-41ca-9021-97873c591732
+```
+
+Still missing as local binaries:
+
+```text
 artifacts/mealscout-onboarding/3d-eats-and-tea/images/menu-front.png
 artifacts/mealscout-onboarding/3d-eats-and-tea/images/menu-back.png
 artifacts/mealscout-onboarding/3d-eats-and-tea/images/menu-duplicate-reference.png
