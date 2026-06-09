@@ -14,6 +14,10 @@ import { db } from "./db";
 import { users, telemetryEvents, userAddresses } from "@shared/schema";
 import { and, eq, gte, lte, sql, isNotNull } from "drizzle-orm";
 import { emailService } from "./emailService";
+import {
+  areAutomatedMarketingEmailsEnabled,
+  describeAutomatedMarketingEmailFlag,
+} from "./utils/marketingEmailWindow";
 
 type NotifPrefs = {
   notifications?: {
@@ -59,7 +63,18 @@ export class OnboardingDripService {
     return OnboardingDripService.instance;
   }
 
-  async run(): Promise<{ day3Sent: number; day7Sent: number; errors: number }> {
+  async run(): Promise<{
+    day3Sent: number;
+    day7Sent: number;
+    errors: number;
+    skippedDisabled?: boolean;
+  }> {
+    if (!areAutomatedMarketingEmailsEnabled()) {
+      console.log(
+        `[OnboardingDrip] skipped: automated marketing emails disabled (${describeAutomatedMarketingEmailFlag()} not set)`,
+      );
+      return { day3Sent: 0, day7Sent: 0, errors: 0, skippedDisabled: true };
+    }
     console.log("[OnboardingDrip] Running post-signup drip...");
     const now = new Date();
     let day3Sent = 0;

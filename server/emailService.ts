@@ -5,7 +5,9 @@ import {
 import crypto from "crypto";
 import type { User, Restaurant } from "@shared/schema";
 import {
+  areAutomatedMarketingEmailsEnabled,
   describeMarketingEmailWindow,
+  describeAutomatedMarketingEmailFlag,
   isWithinMarketingEmailWindow,
 } from "./utils/marketingEmailWindow";
 
@@ -23,6 +25,7 @@ type EmailAttempt = {
   skipReason?:
     | "mode_filtered"
     | "mode_disabled"
+    | "marketing_disabled"
     | "provider_not_configured"
     | "outside_marketing_window";
   error?: string;
@@ -94,6 +97,7 @@ export const getEmailConfigSummary = () => {
     provider: "brevo" as const,
     mode,
     disabled,
+    automatedMarketingEmailsEnabled: areAutomatedMarketingEmailsEnabled(),
     missing,
     fromEmail: EMAIL_CONFIG.fromEmail,
     fromName: EMAIL_CONFIG.fromName,
@@ -1180,6 +1184,27 @@ export class EmailService {
         category: params.category || "general",
         status: "skipped",
         skipReason: "mode_filtered",
+        provider: "brevo",
+        fromEmail: EMAIL_CONFIG.fromEmail,
+        mode: notificationMode,
+      });
+      return false;
+    }
+    if (
+      (params.category || "general") === "marketing" &&
+      !areAutomatedMarketingEmailsEnabled()
+    ) {
+      console.log(
+        `Marketing email skipped for ${params.to}: ${params.subject} (${describeAutomatedMarketingEmailFlag()} not set)`,
+      );
+      emailDeliveryAudit.add({
+        id: crypto.randomUUID(),
+        createdAt: new Date().toISOString(),
+        to: params.to,
+        subject: params.subject,
+        category: "marketing",
+        status: "skipped",
+        skipReason: "marketing_disabled",
         provider: "brevo",
         fromEmail: EMAIL_CONFIG.fromEmail,
         mode: notificationMode,

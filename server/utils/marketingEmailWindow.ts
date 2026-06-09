@@ -65,3 +65,18 @@ export function isWithinMarketingEmailWindow(now: Date = new Date()): boolean {
 export function describeMarketingEmailWindow(): string {
   return `${MARKETING_EMAIL_WINDOW_START_HOUR}:00-${MARKETING_EMAIL_WINDOW_END_HOUR}:00 ${MARKETING_EMAIL_TIMEZONE}`;
 }
+
+export const AUTOMATED_MARKETING_EMAILS_FLAG =
+  "AUTOMATED_MARKETING_EMAILS_ENABLED";
+
+export function areAutomatedMarketingEmailsEnabled(): boolean {
+  return (
+    String(process.env[AUTOMATED_MARKETING_EMAILS_FLAG] || "")
+      .trim()
+      .toLowerCase() === "true"
+  );
+}
+
+export function describeAutomatedMarketingEmailFlag(): string {
+  return `${AUTOMATED_MARKETING_EMAILS_FLAG}=true`;
+}

@@ -27,6 +27,8 @@ import {
   MARKETING_EMAIL_TIMEZONE,
   MARKETING_EMAIL_WINDOW_END_HOUR,
   MARKETING_EMAIL_WINDOW_START_HOUR,
+  areAutomatedMarketingEmailsEnabled,
+  describeAutomatedMarketingEmailFlag,
   isWithinMarketingEmailWindow,
 } from "../utils/marketingEmailWindow";
 import { db } from "../db";
@@ -69,6 +71,11 @@ export async function registerSchedulers(app: Express): Promise<void> {
   console.log(
     `[schedulers] timezone=${SCHEDULER_TIMEZONE} marketing_email_window=${MARKETING_EMAIL_WINDOW_START_HOUR}:00-${MARKETING_EMAIL_WINDOW_END_HOUR}:00`,
   );
+  if (!areAutomatedMarketingEmailsEnabled()) {
+    console.log(
+      `[schedulers] automated marketing/drip emails disabled (${describeAutomatedMarketingEmailFlag()} not set)`,
+    );
+  }
 
   // Story cleanup and level recalculation
   registerStoryCronJobs(app);
@@ -215,6 +222,9 @@ export async function registerSchedulers(app: Express): Promise<void> {
     if (!shouldRunMarketingEmailJobs()) return;
     try {
       const stats = await OnboardingDripService.getInstance().run();
+      if ((stats as any).skippedDisabled) {
+        return;
+      }
       if (stats.day3Sent + stats.day7Sent > 0) {
         console.log("[onboarding-drip] sent:", stats);
       }

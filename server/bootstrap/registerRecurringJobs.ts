@@ -12,6 +12,13 @@ import { runMarketplaceHealthAudit } from "../marketplaceHealth";
 import { createIncident } from "../incidentManager";
 
 export function registerRecurringJobs(): void {
+  const verboseOpsCleanup =
+    String(process.env.OPS_CLEANUP_VERBOSE || "").trim().toLowerCase() === "true";
+  const verboseMarketplaceHealth =
+    String(process.env.MARKETPLACE_HEALTH_AUDIT_VERBOSE || "")
+      .trim()
+      .toLowerCase() === "true";
+
   const enableSessionCleanup =
     process.env.SESSION_CLEANUP_ENABLED !== "false";
   if (enableSessionCleanup) {
@@ -52,6 +59,13 @@ export function registerRecurringJobs(): void {
         );
         return;
       }
+      const deletedTotal =
+        Number(result.idempotencyDeleted || 0) +
+        Number(result.rateLimitDeleted || 0) +
+        Number((result as any).reportTokensDeleted || 0);
+      if (deletedTotal === 0 && !verboseOpsCleanup) {
+        return;
+      }
       console.log(
         `✅ Ops cleanup completed (idempotency=${result.idempotencyDeleted}, rateLimit=${result.rateLimitDeleted}, reportTokens=${(result as any).reportTokensDeleted ?? 0})`,
       );
@@ -83,9 +97,12 @@ export function registerRecurringJobs(): void {
         return;
       }
       const r: any = result;
-      console.log(
-        `[marketplace-health] ok total=${r.demandCounts?.total ?? 0} collecting=${r.demandCounts?.collecting ?? 0} threshold_met=${r.demandCounts?.threshold_met ?? 0} claimed=${r.demandCounts?.claimed ?? 0} fulfilled=${r.demandCounts?.fulfilled ?? 0}`,
-      );
+      const demandTotal = Number(r.demandCounts?.total || 0);
+      if (demandTotal > 0 || verboseMarketplaceHealth) {
+        console.log(
+          `[marketplace-health] ok total=${r.demandCounts?.total ?? 0} collecting=${r.demandCounts?.collecting ?? 0} threshold_met=${r.demandCounts?.threshold_met ?? 0} claimed=${r.demandCounts?.claimed ?? 0} fulfilled=${r.demandCounts?.fulfilled ?? 0}`,
+        );
+      }
       if (
         Number(r.stuckThreshold || 0) > 0 ||
         Number(r.staleCollecting || 0) > 0 ||
