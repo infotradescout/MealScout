@@ -48,6 +48,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  formatSignalsDisplay,
+  formatVacScoreDisplay,
+} from "@shared/adminSmokeDisplay";
 
 interface VacLogEntry {
   id: string;
@@ -56,6 +60,7 @@ interface VacLogEntry {
   timestamp: string;
   score: number | null;
   threshold: number | null;
+  scoreDisplay?: string;
   autoVerified: boolean;
   outcome: "auto_verified" | "manual_review";
   emailDomain: string | null;
@@ -114,8 +119,8 @@ export default function AdminVacLogs() {
         l.userId,
         l.restaurantId,
         l.timestamp,
-        l.score ?? "",
-        l.threshold ?? "",
+        l.scoreDisplay ?? formatVacScoreDisplay(l.score, l.threshold),
+        "100",
         l.outcome,
         l.emailDomain ?? "",
         l.websiteHost ?? "",
@@ -241,6 +246,8 @@ export default function AdminVacLogs() {
                 <p>No VAC evaluations found for this time range.</p>
               </div>
             ) : (
+              <>
+              <div className="hidden md:block overflow-x-auto" data-admin-vac-desktop-table>
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -270,7 +277,8 @@ export default function AdminVacLogs() {
                               : "text-amber-700 dark:text-amber-400 font-semibold"
                           }
                         >
-                          {entry.score ?? "?"} / {entry.threshold ?? "?"}
+                          {entry.scoreDisplay ??
+                            formatVacScoreDisplay(entry.score, entry.threshold)}
                         </span>
                       </TableCell>
                       <TableCell>
@@ -293,7 +301,7 @@ export default function AdminVacLogs() {
                         {entry.emailDomain || "—"}
                       </TableCell>
                       <TableCell className="text-xs max-w-[260px] truncate text-muted-foreground">
-                        {entry.signalSummary}
+                        {formatSignalsDisplay(entry.signalSummary)}
                       </TableCell>
                       <TableCell className="text-right">
                         <Button
@@ -308,6 +316,48 @@ export default function AdminVacLogs() {
                   ))}
                 </TableBody>
               </Table>
+              </div>
+              <div className="grid gap-3 p-3 md:hidden" data-admin-vac-mobile-cards>
+                {logs.map((entry) => (
+                  <button
+                    key={entry.id}
+                    type="button"
+                    className="rounded-md border bg-background p-3 text-left text-sm"
+                    onClick={() => setSelectedEntry(entry)}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="font-mono text-xs text-muted-foreground truncate">
+                          {entry.restaurantId || "Unknown restaurant"}
+                        </div>
+                        <div className="mt-1 font-semibold">
+                          {entry.scoreDisplay ??
+                            formatVacScoreDisplay(entry.score, entry.threshold)}
+                        </div>
+                      </div>
+                      <Badge
+                        variant={entry.autoVerified ? "default" : "outline"}
+                        className="shrink-0"
+                      >
+                        {entry.autoVerified ? "Auto" : "Review"}
+                      </Badge>
+                    </div>
+                    <dl className="mt-3 grid grid-cols-1 gap-2 text-xs">
+                      <div>
+                        <dt className="text-muted-foreground">Evaluated</dt>
+                        <dd>{new Date(entry.timestamp).toLocaleString()}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-muted-foreground">Signals</dt>
+                        <dd className="break-words">
+                          {formatSignalsDisplay(entry.signalSummary)}
+                        </dd>
+                      </div>
+                    </dl>
+                  </button>
+                ))}
+              </div>
+              </>
             )}
           </CardContent>
         </Card>
@@ -332,8 +382,11 @@ export default function AdminVacLogs() {
                 <div>
                   <p className="text-muted-foreground text-xs mb-1">Score</p>
                   <p className="font-semibold text-lg">
-                    {selectedEntry.score ?? "?"} /{" "}
-                    {selectedEntry.threshold ?? "?"}
+                    {selectedEntry.scoreDisplay ??
+                      formatVacScoreDisplay(
+                        selectedEntry.score,
+                        selectedEntry.threshold,
+                      )}
                   </p>
                 </div>
                 <div>
@@ -403,7 +456,7 @@ export default function AdminVacLogs() {
                               : "text-muted-foreground"
                         }
                       >
-                        {String(value)}
+                        {formatSignalsDisplay(value)}
                       </span>
                     </div>
                   ))}

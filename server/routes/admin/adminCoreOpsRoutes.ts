@@ -25,6 +25,10 @@ import {
   users,
   userAddresses,
 } from "@shared/schema";
+import {
+  formatOwnerEmailDisplay,
+  getAdminSmokeRowStatus,
+} from "@shared/adminSmokeDisplay";
 import { parseAdminBroadcastMaxRecipients } from "../../utils/notificationPreferences";
 
 const stripe = process.env.STRIPE_SECRET_KEY
@@ -1597,9 +1601,10 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             const hasCoverImage = Boolean(String(row.coverImageUrl || "").trim());
             const hasPhone = Boolean(String(row.phone || "").trim());
             const ownerUserId = String(row.ownerId || "").trim() || null;
-            const ownerEmail = ownerUserId ? ownerById.get(ownerUserId) || null : null;
+            const rawOwnerEmail = ownerUserId ? ownerById.get(ownerUserId) || null : null;
+            const ownerEmail = formatOwnerEmailDisplay(rawOwnerEmail);
             const hasOwner = Boolean(ownerUserId);
-            const hasEmail = Boolean(ownerEmail);
+            const hasEmail = Boolean(rawOwnerEmail && ownerEmail !== "Deleted owner");
             const hasSocials =
               Boolean(String(row.instagramUrl || "").trim()) ||
               Boolean(String(row.facebookPageUrl || "").trim());
@@ -1637,6 +1642,13 @@ export function registerAdminCoreOpsRoutes(app: Express) {
               hasSocials,
               isVerified,
               isQuarantined,
+              rowStatus: getAdminSmokeRowStatus({
+                name,
+                isQuarantined,
+                isActive: true,
+                ownerEmail: rawOwnerEmail,
+                missingFields,
+              }),
               missingFields,
               lastUpdatedAt: row.updatedAt || row.createdAt || null,
             };

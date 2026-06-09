@@ -22,6 +22,10 @@ import {
   requestLogs,
   adminDailyReports,
 } from "@shared/schema";
+import {
+  formatSignalsDisplay,
+  formatVacScoreDisplay,
+} from "@shared/adminSmokeDisplay";
 import { eq, desc, and, or, gte, lte, like, isNull } from "drizzle-orm";
 import { isAdmin, isStaffOrAdmin } from "./unifiedAuth";
 import { logAudit } from "./auditLogger";
@@ -379,11 +383,14 @@ router.get("/vac-logs", isAdmin, async (req, res) => {
         timestamp: log.timestamp,
         score,
         threshold,
+        scoreDisplay: formatVacScoreDisplay(score, threshold),
         autoVerified,
         outcome: autoVerified ? "auto_verified" : "manual_review",
         emailDomain: signals.emailDomain ?? null,
         websiteHost: signals.websiteHost ?? null,
-        signalSummary: signalSummary.join(" | "),
+        signalSummary: signalSummary.length
+          ? signalSummary.join(" | ")
+          : formatSignalsDisplay(signals),
         rawMetadata: meta,
       };
     });

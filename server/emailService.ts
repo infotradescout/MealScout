@@ -1992,10 +1992,10 @@ View other available events: https://mealscout.io/truck/dashboard`;
       restaurantId: string;
       restaurantName: string;
       ownerEmail: string;
-      vacScore: number;
-      threshold: number;
+      vacScoreDisplay: string;
       signals: string;
       createdAt: string;
+      rowStatus?: string;
     }>;
   }): Promise<boolean> {
     const { pendingCount, entries } = params;
@@ -2006,9 +2006,10 @@ View other available events: https://mealscout.io/truck/dashboard`;
           `<tr style="border-bottom:1px solid #eee">
             <td style="padding:8px 12px">${e.restaurantName}</td>
             <td style="padding:8px 12px">${e.ownerEmail}</td>
-            <td style="padding:8px 12px;text-align:center"><strong>${e.vacScore}</strong> / ${e.threshold}</td>
+            <td style="padding:8px 12px;text-align:center"><strong>${e.vacScoreDisplay}</strong></td>
             <td style="padding:8px 12px;font-size:12px;color:#555">${e.signals}</td>
             <td style="padding:8px 12px;font-size:12px;color:#888">${e.createdAt}</td>
+            <td style="padding:8px 12px;font-size:12px;color:#888">${e.rowStatus || "operational"}</td>
           </tr>`,
       )
       .join("");
@@ -2025,6 +2026,7 @@ View other available events: https://mealscout.io/truck/dashboard`;
               <th style="padding:8px 12px;text-align:center">VAC Score</th>
               <th style="padding:8px 12px;text-align:left">Signals</th>
               <th style="padding:8px 12px;text-align:left">Signed Up</th>
+              <th style="padding:8px 12px;text-align:left">Status</th>
             </tr>
           </thead>
           <tbody>${rows}</tbody>
@@ -2034,7 +2036,7 @@ View other available events: https://mealscout.io/truck/dashboard`;
         </p>
         <p style="color:#999;font-size:12px;margin-top:16px">This digest is sent daily at 9 AM when there are pending manual reviews.</p>
       </div>`;
-    const text = `VAC Manual Review Queue - ${new Date().toLocaleDateString()}\n\n${pendingCount} truck(s) pending manual verification:\n\n${entries.map((e) => `- ${e.restaurantName} (${e.ownerEmail}) | Score: ${e.vacScore}/${e.threshold} | ${e.signals} | Signed up: ${e.createdAt}`).join("\n")}\n\nReview at: ${appUrl}/admin/verifications`;
+    const text = `VAC Manual Review Queue - ${new Date().toLocaleDateString()}\n\n${pendingCount} truck(s) pending manual verification:\n\n${entries.map((e) => `- ${e.restaurantName} (${e.ownerEmail}) | Score: ${e.vacScoreDisplay} | ${e.signals} | Signed up: ${e.createdAt} | Status: ${e.rowStatus || "operational"}`).join("\n")}\n\nReview at: ${appUrl}/admin/verifications`;
     return await this.sendEmail({
       to: EMAIL_CONFIG.adminEmail,
       subject,

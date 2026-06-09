@@ -629,6 +629,13 @@ export async function registerSchedulers(app: Express): Promise<void> {
       const { securityAuditLog, restaurants, users } = await import("@shared/schema");
       const { eq, and, isNull } = await import("drizzle-orm");
       const { emailService } = await import("../emailService");
+      const {
+        formatOwnerEmailDisplay,
+        formatSignalsDisplay,
+        formatSignupDateDisplay,
+        formatVacScoreDisplay,
+        getAdminSmokeRowStatus,
+      } = await import("@shared/adminSmokeDisplay");
 
       // Find all trucks that have a vac:evaluate log entry with outcome = 'manual_review'
       // and are still unverified (isVerified = false)
@@ -660,19 +667,18 @@ export async function registerSchedulers(app: Express): Promise<void> {
 
       const entries = pendingRows.map((row: any) => {
         const meta = (row.vacScore as any) || {};
-        const score = Number(meta.score ?? 0);
-        const threshold = Number(meta.threshold ?? 60);
-        const signals = String(meta.signalSummary || meta.signals || "");
+        const ownerEmail = formatOwnerEmailDisplay(row.ownerEmail);
         return {
           restaurantId: String(row.restaurantId || ""),
           restaurantName: String(row.restaurantName || "Unknown"),
-          ownerEmail: String(row.ownerEmail || ""),
-          vacScore: score,
-          threshold,
-          signals,
-          createdAt: row.createdAt
-            ? new Date(row.createdAt).toLocaleDateString()
-            : "unknown",
+          ownerEmail,
+          vacScoreDisplay: formatVacScoreDisplay(meta.score, meta.threshold),
+          signals: formatSignalsDisplay(meta.signalSummary || meta.signals),
+          createdAt: formatSignupDateDisplay(row.createdAt),
+          rowStatus: getAdminSmokeRowStatus({
+            name: row.restaurantName,
+            ownerEmail: row.ownerEmail,
+          }),
         };
       });
 

@@ -568,6 +568,7 @@ interface FoodTruckInventoryItem {
   hasSocials: boolean;
   isVerified: boolean;
   isQuarantined: boolean;
+  rowStatus?: "operational" | "quarantined" | "test_smoke" | "deleted_system";
   missingFields: string[];
   lastUpdatedAt: string | null;
 }
@@ -10367,7 +10368,8 @@ export default function AdminDashboard() {
                 ) : null}
 
                 {!foodTruckInventoryLoading && !foodTruckInventoryError ? (
-                  <div className="overflow-x-auto rounded-lg border">
+                  <>
+                  <div className="hidden overflow-x-auto rounded-lg border md:block" data-admin-truck-inventory-desktop-table>
                     <table className="w-full min-w-[1200px] text-sm">
                       <thead className="bg-muted/30 text-left">
                         <tr>
@@ -10391,6 +10393,11 @@ export default function AdminDashboard() {
                             <td className="px-3 py-2">
                               <div className="font-medium">{truck.name}</div>
                               <div className="text-xs text-muted-foreground">{truck.id}</div>
+                              {truck.rowStatus && truck.rowStatus !== "operational" ? (
+                                <Badge variant="secondary" className="mt-1">
+                                  {truck.rowStatus.replace(/_/g, " ")}
+                                </Badge>
+                              ) : null}
                             </td>
                             <td className="px-3 py-2">
                               {truck.ownerEmail || (
@@ -10496,6 +10503,62 @@ export default function AdminDashboard() {
                       </tbody>
                     </table>
                   </div>
+                  <div className="grid gap-3 md:hidden" data-admin-truck-inventory-mobile-cards>
+                    {foodTruckInventoryRows.map((truck) => (
+                      <div key={truck.id} className="rounded-lg border p-3 text-sm">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="font-medium break-words">{truck.name}</div>
+                            <div className="text-xs text-muted-foreground break-all">{truck.id}</div>
+                          </div>
+                          <Badge variant={truck.isQuarantined ? "destructive" : "outline"} className="shrink-0">
+                            {truck.rowStatus && truck.rowStatus !== "operational"
+                              ? truck.rowStatus.replace(/_/g, " ")
+                              : "operational"}
+                          </Badge>
+                        </div>
+                        <dl className="mt-3 grid grid-cols-1 gap-2 text-xs">
+                          <div>
+                            <dt className="text-muted-foreground">Owner</dt>
+                            <dd className="break-all">{truck.ownerEmail || "No active owner"}</dd>
+                          </div>
+                          <div>
+                            <dt className="text-muted-foreground">City</dt>
+                            <dd>{truck.city || "Missing"}</dd>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <dt className="text-muted-foreground">Menu</dt>
+                              <dd>{truck.menuItemCount} items</dd>
+                            </div>
+                            <div>
+                              <dt className="text-muted-foreground">Updated</dt>
+                              <dd>
+                                {truck.lastUpdatedAt
+                                  ? new Date(truck.lastUpdatedAt).toLocaleDateString()
+                                  : "Unknown"}
+                              </dd>
+                            </div>
+                          </div>
+                          <div>
+                            <dt className="text-muted-foreground">Missing</dt>
+                            <dd className="mt-1 flex flex-wrap gap-1">
+                              {truck.missingFields.length ? (
+                                truck.missingFields.slice(0, 4).map((field) => (
+                                  <Badge key={`${truck.id}:mobile:${field}`} variant="secondary">
+                                    {field}
+                                  </Badge>
+                                ))
+                              ) : (
+                                <Badge variant="outline">Complete</Badge>
+                              )}
+                            </dd>
+                          </div>
+                        </dl>
+                      </div>
+                    ))}
+                  </div>
+                  </>
                 ) : null}
               </CardContent>
             </Card>
