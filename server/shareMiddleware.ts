@@ -16,6 +16,48 @@
 import { appendReferralParam } from './referralService';
 import { ensureAffiliateTag } from "./affiliateTagService";
 
+function normalizeOrigin(value: unknown): string | null {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== "https:" && url.protocol !== "http:") return null;
+    return url.origin.replace(/\/+$/, "");
+  } catch {
+    return null;
+  }
+}
+
+function isBackendRenderOrigin(origin: string): boolean {
+  try {
+    return new URL(origin).hostname.endsWith(".onrender.com");
+  } catch {
+    return false;
+  }
+}
+
+export function resolveCanonicalShareOrigin(req?: {
+  protocol?: string;
+  get?: (name: string) => string | undefined;
+}): string {
+  const configured =
+    normalizeOrigin(process.env.PUBLIC_APP_URL) ||
+    normalizeOrigin(process.env.CLIENT_ORIGIN) ||
+    normalizeOrigin(process.env.APP_PUBLIC_URL) ||
+    normalizeOrigin(process.env.PUBLIC_BASE_URL) ||
+    normalizeOrigin(process.env.VITE_APP_URL);
+  if (configured) return configured;
+
+  const requestOrigin = normalizeOrigin(req?.get?.("origin"));
+  if (requestOrigin && !isBackendRenderOrigin(requestOrigin)) {
+    return requestOrigin;
+  }
+
+  const host = String(req?.get?.("host") || "").trim();
+  const protocol = String(req?.protocol || "https").trim() || "https";
+  return normalizeOrigin(`${protocol}://${host}`) || "https://www.mealscout.us";
+}
+
 /**
  * Generate shareable URL with affiliate param
  * 
@@ -32,10 +74,12 @@ export function generateShareableUrl(
   baseUrl: string,
   affiliateTag?: string,
 ): string {
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  const normalizedBase = baseUrl.replace(/\/+$/, "");
   // Build full URL
-  const fullUrl = baseUrl.startsWith('http')
-    ? `${baseUrl}${path}`
-    : `${baseUrl}${path}`;
+  const fullUrl = normalizedBase.startsWith('http')
+    ? `${normalizedBase}${normalizedPath}`
+    : `${normalizedBase}${normalizedPath}`;
 
   // Append affiliate param if user is logged in
   if (!affiliateTag) {
@@ -52,7 +96,7 @@ export function generateShareableUrl(
  * Usage: res.locals.generateShareableUrl(path)
  */
 export function shareUrlMiddleware(req: any, res: any, next: any) {
-  const baseUrl = `${req.protocol}://${req.get('host')}`;
+  const baseUrl = resolveCanonicalShareOrigin(req);
 
   res.locals.generateShareableUrl = (path: string) => {
     const tag = req.user?.affiliateTag || req.user?.id;

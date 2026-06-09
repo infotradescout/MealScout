@@ -113,7 +113,7 @@ export function registerSystemUtilityRoutes(
   app.get("/ref/:tag", (req, res) => {
     const tag = req.params?.tag || "";
     const safeTag = encodeURIComponent(tag);
-    res.redirect(`/?ref=${safeTag}`);
+    res.redirect(`/scout?ref=${safeTag}`);
   });
 
   app.post(

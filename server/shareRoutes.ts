@@ -5,7 +5,7 @@
  */
 
 import type { Express } from 'express';
-import { generateShareableUrl } from './shareMiddleware';
+import { generateShareableUrl, resolveCanonicalShareOrigin } from './shareMiddleware';
 import { db } from "./db";
 import { affiliateShareEvents } from "@shared/schema";
 import { ensureAffiliateTag, resolveAffiliateUserId } from "./affiliateTagService";
@@ -38,7 +38,7 @@ export default function setupShareRoutes(app: Express) {
         return res.status(400).json({ error: 'Path required' });
       }
 
-      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      const baseUrl = resolveCanonicalShareOrigin(req);
       let affiliateUserId: string | null = req.user?.id || null;
       let affiliateTag: string | undefined;
 

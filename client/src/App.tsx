@@ -110,6 +110,7 @@ const ForgotPassword = lazy(() => import("@/pages/forgot-password"));
 const ResetPassword = lazy(() => import("@/pages/reset-password"));
 const AccountSetup = lazy(() => import("@/pages/account-setup"));
 const PostVerification = lazy(() => import("@/pages/post-verification"));
+const ReferralRedirect = lazy(() => import("@/pages/referral-redirect"));
 const OAuthSetupGuide = lazy(() => import("@/pages/oauth-setup-guide"));
 const GoldenPlateWinners = lazy(() => import("@/pages/golden-plate-winners"));
 const ParkingPassPage = lazy(() => import("@/pages/parking-pass"));
@@ -217,6 +218,7 @@ const publicRoutePrefixes = [
   "/p/",
   "/forgot-password",
   "/reset-password",
+  "/ref/",
   "/change-password",
   "/account-setup",
   "/owner/verify",
@@ -415,6 +417,7 @@ function Router() {
             />
             <Route path="/forgot-password" component={ForgotPassword} />
             <Route path="/reset-password" component={ResetPassword} />
+            <Route path="/ref/:tag" component={ReferralRedirect} />
             <Route path="/change-password" component={ChangePassword} />
             <Route path="/account-setup" component={AccountSetup} />
             <Route path="/owner/verify" component={AccountSetup} />
@@ -598,6 +601,7 @@ function Router() {
             />
             <Route path="/forgot-password" component={ForgotPassword} />
             <Route path="/reset-password" component={ResetPassword} />
+            <Route path="/ref/:tag" component={ReferralRedirect} />
             <Route path="/change-password" component={ChangePassword} />
             <Route path="/account-setup" component={AccountSetup} />
             <Route path="/owner/verify" component={AccountSetup} />

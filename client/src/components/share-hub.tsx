@@ -83,7 +83,7 @@ const STAFF_ADMIN_ITEMS: ShareHubItem[] = [
     key: "staff-dashboard",
     title: "Staff Dashboard",
     description: "Account creation and host-location operations in one place.",
-    href: "/staff/dashboard",
+    href: "/staff",
     audience: "Internal",
   },
   {
