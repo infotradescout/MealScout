@@ -4,10 +4,12 @@ Status: `C5B Fold Affiliate Management Into Admin User Card`
 
 Affiliate management belongs inside the admin user card. This audit records the current code truth and the correction; it does not create a new affiliate system, payout model, attribution model, or role model.
 
+Doctrine note: Affiliate is not a standalone user role. Affiliate sharing is an attribution/campaign capability that can exist across user authorities when share/tag state exists. Role authority controls permissions; affiliate state controls attribution tools.
+
 ## Current Code Says This
 
 - `server/roleAccess.ts` treats `admin`, `duper_admin`, and `super_admin` as internal admin-family user types.
-- `server/roleAccess.ts` does not assign affiliate tags to admin-family user types.
+- `server/roleAccess.ts` does not assign public affiliate tags to admin-family user types by default.
 - `client/src/pages/admin-dashboard.tsx` is the admin operator surface for user identity, role/user type, email verification, affiliate link display, affiliate status, supported affiliate settings, and attached business/entity actions.
 - `client/src/pages/AdminAffiliateManagement.tsx` remains an aggregate affiliate reporting/overview surface, not the required place to manage one selected user.
 - `server/routes/admin/affiliateAdminRoutes.ts` supports admin edits to existing affiliate settings such as percentage/referrer relationships (`affiliatePercent`, `affiliateCloserUserId`, `affiliateBookerUserId`), but it does not expose an admin endpoint to create, regenerate, remove, or disable a user affiliate tag.
@@ -21,8 +23,8 @@ Affiliate management belongs inside the admin user card. This audit records the 
 
 ## This Is Wrong Because Of This Product Rule
 
-- Admins manage affiliates.
-- Admins are not affiliates.
+- Admins manage affiliate visibility and supported affiliate settings.
+- Internal admin-family accounts do not receive public-ref affiliate assignment or payout controls by default.
 - The public affiliate/profile link is for outside-world sharing.
 - The admin focus URL is for internal operator navigation.
 - Those must never be the same primary button, and the admin focus URL should not be copied from the user card at all.
@@ -36,7 +38,7 @@ Affiliate management belongs inside the admin user card. This audit records the 
 - `Copy Link` and `Open Link` use the canonical root referral URL.
 - Public truck, restaurant, or location profile URLs are not used as the primary `Affiliate Link`.
 - For eligible users without a tag, the card shows `No affiliate link assigned`.
-- For internal admin-family accounts, the card shows `Not applicable for internal admin accounts.` and hides `Copy Link` / `Open Link`.
+- For internal admin-family accounts, the card shows `Not applicable for internal admin accounts.` and hides public `Copy Link` / `Open Link` controls.
 - The internal admin focus URL is not copied from the user card.
 - The card mirrors only backend-supported single-user settings: `affiliatePercent`, `affiliateCloserUserId`, and `affiliateBookerUserId`.
 - The raw affiliate token is secondary internal metadata only, shown as `Internal token`.

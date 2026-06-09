@@ -12,6 +12,8 @@ Guest-safe discovery routes are registered in `client/src/App.tsx` and include `
 
 `/scout?ref=<tag>` is a valid public discovery entry. The `ref` query is attribution metadata only and must not decide user type, business type, role, dashboard access, account ownership, email verification, admin/staff affiliate assignment, Parking Pass eligibility, or payment state.
 
+Affiliate is not a standalone account role in MealScout. It is an attribution/campaign layer expressed through share/tag state and referral capture. User role remains authority; current intent and entity state decide what the UI prioritizes.
+
 ## Referral Entry
 
 Guest referral capture exists in three layers:
@@ -43,6 +45,8 @@ Guest users can enter through discovery with `?ref` and then move through signup
 | `/claim-truck` | Truck claim | Public claim discovery and authenticated claim submission lead to a food truck business profile or setup reminder without creating a new role. |
 
 Customer mapping note: Customer is the canonical account concept; legacy `diner` is a URL alias only where still present in links.
+
+Affiliate sharing signup note: affiliate intent may be expressed as an intent/capability hint such as `?intent=affiliate-sharing`, but it must not use `role=affiliate` and must not create a distinct affiliate account type.
 
 ## Login Paths
 

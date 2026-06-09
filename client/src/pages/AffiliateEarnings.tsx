@@ -265,8 +265,8 @@ export default function AffiliateEarnings() {
           <a href="/login" className="inline-flex items-center px-4 py-2 rounded-md bg-[color:var(--accent-text)] text-white text-sm font-medium hover:bg-[color:var(--accent-text-hover)]">
             Sign In
           </a>
-          <a href="/customer-signup?role=affiliate" className="inline-flex items-center px-4 py-2 rounded-md border border-[var(--border-subtle)] text-sm font-medium hover:bg-[var(--bg-surface)]">
-            Create Affiliate Account
+          <a href="/customer-signup?intent=affiliate-sharing" className="inline-flex items-center px-4 py-2 rounded-md border border-[var(--border-subtle)] text-sm font-medium hover:bg-[var(--bg-surface)]">
+            Create Free Account
           </a>
         </div>
       </div>

@@ -7,8 +7,9 @@ const affiliateAdminRoutes = readFileSync("server/routes/admin/affiliateAdminRou
 const roleAccess = readFileSync("server/roleAccess.ts", "utf8");
 
 const requiredAuditSnippets = [
-  "Admins manage affiliates.",
-  "Admins are not affiliates.",
+  "Admins manage affiliate visibility and supported affiliate settings.",
+  "Affiliate is not a standalone user role.",
+  "Internal admin-family accounts do not receive public-ref affiliate assignment or payout controls by default.",
   "The admin user card includes an `Affiliate Management` section.",
   "The canonical primary affiliate link is always `https://www.mealscout.us/?ref=<affiliateTag>`.",
   "`Copy Link` and `Open Link` use the canonical root referral URL.",
