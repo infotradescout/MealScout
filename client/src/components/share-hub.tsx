@@ -22,71 +22,50 @@ interface ShareHubItem {
   outreachText?: string;
 }
 
-const USER_ITEMS: ShareHubItem[] = [
+const BASE_ITEMS: ShareHubItem[] = [
   {
-    key: "owner-signup",
-    title: "1) Owner Signup",
-    description:
-      "Primary link for restaurant owners and food truck operators to start.",
+    key: "signup",
+    title: "Signup",
+    description: "General signup link for new users.",
     href: "/customer-signup",
-    audience: "Restaurant + Food Truck Owners",
+    audience: "General",
     priority: 1,
     outreachText:
-      "Get your business on MealScout and start getting monthly visibility and booking leads: ",
+      "Join MealScout and get started here: ",
   },
   {
-    key: "claim-truck",
-    title: "2) Food Truck Claim",
-    description:
-      "Direct page for food truck operators to claim and activate their profile.",
+    key: "host",
+    title: "Host",
+    description: "Direct signup for host/location partners.",
+    href: "/host-signup",
+    audience: "Hosts",
+    priority: 2,
+    outreachText: "Become a MealScout host and create your listing: ",
+  },
+  {
+    key: "truck",
+    title: "Truck",
+    description: "Direct page for food truck operators to claim and activate.",
     href: "/claim-truck",
     audience: "Food Truck Owners",
-    priority: 2,
-    outreachText:
-      "Claim your food truck listing and start receiving local booking opportunities here: ",
-  },
-  {
-    key: "host-partner",
-    title: "3) Host Location Signup",
-    description:
-      "Direct intake page for non-food businesses with usable parking.",
-    href: "/host-signup",
-    audience: "Potential Hosts",
     priority: 3,
     outreachText:
-      "Have parking space? Become a MealScout host location and earn from food truck bookings: ",
+      "Claim your food truck profile here: ",
   },
   {
-    key: "for-restaurants",
-    title: "Restaurant Growth Page",
-    description: "Share this with restaurant owners ready for monthly growth.",
+    key: "restaurant",
+    title: "Restaurant",
+    description:
+      "Direct signup flow for restaurant owners who want a public profile.",
     href: "/restaurant-signup?businessType=restaurant",
     audience: "Restaurant Owners",
-  },
-  {
-    key: "for-hosts",
-    title: "Host Program Page",
-    description: "Great for businesses with parking lots that can host trucks.",
-    href: "/host-signup",
-    audience: "Potential Hosts",
-  },
-  {
-    key: "map",
-    title: "Scout Dashboard",
-    description: "Send people straight to nearby food trucks and restaurants.",
-    href: "/directory",
-    audience: "Customers",
-  },
-  {
-    key: "sitemap",
-    title: "Site Directory",
-    description: "Shareable index of important public pages.",
-    href: "/sitemap",
-    audience: "General",
+    priority: 4,
+    outreachText:
+      "Create or claim your restaurant profile here: ",
   },
 ];
 
-const STAFF_ADMIN_ITEMS: ShareHubItem[] = USER_ITEMS;
+const STAFF_ADMIN_ITEMS: ShareHubItem[] = BASE_ITEMS;
 const SHARE_UNAVAILABLE_MESSAGE =
   "Tracked links are ready. Add a custom share tag later if you want cleaner links.";
 
@@ -180,23 +159,85 @@ export default function ShareHub({
   const { toast } = useToast();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [shareAuthError, setShareAuthError] = useState<string | null>(null);
+  const [publicProfilePath, setPublicProfilePath] = useState<string | null>(null);
+
+  const canonicalMealScoutOrigin = (
+    import.meta.env.VITE_PUBLIC_BASE_URL ||
+    import.meta.env.VITE_PUBLIC_ORIGIN ||
+    "https://www.mealscout.us"
+  ).replace(/\/+$/, "");
+
+  const toSeoSlug = (value: string) =>
+    String(value || "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+
+  const deriveSelfPublicProfilePath = (user: any, hostProfile?: any | null) => {
+    const restaurantId = String(user?.restaurantId || "").trim();
+    if (restaurantId) {
+      const businessType = String(user?.businessType || "").toLowerCase();
+      const profileType =
+        user?.businessIsFoodTruck === true ||
+        user?.userType === "food_truck" ||
+        businessType === "food_truck"
+          ? "truck"
+          : "restaurant";
+      const slug = toSeoSlug(
+        user?.businessName ||
+          `${String(user?.firstName || "").trim()} ${String(user?.lastName || "").trim()}` ||
+          restaurantId,
+      );
+      return `/p/${profileType}/${encodeURIComponent(restaurantId)}${slug ? `/${encodeURIComponent(slug)}` : ""}`;
+    }
+
+    const hostId = String(hostProfile?.id || "").trim();
+    if (hostId) {
+      const slug = toSeoSlug(
+        hostProfile?.businessName || hostProfile?.name || user?.businessName || hostId,
+      );
+      return `/p/location/${encodeURIComponent(hostId)}${slug ? `/${encodeURIComponent(slug)}` : ""}`;
+    }
+
+    return null;
+  };
 
   useEffect(() => {
     let cancelled = false;
     fetch("/api/auth/user", { credentials: "include" })
       .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
+      .then(async (data) => {
         if (cancelled) return;
         const authenticated = Boolean(String(data?.id || "").trim());
         setIsAuthenticated(authenticated);
         setShareAuthError(
           authenticated ? null : "Sign in to generate tracked links.",
         );
+
+        if (!authenticated) {
+          setPublicProfilePath(null);
+          return;
+        }
+
+        let hostProfile: any | null = null;
+        try {
+          const hostResponse = await fetch("/api/hosts/me", {
+            credentials: "include",
+          });
+          hostProfile = hostResponse.ok
+            ? await hostResponse.json().catch(() => null)
+            : null;
+        } catch {
+          hostProfile = null;
+        }
+
+        setPublicProfilePath(deriveSelfPublicProfilePath(data, hostProfile));
       })
       .catch(() => {
         if (cancelled) return;
         setIsAuthenticated(false);
         setShareAuthError("Sign in to generate tracked links.");
+        setPublicProfilePath(null);
       });
     return () => {
       cancelled = true;
@@ -204,9 +245,19 @@ export default function ShareHub({
   }, []);
 
   const items = useMemo(() => {
-    const base = mode === "user" ? USER_ITEMS : STAFF_ADMIN_ITEMS;
-    return base;
-  }, [mode]);
+    const base = mode === "user" ? BASE_ITEMS : STAFF_ADMIN_ITEMS;
+    if (!publicProfilePath) return base;
+    const publicProfileItem: ShareHubItem = {
+      key: "public-profile",
+      title: "Public Profile",
+      description: "Share your public MealScout profile.",
+      href: publicProfilePath,
+      audience: "Your audience",
+      priority: 0,
+      outreachText: "View my public MealScout profile: ",
+    };
+    return [publicProfileItem, ...base];
+  }, [mode, publicProfilePath]);
 
   const generateTrackedShareUrl = async (href: string) => {
     const path = normalizeShareHubTargetPath(href);
@@ -240,7 +291,7 @@ export default function ShareHub({
   };
 
   const trackShareHubEvent = async (
-    action: "copy_link" | "share",
+    action: "copy_link" | "copy_outreach" | "share",
     item: ShareHubItem,
   ) => {
     try {
@@ -321,6 +372,32 @@ export default function ShareHub({
     }
   };
 
+  const copyOutreachText = async (item: ShareHubItem) => {
+    let text = "";
+    try {
+      const value = await generateTrackedShareUrl(item.href);
+      text = item.outreachText ? `${item.outreachText}${value}` : value;
+    } catch (error: any) {
+      toast({
+        title: "Sharing disabled",
+        description: error?.message || SHARE_UNAVAILABLE_MESSAGE,
+        variant: "destructive",
+      });
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      void trackShareHubEvent("copy_outreach", item);
+      toast({ title: "Outreach text copied", description: item.title });
+    } catch {
+      toast({
+        title: "Copy failed",
+        description: "Clipboard permission was blocked.",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -377,6 +454,16 @@ export default function ShareHub({
                   }}
                 >
                   Copy Link
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={
+                    !isAuthenticated || !normalizeShareHubTargetPath(item.href)
+                  }
+                  onClick={() => copyOutreachText(item)}
+                >
+                  Copy Outreach
                 </Button>
               </div>
             </div>
