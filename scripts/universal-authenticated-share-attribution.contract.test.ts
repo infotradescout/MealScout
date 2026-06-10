@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 
 import { generateShareableUrl } from "../server/shareMiddleware";
 import {
-  buildUniversalAttributedPath,
+  buildTrackedAttributedPath,
   isEligibleInternalShareTarget,
   normalizeInternalShareTarget,
 } from "../server/shareTargetPolicy";
@@ -61,8 +61,8 @@ assert.equal(
   null,
 );
 assert.equal(
-  buildUniversalAttributedPath("traci", "/request/start"),
-  "/ref/traci?to=%2Frequest%2Fstart",
+  buildTrackedAttributedPath("traci", "/request/start"),
+  "/request/start?ref=traci",
 );
 
 const shareUrl = generateShareableUrl(
@@ -72,7 +72,7 @@ const shareUrl = generateShareableUrl(
 );
 assert.equal(
   shareUrl,
-  "https://www.mealscout.us/ref/traci?to=%2Fcontractors%2Fbobs-roofing",
+  "https://www.mealscout.us/contractors/bobs-roofing?ref=traci",
 );
 
 assert.throws(() =>
@@ -128,7 +128,7 @@ assert(
   ) &&
     doctrine.includes("destination ownership is not required") &&
     doctrine.includes("Destination validity is required") &&
-    doctrine.includes("/ref/<tag>?to=<safe-internal-path>") &&
+    doctrine.includes("/<safe-internal-path>?ref=<tag>") &&
     doctrine.includes("tracking separate from payout"),
   "Doctrine must encode universal authenticated share attribution.",
 );

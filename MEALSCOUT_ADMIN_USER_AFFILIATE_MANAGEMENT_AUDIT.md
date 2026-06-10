@@ -13,7 +13,7 @@ Doctrine note: Affiliate is not a standalone user role. Affiliate sharing is an 
 - `client/src/pages/admin-dashboard.tsx` is the admin operator surface for user identity, role/user type, email verification, affiliate link display, affiliate status, supported affiliate settings, and attached business/entity actions.
 - `client/src/pages/AdminAffiliateManagement.tsx` remains an aggregate affiliate reporting/overview surface, not the required place to manage one selected user.
 - `server/routes/admin/affiliateAdminRoutes.ts` supports admin edits to existing affiliate settings such as percentage/referrer relationships (`affiliatePercent`, `affiliateCloserUserId`, `affiliateBookerUserId`), but it does not expose an admin endpoint to create, regenerate, remove, or disable a user affiliate tag.
-- Public affiliate attribution uses MealScout's universal `/ref/<affiliateTag>?to=<safe-internal-path>` wrapper; direct `?ref=` remains downstream session metadata after a validated referral redirect.
+- Public affiliate attribution uses direct clean links `/<safe-internal-path>?ref=<affiliateTag>` for generated shares; legacy `/ref/...` remains redirect-only compatibility.
 
 ## Current UI Showed This
 
@@ -34,9 +34,9 @@ Doctrine note: Affiliate is not a standalone user role. Affiliate sharing is an 
 
 - The admin user card includes an `Affiliate Management` section.
 - The primary user-facing link label remains `Affiliate Link`.
-- The canonical primary affiliate link uses universal attribution: `https://www.mealscout.us/ref/<affiliateTag>?to=<public-profile-path>`.
-- `Copy Link` and `Open Link` use the universal referral wrapper, not `/admin/dashboard`.
-- Public truck, restaurant, or location profile URLs are used only as the validated `to` destination inside the universal wrapper.
+- The canonical primary affiliate link uses direct attribution: `https://www.mealscout.us/<public-profile-path>?ref=<affiliateTag>`.
+- `Copy Link` and `Open Link` use direct public profile links with clean `ref`, not `/admin/dashboard`.
+- Public truck, restaurant, or location profile URLs are shared directly with `ref` attribution.
 - For eligible users without a tag, the card shows `No affiliate link assigned`.
 - For internal admin-family accounts, the card shows `Not applicable for internal admin accounts.` and hides public `Copy Link` / `Open Link` controls.
 - The internal admin focus URL is not copied from the user card.

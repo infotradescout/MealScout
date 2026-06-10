@@ -64,7 +64,7 @@ Role authority
 - Every eligible internal link shared by an authenticated user can become an attributed share link.
 - Affiliate attribution belongs to the sharer/session; destination ownership is not required.
 - Destination validity is required: block external, protocol-relative, root, admin, staff, API, and `/ref` targets.
-- Universal tracked share output uses `/ref/<tag>?to=<safe-internal-path>` and keeps tracking separate from payout.
+- Universal tracked share output uses `/<safe-internal-path>?ref=<tag>` and keeps tracking separate from payout.
 - Role authority controls permissions.
 - Intent controls priority.
 - Entity state controls warnings and repair prompts.

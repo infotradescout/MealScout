@@ -43,7 +43,7 @@ const requireExcludes = (source: string, snippet: string, message: string) => {
   "Every eligible internal link shared by an authenticated user can become an attributed share link.",
   "destination ownership is not required",
   "Destination validity is required",
-  "/ref/<tag>?to=<safe-internal-path>",
+  "/<safe-internal-path>?ref=<tag>",
   "tracking separate from payout",
 ].forEach((snippet) =>
   requireIncludes(

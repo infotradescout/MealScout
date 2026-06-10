@@ -51,10 +51,17 @@ assert(
 );
 
 assert(
-  source.includes("isCanonicalCustomerSignupShareLink") &&
-    source.includes("isUniversalAttributedShareLink") &&
-    source.includes("expectsCanonicalSignup"),
-  "Share Hub must validate canonical customer-signup referral links and universal attributed links for other pages",
+  source.includes("isDirectAttributedShareLink") &&
+    source.includes('url.searchParams.get("ref")') &&
+    source.includes('!url.searchParams.has("to")') &&
+    source.includes('!shareLink.includes("%2F")'),
+  "Share Hub must validate direct clean ?ref links and reject nested/encoded destination params",
+);
+
+assert(
+  !source.includes("isUniversalAttributedShareLink") &&
+    !source.includes("expectsCanonicalSignup"),
+  "Share Hub should no longer require /ref/:tag?to= style universal wrappers for generated links",
 );
 assert(
   source.includes("/\\/ref\\/([^/?#]+)[^#]*[?&]ref=\\1") &&

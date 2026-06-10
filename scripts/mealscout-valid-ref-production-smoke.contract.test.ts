@@ -57,17 +57,14 @@ assert(
 
 assert(
   runner.includes('shareLink.startsWith("https://www.mealscout.us/")') &&
-    runner.includes(
-      "shareLink.includes(`/ref/${encodeURIComponent(expectedTag)}`)",
-    ) &&
-    runner.includes(
-      "shareLink.includes(`to=${encodeURIComponent(publicTargetPath)}`)",
-    ) &&
+    runner.includes('generatedUrl.searchParams.get("ref")') &&
+    runner.includes('generatedUrl.searchParams.has("to")') &&
+    runner.includes('shareLink.includes("%2F")') &&
     runner.includes(
       "!/^https:\\/\\/meal-scout\\.vercel\\.app\\//i.test(shareLink)",
     ) &&
-    runner.includes("!/\\/ref\\/([^/?#]+)[^#]*[?&]ref=\\1"),
-  "Valid-ref runner must require canonical host and reject legacy /ref/<tag>?ref=<tag> links.",
+    runner.includes("!/\\/ref\\//i.test(shareLink)"),
+  "Valid-ref runner must require canonical host and direct clean ?ref links without nested destination params.",
 );
 
 assert(

@@ -318,11 +318,22 @@ async function main(): Promise<void> {
       const body = generated.body as any;
       const shareLink = String(body?.shareLink || "").trim();
       evidence.generatedLink = shareLink || undefined;
+      const generatedUrl = new URL(shareLink || "https://www.mealscout.us/");
+      const normalizedTarget = new URL(publicTargetPath, baseUrl);
+      const expectedPathname =
+        normalizedTarget.pathname.toLowerCase() === "/customer-signup"
+          ? "/customer-signup"
+          : normalizedTarget.pathname;
       const passed =
         generated.status === 200 &&
         shareLink.startsWith("https://www.mealscout.us/") &&
-        shareLink.includes(`/ref/${encodeURIComponent(expectedTag)}`) &&
-        shareLink.includes(`to=${encodeURIComponent(publicTargetPath)}`) &&
+        generatedUrl.pathname === expectedPathname &&
+        String(generatedUrl.searchParams.get("ref") || "")
+          .trim()
+          .toLowerCase() === expectedTag.toLowerCase() &&
+        !generatedUrl.searchParams.has("to") &&
+        !/\/ref\//i.test(shareLink) &&
+        !shareLink.includes("%2F") &&
         !/\/ref\/([^/?#]+)[^#]*[?&]ref=\1(?:&|#|$)/i.test(shareLink) &&
         !/^https:\/\/meal-scout\.vercel\.app\//i.test(shareLink);
       evidence.checks.push({

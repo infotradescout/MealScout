@@ -35,14 +35,40 @@ export function buildUniversalAttributedPath(
   )}`;
 }
 
-function buildCanonicalCustomerSignupPath(
+function sanitizeTrackedTargetPath(targetPath: string): {
+  pathname: string;
+  search: string;
+  hash: string;
+} {
+  const parsed = new URL(targetPath, "https://www.mealscout.us");
+
+  // Direct tracked links never use nested destination params.
+  parsed.searchParams.delete("to");
+
+  // Canonical signup sharing should stay clean unless a role is truly required.
+  if (
+    parsed.pathname.toLowerCase() === "/customer-signup" &&
+    parsed.searchParams.get("role") === "business"
+  ) {
+    parsed.searchParams.delete("role");
+  }
+
+  return {
+    pathname: parsed.pathname,
+    search: parsed.search,
+    hash: parsed.hash,
+  };
+}
+
+function buildDirectAttributedPath(
   affiliateTag: string,
   targetPath: string,
 ): string {
-  const parsed = new URL(targetPath, "https://www.mealscout.us");
-  if (parsed.pathname.toLowerCase() !== "/customer-signup") {
-    throw new Error("Customer signup canonical path requires /customer-signup");
-  }
+  const sanitized = sanitizeTrackedTargetPath(targetPath);
+  const parsed = new URL(
+    `${sanitized.pathname}${sanitized.search}${sanitized.hash}`,
+    "https://www.mealscout.us",
+  );
   parsed.searchParams.set("ref", affiliateTag);
   return `${parsed.pathname}${parsed.search}${parsed.hash}`;
 }
@@ -56,12 +82,7 @@ export function buildTrackedAttributedPath(
     throw new Error("Invalid share target");
   }
 
-  const pathname = normalizedTarget.split(/[?#]/, 1)[0].toLowerCase();
-  if (pathname === "/customer-signup") {
-    return buildCanonicalCustomerSignupPath(affiliateTag, normalizedTarget);
-  }
-
-  return buildUniversalAttributedPath(affiliateTag, normalizedTarget);
+  return buildDirectAttributedPath(affiliateTag, normalizedTarget);
 }
 
 export function buildUniversalAttributedUrl(

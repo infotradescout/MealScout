@@ -12,8 +12,8 @@ const canonicalBusinessPath = buildTrackedAttributedPath(
 );
 assert.equal(
   canonicalBusinessPath,
-  "/customer-signup?role=business&ref=efpjv02e",
-  "Business signup links must use canonical /customer-signup?role=business&ref=<code> format.",
+  "/customer-signup?ref=efpjv02e",
+  "Business signup links must be simplified to canonical /customer-signup?ref=<code> format when role is not required.",
 );
 assert.equal(
   canonicalBusinessPath.includes("/ref/"),
@@ -43,7 +43,7 @@ const canonicalUrl = buildTrackedAttributedUrl(
 );
 assert.equal(
   canonicalUrl,
-  "https://mealscout.us/customer-signup?role=business&ref=efpjv02e",
+  "https://mealscout.us/customer-signup?ref=efpjv02e",
   "Canonical signup share URL must be direct and not wrapped.",
 );
 
@@ -54,8 +54,23 @@ const universalNonSignup = buildTrackedAttributedUrl(
 );
 assert.equal(
   universalNonSignup,
-  "https://mealscout.us/ref/efpjv02e?to=%2Fclaim-truck",
-  "Non-signup paths should keep universal /ref/:code?to= format for compatibility.",
+  "https://mealscout.us/claim-truck?ref=efpjv02e",
+  "Non-signup paths should also use direct clean ?ref= links.",
+);
+assert.equal(
+  universalNonSignup.includes("/ref/"),
+  false,
+  "Generated links must not include /ref/ wrappers.",
+);
+assert.equal(
+  universalNonSignup.includes("to="),
+  false,
+  "Generated links must not include nested destination query params.",
+);
+assert.equal(
+  universalNonSignup.includes("%2F"),
+  false,
+  "Generated links must not URL-encode destination path into params.",
 );
 
 const customerSignupSource = readFileSync(

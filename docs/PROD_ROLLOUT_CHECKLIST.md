@@ -92,7 +92,7 @@ Affiliate valid-ref final smoke gate:
   - approved production smoke account/session
   - non-default affiliate tag
   - eligible public internal share target; destination ownership is not required
-  - canonical generated link on `https://www.mealscout.us/ref/<real-affiliate-tag>?to=<safe-internal-path>`
+  - canonical generated link on `https://www.mealscout.us/<safe-internal-path>?ref=<real-affiliate-tag>`
   - no `/ref/<tag>?ref=<tag>` shape and no `meal-scout.vercel.app` host
 
 1. Supplier pay-intent idempotency (existing flow):

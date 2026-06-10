@@ -84,9 +84,9 @@ const requiredDashboardSnippets = [
   'event_coordinator: { userType: "event_coordinator"',
   "const buildCanonicalAffiliateLink = (",
   "const url = new URL(",
-  "`/ref/${encodeURIComponent(tag)}`",
+  "profilePath",
   "canonicalMealScoutOrigin",
-  'url.searchParams.set("to", profilePath);',
+  'url.searchParams.set("ref", tag);',
   "Affiliate Link",
   "Copy Link",
   "Open Link",
@@ -115,14 +115,16 @@ if (
     "const profilePath = getAdminUserPublicProfilePath(user, attachedHostProfile);",
   ) ||
   !affiliateBuilderSlice.includes("const url = new URL(") ||
-  !affiliateBuilderSlice.includes("`/ref/${encodeURIComponent(tag)}`") ||
+  !affiliateBuilderSlice.includes("profilePath") ||
   !affiliateBuilderSlice.includes("canonicalMealScoutOrigin") ||
-  !affiliateBuilderSlice.includes('url.searchParams.set("to", profilePath);') ||
+  !affiliateBuilderSlice.includes('url.searchParams.set("ref", tag);') ||
+  affiliateBuilderSlice.includes("/ref/") ||
+  affiliateBuilderSlice.includes("to=") ||
   affiliateBuilderSlice.includes("/admin/dashboard") ||
   affiliateBuilderSlice.includes("focusUser")
 ) {
   throw new Error(
-    "Admin primary Affiliate Link must use universal /ref/:tag?to=<profile> wrapper, not admin paths",
+    "Admin primary Affiliate Link must use direct <profile>?ref=<tag> links, not admin paths",
   );
 }
 

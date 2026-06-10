@@ -44,7 +44,7 @@ assert(
   shareRoutes.includes("buildTrackedAttributedUrl(") &&
     shareRoutes.includes("attribution.attributionKey") &&
     shareRoutes.includes("sharePath"),
-  "Generated share URLs must support canonical customer-signup ?ref= links and universal /ref/:tag?to=<target> links for other pages.",
+  "Generated share URLs must be direct clean links with ?ref= attribution.",
 );
 assert(
   shareRoutes.includes("normalizeInternalShareTarget") &&
@@ -75,10 +75,11 @@ assert(
   "Share Hub actions must be enabled for authenticated users and only disabled for invalid targets or unauthenticated sessions.",
 );
 assert(
-  shareHub.includes("isCanonicalCustomerSignupShareLink") &&
-    shareHub.includes("isUniversalAttributedShareLink") &&
-    shareHub.includes("expectsCanonicalSignup"),
-  "Share Hub must validate canonical customer-signup links and universal referral links for other targets.",
+  shareHub.includes("isDirectAttributedShareLink") &&
+    shareHub.includes('url.searchParams.get("ref")') &&
+    shareHub.includes('!url.searchParams.has("to")') &&
+    shareHub.includes('!shareLink.includes("%2F")'),
+  "Share Hub must validate direct clean ?ref links and reject nested/encoded destination params.",
 );
 assert(
   shareHub.includes("normalizeShareHubTargetPath") &&
@@ -99,10 +100,11 @@ assert(
 );
 
 assert(
-  shareLib.includes("isCanonicalCustomerSignupShareLink") &&
-    shareLib.includes("isCanonicalCustomerSignupPath(path)") &&
-    shareLib.includes("/\\/ref\\/[^/?#]+[?&]to=/.test(shareLink)"),
-  "Shared URL helper must accept canonical customer-signup links and reject malformed attribution links.",
+  shareLib.includes("isDirectAttributedShareLink") &&
+    shareLib.includes('url.searchParams.get("ref")') &&
+    shareLib.includes('!url.searchParams.has("to")') &&
+    shareLib.includes('!shareLink.includes("%2F")'),
+  "Shared URL helper must accept direct ?ref links and reject malformed attribution links.",
 );
 assert(
   !shareLib.includes("return fallback"),

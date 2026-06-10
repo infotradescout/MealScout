@@ -28,7 +28,7 @@ const USER_ITEMS: ShareHubItem[] = [
     title: "1) Owner Signup",
     description:
       "Primary link for restaurant owners and food truck operators to start.",
-    href: "/customer-signup?role=business",
+    href: "/customer-signup",
     audience: "Restaurant + Food Truck Owners",
     priority: 1,
     outreachText:
@@ -90,26 +90,21 @@ const STAFF_ADMIN_ITEMS: ShareHubItem[] = USER_ITEMS;
 const SHARE_UNAVAILABLE_MESSAGE =
   "Tracked links are ready. Add a custom share tag later if you want cleaner links.";
 
-function isUniversalAttributedShareLink(shareLink: string): boolean {
-  return /\/ref\/[^/?#]+[?&]to=/.test(shareLink);
-}
-
-function isCanonicalCustomerSignupShareLink(shareLink: string): boolean {
+function isDirectAttributedShareLink(shareLink: string): boolean {
   try {
     const url = new URL(shareLink, window.location.origin);
+    const ref = String(url.searchParams.get("ref") || "").trim();
+    const pathname = url.pathname.toLowerCase();
     return (
-      url.pathname.toLowerCase() === "/customer-signup" &&
-      Boolean(String(url.searchParams.get("ref") || "").trim()) &&
-      !url.pathname.toLowerCase().startsWith("/ref/") &&
-      !url.searchParams.has("to")
+      Boolean(ref) &&
+      pathname !== "/ref" &&
+      !pathname.startsWith("/ref/") &&
+      !url.searchParams.has("to") &&
+      !shareLink.includes("%2F")
     );
   } catch {
     return false;
   }
-}
-
-function isCanonicalCustomerSignupTarget(path: string): boolean {
-  return path.split(/[?#]/, 1)[0].toLowerCase() === "/customer-signup";
 }
 
 function normalizeShareHubTargetPath(href: string): string | null {
@@ -200,11 +195,7 @@ export default function ShareHub({
       throw new Error(data?.message || "Tracked links are unavailable.");
     }
     const shareLink = String(data?.shareLink || "").trim();
-    const expectsCanonicalSignup = isCanonicalCustomerSignupTarget(path);
-    const hasValidTrackedFormat = expectsCanonicalSignup
-      ? isCanonicalCustomerSignupShareLink(shareLink)
-      : isUniversalAttributedShareLink(shareLink);
-    if (!shareLink || !hasValidTrackedFormat) {
+    if (!shareLink || !isDirectAttributedShareLink(shareLink)) {
       throw new Error("Tracked share link missing attribution target.");
     }
     if (/\/ref\/([^/?#]+)[^#]*[?&]ref=\1(?:&|#|$)/i.test(shareLink)) {

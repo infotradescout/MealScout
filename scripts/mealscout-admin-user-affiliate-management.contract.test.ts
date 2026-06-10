@@ -20,9 +20,9 @@ const requiredAuditSnippets = [
   "Affiliate is not a standalone user role.",
   "Internal admin-family accounts do not receive public-ref affiliate assignment or payout controls by default.",
   "The admin user card includes an `Affiliate Management` section.",
-  "The canonical primary affiliate link uses universal attribution: `https://www.mealscout.us/ref/<affiliateTag>?to=<public-profile-path>`.",
-  "`Copy Link` and `Open Link` use the universal referral wrapper, not `/admin/dashboard`.",
-  "Public truck, restaurant, or location profile URLs are used only as the validated `to` destination inside the universal wrapper.",
+  "The canonical primary affiliate link uses direct attribution: `https://www.mealscout.us/<public-profile-path>?ref=<affiliateTag>`.",
+  "`Copy Link` and `Open Link` use direct public profile links with clean `ref`, not `/admin/dashboard`.",
+  "Public truck, restaurant, or location profile URLs are shared directly with `ref` attribution.",
   "client/src/pages/AdminAffiliateManagement.tsx` remains an aggregate affiliate reporting/overview surface",
   "Not applicable for internal admin accounts.",
   "The internal admin focus URL is not copied from the user card.",
@@ -50,9 +50,9 @@ const requiredDashboardSnippets = [
   "const profilePath = getAdminUserPublicProfilePath(user, attachedHostProfile);",
   'if (!profilePath || profilePath === "/") return null;',
   "const url = new URL(",
-  "`/ref/${encodeURIComponent(tag)}`",
+  "profilePath",
   "canonicalMealScoutOrigin",
-  'url.searchParams.set("to", profilePath);',
+  'url.searchParams.set("ref", tag);',
   "Affiliate Management",
   "Affiliate Link",
   "Affiliate active",
@@ -176,13 +176,15 @@ if (
     "const profilePath = getAdminUserPublicProfilePath(user, attachedHostProfile);",
   ) ||
   !affiliateBuilderSlice.includes("const url = new URL(") ||
-  !affiliateBuilderSlice.includes("`/ref/${encodeURIComponent(tag)}`") ||
+  !affiliateBuilderSlice.includes("profilePath") ||
   !affiliateBuilderSlice.includes("canonicalMealScoutOrigin") ||
-  !affiliateBuilderSlice.includes('url.searchParams.set("to", profilePath);') ||
+  !affiliateBuilderSlice.includes('url.searchParams.set("ref", tag);') ||
+  affiliateBuilderSlice.includes("/ref/") ||
+  affiliateBuilderSlice.includes("to=") ||
   affiliateBuilderSlice.includes("/admin/dashboard")
 ) {
   throw new Error(
-    "Primary Affiliate Link must use the public profile target with referral attribution, never admin URLs",
+    "Primary Affiliate Link must use direct public profile URLs with clean ref attribution, never admin URLs",
   );
 }
 

@@ -88,10 +88,12 @@ const origin = resolveCanonicalShareOrigin({
 assert.equal(origin, "https://www.mealscout.us");
 const shareLink = generateShareableUrl("/scout", origin, "sample-tag");
 assert.equal(
-  shareLink.startsWith("https://www.mealscout.us/ref/sample-tag?to="),
+  shareLink.startsWith("https://www.mealscout.us/scout?ref=sample-tag"),
   true,
 );
-assert.equal(shareLink.includes("to=%2Fscout"), true);
+assert.equal(shareLink.includes("/ref/"), false);
+assert.equal(shareLink.includes("to="), false);
+assert.equal(shareLink.includes("%2F"), false);
 assert.equal(shareLink.includes("mealscout.onrender.com"), false);
 assert(
   shareRoutes.includes("resolveCanonicalShareOrigin(req)"),
