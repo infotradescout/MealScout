@@ -74,7 +74,7 @@ const USER_ITEMS: ShareHubItem[] = [
     key: "map",
     title: "Scout Dashboard",
     description: "Send people straight to nearby food trucks and restaurants.",
-    href: "/scout",
+    href: "/directory",
     audience: "Customers",
   },
   {
@@ -90,17 +90,49 @@ const STAFF_ADMIN_ITEMS: ShareHubItem[] = USER_ITEMS;
 const SHARE_UNAVAILABLE_MESSAGE =
   "Tracked links are ready. Add a custom share tag later if you want cleaner links.";
 
-function isDirectAttributedShareLink(shareLink: string): boolean {
+function sanitizeTargetPathForTrackedLink(targetPath: string): string {
+  const parsed = new URL(targetPath, window.location.origin);
+  parsed.searchParams.delete("to");
+  parsed.searchParams.delete("ref");
+  if (
+    parsed.pathname.toLowerCase() === "/customer-signup" &&
+    parsed.searchParams.get("role") === "business"
+  ) {
+    parsed.searchParams.delete("role");
+  }
+  const normalizedPathname = parsed.pathname.replace(/\/+$/, "") || "/";
+  return `${normalizedPathname}${parsed.search}${parsed.hash}`;
+}
+
+function isDirectAttributedShareLink(
+  shareLink: string,
+  targetPath: string,
+): boolean {
   try {
-    const url = new URL(shareLink, window.location.origin);
-    const ref = String(url.searchParams.get("ref") || "").trim();
-    const pathname = url.pathname.toLowerCase();
+    const generated = new URL(shareLink, window.location.origin);
+    const expectedTarget = new URL(
+      sanitizeTargetPathForTrackedLink(targetPath),
+      window.location.origin,
+    );
+    const generatedParts = generated.pathname.split("/").filter(Boolean);
+    if (generatedParts.length < 2) return false;
+    const refSegment = String(
+      generatedParts[generatedParts.length - 1] || "",
+    ).trim();
+    if (!refSegment) return false;
+    const generatedBasePath = `/${generatedParts.slice(0, -1).join("/")}`;
+    const expectedBasePath = expectedTarget.pathname.replace(/\/+$/, "") || "/";
     return (
-      Boolean(ref) &&
-      pathname !== "/ref" &&
-      !pathname.startsWith("/ref/") &&
-      !url.searchParams.has("to") &&
-      !shareLink.includes("%2F")
+      generatedBasePath === expectedBasePath &&
+      generated.search === expectedTarget.search &&
+      generated.hash === expectedTarget.hash &&
+      generated.pathname.toLowerCase() !== "/ref" &&
+      !generated.pathname.toLowerCase().startsWith("/ref/") &&
+      !generated.searchParams.has("to") &&
+      !generated.searchParams.has("ref") &&
+      !shareLink.includes("to=") &&
+      !shareLink.includes("%2F") &&
+      !shareLink.includes("role=business")
     );
   } catch {
     return false;
@@ -195,7 +227,7 @@ export default function ShareHub({
       throw new Error(data?.message || "Tracked links are unavailable.");
     }
     const shareLink = String(data?.shareLink || "").trim();
-    if (!shareLink || !isDirectAttributedShareLink(shareLink)) {
+    if (!shareLink || !isDirectAttributedShareLink(shareLink, path)) {
       throw new Error("Tracked share link missing attribution target.");
     }
     if (/\/ref\/([^/?#]+)[^#]*[?&]ref=\1(?:&|#|$)/i.test(shareLink)) {

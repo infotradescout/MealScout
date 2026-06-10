@@ -28,10 +28,24 @@ function clearOAuthCompletionParams() {
   window.history.replaceState({}, "", url.pathname + url.search + url.hash);
 }
 
+function extractPathAffiliateRef(pathname: string): string | null {
+  const match = pathname.match(
+    /^\/(customer-signup|claim-truck|directory|scout)\/([^/?#\/]+)\/?$/i,
+  );
+  if (!match) return null;
+  try {
+    return decodeURIComponent(String(match[2] || "")).trim() || null;
+  } catch {
+    return String(match[2] || "").trim() || null;
+  }
+}
+
 function captureUrlAffiliateRef() {
   if (typeof window === "undefined") return;
   const urlParams = new URLSearchParams(window.location.search);
-  const ref = String(urlParams.get("ref") || "").trim();
+  const queryRef = String(urlParams.get("ref") || "").trim();
+  const pathRef = extractPathAffiliateRef(window.location.pathname || "");
+  const ref = queryRef || pathRef || "";
   if (ref) setAffiliateRef(ref);
 }
 
@@ -107,8 +121,8 @@ export function useAuth() {
     isLoading || oauthConfirmationPending || (isError && !user)
       ? "loading"
       : user
-      ? "authenticated"
-      : "guest";
+        ? "authenticated"
+        : "guest";
 
   // Check for password reset requirement
   useEffect(() => {
@@ -136,7 +150,10 @@ export function useAuth() {
     const ignoredPrefixes = ["/logout", "/login", "/post-verification"];
     if (ignoredPrefixes.some((prefix) => pathname.startsWith(prefix))) return;
     if (pathname.includes("/callback")) return;
-    if (window.location.pathname + window.location.search === continuationTarget) {
+    if (
+      window.location.pathname + window.location.search ===
+      continuationTarget
+    ) {
       return;
     }
 
@@ -146,9 +163,9 @@ export function useAuth() {
     if (isAdminUser && pathname.startsWith("/admin")) return;
 
     const nextRequiredStep = String(user.nextRequiredStep || "").toLowerCase();
-    const hardBlockingStep =
-      nextRequiredStep === "business_setup";
-    if (nextRequiredStep === "account_onboarding" && isAccountSetupWithoutToken) return;
+    const hardBlockingStep = nextRequiredStep === "business_setup";
+    if (nextRequiredStep === "account_onboarding" && isAccountSetupWithoutToken)
+      return;
     if (!hardBlockingStep) return;
 
     setLocation(continuationTarget);
@@ -169,7 +186,12 @@ export function useAuth() {
         ? "/restaurant-signup?businessType=food_truck&source=auth-guard&claim=1"
         : "/restaurant-signup?businessType=restaurant&source=auth-guard&claim=1");
     setLocation(target);
-  }, [user?.businessOnboardingRequired, user?.businessOnboardingPath, user?.userType, setLocation]);
+  }, [
+    user?.businessOnboardingRequired,
+    user?.businessOnboardingPath,
+    user?.userType,
+    setLocation,
+  ]);
 
   useEffect(() => {
     if (!user) return;

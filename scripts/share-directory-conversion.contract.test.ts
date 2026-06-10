@@ -52,10 +52,12 @@ assert(
 
 assert(
   source.includes("isDirectAttributedShareLink") &&
-    source.includes('url.searchParams.get("ref")') &&
-    source.includes('!url.searchParams.has("to")') &&
-    source.includes('!shareLink.includes("%2F")'),
-  "Share Hub must validate direct clean ?ref links and reject nested/encoded destination params",
+    source.includes('generated.pathname.split("/").filter(Boolean)') &&
+    source.includes('generated.searchParams.has("to")') &&
+    source.includes('generated.searchParams.has("ref")') &&
+    source.includes('!shareLink.includes("%2F")') &&
+    source.includes('!shareLink.includes("role=business")'),
+  "Share Hub must validate direct clean path-segment ref links and reject nested/encoded destination params",
 );
 
 assert(

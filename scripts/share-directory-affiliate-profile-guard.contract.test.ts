@@ -76,10 +76,12 @@ assert(
 );
 assert(
   shareHub.includes("isDirectAttributedShareLink") &&
-    shareHub.includes('url.searchParams.get("ref")') &&
-    shareHub.includes('!url.searchParams.has("to")') &&
-    shareHub.includes('!shareLink.includes("%2F")'),
-  "Share Hub must validate direct clean ?ref links and reject nested/encoded destination params.",
+    shareHub.includes('generated.pathname.split("/").filter(Boolean)') &&
+    shareHub.includes('generated.searchParams.has("to")') &&
+    shareHub.includes('generated.searchParams.has("ref")') &&
+    shareHub.includes('!shareLink.includes("%2F")') &&
+    shareHub.includes('!shareLink.includes("role=business")'),
+  "Share Hub must validate direct clean path-segment ref links and reject nested/encoded destination params.",
 );
 assert(
   shareHub.includes("normalizeShareHubTargetPath") &&
@@ -101,10 +103,12 @@ assert(
 
 assert(
   shareLib.includes("isDirectAttributedShareLink") &&
-    shareLib.includes('url.searchParams.get("ref")') &&
-    shareLib.includes('!url.searchParams.has("to")') &&
-    shareLib.includes('!shareLink.includes("%2F")'),
-  "Shared URL helper must accept direct ?ref links and reject malformed attribution links.",
+    shareLib.includes('generated.pathname.split("/").filter(Boolean)') &&
+    shareLib.includes('generated.searchParams.has("to")') &&
+    shareLib.includes('generated.searchParams.has("ref")') &&
+    shareLib.includes('!shareLink.includes("%2F")') &&
+    shareLib.includes('!shareLink.includes("role=business")'),
+  "Shared URL helper must accept direct path-segment ref links and reject malformed attribution links.",
 );
 assert(
   !shareLib.includes("return fallback"),

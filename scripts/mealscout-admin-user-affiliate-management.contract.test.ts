@@ -20,9 +20,9 @@ const requiredAuditSnippets = [
   "Affiliate is not a standalone user role.",
   "Internal admin-family accounts do not receive public-ref affiliate assignment or payout controls by default.",
   "The admin user card includes an `Affiliate Management` section.",
-  "The canonical primary affiliate link uses direct attribution: `https://www.mealscout.us/<public-profile-path>?ref=<affiliateTag>`.",
-  "`Copy Link` and `Open Link` use direct public profile links with clean `ref`, not `/admin/dashboard`.",
-  "Public truck, restaurant, or location profile URLs are shared directly with `ref` attribution.",
+  "The canonical primary affiliate link uses direct attribution: `https://www.mealscout.us/<public-profile-path>/<affiliateTag>`.",
+  "`Copy Link` and `Open Link` use direct public profile links with clean path referral tags, not `/admin/dashboard`.",
+  "Public truck, restaurant, or location profile URLs are shared directly with path-segment referral attribution.",
   "client/src/pages/AdminAffiliateManagement.tsx` remains an aggregate affiliate reporting/overview surface",
   "Not applicable for internal admin accounts.",
   "The internal admin focus URL is not copied from the user card.",
@@ -52,7 +52,10 @@ const requiredDashboardSnippets = [
   "const url = new URL(",
   "profilePath",
   "canonicalMealScoutOrigin",
-  'url.searchParams.set("ref", tag);',
+  'const normalizedPathname = url.pathname.replace(/\\/+$/, "") || "/";',
+  "url.pathname = `${normalizedPathname}/${encodeURIComponent(tag)}`;",
+  'url.searchParams.delete("ref");',
+  'url.searchParams.delete("to");',
   "Affiliate Management",
   "Affiliate Link",
   "Affiliate active",
@@ -178,7 +181,12 @@ if (
   !affiliateBuilderSlice.includes("const url = new URL(") ||
   !affiliateBuilderSlice.includes("profilePath") ||
   !affiliateBuilderSlice.includes("canonicalMealScoutOrigin") ||
-  !affiliateBuilderSlice.includes('url.searchParams.set("ref", tag);') ||
+  !affiliateBuilderSlice.includes(
+    "url.pathname = `${normalizedPathname}/${encodeURIComponent(tag)}`;",
+  ) ||
+  !affiliateBuilderSlice.includes('url.searchParams.delete("ref");') ||
+  !affiliateBuilderSlice.includes('url.searchParams.delete("to");') ||
+  affiliateBuilderSlice.includes("?ref=") ||
   affiliateBuilderSlice.includes("/ref/") ||
   affiliateBuilderSlice.includes("to=") ||
   affiliateBuilderSlice.includes("/admin/dashboard")

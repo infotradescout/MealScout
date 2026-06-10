@@ -62,7 +62,7 @@ assert.equal(
 );
 assert.equal(
   buildTrackedAttributedPath("traci", "/request/start"),
-  "/request/start?ref=traci",
+  "/request/start/traci",
 );
 
 const shareUrl = generateShareableUrl(
@@ -72,7 +72,7 @@ const shareUrl = generateShareableUrl(
 );
 assert.equal(
   shareUrl,
-  "https://www.mealscout.us/contractors/bobs-roofing?ref=traci",
+  "https://www.mealscout.us/contractors/bobs-roofing/traci",
 );
 
 assert.throws(() =>
@@ -128,7 +128,7 @@ assert(
   ) &&
     doctrine.includes("destination ownership is not required") &&
     doctrine.includes("Destination validity is required") &&
-    doctrine.includes("/<safe-internal-path>?ref=<tag>") &&
+    doctrine.includes("/<safe-internal-path>/<tag>") &&
     doctrine.includes("tracking separate from payout"),
   "Doctrine must encode universal authenticated share attribution.",
 );

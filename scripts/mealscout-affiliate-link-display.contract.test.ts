@@ -11,9 +11,12 @@ const requiredDashboardSnippets = [
   "if (!tag) return null;",
   "https://www.mealscout.us",
   "const url = new URL(",
-  "`/ref/${encodeURIComponent(tag)}`",
+  "profilePath",
   "canonicalMealScoutOrigin",
-  'url.searchParams.set("to", profilePath);',
+  'const normalizedPathname = url.pathname.replace(/\\/+$/, "") || "/";',
+  "url.pathname = `${normalizedPathname}/${encodeURIComponent(tag)}`;",
+  'url.searchParams.delete("ref");',
+  'url.searchParams.delete("to");',
   "Affiliate Link",
   "No affiliate link assigned",
   "Copy Link",
@@ -29,6 +32,12 @@ for (const snippet of requiredDashboardSnippets) {
   if (!dashboard.includes(snippet)) {
     throw new Error(`Missing affiliate link display snippet: ${snippet}`);
   }
+}
+
+if (dashboard.includes("`/ref/${encodeURIComponent(tag)}`")) {
+  throw new Error(
+    "Affiliate links must not use /ref/:tag wrappers in admin dashboard",
+  );
 }
 
 if (dashboard.includes("Affiliate Tag")) {

@@ -173,6 +173,7 @@ const RedirectToScout = () => {
 const publicRoutePrefixes = [
   "/",
   "/scout",
+  "/directory",
   "/food-truck-rush",
   "/login",
   "/customer-signup",
@@ -308,12 +309,17 @@ function Router() {
           <>
             <Route path="/" component={Welcome} />
             <Route path="/scout" component={ScoutPage} />
+            <Route path="/scout/:refTag" component={ScoutPage} />
+            <Route path="/directory" component={ScoutPage} />
+            <Route path="/directory/:refTag" component={ScoutPage} />
             <Route path="/scout-prototype" component={ScoutPrototype} />
             <Route path="/food-truck-rush" component={FoodTruckRush} />
             <Route path="/login" component={Login} />
             <Route path="/customer-signup" component={CustomerSignup} />
+            <Route path="/customer-signup/:refTag" component={CustomerSignup} />
             <Route path="/restaurant-signup" component={RestaurantSignup} />
             <Route path="/claim-truck" component={ClaimTruckPage} />
+            <Route path="/claim-truck/:refTag" component={ClaimTruckPage} />
             <Route path="/deal-creation" component={DealCreation} />
             <Route path="/deal/:id" component={DealDetail} />
             <Route path="/search" component={Search} />
@@ -452,12 +458,17 @@ function Router() {
           <>
             <Route path="/" component={RedirectToScout} />
             <Route path="/scout" component={ScoutPage} />
+            <Route path="/scout/:refTag" component={ScoutPage} />
+            <Route path="/directory" component={ScoutPage} />
+            <Route path="/directory/:refTag" component={ScoutPage} />
             <Route path="/scout-prototype" component={ScoutPrototype} />
             <Route path="/food-truck-rush" component={FoodTruckRush} />
             <Route path="/login" component={Login} />
             <Route path="/customer-signup" component={CustomerSignup} />
+            <Route path="/customer-signup/:refTag" component={CustomerSignup} />
             <Route path="/restaurant-signup" component={RestaurantSignup} />
             <Route path="/claim-truck" component={ClaimTruckPage} />
+            <Route path="/claim-truck/:refTag" component={ClaimTruckPage} />
             <Route path="/deal-creation" component={DealCreation} />
             <Route path="/deal-edit/:dealId" component={DealEdit} />
             <Route path="/deal/:id" component={DealDetail} />

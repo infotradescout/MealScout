@@ -46,10 +46,12 @@ assert(
 assert(
   shareLib.includes("/api/share/generate") &&
     shareLib.includes("isDirectAttributedShareLink") &&
-    shareLib.includes('url.searchParams.get("ref")') &&
-    shareLib.includes('!url.searchParams.has("to")') &&
-    shareLib.includes('!shareLink.includes("%2F")'),
-  "Client share helper must enforce direct clean ?ref links and reject nested/encoded destination params.",
+    shareLib.includes('generated.pathname.split("/").filter(Boolean)') &&
+    shareLib.includes('generated.searchParams.has("to")') &&
+    shareLib.includes('generated.searchParams.has("ref")') &&
+    shareLib.includes('!shareLink.includes("%2F")') &&
+    shareLib.includes('!shareLink.includes("role=business")'),
+  "Client share helper must enforce direct clean path-segment ref links and reject nested/encoded destination params.",
 );
 
 assert(

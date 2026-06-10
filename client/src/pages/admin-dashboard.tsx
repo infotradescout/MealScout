@@ -179,7 +179,10 @@ const buildCanonicalAffiliateLink = (
   const profilePath = getAdminUserPublicProfilePath(user, attachedHostProfile);
   if (!profilePath || profilePath === "/") return null;
   const url = new URL(profilePath, canonicalMealScoutOrigin);
-  url.searchParams.set("ref", tag);
+  const normalizedPathname = url.pathname.replace(/\/+$/, "") || "/";
+  url.pathname = `${normalizedPathname}/${encodeURIComponent(tag)}`;
+  url.searchParams.delete("ref");
+  url.searchParams.delete("to");
   return url.toString();
 };
 

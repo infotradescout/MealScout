@@ -35,10 +35,7 @@ import {
 } from "lucide-react";
 import { BackHeader } from "@/components/back-header";
 import { SEOHead } from "@/components/seo-head";
-import {
-  PASSWORD_REGEX,
-  PASSWORD_REQUIREMENTS,
-} from "@/utils/passwordPolicy";
+import { PASSWORD_REGEX, PASSWORD_REQUIREMENTS } from "@/utils/passwordPolicy";
 import {
   InputOTP,
   InputOTPGroup,
@@ -78,8 +75,18 @@ const signupSchema = z
 
 type SignupFormData = z.infer<typeof signupSchema>;
 
-type AccountType = "diner" | "host" | "event_organizer" | "business" | "supplier";
-type BusinessSubType = "restaurant" | "bar" | "food_truck" | "caterer" | "private_chef";
+type AccountType =
+  | "diner"
+  | "host"
+  | "event_organizer"
+  | "business"
+  | "supplier";
+type BusinessSubType =
+  | "restaurant"
+  | "bar"
+  | "food_truck"
+  | "caterer"
+  | "private_chef";
 
 type SignupFlowOption = {
   id: string;
@@ -92,13 +99,29 @@ type SignupFlowOption = {
 };
 
 const normalizeSignupRole = (value: string | null): AccountType | null => {
-  const role = String(value || "").trim().toLowerCase();
+  const role = String(value || "")
+    .trim()
+    .toLowerCase();
   if (role === "diner" || role === "customer") return "diner";
   if (role === "host") return "host";
-  if (role === "event" || role === "event_coordinator") return "event_organizer";
+  if (role === "event" || role === "event_coordinator")
+    return "event_organizer";
   if (role === "business") return "business";
   if (role === "supplier") return "supplier";
   return null;
+};
+
+const extractCustomerSignupPathRef = () => {
+  if (typeof window === "undefined") return "";
+  const match = window.location.pathname.match(
+    /^\/customer-signup\/([^/?#\/]+)\/?$/i,
+  );
+  if (!match) return "";
+  try {
+    return decodeURIComponent(String(match[1] || "")).trim();
+  } catch {
+    return String(match[1] || "").trim();
+  }
 };
 
 const signupFlowOptions: SignupFlowOption[] = [
@@ -193,9 +216,10 @@ export default function CustomerSignup() {
 
   const searchParams = new URLSearchParams(window.location.search);
   const normalizedRole = normalizeSignupRole(searchParams.get("role"));
-  const urlReferralTag = String(searchParams.get("ref") || "").trim();
-  const initialAccountType: AccountType =
-    normalizedRole || "diner";
+  const urlReferralTag = String(
+    searchParams.get("ref") || extractCustomerSignupPathRef() || "",
+  ).trim();
+  const initialAccountType: AccountType = normalizedRole || "diner";
   const businessTypeParam = searchParams.get("businessType");
   const initialBusinessSubType: BusinessSubType =
     businessTypeParam === "food_truck" ||
@@ -205,10 +229,13 @@ export default function CustomerSignup() {
       ? businessTypeParam
       : "restaurant";
   const hasExplicitSignupFlow = Boolean(normalizedRole || businessTypeParam);
-  const [signupFlowSelected, setSignupFlowSelected] = useState(hasExplicitSignupFlow);
-  const [accountType, setAccountType] = useState<AccountType>(initialAccountType);
+  const [signupFlowSelected, setSignupFlowSelected] = useState(
+    hasExplicitSignupFlow,
+  );
+  const [accountType, setAccountType] =
+    useState<AccountType>(initialAccountType);
   const [businessSubType, setBusinessSubType] = useState<BusinessSubType>(
-    initialAccountType === "business" ? initialBusinessSubType : "restaurant"
+    initialAccountType === "business" ? initialBusinessSubType : "restaurant",
   );
   const SIGNUP_DRAFT_KEY = "mealscout:customer-signup-draft";
   const POST_VERIFICATION_REDIRECT_KEY = "mealscout:post-verification-redirect";
@@ -227,7 +254,7 @@ export default function CustomerSignup() {
     accountType === "host"
       ? "/host-signup"
       : accountType === "event_organizer"
-          ? "/event-coordinator/dashboard?setup=onboarding"
+        ? "/event-coordinator/dashboard?setup=onboarding"
         : accountType === "business"
           ? getBusinessRedirectPath()
           : "/scout";
@@ -302,7 +329,8 @@ export default function CustomerSignup() {
     if (/already exists|already has an account|email already/i.test(message)) {
       toast({
         title: "That email already has an account",
-        description: "Log in to continue. If the account still needs verification, resend it from login.",
+        description:
+          "Log in to continue. If the account still needs verification, resend it from login.",
       });
       redirectExistingAccountToLogin();
       return;
@@ -316,12 +344,16 @@ export default function CustomerSignup() {
   };
 
   useEffect(() => {
-    trackFunnelEventOncePerSession(FUNNEL_EVENTS.signupStarted, "customer_signup_view", {
-      page: "customer-signup",
-      accountType: initialAccountType,
-      businessSubType: initialBusinessSubType,
-      stage: "signup_view",
-    });
+    trackFunnelEventOncePerSession(
+      FUNNEL_EVENTS.signupStarted,
+      "customer_signup_view",
+      {
+        page: "customer-signup",
+        accountType: initialAccountType,
+        businessSubType: initialBusinessSubType,
+        stage: "signup_view",
+      },
+    );
   }, [initialAccountType, initialBusinessSubType]);
 
   const defaultValues = useMemo<SignupFormData>(() => {
@@ -452,16 +484,12 @@ export default function CustomerSignup() {
   const customerSignupMutation = useMutation({
     mutationFn: async (data: SignupFormData) => {
       const { confirmPassword, ...signupData } = data;
-      const res = await apiRequest(
-        "POST",
-        "/api/auth/customer/register",
-        {
-          ...signupData,
-          accountType: getRegistrationUserType(),
-          referralId: getReferralId(),
-          intendedNextPath: getCustomerRedirectPath(),
-        }
-      );
+      const res = await apiRequest("POST", "/api/auth/customer/register", {
+        ...signupData,
+        accountType: getRegistrationUserType(),
+        referralId: getReferralId(),
+        intendedNextPath: getCustomerRedirectPath(),
+      });
       return await res.json();
     },
     onSuccess: async (payload: any) => {
@@ -499,17 +527,13 @@ export default function CustomerSignup() {
   const businessSignupMutation = useMutation({
     mutationFn: async (data: SignupFormData) => {
       const { confirmPassword, ...signupData } = data;
-      const res = await apiRequest(
-        "POST",
-        "/api/auth/restaurant/register",
-        {
-          ...signupData,
-          businessType: businessSubType,
-          menuSourceUrl: signupData.menuSourceUrl || undefined,
-          referralId: getReferralId(),
-          intendedNextPath: getBusinessRedirectPath(),
-        }
-      );
+      const res = await apiRequest("POST", "/api/auth/restaurant/register", {
+        ...signupData,
+        businessType: businessSubType,
+        menuSourceUrl: signupData.menuSourceUrl || undefined,
+        referralId: getReferralId(),
+        intendedNextPath: getBusinessRedirectPath(),
+      });
       return await res.json();
     },
     onSuccess: async (payload: any) => {
@@ -550,11 +574,11 @@ export default function CustomerSignup() {
   const supplierSignupMutation = useMutation({
     mutationFn: async (data: SignupFormData) => {
       const { confirmPassword, ...signupData } = data;
-      const res = await apiRequest(
-        "POST",
-        "/api/auth/supplier/register",
-        { ...signupData, referralId: getReferralId(), intendedNextPath: "/supplier/dashboard" }
-      );
+      const res = await apiRequest("POST", "/api/auth/supplier/register", {
+        ...signupData,
+        referralId: getReferralId(),
+        intendedNextPath: "/supplier/dashboard",
+      });
       return await res.json();
     },
     onSuccess: async (payload: any) => {
@@ -598,7 +622,8 @@ export default function CustomerSignup() {
         body: JSON.stringify({}),
       });
       const data = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(data?.message || "Failed to activate supplier profile");
+      if (!res.ok)
+        throw new Error(data?.message || "Failed to activate supplier profile");
       return data;
     },
     onSuccess: () => {
@@ -674,7 +699,8 @@ export default function CustomerSignup() {
       if (!digitsOnly || digitsOnly.length < 10) {
         form.setError("phone", {
           type: "manual",
-          message: "Valid phone number is required for business profile managers",
+          message:
+            "Valid phone number is required for business profile managers",
         });
         return;
       }
@@ -793,13 +819,13 @@ export default function CustomerSignup() {
       ? "Create host profile"
       : accountType === "event_organizer"
         ? "Create event organizer profile"
-      : accountType === "business"
-        ? businessSubType === "food_truck"
-          ? "Create food truck profile"
-          : "Create restaurant profile"
-        : accountType === "supplier"
-          ? "Create supplier profile"
-          : "Go to dashboard";
+        : accountType === "business"
+          ? businessSubType === "food_truck"
+            ? "Create food truck profile"
+            : "Create restaurant profile"
+          : accountType === "supplier"
+            ? "Create supplier profile"
+            : "Go to dashboard";
 
   if (isLoading) {
     return (
@@ -878,9 +904,12 @@ export default function CustomerSignup() {
         <main className="flex-1 px-4 py-6 max-w-md mx-auto w-full">
           <div className="bg-[var(--bg-card)] border border-[color:var(--border-subtle)] rounded-2xl shadow-clean-lg p-4 space-y-4">
             <div className="text-center">
-              <h1 className="text-xl font-bold text-[color:var(--text-primary)]">You are already signed in</h1>
+              <h1 className="text-xl font-bold text-[color:var(--text-primary)]">
+                You are already signed in
+              </h1>
               <p className="text-sm text-[color:var(--text-secondary)] mt-1">
-                Add another profile to this same account instead of creating a new login.
+                Add another profile to this same account instead of creating a
+                new login.
               </p>
             </div>
 
@@ -1015,12 +1044,12 @@ export default function CustomerSignup() {
               {accountType === "business"
                 ? "Create your personal login first. Then we’ll attach and finish the business profile you manage."
                 : accountType === "host"
-                ? "Post and manage parking-host locations for trucks and local customers."
-                : accountType === "event_organizer"
-                ? "Publish events, coordinate vendor attendance, and manage event demand."
-                : accountType === "supplier"
-                ? "Set up your supplier profile, publish products, and accept orders from food trucks and restaurants."
-                : "Save favorite deals and never miss new drops from local spots."}
+                  ? "Post and manage parking-host locations for trucks and local customers."
+                  : accountType === "event_organizer"
+                    ? "Publish events, coordinate vendor attendance, and manage event demand."
+                    : accountType === "supplier"
+                      ? "Set up your supplier profile, publish products, and accept orders from food trucks and restaurants."
+                      : "Save favorite deals and never miss new drops from local spots."}
             </p>
           </div>
 
@@ -1191,8 +1220,9 @@ export default function CustomerSignup() {
                 </div>
                 {businessSubType === "food_truck" && (
                   <div className="mt-2 text-xs text-[color:var(--text-secondary)]">
-                    Create your account, then claim your truck from the registry list.
-                    We’ll keep it inactive and unverified until you submit verification.
+                    Create your account, then claim your truck from the registry
+                    list. We’ll keep it inactive and unverified until you submit
+                    verification.
                   </div>
                 )}
               </div>
@@ -1208,12 +1238,12 @@ export default function CustomerSignup() {
                 {accountType === "business"
                   ? "Your login belongs to you. The business profile is attached next, so teams, ownership, and future locations stay clean."
                   : accountType === "host"
-                  ? "This login lets you manage host locations and parking availability."
-                  : accountType === "event_organizer"
-                  ? "This login gives you event coordinator tools and vendor scheduling access."
-                  : accountType === "supplier"
-                  ? "This login powers your supplier dashboard, products, and incoming orders."
-                  : "Create your account to get started with local food deals."}
+                    ? "This login lets you manage host locations and parking availability."
+                    : accountType === "event_organizer"
+                      ? "This login gives you event coordinator tools and vendor scheduling access."
+                      : accountType === "supplier"
+                        ? "This login powers your supplier dashboard, products, and incoming orders."
+                        : "Create your account to get started with local food deals."}
               </p>
             </div>
 
@@ -1229,7 +1259,9 @@ export default function CustomerSignup() {
                         Business profile seed
                       </div>
                       <p className="text-xs text-[color:var(--text-secondary)]">
-                        These details start the profile attached to your personal login. You’ll finish the full setup after email verification.
+                        These details start the profile attached to your
+                        personal login. You’ll finish the full setup after email
+                        verification.
                       </p>
                     </div>
                     <FormField
@@ -1329,20 +1361,36 @@ export default function CustomerSignup() {
                       )}
                     />
                     <div className="grid grid-cols-[1fr_5rem] gap-3">
-                      <FormField control={form.control} name="businessCity" render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>City</FormLabel>
-                          <FormControl><Input placeholder="Pensacola" {...field} /></FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )} />
-                      <FormField control={form.control} name="businessState" render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>State</FormLabel>
-                          <FormControl><Input placeholder="FL" maxLength={2} {...field} /></FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )} />
+                      <FormField
+                        control={form.control}
+                        name="businessCity"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>City</FormLabel>
+                            <FormControl>
+                              <Input placeholder="Pensacola" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="businessState"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>State</FormLabel>
+                            <FormControl>
+                              <Input
+                                placeholder="FL"
+                                maxLength={2}
+                                {...field}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
                     </div>
                   </div>
                 )}
@@ -1354,7 +1402,8 @@ export default function CustomerSignup() {
                         Event basics
                       </div>
                       <p className="text-xs text-[color:var(--text-secondary)]">
-                        Start the account now, then finish event details after verification.
+                        Start the account now, then finish event details after
+                        verification.
                       </p>
                     </div>
                     <FormField
@@ -1374,13 +1423,19 @@ export default function CustomerSignup() {
                         </FormItem>
                       )}
                     />
-                    <FormField control={form.control} name="businessCity" render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Primary City</FormLabel>
-                        <FormControl><Input placeholder="Pensacola" {...field} /></FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )} />
+                    <FormField
+                      control={form.control}
+                      name="businessCity"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Primary City</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Pensacola" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
                   </div>
                 )}
 
@@ -1618,7 +1673,8 @@ export default function CustomerSignup() {
                   {isSubmitting ? (
                     <div className="animate-spin w-5 h-5 mr-3 border-2 border-white border-t-transparent rounded-full" />
                   ) : null}
-                  {accountType === "business" && businessSubType === "food_truck"
+                  {accountType === "business" &&
+                  businessSubType === "food_truck"
                     ? "Create Account & Claim Food Truck"
                     : "Create Account"}
                 </Button>
@@ -1726,6 +1782,3 @@ export default function CustomerSignup() {
     </div>
   );
 }
-
-
-
