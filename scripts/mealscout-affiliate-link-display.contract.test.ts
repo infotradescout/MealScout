@@ -1,6 +1,11 @@
 import { readFileSync } from "node:fs";
 
 const dashboard = readFileSync("client/src/pages/admin-dashboard.tsx", "utf8");
+const profilePage = readFileSync("client/src/pages/profile.tsx", "utf8");
+const adminAffiliatePage = readFileSync(
+  "client/src/pages/AdminAffiliateManagement.tsx",
+  "utf8",
+);
 const cleanupMap = readFileSync("CLEANUP_MAP.md", "utf8");
 const affiliateRoutes = readFileSync("server/affiliateRoutes.ts", "utf8");
 const affiliateService = readFileSync("server/affiliateService.ts", "utf8");
@@ -37,6 +42,27 @@ for (const snippet of requiredDashboardSnippets) {
 if (dashboard.includes("`/ref/${encodeURIComponent(tag)}`")) {
   throw new Error(
     "Affiliate links must not use /ref/:tag wrappers in admin dashboard",
+  );
+}
+
+if (
+  !profilePage.includes("/directory/${encodeURIComponent(") ||
+  profilePage.includes("/ref/${affiliateTag}") ||
+  profilePage.includes("?ref=")
+) {
+  throw new Error(
+    "Profile affiliate link generator must use canonical /directory/<tag> links",
+  );
+}
+
+if (
+  !adminAffiliatePage.includes("const getAffiliateLink") ||
+  !adminAffiliatePage.includes("`/directory/${encodedTag}`") ||
+  adminAffiliatePage.includes("`/ref/${tag}`") ||
+  adminAffiliatePage.includes("?ref=")
+) {
+  throw new Error(
+    "Admin affiliate page link generator must use canonical /directory/<tag> links",
   );
 }
 

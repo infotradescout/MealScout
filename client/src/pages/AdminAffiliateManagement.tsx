@@ -121,8 +121,9 @@ export default function AdminAffiliateManagement() {
   const getAffiliateLink = (tag: string | null) => {
     if (!tag) return null;
     const origin = typeof window !== "undefined" ? window.location.origin : "";
-    if (!origin) return `/ref/${tag}`;
-    return `${origin}/ref/${tag}`;
+    const encodedTag = encodeURIComponent(tag);
+    if (!origin) return `/directory/${encodedTag}`;
+    return `${origin}/directory/${encodedTag}`;
   };
 
   const handleCopyLink = async (tag: string | null, userId: string) => {

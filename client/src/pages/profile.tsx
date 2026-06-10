@@ -351,7 +351,9 @@ export default function ProfilePage() {
 
   const handleCopyAffiliateLink = async () => {
     if (!affiliateTag) return;
-    const shareUrl = `${window.location.origin}/ref/${affiliateTag}`;
+    const shareUrl = `${window.location.origin}/directory/${encodeURIComponent(
+      affiliateTag,
+    )}`;
     try {
       await navigator.clipboard.writeText(shareUrl);
     } catch (error) {

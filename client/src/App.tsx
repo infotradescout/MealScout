@@ -249,42 +249,9 @@ function Router() {
   const { toast } = useToast();
   const shownAnnouncementRef = useRef<string>("");
   const [location] = useLocation();
-  const [affiliateTag, setAffiliateTag] = useState<string>("");
   const isLikelyPublicRoute = isPublicPath(location);
   const shouldUseGuestRoutes =
     !isAuthenticated || (authState === "loading" && isLikelyPublicRoute);
-
-  useEffect(() => {
-    if (!isAuthenticated) {
-      setAffiliateTag("");
-      return;
-    }
-    let cancelled = false;
-    fetch(apiUrl("/api/auth/user"), { credentials: "include" })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (cancelled) return;
-        const tag = String(data?.affiliateTag || "").trim();
-        if (tag && !/^user\d{4}$/i.test(tag)) setAffiliateTag(tag);
-      })
-      .catch(() => {});
-
-    return () => {
-      cancelled = true;
-    };
-  }, [isAuthenticated]);
-
-  useEffect(() => {
-    if (!affiliateTag) return;
-    if (typeof window === "undefined") return;
-
-    const url = new URL(window.location.href);
-    if (url.pathname.startsWith("/ref/")) return;
-    if (url.searchParams.has("ref")) return;
-
-    url.searchParams.set("ref", affiliateTag);
-    window.history.replaceState({}, "", url.toString());
-  }, [affiliateTag, location]);
 
   useEffect(() => {
     const message = String((user as any)?.loginAnnouncement || "").trim();
