@@ -670,7 +670,7 @@ export default function ProfilePage() {
                     value={tagInput}
                     onChange={(e) => setTagInput(e.target.value)}
                     className="bg-transparent outline-none flex-1"
-                    placeholder="user1234"
+                    placeholder="your-tag"
                   />
                 </div>
                 <div className="flex flex-col gap-2 sm:flex-row">

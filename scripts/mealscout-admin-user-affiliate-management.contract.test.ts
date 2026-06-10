@@ -38,7 +38,8 @@ const requiredDashboardSnippets = [
   "return `/p/${profileType}/${encodeURIComponent(restaurantId)}/${encodeURIComponent(slug || restaurantId)}`;",
   "return `/p/location/${encodeURIComponent(hostId)}/${encodeURIComponent(slug || hostId)}`;",
   "const buildCanonicalAffiliateLink = (",
-  "const url = new URL(\"/\", canonicalMealScoutOrigin);",
+  "const profilePath = getAdminUserPublicProfilePath(user, attachedHostProfile);",
+  "const url = new URL(profilePath || \"/\", canonicalMealScoutOrigin);",
   "url.searchParams.set(\"ref\", tag);",
   "Affiliate Management",
   "Affiliate Link",
@@ -116,26 +117,20 @@ if (openLinkHandler.includes("/admin/dashboard") || !openLinkHandler.includes("a
 const affiliateBuilderIndex = dashboard.indexOf("const buildCanonicalAffiliateLink = (");
 const affiliateBuilderSlice = dashboard.slice(affiliateBuilderIndex, dashboard.indexOf("const businessTypeOptions"));
 if (
-  !affiliateBuilderSlice.includes("const url = new URL(\"/\", canonicalMealScoutOrigin);") ||
+  !affiliateBuilderSlice.includes("const profilePath = getAdminUserPublicProfilePath(user, attachedHostProfile);") ||
+  !affiliateBuilderSlice.includes("const url = new URL(profilePath || \"/\", canonicalMealScoutOrigin);") ||
   !affiliateBuilderSlice.includes("url.searchParams.set(\"ref\", tag);") ||
-  affiliateBuilderSlice.includes("getAdminUserPublicProfilePath(") ||
-  affiliateBuilderSlice.includes("/p/truck") ||
-  affiliateBuilderSlice.includes("/p/restaurant") ||
-  affiliateBuilderSlice.includes("/p/location") ||
   affiliateBuilderSlice.includes("/admin/dashboard")
 ) {
-  throw new Error("Primary Affiliate Link must be the root referral URL, never profile/admin URL");
+  throw new Error("Primary Affiliate Link must use the public profile target with referral attribution, never admin URLs");
 }
 
 const affiliateDisplaySlice = dashboard.slice(affiliateSectionIndex, dashboard.indexOf("Internal token", affiliateSectionIndex));
 if (
-  affiliateDisplaySlice.includes("/p/truck") ||
-  affiliateDisplaySlice.includes("/p/restaurant") ||
-  affiliateDisplaySlice.includes("/p/location") ||
   affiliateDisplaySlice.includes("focusUser") ||
   affiliateDisplaySlice.includes("/admin/dashboard")
 ) {
-  throw new Error("Primary Affiliate Link display/copy/open must not use profile or admin paths");
+  throw new Error("Primary Affiliate Link display/copy/open must not use admin paths");
 }
 
 const notApplicableIndex = dashboard.indexOf("Not applicable for internal admin accounts.");

@@ -275,7 +275,7 @@ export default function AdminAffiliateManagement() {
                       </div>
                       <div className="mt-0.5 flex items-center gap-1 text-2xs text-[color:var(--text-muted)]">
                         <span className="max-w-[100px] truncate">
-                          {getAffiliateLink(user.affiliateTag) || "No tag"}
+                          {getAffiliateLink(user.affiliateTag) || "No affiliate link assigned"}
                         </span>
                         {user.affiliateTag && (
                           <>
@@ -359,7 +359,7 @@ export default function AdminAffiliateManagement() {
                       {user.userType || "unknown"}
                     </TableCell>
                     <TableCell className="text-xs">
-                      {user.affiliateTag || "userXXXX"}
+                      {user.affiliateTag || "Unassigned"}
                     </TableCell>
                     <TableCell className="text-xs font-medium">
                       {user.affiliatePercent ?? 5}%

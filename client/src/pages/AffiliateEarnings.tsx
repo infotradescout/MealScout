@@ -298,7 +298,7 @@ export default function AffiliateEarnings() {
                 value={tagInput}
                 onChange={(e) => setTagInput(e.target.value)}
                 className="w-full rounded-md border border-[var(--border-subtle)] px-3 py-2 text-sm"
-                placeholder="user1234"
+                placeholder="your-tag"
               />
             </div>
             <Button onClick={handleSaveTag} disabled={tagSaving}>
@@ -309,7 +309,7 @@ export default function AffiliateEarnings() {
             <p className="text-xs text-[color:var(--status-error)]">{tagError}</p>
           ) : (
             <p className="text-xs text-[color:var(--text-muted)]">
-              Current tag: <span className="font-medium text-[color:var(--text-primary)]">{affiliateTag || 'user1234'}</span>
+              Current tag: <span className="font-medium text-[color:var(--text-primary)]">{affiliateTag || 'Unavailable'}</span>
             </p>
           )}
         </CardContent>
