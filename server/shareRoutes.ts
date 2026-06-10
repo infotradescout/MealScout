@@ -13,7 +13,7 @@ import {
   isAffiliateTagValid,
 } from "./affiliateTagService";
 import {
-  buildUniversalAttributedUrl,
+  buildTrackedAttributedUrl,
   isEligibleInternalShareTarget,
   normalizeInternalShareTarget,
 } from "./shareTargetPolicy";
@@ -84,7 +84,7 @@ async function getOrCreateInternalAttributionCode(params: {
   const sourceUrl = `${baseUrl.replace(/\/+$/, "")}${sharePath}`;
   for (let attempt = 0; attempt < 20; attempt += 1) {
     const generatedCode = generateInternalAttributionCode();
-    const fullUrl = buildUniversalAttributedUrl(
+    const fullUrl = buildTrackedAttributedUrl(
       baseUrl,
       generatedCode,
       sharePath,
@@ -200,7 +200,7 @@ export default function setupShareRoutes(app: Express) {
         });
       }
 
-      const shareLink = buildUniversalAttributedUrl(
+      const shareLink = buildTrackedAttributedUrl(
         baseUrl,
         attribution.attributionKey,
         sharePath,

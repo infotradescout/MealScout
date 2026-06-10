@@ -51,8 +51,10 @@ assert(
 );
 
 assert(
-  source.includes("!/\\/ref\\/[^/?#]+[?&]to=/.test(shareLink)"),
-  "Share Hub must reject generated links that are missing universal referral target attribution",
+  source.includes("isCanonicalCustomerSignupShareLink") &&
+    source.includes("isUniversalAttributedShareLink") &&
+    source.includes("expectsCanonicalSignup"),
+  "Share Hub must validate canonical customer-signup referral links and universal attributed links for other pages",
 );
 assert(
   source.includes("/\\/ref\\/([^/?#]+)[^#]*[?&]ref=\\1") &&

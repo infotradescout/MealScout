@@ -35,6 +35,24 @@ function normalizeSharePath(input: string): string {
   return `/${input}`;
 }
 
+function isCanonicalCustomerSignupPath(path: string): boolean {
+  return path.split(/[?#]/, 1)[0].toLowerCase() === "/customer-signup";
+}
+
+function isCanonicalCustomerSignupShareLink(shareLink: string): boolean {
+  try {
+    const url = new URL(shareLink, window.location.origin);
+    return (
+      url.pathname.toLowerCase() === "/customer-signup" &&
+      Boolean(String(url.searchParams.get("ref") || "").trim()) &&
+      !url.pathname.toLowerCase().startsWith("/ref/") &&
+      !url.searchParams.has("to")
+    );
+  } catch {
+    return false;
+  }
+}
+
 export async function getAffiliateShareUrl(input: string): Promise<string> {
   if (typeof window === "undefined") {
     throw new Error("Tracked links are available in the browser session only.");
@@ -47,7 +65,10 @@ export async function getAffiliateShareUrl(input: string): Promise<string> {
   });
   const data = await res.json().catch(() => ({}));
   const shareLink = String(data?.shareLink || "").trim();
-  if (!shareLink || !/\/ref\/[^/?#]+[?&]to=/.test(shareLink)) {
+  const hasValidTrackedFormat = isCanonicalCustomerSignupPath(path)
+    ? isCanonicalCustomerSignupShareLink(shareLink)
+    : /\/ref\/[^/?#]+[?&]to=/.test(shareLink);
+  if (!shareLink || !hasValidTrackedFormat) {
     throw new Error(
       data?.message || "Unable to generate tracked link attribution.",
     );

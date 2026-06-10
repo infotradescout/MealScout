@@ -96,11 +96,11 @@ assert(
 );
 
 assert(
-  shareRoutes.includes("buildUniversalAttributedUrl(") &&
+  shareRoutes.includes("buildTrackedAttributedUrl(") &&
     !shareRoutes.includes("commission") &&
     !shareRoutes.includes("payout") &&
     !shareRoutes.includes("stripe"),
-  "Universal share generation must stay separated from payout/payment logic.",
+  "Tracked share generation must stay separated from payout/payment logic.",
 );
 
 assert(

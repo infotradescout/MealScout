@@ -35,6 +35,35 @@ export function buildUniversalAttributedPath(
   )}`;
 }
 
+function buildCanonicalCustomerSignupPath(
+  affiliateTag: string,
+  targetPath: string,
+): string {
+  const parsed = new URL(targetPath, "https://www.mealscout.us");
+  if (parsed.pathname.toLowerCase() !== "/customer-signup") {
+    throw new Error("Customer signup canonical path requires /customer-signup");
+  }
+  parsed.searchParams.set("ref", affiliateTag);
+  return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+}
+
+export function buildTrackedAttributedPath(
+  affiliateTag: string,
+  targetPath: string,
+): string {
+  const normalizedTarget = normalizeInternalShareTarget(targetPath);
+  if (!normalizedTarget) {
+    throw new Error("Invalid share target");
+  }
+
+  const pathname = normalizedTarget.split(/[?#]/, 1)[0].toLowerCase();
+  if (pathname === "/customer-signup") {
+    return buildCanonicalCustomerSignupPath(affiliateTag, normalizedTarget);
+  }
+
+  return buildUniversalAttributedPath(affiliateTag, normalizedTarget);
+}
+
 export function buildUniversalAttributedUrl(
   baseUrl: string,
   affiliateTag: string,
@@ -42,4 +71,13 @@ export function buildUniversalAttributedUrl(
 ): string {
   const normalizedBase = baseUrl.replace(/\/+$/, "");
   return `${normalizedBase}${buildUniversalAttributedPath(affiliateTag, targetPath)}`;
+}
+
+export function buildTrackedAttributedUrl(
+  baseUrl: string,
+  affiliateTag: string,
+  targetPath: string,
+): string {
+  const normalizedBase = baseUrl.replace(/\/+$/, "");
+  return `${normalizedBase}${buildTrackedAttributedPath(affiliateTag, targetPath)}`;
 }

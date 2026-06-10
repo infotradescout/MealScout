@@ -28,7 +28,7 @@ assert(
 
 assert(
   shareRoutes.includes("attribution.attributionKey") &&
-    shareRoutes.includes("buildUniversalAttributedUrl(") &&
+    shareRoutes.includes("buildTrackedAttributedUrl(") &&
     !shareRoutes.includes("ensureAffiliateTag(authenticatedUserId)"),
   "Tracked links must be generated with resolved attribution key without forcing vanity-tag creation.",
 );
@@ -45,8 +45,10 @@ assert(
 
 assert(
   shareLib.includes("/api/share/generate") &&
+    shareLib.includes("isCanonicalCustomerSignupShareLink") &&
+    shareLib.includes("isCanonicalCustomerSignupPath(path)") &&
     shareLib.includes("/\\/ref\\/[^/?#]+[?&]to=/.test(shareLink)"),
-  "Client share helper must still require universal /ref/:key?to= attribution format.",
+  "Client share helper must accept canonical customer-signup ?ref= links and keep universal /ref/:key?to= validation for other pages.",
 );
 
 assert(

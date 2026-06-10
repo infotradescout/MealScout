@@ -41,10 +41,10 @@ assert(
   "Share generation must resolve internal attribution for authenticated users and fail closed for unresolved identity or unauthenticated requests.",
 );
 assert(
-  shareRoutes.includes("buildUniversalAttributedUrl(") &&
+  shareRoutes.includes("buildTrackedAttributedUrl(") &&
     shareRoutes.includes("attribution.attributionKey") &&
     shareRoutes.includes("sharePath"),
-  "Generated share URLs must use the universal /ref/:tag?to=<target> wrapper.",
+  "Generated share URLs must support canonical customer-signup ?ref= links and universal /ref/:tag?to=<target> links for other pages.",
 );
 assert(
   shareRoutes.includes("normalizeInternalShareTarget") &&
@@ -75,8 +75,10 @@ assert(
   "Share Hub actions must be enabled for authenticated users and only disabled for invalid targets or unauthenticated sessions.",
 );
 assert(
-  shareHub.includes("!/\\/ref\\/[^/?#]+[?&]to=/.test(shareLink)"),
-  "Share Hub must reject generated links missing universal referral attribution target.",
+  shareHub.includes("isCanonicalCustomerSignupShareLink") &&
+    shareHub.includes("isUniversalAttributedShareLink") &&
+    shareHub.includes("expectsCanonicalSignup"),
+  "Share Hub must validate canonical customer-signup links and universal referral links for other targets.",
 );
 assert(
   shareHub.includes("normalizeShareHubTargetPath") &&
@@ -97,8 +99,10 @@ assert(
 );
 
 assert(
-  shareLib.includes("!/\\/ref\\/[^/?#]+[?&]to=/.test(shareLink)"),
-  "Shared URL helper must reject API links missing universal referral attribution target.",
+  shareLib.includes("isCanonicalCustomerSignupShareLink") &&
+    shareLib.includes("isCanonicalCustomerSignupPath(path)") &&
+    shareLib.includes("/\\/ref\\/[^/?#]+[?&]to=/.test(shareLink)"),
+  "Shared URL helper must accept canonical customer-signup links and reject malformed attribution links.",
 );
 assert(
   !shareLib.includes("return fallback"),
@@ -140,7 +144,7 @@ assert(
   "Share middleware must keep canonical origin resolution and reject Render/legacy Vercel hosts.",
 );
 assert(
-  shareMiddleware.includes("buildUniversalAttributedUrl") &&
+  shareMiddleware.includes("buildTrackedAttributedUrl") &&
     shareMiddleware.includes("isEligibleInternalShareTarget"),
   "Share middleware must produce universal attributed links and validate internal targets.",
 );

@@ -15,7 +15,7 @@
 
 import { isDefaultLookingAffiliateTag } from "./affiliateTagService";
 import {
-  buildUniversalAttributedUrl,
+  buildTrackedAttributedUrl,
   isEligibleInternalShareTarget,
   normalizeInternalShareTarget,
 } from "./shareTargetPolicy";
@@ -106,7 +106,7 @@ export function generateShareableUrl(
     throw new Error("Affiliate tag required");
   }
 
-  return buildUniversalAttributedUrl(
+  return buildTrackedAttributedUrl(
     normalizedBase,
     affiliateTag,
     normalizedPath,

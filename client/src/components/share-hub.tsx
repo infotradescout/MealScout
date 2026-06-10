@@ -90,6 +90,28 @@ const STAFF_ADMIN_ITEMS: ShareHubItem[] = USER_ITEMS;
 const SHARE_UNAVAILABLE_MESSAGE =
   "Tracked links are ready. Add a custom share tag later if you want cleaner links.";
 
+function isUniversalAttributedShareLink(shareLink: string): boolean {
+  return /\/ref\/[^/?#]+[?&]to=/.test(shareLink);
+}
+
+function isCanonicalCustomerSignupShareLink(shareLink: string): boolean {
+  try {
+    const url = new URL(shareLink, window.location.origin);
+    return (
+      url.pathname.toLowerCase() === "/customer-signup" &&
+      Boolean(String(url.searchParams.get("ref") || "").trim()) &&
+      !url.pathname.toLowerCase().startsWith("/ref/") &&
+      !url.searchParams.has("to")
+    );
+  } catch {
+    return false;
+  }
+}
+
+function isCanonicalCustomerSignupTarget(path: string): boolean {
+  return path.split(/[?#]/, 1)[0].toLowerCase() === "/customer-signup";
+}
+
 function normalizeShareHubTargetPath(href: string): string | null {
   const raw = String(href || "").trim();
   if (!raw) return null;
@@ -178,7 +200,11 @@ export default function ShareHub({
       throw new Error(data?.message || "Tracked links are unavailable.");
     }
     const shareLink = String(data?.shareLink || "").trim();
-    if (!shareLink || !/\/ref\/[^/?#]+[?&]to=/.test(shareLink)) {
+    const expectsCanonicalSignup = isCanonicalCustomerSignupTarget(path);
+    const hasValidTrackedFormat = expectsCanonicalSignup
+      ? isCanonicalCustomerSignupShareLink(shareLink)
+      : isUniversalAttributedShareLink(shareLink);
+    if (!shareLink || !hasValidTrackedFormat) {
       throw new Error("Tracked share link missing attribution target.");
     }
     if (/\/ref\/([^/?#]+)[^#]*[?&]ref=\1(?:&|#|$)/i.test(shareLink)) {
