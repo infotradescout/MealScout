@@ -124,6 +124,85 @@ The system queues review items for:
 5. Run apply and verify returned evidence upload counts and statuses.
 6. Open matched restaurant profile to verify linked media/evidence.
 
+## Real Smoke Packet
+
+Use one real truck packet and run the smoke with real image evidence files.
+
+### Exact File Categories
+
+- `logoImage`: one logo image
+- `profileImages`: one or more truck/profile images
+- `menuImages`: one or more menu screenshots
+- `hoursImages`: one or more hours/schedule screenshots
+- `contactImages`: one or more contact/social/admin screenshots
+
+Include operator notes in payload `sourceNotes`.
+
+### Smoke Runner
+
+Script: `scripts/runManualTruckIntakeSmokePacket.ts`
+
+Example command (dry run only, default):
+
+```bash
+npx tsx scripts/runManualTruckIntakeSmokePacket.ts \
+  --packet artifacts/mealscout-onboarding/3d-eats-and-tea/profile-enrichment.json \
+  --logo artifacts/mealscout-onboarding/3d-eats-and-tea/images/cover-photo.png \
+  --profile-images artifacts/mealscout-onboarding/3d-eats-and-tea/images/cover-photo.png \
+  --menu-images artifacts/mealscout-onboarding/3d-eats-and-tea/images/details-contact.png \
+  --hours-images artifacts/mealscout-onboarding/3d-eats-and-tea/images/details-contact.png \
+  --contact-images artifacts/mealscout-onboarding/3d-eats-and-tea/images/details-contact.png
+```
+
+Optional apply execution:
+
+- `--apply` enables apply mode
+- `--menu-overwrite` enables explicit menu replacement approval
+- `--logo-overwrite` enables explicit logo replacement approval
+- `--allow-production` must be passed to target `*.mealscout.us`
+
+### Expected Preview Result
+
+Preview (dry run) should return:
+
+- `status = dry_run`
+- `evidenceStatus` present
+- `menuEvidenceStatus` present
+- `uploadedEvidence` array present
+- `reviewQueueItems` array present when conflicts/menu evidence review are needed
+- existing menu/logo preserved (no silent overwrite)
+
+### Expected Apply Result
+
+Apply should return:
+
+- `status = applied`
+- `evidenceStatus` and `menuEvidenceStatus` present
+- `uploadedEvidence` count populated when files were attached
+- `reviewQueueItems` populated when review is required
+
+Apply without overwrite approvals must preserve existing menu/logo:
+
+- existing menu is not replaced unless `approvals.menuOverwrite = true`
+- existing logo is not replaced unless `approvals.logoOverwrite = true`
+
+### Failure States
+
+- missing required file category input
+- login/session failure
+- invalid payload JSON
+- low-confidence or missing menu extraction resulting in queued review
+- ambiguous identity match (`needs_review`)
+- upload service not configured
+
+### Rollback/No-Overwrite Rules
+
+- Always execute dry run first.
+- Do not apply overwrite approvals unless explicitly reviewed.
+- If conflicts are surfaced, keep approvals disabled and resolve via review queue.
+- If apply was run unintentionally, do not run second apply with overwrite approvals.
+- Never perform production apply without explicit approval and `--allow-production`.
+
 ## Validation Commands
 
 - `npm run check`
