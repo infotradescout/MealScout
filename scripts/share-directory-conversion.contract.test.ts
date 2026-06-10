@@ -37,13 +37,17 @@ assert(
 );
 
 assert(
-  source.includes("Set your share tag before sharing tracked links."),
-  "Share Hub must show visible disabled-state copy when affiliate tag is unavailable",
+  source.includes(
+    "Tracked links are ready. Add a custom share tag later if you want cleaner links.",
+  ),
+  "Share Hub must show ready-state copy and treat custom share tags as optional",
 );
 
 assert(
-  source.includes("disabled={affiliateTagUnavailable || !affiliateTag}"),
-  "Share Hub share buttons must be disabled without a resolved affiliate tag",
+  source.includes(
+    "!isAuthenticated || !normalizeShareHubTargetPath(item.href)",
+  ),
+  "Share Hub share buttons must be enabled for authenticated users and only disabled for unsafe targets or unauthenticated sessions",
 );
 
 assert(

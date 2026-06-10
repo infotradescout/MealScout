@@ -88,11 +88,7 @@ const USER_ITEMS: ShareHubItem[] = [
 
 const STAFF_ADMIN_ITEMS: ShareHubItem[] = USER_ITEMS;
 const SHARE_UNAVAILABLE_MESSAGE =
-  "Set your share tag before sharing tracked links.";
-
-function isDefaultLookingAffiliateTag(tag: string): boolean {
-  return /^user\d{4}$/i.test(String(tag || "").trim());
-}
+  "Tracked links are ready. Add a custom share tag later if you want cleaner links.";
 
 function normalizeShareHubTargetPath(href: string): string | null {
   const raw = String(href || "").trim();
@@ -133,8 +129,8 @@ export default function ShareHub({
   description: string;
 }) {
   const { toast } = useToast();
-  const [affiliateTag, setAffiliateTag] = useState("");
-  const [affiliateTagUnavailable, setAffiliateTagUnavailable] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [shareAuthError, setShareAuthError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -142,18 +138,16 @@ export default function ShareHub({
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (cancelled) return;
-        const tag = String(data?.affiliateTag || "").trim();
-        if (tag && !isDefaultLookingAffiliateTag(tag)) {
-          setAffiliateTag(tag);
-          setAffiliateTagUnavailable(false);
-        } else {
-          setAffiliateTag("");
-          setAffiliateTagUnavailable(true);
-        }
+        const authenticated = Boolean(String(data?.id || "").trim());
+        setIsAuthenticated(authenticated);
+        setShareAuthError(
+          authenticated ? null : "Sign in to generate tracked links.",
+        );
       })
       .catch(() => {
         if (cancelled) return;
-        setAffiliateTagUnavailable(true);
+        setIsAuthenticated(false);
+        setShareAuthError("Sign in to generate tracked links.");
       });
     return () => {
       cancelled = true;
@@ -168,7 +162,7 @@ export default function ShareHub({
   const generateTrackedShareUrl = async (href: string) => {
     const path = normalizeShareHubTargetPath(href);
     if (!path) {
-      throw new Error(SHARE_UNAVAILABLE_MESSAGE);
+      throw new Error("Tracked link target is not eligible.");
     }
 
     const response = await fetch("/api/share/generate", {
@@ -181,7 +175,7 @@ export default function ShareHub({
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
-      throw new Error(data?.message || SHARE_UNAVAILABLE_MESSAGE);
+      throw new Error(data?.message || "Tracked links are unavailable.");
     }
     const shareLink = String(data?.shareLink || "").trim();
     if (!shareLink || !/\/ref\/[^/?#]+[?&]to=/.test(shareLink)) {
@@ -310,7 +304,11 @@ export default function ShareHub({
         <CardDescription>{description}</CardDescription>
       </CardHeader>
       <CardContent>
-        {affiliateTagUnavailable ? (
+        {shareAuthError ? (
+          <div className="mb-3 rounded-md border border-red-300/50 bg-red-100/40 p-3 text-xs text-red-900">
+            {shareAuthError}
+          </div>
+        ) : isAuthenticated ? (
           <div className="mb-3 rounded-md border border-amber-300/50 bg-amber-100/40 p-3 text-xs text-amber-900">
             {SHARE_UNAVAILABLE_MESSAGE}
           </div>
@@ -336,7 +334,9 @@ export default function ShareHub({
               <div className="flex flex-wrap gap-2">
                 <Button
                   size="sm"
-                  disabled={affiliateTagUnavailable || !affiliateTag}
+                  disabled={
+                    !isAuthenticated || !normalizeShareHubTargetPath(item.href)
+                  }
                   onClick={() => shareLink(item.title, item.href)}
                 >
                   Share tracked link
@@ -344,7 +344,9 @@ export default function ShareHub({
                 <Button
                   size="sm"
                   variant="outline"
-                  disabled={affiliateTagUnavailable || !affiliateTag}
+                  disabled={
+                    !isAuthenticated || !normalizeShareHubTargetPath(item.href)
+                  }
                   onClick={async () => {
                     try {
                       const trackedUrl = await generateTrackedShareUrl(
@@ -373,7 +375,9 @@ export default function ShareHub({
                 <Button
                   size="sm"
                   variant="ghost"
-                  disabled={affiliateTagUnavailable || !affiliateTag}
+                  disabled={
+                    !isAuthenticated || !normalizeShareHubTargetPath(item.href)
+                  }
                   onClick={async () => {
                     await copyLink(item.href);
                     void trackShareHubEvent("copy_link", item);
@@ -384,7 +388,9 @@ export default function ShareHub({
                 <Button
                   size="sm"
                   variant="secondary"
-                  disabled={affiliateTagUnavailable || !affiliateTag}
+                  disabled={
+                    !isAuthenticated || !normalizeShareHubTargetPath(item.href)
+                  }
                   onClick={() => copyOutreachText(item)}
                 >
                   Copy Outreach

@@ -108,12 +108,17 @@ requireIncludes(
 requireIncludes(
   shareHub,
   'fetch("/api/auth/user"',
-  "Share Hub must derive sharing from existing authenticated affiliate tag state.",
+  "Share Hub must derive sharing from existing authenticated user state.",
 );
 requireIncludes(
   shareHub,
-  "disabled={affiliateTagUnavailable || !affiliateTag}",
-  "Share Hub must gate tools on share/tag state, not a standalone role.",
+  "!isAuthenticated || !normalizeShareHubTargetPath(item.href)",
+  "Share Hub must gate tools on authentication and safe eligible targets, not custom vanity tag setup.",
+);
+requireIncludes(
+  shareHub,
+  "Tracked links are ready. Add a custom share tag later if you want cleaner links.",
+  "Share Hub must show that tracked links are ready even when no vanity tag is configured.",
 );
 requireExcludes(
   shareHub,

@@ -86,12 +86,13 @@ assert.throws(() =>
 );
 
 assert(
-  shareRoutes.includes("return res.status(409).json({") &&
+  shareRoutes.includes("resolveShareAttributionIdentity") &&
+    shareRoutes.includes("getOrCreateInternalAttributionCode") &&
     shareRoutes.includes("users.affiliateTag") &&
-    shareRoutes.includes("isDefaultLookingAffiliateTag(affiliateTag)") &&
+    shareRoutes.includes("attribution.attributionKey") &&
     !shareRoutes.includes("/api/restaurants/my") &&
     !shareRoutes.includes("restaurantId"),
-  "Share generation must use authenticated tag state and must not require destination ownership.",
+  "Share generation must use authenticated attribution identity, support internal key fallback, and must not require destination ownership.",
 );
 
 assert(
@@ -115,8 +116,10 @@ assert(
   shareHub.includes('fetch("/api/auth/user"') &&
     !shareHub.includes('fetch("/api/affiliate/tag"') &&
     !shareHub.includes("/api/restaurants/my") &&
-    shareHub.includes("Set your share tag before sharing tracked links."),
-  "Share Hub must use existing auth tag state and not create tags or require owned destinations.",
+    shareHub.includes(
+      "Tracked links are ready. Add a custom share tag later if you want cleaner links.",
+    ),
+  "Share Hub must allow tracked sharing for authenticated users without requiring a custom vanity tag.",
 );
 
 assert(

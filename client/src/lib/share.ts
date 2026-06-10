@@ -37,7 +37,7 @@ function normalizeSharePath(input: string): string {
 
 export async function getAffiliateShareUrl(input: string): Promise<string> {
   if (typeof window === "undefined") {
-    throw new Error("Set your share tag before sharing tracked links.");
+    throw new Error("Tracked links are available in the browser session only.");
   }
 
   const path = normalizeSharePath(input);
@@ -49,7 +49,7 @@ export async function getAffiliateShareUrl(input: string): Promise<string> {
   const shareLink = String(data?.shareLink || "").trim();
   if (!shareLink || !/\/ref\/[^/?#]+[?&]to=/.test(shareLink)) {
     throw new Error(
-      data?.message || "Set your share tag before sharing tracked links.",
+      data?.message || "Unable to generate tracked link attribution.",
     );
   }
   return shareLink;

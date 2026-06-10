@@ -35,20 +35,21 @@ assert(
   "Unauthenticated tracked share generation must be refused.",
 );
 assert(
-  shareRoutes.includes("res.status(409)") &&
-    shareRoutes.includes('error: "affiliate_tag_required"'),
-  "Share generation must block sharing when no affiliate tag can be resolved.",
+  shareRoutes.includes("resolveShareAttributionIdentity") &&
+    shareRoutes.includes("attribution_identity_required") &&
+    shareRoutes.includes("authentication_required"),
+  "Share generation must resolve internal attribution for authenticated users and fail closed for unresolved identity or unauthenticated requests.",
 );
 assert(
   shareRoutes.includes("buildUniversalAttributedUrl(") &&
-    shareRoutes.includes("affiliate.affiliateTag") &&
+    shareRoutes.includes("attribution.attributionKey") &&
     shareRoutes.includes("sharePath"),
   "Generated share URLs must use the universal /ref/:tag?to=<target> wrapper.",
 );
 assert(
   shareRoutes.includes("normalizeInternalShareTarget") &&
     shareRoutes.includes("isEligibleInternalShareTarget") &&
-    shareRoutes.includes('error: "share_target_required"'),
+    shareRoutes.includes("share_target_required"),
   "Share generation must normalize targets and reject missing/root/internal/ref targets.",
 );
 assert(
@@ -62,12 +63,16 @@ assert(
 );
 
 assert(
-  shareHub.includes("Set your share tag before sharing tracked links."),
-  "Share Hub must show clear disabled copy when no tag is available.",
+  shareHub.includes(
+    "Tracked links are ready. Add a custom share tag later if you want cleaner links.",
+  ),
+  "Share Hub must show ready copy and keep vanity tags optional.",
 );
 assert(
-  shareHub.includes("disabled={affiliateTagUnavailable || !affiliateTag}"),
-  "Share Hub actions must be disabled without a resolved affiliate tag.",
+  shareHub.includes(
+    "!isAuthenticated || !normalizeShareHubTargetPath(item.href)",
+  ),
+  "Share Hub actions must be enabled for authenticated users and only disabled for invalid targets or unauthenticated sessions.",
 );
 assert(
   shareHub.includes("!/\\/ref\\/[^/?#]+[?&]to=/.test(shareLink)"),
