@@ -259,11 +259,12 @@ function Router() {
       return;
     }
     let cancelled = false;
-    fetch(apiUrl("/api/affiliate/tag"), { credentials: "include" })
+    fetch(apiUrl("/api/auth/user"), { credentials: "include" })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (cancelled) return;
-        if (data?.tag) setAffiliateTag(data.tag);
+        const tag = String(data?.affiliateTag || "").trim();
+        if (tag && !/^user\d{4}$/i.test(tag)) setAffiliateTag(tag);
       })
       .catch(() => {});
 
@@ -350,11 +351,23 @@ function Router() {
             <Route path="/city/:city" component={CityLanding} />
             <Route path="/city/:city/:mode" component={CityDiscoveryPage} />
             <Route path="/city/:city/food" component={PublicSeoLandingPage} />
-            <Route path="/food-trucks-today/:city" component={PublicSeoLandingPage} />
+            <Route
+              path="/food-trucks-today/:city"
+              component={PublicSeoLandingPage}
+            />
             <Route path="/deals-today/:city" component={PublicSeoLandingPage} />
-            <Route path="/events-today/:city" component={PublicSeoLandingPage} />
-            <Route path="/cuisine/:cuisine/:city" component={PublicSeoLandingPage} />
-            <Route path="/locations-with-trucks/:city" component={PublicSeoLandingPage} />
+            <Route
+              path="/events-today/:city"
+              component={PublicSeoLandingPage}
+            />
+            <Route
+              path="/cuisine/:cuisine/:city"
+              component={PublicSeoLandingPage}
+            />
+            <Route
+              path="/locations-with-trucks/:city"
+              component={PublicSeoLandingPage}
+            />
             <Route path="/terms-of-service" component={TermsOfService} />
             <Route path="/moderation-policy" component={ModerationPolicy} />
             <Route path="/privacy-policy" component={PrivacyPolicy} />
@@ -548,11 +561,23 @@ function Router() {
             <Route path="/city/:city" component={CityLanding} />
             <Route path="/city/:city/:mode" component={CityDiscoveryPage} />
             <Route path="/city/:city/food" component={PublicSeoLandingPage} />
-            <Route path="/food-trucks-today/:city" component={PublicSeoLandingPage} />
+            <Route
+              path="/food-trucks-today/:city"
+              component={PublicSeoLandingPage}
+            />
             <Route path="/deals-today/:city" component={PublicSeoLandingPage} />
-            <Route path="/events-today/:city" component={PublicSeoLandingPage} />
-            <Route path="/cuisine/:cuisine/:city" component={PublicSeoLandingPage} />
-            <Route path="/locations-with-trucks/:city" component={PublicSeoLandingPage} />
+            <Route
+              path="/events-today/:city"
+              component={PublicSeoLandingPage}
+            />
+            <Route
+              path="/cuisine/:cuisine/:city"
+              component={PublicSeoLandingPage}
+            />
+            <Route
+              path="/locations-with-trucks/:city"
+              component={PublicSeoLandingPage}
+            />
             <Route path="/terms-of-service" component={TermsOfService} />
             <Route path="/moderation-policy" component={ModerationPolicy} />
             <Route path="/privacy-policy" component={PrivacyPolicy} />

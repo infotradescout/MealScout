@@ -1,8 +1,8 @@
 /**
  * PHASE 7: Share Anything = Affiliate Link Middleware
- * 
+ *
  * Global middleware that appends ?ref=<userId> to any shared URL
- * 
+ *
  * Catches:
  * - Share links
  * - Copy link
@@ -13,8 +13,12 @@
  * - Home page
  */
 
-import { appendReferralParam } from './referralService';
-import { ensureAffiliateTag } from "./affiliateTagService";
+import { isDefaultLookingAffiliateTag } from "./affiliateTagService";
+import {
+  buildUniversalAttributedUrl,
+  isEligibleInternalShareTarget,
+  normalizeInternalShareTarget,
+} from "./shareTargetPolicy";
 
 function normalizeOrigin(value: unknown): string | null {
   const raw = String(value || "").trim();
@@ -78,7 +82,7 @@ export function resolveCanonicalShareOrigin(req?: {
 
 /**
  * Generate shareable URL with affiliate param
- * 
+ *
  * Can be used for:
  * - Restaurant pages: /restaurants/:id
  * - Deal pages: /deals/:id
@@ -92,24 +96,26 @@ export function generateShareableUrl(
   baseUrl: string,
   affiliateTag?: string,
 ): string {
-  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  const normalizedPath = normalizeInternalShareTarget(path);
   const normalizedBase = baseUrl.replace(/\/+$/, "");
-  // Build full URL
-  const fullUrl = normalizedBase.startsWith('http')
-    ? `${normalizedBase}${normalizedPath}`
-    : `${normalizedBase}${normalizedPath}`;
-
-  // Append affiliate param if user is logged in
-  if (!affiliateTag) {
-    return fullUrl;
+  if (!normalizedPath || !isEligibleInternalShareTarget(normalizedPath)) {
+    throw new Error("Invalid share target");
   }
 
-  return appendReferralParam(fullUrl, affiliateTag);
+  if (!affiliateTag || isDefaultLookingAffiliateTag(affiliateTag)) {
+    throw new Error("Affiliate tag required");
+  }
+
+  return buildUniversalAttributedUrl(
+    normalizedBase,
+    affiliateTag,
+    normalizedPath,
+  );
 }
 
 /**
  * Express middleware to add shareUrl to res.locals
- * 
+ *
  * Makes generateShareableUrl available in all route handlers
  * Usage: res.locals.generateShareableUrl(path)
  */
@@ -117,14 +123,13 @@ export function shareUrlMiddleware(req: any, res: any, next: any) {
   const baseUrl = resolveCanonicalShareOrigin(req);
 
   res.locals.generateShareableUrl = (path: string) => {
-    const tag = req.user?.affiliateTag || req.user?.id;
+    const tag = req.user?.affiliateTag;
     return generateShareableUrl(path, baseUrl, tag);
   };
 
   res.locals.appendAffiliateParam = (url: string) => {
-    const tag = req.user?.affiliateTag || req.user?.id;
-    if (!tag) return url;
-    return appendReferralParam(url, tag);
+    const tag = req.user?.affiliateTag;
+    return generateShareableUrl(url, baseUrl, tag);
   };
 
   next();
@@ -132,19 +137,18 @@ export function shareUrlMiddleware(req: any, res: any, next: any) {
 
 /**
  * API endpoint to generate share links
- * 
+ *
  * Called by frontend when user clicks share
  */
 export async function generateShareLink(
   path: string,
   baseUrl: string,
-  userId?: string,
+  affiliateTag?: string,
 ): Promise<{
   shareLink: string;
   shortPath: string;
 }> {
-  const tag = userId ? await ensureAffiliateTag(userId) : undefined;
-  const shareLink = generateShareableUrl(path, baseUrl, tag);
+  const shareLink = generateShareableUrl(path, baseUrl, affiliateTag);
 
   return {
     shareLink,

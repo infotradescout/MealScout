@@ -1,6 +1,16 @@
 import type { Express } from "express";
 
+import {
+  isAffiliateTagValid,
+  isDefaultLookingAffiliateTag,
+  resolveAffiliateUserId,
+} from "../affiliateTagService";
 import { getMapEndpointWatchdogSnapshot } from "../mapEndpointWatchdog";
+import { recordReferralClick } from "../referralService";
+import {
+  isEligibleInternalShareTarget,
+  normalizeInternalShareTarget,
+} from "../shareTargetPolicy";
 import { storage } from "../storage";
 import { isAdmin, isAuthenticated } from "../unifiedAuth";
 
@@ -110,10 +120,62 @@ export function registerSystemUtilityRoutes(
     findIncidentHandler(incidentRoutes, "/cron/escalations"),
   );
 
-  app.get("/ref/:tag", (req, res) => {
-    const tag = req.params?.tag || "";
-    const safeTag = encodeURIComponent(tag);
-    res.redirect(`/scout?ref=${safeTag}`);
+  app.get("/ref/:tag", async (req, res) => {
+    const tag = String(req.params?.tag || "")
+      .trim()
+      .toLowerCase();
+    const targetPath = normalizeInternalShareTarget(req.query?.to);
+
+    if (
+      !tag ||
+      !isAffiliateTagValid(tag) ||
+      isDefaultLookingAffiliateTag(tag)
+    ) {
+      return res.status(404).send("Referral link not found");
+    }
+
+    if (!targetPath || !isEligibleInternalShareTarget(targetPath)) {
+      return res.status(400).send("Referral destination unavailable");
+    }
+
+    try {
+      const affiliateUserId = await resolveAffiliateUserId(tag);
+      if (!affiliateUserId) {
+        return res.status(404).send("Referral link not found");
+      }
+
+      const result = await recordReferralClick(
+        affiliateUserId,
+        req.originalUrl ||
+          `/ref/${encodeURIComponent(tag)}?to=${encodeURIComponent(targetPath)}`,
+        req.get("user-agent") || undefined,
+        req.ip || undefined,
+      );
+
+      res.cookie("referralId", tag, {
+        maxAge: 1000 * 60 * 60 * 24 * 365,
+        httpOnly: false,
+        sameSite: "lax",
+      });
+      if (result?.referralId) {
+        res.cookie("referralRecordId", result.referralId, {
+          maxAge: 1000 * 60 * 60 * 24 * 365,
+          httpOnly: true,
+          sameSite: "lax",
+        });
+      }
+    } catch (error) {
+      console.error(
+        "[affiliate] Failed to record universal referral click:",
+        error,
+      );
+    }
+
+    const redirectUrl = new URL(targetPath, "https://www.mealscout.us");
+    redirectUrl.searchParams.set("ref", tag);
+    res.redirect(
+      `${redirectUrl.pathname}${redirectUrl.search}${redirectUrl.hash}`,
+    );
   });
 
   app.post(

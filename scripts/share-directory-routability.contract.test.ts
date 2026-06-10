@@ -1,11 +1,17 @@
 import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
-import { generateShareableUrl, resolveCanonicalShareOrigin } from "../server/shareMiddleware";
+import {
+  generateShareableUrl,
+  resolveCanonicalShareOrigin,
+} from "../server/shareMiddleware";
 
 const shareHub = readFileSync("client/src/components/share-hub.tsx", "utf8");
 const appRoutes = readFileSync("client/src/App.tsx", "utf8");
 const shareRoutes = readFileSync("server/shareRoutes.ts", "utf8");
-const systemRoutes = readFileSync("server/routes/systemUtilityRoutes.ts", "utf8");
+const systemRoutes = readFileSync(
+  "server/routes/systemUtilityRoutes.ts",
+  "utf8",
+);
 
 const hrefs = Array.from(shareHub.matchAll(/href:\s*(["'`])([^"'`]+)\1/g))
   .map((match) => match[2])
@@ -14,7 +20,9 @@ const hrefs = Array.from(shareHub.matchAll(/href:\s*(["'`])([^"'`]+)\1/g))
 assert(hrefs.length > 0, "Share Hub href extraction must find public hrefs.");
 
 const registeredRouteSnippets = [
-  ...Array.from(appRoutes.matchAll(/<Route[\s\S]*?path="([^"]+)"/g)).map((match) => match[1]),
+  ...Array.from(appRoutes.matchAll(/<Route[\s\S]*?path="([^"]+)"/g)).map(
+    (match) => match[1],
+  ),
   "/ref/:tag",
 ];
 
@@ -32,20 +40,31 @@ function routeMatches(href: string): boolean {
     const pathParts = path.split("/").filter(Boolean);
     return (
       routeParts.length === pathParts.length &&
-      routeParts.every((part, index) => part.startsWith(":") || part === pathParts[index])
+      routeParts.every(
+        (part, index) => part.startsWith(":") || part === pathParts[index],
+      )
     );
   });
 }
 
 for (const href of hrefs) {
-  assert.equal(routeMatches(href), true, `Share Hub href must be routable: ${href}`);
+  assert.equal(
+    routeMatches(href),
+    true,
+    `Share Hub href must be routable: ${href}`,
+  );
 }
 
-assert(appRoutes.includes('"/ref/"'), "App public route prefix must include /ref/.");
+assert(
+  appRoutes.includes('"/ref/"'),
+  "App public route prefix must include /ref/.",
+);
 assert(appRoutes.includes('path="/ref/:tag"'), "App must register /ref/:tag.");
 assert(
-  systemRoutes.includes("res.redirect(`/scout?ref=${safeTag}`)"),
-  "Server /ref/:tag redirect must land on Scout with the ref.",
+  systemRoutes.includes("normalizeInternalShareTarget(req.query?.to)") &&
+    systemRoutes.includes("isEligibleInternalShareTarget(targetPath)") &&
+    systemRoutes.includes('redirectUrl.searchParams.set("ref", tag)'),
+  "Server /ref/:tag redirect must validate the target and preserve attribution.",
 );
 
 const previous = {
@@ -68,7 +87,11 @@ const origin = resolveCanonicalShareOrigin({
 });
 assert.equal(origin, "https://www.mealscout.us");
 const shareLink = generateShareableUrl("/scout", origin, "sample-tag");
-assert.equal(shareLink.startsWith("https://www.mealscout.us/scout"), true);
+assert.equal(
+  shareLink.startsWith("https://www.mealscout.us/ref/sample-tag?to="),
+  true,
+);
+assert.equal(shareLink.includes("to=%2Fscout"), true);
 assert.equal(shareLink.includes("mealscout.onrender.com"), false);
 assert(
   shareRoutes.includes("resolveCanonicalShareOrigin(req)"),

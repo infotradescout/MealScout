@@ -1,0 +1,133 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+
+import { generateShareableUrl } from "../server/shareMiddleware";
+import {
+  buildUniversalAttributedPath,
+  isEligibleInternalShareTarget,
+  normalizeInternalShareTarget,
+} from "../server/shareTargetPolicy";
+
+const shareRoutes = readFileSync("server/shareRoutes.ts", "utf8");
+const systemRoutes = readFileSync(
+  "server/routes/systemUtilityRoutes.ts",
+  "utf8",
+);
+const shareHub = readFileSync("client/src/components/share-hub.tsx", "utf8");
+const doctrine = readFileSync("MEALSCOUT_UI_DOCTRINE.md", "utf8");
+
+const validTargets = [
+  "/p/truck/t1/taco-bandito",
+  "/restaurant/letty-b-smokehouse",
+  "/contractors/bobs-roofing",
+  "/request/start",
+  "/claim-provider",
+  "/booking/start",
+  "/landing",
+  "/customer-signup?role=business",
+];
+
+for (const target of validTargets) {
+  assert.equal(
+    isEligibleInternalShareTarget(target),
+    true,
+    `eligible public internal target should be allowed: ${target}`,
+  );
+}
+
+const unsafeTargets = [
+  "",
+  "/",
+  "https://external.example/path",
+  "//evil.example/path",
+  "/admin/dashboard",
+  "/staff",
+  "/api/auth/user",
+  "/ref/user9968",
+  "/ref/user9968?ref=user9968",
+];
+
+for (const target of unsafeTargets) {
+  assert.equal(
+    isEligibleInternalShareTarget(target),
+    false,
+    `unsafe target should be refused: ${target}`,
+  );
+}
+
+assert.equal(normalizeInternalShareTarget("/scout?q=tacos"), "/scout?q=tacos");
+assert.equal(
+  normalizeInternalShareTarget("https://external.example/path"),
+  null,
+);
+assert.equal(
+  buildUniversalAttributedPath("traci", "/request/start"),
+  "/ref/traci?to=%2Frequest%2Fstart",
+);
+
+const shareUrl = generateShareableUrl(
+  "/contractors/bobs-roofing",
+  "https://www.mealscout.us",
+  "traci",
+);
+assert.equal(
+  shareUrl,
+  "https://www.mealscout.us/ref/traci?to=%2Fcontractors%2Fbobs-roofing",
+);
+
+assert.throws(() =>
+  generateShareableUrl("/admin/dashboard", "https://www.mealscout.us", "traci"),
+);
+assert.throws(() =>
+  generateShareableUrl("/scout", "https://www.mealscout.us", undefined),
+);
+assert.throws(() =>
+  generateShareableUrl("/scout", "https://www.mealscout.us", "user1234"),
+);
+
+assert(
+  shareRoutes.includes("return res.status(409).json({") &&
+    shareRoutes.includes("users.affiliateTag") &&
+    shareRoutes.includes("isDefaultLookingAffiliateTag(affiliateTag)") &&
+    !shareRoutes.includes("/api/restaurants/my") &&
+    !shareRoutes.includes("restaurantId"),
+  "Share generation must use authenticated tag state and must not require destination ownership.",
+);
+
+assert(
+  shareRoutes.includes("buildUniversalAttributedUrl(") &&
+    !shareRoutes.includes("commission") &&
+    !shareRoutes.includes("payout") &&
+    !shareRoutes.includes("stripe"),
+  "Universal share generation must stay separated from payout/payment logic.",
+);
+
+assert(
+  systemRoutes.includes('app.get("/ref/:tag"') &&
+    systemRoutes.includes("resolveAffiliateUserId(tag)") &&
+    systemRoutes.includes("recordReferralClick(") &&
+    systemRoutes.includes("isEligibleInternalShareTarget(targetPath)") &&
+    systemRoutes.includes('redirectUrl.searchParams.set("ref", tag)'),
+  "/ref/:tag must validate tag and target, record click attribution, and redirect safely.",
+);
+
+assert(
+  shareHub.includes('fetch("/api/auth/user"') &&
+    !shareHub.includes('fetch("/api/affiliate/tag"') &&
+    !shareHub.includes("/api/restaurants/my") &&
+    shareHub.includes("Set your share tag before sharing tracked links."),
+  "Share Hub must use existing auth tag state and not create tags or require owned destinations.",
+);
+
+assert(
+  doctrine.includes(
+    "Every eligible internal link shared by an authenticated user",
+  ) &&
+    doctrine.includes("destination ownership is not required") &&
+    doctrine.includes("Destination validity is required") &&
+    doctrine.includes("/ref/<tag>?to=<safe-internal-path>") &&
+    doctrine.includes("tracking separate from payout"),
+  "Doctrine must encode universal authenticated share attribution.",
+);
+
+console.log("universal-authenticated-share-attribution.contract: PASS");

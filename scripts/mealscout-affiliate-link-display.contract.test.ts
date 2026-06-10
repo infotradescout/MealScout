@@ -10,12 +10,16 @@ const requiredDashboardSnippets = [
   "const profilePath = getAdminUserPublicProfilePath(user, attachedHostProfile);",
   "if (!tag) return null;",
   "https://www.mealscout.us",
-  "url.searchParams.set(\"ref\", tag);",
+  "const url = new URL(",
+  "`/ref/${encodeURIComponent(tag)}`",
+  "canonicalMealScoutOrigin",
+  'url.searchParams.set("to", profilePath);',
   "Affiliate Link",
   "No affiliate link assigned",
   "Copy Link",
   "Open Link",
-  "navigator.clipboard.writeText(affiliateLink)",
+  "navigator.clipboard.writeText(",
+  "affiliateLink",
   "window.open(",
   "data-testid={`button-copy-affiliate-link-${selectedUser.id}`}",
   "data-testid={`button-open-affiliate-link-${selectedUser.id}`}",
@@ -28,13 +32,20 @@ for (const snippet of requiredDashboardSnippets) {
 }
 
 if (dashboard.includes("Affiliate Tag")) {
-  throw new Error("Admin dashboard primary UI must not label the field Affiliate Tag");
+  throw new Error(
+    "Admin dashboard primary UI must not label the field Affiliate Tag",
+  );
 }
 
 const linkLabelIndex = dashboard.indexOf("Affiliate Link");
-const rawTagRenderIndex = dashboard.indexOf("{selectedUser.affiliateTag}", linkLabelIndex);
+const rawTagRenderIndex = dashboard.indexOf(
+  "{selectedUser.affiliateTag}",
+  linkLabelIndex,
+);
 if (rawTagRenderIndex !== -1) {
-  throw new Error("Raw affiliate tag must not be the primary displayed affiliate value");
+  throw new Error(
+    "Raw affiliate tag must not be the primary displayed affiliate value",
+  );
 }
 
 const emptyStateIndex = dashboard.indexOf("No affiliate link assigned");
@@ -44,7 +55,9 @@ if (emptyStateIndex === -1) {
 
 for (const fakeFallback of ["userXXXX", "user8530", "No tag"]) {
   if (dashboard.includes(fakeFallback)) {
-    throw new Error(`Admin dashboard must not render fake affiliate link fallback: ${fakeFallback}`);
+    throw new Error(
+      `Admin dashboard must not render fake affiliate link fallback: ${fakeFallback}`,
+    );
   }
 }
 
@@ -64,24 +77,31 @@ const dashboardMutationSurface = dashboard.slice(
 );
 for (const snippet of forbiddenMutationSnippets) {
   if (dashboardMutationSurface.includes(snippet)) {
-    throw new Error(`Affiliate link display helper must not touch mutation/payout logic: ${snippet}`);
+    throw new Error(
+      `Affiliate link display helper must not touch mutation/payout logic: ${snippet}`,
+    );
   }
 }
 
-const routeRequiredSnippets = [
-  "appendReferralParam",
-  "ref",
-  "affiliateTag",
-];
+const routeRequiredSnippets = ["appendReferralParam", "ref", "affiliateTag"];
 
 for (const snippet of routeRequiredSnippets) {
-  if (!affiliateRoutes.includes(snippet) && !affiliateService.includes(snippet)) {
-    throw new Error(`Existing attribution support must remain discoverable: ${snippet}`);
+  if (
+    !affiliateRoutes.includes(snippet) &&
+    !affiliateService.includes(snippet)
+  ) {
+    throw new Error(
+      `Existing attribution support must remain discoverable: ${snippet}`,
+    );
   }
 }
 
-const c5cStart = cleanupMap.indexOf("## C5C - Affiliate Link Display Correction");
-const c6Start = cleanupMap.indexOf("## C6 - Parking Pass Page Decomposition Map");
+const c5cStart = cleanupMap.indexOf(
+  "## C5C - Affiliate Link Display Correction",
+);
+const c6Start = cleanupMap.indexOf(
+  "## C6 - Parking Pass Page Decomposition Map",
+);
 const c5cSection =
   c5cStart >= 0
     ? cleanupMap.slice(c5cStart, c6Start >= 0 ? c6Start : cleanupMap.length)
@@ -104,7 +124,9 @@ const requiredDisallowedScope = [
 
 for (const phrase of requiredDisallowedScope) {
   if (!c5cSection.toLowerCase().includes(phrase.toLowerCase())) {
-    throw new Error(`C5C must explicitly disallow feature/mutation scope: ${phrase}`);
+    throw new Error(
+      `C5C must explicitly disallow feature/mutation scope: ${phrase}`,
+    );
   }
 }
 

@@ -4,11 +4,20 @@ const audit = readFileSync("MEALSCOUT_ROLE_ADMIN_DISPLAY_AUDIT.md", "utf8");
 const cleanupMap = readFileSync("CLEANUP_MAP.md", "utf8");
 const roleAccess = readFileSync("server/roleAccess.ts", "utf8");
 const unifiedAuth = readFileSync("server/unifiedAuth.ts", "utf8");
-const adminDashboard = readFileSync("client/src/pages/admin-dashboard.tsx", "utf8");
+const adminDashboard = readFileSync(
+  "client/src/pages/admin-dashboard.tsx",
+  "utf8",
+);
 const useAuth = readFileSync("client/src/hooks/useAuth.ts", "utf8");
-const dashboardSwitcher = readFileSync("client/src/components/dashboard-switcher.tsx", "utf8");
+const dashboardSwitcher = readFileSync(
+  "client/src/components/dashboard-switcher.tsx",
+  "utf8",
+);
 const adminRoutes = readFileSync("server/adminRoutes.ts", "utf8");
-const adminManagementRoutes = readFileSync("server/routes/adminManagementRoutes.ts", "utf8");
+const adminManagementRoutes = readFileSync(
+  "server/routes/adminManagementRoutes.ts",
+  "utf8",
+);
 
 const canonicalUserTypes = [
   "customer",
@@ -25,7 +34,9 @@ const canonicalUserTypes = [
 
 for (const role of canonicalUserTypes) {
   if (!roleAccess.includes(`"${role}"`)) {
-    throw new Error(`server/roleAccess.ts must include canonical user type: ${role}`);
+    throw new Error(
+      `server/roleAccess.ts must include canonical user type: ${role}`,
+    );
   }
   if (!audit.includes(`\`${role}\``)) {
     throw new Error(`Audit doc must inventory canonical user type: ${role}`);
@@ -57,23 +68,25 @@ for (const snippet of requiredAuditSnippets) {
 
 const requiredDashboardSnippets = [
   "const businessBearingUserTypes = new Set([",
-  "\"event_coordinator\"",
-  "if (!isBusinessBearingUserType(userType)) return \"not_required\";",
+  '"event_coordinator"',
+  'if (!isBusinessBearingUserType(userType)) return "not_required";',
   "{isBusinessBearingUserType(user.userType) && (",
   "{canSendMonthlySubscriptionLink(user.userType) && (",
-  "<option value=\"customer\">Customer</option>",
-  "<option value=\"restaurant_owner\">Restaurant Owner</option>",
-  "<option value=\"food_truck\">Food Truck</option>",
-  "<option value=\"host\">Host</option>",
-  "<option value=\"event_coordinator\">",
-  "<option value=\"staff\">Staff</option>",
-  "<option value=\"admin\">Admin</option>",
-  "<option value=\"duper_admin\">Duper Admin</option>",
-  "<option value=\"super_admin\">Super Admin</option>",
-  "event_coordinator: { userType: \"event_coordinator\"",
+  '<option value="customer">Customer</option>',
+  '<option value="restaurant_owner">Restaurant Owner</option>',
+  '<option value="food_truck">Food Truck</option>',
+  '<option value="host">Host</option>',
+  '<option value="event_coordinator">',
+  '<option value="staff">Staff</option>',
+  '<option value="admin">Admin</option>',
+  '<option value="duper_admin">Duper Admin</option>',
+  '<option value="super_admin">Super Admin</option>',
+  'event_coordinator: { userType: "event_coordinator"',
   "const buildCanonicalAffiliateLink = (",
-  "const url = new URL(\"/\", canonicalMealScoutOrigin);",
-  "url.searchParams.set(\"ref\", tag);",
+  "const url = new URL(",
+  "`/ref/${encodeURIComponent(tag)}`",
+  "canonicalMealScoutOrigin",
+  'url.searchParams.set("to", profilePath);',
   "Affiliate Link",
   "Copy Link",
   "Open Link",
@@ -86,62 +99,97 @@ for (const snippet of requiredDashboardSnippets) {
   }
 }
 
-const affiliateBuilderIndex = adminDashboard.indexOf("const buildCanonicalAffiliateLink = (");
+const affiliateBuilderIndex = adminDashboard.indexOf(
+  "const buildCanonicalAffiliateLink = (",
+);
 const affiliateBuilderSlice = adminDashboard.slice(
   affiliateBuilderIndex,
-  adminDashboard.indexOf("const getSafeAuthProviderLabel", affiliateBuilderIndex),
+  adminDashboard.indexOf(
+    "const getSafeAuthProviderLabel",
+    affiliateBuilderIndex,
+  ),
 );
 if (
   affiliateBuilderIndex === -1 ||
-  !affiliateBuilderSlice.includes("const url = new URL(\"/\", canonicalMealScoutOrigin);") ||
-  affiliateBuilderSlice.includes("getAdminUserPublicProfilePath(") ||
-  affiliateBuilderSlice.includes("/p/truck") ||
-  affiliateBuilderSlice.includes("/p/restaurant") ||
-  affiliateBuilderSlice.includes("/p/location") ||
+  !affiliateBuilderSlice.includes(
+    "const profilePath = getAdminUserPublicProfilePath(user, attachedHostProfile);",
+  ) ||
+  !affiliateBuilderSlice.includes("const url = new URL(") ||
+  !affiliateBuilderSlice.includes("`/ref/${encodeURIComponent(tag)}`") ||
+  !affiliateBuilderSlice.includes("canonicalMealScoutOrigin") ||
+  !affiliateBuilderSlice.includes('url.searchParams.set("to", profilePath);') ||
   affiliateBuilderSlice.includes("/admin/dashboard") ||
   affiliateBuilderSlice.includes("focusUser")
 ) {
-  throw new Error("Admin primary Affiliate Link must use root ?ref URL, not profile/admin paths");
+  throw new Error(
+    "Admin primary Affiliate Link must use universal /ref/:tag?to=<profile> wrapper, not admin paths",
+  );
 }
 
 const forbiddenDashboardSnippets = [
-  "\"business_owner\"",
-  "return \"business_owner\"",
-  "<option value=\"event_organizer\">",
-  "userType: \"event_organizer\"",
-  "<option value=\"restaurant_owner\">Business Owner</option>",
-  "<option value=\"food_truck\">Business Owner (Truck)</option>",
+  '"business_owner"',
+  'return "business_owner"',
+  '<option value="event_organizer">',
+  'userType: "event_organizer"',
+  '<option value="restaurant_owner">Business Owner</option>',
+  '<option value="food_truck">Business Owner (Truck)</option>',
   "Affiliate Tag",
 ];
 
 for (const snippet of forbiddenDashboardSnippets) {
   if (adminDashboard.includes(snippet)) {
-    throw new Error(`Admin dashboard must not contain stale role/display snippet: ${snippet}`);
+    throw new Error(
+      `Admin dashboard must not contain stale role/display snippet: ${snippet}`,
+    );
   }
 }
 
-if (!adminRoutes.includes("event_coordinator: { userType: \"event_coordinator\", businessType: \"event_organizer\" }")) {
-  throw new Error("server/adminRoutes.ts must map event coordinator account type to canonical event_coordinator userType");
+if (
+  !adminRoutes.includes(
+    'event_coordinator: { userType: "event_coordinator", businessType: "event_organizer" }',
+  )
+) {
+  throw new Error(
+    "server/adminRoutes.ts must map event coordinator account type to canonical event_coordinator userType",
+  );
 }
 
-if (!adminManagementRoutes.includes("event_coordinator: { userType: \"event_coordinator\", businessType: \"event_organizer\" }")) {
-  throw new Error("server/routes/adminManagementRoutes.ts must map event coordinator account type to canonical event_coordinator userType");
+if (
+  !adminManagementRoutes.includes(
+    'event_coordinator: { userType: "event_coordinator", businessType: "event_organizer" }',
+  )
+) {
+  throw new Error(
+    "server/routes/adminManagementRoutes.ts must map event coordinator account type to canonical event_coordinator userType",
+  );
 }
 
 for (const source of [adminRoutes, adminManagementRoutes]) {
-  if (source.includes("userType: \"event_organizer\"")) {
-    throw new Error("Admin provisioning routes must not emit event_organizer as users.userType");
+  if (source.includes('userType: "event_organizer"')) {
+    throw new Error(
+      "Admin provisioning routes must not emit event_organizer as users.userType",
+    );
   }
 }
 
 const continuationBlockStart = useAuth.indexOf("const setupOnlyRoutes =");
-const continuationBlockEnd = useAuth.indexOf("if (!setupOnlyRoutes) return;", continuationBlockStart);
+const continuationBlockEnd = useAuth.indexOf(
+  "if (!setupOnlyRoutes) return;",
+  continuationBlockStart,
+);
 if (continuationBlockStart === -1 || continuationBlockEnd === -1) {
-  throw new Error("useAuth business onboarding continuation block must remain discoverable");
+  throw new Error(
+    "useAuth business onboarding continuation block must remain discoverable",
+  );
 }
-const continuationBlock = useAuth.slice(continuationBlockStart, continuationBlockEnd);
-if (continuationBlock.includes("pathname.startsWith(\"/parking-pass\")")) {
-  throw new Error("Parking Pass must not be globally blocked by business onboarding redirect");
+const continuationBlock = useAuth.slice(
+  continuationBlockStart,
+  continuationBlockEnd,
+);
+if (continuationBlock.includes('pathname.startsWith("/parking-pass")')) {
+  throw new Error(
+    "Parking Pass must not be globally blocked by business onboarding redirect",
+  );
 }
 
 if (!unifiedAuth.includes("event_coordinator")) {
@@ -149,12 +197,18 @@ if (!unifiedAuth.includes("event_coordinator")) {
 }
 
 if (!dashboardSwitcher.includes("/parking-pass?adminMode=host")) {
-  throw new Error("dashboard switcher must keep Parking Pass host/operator lane discoverable");
+  throw new Error(
+    "dashboard switcher must keep Parking Pass host/operator lane discoverable",
+  );
 }
 
 const c5Start = cleanupMap.indexOf("## C5 - Launch Board SQL Safety Map");
-const c5bStart = cleanupMap.indexOf("## C5B - Code-Derived Role + Admin Display Audit");
-const c6Start = cleanupMap.indexOf("## C6 - Parking Pass Page Decomposition Map");
+const c5bStart = cleanupMap.indexOf(
+  "## C5B - Code-Derived Role + Admin Display Audit",
+);
+const c6Start = cleanupMap.indexOf(
+  "## C6 - Parking Pass Page Decomposition Map",
+);
 if (c5Start === -1 || c5bStart === -1 || c6Start === -1) {
   throw new Error("CLEANUP_MAP.md must include C5, C5B, and C6");
 }

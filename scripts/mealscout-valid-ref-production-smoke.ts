@@ -94,7 +94,15 @@ function isValidPublicShareTarget(input: string): boolean {
     pathname.startsWith("/scout") ||
     pathname.startsWith("/restaurant/") ||
     pathname.startsWith("/truck/") ||
-    pathname.startsWith("/location/")
+    pathname.startsWith("/location/") ||
+    pathname.startsWith("/request/") ||
+    pathname.startsWith("/claim-provider") ||
+    pathname.startsWith("/claim-truck") ||
+    pathname.startsWith("/booking/") ||
+    pathname.startsWith("/contractors/") ||
+    pathname.startsWith("/providers/") ||
+    pathname.startsWith("/landing") ||
+    pathname.startsWith("/customer-signup")
   );
 }
 
@@ -313,8 +321,8 @@ async function main(): Promise<void> {
       const passed =
         generated.status === 200 &&
         shareLink.startsWith("https://www.mealscout.us/") &&
-        shareLink.includes(publicTargetPath.split(/[?#]/, 1)[0]) &&
-        shareLink.includes(`ref=${encodeURIComponent(expectedTag)}`) &&
+        shareLink.includes(`/ref/${encodeURIComponent(expectedTag)}`) &&
+        shareLink.includes(`to=${encodeURIComponent(publicTargetPath)}`) &&
         !/\/ref\/([^/?#]+)[^#]*[?&]ref=\1(?:&|#|$)/i.test(shareLink) &&
         !/^https:\/\/meal-scout\.vercel\.app\//i.test(shareLink);
       evidence.checks.push({

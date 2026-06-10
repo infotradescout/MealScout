@@ -1,14 +1,23 @@
 import { readFileSync } from "node:fs";
 
 const doctrine = readFileSync("MEALSCOUT_UI_DOCTRINE.md", "utf8");
-const lifecycleAudit = readFileSync("MEALSCOUT_ACCOUNT_LIFECYCLE_DISCOVERY_AUDIT.md", "utf8");
+const lifecycleAudit = readFileSync(
+  "MEALSCOUT_ACCOUNT_LIFECYCLE_DISCOVERY_AUDIT.md",
+  "utf8",
+);
 const adminAffiliateAudit = readFileSync(
   "MEALSCOUT_ADMIN_USER_AFFILIATE_MANAGEMENT_AUDIT.md",
   "utf8",
 );
-const affiliateEarnings = readFileSync("client/src/pages/AffiliateEarnings.tsx", "utf8");
+const affiliateEarnings = readFileSync(
+  "client/src/pages/AffiliateEarnings.tsx",
+  "utf8",
+);
 const shareHub = readFileSync("client/src/components/share-hub.tsx", "utf8");
-const publicProfile = readFileSync("client/src/pages/public-profile.tsx", "utf8");
+const publicProfile = readFileSync(
+  "client/src/pages/public-profile.tsx",
+  "utf8",
+);
 
 const requireIncludes = (source: string, snippet: string, message: string) => {
   if (!source.includes(snippet)) throw new Error(message);
@@ -31,8 +40,17 @@ const requireExcludes = (source: string, snippet: string, message: string) => {
   "Report issue",
   "Submit evidence",
   "Do not use `role=affiliate` signup or routing.",
+  "Every eligible internal link shared by an authenticated user can become an attributed share link.",
+  "destination ownership is not required",
+  "Destination validity is required",
+  "/ref/<tag>?to=<safe-internal-path>",
+  "tracking separate from payout",
 ].forEach((snippet) =>
-  requireIncludes(doctrine, snippet, `Doctrine missing required snippet: ${snippet}`),
+  requireIncludes(
+    doctrine,
+    snippet,
+    `Doctrine missing required snippet: ${snippet}`,
+  ),
 );
 
 [
@@ -48,7 +66,11 @@ const requireExcludes = (source: string, snippet: string, message: string) => {
   "Admin user card",
   "Scout/discovery",
 ].forEach((snippet) =>
-  requireIncludes(doctrine, snippet, `Role/capability matrix missing: ${snippet}`),
+  requireIncludes(
+    doctrine,
+    snippet,
+    `Role/capability matrix missing: ${snippet}`,
+  ),
 );
 
 requireIncludes(
@@ -85,8 +107,8 @@ requireIncludes(
 
 requireIncludes(
   shareHub,
-  'fetch("/api/affiliate/tag"',
-  "Share Hub must derive sharing from affiliate tag state.",
+  'fetch("/api/auth/user"',
+  "Share Hub must derive sharing from existing authenticated affiliate tag state.",
 );
 requireIncludes(
   shareHub,

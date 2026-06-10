@@ -58,6 +58,12 @@ assert(
 assert(
   runner.includes('shareLink.startsWith("https://www.mealscout.us/")') &&
     runner.includes(
+      "shareLink.includes(`/ref/${encodeURIComponent(expectedTag)}`)",
+    ) &&
+    runner.includes(
+      "shareLink.includes(`to=${encodeURIComponent(publicTargetPath)}`)",
+    ) &&
+    runner.includes(
       "!/^https:\\/\\/meal-scout\\.vercel\\.app\\//i.test(shareLink)",
     ) &&
     runner.includes("!/\\/ref\\/([^/?#]+)[^#]*[?&]ref=\\1"),
@@ -69,7 +75,8 @@ assert(
     "Full valid-ref production acceptance is blocked",
   ) &&
     rolloutChecklist.includes("non-default affiliate tag") &&
-    rolloutChecklist.includes("real public profile/share target") &&
+    rolloutChecklist.includes("eligible public internal share target") &&
+    rolloutChecklist.includes("destination ownership is not required") &&
     rolloutChecklist.includes("Do not call `/api/affiliate/tag`") &&
     rolloutChecklist.includes("fail_closed_production_pass") &&
     rolloutChecklist.includes("valid_ref_acceptance_blocked") &&

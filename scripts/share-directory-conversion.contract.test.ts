@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
-const filePath = path.join(process.cwd(), "client/src/components/share-hub.tsx");
+const filePath = path.join(
+  process.cwd(),
+  "client/src/components/share-hub.tsx",
+);
 const source = readFileSync(filePath, "utf8");
 
 assert(
@@ -29,12 +32,12 @@ assert(
   "Share Hub must normalize and validate a real share target before link generation",
 );
 assert(
-  source.includes("ref: affiliateTag || undefined"),
-  "Tracked share generation must preserve affiliate/ref context",
+  !source.includes("ref: affiliateTag || undefined"),
+  "Tracked share generation must let the server derive attribution from the authenticated user",
 );
 
 assert(
-  source.includes("Affiliate tag unavailable — sharing disabled."),
+  source.includes("Set your share tag before sharing tracked links."),
   "Share Hub must show visible disabled-state copy when affiliate tag is unavailable",
 );
 
@@ -44,11 +47,11 @@ assert(
 );
 
 assert(
-  source.includes("!/[?&]ref=/.test(shareLink)"),
-  "Share Hub must reject generated links that are missing a referral tag",
+  source.includes("!/\\/ref\\/[^/?#]+[?&]to=/.test(shareLink)"),
+  "Share Hub must reject generated links that are missing universal referral target attribution",
 );
 assert(
-  source.includes('/\\/ref\\/([^/?#]+)[^#]*[?&]ref=\\1') &&
+  source.includes("/\\/ref\\/([^/?#]+)[^#]*[?&]ref=\\1") &&
     source.includes("meal-scout\\.vercel\\.app"),
   "Share Hub must reject legacy /ref/<tag>?ref=<tag> and old Vercel share links",
 );

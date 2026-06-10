@@ -37,20 +37,20 @@ function normalizeSharePath(input: string): string {
 
 export async function getAffiliateShareUrl(input: string): Promise<string> {
   if (typeof window === "undefined") {
-    throw new Error("Affiliate tag unavailable — sharing disabled.");
+    throw new Error("Set your share tag before sharing tracked links.");
   }
 
   const path = normalizeSharePath(input);
-  const storedRef = getStoredAffiliateRef();
 
   const res = await apiRequest("POST", "/api/share/generate", {
     path,
-    ref: storedRef || undefined,
   });
   const data = await res.json().catch(() => ({}));
   const shareLink = String(data?.shareLink || "").trim();
-  if (!shareLink || !/[?&]ref=/.test(shareLink)) {
-    throw new Error(data?.message || "Affiliate tag unavailable — sharing disabled.");
+  if (!shareLink || !/\/ref\/[^/?#]+[?&]to=/.test(shareLink)) {
+    throw new Error(
+      data?.message || "Set your share tag before sharing tracked links.",
+    );
   }
   return shareLink;
 }

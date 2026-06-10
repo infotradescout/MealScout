@@ -177,8 +177,12 @@ const buildCanonicalAffiliateLink = (
   const tag = String(affiliateTag || "").trim();
   if (!tag) return null;
   const profilePath = getAdminUserPublicProfilePath(user, attachedHostProfile);
-  const url = new URL(profilePath || "/", canonicalMealScoutOrigin);
-  url.searchParams.set("ref", tag);
+  if (!profilePath || profilePath === "/") return null;
+  const url = new URL(
+    `/ref/${encodeURIComponent(tag)}`,
+    canonicalMealScoutOrigin,
+  );
+  url.searchParams.set("to", profilePath);
   return url.toString();
 };
 

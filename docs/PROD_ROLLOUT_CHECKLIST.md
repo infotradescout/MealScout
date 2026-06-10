@@ -84,15 +84,15 @@ P3 guarded authenticated smoke runner:
 Affiliate valid-ref final smoke gate:
 
 - Fail-closed production share behavior may be accepted separately when missing refs return `409 affiliate_tag_required`, invalid refs return `409 affiliate_tag_required`, and stale `/ref/<tag>` targets return `409 share_target_required`.
-- Full valid-ref production acceptance is blocked until operators approve a dedicated production smoke account/session with a non-default affiliate tag, a real public profile/share target, and explicit final-smoke approval outside the repo.
+- Full valid-ref production acceptance is blocked until operators approve a dedicated production smoke account/session with a non-default affiliate tag, any eligible public internal share target, and explicit final-smoke approval outside the repo.
 - Do not use default-looking `userNNNN` tags, fake fallback tags, generated sample tags, or screenshots containing `userXXXX`, `user1234`, or `user9968` as valid-ref proof.
 - Do not call `/api/affiliate/tag` during final valid-ref smoke because it can create tag state silently.
 - Use `scripts/mealscout-valid-ref-production-smoke.ts` only after setting approved fixture env outside the repo. The runner distinguishes `fail_closed_production_pass`, `valid_ref_acceptance_blocked`, and `valid_ref_acceptance_complete`; fail-closed evidence alone must never be reported as full valid-ref acceptance.
 - Required valid-ref fixture evidence:
   - approved production smoke account/session
   - non-default affiliate tag
-  - real public profile/share target
-  - canonical generated link on `https://www.mealscout.us` with `?ref=<real-affiliate-tag>`
+  - eligible public internal share target; destination ownership is not required
+  - canonical generated link on `https://www.mealscout.us/ref/<real-affiliate-tag>?to=<safe-internal-path>`
   - no `/ref/<tag>?ref=<tag>` shape and no `meal-scout.vercel.app` host
 
 1. Supplier pay-intent idempotency (existing flow):

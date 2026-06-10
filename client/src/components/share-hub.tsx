@@ -1,5 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
@@ -20,7 +26,8 @@ const USER_ITEMS: ShareHubItem[] = [
   {
     key: "owner-signup",
     title: "1) Owner Signup",
-    description: "Primary link for restaurant owners and food truck operators to start.",
+    description:
+      "Primary link for restaurant owners and food truck operators to start.",
     href: "/customer-signup?role=business",
     audience: "Restaurant + Food Truck Owners",
     priority: 1,
@@ -30,7 +37,8 @@ const USER_ITEMS: ShareHubItem[] = [
   {
     key: "claim-truck",
     title: "2) Food Truck Claim",
-    description: "Direct page for food truck operators to claim and activate their profile.",
+    description:
+      "Direct page for food truck operators to claim and activate their profile.",
     href: "/claim-truck",
     audience: "Food Truck Owners",
     priority: 2,
@@ -40,7 +48,8 @@ const USER_ITEMS: ShareHubItem[] = [
   {
     key: "host-partner",
     title: "3) Host Location Signup",
-    description: "Direct intake page for non-food businesses with usable parking.",
+    description:
+      "Direct intake page for non-food businesses with usable parking.",
     href: "/host-signup",
     audience: "Potential Hosts",
     priority: 3,
@@ -78,6 +87,12 @@ const USER_ITEMS: ShareHubItem[] = [
 ];
 
 const STAFF_ADMIN_ITEMS: ShareHubItem[] = USER_ITEMS;
+const SHARE_UNAVAILABLE_MESSAGE =
+  "Set your share tag before sharing tracked links.";
+
+function isDefaultLookingAffiliateTag(tag: string): boolean {
+  return /^user\d{4}$/i.test(String(tag || "").trim());
+}
 
 function normalizeShareHubTargetPath(href: string): string | null {
   const raw = String(href || "").trim();
@@ -100,7 +115,8 @@ function normalizeShareHubTargetPath(href: string): string | null {
     pathname === "/ref" ||
     pathname.startsWith("/ref/") ||
     pathname.startsWith("/admin") ||
-    pathname.startsWith("/staff")
+    pathname.startsWith("/staff") ||
+    pathname.startsWith("/api")
   ) {
     return null;
   }
@@ -122,14 +138,16 @@ export default function ShareHub({
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/affiliate/tag", { credentials: "include" })
+    fetch("/api/auth/user", { credentials: "include" })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (cancelled) return;
-        if (data?.tag) {
-          setAffiliateTag(String(data.tag));
+        const tag = String(data?.affiliateTag || "").trim();
+        if (tag && !isDefaultLookingAffiliateTag(tag)) {
+          setAffiliateTag(tag);
           setAffiliateTagUnavailable(false);
         } else {
+          setAffiliateTag("");
           setAffiliateTagUnavailable(true);
         }
       })
@@ -150,7 +168,7 @@ export default function ShareHub({
   const generateTrackedShareUrl = async (href: string) => {
     const path = normalizeShareHubTargetPath(href);
     if (!path) {
-      throw new Error("Affiliate tag unavailable — sharing disabled.");
+      throw new Error(SHARE_UNAVAILABLE_MESSAGE);
     }
 
     const response = await fetch("/api/share/generate", {
@@ -159,22 +177,21 @@ export default function ShareHub({
       credentials: "include",
       body: JSON.stringify({
         path,
-        ref: affiliateTag || undefined,
       }),
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
-      throw new Error(data?.message || "Affiliate tag unavailable — sharing disabled.");
+      throw new Error(data?.message || SHARE_UNAVAILABLE_MESSAGE);
     }
     const shareLink = String(data?.shareLink || "").trim();
-    if (!shareLink || !/[?&]ref=/.test(shareLink)) {
-      throw new Error("Tracked share link missing affiliate tag.");
+    if (!shareLink || !/\/ref\/[^/?#]+[?&]to=/.test(shareLink)) {
+      throw new Error("Tracked share link missing attribution target.");
     }
     if (/\/ref\/([^/?#]+)[^#]*[?&]ref=\1(?:&|#|$)/i.test(shareLink)) {
-      throw new Error("Affiliate tag unavailable — sharing disabled.");
+      throw new Error(SHARE_UNAVAILABLE_MESSAGE);
     }
     if (/^https:\/\/meal-scout\.vercel\.app\//i.test(shareLink)) {
-      throw new Error("Affiliate tag unavailable — sharing disabled.");
+      throw new Error(SHARE_UNAVAILABLE_MESSAGE);
     }
     return shareLink;
   };
@@ -211,7 +228,7 @@ export default function ShareHub({
     } catch (error: any) {
       toast({
         title: "Sharing disabled",
-        description: error?.message || "Affiliate tag unavailable — sharing disabled.",
+        description: error?.message || SHARE_UNAVAILABLE_MESSAGE,
         variant: "destructive",
       });
       return;
@@ -236,7 +253,7 @@ export default function ShareHub({
     } catch (error: any) {
       toast({
         title: "Sharing disabled",
-        description: error?.message || "Affiliate tag unavailable — sharing disabled.",
+        description: error?.message || SHARE_UNAVAILABLE_MESSAGE,
         variant: "destructive",
       });
       return;
@@ -255,14 +272,16 @@ export default function ShareHub({
   };
 
   const shareLink = async (titleValue: string, href: string) => {
-    const item = items.find((entry) => entry.title === titleValue && entry.href === href);
+    const item = items.find(
+      (entry) => entry.title === titleValue && entry.href === href,
+    );
     let value = "";
     try {
       value = await generateTrackedShareUrl(href);
     } catch (error: any) {
       toast({
         title: "Sharing disabled",
-        description: error?.message || "Affiliate tag unavailable — sharing disabled.",
+        description: error?.message || SHARE_UNAVAILABLE_MESSAGE,
         variant: "destructive",
       });
       return;
@@ -293,7 +312,7 @@ export default function ShareHub({
       <CardContent>
         {affiliateTagUnavailable ? (
           <div className="mb-3 rounded-md border border-amber-300/50 bg-amber-100/40 p-3 text-xs text-amber-900">
-            Affiliate tag unavailable — sharing disabled.
+            {SHARE_UNAVAILABLE_MESSAGE}
           </div>
         ) : null}
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -311,7 +330,9 @@ export default function ShareHub({
                   <Badge variant="secondary">{item.audience}</Badge>
                 </div>
               </div>
-              <p className="mb-3 text-sm text-muted-foreground">{item.description}</p>
+              <p className="mb-3 text-sm text-muted-foreground">
+                {item.description}
+              </p>
               <div className="flex flex-wrap gap-2">
                 <Button
                   size="sm"
@@ -326,7 +347,9 @@ export default function ShareHub({
                   disabled={affiliateTagUnavailable || !affiliateTag}
                   onClick={async () => {
                     try {
-                      const trackedUrl = await generateTrackedShareUrl(item.href);
+                      const trackedUrl = await generateTrackedShareUrl(
+                        item.href,
+                      );
                       window.open(
                         trackedUrl,
                         item.href.startsWith("http") ? "_blank" : "_self",
@@ -339,7 +362,7 @@ export default function ShareHub({
                       toast({
                         title: "Sharing disabled",
                         description:
-                          error?.message || "Affiliate tag unavailable — sharing disabled.",
+                          error?.message || SHARE_UNAVAILABLE_MESSAGE,
                         variant: "destructive",
                       });
                     }
