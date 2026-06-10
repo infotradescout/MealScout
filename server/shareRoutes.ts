@@ -40,6 +40,35 @@ function inferShareResource(path: string): {
   return { resourceType, resourceId };
 }
 
+function normalizeShareTargetPath(value: unknown): string | null {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+
+  let path = raw;
+  if (/^https?:\/\//i.test(raw)) {
+    try {
+      const url = new URL(raw);
+      path = `${url.pathname}${url.search}${url.hash}`;
+    } catch {
+      return null;
+    }
+  }
+
+  if (!path.startsWith("/")) path = `/${path}`;
+  return path;
+}
+
+function isBlockedShareTargetPath(path: string): boolean {
+  const pathname = path.split(/[?#]/, 1)[0].toLowerCase();
+  return (
+    pathname === "/" ||
+    pathname.startsWith("/ref/") ||
+    pathname === "/ref" ||
+    pathname.startsWith("/admin") ||
+    pathname.startsWith("/staff")
+  );
+}
+
 export default function setupShareRoutes(app: Express) {
   /**
    * POST /api/share/generate
@@ -52,8 +81,17 @@ export default function setupShareRoutes(app: Express) {
     try {
       const { path, ref } = req.body;
 
-      if (!path) {
+      const sharePath = normalizeShareTargetPath(path);
+
+      if (!sharePath) {
         return res.status(400).json({ error: 'Path required' });
+      }
+
+      if (isBlockedShareTargetPath(sharePath)) {
+        return res.status(409).json({
+          error: "share_target_required",
+          message: "Affiliate tag unavailable — sharing disabled.",
+        });
       }
 
       const baseUrl = resolveCanonicalShareOrigin(req);
@@ -65,20 +103,20 @@ export default function setupShareRoutes(app: Express) {
         });
       }
 
-      const shareLink = generateShareableUrl(path, baseUrl, affiliate.affiliateTag);
+      const shareLink = generateShareableUrl(sharePath, baseUrl, affiliate.affiliateTag);
 
-      const resource = inferShareResource(path);
+      const resource = inferShareResource(sharePath);
       await db.insert(affiliateShareEvents).values({
         affiliateUserId: affiliate.affiliateUserId,
         resourceType: resource.resourceType,
         resourceId: resource.resourceId,
-        destinationUrl: path,
+        destinationUrl: sharePath,
         shareMethod: "link",
       });
 
       res.json({
         shareLink,
-        shortPath: path,
+        shortPath: sharePath,
         message: 'Share link generated',
       });
     } catch (error: any) {

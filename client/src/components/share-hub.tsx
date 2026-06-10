@@ -77,37 +77,35 @@ const USER_ITEMS: ShareHubItem[] = [
   },
 ];
 
-const STAFF_ADMIN_ITEMS: ShareHubItem[] = [
-  ...USER_ITEMS,
-  {
-    key: "staff-dashboard",
-    title: "Staff Dashboard",
-    description: "Account creation and host-location operations in one place.",
-    href: "/staff",
-    audience: "Internal",
-  },
-  {
-    key: "admin-dashboard",
-    title: "Admin Dashboard",
-    description: "Platform operations, moderation, imports, and host controls.",
-    href: "/admin/dashboard",
-    audience: "Internal",
-  },
-  {
-    key: "lisa",
-    title: "LISA Control Center",
-    description: "AI operations, traffic insights, and growth automation tools.",
-    href: "/admin/control-center",
-    audience: "Internal",
-  },
-  {
-    key: "admin-affiliates",
-    title: "Affiliate Manager",
-    description: "Manage referral tags and commission settings.",
-    href: "/admin/affiliates",
-    audience: "Internal",
-  },
-];
+const STAFF_ADMIN_ITEMS: ShareHubItem[] = USER_ITEMS;
+
+function normalizeShareHubTargetPath(href: string): string | null {
+  const raw = String(href || "").trim();
+  if (!raw) return null;
+
+  let path = raw;
+  if (/^https?:\/\//i.test(raw)) {
+    try {
+      const url = new URL(raw);
+      path = `${url.pathname}${url.search}${url.hash}`;
+    } catch {
+      return null;
+    }
+  }
+
+  if (!path.startsWith("/")) path = `/${path}`;
+  const pathname = path.split(/[?#]/, 1)[0].toLowerCase();
+  if (
+    pathname === "/" ||
+    pathname === "/ref" ||
+    pathname.startsWith("/ref/") ||
+    pathname.startsWith("/admin") ||
+    pathname.startsWith("/staff")
+  ) {
+    return null;
+  }
+  return path;
+}
 
 export default function ShareHub({
   mode,
@@ -146,24 +144,21 @@ export default function ShareHub({
 
   const items = useMemo(() => {
     const base = mode === "user" ? USER_ITEMS : STAFF_ADMIN_ITEMS;
-    if (!affiliateTag) return base;
-    const referralItem: ShareHubItem = {
-      key: "referral",
-      title: "My Referral Link",
-      description: "Use this one-click link to share and auto-credit referrals.",
-      href: `/ref/${affiliateTag}`,
-      audience: "All",
-    };
-    return [referralItem, ...base];
-  }, [mode, affiliateTag]);
+    return base;
+  }, [mode]);
 
   const generateTrackedShareUrl = async (href: string) => {
+    const path = normalizeShareHubTargetPath(href);
+    if (!path) {
+      throw new Error("Affiliate tag unavailable — sharing disabled.");
+    }
+
     const response = await fetch("/api/share/generate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
       body: JSON.stringify({
-        path: href,
+        path,
         ref: affiliateTag || undefined,
       }),
     });
@@ -174,6 +169,12 @@ export default function ShareHub({
     const shareLink = String(data?.shareLink || "").trim();
     if (!shareLink || !/[?&]ref=/.test(shareLink)) {
       throw new Error("Tracked share link missing affiliate tag.");
+    }
+    if (/\/ref\/([^/?#]+)[^#]*[?&]ref=\1(?:&|#|$)/i.test(shareLink)) {
+      throw new Error("Affiliate tag unavailable — sharing disabled.");
+    }
+    if (/^https:\/\/meal-scout\.vercel\.app\//i.test(shareLink)) {
+      throw new Error("Affiliate tag unavailable — sharing disabled.");
     }
     return shareLink;
   };

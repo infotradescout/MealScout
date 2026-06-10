@@ -24,8 +24,9 @@ assert(
 );
 
 assert(
-  source.includes("path: href"),
-  "Tracked share generation must send source path",
+  source.includes("normalizeShareHubTargetPath(href)") &&
+    source.includes("path,"),
+  "Share Hub must normalize and validate a real share target before link generation",
 );
 assert(
   source.includes("ref: affiliateTag || undefined"),
@@ -46,11 +47,21 @@ assert(
   source.includes("!/[?&]ref=/.test(shareLink)"),
   "Share Hub must reject generated links that are missing a referral tag",
 );
+assert(
+  source.includes('/\\/ref\\/([^/?#]+)[^#]*[?&]ref=\\1') &&
+    source.includes("meal-scout\\.vercel\\.app"),
+  "Share Hub must reject legacy /ref/<tag>?ref=<tag> and old Vercel share links",
+);
 
 assert(
   !source.includes("return absoluteUrl(href)") &&
     !source.includes("Referral tracking is temporarily unavailable"),
   "Share Hub must not fall back to untracked/untagged share URLs",
+);
+assert(
+  !source.includes("My Referral Link") &&
+    !source.includes("href: `/ref/${affiliateTag}`"),
+  "Share Hub must not inject generic /ref/<tag> referral-page share items",
 );
 
 assert(

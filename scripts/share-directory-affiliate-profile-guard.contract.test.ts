@@ -28,8 +28,20 @@ assert(
   "Share generation must block sharing when no affiliate tag can be resolved.",
 );
 assert(
-  shareRoutes.includes("generateShareableUrl(path, baseUrl, affiliate.affiliateTag)"),
+  shareRoutes.includes("generateShareableUrl(sharePath, baseUrl, affiliate.affiliateTag)"),
   "Generated share URLs must always use the resolved affiliate tag.",
+);
+assert(
+  shareRoutes.includes("normalizeShareTargetPath") &&
+    shareRoutes.includes("isBlockedShareTargetPath") &&
+    shareRoutes.includes('error: "share_target_required"'),
+  "Share generation must normalize targets and reject missing/root/internal/ref targets.",
+);
+assert(
+  shareRoutes.includes('pathname.startsWith("/ref/")') &&
+    shareRoutes.includes('pathname.startsWith("/admin")') &&
+    shareRoutes.includes('pathname.startsWith("/staff")'),
+  "Share generation must reject legacy referral pages and internal dashboards as share targets.",
 );
 
 assert(
@@ -43,6 +55,18 @@ assert(
 assert(
   shareHub.includes("!/[?&]ref=/.test(shareLink)"),
   "Share Hub must reject generated links missing referral attribution.",
+);
+assert(
+  shareHub.includes("normalizeShareHubTargetPath") &&
+    shareHub.includes('pathname.startsWith("/ref/")') &&
+    !shareHub.includes("My Referral Link") &&
+    !shareHub.includes("href: `/ref/${affiliateTag}`"),
+  "Share Hub must validate targets and must not inject generic /ref/<tag> links.",
+);
+assert(
+  shareHub.includes("meal-scout\\.vercel\\.app") &&
+    shareHub.includes("/\\/ref\\/([^/?#]+)[^#]*[?&]ref=\\1"),
+  "Share Hub must reject old Vercel links and /ref/<tag>?ref=<tag> links.",
 );
 assert(
   !shareHub.includes("return absoluteUrl(href)") &&
@@ -85,8 +109,10 @@ assert(
 
 assert(
   shareMiddleware.includes("resolveCanonicalShareOrigin") &&
-    shareMiddleware.includes('.endsWith(".onrender.com")'),
-  "Share middleware must keep canonical origin resolution and Render-host rejection.",
+    shareMiddleware.includes('.endsWith(".onrender.com")') &&
+    shareMiddleware.includes('"meal-scout.vercel.app"') &&
+    shareMiddleware.includes('"https://www.mealscout.us"'),
+  "Share middleware must keep canonical origin resolution and reject Render/legacy Vercel hosts.",
 );
 assert(
   appRoutes.includes('"/ref/"') && appRoutes.includes('path="/ref/:tag"'),

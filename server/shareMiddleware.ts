@@ -36,26 +36,44 @@ function isBackendRenderOrigin(origin: string): boolean {
   }
 }
 
+function isLegacyShareOrigin(origin: string): boolean {
+  try {
+    const hostname = new URL(origin).hostname.toLowerCase();
+    return hostname === "meal-scout.vercel.app";
+  } catch {
+    return false;
+  }
+}
+
+function isPublicShareOrigin(origin: string): boolean {
+  return !isBackendRenderOrigin(origin) && !isLegacyShareOrigin(origin);
+}
+
 export function resolveCanonicalShareOrigin(req?: {
   protocol?: string;
   get?: (name: string) => string | undefined;
 }): string {
-  const configured =
-    normalizeOrigin(process.env.PUBLIC_APP_URL) ||
-    normalizeOrigin(process.env.CLIENT_ORIGIN) ||
-    normalizeOrigin(process.env.APP_PUBLIC_URL) ||
-    normalizeOrigin(process.env.PUBLIC_BASE_URL) ||
-    normalizeOrigin(process.env.VITE_APP_URL);
+  const configuredCandidates = [
+    normalizeOrigin(process.env.PUBLIC_APP_URL),
+    normalizeOrigin(process.env.CLIENT_ORIGIN),
+    normalizeOrigin(process.env.APP_PUBLIC_URL),
+    normalizeOrigin(process.env.PUBLIC_BASE_URL),
+    normalizeOrigin(process.env.VITE_APP_URL),
+  ].filter(Boolean) as string[];
+
+  const configured = configuredCandidates.find(isPublicShareOrigin);
   if (configured) return configured;
 
   const requestOrigin = normalizeOrigin(req?.get?.("origin"));
-  if (requestOrigin && !isBackendRenderOrigin(requestOrigin)) {
+  if (requestOrigin && isPublicShareOrigin(requestOrigin)) {
     return requestOrigin;
   }
 
   const host = String(req?.get?.("host") || "").trim();
   const protocol = String(req?.protocol || "https").trim() || "https";
-  return normalizeOrigin(`${protocol}://${host}`) || "https://www.mealscout.us";
+  const hostOrigin = normalizeOrigin(`${protocol}://${host}`);
+  if (hostOrigin && isPublicShareOrigin(hostOrigin)) return hostOrigin;
+  return "https://www.mealscout.us";
 }
 
 /**
