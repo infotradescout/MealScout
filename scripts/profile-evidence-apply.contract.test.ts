@@ -11,8 +11,8 @@ const adminDashboard = readFileSync(
 
 const routeSnippets = [
   '"/api/admin/profile-evidence/apply"',
-  "upload.single(\"image\")",
-  "mode === \"apply\" ? \"applied\" : \"dry_run\"",
+  "upload.fields([",
+  'mode === "apply" ? "applied" : "dry_run"',
   "menuStatus",
   "scheduleStatus",
   "logoStatus",

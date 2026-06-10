@@ -26,7 +26,10 @@ import {
 
 type RequireAdminUser = (req: any, res: any) => boolean;
 type EnsureTruckImportTables = () => Promise<void>;
-type IsMissingRelationError = (error: unknown, relationName?: string) => boolean;
+type IsMissingRelationError = (
+  error: unknown,
+  relationName?: string,
+) => boolean;
 type IsMissingColumnError = (error: unknown, columnName?: string) => boolean;
 type GetOrCreateImportSystemUserId = () => Promise<string>;
 type TruckImportUploadSingle = (req: any, res: any, next: any) => void;
@@ -54,7 +57,8 @@ export function registerTruckImportAdminRoutes(
     if (value === null || value === undefined) return true;
     if (typeof value === "string") return value.trim().length === 0;
     if (Array.isArray(value)) return value.length === 0;
-    if (typeof value === "object") return Object.keys(value as any).length === 0;
+    if (typeof value === "object")
+      return Object.keys(value as any).length === 0;
     return false;
   };
   const normalizeComparable = (value: unknown) =>
@@ -121,7 +125,10 @@ export function registerTruckImportAdminRoutes(
     return pitch;
   };
 
-  const buildClaimPitchSharePack = (listing: any, claimPitch: Record<string, any>) => {
+  const buildClaimPitchSharePack = (
+    listing: any,
+    claimPitch: Record<string, any>,
+  ) => {
     const businessName = String(
       claimPitch?.businessName || listing?.name || "this business",
     ).trim();
@@ -452,7 +459,14 @@ export function registerTruckImportAdminRoutes(
     "/api/admin/profile-evidence/apply",
     isAuthenticated,
     isStaffOrAdmin,
-    upload.single("image"),
+    upload.fields([
+      { name: "image", maxCount: 1 },
+      { name: "logoImage", maxCount: 1 },
+      { name: "profileImages", maxCount: 20 },
+      { name: "menuImages", maxCount: 20 },
+      { name: "hoursImages", maxCount: 20 },
+      { name: "contactImages", maxCount: 20 },
+    ]),
     async (req: any, res) => {
       if (!requireAdminUser(req, res)) return;
       try {
@@ -480,8 +494,10 @@ export function registerTruckImportAdminRoutes(
           : "unknown";
 
         const match = (requestBody?.match || {}) as Record<string, unknown>;
-        const fillIfBlank = (requestBody?.fillIfBlank ||
-          {}) as Record<string, unknown>;
+        const fillIfBlank = (requestBody?.fillIfBlank || {}) as Record<
+          string,
+          unknown
+        >;
         const descriptionOnlyIfBlank = String(
           requestBody?.descriptionOnlyIfBlank || "",
         ).trim();
@@ -492,16 +508,26 @@ export function registerTruckImportAdminRoutes(
           ? requestBody.scheduleItems
           : [];
         const sourceNotes = Array.isArray(requestBody?.sourceNotes)
-          ? requestBody.sourceNotes.map((v: any) => String(v || "").trim()).filter(Boolean)
+          ? requestBody.sourceNotes
+              .map((v: any) => String(v || "").trim())
+              .filter(Boolean)
           : [];
         const missingInfo = Array.isArray(requestBody?.missingInfo)
-          ? requestBody.missingInfo.map((v: any) => String(v || "").trim()).filter(Boolean)
+          ? requestBody.missingInfo
+              .map((v: any) => String(v || "").trim())
+              .filter(Boolean)
           : [];
         const rawSource = requestBody?.rawSource;
-        const evidence = Array.isArray(requestBody?.evidence) ? requestBody.evidence : [];
-        const evidenceFieldProposals = Array.isArray(requestBody?.evidenceFieldProposals)
+        const evidence = Array.isArray(requestBody?.evidence)
+          ? requestBody.evidence
+          : [];
+        const evidenceFieldProposals = Array.isArray(
+          requestBody?.evidenceFieldProposals,
+        )
           ? requestBody.evidenceFieldProposals
-              .filter((proposal: any) => proposal && typeof proposal === "object")
+              .filter(
+                (proposal: any) => proposal && typeof proposal === "object",
+              )
               .map((proposal: any) => ({
                 field: String(proposal.field || "").trim(),
                 proposedValue: String(proposal.proposedValue || "").trim(),
@@ -510,7 +536,9 @@ export function registerTruckImportAdminRoutes(
                 evidenceText: String(proposal.evidenceText || "").trim(),
                 imageRef: String(proposal.imageRef || "").trim(),
               }))
-              .filter((proposal: any) => proposal.field && proposal.proposedValue)
+              .filter(
+                (proposal: any) => proposal.field && proposal.proposedValue,
+              )
           : [];
         const ocrTextCandidates = [
           String(
@@ -534,6 +562,38 @@ export function registerTruckImportAdminRoutes(
         );
         const logoUpload = requestBody?.logoUpload || {};
         const logoEnabled = Boolean(logoUpload?.enabled);
+        const approvals =
+          requestBody?.approvals && typeof requestBody.approvals === "object"
+            ? requestBody.approvals
+            : {};
+        const allowMenuOverwrite = Boolean(approvals?.menuOverwrite);
+        const allowLogoReplace = Boolean(approvals?.logoOverwrite);
+
+        const fileMap =
+          req.files && typeof req.files === "object"
+            ? (req.files as Record<string, Express.Multer.File[]>)
+            : {};
+        const firstImageFile =
+          (Array.isArray(fileMap.logoImage) ? fileMap.logoImage[0] : null) ||
+          (Array.isArray(fileMap.image) ? fileMap.image[0] : null) ||
+          null;
+        const profileEvidenceFiles = Array.isArray(fileMap.profileImages)
+          ? fileMap.profileImages
+          : [];
+        const menuEvidenceFiles = Array.isArray(fileMap.menuImages)
+          ? fileMap.menuImages
+          : [];
+        const hoursEvidenceFiles = Array.isArray(fileMap.hoursImages)
+          ? fileMap.hoursImages
+          : [];
+        const contactEvidenceFiles = Array.isArray(fileMap.contactImages)
+          ? fileMap.contactImages
+          : [];
+        const hasEvidenceFiles =
+          profileEvidenceFiles.length > 0 ||
+          menuEvidenceFiles.length > 0 ||
+          hoursEvidenceFiles.length > 0 ||
+          contactEvidenceFiles.length > 0;
 
         const normalize = (value: unknown) =>
           String(value || "")
@@ -547,13 +607,13 @@ export function registerTruckImportAdminRoutes(
         const normalizeUrlIdentity = (value: unknown) => {
           const raw = String(value || "").trim();
           if (!raw) return "";
-          const withProtocol = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+          const withProtocol = /^https?:\/\//i.test(raw)
+            ? raw
+            : `https://${raw}`;
           try {
             const parsed = new URL(withProtocol);
             const host = parsed.hostname.replace(/^www\./i, "").toLowerCase();
-            const path = parsed.pathname
-              .replace(/\/+$/, "")
-              .toLowerCase();
+            const path = parsed.pathname.replace(/\/+$/, "").toLowerCase();
             return `${host}${path}`;
           } catch {
             return normalize(raw)
@@ -587,21 +647,32 @@ export function registerTruckImportAdminRoutes(
           facebook: Boolean(matchFacebook),
           instagram: Boolean(matchInstagram),
           exactNameCity: Boolean(normalizedMatchName && matchCity),
-          nameOnly: Boolean(normalizedMatchName && !matchCity && !matchPhone && !matchEmail),
+          nameOnly: Boolean(
+            normalizedMatchName && !matchCity && !matchPhone && !matchEmail,
+          ),
         };
         const menuSignals = {
           menuItemCount: incomingMenuItems.length,
           hasMenuItems: incomingMenuItems.length > 0,
           hasMenuKeywords:
-            sourceNotes.some((note: string) => /menu|price|item|dish/i.test(note)) ||
+            sourceNotes.some((note: string) =>
+              /menu|price|item|dish/i.test(note),
+            ) ||
             evidenceFieldProposals.some((proposal: any) =>
               /menu|item|price|dish|food/i.test(String(proposal.field || "")),
             ),
         };
         const whyUnknownReasons: string[] = [];
         if (!matchName) whyUnknownReasons.push("missing_name");
-        if (!matchCity && !matchState) whyUnknownReasons.push("missing_city_or_state");
-        if (!matchPhone && !matchEmail && !matchWebsite && !matchFacebook && !matchInstagram) {
+        if (!matchCity && !matchState)
+          whyUnknownReasons.push("missing_city_or_state");
+        if (
+          !matchPhone &&
+          !matchEmail &&
+          !matchWebsite &&
+          !matchFacebook &&
+          !matchInstagram
+        ) {
           whyUnknownReasons.push("missing_hard_identity_anchors");
         }
         const buildDebug = (input: {
@@ -626,10 +697,21 @@ export function registerTruckImportAdminRoutes(
         });
 
         const restaurantWhere = or(
-          matchPhone ? eq(sql`regexp_replace(coalesce(${restaurants.phone}, ''), '[^0-9]', '', 'g')`, matchPhone) : sql`false`,
-          matchWebsite ? sql`replace(replace(lower(coalesce(${restaurants.websiteUrl}, '')), 'https://', ''), 'http://', '') like ${`%${matchWebsite}%`}` : sql`false`,
-          matchFacebook ? sql`replace(replace(lower(coalesce(${restaurants.facebookPageUrl}, '')), 'https://', ''), 'http://', '') like ${`%${matchFacebook}%`}` : sql`false`,
-          matchInstagram ? sql`replace(replace(lower(coalesce(${restaurants.instagramUrl}, '')), 'https://', ''), 'http://', '') like ${`%${matchInstagram}%`}` : sql`false`,
+          matchPhone
+            ? eq(
+                sql`regexp_replace(coalesce(${restaurants.phone}, ''), '[^0-9]', '', 'g')`,
+                matchPhone,
+              )
+            : sql`false`,
+          matchWebsite
+            ? sql`replace(replace(lower(coalesce(${restaurants.websiteUrl}, '')), 'https://', ''), 'http://', '') like ${`%${matchWebsite}%`}`
+            : sql`false`,
+          matchFacebook
+            ? sql`replace(replace(lower(coalesce(${restaurants.facebookPageUrl}, '')), 'https://', ''), 'http://', '') like ${`%${matchFacebook}%`}`
+            : sql`false`,
+          matchInstagram
+            ? sql`replace(replace(lower(coalesce(${restaurants.instagramUrl}, '')), 'https://', ''), 'http://', '') like ${`%${matchInstagram}%`}`
+            : sql`false`,
           matchName
             ? and(
                 sql`lower(${restaurants.name}) = ${normalize(matchName)}`,
@@ -843,7 +925,9 @@ export function registerTruckImportAdminRoutes(
             const [linked] = await db
               .select()
               .from(restaurants)
-              .where(eq(restaurants.claimedFromImportId, matchedImportListing.id))
+              .where(
+                eq(restaurants.claimedFromImportId, matchedImportListing.id),
+              )
               .limit(1);
             matchedRestaurant = linked || null;
           }
@@ -883,7 +967,9 @@ export function registerTruckImportAdminRoutes(
             matchedBy,
             fieldsApplied: [],
             fieldsSkipped: [],
-            conflicts: [{ field: "match", reason: "weak_name_only_review_required" }],
+            conflicts: [
+              { field: "match", reason: "weak_name_only_review_required" },
+            ],
             menuStatus: "none",
             scheduleStatus: "none",
             logoStatus: "none",
@@ -928,13 +1014,24 @@ export function registerTruckImportAdminRoutes(
               .insert(truckImportListings)
               .values({
                 name: String(fillIfBlank.name || matchName || "Unknown").trim(),
-                address: String(fillIfBlank.address || fillIfBlank.location_text || "").trim(),
-                city: String(fillIfBlank.city || match.city || "").trim() || null,
-                state: String(fillIfBlank.state || match.state || "").trim() || null,
-                phone: String(fillIfBlank.phone || match.phone || "").trim() || null,
-                email: String(fillIfBlank.email || match.email || "").trim().toLowerCase() || null,
+                address: String(
+                  fillIfBlank.address || fillIfBlank.location_text || "",
+                ).trim(),
+                city:
+                  String(fillIfBlank.city || match.city || "").trim() || null,
+                state:
+                  String(fillIfBlank.state || match.state || "").trim() || null,
+                phone:
+                  String(fillIfBlank.phone || match.phone || "").trim() || null,
+                email:
+                  String(fillIfBlank.email || match.email || "")
+                    .trim()
+                    .toLowerCase() || null,
                 cuisineType: String(fillIfBlank.category || "").trim() || null,
-                websiteUrl: toUrl(fillIfBlank.website || fillIfBlank.websiteUrl || null) || null,
+                websiteUrl:
+                  toUrl(
+                    fillIfBlank.website || fillIfBlank.websiteUrl || null,
+                  ) || null,
                 status: "unclaimed",
                 rawData: {
                   evidenceApply: {
@@ -950,7 +1047,9 @@ export function registerTruckImportAdminRoutes(
             createdDraftId = createdListing.id;
             matchedImportListing = createdListing;
           } else if (
-            ["restaurant", "bar", "caterer", "private_chef"].includes(profileType)
+            ["restaurant", "bar", "caterer", "private_chef"].includes(
+              profileType,
+            )
           ) {
             const systemOwnerId = await getOrCreateImportSystemUserId();
             const [createdRestaurant] = await db
@@ -959,19 +1058,27 @@ export function registerTruckImportAdminRoutes(
                 ownerId: systemOwnerId,
                 name: String(fillIfBlank.name || matchName || "Unknown").trim(),
                 address: String(fillIfBlank.address || "").trim(),
-                city: String(fillIfBlank.city || match.city || "").trim() || null,
-                state: String(fillIfBlank.state || match.state || "").trim() || null,
+                city:
+                  String(fillIfBlank.city || match.city || "").trim() || null,
+                state:
+                  String(fillIfBlank.state || match.state || "").trim() || null,
                 businessType: profileType,
                 phone: String(fillIfBlank.phone || "").trim() || null,
                 cuisineType: String(fillIfBlank.category || "").trim() || null,
                 websiteUrl:
-                  toUrl(fillIfBlank.website || fillIfBlank.websiteUrl || null) || null,
+                  toUrl(
+                    fillIfBlank.website || fillIfBlank.websiteUrl || null,
+                  ) || null,
                 facebookPageUrl:
-                  toUrl(fillIfBlank.facebook || fillIfBlank.facebookPageUrl || null, "facebook.com") ||
-                  null,
+                  toUrl(
+                    fillIfBlank.facebook || fillIfBlank.facebookPageUrl || null,
+                    "facebook.com",
+                  ) || null,
                 instagramUrl:
-                  toUrl(fillIfBlank.instagram || fillIfBlank.instagramUrl || null, "instagram.com") ||
-                  null,
+                  toUrl(
+                    fillIfBlank.instagram || fillIfBlank.instagramUrl || null,
+                    "instagram.com",
+                  ) || null,
                 isFoodTruck: false,
                 isActive: false,
                 isVerified: false,
@@ -1025,9 +1132,15 @@ export function registerTruckImportAdminRoutes(
 
         const fieldsApplied: string[] = [];
         const fieldsSkipped: string[] = [];
-        const conflicts: Array<{ field: string; existing: unknown; incoming: unknown }> = [];
+        const conflicts: Array<{
+          field: string;
+          existing: unknown;
+          incoming: unknown;
+        }> = [];
+        const reviewQueueItems: Array<Record<string, unknown>> = [];
         const listingUpdates: Record<string, unknown> = {};
         const restaurantUpdates: Record<string, unknown> = {};
+        const evidenceUploadsSummary: Array<Record<string, unknown>> = [];
 
         const isProtectedField = (field: string) =>
           [
@@ -1048,14 +1161,21 @@ export function registerTruckImportAdminRoutes(
           transform?: (value: unknown) => unknown;
         }> = [
           { key: "name", listingField: "name", restaurantField: "name" },
-          { key: "address", listingField: "address", restaurantField: "address" },
+          {
+            key: "address",
+            listingField: "address",
+            restaurantField: "address",
+          },
           { key: "city", listingField: "city", restaurantField: "city" },
           { key: "state", listingField: "state", restaurantField: "state" },
           { key: "phone", listingField: "phone", restaurantField: "phone" },
           {
             key: "email",
             listingField: "email",
-            transform: (value) => String(value || "").trim().toLowerCase(),
+            transform: (value) =>
+              String(value || "")
+                .trim()
+                .toLowerCase(),
           },
           {
             key: "website",
@@ -1114,7 +1234,9 @@ export function registerTruckImportAdminRoutes(
           if (isBlankValue(incoming)) continue;
 
           if (matchedImportListing && mapEntry.listingField) {
-            const existing = (matchedImportListing as any)[mapEntry.listingField];
+            const existing = (matchedImportListing as any)[
+              mapEntry.listingField
+            ];
             if (isBlankValue(existing)) {
               listingUpdates[mapEntry.listingField] = incoming;
               fieldsApplied.push(`listing.${mapEntry.listingField}`);
@@ -1133,7 +1255,9 @@ export function registerTruckImportAdminRoutes(
           }
 
           if (matchedRestaurant && mapEntry.restaurantField) {
-            const existing = (matchedRestaurant as any)[mapEntry.restaurantField];
+            const existing = (matchedRestaurant as any)[
+              mapEntry.restaurantField
+            ];
             if (isBlankValue(existing)) {
               restaurantUpdates[mapEntry.restaurantField] = incoming;
               fieldsApplied.push(`restaurant.${mapEntry.restaurantField}`);
@@ -1161,13 +1285,19 @@ export function registerTruckImportAdminRoutes(
           }
         }
 
-        let menuStatus: "added" | "queued_review" | "skipped_existing" | "none" = "none";
+        let menuStatus:
+          | "added"
+          | "queued_review"
+          | "skipped_existing"
+          | "none" = "none";
         let scheduleStatus:
           | "added"
           | "queued_review"
           | "skipped_existing"
           | "none" = "none";
         let logoStatus: "uploaded" | "skipped_existing_logo" | "none" = "none";
+        let evidenceStatus: "attached" | "queued_review" | "none" = "none";
+        let menuEvidenceStatus: "attached" | "queued_review" | "none" = "none";
 
         const appendEvidence = (
           existingRaw: Record<string, unknown> | null | undefined,
@@ -1194,12 +1324,15 @@ export function registerTruckImportAdminRoutes(
 
         if (matchedRestaurant) {
           const existingSettings =
-            typeof (matchedRestaurant as any).socialAutopostSettings === "object"
-              ? ((matchedRestaurant as any).socialAutopostSettings as Record<string, unknown>)
+            typeof (matchedRestaurant as any).socialAutopostSettings ===
+            "object"
+              ? ((matchedRestaurant as any).socialAutopostSettings as Record<
+                  string,
+                  unknown
+                >)
               : {};
-          restaurantUpdates.socialAutopostSettings = appendEvidence(
-            existingSettings,
-          );
+          restaurantUpdates.socialAutopostSettings =
+            appendEvidence(existingSettings);
         }
 
         if (matchedRestaurant) {
@@ -1207,12 +1340,36 @@ export function registerTruckImportAdminRoutes(
             .select({ total: sql<number>`count(*)` })
             .from(menuItems)
             .where(eq(menuItems.restaurantId, matchedRestaurant.id));
-          const existingMenuCount = Number(existingMenuCountRows?.[0]?.total || 0);
+          const existingMenuCount = Number(
+            existingMenuCountRows?.[0]?.total || 0,
+          );
 
           if (incomingMenuItems.length > 0) {
-            if (existingMenuCount > 0) {
+            if (existingMenuCount > 0 && !allowMenuOverwrite) {
               menuStatus = "queued_review";
+              reviewQueueItems.push({
+                type: "menu_conflict",
+                reason: "existing_menu_present",
+                approvedOverwrite: false,
+                queuedAt: new Date().toISOString(),
+                existingMenuCount,
+              });
             } else if (mode === "apply") {
+              if (existingMenuCount > 0 && allowMenuOverwrite) {
+                await db
+                  .delete(menuItems)
+                  .where(eq(menuItems.restaurantId, matchedRestaurant.id));
+                await db
+                  .delete(menus)
+                  .where(eq(menus.restaurantId, matchedRestaurant.id));
+                reviewQueueItems.push({
+                  type: "menu_overwrite",
+                  reason: "explicit_overwrite_approval",
+                  queuedAt: new Date().toISOString(),
+                  existingMenuCount,
+                });
+              }
+
               const [menu] = await db
                 .insert(menus)
                 .values({
@@ -1235,7 +1392,9 @@ export function registerTruckImportAdminRoutes(
 
               const itemsToInsert = incomingMenuItems
                 .map((item: any, index: number) => {
-                  const name = String(item?.item_name || item?.name || "").trim();
+                  const name = String(
+                    item?.item_name || item?.name || "",
+                  ).trim();
                   if (!name) return null;
                   return {
                     menuId: menu.id,
@@ -1262,19 +1421,55 @@ export function registerTruckImportAdminRoutes(
             }
           }
 
+          const lowConfidenceMenuEvidence = evidenceFieldProposals.some(
+            (proposal: any) =>
+              String(proposal.field || "")
+                .toLowerCase()
+                .includes("menu") &&
+              ["low", "unknown", "uncertain"].includes(
+                String(proposal.confidence || "").toLowerCase(),
+              ),
+          );
+          const hasMenuEvidenceWithoutParsedMenu =
+            menuEvidenceFiles.length > 0 && incomingMenuItems.length === 0;
+          if (lowConfidenceMenuEvidence || hasMenuEvidenceWithoutParsedMenu) {
+            menuStatus = "queued_review";
+            menuEvidenceStatus =
+              menuEvidenceFiles.length > 0
+                ? "queued_review"
+                : menuEvidenceStatus;
+            reviewQueueItems.push({
+              type: "menu_evidence_review",
+              reason: lowConfidenceMenuEvidence
+                ? "low_confidence_extraction"
+                : "menu_images_without_parsed_items",
+              queuedAt: new Date().toISOString(),
+              menuImageCount: menuEvidenceFiles.length,
+              parsedMenuItems: incomingMenuItems.length,
+            });
+          }
+
           const existingScheduleRows = await db
             .select({ total: sql<number>`count(*)` })
             .from(truckManualSchedules)
             .where(eq(truckManualSchedules.truckId, matchedRestaurant.id));
-          const existingScheduleCount = Number(existingScheduleRows?.[0]?.total || 0);
+          const existingScheduleCount = Number(
+            existingScheduleRows?.[0]?.total || 0,
+          );
 
-          const validScheduleItems = incomingScheduleItems.filter((item: any) => {
-            const date = String(item?.date || "").trim();
-            const location = String(item?.location_name || item?.locationName || "").trim();
-            const start = String(item?.start_time || item?.startTime || "").trim();
-            const end = String(item?.end_time || item?.endTime || "").trim();
-            return Boolean(date && location && start && end);
-          });
+          const validScheduleItems = incomingScheduleItems.filter(
+            (item: any) => {
+              const date = String(item?.date || "").trim();
+              const location = String(
+                item?.location_name || item?.locationName || "",
+              ).trim();
+              const start = String(
+                item?.start_time || item?.startTime || "",
+              ).trim();
+              const end = String(item?.end_time || item?.endTime || "").trim();
+              return Boolean(date && location && start && end);
+            },
+          );
 
           if (validScheduleItems.length > 0) {
             if (existingScheduleCount > 0) {
@@ -1285,12 +1480,21 @@ export function registerTruckImportAdminRoutes(
                 date: new Date(String(item.date)),
                 startTime: String(item.start_time || item.startTime),
                 endTime: String(item.end_time || item.endTime),
-                locationName: String(item.location_name || item.locationName || "").trim() || null,
+                locationName:
+                  String(
+                    item.location_name || item.locationName || "",
+                  ).trim() || null,
                 address:
                   String(item.address || "").trim() ||
-                  String(item.location_name || item.locationName || "Unknown location").trim(),
-                city: String(item.city || fillIfBlank.city || "").trim() || null,
-                state: String(item.state || fillIfBlank.state || "").trim() || null,
+                  String(
+                    item.location_name ||
+                      item.locationName ||
+                      "Unknown location",
+                  ).trim(),
+                city:
+                  String(item.city || fillIfBlank.city || "").trim() || null,
+                state:
+                  String(item.state || fillIfBlank.state || "").trim() || null,
                 notes: String(item.notes || "").trim() || null,
                 isPublic: true,
                 lastConfirmedAt: new Date(),
@@ -1303,14 +1507,18 @@ export function registerTruckImportAdminRoutes(
           }
 
           if (logoEnabled) {
-            if (!matchedRestaurant.logoUrl && req.file && mode === "apply") {
+            if (
+              firstImageFile &&
+              mode === "apply" &&
+              (!matchedRestaurant.logoUrl || allowLogoReplace)
+            ) {
               if (!isCloudinaryConfigured()) {
                 return res.status(503).json({
                   message: "Image upload service not configured",
                 });
               }
               const uploadResult = await uploadToCloudinary(
-                req.file.buffer,
+                firstImageFile.buffer,
                 "restaurant-logos",
                 `restaurant-${matchedRestaurant.id}-logo`,
               );
@@ -1327,14 +1535,20 @@ export function registerTruckImportAdminRoutes(
                   width: uploadResult.width,
                   height: uploadResult.height,
                   fileSize: uploadResult.bytes,
-                  mimeType: req.file.mimetype,
+                  mimeType: firstImageFile.mimetype,
                 })
                 .returning();
               const existingSettings =
-                typeof (matchedRestaurant as any).socialAutopostSettings === "object"
-                  ? { ...((matchedRestaurant as any).socialAutopostSettings || {}) }
+                typeof (matchedRestaurant as any).socialAutopostSettings ===
+                "object"
+                  ? {
+                      ...((matchedRestaurant as any).socialAutopostSettings ||
+                        {}),
+                    }
                   : {};
-              const existingGallery = Array.isArray((existingSettings as any).publicGalleryImages)
+              const existingGallery = Array.isArray(
+                (existingSettings as any).publicGalleryImages,
+              )
                 ? [...((existingSettings as any).publicGalleryImages as any[])]
                 : [];
               existingGallery.push({
@@ -1357,7 +1571,192 @@ export function registerTruckImportAdminRoutes(
               logoStatus = "uploaded";
             } else if (matchedRestaurant.logoUrl) {
               logoStatus = "skipped_existing_logo";
+              reviewQueueItems.push({
+                type: "logo_conflict",
+                reason: allowLogoReplace
+                  ? "logo_replace_requested_but_no_file"
+                  : "existing_logo_present",
+                queuedAt: new Date().toISOString(),
+                approvedOverwrite: allowLogoReplace,
+              });
             }
+          }
+
+          const uploadEvidenceFiles = async (
+            files: Express.Multer.File[],
+            options: {
+              cloudinaryFolder: string;
+              imageType: string;
+              galleryCategory: string;
+              evidenceType: string;
+            },
+          ) => {
+            if (!files.length) return;
+            if (!isCloudinaryConfigured()) {
+              throw new Error("Image upload service not configured");
+            }
+
+            const existingSettings =
+              typeof (matchedRestaurant as any).socialAutopostSettings ===
+              "object"
+                ? {
+                    ...((matchedRestaurant as any).socialAutopostSettings ||
+                      {}),
+                  }
+                : {};
+            const existingGallery = Array.isArray(
+              (existingSettings as any).publicGalleryImages,
+            )
+              ? [...((existingSettings as any).publicGalleryImages as any[])]
+              : [];
+
+            for (const file of files) {
+              const uploadResult = await uploadToCloudinary(
+                file.buffer,
+                options.cloudinaryFolder,
+                `restaurant-${matchedRestaurant.id}-${options.evidenceType}-${Date.now()}`,
+              );
+              const insertedUploads = await db
+                .insert(imageUploads)
+                .values({
+                  uploadedByUserId: req.user?.id || null,
+                  imageType: options.imageType,
+                  entityId: matchedRestaurant.id,
+                  entityType: "restaurant",
+                  cloudinaryPublicId: uploadResult.publicId,
+                  cloudinaryUrl: uploadResult.secureUrl,
+                  thumbnailUrl: uploadResult.thumbnailUrl,
+                  width: uploadResult.width,
+                  height: uploadResult.height,
+                  fileSize: uploadResult.bytes,
+                  mimeType: file.mimetype,
+                })
+                .returning();
+              const uploadRow = insertedUploads?.[0];
+
+              existingGallery.push({
+                id: uploadRow?.id || randomUUID(),
+                url: uploadResult.secureUrl,
+                source: "admin_evidence",
+                category: options.galleryCategory,
+                publicApproved: true,
+                uploadedAt: new Date().toISOString(),
+                lastVerifiedAt: new Date().toISOString(),
+              });
+              evidenceUploadsSummary.push({
+                evidenceType: options.evidenceType,
+                fileName: file.originalname,
+                imageUploadId: uploadRow?.id || null,
+                entityType: "restaurant",
+                entityId: matchedRestaurant.id,
+              });
+            }
+
+            restaurantUpdates.socialAutopostSettings = {
+              ...existingSettings,
+              publicGalleryImages: existingGallery,
+              evidenceApply: (restaurantUpdates.socialAutopostSettings as any)
+                ?.evidenceApply,
+            };
+          };
+
+          if (mode === "apply" && hasEvidenceFiles) {
+            await uploadEvidenceFiles(profileEvidenceFiles, {
+              cloudinaryFolder: "restaurant-gallery",
+              imageType: "restaurant_gallery_truck",
+              galleryCategory: "truck",
+              evidenceType: "profile_media",
+            });
+            await uploadEvidenceFiles(menuEvidenceFiles, {
+              cloudinaryFolder: "restaurant-gallery",
+              imageType: "restaurant_gallery_menu",
+              galleryCategory: "menu",
+              evidenceType: "menu_evidence",
+            });
+            await uploadEvidenceFiles(hoursEvidenceFiles, {
+              cloudinaryFolder: "restaurant-gallery",
+              imageType: "restaurant_gallery_hours",
+              galleryCategory: "other",
+              evidenceType: "hours_evidence",
+            });
+            await uploadEvidenceFiles(contactEvidenceFiles, {
+              cloudinaryFolder: "restaurant-gallery",
+              imageType: "restaurant_gallery_contact",
+              galleryCategory: "other",
+              evidenceType: "contact_evidence",
+            });
+            evidenceStatus =
+              evidenceUploadsSummary.length > 0 ? "attached" : "none";
+            if (menuEvidenceFiles.length > 0 && menuEvidenceStatus === "none") {
+              menuEvidenceStatus = "attached";
+            }
+          } else if (hasEvidenceFiles) {
+            evidenceStatus = "queued_review";
+            if (menuEvidenceFiles.length > 0) {
+              menuEvidenceStatus = "queued_review";
+            }
+          }
+
+          if (hoursEvidenceFiles.length > 0) {
+            reviewQueueItems.push({
+              type: "hours_evidence_review",
+              reason: "operator_provided_hours_images",
+              queuedAt: new Date().toISOString(),
+              hoursImageCount: hoursEvidenceFiles.length,
+            });
+          }
+          if (contactEvidenceFiles.length > 0) {
+            reviewQueueItems.push({
+              type: "contact_evidence_review",
+              reason: "operator_provided_contact_images",
+              queuedAt: new Date().toISOString(),
+              contactImageCount: contactEvidenceFiles.length,
+            });
+          }
+        }
+
+        if (conflicts.length > 0) {
+          reviewQueueItems.push({
+            type: "field_conflicts",
+            reason: "conflicting_existing_values",
+            queuedAt: new Date().toISOString(),
+            conflictCount: conflicts.length,
+          });
+        }
+
+        if (reviewQueueItems.length > 0) {
+          if (matchedImportListing) {
+            listingUpdates.rawData = {
+              ...((listingUpdates.rawData as Record<string, unknown>) || {}),
+              evidenceApply: {
+                ...(((listingUpdates.rawData as any)?.evidenceApply ||
+                  {}) as Record<string, unknown>),
+                reviewQueue: reviewQueueItems,
+                uploadedEvidence: evidenceUploadsSummary,
+              },
+            };
+          }
+
+          if (matchedRestaurant) {
+            const currentSettings =
+              (restaurantUpdates.socialAutopostSettings as Record<
+                string,
+                unknown
+              >) ||
+              (typeof (matchedRestaurant as any).socialAutopostSettings ===
+              "object"
+                ? ({
+                    ...(matchedRestaurant as any).socialAutopostSettings,
+                  } as Record<string, unknown>)
+                : {});
+            restaurantUpdates.socialAutopostSettings = {
+              ...currentSettings,
+              evidenceApply: {
+                ...((currentSettings as any)?.evidenceApply || {}),
+                reviewQueue: reviewQueueItems,
+                uploadedEvidence: evidenceUploadsSummary,
+              },
+            };
           }
         }
 
@@ -1390,6 +1789,10 @@ export function registerTruckImportAdminRoutes(
           menuStatus,
           scheduleStatus,
           logoStatus,
+          evidenceStatus,
+          menuEvidenceStatus,
+          reviewQueueItems,
+          uploadedEvidence: evidenceUploadsSummary,
           missingInfo,
           sourceNotes,
           debug: buildDebug({
@@ -1459,7 +1862,9 @@ export function registerTruckImportAdminRoutes(
         ).trim();
         const sourceNotes = String(req.body?.source_notes || "").trim();
         const missingInfo = Array.isArray(req.body?.missing_info)
-          ? req.body.missing_info.map((v: any) => String(v || "").trim()).filter(Boolean)
+          ? req.body.missing_info
+              .map((v: any) => String(v || "").trim())
+              .filter(Boolean)
           : [];
         const menuItems = Array.isArray(req.body?.menu_items)
           ? req.body.menu_items
@@ -1486,7 +1891,11 @@ export function registerTruckImportAdminRoutes(
         const restaurantUpdates: Record<string, unknown> = {};
         const fieldsFilled: string[] = [];
         const fieldsSkipped: string[] = [];
-        const conflicts: Array<{ field: string; existing: unknown; incoming: unknown }> = [];
+        const conflicts: Array<{
+          field: string;
+          existing: unknown;
+          incoming: unknown;
+        }> = [];
 
         const protectedFieldSet = new Set([
           "description",
@@ -1505,15 +1914,65 @@ export function registerTruckImportAdminRoutes(
           value: unknown;
           transform?: (input: unknown) => unknown;
         }> = [
-          { evidenceField: "business_type", restaurantField: "businessType", value: fill.business_type },
-          { evidenceField: "category", listingField: "cuisineType", restaurantField: "cuisineType", value: fill.category },
-          { evidenceField: "phone", listingField: "phone", restaurantField: "phone", value: fill.phone },
-          { evidenceField: "email", listingField: "email", value: fill.email, transform: (v) => String(v || "").trim().toLowerCase() },
-          { evidenceField: "website", listingField: "websiteUrl", restaurantField: "websiteUrl", value: fill.website, transform: (v) => toUrl(v) },
-          { evidenceField: "facebook", listingField: "facebookPageUrl", restaurantField: "facebookPageUrl", value: fill.facebook, transform: (v) => toUrl(v, "facebook.com") },
-          { evidenceField: "instagram", listingField: "instagramUrl", restaurantField: "instagramUrl", value: fill.instagram, transform: (v) => toUrl(v, "instagram.com") },
-          { evidenceField: "city", listingField: "city", restaurantField: "city", value: fill.city },
-          { evidenceField: "state", listingField: "state", restaurantField: "state", value: fill.state },
+          {
+            evidenceField: "business_type",
+            restaurantField: "businessType",
+            value: fill.business_type,
+          },
+          {
+            evidenceField: "category",
+            listingField: "cuisineType",
+            restaurantField: "cuisineType",
+            value: fill.category,
+          },
+          {
+            evidenceField: "phone",
+            listingField: "phone",
+            restaurantField: "phone",
+            value: fill.phone,
+          },
+          {
+            evidenceField: "email",
+            listingField: "email",
+            value: fill.email,
+            transform: (v) =>
+              String(v || "")
+                .trim()
+                .toLowerCase(),
+          },
+          {
+            evidenceField: "website",
+            listingField: "websiteUrl",
+            restaurantField: "websiteUrl",
+            value: fill.website,
+            transform: (v) => toUrl(v),
+          },
+          {
+            evidenceField: "facebook",
+            listingField: "facebookPageUrl",
+            restaurantField: "facebookPageUrl",
+            value: fill.facebook,
+            transform: (v) => toUrl(v, "facebook.com"),
+          },
+          {
+            evidenceField: "instagram",
+            listingField: "instagramUrl",
+            restaurantField: "instagramUrl",
+            value: fill.instagram,
+            transform: (v) => toUrl(v, "instagram.com"),
+          },
+          {
+            evidenceField: "city",
+            listingField: "city",
+            restaurantField: "city",
+            value: fill.city,
+          },
+          {
+            evidenceField: "state",
+            listingField: "state",
+            restaurantField: "state",
+            value: fill.state,
+          },
         ];
 
         for (const candidate of candidates) {
@@ -1599,10 +2058,16 @@ export function registerTruckImportAdminRoutes(
           schedule_notes: scheduleNotes,
         };
         const rawDataNext = {
-          ...(((listing.rawData as Record<string, unknown>) || {}) as Record<string, unknown>),
+          ...(((listing.rawData as Record<string, unknown>) || {}) as Record<
+            string,
+            unknown
+          >),
           evidenceUpdate: {
             ...(typeof (listing.rawData as any)?.evidenceUpdate === "object"
-              ? ((listing.rawData as any).evidenceUpdate as Record<string, unknown>)
+              ? ((listing.rawData as any).evidenceUpdate as Record<
+                  string,
+                  unknown
+                >)
               : {}),
             updatedAt: new Date().toISOString(),
             updatedByUserId: req.user?.id || null,
@@ -1652,7 +2117,8 @@ export function registerTruckImportAdminRoutes(
             queuedCount: menuItems.length,
           },
           schedule: {
-            action: scheduleNotes.length > 0 ? "note_only_no_rows_created" : "none",
+            action:
+              scheduleNotes.length > 0 ? "note_only_no_rows_created" : "none",
             queuedCount: scheduleNotes.length,
           },
           remainingMissingInfo: missingInfo,
@@ -1665,7 +2131,10 @@ export function registerTruckImportAdminRoutes(
             code: "migration_required",
           });
         }
-        console.error("Error filling missing listing fields from evidence:", error);
+        console.error(
+          "Error filling missing listing fields from evidence:",
+          error,
+        );
         res.status(500).json({ message: "Failed to apply evidence update" });
       }
     },
@@ -1681,7 +2150,9 @@ export function registerTruckImportAdminRoutes(
         await ensureTruckImportTables();
 
         const listingId = String(req.body?.listingId || "").trim();
-        const source = String(req.body?.source || "admin_inventory").trim() || "admin_inventory";
+        const source =
+          String(req.body?.source || "admin_inventory").trim() ||
+          "admin_inventory";
         if (!listingId) {
           return res.status(400).json({ message: "listingId is required" });
         }
@@ -1697,7 +2168,8 @@ export function registerTruckImportAdminRoutes(
 
         const profileType = "truck";
         const profileId = String(listing.id);
-        const businessName = String(listing.name || "").trim() || "Unnamed truck";
+        const businessName =
+          String(listing.name || "").trim() || "Unnamed truck";
         const city = String(listing.city || "").trim() || null;
         const claimUrl = `${resolvePublicBaseUrl()}/claim-truck?q=${encodeURIComponent(
           String(listing.externalId || businessName),
@@ -1708,7 +2180,9 @@ export function registerTruckImportAdminRoutes(
             ? (listing.rawData as Record<string, any>)
             : {};
         const priorPitch =
-          existingRaw && typeof existingRaw.claimPitch === "object" && existingRaw.claimPitch
+          existingRaw &&
+          typeof existingRaw.claimPitch === "object" &&
+          existingRaw.claimPitch
             ? (existingRaw.claimPitch as Record<string, any>)
             : {};
 
@@ -1763,7 +2237,9 @@ export function registerTruckImportAdminRoutes(
           });
         }
         console.error("Error creating claim pitch:", error);
-        return res.status(500).json({ message: "Failed to create claim pitch" });
+        return res
+          .status(500)
+          .json({ message: "Failed to create claim pitch" });
       }
     },
   );
@@ -1777,7 +2253,9 @@ export function registerTruckImportAdminRoutes(
       try {
         await ensureTruckImportTables();
         const listingId = String(req.params?.listingId || "").trim();
-        const status = String(req.body?.status || "").trim().toLowerCase();
+        const status = String(req.body?.status || "")
+          .trim()
+          .toLowerCase();
         const sentChannel = String(req.body?.sentChannel || "")
           .trim()
           .toLowerCase();
@@ -1796,7 +2274,9 @@ export function registerTruckImportAdminRoutes(
           "other",
         ]);
         if (!listingId || !allowedStatuses.has(status)) {
-          return res.status(400).json({ message: "Invalid listingId or status" });
+          return res
+            .status(400)
+            .json({ message: "Invalid listingId or status" });
         }
         if (status === "sent" && !allowedSentChannels.has(sentChannel)) {
           return res.status(400).json({ message: "Invalid sentChannel" });
@@ -1816,7 +2296,9 @@ export function registerTruckImportAdminRoutes(
             ? (listing.rawData as Record<string, any>)
             : {};
         const currentPitch =
-          existingRaw && typeof existingRaw.claimPitch === "object" && existingRaw.claimPitch
+          existingRaw &&
+          typeof existingRaw.claimPitch === "object" &&
+          existingRaw.claimPitch
             ? (existingRaw.claimPitch as Record<string, any>)
             : null;
         if (!currentPitch) {
@@ -1830,20 +2312,22 @@ export function registerTruckImportAdminRoutes(
             status === "sent"
               ? "sent"
               : status === "opened"
-              ? "opened"
-              : status === "claim_started"
-                ? "claim_started"
-                : "claim_completed",
-          sentAt: status === "sent" ? currentPitch.sentAt || nowIso : currentPitch.sentAt || null,
-          lastSentAt: status === "sent" ? nowIso : currentPitch.lastSentAt || null,
+                ? "opened"
+                : status === "claim_started"
+                  ? "claim_started"
+                  : "claim_completed",
+          sentAt:
+            status === "sent"
+              ? currentPitch.sentAt || nowIso
+              : currentPitch.sentAt || null,
+          lastSentAt:
+            status === "sent" ? nowIso : currentPitch.lastSentAt || null,
           sendCount:
             status === "sent"
               ? Math.max(1, Number(currentPitch.sendCount || 0) + 1)
               : Math.max(0, Number(currentPitch.sendCount || 0)),
           sentChannel:
-            status === "sent"
-              ? sentChannel
-              : currentPitch.sentChannel || null,
+            status === "sent" ? sentChannel : currentPitch.sentChannel || null,
           sentByUserId:
             status === "sent"
               ? String(req.user?.id || "")
@@ -1886,7 +2370,9 @@ export function registerTruckImportAdminRoutes(
         });
       } catch (error: any) {
         console.error("Error updating claim pitch status:", error);
-        return res.status(500).json({ message: "Failed to update claim pitch status" });
+        return res
+          .status(500)
+          .json({ message: "Failed to update claim pitch status" });
       }
     },
   );
@@ -1899,7 +2385,10 @@ export function registerTruckImportAdminRoutes(
       if (!requireAdminUser(req, res)) return;
       try {
         await ensureTruckImportTables();
-        const limit = Math.min(200, Math.max(1, Number(req.query?.limit ?? 100)));
+        const limit = Math.min(
+          200,
+          Math.max(1, Number(req.query?.limit ?? 100)),
+        );
         const rows = await db
           .select()
           .from(truckImportListings)
@@ -1915,7 +2404,8 @@ export function registerTruckImportAdminRoutes(
               listingId: String(listing.id),
               profileId: claimPitch.profileId || String(listing.id),
               profileType: claimPitch.profileType || "truck",
-              businessName: claimPitch.businessName || String(listing.name || ""),
+              businessName:
+                claimPitch.businessName || String(listing.name || ""),
               city: claimPitch.city || String(listing.city || ""),
               claimUrl: claimPitch.claimUrl || null,
               pitchStatus: claimPitch.pitchStatus || "created",
@@ -1938,7 +2428,9 @@ export function registerTruckImportAdminRoutes(
         return res.json({ items });
       } catch (error: any) {
         console.error("Error listing claim pitches:", error);
-        return res.status(500).json({ message: "Failed to load claim pitches" });
+        return res
+          .status(500)
+          .json({ message: "Failed to load claim pitches" });
       }
     },
   );
@@ -2050,7 +2542,11 @@ export function registerTruckImportAdminRoutes(
           invitedAt: new Date().toISOString(),
         });
 
-        res.json({ success: true, emailSent: inviteResult.emailSent, listing: updated });
+        res.json({
+          success: true,
+          emailSent: inviteResult.emailSent,
+          listing: updated,
+        });
       } catch (error: any) {
         if (
           isMissingRelationError(error, "truck_import_listings") ||
@@ -2244,7 +2740,9 @@ export function registerTruckImportAdminRoutes(
             );
           }
           if (name && city && state && phone) {
-            existingNameCityStatePhoneSet.add(`${name}|${city}|${state}|${phone}`);
+            existingNameCityStatePhoneSet.add(
+              `${name}|${city}|${state}|${phone}`,
+            );
           }
         });
         existingRestaurantRows.forEach((row: any) => {
@@ -2260,7 +2758,9 @@ export function registerTruckImportAdminRoutes(
             );
           }
           if (name && city && state && phone) {
-            existingNameCityStatePhoneSet.add(`${name}|${city}|${state}|${phone}`);
+            existingNameCityStatePhoneSet.add(
+              `${name}|${city}|${state}|${phone}`,
+            );
           }
         });
 
@@ -2891,5 +3391,4 @@ export function registerTruckImportAdminRoutes(
       }
     },
   );
-
 }

@@ -269,22 +269,21 @@ function resolveAdminUserBusinessIdentity(
     .toLowerCase();
   const joinedSignals = journeySignals.join(" ").toLowerCase();
 
-  const signalIntent: BusinessTypeIntent =
-    joinedSignals.includes("truck")
-      ? "food_truck"
-      : joinedSignals.includes("bar")
-        ? "bar"
-        : joinedSignals.includes("brewery") || joinedSignals.includes("taproom")
-          ? "brewery_taproom"
-          : joinedSignals.includes("caterer") || joinedSignals.includes("chef")
-            ? "caterer_private_chef"
-            : joinedSignals.includes("host") || joinedSignals.includes("venue")
-              ? "host_venue"
-              : joinedSignals.includes("supplier")
-                ? "supplier"
-                : joinedSignals.includes("restaurant")
-                  ? "restaurant"
-                  : "unknown";
+  const signalIntent: BusinessTypeIntent = joinedSignals.includes("truck")
+    ? "food_truck"
+    : joinedSignals.includes("bar")
+      ? "bar"
+      : joinedSignals.includes("brewery") || joinedSignals.includes("taproom")
+        ? "brewery_taproom"
+        : joinedSignals.includes("caterer") || joinedSignals.includes("chef")
+          ? "caterer_private_chef"
+          : joinedSignals.includes("host") || joinedSignals.includes("venue")
+            ? "host_venue"
+            : joinedSignals.includes("supplier")
+              ? "supplier"
+              : joinedSignals.includes("restaurant")
+                ? "restaurant"
+                : "unknown";
 
   const roleIntent: BusinessTypeIntent =
     userType === "food_truck"
@@ -314,7 +313,10 @@ function resolveAdminUserBusinessIdentity(
                   ? "restaurant"
                   : "unknown";
 
-  const attachmentState = resolveBusinessAttachmentState(user, attachedBusiness);
+  const attachmentState = resolveBusinessAttachmentState(
+    user,
+    attachedBusiness,
+  );
 
   const candidates = [attachedIntent, signalIntent, roleIntent].filter(
     (value) => value !== "unknown",
@@ -595,7 +597,12 @@ interface OneMarketLaunchBoardResponse {
     cityOptions: string[];
   };
   commandCenter: {
-    marketHealthStatus: "blocked" | "at_risk" | "building" | "ready" | "scaling";
+    marketHealthStatus:
+      | "blocked"
+      | "at_risk"
+      | "building"
+      | "ready"
+      | "scaling";
     topGrowthConstraint: string;
     topRecommendedAction: string;
     topRecommendedActionUrl: string;
@@ -1458,9 +1465,17 @@ function ProfileEvidenceApplyPanel({ enabled }: { enabled: boolean }) {
   "scheduleItems": [],
   "sourceNotes": [],
   "missingInfo": [],
+  "approvals": {
+    "menuOverwrite": false,
+    "logoOverwrite": false
+  },
   "logoUpload": { "enabled": true, "fileField": "image" }
 }`);
   const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [profileEvidenceFiles, setProfileEvidenceFiles] = useState<File[]>([]);
+  const [menuEvidenceFiles, setMenuEvidenceFiles] = useState<File[]>([]);
+  const [hoursEvidenceFiles, setHoursEvidenceFiles] = useState<File[]>([]);
+  const [contactEvidenceFiles, setContactEvidenceFiles] = useState<File[]>([]);
   const [result, setResult] = useState<any | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const parsedPayload = (() => {
@@ -1479,7 +1494,8 @@ function ProfileEvidenceApplyPanel({ enabled }: { enabled: boolean }) {
         evidenceIngest: {
           ...((parsedPayload.rawSource || {}).evidenceIngest || {}),
           extracted: {
-            ...(((parsedPayload.rawSource || {}).evidenceIngest || {}).extracted || {}),
+            ...(((parsedPayload.rawSource || {}).evidenceIngest || {})
+              .extracted || {}),
             menuDeferred: value,
           },
         },
@@ -1512,8 +1528,18 @@ function ProfileEvidenceApplyPanel({ enabled }: { enabled: boolean }) {
       const formData = new FormData();
       formData.append("payload", JSON.stringify(bodyPayload));
       if (logoFile) {
-        formData.append("image", logoFile);
+        formData.append("logoImage", logoFile);
       }
+      profileEvidenceFiles.forEach((file) =>
+        formData.append("profileImages", file),
+      );
+      menuEvidenceFiles.forEach((file) => formData.append("menuImages", file));
+      hoursEvidenceFiles.forEach((file) =>
+        formData.append("hoursImages", file),
+      );
+      contactEvidenceFiles.forEach((file) =>
+        formData.append("contactImages", file),
+      );
 
       const res = await fetch("/api/admin/profile-evidence/apply", {
         method: "POST",
@@ -1547,8 +1573,9 @@ function ProfileEvidenceApplyPanel({ enabled }: { enabled: boolean }) {
           Profile Evidence Apply
         </CardTitle>
         <CardDescription>
-          Paste extracted profile JSON, optionally attach a logo, then run dry-run
-          or apply. The API fills only blank fields and reports skips/conflicts.
+          Paste extracted profile JSON, optionally attach a logo, then run
+          dry-run or apply. The API fills only blank fields and reports
+          skips/conflicts.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -1562,6 +1589,38 @@ function ProfileEvidenceApplyPanel({ enabled }: { enabled: boolean }) {
             type="file"
             accept="image/*"
             onChange={(event) => setLogoFile(event.target.files?.[0] || null)}
+          />
+          <input
+            type="file"
+            accept="image/*"
+            multiple
+            onChange={(event) =>
+              setProfileEvidenceFiles(Array.from(event.target.files || []))
+            }
+          />
+          <input
+            type="file"
+            accept="image/*"
+            multiple
+            onChange={(event) =>
+              setMenuEvidenceFiles(Array.from(event.target.files || []))
+            }
+          />
+          <input
+            type="file"
+            accept="image/*"
+            multiple
+            onChange={(event) =>
+              setHoursEvidenceFiles(Array.from(event.target.files || []))
+            }
+          />
+          <input
+            type="file"
+            accept="image/*"
+            multiple
+            onChange={(event) =>
+              setContactEvidenceFiles(Array.from(event.target.files || []))
+            }
           />
           <div className="flex gap-2">
             <Button
@@ -1581,21 +1640,28 @@ function ProfileEvidenceApplyPanel({ enabled }: { enabled: boolean }) {
           <div className="rounded-md border bg-muted/40 p-3 text-sm space-y-1">
             {(() => {
               const debug = (result?.debug || {}) as any;
-              const existingTruckId =
-                String(result?.existingTruckId || debug?.existingTruckId || "").trim();
-              const matchStrength =
-                String(result?.matchStrength || debug?.matchStrength || "none").trim();
+              const existingTruckId = String(
+                result?.existingTruckId || debug?.existingTruckId || "",
+              ).trim();
+              const matchStrength = String(
+                result?.matchStrength || debug?.matchStrength || "none",
+              ).trim();
               const matchedBy = Array.isArray(result?.matchedBy)
                 ? result.matchedBy
                 : Array.isArray(debug?.matchedBy)
                   ? debug.matchedBy
                   : [];
-              const classification = String(debug?.classification || result?.status || "unknown");
-              const classificationReasons = Array.isArray(debug?.classificationReasons)
+              const classification = String(
+                debug?.classification || result?.status || "unknown",
+              );
+              const classificationReasons = Array.isArray(
+                debug?.classificationReasons,
+              )
                 ? debug.classificationReasons
                 : [];
               const identitySignals =
-                debug?.identitySignals && typeof debug.identitySignals === "object"
+                debug?.identitySignals &&
+                typeof debug.identitySignals === "object"
                   ? debug.identitySignals
                   : {};
               const menuSignals =
@@ -1623,147 +1689,183 @@ function ProfileEvidenceApplyPanel({ enabled }: { enabled: boolean }) {
               const ocrTextSnippet = String(debug?.ocrTextSnippet || "").trim();
               const ocrConfidence = Number(debug?.ocrConfidence || 0);
               const menuDeferredOverrideActive = Boolean(
-                debug?.menuDeferredOverrideActive || result?.menuDeferredOverrideActive,
+                debug?.menuDeferredOverrideActive ||
+                result?.menuDeferredOverrideActive,
               );
               return (
                 <>
-            <div>
-              <strong>Status:</strong> {result.status || "unknown"}
-            </div>
-            <div>
-              <strong>Existing truck:</strong> {existingTruckId || "(none)"}
-            </div>
-            <div>
-              <strong>Match strength:</strong> {matchStrength || "none"}
-            </div>
-            <div>
-              <strong>Matched by:</strong>{" "}
-              {matchedBy.length ? matchedBy.join(", ") : "(none)"}
-            </div>
-            <div>
-              <strong>Classification:</strong> {classification}
-            </div>
-            <div>
-              <strong>Classification reasons:</strong>{" "}
-              {classificationReasons.length ? classificationReasons.join(", ") : "(none)"}
-            </div>
-            <div>
-              <strong>Matched restaurant:</strong>{" "}
-              {result.matchedRestaurantId || "(none)"}
-            </div>
-            <div>
-              <strong>Matched import listing:</strong>{" "}
-              {result.matchedImportListingId || "(none)"}
-            </div>
-            <div>
-              <strong>Created draft:</strong> {result.createdDraftId || "(none)"}
-            </div>
-            <div>
-              <strong>Menu:</strong> {result.menuStatus || "none"} |{" "}
-              <strong>Schedule:</strong> {result.scheduleStatus || "none"} |{" "}
-              <strong>Logo:</strong> {result.logoStatus || "none"}
-            </div>
-            <div>
-              <strong>Applied:</strong>{" "}
-              {Array.isArray(result.fieldsApplied)
-                ? result.fieldsApplied.join(", ") || "(none)"
-                : "(none)"}
-            </div>
-            <div>
-              <strong>Skipped:</strong>{" "}
-              {Array.isArray(result.fieldsSkipped)
-                ? result.fieldsSkipped.join(", ") || "(none)"
-                : "(none)"}
-            </div>
-            <div>
-              <strong>Conflicts:</strong>{" "}
-              {Array.isArray(result.conflicts) ? result.conflicts.length : 0}
-            </div>
-            <div>
-              <strong>Identity signals:</strong>{" "}
-              {Object.keys(identitySignals).length
-                ? JSON.stringify(identitySignals)
-                : "(none)"}
-            </div>
-            <div>
-              <strong>Menu signals:</strong>{" "}
-              {Object.keys(menuSignals).length ? JSON.stringify(menuSignals) : "(none)"}
-            </div>
-            <div>
-              <strong>Missing fields:</strong>{" "}
-              {missingFields.length ? missingFields.join(", ") : "(none)"}
-            </div>
-            <div>
-              <strong>Menu deferred override:</strong>{" "}
-              {menuDeferredOverrideActive ? "active" : "inactive"}
-            </div>
-            <div>
-              <strong>Publish warnings:</strong>{" "}
-              {publishWarnings.length ? publishWarnings.join(" | ") : "(none)"}
-            </div>
-            <div>
-              <strong>Publish audit notes:</strong>{" "}
-              {publishAuditNotes.length ? publishAuditNotes.join(" | ") : "(none)"}
-            </div>
-            <div>
-              <strong>Why unknown:</strong>{" "}
-              {whyUnknown.length ? whyUnknown.join(", ") : "(none)"}
-            </div>
-            <div>
-              <strong>OCR text snippet:</strong> {ocrTextSnippet || "(none)"}
-            </div>
-            <div>
-              <strong>OCR confidence:</strong> {Number.isFinite(ocrConfidence) ? ocrConfidence : 0}
-            </div>
-            <div className="pt-2 flex flex-wrap gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={isSubmitting}
-                onClick={() => submit("apply")}
-              >
-                Approve updates to existing truck
-              </Button>
-              <Button size="sm" disabled={isSubmitting} onClick={() => submit("apply")}>
-                Approve new truck draft
-              </Button>
-              <Button
-                size="sm"
-                variant="destructive"
-                disabled
-                title="Use existing review/apply path and keep as dry run to reject weak or unknown evidence."
-              >
-                Reject weak/unknown evidence
-              </Button>
-              <Button
-                size="sm"
-                variant="secondary"
-                disabled={!parsedPayload}
-                onClick={() => markMenuDeferred(true)}
-              >
-                Mark menuDeferred=true
-              </Button>
-              <Button
-                size="sm"
-                variant="secondary"
-                disabled={!parsedPayload}
-                onClick={() => markMenuDeferred(false)}
-              >
-                Require menu before publish
-              </Button>
-            </div>
-            {result.matchedRestaurantId && (
-              <div>
-                <a
-                  className="underline"
-                  href={`/restaurant/${result.matchedRestaurantId}`}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Open matched restaurant
-                </a>
-              </div>
-            )}
+                  <div>
+                    <strong>Status:</strong> {result.status || "unknown"}
+                  </div>
+                  <div>
+                    <strong>Existing truck:</strong>{" "}
+                    {existingTruckId || "(none)"}
+                  </div>
+                  <div>
+                    <strong>Match strength:</strong> {matchStrength || "none"}
+                  </div>
+                  <div>
+                    <strong>Matched by:</strong>{" "}
+                    {matchedBy.length ? matchedBy.join(", ") : "(none)"}
+                  </div>
+                  <div>
+                    <strong>Classification:</strong> {classification}
+                  </div>
+                  <div>
+                    <strong>Classification reasons:</strong>{" "}
+                    {classificationReasons.length
+                      ? classificationReasons.join(", ")
+                      : "(none)"}
+                  </div>
+                  <div>
+                    <strong>Matched restaurant:</strong>{" "}
+                    {result.matchedRestaurantId || "(none)"}
+                  </div>
+                  <div>
+                    <strong>Matched import listing:</strong>{" "}
+                    {result.matchedImportListingId || "(none)"}
+                  </div>
+                  <div>
+                    <strong>Created draft:</strong>{" "}
+                    {result.createdDraftId || "(none)"}
+                  </div>
+                  <div>
+                    <strong>Menu:</strong> {result.menuStatus || "none"} |{" "}
+                    <strong>Schedule:</strong> {result.scheduleStatus || "none"}{" "}
+                    | <strong>Logo:</strong> {result.logoStatus || "none"}
+                  </div>
+                  <div>
+                    <strong>Evidence:</strong> {result.evidenceStatus || "none"}{" "}
+                    | <strong>Menu evidence:</strong>{" "}
+                    {result.menuEvidenceStatus || "none"}
+                  </div>
+                  <div>
+                    <strong>Applied:</strong>{" "}
+                    {Array.isArray(result.fieldsApplied)
+                      ? result.fieldsApplied.join(", ") || "(none)"
+                      : "(none)"}
+                  </div>
+                  <div>
+                    <strong>Skipped:</strong>{" "}
+                    {Array.isArray(result.fieldsSkipped)
+                      ? result.fieldsSkipped.join(", ") || "(none)"
+                      : "(none)"}
+                  </div>
+                  <div>
+                    <strong>Conflicts:</strong>{" "}
+                    {Array.isArray(result.conflicts)
+                      ? result.conflicts.length
+                      : 0}
+                  </div>
+                  <div>
+                    <strong>Review queue:</strong>{" "}
+                    {Array.isArray(result.reviewQueueItems)
+                      ? result.reviewQueueItems.length
+                      : 0}
+                  </div>
+                  <div>
+                    <strong>Uploaded evidence:</strong>{" "}
+                    {Array.isArray(result.uploadedEvidence)
+                      ? result.uploadedEvidence.length
+                      : 0}
+                  </div>
+                  <div>
+                    <strong>Identity signals:</strong>{" "}
+                    {Object.keys(identitySignals).length
+                      ? JSON.stringify(identitySignals)
+                      : "(none)"}
+                  </div>
+                  <div>
+                    <strong>Menu signals:</strong>{" "}
+                    {Object.keys(menuSignals).length
+                      ? JSON.stringify(menuSignals)
+                      : "(none)"}
+                  </div>
+                  <div>
+                    <strong>Missing fields:</strong>{" "}
+                    {missingFields.length ? missingFields.join(", ") : "(none)"}
+                  </div>
+                  <div>
+                    <strong>Menu deferred override:</strong>{" "}
+                    {menuDeferredOverrideActive ? "active" : "inactive"}
+                  </div>
+                  <div>
+                    <strong>Publish warnings:</strong>{" "}
+                    {publishWarnings.length
+                      ? publishWarnings.join(" | ")
+                      : "(none)"}
+                  </div>
+                  <div>
+                    <strong>Publish audit notes:</strong>{" "}
+                    {publishAuditNotes.length
+                      ? publishAuditNotes.join(" | ")
+                      : "(none)"}
+                  </div>
+                  <div>
+                    <strong>Why unknown:</strong>{" "}
+                    {whyUnknown.length ? whyUnknown.join(", ") : "(none)"}
+                  </div>
+                  <div>
+                    <strong>OCR text snippet:</strong>{" "}
+                    {ocrTextSnippet || "(none)"}
+                  </div>
+                  <div>
+                    <strong>OCR confidence:</strong>{" "}
+                    {Number.isFinite(ocrConfidence) ? ocrConfidence : 0}
+                  </div>
+                  <div className="pt-2 flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={isSubmitting}
+                      onClick={() => submit("apply")}
+                    >
+                      Approve updates to existing truck
+                    </Button>
+                    <Button
+                      size="sm"
+                      disabled={isSubmitting}
+                      onClick={() => submit("apply")}
+                    >
+                      Approve new truck draft
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      disabled
+                      title="Use existing review/apply path and keep as dry run to reject weak or unknown evidence."
+                    >
+                      Reject weak/unknown evidence
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      disabled={!parsedPayload}
+                      onClick={() => markMenuDeferred(true)}
+                    >
+                      Mark menuDeferred=true
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      disabled={!parsedPayload}
+                      onClick={() => markMenuDeferred(false)}
+                    >
+                      Require menu before publish
+                    </Button>
+                  </div>
+                  {result.matchedRestaurantId && (
+                    <div>
+                      <a
+                        className="underline"
+                        href={`/restaurant/${result.matchedRestaurantId}`}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Open matched restaurant
+                      </a>
+                    </div>
+                  )}
                 </>
               );
             })()}
@@ -1892,7 +1994,13 @@ function UnclaimedImportedTrucksTab({ enabled }: { enabled: boolean }) {
     mutationFn: async (payload: {
       listingId: string;
       status: "sent" | "opened" | "claim_started" | "claim_completed";
-      sentChannel?: "sms" | "email" | "facebook" | "instagram" | "manual" | "other";
+      sentChannel?:
+        | "sms"
+        | "email"
+        | "facebook"
+        | "instagram"
+        | "manual"
+        | "other";
     }) => {
       const res = await apiRequest(
         "PATCH",
@@ -1957,7 +2065,9 @@ function UnclaimedImportedTrucksTab({ enabled }: { enabled: boolean }) {
                 ? (row.rawData as any).claimPitch || null
                 : null;
             const sentChannelValue = String(
-              edits.claimPitchSentChannel || claimPitch?.sentChannel || "manual",
+              edits.claimPitchSentChannel ||
+                claimPitch?.sentChannel ||
+                "manual",
             );
             return (
               <Card key={row.id}>
@@ -2015,7 +2125,8 @@ function UnclaimedImportedTrucksTab({ enabled }: { enabled: boolean }) {
                   {claimPitch ? (
                     <div className="rounded-md border bg-muted/20 p-2 text-xs space-y-1">
                       <div className="font-medium">
-                        Claim pitch status: {String(claimPitch.pitchStatus || "created")}
+                        Claim pitch status:{" "}
+                        {String(claimPitch.pitchStatus || "created")}
                       </div>
                       <div className="text-muted-foreground">
                         {String(
@@ -2053,12 +2164,16 @@ function UnclaimedImportedTrucksTab({ enabled }: { enabled: boolean }) {
                           variant="outline"
                           disabled={
                             !String(
-                              claimPitch.claimPitchUrl || claimPitch.claimUrl || "",
+                              claimPitch.claimPitchUrl ||
+                                claimPitch.claimUrl ||
+                                "",
                             ).trim()
                           }
                           onClick={async () => {
                             const url = String(
-                              claimPitch.claimPitchUrl || claimPitch.claimUrl || "",
+                              claimPitch.claimPitchUrl ||
+                                claimPitch.claimUrl ||
+                                "",
                             ).trim();
                             if (!url) return;
                             try {
@@ -2085,7 +2200,7 @@ function UnclaimedImportedTrucksTab({ enabled }: { enabled: boolean }) {
                             Open profile URL
                           </a>
                         ) : null}
-                        {(claimPitch.claimPitchUrl || claimPitch.claimUrl) ? (
+                        {claimPitch.claimPitchUrl || claimPitch.claimUrl ? (
                           <a
                             className="underline"
                             href={String(
@@ -2107,8 +2222,8 @@ function UnclaimedImportedTrucksTab({ enabled }: { enabled: boolean }) {
                         {claimPitch.sentAt
                           ? new Date(claimPitch.sentAt).toLocaleString()
                           : "-"}{" "}
-                        • Send Count: {Number(claimPitch.sendCount || 0)}{" "}
-                        • Opened:{" "}
+                        • Send Count: {Number(claimPitch.sendCount || 0)} •
+                        Opened:{" "}
                         {claimPitch.pitchOpenedAt
                           ? new Date(claimPitch.pitchOpenedAt).toLocaleString()
                           : "-"}{" "}
@@ -2118,7 +2233,9 @@ function UnclaimedImportedTrucksTab({ enabled }: { enabled: boolean }) {
                           : "-"}{" "}
                         • Completed:{" "}
                         {claimPitch.claimCompletedAt
-                          ? new Date(claimPitch.claimCompletedAt).toLocaleString()
+                          ? new Date(
+                              claimPitch.claimCompletedAt,
+                            ).toLocaleString()
                           : "-"}
                       </div>
                       <div className="flex flex-wrap gap-2 pt-1">
@@ -2331,9 +2448,15 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
   > = {
     customer: { userType: "customer" },
     food_truck_owner: { userType: "food_truck", businessType: "food_truck" },
-    restaurant_owner: { userType: "restaurant_owner", businessType: "restaurant" },
+    restaurant_owner: {
+      userType: "restaurant_owner",
+      businessType: "restaurant",
+    },
     bar_owner: { userType: "restaurant_owner", businessType: "bar" },
-    brewery_taproom_owner: { userType: "restaurant_owner", businessType: "brewery_taproom" },
+    brewery_taproom_owner: {
+      userType: "restaurant_owner",
+      businessType: "brewery_taproom",
+    },
     caterer_owner: {
       userType: "restaurant_owner",
       businessType: "caterer",
@@ -2592,7 +2715,9 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
             <option value="food_truck_owner">Food Truck Owner</option>
             <option value="restaurant_owner">Restaurant Owner</option>
             <option value="bar_owner">Bar Owner</option>
-            <option value="brewery_taproom_owner">Brewery / Taproom Owner</option>
+            <option value="brewery_taproom_owner">
+              Brewery / Taproom Owner
+            </option>
             <option value="caterer_owner">Caterer</option>
             <option value="private_chef_owner">Private Chef</option>
             <option value="host_venue_operator">Host / Venue Operator</option>
@@ -2817,7 +2942,10 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
                           type="text"
                           value={formData.hostBusinessName}
                           onChange={(e) =>
-                            setFormData({ ...formData, hostBusinessName: e.target.value })
+                            setFormData({
+                              ...formData,
+                              hostBusinessName: e.target.value,
+                            })
                           }
                           className="w-full px-3 py-2 border rounded-md"
                           placeholder="Parking-pass venue name"
@@ -2831,7 +2959,10 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
                           type="text"
                           value={formData.hostAddress}
                           onChange={(e) =>
-                            setFormData({ ...formData, hostAddress: e.target.value })
+                            setFormData({
+                              ...formData,
+                              hostAddress: e.target.value,
+                            })
                           }
                           className="w-full px-3 py-2 border rounded-md"
                           placeholder="456 Host Lot Ave, City, State"
@@ -2853,29 +2984,43 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
 
               <div className="space-y-3">
                 <div>
-                  <label className="text-sm font-medium">Target Business ID</label>
+                  <label className="text-sm font-medium">
+                    Target Business ID
+                  </label>
                   <input
                     type="text"
                     required
                     value={formData.staffBusinessId}
                     onChange={(e) =>
-                      setFormData({ ...formData, staffBusinessId: e.target.value })
+                      setFormData({
+                        ...formData,
+                        staffBusinessId: e.target.value,
+                      })
                     }
                     className="w-full px-3 py-2 border rounded-md"
                     placeholder="Existing business id to attach staff"
                   />
                 </div>
                 <div>
-                  <label className="text-sm font-medium">Staff Provisioning Mode</label>
+                  <label className="text-sm font-medium">
+                    Staff Provisioning Mode
+                  </label>
                   <select
                     value={formData.staffInviteMode}
                     onChange={(e) =>
-                      setFormData({ ...formData, staffInviteMode: e.target.value })
+                      setFormData({
+                        ...formData,
+                        staffInviteMode: e.target.value,
+                      })
                     }
                     className="w-full px-3 py-2 border rounded-md"
                   >
-                    <option value="attach_existing">Attach to existing business</option>
-                    <option value="pending_invite">Pending invite (target required)</option>
+                    <option value="attach_existing">
+                      Attach to existing business
+                    </option>
+                    <option value="pending_invite">
+                      Pending invite (target required)
+                    </option>
                   </select>
                 </div>
               </div>
@@ -3509,20 +3654,25 @@ export default function AdminDashboard() {
     enabled: !!adminUser && selectedTab === "food-trucks",
     queryFn: async () => {
       const params = new URLSearchParams();
-      if (truckInventorySearch.trim()) params.set("q", truckInventorySearch.trim());
+      if (truckInventorySearch.trim())
+        params.set("q", truckInventorySearch.trim());
       if (truckFilterMissingMenu) params.set("missingMenu", "true");
       if (truckFilterMissingLogo) params.set("missingLogo", "true");
       if (truckFilterMissingOwner) params.set("missingOwner", "true");
       if (truckFilterQuarantined) params.set("quarantined", "true");
       if (truckFilterVerified) params.set("verified", "true");
       const suffix = params.toString() ? `?${params.toString()}` : "";
-      const res = await apiRequest("GET", `/api/admin/food-trucks/inventory${suffix}`);
+      const res = await apiRequest(
+        "GET",
+        `/api/admin/food-trucks/inventory${suffix}`,
+      );
       return (await res.json()) as FoodTruckInventoryResponse;
     },
   });
 
   const foodTruckInventoryRows = useMemo<FoodTruckInventoryItem[]>(() => {
-    if (Array.isArray(foodTruckInventoryPayload?.trucks)) return foodTruckInventoryPayload.trucks;
+    if (Array.isArray(foodTruckInventoryPayload?.trucks))
+      return foodTruckInventoryPayload.trucks;
     return [];
   }, [foodTruckInventoryPayload]);
 
@@ -3678,7 +3828,9 @@ export default function AdminDashboard() {
     const focusUserId = String(url.searchParams.get("focusUser") || "").trim();
     if (!focusUserId) return;
 
-    const matchedUser = users.find((entry: any) => String(entry?.id) === focusUserId);
+    const matchedUser = users.find(
+      (entry: any) => String(entry?.id) === focusUserId,
+    );
     if (!matchedUser) return;
 
     setSelectedUser(matchedUser);
@@ -3722,9 +3874,12 @@ export default function AdminDashboard() {
       if (effectiveLocationContext?.marketKey) {
         query.set("market", effectiveLocationContext.marketKey);
       }
-      const res = await fetch(apiUrl(`/api/admin/lisa/signals?${query.toString()}`), {
-        credentials: "include",
-      });
+      const res = await fetch(
+        apiUrl(`/api/admin/lisa/signals?${query.toString()}`),
+        {
+          credentials: "include",
+        },
+      );
       if (!res.ok) throw new Error("Failed to fetch LISA signals");
       return res.json();
     },
@@ -3742,9 +3897,12 @@ export default function AdminDashboard() {
       if (effectiveLocationContext?.marketKey) {
         query.set("market", effectiveLocationContext.marketKey);
       }
-      const res = await fetch(apiUrl(`/api/admin/lisa/priorities?${query.toString()}`), {
-        credentials: "include",
-      });
+      const res = await fetch(
+        apiUrl(`/api/admin/lisa/priorities?${query.toString()}`),
+        {
+          credentials: "include",
+        },
+      );
       if (!res.ok) throw new Error("Failed to fetch LISA priorities");
       return res.json();
     },
@@ -4783,13 +4941,19 @@ export default function AdminDashboard() {
 
   const selectedUserIdentity = useMemo(() => {
     if (!selectedUser) return null;
-    const attachedBusiness = Array.isArray(userRestaurants) ? userRestaurants[0] : null;
+    const attachedBusiness = Array.isArray(userRestaurants)
+      ? userRestaurants[0]
+      : null;
     const journeySignals = [
       ...(Array.isArray(userActivity?.journeySummary)
-        ? userActivity.journeySummary.map((entry: any) => String(entry?.category || ""))
+        ? userActivity.journeySummary.map((entry: any) =>
+            String(entry?.category || ""),
+          )
         : []),
       ...(Array.isArray(userActivity?.eventCounts)
-        ? userActivity.eventCounts.map((entry: any) => String(entry?.eventName || ""))
+        ? userActivity.eventCounts.map((entry: any) =>
+            String(entry?.eventName || ""),
+          )
         : []),
     ]
       .map((value) => value.trim())
@@ -4935,8 +5099,8 @@ export default function AdminDashboard() {
         .toLowerCase();
       const email = `${user.email || ""}`.toLowerCase();
       const phone = `${user.phone || ""}`.toLowerCase();
-      const business = `${user.businessName || ""} ${user.businessType || ""}`
-        .toLowerCase();
+      const business =
+        `${user.businessName || ""} ${user.businessType || ""}`.toLowerCase();
       const location = `${user.defaultCity || ""} ${user.defaultState || ""} ${
         user.businessCity || ""
       } ${user.businessState || ""} ${user.defaultPostalCode || ""}`.toLowerCase();
@@ -6742,9 +6906,13 @@ export default function AdminDashboard() {
       restaurantId: string;
       businessType: string;
     }) => {
-      return await apiRequest("PATCH", `/api/admin/restaurants/${restaurantId}`, {
-        businessType,
-      });
+      return await apiRequest(
+        "PATCH",
+        `/api/admin/restaurants/${restaurantId}`,
+        {
+          businessType,
+        },
+      );
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
@@ -6822,10 +6990,9 @@ export default function AdminDashboard() {
       setAttachBusinessSearch("");
       toast({
         title: "Business attached",
-        description:
-          data?.accessContext?.primaryRestaurant?.name
-            ? `Attached to ${data.accessContext.primaryRestaurant.name}.`
-            : "Business user linked successfully.",
+        description: data?.accessContext?.primaryRestaurant?.name
+          ? `Attached to ${data.accessContext.primaryRestaurant.name}.`
+          : "Business user linked successfully.",
       });
     },
     onError: (error: any) => {
@@ -6866,7 +7033,8 @@ export default function AdminDashboard() {
     onError: (error: any) => {
       toast({
         title: "Create failed",
-        description: error?.message || "Unable to create and attach business profile.",
+        description:
+          error?.message || "Unable to create and attach business profile.",
         variant: "destructive",
       });
     },
@@ -7462,7 +7630,9 @@ export default function AdminDashboard() {
                 Platform Control & Intelligence
               </p>
               <p className="mt-2 text-xs text-white/70 max-w-2xl">
-                You are here as Admin. Use this space to fix user and business links, review quarantined profile evidence, and keep public data trustworthy.
+                You are here as Admin. Use this space to fix user and business
+                links, review quarantined profile evidence, and keep public data
+                trustworthy.
               </p>
             </div>
           </div>
@@ -7911,7 +8081,8 @@ export default function AdminDashboard() {
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Admin Quick Tools</CardTitle>
             <CardDescription>
-              Jump straight to verification review, user search, or business search.
+              Jump straight to verification review, user search, or business
+              search.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-wrap gap-2">
@@ -8980,15 +9151,16 @@ export default function AdminDashboard() {
                             Launch Board Priority Command Center
                           </div>
                           <div className="text-2xl font-semibold">
-                            {launchBoardData?.commandCenter?.topRecommendedAction ||
+                            {launchBoardData?.commandCenter
+                              ?.topRecommendedAction ||
                               "Keep improving useful profiles and booking readiness"}
                           </div>
                           <div className="text-sm text-slate-200">
                             Top growth constraint:{" "}
                             <span className="font-medium text-white">
                               {(
-                                launchBoardData?.commandCenter?.topGrowthConstraint ||
-                                "none"
+                                launchBoardData?.commandCenter
+                                  ?.topGrowthConstraint || "none"
                               ).replaceAll("_", " ")}
                             </span>
                           </div>
@@ -9007,8 +9179,8 @@ export default function AdminDashboard() {
                             [
                               "Market Health Status",
                               (
-                                launchBoardData?.commandCenter?.marketHealthStatus ||
-                                "blocked"
+                                launchBoardData?.commandCenter
+                                  ?.marketHealthStatus || "blocked"
                               ).replaceAll("_", " "),
                             ],
                             [
@@ -9034,7 +9206,8 @@ export default function AdminDashboard() {
                             ],
                             [
                               "Open Critical Fix Count",
-                              launchBoardData?.commandCenter?.openCriticalFixCount,
+                              launchBoardData?.commandCenter
+                                ?.openCriticalFixCount,
                             ],
                             [
                               "Resolved Fix Count",
@@ -9064,297 +9237,346 @@ export default function AdminDashboard() {
                     </div>
 
                     <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
-                    {[
-                      ["Profiles Total", launchBoardData?.metrics?.profilesTotal],
-                      [
-                        "Claimable Profiles",
-                        launchBoardData?.metrics?.claimableProfiles,
-                      ],
-                      ["Claimed Profiles", launchBoardData?.metrics?.claimedProfiles],
-                      ["Profiles w/ Menu", launchBoardData?.metrics?.profilesWithMenu],
-                      [
-                        "Profiles w/ Schedule",
-                        launchBoardData?.metrics?.profilesWithSchedule,
-                      ],
-                      [
-                        "Profiles w/ Contact",
-                        launchBoardData?.metrics?.profilesWithContact,
-                      ],
-                      [
-                        "Profiles w/ Photo/Logo",
-                        launchBoardData?.metrics?.profilesWithPhotoLogo,
-                      ],
-                      ["Active Food Trucks", launchBoardData?.metrics?.activeFoodTrucks],
-                      ["Active Hosts", launchBoardData?.metrics?.activeHosts],
-                      [
-                        "Parking Pass Listings",
-                        launchBoardData?.metrics?.parkingPassListings,
-                      ],
-                      ["Booking Starts", launchBoardData?.metrics?.bookingStarts],
-                      [
-                        "Booking Confirmations",
-                        launchBoardData?.metrics?.bookingConfirmations,
-                      ],
-                      ["Parking Pass Views", launchBoardData?.metrics?.parkingPassViews],
-                      ["Parking Pass Clicks", launchBoardData?.metrics?.parkingPassClicks],
-                      [
-                        "Parking Pass Booking Starts",
-                        launchBoardData?.metrics?.parkingPassBookingStarts,
-                      ],
-                      [
-                        "Parking Pass Booking Confirmations",
-                        launchBoardData?.metrics?.parkingPassBookingConfirmations,
-                      ],
-                      [
-                        "Parking Pass Click to Start Rate %",
-                        Number(
-                          (launchBoardData?.metrics?.parkingPassClickToStartRate || 0) *
-                            100,
-                        ).toFixed(1),
-                      ],
-                      [
-                        "Parking Pass Start to Confirm Rate %",
-                        Number(
-                          (launchBoardData?.metrics?.parkingPassStartToConfirmRate ||
-                            0) * 100,
-                        ).toFixed(1),
-                      ],
-                      [
-                        "Booking Intent to Booking Start Rate %",
-                        Number(
-                          (launchBoardData?.metrics
-                            ?.bookingIntentToBookingStartRate || 0) * 100,
-                        ).toFixed(1),
-                      ],
-                      [
-                        "Booking Intent to Booking Confirm Rate %",
-                        Number(
-                          (launchBoardData?.metrics
-                            ?.bookingIntentToBookingConfirmRate || 0) * 100,
-                        ).toFixed(1),
-                      ],
-                      [
-                        "Parking Pass No Listing Leak",
-                        launchBoardData?.metrics?.parkingPassNoListingLeak,
-                      ],
-                      [
-                        "Parking Pass Click No Start Leak",
-                        launchBoardData?.metrics?.parkingPassClickNoStartLeak,
-                      ],
-                      [
-                        "Parking Pass Start No Confirm Leak",
-                        launchBoardData?.metrics?.parkingPassStartNoConfirmLeak,
-                      ],
-                      [
-                        "Parking Pass Payment Disabled Leak",
-                        launchBoardData?.metrics?.parkingPassPaymentDisabledLeak,
-                      ],
-                      [
-                        "Parking Pass Host Capacity Leak",
-                        launchBoardData?.metrics?.parkingPassHostCapacityLeak,
-                      ],
-                      [
-                        "Parking Pass Missing Host Coordinate Leak",
-                        launchBoardData?.metrics
-                          ?.parkingPassMissingHostCoordinateLeak,
-                      ],
-                      [
-                        "Parking Pass Missing Truck Profile Leak",
-                        launchBoardData?.metrics?.parkingPassMissingTruckProfileLeak,
-                      ],
-                      [
-                        "Parking Pass Top Leak Reason",
-                        launchBoardData?.metrics?.parkingPassTopLeakReason || "none",
-                      ],
-                      ["Leak Fixes Open", launchBoardData?.metrics?.leakFixesOpen],
-                      [
-                        "Leak Fixes In Progress",
-                        launchBoardData?.metrics?.leakFixesInProgress,
-                      ],
-                      [
-                        "Leak Fixes Resolved",
-                        launchBoardData?.metrics?.leakFixesResolved,
-                      ],
-                      [
-                        "Leak Fixes Improved",
-                        launchBoardData?.metrics?.leakFixesImproved,
-                      ],
-                      [
-                        "Leak Fix Resolution Rate %",
-                        Number(
-                          (launchBoardData?.metrics?.leakFixResolutionRate || 0) *
-                            100,
-                        ).toFixed(1),
-                      ],
-                      [
-                        "Leak Fix Improvement Rate %",
-                        Number(
-                          (launchBoardData?.metrics?.leakFixImprovementRate || 0) *
-                            100,
-                        ).toFixed(1),
-                      ],
-                      ["Public Profile Views", launchBoardData?.metrics?.publicProfileViews],
-                      [
-                        "Public Profile Actions",
-                        launchBoardData?.metrics?.publicProfileActions,
-                      ],
-                      ["Affiliate Link Opens", launchBoardData?.metrics?.affiliateLinkOpens],
-                      [
-                        "Claim Pitches Created",
-                        launchBoardData?.metrics?.claimPitchesCreated,
-                      ],
-                      [
-                        "Claim Pitches Sent",
-                        launchBoardData?.metrics?.claimPitchesSent,
-                      ],
-                      [
-                        "Claim Pitches Opened",
-                        launchBoardData?.metrics?.claimPitchesOpened,
-                      ],
-                      [
-                        "Claim Pitches Started",
-                        launchBoardData?.metrics?.claimPitchesStarted,
-                      ],
-                      [
-                        "Claim Pitches Completed",
-                        launchBoardData?.metrics?.claimPitchesCompleted,
-                      ],
-                      [
-                        "Claim Pitch Sent Rate %",
-                        Number(
-                          (launchBoardData?.metrics?.claimPitchSentRate || 0) *
-                            100,
-                        ).toFixed(1),
-                      ],
-                      [
-                        "Claim Pitch Open Rate %",
-                        Number(
-                          (launchBoardData?.metrics?.claimPitchOpenRate || 0) *
-                            100,
-                        ).toFixed(1),
-                      ],
-                      [
-                        "Claim Pitch Start Rate %",
-                        Number(
-                          (launchBoardData?.metrics?.claimPitchStartRate || 0) *
-                            100,
-                        ).toFixed(1),
-                      ],
-                      [
-                        "Claim Pitch Completion Rate %",
-                        Number(
-                          (launchBoardData?.metrics?.claimPitchCompletionRate ||
-                            0) * 100,
-                        ).toFixed(1),
-                      ],
-                      [
-                        "Claimed Profiles Updated After Pitch",
-                        launchBoardData?.metrics?.claimedProfilesUpdatedAfterPitch,
-                      ],
-                      [
-                        "Claimed Profiles w/ Menu After Pitch",
-                        launchBoardData?.metrics?.claimedProfilesWithMenuAfterPitch,
-                      ],
-                      [
-                        "Claimed Profiles w/ Schedule After Pitch",
-                        launchBoardData?.metrics?.claimedProfilesWithScheduleAfterPitch,
-                      ],
-                      [
-                        "Claimed Profiles w/ Contact After Pitch",
-                        launchBoardData?.metrics?.claimedProfilesWithContactAfterPitch,
-                      ],
-                      [
-                        "Claimed Profiles w/ Photo After Pitch",
-                        launchBoardData?.metrics?.claimedProfilesWithPhotoAfterPitch,
-                      ],
-                      [
-                        "Claim to Useful Profile Rate %",
-                        Number(
-                          (launchBoardData?.metrics?.claimToUsefulProfileRate || 0) *
-                            100,
-                        ).toFixed(1),
-                      ],
-                      [
-                        "Useful Profiles Total",
-                        launchBoardData?.metrics?.usefulProfilesTotal,
-                      ],
-                      [
-                        "Useful Profiles With Views",
-                        launchBoardData?.metrics?.usefulProfilesWithViews,
-                      ],
-                      [
-                        "Useful Profiles With Actions",
-                        launchBoardData?.metrics?.usefulProfilesWithActions,
-                      ],
-                      [
-                        "Useful Profile View Lift %",
-                        Number(
-                          (launchBoardData?.metrics?.usefulProfileViewLift || 0) * 100,
-                        ).toFixed(1),
-                      ],
-                      [
-                        "Useful Profile Action Lift %",
-                        Number(
-                          (launchBoardData?.metrics?.usefulProfileActionLift || 0) * 100,
-                        ).toFixed(1),
-                      ],
-                      [
-                        "Useful Profile Booking Click Lift %",
-                        Number(
-                          (launchBoardData?.metrics?.usefulProfileBookingClickLift || 0) *
-                            100,
-                        ).toFixed(1),
-                      ],
-                      [
-                        "Booking Intent Profiles Total",
-                        launchBoardData?.metrics?.bookingIntentProfilesTotal,
-                      ],
-                      [
-                        "Booking Intent From Useful Profiles",
-                        launchBoardData?.metrics?.bookingIntentFromUsefulProfiles,
-                      ],
-                      [
-                        "Booking Intent From Non-Useful Profiles",
-                        launchBoardData?.metrics?.bookingIntentFromNonUsefulProfiles,
-                      ],
-                      [
-                        "Booking Intent Useful Profile Rate %",
-                        Number(
-                          (launchBoardData?.metrics?.bookingIntentUsefulProfileRate ||
-                            0) * 100,
-                        ).toFixed(1),
-                      ],
-                      [
-                        "Booking Intent Non-Useful Profile Rate %",
-                        Number(
-                          (launchBoardData?.metrics?.bookingIntentNonUsefulProfileRate ||
-                            0) * 100,
-                        ).toFixed(1),
-                      ],
-                      [
-                        "Booking Intent Useful Lift %",
-                        Number(
-                          (launchBoardData?.metrics?.bookingIntentUsefulLift || 0) *
-                            100,
-                        ).toFixed(1),
-                      ],
-                      [
-                        "Booking Intent to Parking Pass Click Rate %",
-                        Number(
-                          (launchBoardData?.metrics
-                            ?.bookingIntentToParkingPassClickRate || 0) * 100,
-                        ).toFixed(1),
-                      ],
-                    ].map(([label, value]) => (
-                      <div key={String(label)} className="rounded-lg border p-3">
-                        <div className="text-xs text-muted-foreground">{label}</div>
-                        <div className="text-2xl font-semibold">
-                          {typeof value === "string"
-                            ? value.replaceAll("_", " ")
-                            : Number(value || 0).toLocaleString()}
+                      {[
+                        [
+                          "Profiles Total",
+                          launchBoardData?.metrics?.profilesTotal,
+                        ],
+                        [
+                          "Claimable Profiles",
+                          launchBoardData?.metrics?.claimableProfiles,
+                        ],
+                        [
+                          "Claimed Profiles",
+                          launchBoardData?.metrics?.claimedProfiles,
+                        ],
+                        [
+                          "Profiles w/ Menu",
+                          launchBoardData?.metrics?.profilesWithMenu,
+                        ],
+                        [
+                          "Profiles w/ Schedule",
+                          launchBoardData?.metrics?.profilesWithSchedule,
+                        ],
+                        [
+                          "Profiles w/ Contact",
+                          launchBoardData?.metrics?.profilesWithContact,
+                        ],
+                        [
+                          "Profiles w/ Photo/Logo",
+                          launchBoardData?.metrics?.profilesWithPhotoLogo,
+                        ],
+                        [
+                          "Active Food Trucks",
+                          launchBoardData?.metrics?.activeFoodTrucks,
+                        ],
+                        ["Active Hosts", launchBoardData?.metrics?.activeHosts],
+                        [
+                          "Parking Pass Listings",
+                          launchBoardData?.metrics?.parkingPassListings,
+                        ],
+                        [
+                          "Booking Starts",
+                          launchBoardData?.metrics?.bookingStarts,
+                        ],
+                        [
+                          "Booking Confirmations",
+                          launchBoardData?.metrics?.bookingConfirmations,
+                        ],
+                        [
+                          "Parking Pass Views",
+                          launchBoardData?.metrics?.parkingPassViews,
+                        ],
+                        [
+                          "Parking Pass Clicks",
+                          launchBoardData?.metrics?.parkingPassClicks,
+                        ],
+                        [
+                          "Parking Pass Booking Starts",
+                          launchBoardData?.metrics?.parkingPassBookingStarts,
+                        ],
+                        [
+                          "Parking Pass Booking Confirmations",
+                          launchBoardData?.metrics
+                            ?.parkingPassBookingConfirmations,
+                        ],
+                        [
+                          "Parking Pass Click to Start Rate %",
+                          Number(
+                            (launchBoardData?.metrics
+                              ?.parkingPassClickToStartRate || 0) * 100,
+                          ).toFixed(1),
+                        ],
+                        [
+                          "Parking Pass Start to Confirm Rate %",
+                          Number(
+                            (launchBoardData?.metrics
+                              ?.parkingPassStartToConfirmRate || 0) * 100,
+                          ).toFixed(1),
+                        ],
+                        [
+                          "Booking Intent to Booking Start Rate %",
+                          Number(
+                            (launchBoardData?.metrics
+                              ?.bookingIntentToBookingStartRate || 0) * 100,
+                          ).toFixed(1),
+                        ],
+                        [
+                          "Booking Intent to Booking Confirm Rate %",
+                          Number(
+                            (launchBoardData?.metrics
+                              ?.bookingIntentToBookingConfirmRate || 0) * 100,
+                          ).toFixed(1),
+                        ],
+                        [
+                          "Parking Pass No Listing Leak",
+                          launchBoardData?.metrics?.parkingPassNoListingLeak,
+                        ],
+                        [
+                          "Parking Pass Click No Start Leak",
+                          launchBoardData?.metrics?.parkingPassClickNoStartLeak,
+                        ],
+                        [
+                          "Parking Pass Start No Confirm Leak",
+                          launchBoardData?.metrics
+                            ?.parkingPassStartNoConfirmLeak,
+                        ],
+                        [
+                          "Parking Pass Payment Disabled Leak",
+                          launchBoardData?.metrics
+                            ?.parkingPassPaymentDisabledLeak,
+                        ],
+                        [
+                          "Parking Pass Host Capacity Leak",
+                          launchBoardData?.metrics?.parkingPassHostCapacityLeak,
+                        ],
+                        [
+                          "Parking Pass Missing Host Coordinate Leak",
+                          launchBoardData?.metrics
+                            ?.parkingPassMissingHostCoordinateLeak,
+                        ],
+                        [
+                          "Parking Pass Missing Truck Profile Leak",
+                          launchBoardData?.metrics
+                            ?.parkingPassMissingTruckProfileLeak,
+                        ],
+                        [
+                          "Parking Pass Top Leak Reason",
+                          launchBoardData?.metrics?.parkingPassTopLeakReason ||
+                            "none",
+                        ],
+                        [
+                          "Leak Fixes Open",
+                          launchBoardData?.metrics?.leakFixesOpen,
+                        ],
+                        [
+                          "Leak Fixes In Progress",
+                          launchBoardData?.metrics?.leakFixesInProgress,
+                        ],
+                        [
+                          "Leak Fixes Resolved",
+                          launchBoardData?.metrics?.leakFixesResolved,
+                        ],
+                        [
+                          "Leak Fixes Improved",
+                          launchBoardData?.metrics?.leakFixesImproved,
+                        ],
+                        [
+                          "Leak Fix Resolution Rate %",
+                          Number(
+                            (launchBoardData?.metrics?.leakFixResolutionRate ||
+                              0) * 100,
+                          ).toFixed(1),
+                        ],
+                        [
+                          "Leak Fix Improvement Rate %",
+                          Number(
+                            (launchBoardData?.metrics?.leakFixImprovementRate ||
+                              0) * 100,
+                          ).toFixed(1),
+                        ],
+                        [
+                          "Public Profile Views",
+                          launchBoardData?.metrics?.publicProfileViews,
+                        ],
+                        [
+                          "Public Profile Actions",
+                          launchBoardData?.metrics?.publicProfileActions,
+                        ],
+                        [
+                          "Affiliate Link Opens",
+                          launchBoardData?.metrics?.affiliateLinkOpens,
+                        ],
+                        [
+                          "Claim Pitches Created",
+                          launchBoardData?.metrics?.claimPitchesCreated,
+                        ],
+                        [
+                          "Claim Pitches Sent",
+                          launchBoardData?.metrics?.claimPitchesSent,
+                        ],
+                        [
+                          "Claim Pitches Opened",
+                          launchBoardData?.metrics?.claimPitchesOpened,
+                        ],
+                        [
+                          "Claim Pitches Started",
+                          launchBoardData?.metrics?.claimPitchesStarted,
+                        ],
+                        [
+                          "Claim Pitches Completed",
+                          launchBoardData?.metrics?.claimPitchesCompleted,
+                        ],
+                        [
+                          "Claim Pitch Sent Rate %",
+                          Number(
+                            (launchBoardData?.metrics?.claimPitchSentRate ||
+                              0) * 100,
+                          ).toFixed(1),
+                        ],
+                        [
+                          "Claim Pitch Open Rate %",
+                          Number(
+                            (launchBoardData?.metrics?.claimPitchOpenRate ||
+                              0) * 100,
+                          ).toFixed(1),
+                        ],
+                        [
+                          "Claim Pitch Start Rate %",
+                          Number(
+                            (launchBoardData?.metrics?.claimPitchStartRate ||
+                              0) * 100,
+                          ).toFixed(1),
+                        ],
+                        [
+                          "Claim Pitch Completion Rate %",
+                          Number(
+                            (launchBoardData?.metrics
+                              ?.claimPitchCompletionRate || 0) * 100,
+                          ).toFixed(1),
+                        ],
+                        [
+                          "Claimed Profiles Updated After Pitch",
+                          launchBoardData?.metrics
+                            ?.claimedProfilesUpdatedAfterPitch,
+                        ],
+                        [
+                          "Claimed Profiles w/ Menu After Pitch",
+                          launchBoardData?.metrics
+                            ?.claimedProfilesWithMenuAfterPitch,
+                        ],
+                        [
+                          "Claimed Profiles w/ Schedule After Pitch",
+                          launchBoardData?.metrics
+                            ?.claimedProfilesWithScheduleAfterPitch,
+                        ],
+                        [
+                          "Claimed Profiles w/ Contact After Pitch",
+                          launchBoardData?.metrics
+                            ?.claimedProfilesWithContactAfterPitch,
+                        ],
+                        [
+                          "Claimed Profiles w/ Photo After Pitch",
+                          launchBoardData?.metrics
+                            ?.claimedProfilesWithPhotoAfterPitch,
+                        ],
+                        [
+                          "Claim to Useful Profile Rate %",
+                          Number(
+                            (launchBoardData?.metrics
+                              ?.claimToUsefulProfileRate || 0) * 100,
+                          ).toFixed(1),
+                        ],
+                        [
+                          "Useful Profiles Total",
+                          launchBoardData?.metrics?.usefulProfilesTotal,
+                        ],
+                        [
+                          "Useful Profiles With Views",
+                          launchBoardData?.metrics?.usefulProfilesWithViews,
+                        ],
+                        [
+                          "Useful Profiles With Actions",
+                          launchBoardData?.metrics?.usefulProfilesWithActions,
+                        ],
+                        [
+                          "Useful Profile View Lift %",
+                          Number(
+                            (launchBoardData?.metrics?.usefulProfileViewLift ||
+                              0) * 100,
+                          ).toFixed(1),
+                        ],
+                        [
+                          "Useful Profile Action Lift %",
+                          Number(
+                            (launchBoardData?.metrics
+                              ?.usefulProfileActionLift || 0) * 100,
+                          ).toFixed(1),
+                        ],
+                        [
+                          "Useful Profile Booking Click Lift %",
+                          Number(
+                            (launchBoardData?.metrics
+                              ?.usefulProfileBookingClickLift || 0) * 100,
+                          ).toFixed(1),
+                        ],
+                        [
+                          "Booking Intent Profiles Total",
+                          launchBoardData?.metrics?.bookingIntentProfilesTotal,
+                        ],
+                        [
+                          "Booking Intent From Useful Profiles",
+                          launchBoardData?.metrics
+                            ?.bookingIntentFromUsefulProfiles,
+                        ],
+                        [
+                          "Booking Intent From Non-Useful Profiles",
+                          launchBoardData?.metrics
+                            ?.bookingIntentFromNonUsefulProfiles,
+                        ],
+                        [
+                          "Booking Intent Useful Profile Rate %",
+                          Number(
+                            (launchBoardData?.metrics
+                              ?.bookingIntentUsefulProfileRate || 0) * 100,
+                          ).toFixed(1),
+                        ],
+                        [
+                          "Booking Intent Non-Useful Profile Rate %",
+                          Number(
+                            (launchBoardData?.metrics
+                              ?.bookingIntentNonUsefulProfileRate || 0) * 100,
+                          ).toFixed(1),
+                        ],
+                        [
+                          "Booking Intent Useful Lift %",
+                          Number(
+                            (launchBoardData?.metrics
+                              ?.bookingIntentUsefulLift || 0) * 100,
+                          ).toFixed(1),
+                        ],
+                        [
+                          "Booking Intent to Parking Pass Click Rate %",
+                          Number(
+                            (launchBoardData?.metrics
+                              ?.bookingIntentToParkingPassClickRate || 0) * 100,
+                          ).toFixed(1),
+                        ],
+                      ].map(([label, value]) => (
+                        <div
+                          key={String(label)}
+                          className="rounded-lg border p-3"
+                        >
+                          <div className="text-xs text-muted-foreground">
+                            {label}
+                          </div>
+                          <div className="text-2xl font-semibold">
+                            {typeof value === "string"
+                              ? value.replaceAll("_", " ")
+                              : Number(value || 0).toLocaleString()}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ))}
                     </div>
                   </>
                 )}
@@ -9362,10 +9584,13 @@ export default function AdminDashboard() {
                   <div className="space-y-2">
                     <div className="flex items-center justify-between gap-2">
                       <div>
-                        <div className="text-sm font-semibold">Leak Fix Queue</div>
+                        <div className="text-sm font-semibold">
+                          Leak Fix Queue
+                        </div>
                         <div className="text-xs text-muted-foreground">
                           Top fix priority:{" "}
-                          {launchBoardData?.leakFixQueue?.[0]?.priority || "none"}
+                          {launchBoardData?.leakFixQueue?.[0]?.priority ||
+                            "none"}
                         </div>
                       </div>
                       <Badge variant="outline">
@@ -9388,7 +9613,9 @@ export default function AdminDashboard() {
                             </div>
                             <Badge
                               variant={
-                                fix.priority === "high" ? "destructive" : "outline"
+                                fix.priority === "high"
+                                  ? "destructive"
+                                  : "outline"
                               }
                             >
                               {fix.priority}
@@ -10282,27 +10509,43 @@ export default function AdminDashboard() {
                     </div>
                   </div>
                   <div className="rounded-lg border p-3">
-                    <div className="text-xs text-muted-foreground">Missing Menu</div>
+                    <div className="text-xs text-muted-foreground">
+                      Missing Menu
+                    </div>
                     <div className="text-lg font-semibold">
-                      {Number(foodTruckInventoryPayload?.counts?.missingMenu || 0)}
+                      {Number(
+                        foodTruckInventoryPayload?.counts?.missingMenu || 0,
+                      )}
                     </div>
                   </div>
                   <div className="rounded-lg border p-3">
-                    <div className="text-xs text-muted-foreground">Missing Logo</div>
+                    <div className="text-xs text-muted-foreground">
+                      Missing Logo
+                    </div>
                     <div className="text-lg font-semibold">
-                      {Number(foodTruckInventoryPayload?.counts?.missingLogo || 0)}
+                      {Number(
+                        foodTruckInventoryPayload?.counts?.missingLogo || 0,
+                      )}
                     </div>
                   </div>
                   <div className="rounded-lg border p-3">
-                    <div className="text-xs text-muted-foreground">Missing Owner</div>
+                    <div className="text-xs text-muted-foreground">
+                      Missing Owner
+                    </div>
                     <div className="text-lg font-semibold">
-                      {Number(foodTruckInventoryPayload?.counts?.missingOwner || 0)}
+                      {Number(
+                        foodTruckInventoryPayload?.counts?.missingOwner || 0,
+                      )}
                     </div>
                   </div>
                   <div className="rounded-lg border p-3">
-                    <div className="text-xs text-muted-foreground">Quarantined</div>
+                    <div className="text-xs text-muted-foreground">
+                      Quarantined
+                    </div>
                     <div className="text-lg font-semibold">
-                      {Number(foodTruckInventoryPayload?.counts?.quarantined || 0)}
+                      {Number(
+                        foodTruckInventoryPayload?.counts?.quarantined || 0,
+                      )}
                     </div>
                   </div>
                 </div>
@@ -10311,14 +10554,18 @@ export default function AdminDashboard() {
                   <input
                     className="h-10 rounded-md border bg-background px-3 text-sm"
                     value={truckInventorySearch}
-                    onChange={(event) => setTruckInventorySearch(event.target.value)}
+                    onChange={(event) =>
+                      setTruckInventorySearch(event.target.value)
+                    }
                     placeholder="Search truck, owner email, phone, city"
                   />
                   <label className="inline-flex items-center gap-2 text-sm">
                     <input
                       type="checkbox"
                       checked={truckFilterMissingMenu}
-                      onChange={(event) => setTruckFilterMissingMenu(event.target.checked)}
+                      onChange={(event) =>
+                        setTruckFilterMissingMenu(event.target.checked)
+                      }
                     />
                     Missing menu
                   </label>
@@ -10326,7 +10573,9 @@ export default function AdminDashboard() {
                     <input
                       type="checkbox"
                       checked={truckFilterMissingLogo}
-                      onChange={(event) => setTruckFilterMissingLogo(event.target.checked)}
+                      onChange={(event) =>
+                        setTruckFilterMissingLogo(event.target.checked)
+                      }
                     />
                     Missing logo
                   </label>
@@ -10334,7 +10583,9 @@ export default function AdminDashboard() {
                     <input
                       type="checkbox"
                       checked={truckFilterMissingOwner}
-                      onChange={(event) => setTruckFilterMissingOwner(event.target.checked)}
+                      onChange={(event) =>
+                        setTruckFilterMissingOwner(event.target.checked)
+                      }
                     />
                     Missing owner
                   </label>
@@ -10342,7 +10593,9 @@ export default function AdminDashboard() {
                     <input
                       type="checkbox"
                       checked={truckFilterQuarantined}
-                      onChange={(event) => setTruckFilterQuarantined(event.target.checked)}
+                      onChange={(event) =>
+                        setTruckFilterQuarantined(event.target.checked)
+                      }
                     />
                     Quarantined
                   </label>
@@ -10350,14 +10603,18 @@ export default function AdminDashboard() {
                     <input
                       type="checkbox"
                       checked={truckFilterVerified}
-                      onChange={(event) => setTruckFilterVerified(event.target.checked)}
+                      onChange={(event) =>
+                        setTruckFilterVerified(event.target.checked)
+                      }
                     />
                     Verified
                   </label>
                 </div>
 
                 {foodTruckInventoryLoading ? (
-                  <div className="text-sm text-muted-foreground">Loading food truck inventory...</div>
+                  <div className="text-sm text-muted-foreground">
+                    Loading food truck inventory...
+                  </div>
                 ) : null}
                 {foodTruckInventoryError ? (
                   <div className="text-sm text-red-500">
@@ -10373,195 +10630,303 @@ export default function AdminDashboard() {
 
                 {!foodTruckInventoryLoading && !foodTruckInventoryError ? (
                   <>
-                  <div className="hidden overflow-x-auto rounded-lg border md:block" data-admin-truck-inventory-desktop-table>
-                    <table className="w-full min-w-[1200px] text-sm">
-                      <thead className="bg-muted/30 text-left">
-                        <tr>
-                          <th className="px-3 py-2">Truck</th>
-                          <th className="px-3 py-2">Owner</th>
-                          <th className="px-3 py-2">City</th>
-                          <th className="px-3 py-2">Logo</th>
-                          <th className="px-3 py-2">Cover</th>
-                          <th className="px-3 py-2">Menu</th>
-                          <th className="px-3 py-2">Phone</th>
-                          <th className="px-3 py-2">Email / Socials</th>
-                          <th className="px-3 py-2">Verification</th>
-                          <th className="px-3 py-2">Updated</th>
-                          <th className="px-3 py-2">Missing</th>
-                          <th className="px-3 py-2">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {foodTruckInventoryRows.map((truck) => (
-                          <tr key={truck.id} className="border-t align-top">
-                            <td className="px-3 py-2">
-                              <div className="font-medium">{truck.name}</div>
-                              <div className="text-xs text-muted-foreground">{truck.id}</div>
-                              {truck.rowStatus && truck.rowStatus !== "operational" ? (
-                                <Badge variant="secondary" className="mt-1">
-                                  {truck.rowStatus.replace(/_/g, " ")}
-                                </Badge>
-                              ) : null}
-                            </td>
-                            <td className="px-3 py-2">
-                              {truck.ownerEmail || (
-                                <span className="text-muted-foreground">Missing owner</span>
-                              )}
-                            </td>
-                            <td className="px-3 py-2">{truck.city || "Missing"}</td>
-                            <td className="px-3 py-2">
-                              <div className="flex items-center gap-2">
-                                <Badge variant={truck.hasLogo ? "default" : "secondary"}>
-                                  {truck.hasLogo ? "Yes" : "No"}
-                                </Badge>
-                                {truck.logoUrl ? (
-                                  <img
-                                    src={getOptimizedImageUrl(truck.logoUrl, 40)}
-                                    alt=""
-                                    className="h-8 w-8 rounded object-cover"
-                                  />
+                    <div
+                      className="hidden overflow-x-auto rounded-lg border md:block"
+                      data-admin-truck-inventory-desktop-table
+                    >
+                      <table className="w-full min-w-[1200px] text-sm">
+                        <thead className="bg-muted/30 text-left">
+                          <tr>
+                            <th className="px-3 py-2">Truck</th>
+                            <th className="px-3 py-2">Owner</th>
+                            <th className="px-3 py-2">City</th>
+                            <th className="px-3 py-2">Logo</th>
+                            <th className="px-3 py-2">Cover</th>
+                            <th className="px-3 py-2">Menu</th>
+                            <th className="px-3 py-2">Phone</th>
+                            <th className="px-3 py-2">Email / Socials</th>
+                            <th className="px-3 py-2">Verification</th>
+                            <th className="px-3 py-2">Updated</th>
+                            <th className="px-3 py-2">Missing</th>
+                            <th className="px-3 py-2">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {foodTruckInventoryRows.map((truck) => (
+                            <tr key={truck.id} className="border-t align-top">
+                              <td className="px-3 py-2">
+                                <div className="font-medium">{truck.name}</div>
+                                <div className="text-xs text-muted-foreground">
+                                  {truck.id}
+                                </div>
+                                {truck.rowStatus &&
+                                truck.rowStatus !== "operational" ? (
+                                  <Badge variant="secondary" className="mt-1">
+                                    {truck.rowStatus.replace(/_/g, " ")}
+                                  </Badge>
                                 ) : null}
+                              </td>
+                              <td className="px-3 py-2">
+                                {truck.ownerEmail || (
+                                  <span className="text-muted-foreground">
+                                    Missing owner
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-3 py-2">
+                                {truck.city || "Missing"}
+                              </td>
+                              <td className="px-3 py-2">
+                                <div className="flex items-center gap-2">
+                                  <Badge
+                                    variant={
+                                      truck.hasLogo ? "default" : "secondary"
+                                    }
+                                  >
+                                    {truck.hasLogo ? "Yes" : "No"}
+                                  </Badge>
+                                  {truck.logoUrl ? (
+                                    <img
+                                      src={getOptimizedImageUrl(
+                                        truck.logoUrl,
+                                        40,
+                                      )}
+                                      alt=""
+                                      className="h-8 w-8 rounded object-cover"
+                                    />
+                                  ) : null}
+                                </div>
+                              </td>
+                              <td className="px-3 py-2">
+                                <div className="flex items-center gap-2">
+                                  <Badge
+                                    variant={
+                                      truck.hasCoverImage
+                                        ? "default"
+                                        : "secondary"
+                                    }
+                                  >
+                                    {truck.hasCoverImage ? "Yes" : "No"}
+                                  </Badge>
+                                  {truck.coverImageUrl ? (
+                                    <img
+                                      src={getOptimizedImageUrl(
+                                        truck.coverImageUrl,
+                                        40,
+                                      )}
+                                      alt=""
+                                      className="h-8 w-8 rounded object-cover"
+                                    />
+                                  ) : null}
+                                </div>
+                              </td>
+                              <td className="px-3 py-2">
+                                {truck.menuItemCount}{" "}
+                                {truck.hasMenu ? "" : "(Missing)"}
+                              </td>
+                              <td className="px-3 py-2">
+                                {truck.phone || "Missing"}
+                              </td>
+                              <td className="px-3 py-2">
+                                <div className="flex flex-col gap-1">
+                                  <Badge
+                                    variant={
+                                      truck.hasEmail ? "default" : "secondary"
+                                    }
+                                  >
+                                    {truck.hasEmail ? "Email" : "No email"}
+                                  </Badge>
+                                  <Badge
+                                    variant={
+                                      truck.hasSocials ? "default" : "secondary"
+                                    }
+                                  >
+                                    {truck.hasSocials
+                                      ? "Socials"
+                                      : "No socials"}
+                                  </Badge>
+                                </div>
+                              </td>
+                              <td className="px-3 py-2">
+                                <div className="flex flex-col gap-1">
+                                  <Badge
+                                    variant={
+                                      truck.isVerified ? "default" : "secondary"
+                                    }
+                                  >
+                                    {truck.isVerified ? "Verified" : "Pending"}
+                                  </Badge>
+                                  <Badge
+                                    variant={
+                                      truck.isQuarantined
+                                        ? "destructive"
+                                        : "outline"
+                                    }
+                                  >
+                                    {truck.isQuarantined
+                                      ? "Quarantined"
+                                      : "Clear"}
+                                  </Badge>
+                                </div>
+                              </td>
+                              <td className="px-3 py-2">
+                                {truck.lastUpdatedAt
+                                  ? new Date(
+                                      truck.lastUpdatedAt,
+                                    ).toLocaleString()
+                                  : "Unknown"}
+                              </td>
+                              <td className="px-3 py-2">
+                                <div className="flex flex-wrap gap-1">
+                                  {truck.missingFields.length ? (
+                                    truck.missingFields
+                                      .slice(0, 4)
+                                      .map((field) => (
+                                        <Badge
+                                          key={`${truck.id}:${field}`}
+                                          variant="secondary"
+                                        >
+                                          {field}
+                                        </Badge>
+                                      ))
+                                  ) : (
+                                    <Badge variant="outline">Complete</Badge>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="px-3 py-2">
+                                <div className="flex flex-col items-start gap-1">
+                                  <a
+                                    className="underline"
+                                    href={truck.publicProfileUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                  >
+                                    View
+                                  </a>
+                                  <a
+                                    className="underline"
+                                    href={`/restaurant/${encodeURIComponent(truck.id)}`}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                  >
+                                    Edit
+                                  </a>
+                                  <a
+                                    className="underline"
+                                    href={`/admin/dashboard?tab=users`}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                  >
+                                    Attach owner
+                                  </a>
+                                  <a
+                                    className="underline"
+                                    href={`/admin/dashboard?tab=quarantine`}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                  >
+                                    Review evidence
+                                  </a>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                          {foodTruckInventoryRows.length === 0 ? (
+                            <tr>
+                              <td
+                                colSpan={12}
+                                className="px-3 py-8 text-center text-muted-foreground"
+                              >
+                                No food trucks match the current filters.
+                              </td>
+                            </tr>
+                          ) : null}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div
+                      className="grid gap-3 md:hidden"
+                      data-admin-truck-inventory-mobile-cards
+                    >
+                      {foodTruckInventoryRows.map((truck) => (
+                        <div
+                          key={truck.id}
+                          className="rounded-lg border p-3 text-sm"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="font-medium break-words">
+                                {truck.name}
                               </div>
-                            </td>
-                            <td className="px-3 py-2">
-                              <div className="flex items-center gap-2">
-                                <Badge variant={truck.hasCoverImage ? "default" : "secondary"}>
-                                  {truck.hasCoverImage ? "Yes" : "No"}
-                                </Badge>
-                                {truck.coverImageUrl ? (
-                                  <img
-                                    src={getOptimizedImageUrl(truck.coverImageUrl, 40)}
-                                    alt=""
-                                    className="h-8 w-8 rounded object-cover"
-                                  />
-                                ) : null}
+                              <div className="text-xs text-muted-foreground break-all">
+                                {truck.id}
                               </div>
-                            </td>
-                            <td className="px-3 py-2">
-                              {truck.menuItemCount} {truck.hasMenu ? "" : "(Missing)"}
-                            </td>
-                            <td className="px-3 py-2">{truck.phone || "Missing"}</td>
-                            <td className="px-3 py-2">
-                              <div className="flex flex-col gap-1">
-                                <Badge variant={truck.hasEmail ? "default" : "secondary"}>
-                                  {truck.hasEmail ? "Email" : "No email"}
-                                </Badge>
-                                <Badge variant={truck.hasSocials ? "default" : "secondary"}>
-                                  {truck.hasSocials ? "Socials" : "No socials"}
-                                </Badge>
+                            </div>
+                            <Badge
+                              variant={
+                                truck.isQuarantined ? "destructive" : "outline"
+                              }
+                              className="shrink-0"
+                            >
+                              {truck.rowStatus &&
+                              truck.rowStatus !== "operational"
+                                ? truck.rowStatus.replace(/_/g, " ")
+                                : "operational"}
+                            </Badge>
+                          </div>
+                          <dl className="mt-3 grid grid-cols-1 gap-2 text-xs">
+                            <div>
+                              <dt className="text-muted-foreground">Owner</dt>
+                              <dd className="break-all">
+                                {truck.ownerEmail || "No active owner"}
+                              </dd>
+                            </div>
+                            <div>
+                              <dt className="text-muted-foreground">City</dt>
+                              <dd>{truck.city || "Missing"}</dd>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <dt className="text-muted-foreground">Menu</dt>
+                                <dd>{truck.menuItemCount} items</dd>
                               </div>
-                            </td>
-                            <td className="px-3 py-2">
-                              <div className="flex flex-col gap-1">
-                                <Badge variant={truck.isVerified ? "default" : "secondary"}>
-                                  {truck.isVerified ? "Verified" : "Pending"}
-                                </Badge>
-                                <Badge variant={truck.isQuarantined ? "destructive" : "outline"}>
-                                  {truck.isQuarantined ? "Quarantined" : "Clear"}
-                                </Badge>
+                              <div>
+                                <dt className="text-muted-foreground">
+                                  Updated
+                                </dt>
+                                <dd>
+                                  {truck.lastUpdatedAt
+                                    ? new Date(
+                                        truck.lastUpdatedAt,
+                                      ).toLocaleDateString()
+                                    : "Unknown"}
+                                </dd>
                               </div>
-                            </td>
-                            <td className="px-3 py-2">
-                              {truck.lastUpdatedAt
-                                ? new Date(truck.lastUpdatedAt).toLocaleString()
-                                : "Unknown"}
-                            </td>
-                            <td className="px-3 py-2">
-                              <div className="flex flex-wrap gap-1">
+                            </div>
+                            <div>
+                              <dt className="text-muted-foreground">Missing</dt>
+                              <dd className="mt-1 flex flex-wrap gap-1">
                                 {truck.missingFields.length ? (
-                                  truck.missingFields.slice(0, 4).map((field) => (
-                                    <Badge key={`${truck.id}:${field}`} variant="secondary">
-                                      {field}
-                                    </Badge>
-                                  ))
+                                  truck.missingFields
+                                    .slice(0, 4)
+                                    .map((field) => (
+                                      <Badge
+                                        key={`${truck.id}:mobile:${field}`}
+                                        variant="secondary"
+                                      >
+                                        {field}
+                                      </Badge>
+                                    ))
                                 ) : (
                                   <Badge variant="outline">Complete</Badge>
                                 )}
-                              </div>
-                            </td>
-                            <td className="px-3 py-2">
-                              <div className="flex flex-col items-start gap-1">
-                                <a className="underline" href={truck.publicProfileUrl} target="_blank" rel="noreferrer">
-                                  View
-                                </a>
-                                <a className="underline" href={`/restaurant/${encodeURIComponent(truck.id)}`} target="_blank" rel="noreferrer">
-                                  Edit
-                                </a>
-                                <a className="underline" href={`/admin/dashboard?tab=users`} target="_blank" rel="noreferrer">
-                                  Attach owner
-                                </a>
-                                <a className="underline" href={`/admin/dashboard?tab=quarantine`} target="_blank" rel="noreferrer">
-                                  Review evidence
-                                </a>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                        {foodTruckInventoryRows.length === 0 ? (
-                          <tr>
-                            <td colSpan={12} className="px-3 py-8 text-center text-muted-foreground">
-                              No food trucks match the current filters.
-                            </td>
-                          </tr>
-                        ) : null}
-                      </tbody>
-                    </table>
-                  </div>
-                  <div className="grid gap-3 md:hidden" data-admin-truck-inventory-mobile-cards>
-                    {foodTruckInventoryRows.map((truck) => (
-                      <div key={truck.id} className="rounded-lg border p-3 text-sm">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <div className="font-medium break-words">{truck.name}</div>
-                            <div className="text-xs text-muted-foreground break-all">{truck.id}</div>
-                          </div>
-                          <Badge variant={truck.isQuarantined ? "destructive" : "outline"} className="shrink-0">
-                            {truck.rowStatus && truck.rowStatus !== "operational"
-                              ? truck.rowStatus.replace(/_/g, " ")
-                              : "operational"}
-                          </Badge>
-                        </div>
-                        <dl className="mt-3 grid grid-cols-1 gap-2 text-xs">
-                          <div>
-                            <dt className="text-muted-foreground">Owner</dt>
-                            <dd className="break-all">{truck.ownerEmail || "No active owner"}</dd>
-                          </div>
-                          <div>
-                            <dt className="text-muted-foreground">City</dt>
-                            <dd>{truck.city || "Missing"}</dd>
-                          </div>
-                          <div className="grid grid-cols-2 gap-2">
-                            <div>
-                              <dt className="text-muted-foreground">Menu</dt>
-                              <dd>{truck.menuItemCount} items</dd>
-                            </div>
-                            <div>
-                              <dt className="text-muted-foreground">Updated</dt>
-                              <dd>
-                                {truck.lastUpdatedAt
-                                  ? new Date(truck.lastUpdatedAt).toLocaleDateString()
-                                  : "Unknown"}
                               </dd>
                             </div>
-                          </div>
-                          <div>
-                            <dt className="text-muted-foreground">Missing</dt>
-                            <dd className="mt-1 flex flex-wrap gap-1">
-                              {truck.missingFields.length ? (
-                                truck.missingFields.slice(0, 4).map((field) => (
-                                  <Badge key={`${truck.id}:mobile:${field}`} variant="secondary">
-                                    {field}
-                                  </Badge>
-                                ))
-                              ) : (
-                                <Badge variant="outline">Complete</Badge>
-                              )}
-                            </dd>
-                          </div>
-                        </dl>
-                      </div>
-                    ))}
-                  </div>
+                          </dl>
+                        </div>
+                      ))}
+                    </div>
                   </>
                 ) : null}
               </CardContent>
@@ -10585,8 +10950,8 @@ export default function AdminDashboard() {
                     <span className="font-semibold text-foreground">
                       Message filtered users
                     </span>{" "}
-                    below before the user list. Staff/admin accounts and opted-out
-                    users are protected by default.
+                    below before the user list. Staff/admin accounts and
+                    opted-out users are protected by default.
                   </div>
                   <div className="flex gap-2">
                     <Button
@@ -10828,13 +11193,17 @@ export default function AdminDashboard() {
                                           : "unverified"}
                                       </Badge>
                                       {candidate.hasPassword && (
-                                        <Badge variant="outline">password</Badge>
+                                        <Badge variant="outline">
+                                          password
+                                        </Badge>
                                       )}
                                       {candidate.hasGoogle && (
                                         <Badge variant="outline">google</Badge>
                                       )}
                                       {candidate.hasFacebook && (
-                                        <Badge variant="outline">facebook</Badge>
+                                        <Badge variant="outline">
+                                          facebook
+                                        </Badge>
                                       )}
                                       {candidate.hasTradeScout && (
                                         <Badge variant="outline">
@@ -10843,19 +11212,14 @@ export default function AdminDashboard() {
                                       )}
                                       <Badge variant="outline">
                                         restaurants{" "}
-                                        {Number(
-                                          candidate.restaurantCount || 0,
-                                        )}
+                                        {Number(candidate.restaurantCount || 0)}
                                       </Badge>
                                       <Badge variant="outline">
-                                        hosts{" "}
-                                        {Number(candidate.hostCount || 0)}
+                                        hosts {Number(candidate.hostCount || 0)}
                                       </Badge>
                                       <Badge variant="outline">
                                         activity{" "}
-                                        {Number(
-                                          candidate.telemetryCount || 0,
-                                        )}
+                                        {Number(candidate.telemetryCount || 0)}
                                       </Badge>
                                       <Badge variant="outline">
                                         score{" "}
@@ -11002,7 +11366,8 @@ export default function AdminDashboard() {
                               : "No tracked activity"}
                           </span>
                           <span>
-                            {Number(user.activityEventCount || 0)} tracked events
+                            {Number(user.activityEventCount || 0)} tracked
+                            events
                           </span>
                           <Badge variant="outline">
                             role:{toIdentityRole(user.userType)}
@@ -11023,12 +11388,15 @@ export default function AdminDashboard() {
                             </Badge>
                           )}
                           <Badge variant="outline">
-                            email:{user.emailVerified ? "verified" : "unverified"}
+                            email:
+                            {user.emailVerified ? "verified" : "unverified"}
                           </Badge>
                           {user.hasRestaurant && (
                             <Badge
                               variant={
-                                user.businessIsVerified ? "default" : "secondary"
+                                user.businessIsVerified
+                                  ? "default"
+                                  : "secondary"
                               }
                             >
                               business:
@@ -11070,7 +11438,9 @@ export default function AdminDashboard() {
                           >
                             <option value="unknown">Needs review</option>
                             <option value="customer">Customer</option>
-                            <option value="restaurant_owner">Restaurant Owner</option>
+                            <option value="restaurant_owner">
+                              Restaurant Owner
+                            </option>
                             <option value="food_truck">Food Truck</option>
                             <option value="host">Host</option>
                             <option value="event_coordinator">
@@ -11088,29 +11458,37 @@ export default function AdminDashboard() {
                               <option value="super_admin">Super Admin</option>
                             )}
                           </select>
-                          {user.hasRestaurant && isBusinessUserType(user.userType) && (
-                            <select
-                              value={String(user.businessType || "restaurant")}
-                              onChange={(e) =>
-                                updateUserBusinessType.mutate({
-                                  restaurantId: String(user.restaurantId || ""),
-                                  businessType: e.target.value,
-                                })
-                              }
-                              className="text-xs px-2 py-1 border rounded-md"
-                              disabled={
-                                updateUserBusinessType.isPending ||
-                                isStaff ||
-                                !user.restaurantId
-                              }
-                            >
-                              {businessTypeOptions.map((option) => (
-                                <option key={option.value} value={option.value}>
-                                  {option.label}
-                                </option>
-                              ))}
-                            </select>
-                          )}
+                          {user.hasRestaurant &&
+                            isBusinessUserType(user.userType) && (
+                              <select
+                                value={String(
+                                  user.businessType || "restaurant",
+                                )}
+                                onChange={(e) =>
+                                  updateUserBusinessType.mutate({
+                                    restaurantId: String(
+                                      user.restaurantId || "",
+                                    ),
+                                    businessType: e.target.value,
+                                  })
+                                }
+                                className="text-xs px-2 py-1 border rounded-md"
+                                disabled={
+                                  updateUserBusinessType.isPending ||
+                                  isStaff ||
+                                  !user.restaurantId
+                                }
+                              >
+                                {businessTypeOptions.map((option) => (
+                                  <option
+                                    key={option.value}
+                                    value={option.value}
+                                  >
+                                    {option.label}
+                                  </option>
+                                ))}
+                              </select>
+                            )}
                           <Button
                             size="sm"
                             variant="outline"
@@ -11144,7 +11522,9 @@ export default function AdminDashboard() {
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => verifyUserInsurance.mutate(user.id)}
+                              onClick={() =>
+                                verifyUserInsurance.mutate(user.id)
+                              }
                               disabled={
                                 verifyUserInsurance.isPending ||
                                 user.insuranceVerified
@@ -11161,7 +11541,9 @@ export default function AdminDashboard() {
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => sendSubscriptionLink.mutate(user.id)}
+                              onClick={() =>
+                                sendSubscriptionLink.mutate(user.id)
+                              }
                               disabled={
                                 sendSubscriptionLink.isPending ||
                                 isStaff ||
@@ -11246,13 +11628,21 @@ export default function AdminDashboard() {
                                       `${String(user.firstName || "").trim()} ${String(user.lastName || "").trim()}`.trim() ||
                                       "Business Profile",
                                     address: "Address pending",
-                                    city: String(user.defaultCity || "Unknown").trim(),
-                                    state: String(user.defaultState || "NA").trim(),
-                                    phone: String(user.phone || "").trim() || undefined,
+                                    city: String(
+                                      user.defaultCity || "Unknown",
+                                    ).trim(),
+                                    state: String(
+                                      user.defaultState || "NA",
+                                    ).trim(),
+                                    phone:
+                                      String(user.phone || "").trim() ||
+                                      undefined,
                                   })
                                 }
                                 data-testid={`button-create-business-shell-${user.id}`}
-                                disabled={createAndAttachBusinessForUser.isPending}
+                                disabled={
+                                  createAndAttachBusinessForUser.isPending
+                                }
                               >
                                 Create Business Shell
                               </Button>
@@ -11634,46 +12024,49 @@ export default function AdminDashboard() {
                         : 0;
                       const missingDocuments = documentCount === 0;
                       return (
-                      <div key={request.id} className="border rounded-lg p-4">
-                        <div className="flex items-start justify-between mb-3">
-                          <div>
-                            <h3 className="font-semibold text-lg">
-                              {request.restaurant?.name}
-                            </h3>
-                            <p className="text-sm text-muted-foreground">
-                              {request.restaurant?.address}
-                            </p>
+                        <div key={request.id} className="border rounded-lg p-4">
+                          <div className="flex items-start justify-between mb-3">
+                            <div>
+                              <h3 className="font-semibold text-lg">
+                                {request.restaurant?.name}
+                              </h3>
+                              <p className="text-sm text-muted-foreground">
+                                {request.restaurant?.address}
+                              </p>
+                            </div>
+                            <Badge
+                              variant={
+                                request.status === "pending"
+                                  ? "secondary"
+                                  : request.status === "approved"
+                                    ? "default"
+                                    : "destructive"
+                              }
+                              className="flex items-center space-x-1"
+                            >
+                              {request.status === "pending" && (
+                                <Clock className="w-3 h-3" />
+                              )}
+                              {request.status === "approved" && (
+                                <CheckCircle className="w-3 h-3" />
+                              )}
+                              {request.status === "rejected" && (
+                                <XCircle className="w-3 h-3" />
+                              )}
+                              <span className="capitalize">
+                                {request.status}
+                              </span>
+                            </Badge>
                           </div>
-                          <Badge
-                            variant={
-                              request.status === "pending"
-                                ? "secondary"
-                                : request.status === "approved"
-                                  ? "default"
-                                  : "destructive"
-                            }
-                            className="flex items-center space-x-1"
-                          >
-                            {request.status === "pending" && (
-                              <Clock className="w-3 h-3" />
-                            )}
-                            {request.status === "approved" && (
-                              <CheckCircle className="w-3 h-3" />
-                            )}
-                            {request.status === "rejected" && (
-                              <XCircle className="w-3 h-3" />
-                            )}
-                            <span className="capitalize">{request.status}</span>
-                          </Badge>
-                        </div>
 
-                        <div className="mb-4">
-                          <p className="text-sm text-muted-foreground mb-2">
-                            Submitted:{" "}
-                            {new Date(request.submittedAt).toLocaleDateString()}
-                          </p>
-                          {request.documents &&
-                            documentCount > 0 && (
+                          <div className="mb-4">
+                            <p className="text-sm text-muted-foreground mb-2">
+                              Submitted:{" "}
+                              {new Date(
+                                request.submittedAt,
+                              ).toLocaleDateString()}
+                            </p>
+                            {request.documents && documentCount > 0 && (
                               <div>
                                 <p className="text-sm font-medium mb-2">
                                   Documents ({documentCount}):
@@ -11709,64 +12102,69 @@ export default function AdminDashboard() {
                                 </div>
                               </div>
                             )}
-                          {missingDocuments && (
-                            <div className="rounded-md border border-destructive/40 bg-destructive/10 p-2 text-sm text-destructive">
-                              Missing verification documents. Reject and ask the business to resubmit with files.
+                            {missingDocuments && (
+                              <div className="rounded-md border border-destructive/40 bg-destructive/10 p-2 text-sm text-destructive">
+                                Missing verification documents. Reject and ask
+                                the business to resubmit with files.
+                              </div>
+                            )}
+                          </div>
+
+                          {request.rejectionReason && (
+                            <div className="mb-4 p-3 bg-destructive/10 rounded-md">
+                              <p className="text-sm font-medium text-destructive mb-1">
+                                Rejection Reason:
+                              </p>
+                              <p className="text-sm text-destructive">
+                                {request.rejectionReason}
+                              </p>
+                            </div>
+                          )}
+
+                          {request.status === "pending" && (
+                            <div className="flex items-center space-x-2">
+                              <Button
+                                size="sm"
+                                variant="default"
+                                onClick={() =>
+                                  approveVerification.mutate(request.id)
+                                }
+                                disabled={
+                                  approveVerification.isPending ||
+                                  missingDocuments
+                                }
+                                data-testid={`button-approve-verification-${request.id}`}
+                                className="flex items-center space-x-1"
+                              >
+                                <CheckCircle className="w-4 h-4" />
+                                <span>Approve</span>
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                onClick={() => {
+                                  const reason = window.prompt(
+                                    "Please provide a reason for rejection:",
+                                  );
+                                  if (reason && reason.trim()) {
+                                    rejectVerification.mutate({
+                                      requestId: request.id,
+                                      reason: reason.trim(),
+                                    });
+                                  }
+                                }}
+                                disabled={rejectVerification.isPending}
+                                data-testid={`button-reject-verification-${request.id}`}
+                                className="flex items-center space-x-1"
+                              >
+                                <XCircle className="w-4 h-4" />
+                                <span>Reject</span>
+                              </Button>
                             </div>
                           )}
                         </div>
-
-                        {request.rejectionReason && (
-                          <div className="mb-4 p-3 bg-destructive/10 rounded-md">
-                            <p className="text-sm font-medium text-destructive mb-1">
-                              Rejection Reason:
-                            </p>
-                            <p className="text-sm text-destructive">
-                              {request.rejectionReason}
-                            </p>
-                          </div>
-                        )}
-
-                        {request.status === "pending" && (
-                          <div className="flex items-center space-x-2">
-                            <Button
-                              size="sm"
-                              variant="default"
-                              onClick={() =>
-                                approveVerification.mutate(request.id)
-                              }
-                              disabled={approveVerification.isPending || missingDocuments}
-                              data-testid={`button-approve-verification-${request.id}`}
-                              className="flex items-center space-x-1"
-                            >
-                              <CheckCircle className="w-4 h-4" />
-                              <span>Approve</span>
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              onClick={() => {
-                                const reason = window.prompt(
-                                  "Please provide a reason for rejection:",
-                                );
-                                if (reason && reason.trim()) {
-                                  rejectVerification.mutate({
-                                    requestId: request.id,
-                                    reason: reason.trim(),
-                                  });
-                                }
-                              }}
-                              disabled={rejectVerification.isPending}
-                              data-testid={`button-reject-verification-${request.id}`}
-                              className="flex items-center space-x-1"
-                            >
-                              <XCircle className="w-4 h-4" />
-                              <span>Reject</span>
-                            </Button>
-                          </div>
-                        )}
-                      </div>
-                    )})}
+                      );
+                    })}
                   </div>
                 )}
               </CardContent>
@@ -12085,7 +12483,9 @@ export default function AdminDashboard() {
                   </div>
                   <div className="space-y-1">
                     <p className="text-xs text-muted-foreground">User ID</p>
-                    <p className="text-xs font-mono break-all">{selectedUser.id}</p>
+                    <p className="text-xs font-mono break-all">
+                      {selectedUser.id}
+                    </p>
                   </div>
                   <div className="space-y-2 col-span-2 rounded-md border p-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -12134,7 +12534,9 @@ export default function AdminDashboard() {
                                     size="sm"
                                     variant="outline"
                                     onClick={async () => {
-                                      await navigator.clipboard.writeText(affiliateLink);
+                                      await navigator.clipboard.writeText(
+                                        affiliateLink,
+                                      );
                                       toast({ title: "Affiliate link copied" });
                                     }}
                                     data-testid={`button-copy-affiliate-link-${selectedUser.id}`}
@@ -12201,7 +12603,9 @@ export default function AdminDashboard() {
                               <input
                                 type="text"
                                 className="w-full px-3 py-2 border rounded-md text-sm"
-                                value={affiliateEdits?.affiliateCloserUserId ?? ""}
+                                value={
+                                  affiliateEdits?.affiliateCloserUserId ?? ""
+                                }
                                 onChange={(event) =>
                                   setAffiliateEdits({
                                     ...affiliateEdits,
@@ -12217,7 +12621,9 @@ export default function AdminDashboard() {
                               <input
                                 type="text"
                                 className="w-full px-3 py-2 border rounded-md text-sm"
-                                value={affiliateEdits?.affiliateBookerUserId ?? ""}
+                                value={
+                                  affiliateEdits?.affiliateBookerUserId ?? ""
+                                }
                                 onChange={(event) =>
                                   setAffiliateEdits({
                                     ...affiliateEdits,
@@ -12244,9 +12650,11 @@ export default function AdminDashboard() {
                                       affiliateEdits?.affiliatePercent ?? 5,
                                     ),
                                     affiliateCloserUserId:
-                                      affiliateEdits?.affiliateCloserUserId || null,
+                                      affiliateEdits?.affiliateCloserUserId ||
+                                      null,
                                     affiliateBookerUserId:
-                                      affiliateEdits?.affiliateBookerUserId || null,
+                                      affiliateEdits?.affiliateBookerUserId ||
+                                      null,
                                   },
                                 })
                               }
@@ -12337,7 +12745,9 @@ export default function AdminDashboard() {
                     </div>
                   )}
                   <div className="space-y-1">
-                    <p className="text-xs text-muted-foreground">Account Created</p>
+                    <p className="text-xs text-muted-foreground">
+                      Account Created
+                    </p>
                     <p className="text-sm">
                       {selectedUser.createdAt
                         ? new Date(selectedUser.createdAt).toLocaleString()
@@ -12348,7 +12758,9 @@ export default function AdminDashboard() {
                     <p className="text-xs text-muted-foreground">Last Active</p>
                     <p className="text-sm">
                       {userActivity?.summary?.lastActiveAt
-                        ? new Date(userActivity.summary.lastActiveAt).toLocaleString()
+                        ? new Date(
+                            userActivity.summary.lastActiveAt,
+                          ).toLocaleString()
                         : selectedUser.lastActiveAt
                           ? new Date(selectedUser.lastActiveAt).toLocaleString()
                           : "No tracked activity yet"}
@@ -12391,7 +12803,9 @@ export default function AdminDashboard() {
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => openAdminUserProfile(selectedUser.id, true)}
+                      onClick={() =>
+                        openAdminUserProfile(selectedUser.id, true)
+                      }
                     >
                       <ExternalLink className="w-4 h-4 mr-1" />
                       Open Admin User View
@@ -12403,7 +12817,9 @@ export default function AdminDashboard() {
 
                   {selectedUserPublicProfileUrl ? (
                     <div className="space-y-2">
-                      <p className="text-xs text-muted-foreground">Public Profile Link</p>
+                      <p className="text-xs text-muted-foreground">
+                        Public Profile Link
+                      </p>
                       <p className="text-xs font-mono break-all">
                         {selectedUserPublicProfileUrl}
                       </p>
@@ -12439,7 +12855,8 @@ export default function AdminDashboard() {
                     </div>
                   ) : (
                     <p className="text-xs text-muted-foreground">
-                      Public profile link is not currently supported for this account type.
+                      Public profile link is not currently supported for this
+                      account type.
                     </p>
                   )}
 
@@ -12568,10 +12985,14 @@ export default function AdminDashboard() {
                       </p>
                       <Badge
                         variant={
-                          selectedUser.hasPasswordLogin ? "default" : "secondary"
+                          selectedUser.hasPasswordLogin
+                            ? "default"
+                            : "secondary"
                         }
                       >
-                        {selectedUser.hasPasswordLogin ? "Enabled" : "Not enabled"}
+                        {selectedUser.hasPasswordLogin
+                          ? "Enabled"
+                          : "Not enabled"}
                       </Badge>
                     </div>
                     <div className="space-y-1">
@@ -12605,7 +13026,9 @@ export default function AdminDashboard() {
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => sendPasswordResetLink.mutate(selectedUser.id)}
+                      onClick={() =>
+                        sendPasswordResetLink.mutate(selectedUser.id)
+                      }
                       disabled={
                         sendPasswordResetLink.isPending ||
                         isStaff ||
@@ -12699,9 +13122,7 @@ export default function AdminDashboard() {
                     </div>
                   )}
                   <div className="space-y-1">
-                    <p className="text-xs text-muted-foreground">
-                      Last Active
-                    </p>
+                    <p className="text-xs text-muted-foreground">Last Active</p>
                     <p className="text-sm">
                       {userActivity?.summary?.lastActiveAt
                         ? new Date(
@@ -12722,14 +13143,14 @@ export default function AdminDashboard() {
                           selectedUser.activityEventCount ??
                           0,
                       )}{" "}
-                      total /{" "}
-                      {Number(userActivity?.summary?.eventsLast7d ?? 0)} last 7d
+                      total / {Number(userActivity?.summary?.eventsLast7d ?? 0)}{" "}
+                      last 7d
                     </p>
                   </div>
                 </div>
                 <p className="mt-3 text-xs text-muted-foreground">
-                  Recent verification/reset email delivery attempts are not currently
-                  exposed by a dedicated admin endpoint.
+                  Recent verification/reset email delivery attempts are not
+                  currently exposed by a dedicated admin endpoint.
                 </p>
                 {Array.isArray(userActivity?.signalSummary) &&
                   userActivity.signalSummary.length > 0 && (
@@ -12852,43 +13273,59 @@ export default function AdminDashboard() {
                       Identity Resolver
                     </p>
                     <div className="flex flex-wrap gap-2 text-xs">
-                      <Badge variant="outline">Role: {selectedUserIdentity.userRole}</Badge>
                       <Badge variant="outline">
-                        Business intent: {selectedUserIdentity.businessTypeIntent}
+                        Role: {selectedUserIdentity.userRole}
+                      </Badge>
+                      <Badge variant="outline">
+                        Business intent:{" "}
+                        {selectedUserIdentity.businessTypeIntent}
                       </Badge>
                       <Badge
                         variant={
-                          selectedUserIdentity.attachmentState === "attached"
-                            || selectedUserIdentity.attachmentState === "not_required"
+                          selectedUserIdentity.attachmentState === "attached" ||
+                          selectedUserIdentity.attachmentState ===
+                            "not_required"
                             ? "default"
                             : "destructive"
                         }
                       >
-                        Business attachment: {selectedUserIdentity.attachmentState}
+                        Business attachment:{" "}
+                        {selectedUserIdentity.attachmentState}
                       </Badge>
                       <Badge variant="outline">
                         Onboarding signal: {selectedUserIdentity.signalIntent}
                       </Badge>
                       <Badge variant="outline">
-                        Email: {selectedUser?.emailVerified ? "verified" : "unverified"}
+                        Email:{" "}
+                        {selectedUser?.emailVerified
+                          ? "verified"
+                          : "unverified"}
                       </Badge>
                       <Badge variant="outline">
-                        Business verification: {selectedUser?.businessIsVerified ? "verified" : "pending"}
+                        Business verification:{" "}
+                        {selectedUser?.businessIsVerified
+                          ? "verified"
+                          : "pending"}
                       </Badge>
                       <Badge variant="outline">
-                        Insurance: {selectedUser?.insuranceVerified ? "verified" : "unknown"}
+                        Insurance:{" "}
+                        {selectedUser?.insuranceVerified
+                          ? "verified"
+                          : "unknown"}
                         {selectedUser?.insuranceExpiresAt
                           ? ` until ${new Date(selectedUser.insuranceExpiresAt).toLocaleDateString()}`
                           : ""}
                       </Badge>
                       <Badge variant="outline">
-                        Admin approved: {selectedUser?.businessIsActive ? "yes" : "no"}
+                        Admin approved:{" "}
+                        {selectedUser?.businessIsActive ? "yes" : "no"}
                       </Badge>
                     </div>
                     {selectedUserIdentity.conflict && (
                       <div className="rounded-md border border-destructive/40 bg-destructive/10 px-2 py-1 text-xs text-destructive">
-                        Conflict detected: account role intent ({selectedUserIdentity.roleIntent})
-                        does not match onboarding signal ({selectedUserIdentity.signalIntent}).
+                        Conflict detected: account role intent (
+                        {selectedUserIdentity.roleIntent}) does not match
+                        onboarding signal ({selectedUserIdentity.signalIntent}).
                         Resolve business type intent before continuing.
                       </div>
                     )}
@@ -12912,7 +13349,8 @@ export default function AdminDashboard() {
                     </Badge>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Relationship context: {String(selectedUser?.userType || "unknown")} account
+                    Relationship context:{" "}
+                    {String(selectedUser?.userType || "unknown")} account
                     {isBusinessUserType(selectedUser?.userType)
                       ? userRestaurants.length > 0
                         ? " is linked to a business profile."
@@ -12935,8 +13373,8 @@ export default function AdminDashboard() {
                           </Button>
                         </Link>
                         <p className="text-xs text-muted-foreground w-full">
-                          Food truck accounts use truck setup and public Parking Pass flows,
-                          not host-only management.
+                          Food truck accounts use truck setup and public Parking
+                          Pass flows, not host-only management.
                         </p>
                       </>
                     )}
@@ -13239,7 +13677,9 @@ export default function AdminDashboard() {
                   <div className="flex flex-wrap items-center gap-2 text-xs">
                     <span className="text-muted-foreground">Link state:</span>
                     <Badge
-                      variant={userRestaurants.length > 0 ? "default" : "destructive"}
+                      variant={
+                        userRestaurants.length > 0 ? "default" : "destructive"
+                      }
                     >
                       {userRestaurants.length > 0
                         ? "linked"
@@ -13320,7 +13760,8 @@ export default function AdminDashboard() {
                                 .trim()
                                 .toLowerCase();
                               if (!q) return true;
-                              const haystack = `${row?.name || ""} ${row?.email || ""} ${row?.cuisineType || ""}`.toLowerCase();
+                              const haystack =
+                                `${row?.name || ""} ${row?.email || ""} ${row?.cuisineType || ""}`.toLowerCase();
                               return haystack.includes(q);
                             })
                             .slice(0, 50)
@@ -13361,7 +13802,11 @@ export default function AdminDashboard() {
                           size="sm"
                           variant="outline"
                           onClick={() => {
-                            const defaultAddress = (userAddresses.find((row: any) => row?.isDefault) || userAddresses[0] || {}) as any;
+                            const defaultAddress = (userAddresses.find(
+                              (row: any) => row?.isDefault,
+                            ) ||
+                              userAddresses[0] ||
+                              {}) as any;
                             const seedBusinessName =
                               String(selectedUser?.businessName || "").trim() ||
                               `${selectedUser?.firstName || ""} ${selectedUser?.lastName || ""}`.trim() ||
@@ -13371,15 +13816,24 @@ export default function AdminDashboard() {
                               ?.trim();
                             if (!businessName) return;
                             const address = window
-                              .prompt("Address", String(defaultAddress?.address || "").trim())
+                              .prompt(
+                                "Address",
+                                String(defaultAddress?.address || "").trim(),
+                              )
                               ?.trim();
                             if (!address) return;
                             const city = window
-                              .prompt("City", String(defaultAddress?.city || "").trim())
+                              .prompt(
+                                "City",
+                                String(defaultAddress?.city || "").trim(),
+                              )
                               ?.trim();
                             if (!city) return;
                             const state = window
-                              .prompt("State", String(defaultAddress?.state || "").trim())
+                              .prompt(
+                                "State",
+                                String(defaultAddress?.state || "").trim(),
+                              )
                               ?.trim();
                             if (!state) return;
                             createAndAttachBusinessForUser.mutate({
@@ -13388,7 +13842,9 @@ export default function AdminDashboard() {
                               address,
                               city,
                               state,
-                              phone: String(selectedUser?.phone || "").trim() || undefined,
+                              phone:
+                                String(selectedUser?.phone || "").trim() ||
+                                undefined,
                             });
                           }}
                           disabled={createAndAttachBusinessForUser.isPending}
