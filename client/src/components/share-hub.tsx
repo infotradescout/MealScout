@@ -240,7 +240,7 @@ export default function ShareHub({
   };
 
   const trackShareHubEvent = async (
-    action: "open" | "copy_link" | "copy_outreach" | "share",
+    action: "copy_link" | "share",
     item: ShareHubItem,
   ) => {
     try {
@@ -288,32 +288,6 @@ export default function ShareHub({
     }
   };
 
-  const copyOutreachText = async (item: ShareHubItem) => {
-    let text = "";
-    try {
-      const value = await generateTrackedShareUrl(item.href);
-      text = item.outreachText ? `${item.outreachText}${value}` : value;
-    } catch (error: any) {
-      toast({
-        title: "Sharing disabled",
-        description: error?.message || SHARE_UNAVAILABLE_MESSAGE,
-        variant: "destructive",
-      });
-      return;
-    }
-    try {
-      await navigator.clipboard.writeText(text);
-      void trackShareHubEvent("copy_outreach", item);
-      toast({ title: "Outreach text copied", description: item.title });
-    } catch {
-      toast({
-        title: "Copy failed",
-        description: "Clipboard permission was blocked.",
-        variant: "destructive",
-      });
-    }
-  };
-
   const shareLink = async (titleValue: string, href: string) => {
     const item = items.find(
       (entry) => entry.title === titleValue && entry.href === href,
@@ -332,6 +306,7 @@ export default function ShareHub({
     if (!navigator.share) {
       if (item) void trackShareHubEvent("share", item);
       await navigator.clipboard.writeText(value);
+      toast({ title: "Copied", description: value });
       return;
     }
     try {
@@ -392,37 +367,6 @@ export default function ShareHub({
                 </Button>
                 <Button
                   size="sm"
-                  variant="outline"
-                  disabled={
-                    !isAuthenticated || !normalizeShareHubTargetPath(item.href)
-                  }
-                  onClick={async () => {
-                    try {
-                      const trackedUrl = await generateTrackedShareUrl(
-                        item.href,
-                      );
-                      window.open(
-                        trackedUrl,
-                        item.href.startsWith("http") ? "_blank" : "_self",
-                        item.href.startsWith("http")
-                          ? "noopener,noreferrer"
-                          : undefined,
-                      );
-                      void trackShareHubEvent("open", item);
-                    } catch (error: any) {
-                      toast({
-                        title: "Sharing disabled",
-                        description:
-                          error?.message || SHARE_UNAVAILABLE_MESSAGE,
-                        variant: "destructive",
-                      });
-                    }
-                  }}
-                >
-                  Open
-                </Button>
-                <Button
-                  size="sm"
                   variant="ghost"
                   disabled={
                     !isAuthenticated || !normalizeShareHubTargetPath(item.href)
@@ -433,16 +377,6 @@ export default function ShareHub({
                   }}
                 >
                   Copy Link
-                </Button>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  disabled={
-                    !isAuthenticated || !normalizeShareHubTargetPath(item.href)
-                  }
-                  onClick={() => copyOutreachText(item)}
-                >
-                  Copy Outreach
                 </Button>
               </div>
             </div>

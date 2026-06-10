@@ -88,8 +88,8 @@ assert(
 );
 
 assert(
-  source.includes("generateTrackedShareUrl(item.href)"),
-  "Open/Copy actions must generate tracked URL before action",
+  source.includes("generateTrackedShareUrl(href)"),
+  "Share and copy actions must generate tracked URL before action",
 );
 
 console.log("share-directory-conversion.contract: PASS");
