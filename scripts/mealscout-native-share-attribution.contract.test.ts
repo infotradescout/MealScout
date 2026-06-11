@@ -53,6 +53,14 @@ assert(
 );
 
 assert(
+  ownerDashboard.includes("await resolveCanonicalShareUrl(publicProfilePath)") &&
+    ownerDashboard.includes("await navigator.clipboard.writeText(shareUrl)") &&
+    !ownerDashboard.includes("navigator.clipboard.writeText(fullUrl)") &&
+    !ownerDashboard.includes("const fullUrl = `${window.location.origin}${publicProfilePath}`;"),
+  "Owner dashboard public-profile copy action must resolve canonical attributed URL before copying and must not regress to raw fullUrl clipboard writes.",
+);
+
+assert(
   !mapPage.includes("const url = window.location.href;") &&
     !mapPage.includes("navigator.clipboard.writeText(window.location.href)"),
   "Map native share must not use raw window.location.href as final payload.",

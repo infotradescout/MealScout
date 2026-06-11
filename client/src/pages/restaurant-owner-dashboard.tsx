@@ -21,7 +21,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { resolveCanonicalShareUrlSync } from "@/lib/share";
+import { resolveCanonicalShareUrl, resolveCanonicalShareUrlSync } from "@/lib/share";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useForm } from "react-hook-form";
@@ -3150,11 +3150,13 @@ export default function RestaurantOwnerDashboard() {
                               size="sm"
                               variant="outline"
                               onClick={async () => {
-                                const fullUrl = `${window.location.origin}${publicProfilePath}`;
-                                await navigator.clipboard.writeText(fullUrl);
+                                if (!publicProfilePath) return;
+                                const shareUrl =
+                                  await resolveCanonicalShareUrl(publicProfilePath);
+                                await navigator.clipboard.writeText(shareUrl);
                                 toast({
                                   title: "Profile link copied",
-                                  description: "Public profile URL copied to clipboard.",
+                                  description: "Canonical public profile link copied to clipboard.",
                                 });
                               }}
                             >

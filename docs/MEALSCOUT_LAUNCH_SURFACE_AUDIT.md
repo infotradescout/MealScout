@@ -266,7 +266,7 @@ Known non-blocking note:
 ### Referral / Attribution Integrity Pass - 2026-06-11
 
 Decision:
-FAIL
+PASS
 
 Existing attribution protections confirmed by code inspection and contracts:
 
@@ -285,13 +285,10 @@ Existing attribution protections confirmed by code inspection and contracts:
 - Public share/copy canonicality:
   Public profile Share/Copy production smoke remains documented above and still confirms canonical attributed output when attribution context exists.
 
-P0 blocker found:
+Fix completed in this slice:
 
-- Owner dashboard discovery empty-state copy still bypasses the canonical resolver.
-  In `client/src/pages/restaurant-owner-dashboard.tsx`, the `Copy public profile link` action under the `No discovery activity yet.` panel builds:
-  `const fullUrl = \`${window.location.origin}${publicProfilePath}\`;`
-  and copies that raw value with `navigator.clipboard.writeText(fullUrl)`.
-  This path can emit an unattributed raw public profile URL even when attribution context exists, which violates this slice's doctrine for owner-facing share/copy integrity.
+- Owner dashboard discovery empty-state copy now routes through `resolveCanonicalShareUrl(publicProfilePath)` before writing to the clipboard.
+- `scripts/mealscout-native-share-attribution.contract.test.ts` now explicitly guards this owner-dashboard copy path against regression back to `navigator.clipboard.writeText(fullUrl)`.
 
 Launch-audit conclusion for this slice:
 
@@ -300,12 +297,11 @@ Launch-audit conclusion for this slice:
 - Invalid/default referral tags remain rejected: YES.
 - Hydration/redirect attribution preservation status: PASS by current contracts and inspected code.
 - Silent fallback behavior: FAIL-CLOSED on the server and attributed when a valid fallback ref exists on the client; no default/system attribution path was found.
-- Referral / attribution integrity decision: FAIL until the owner dashboard raw copy path is routed through the canonical attributed URL resolver or explicitly narrowed out of the launch surface.
+- Referral / attribution integrity decision: PASS.
 
 ## Required Fixes Before Launch
 
 1. Run a 10-profile data checklist: real identity, menu if available, schedule/location truth, no fabricated data, discoverable without deals, shareable with attribution.
 2. Credentialed owner dashboard smoke: profile link, share controls, menu status, schedule/location status, owner-dashboard QR.
 3. Credentialed admin/staff smoke: profile-quality review, duplicate/conflict visibility, public-ready vs needs-owner-info states.
-4. Route the owner dashboard `Copy public profile link` action through the canonical attributed URL resolver or explicitly remove it from launch-critical owner share surfaces.
-5. Product decision: confirm whether zero-menu profiles should appear in all Scout contexts or only public profile/search contexts.
+4. Product decision: confirm whether zero-menu profiles should appear in all Scout contexts or only public profile/search contexts.
