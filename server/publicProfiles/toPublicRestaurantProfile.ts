@@ -1,6 +1,12 @@
 import type { PublicRestaurantProfile } from "@shared/publicProfiles";
 import { toPublicProfileSeo } from "./toPublicProfileSeo";
-import { buildPublicCta, imageAsset, joinedAddressLabel, toSlug } from "./publicProfileUtils";
+import {
+  buildPublicCta,
+  buildPublicProfilePath,
+  imageAsset,
+  joinedAddressLabel,
+  toSlug,
+} from "./publicProfileUtils";
 import { shouldExposeStaticTruckProfileLocation } from "../utils/truckLocationSemantics";
 
 export function toPublicRestaurantProfile(input: {
@@ -144,7 +150,11 @@ export function toPublicRestaurantProfile(input: {
   const id = String(row.id || "");
   const displayName = String(row.name || "MealScout business");
   const slug = toSlug(displayName) || id;
-  const canonicalPath = `/p/${profileType}/${id}/${slug}`;
+  const canonicalPath = buildPublicProfilePath({
+    entityType: profileType,
+    name: displayName,
+    id,
+  });
   const coverImageUrlRaw = String(row.coverImageUrl || "").trim() || null;
   const logoUrlRaw = String(row.logoUrl || "").trim() || null;
   const coverImageUrl =

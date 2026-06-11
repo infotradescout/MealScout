@@ -2,6 +2,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { apiUrl } from "@/lib/api";
+import { buildPublicProfilePath } from "@/lib/public-profile-path";
 import { useEffectiveLocationContext } from "@/hooks/useEffectiveLocationContext";
 import { Button } from "@/components/ui/button";
 import {
@@ -152,7 +153,14 @@ const getAdminUserPublicProfilePath = (
         `${String(user?.firstName || "").trim()} ${String(user?.lastName || "").trim()}` ||
         restaurantId,
     );
-    return `/p/${profileType}/${encodeURIComponent(restaurantId)}/${encodeURIComponent(slug || restaurantId)}`;
+    return (
+      buildPublicProfilePath({
+        entityType: profileType,
+        id: restaurantId,
+        slug,
+        name: user?.businessName,
+      }) || "/"
+    );
   }
 
   const hostId = String(attachedHostProfile?.id || "").trim();
@@ -163,7 +171,14 @@ const getAdminUserPublicProfilePath = (
         user?.businessName ||
         hostId,
     );
-    return `/p/location/${encodeURIComponent(hostId)}/${encodeURIComponent(slug || hostId)}`;
+    return (
+      buildPublicProfilePath({
+        entityType: "location",
+        id: hostId,
+        slug,
+        name: attachedHostProfile?.businessName || attachedHostProfile?.name,
+      }) || "/"
+    );
   }
 
   return "/";

@@ -34,6 +34,17 @@ const toSlug = (value: string | null | undefined) =>
     .replace(/(^-|-$)+/g, "")
     .slice(0, 80);
 
+const buildPublicProfilePath = (input: {
+  profileType: "restaurant" | "location" | "supplier";
+  id: string;
+  name: string;
+}) => {
+  const slug = `${toSlug(input.name) || input.id}--${input.id}`;
+  if (input.profileType === "location") return `/location/${encodeURIComponent(slug)}`;
+  if (input.profileType === "supplier") return `/supplier/${encodeURIComponent(slug)}`;
+  return `/restaurant/${encodeURIComponent(slug)}`;
+};
+
 const resolveSitemapSiteUrl = () => {
   const normalizeCandidate = (raw?: string | null): string | null => {
     const value = String(raw || "").trim();
@@ -280,27 +291,33 @@ export function registerSeoRoutes(app: Express) {
 
       restaurantRows.forEach((row: any) => {
         mergeUrl(
-          `${baseUrl}/p/restaurant/${encodeURIComponent(row.id)}/${encodeURIComponent(
-            toSlug(row.name) || row.id,
-          )}`,
+          `${baseUrl}${buildPublicProfilePath({
+            profileType: "restaurant",
+            id: String(row.id),
+            name: String(row.name || ""),
+          })}`,
           row.updatedAt,
         );
       });
 
       hostRows.forEach((row: any) => {
         mergeUrl(
-          `${baseUrl}/p/host/${encodeURIComponent(row.id)}/${encodeURIComponent(
-            toSlug(row.name) || row.id,
-          )}`,
+          `${baseUrl}${buildPublicProfilePath({
+            profileType: "location",
+            id: String(row.id),
+            name: String(row.name || ""),
+          })}`,
           row.updatedAt,
         );
       });
 
       supplierRows.forEach((row: any) => {
         mergeUrl(
-          `${baseUrl}/p/supplier/${encodeURIComponent(row.id)}/${encodeURIComponent(
-            toSlug(row.name) || row.id,
-          )}`,
+          `${baseUrl}${buildPublicProfilePath({
+            profileType: "supplier",
+            id: String(row.id),
+            name: String(row.name || ""),
+          })}`,
           row.updatedAt,
         );
       });
@@ -1013,8 +1030,8 @@ export function registerSeoRoutes(app: Express) {
         "Example: /food-trucks/pensacola-fl/bbq",
         "",
         "## Business Profile Pages",
-        "Pattern: /p/restaurant/{id}/{slug}",
-        "Pattern: /p/host/{id}/{slug}",
+        "Pattern: /restaurant/{slug}--{id}",
+        "Pattern: /location/{slug}--{id}",
         "Pattern: /supplier/{slug}--{id}",
         "",
         "## Policies",

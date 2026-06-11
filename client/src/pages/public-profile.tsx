@@ -12,6 +12,7 @@ import {
   assessPublicMenuCompleteness,
   normalizeBusinessTypeLabel,
 } from "@/lib/publicMenuCompleteness";
+import { extractUuidFromSlug } from "@/lib/seo-slug";
 import { resolveCanonicalShareUrl } from "@/lib/share";
 import { SEOHead } from "@/components/seo-head";
 import { Badge } from "@/components/ui/badge";
@@ -1710,19 +1711,30 @@ function RelatedLocalDiscovery({
 }
 
 export default function PublicProfilePage() {
-  const { profileType, profileId } = useParams<{
-    profileType: string;
-    profileId: string;
-  }>();
-  const normalizedProfileType = normalizePublicProfileEntity(profileType);
+  const params = useParams<Record<string, string | undefined>>();
+  const pathname =
+    typeof window !== "undefined" ? window.location.pathname : "";
+  const inferredProfileType = (() => {
+    if (pathname.startsWith("/truck/")) return "truck";
+    if (pathname.startsWith("/bar/")) return "bar";
+    if (pathname.startsWith("/location/")) return "location";
+    if (pathname.startsWith("/supplier/")) return "supplier";
+    if (pathname.startsWith("/restaurant/")) return "restaurant";
+    return String(params.profileType || "").trim();
+  })();
+  const rawProfileId = String(
+    params.profileId || params.id || params.slug || "",
+  ).trim();
+  const resolvedProfileId = extractUuidFromSlug(rawProfileId) || rawProfileId;
+  const normalizedProfileType = normalizePublicProfileEntity(inferredProfileType);
 
   const locationSearch =
     typeof window !== "undefined" ? window.location.search : "";
   const { data, isLoading } = useQuery<PublicProfilePayload>({
-    queryKey: ["/api/public/profiles", normalizedProfileType, profileId, locationSearch],
-    enabled: !!normalizedProfileType && !!profileId,
+    queryKey: ["/api/public/profiles", normalizedProfileType, resolvedProfileId, locationSearch],
+    enabled: !!normalizedProfileType && !!resolvedProfileId,
     queryFn: async () => {
-      const res = await fetch(apiUrl(`/api/public/profiles/${encodeURIComponent(String(normalizedProfileType || ""))}/${encodeURIComponent(String(profileId || ""))}${locationSearch || ""}`),
+      const res = await fetch(apiUrl(`/api/public/profiles/${encodeURIComponent(String(normalizedProfileType || ""))}/${encodeURIComponent(String(resolvedProfileId || ""))}${locationSearch || ""}`),
       );
       if (!res.ok) throw new Error("Profile not found");
       return res.json();

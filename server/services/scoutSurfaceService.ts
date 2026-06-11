@@ -46,6 +46,25 @@ type CandidateBucket = {
   moreNearby: ScoutSurfaceCard[];
 };
 
+const toSlug = (value: string | null | undefined) =>
+  String(value || "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)+/g, "")
+    .slice(0, 80);
+
+const buildPublicProfilePath = (
+  entityType: "restaurant" | "truck" | "location",
+  entityId: string,
+  name?: string | null,
+) => {
+  const slug = `${toSlug(name) || entityId}--${entityId}`;
+  if (entityType === "truck") return `/truck/${encodeURIComponent(slug)}`;
+  if (entityType === "location") return `/location/${encodeURIComponent(slug)}`;
+  return `/restaurant/${encodeURIComponent(slug)}`;
+};
+
 type InitialBlendRule = {
   broadLocalScene: number;
   communityFavorites: number;
@@ -275,12 +294,21 @@ const getCta = (card: ScoutSurfaceCard): ScoutSurfaceCard["cta"] => {
     return { label: "View details", href: `/events/${encodeURIComponent(card.entityId)}` };
   }
   if (card.entityType === "host_spot") {
-    return { label: "View details", href: `/p/host/${encodeURIComponent(card.entityId)}` };
+    return {
+      label: "View details",
+      href: buildPublicProfilePath("location", String(card.entityId), card.title),
+    };
   }
   if (card.entityType === "truck") {
-    return { label: "View details", href: `/truck/${encodeURIComponent(card.entityId)}` };
+    return {
+      label: "View details",
+      href: buildPublicProfilePath("truck", String(card.entityId), card.title),
+    };
   }
-  return { label: "View menu", href: `/restaurant/${encodeURIComponent(card.entityId)}` };
+  return {
+    label: "View menu",
+    href: buildPublicProfilePath("restaurant", String(card.entityId), card.title),
+  };
 };
 
 const isRecommendationBacked = (card: ScoutSurfaceCard) => {

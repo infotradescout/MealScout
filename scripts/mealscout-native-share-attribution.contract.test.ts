@@ -121,6 +121,14 @@ assert.equal(
   "Clipboard share must not pass raw /p/location/ URL as final payload.",
 );
 
+for (const legacyFragment of ["/p/restaurant/", "/p/truck/", "/p/bar/", "/p/location/", "/p/supplier/"]) {
+  assert.equal(
+    finalShareSurfaces.includes(legacyFragment),
+    false,
+    `Launch-critical final share/copy/QR surfaces must not emit legacy canonical fragment: ${legacyFragment}`,
+  );
+}
+
 assert(
   shareHub.includes('fetch("/api/share/generate"') &&
     shareButton.includes("getAffiliateShareUrl") &&

@@ -9,6 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { buildPublicProfilePath } from "@/lib/public-profile-path";
 
 type ShareHubMode = "admin" | "staff" | "user";
 
@@ -184,7 +185,12 @@ export default function ShareHub({
           `${String(user?.firstName || "").trim()} ${String(user?.lastName || "").trim()}` ||
           restaurantId,
       );
-      return `/p/${profileType}/${encodeURIComponent(restaurantId)}${slug ? `/${encodeURIComponent(slug)}` : ""}`;
+      return buildPublicProfilePath({
+        entityType: profileType,
+        id: restaurantId,
+        slug,
+        name: user?.businessName,
+      });
     }
 
     const hostId = String(hostProfile?.id || "").trim();
@@ -192,7 +198,12 @@ export default function ShareHub({
       const slug = toSeoSlug(
         hostProfile?.businessName || hostProfile?.name || user?.businessName || hostId,
       );
-      return `/p/location/${encodeURIComponent(hostId)}${slug ? `/${encodeURIComponent(slug)}` : ""}`;
+      return buildPublicProfilePath({
+        entityType: "location",
+        id: hostId,
+        slug,
+        name: hostProfile?.businessName || hostProfile?.name,
+      });
     }
 
     return null;

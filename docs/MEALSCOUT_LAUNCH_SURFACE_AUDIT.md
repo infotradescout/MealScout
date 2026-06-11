@@ -299,6 +299,47 @@ Launch-audit conclusion for this slice:
 - Silent fallback behavior: FAIL-CLOSED on the server and attributed when a valid fallback ref exists on the client; no default/system attribution path was found.
 - Referral / attribution integrity decision: PASS.
 
+### Clean URL Doctrine / Stage 1 Migration - 2026-06-11
+
+Decision:
+PASS for doctrine lock and first migration slice
+
+Doctrine status:
+
+- `docs/MEALSCOUT_CLEAN_URL_DOCTRINE.md` now locks the target product rule:
+  final public profile architecture should move to root-level clean slugs such as `/{businessSlug}` and clean subpaths.
+- Stage 1 migration is narrower:
+  launch-critical user-facing outputs must stop treating `/p/...` as canonical final output and should use cleaner public route families first.
+
+Current classification:
+
+- Clean public/user-facing in Stage 1:
+  `/restaurant/{slug}--{id}`,
+  `/truck/{slug}--{id}`,
+  `/bar/{slug}--{id}`,
+  `/location/{slug}--{id}`,
+  `/supplier/{slug}--{id}`
+- Acceptable internal/admin/API:
+  `/api/*`, `/admin/*`, `/staff/*`, guarded auth/setup internals
+- Legacy/backward-compatible only:
+  `/p/:profileType/:profileId/:profileSlug`,
+  `/ref/:tag?to=...`
+- Launch-blocking ugly final public output:
+  any launch-critical share/copy/QR/marketing/onboarding/profile link that still emits `/p/location` or other `/p/...` profile canonical output
+
+Stage 1 correction implemented:
+
+- Public profile canonical/profile paths now emit cleaner public route families instead of `/p/...`.
+- Public profile share/copy/QR surfaces inherit those cleaner canonical paths through the profile payloads and canonical URL builders.
+- App route aliases now allow cleaner public profile route families to render the real public profile surface directly, while legacy `/p/...` routes remain supported.
+- City landing, scout adapters, map host links, share hub self-profile links, and onboarding-owned profile links were moved onto the cleaner route family helpers in this slice.
+
+Known remaining risks:
+
+- Root-level `/{businessSlug}` routing is still not implemented. Stage 1 uses route-family clean URLs, not final root-level clean slugs.
+- Collision handling is still using deterministic `slug--id` route tokens in this slice. That is safer than `/p/...` canonical output, but it is not the final no-ID doctrine end state.
+- Some internal/admin and analytics references still mention legacy `/p/...` routes for compatibility or historical event data and should be treated as non-canonical.
+
 ## Required Fixes Before Launch
 
 1. Run a 10-profile data checklist: real identity, menu if available, schedule/location truth, no fabricated data, discoverable without deals, shareable with attribution.

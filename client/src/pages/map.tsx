@@ -57,6 +57,7 @@ import {
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { resolveCanonicalShareUrl } from "@/lib/share";
+import { buildPublicProfilePath } from "@/lib/public-profile-path";
 import { trackUxEvent } from "@/utils/uxTelemetry";
 import { useIsStandalone } from "@/hooks/useIsStandalone";
 import {
@@ -1109,9 +1110,13 @@ function HostMarkerLayer({
         const hostImageUrl = resolveHostImageUrl(host);
         const hostIsVerified =
           String(host.status || "").toLowerCase() === "verified";
-        const publicProfileHref = hostId
-          ? `/p/host/${encodeURIComponent(hostId)}/${toProfileSlug(host.name)}`
-          : `/p/host/${encodeURIComponent(host.id)}/${toProfileSlug(host.name)}`;
+        const publicProfileHref =
+          buildPublicProfilePath({
+            entityType: "location",
+            id: hostId || host.id,
+            slug: toProfileSlug(host.name),
+            name: host.name,
+          }) || "/";
 
         return (
           <Marker
@@ -1885,7 +1890,14 @@ export default function MapPage() {
 
   const getPublicProfileHrefForHost = useCallback((host: HostLocation) => {
     const profileHostId = String(host.hostId || host.id || "").trim();
-    return `/p/host/${encodeURIComponent(profileHostId)}/${toProfileSlug(host.name)}`;
+    return (
+      buildPublicProfilePath({
+        entityType: "location",
+        id: profileHostId,
+        slug: toProfileSlug(host.name),
+        name: host.name,
+      }) || "/"
+    );
   }, []);
 
   const resolveHostCoords = (host: HostLocation) => {

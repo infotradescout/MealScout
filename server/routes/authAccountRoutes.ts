@@ -195,6 +195,17 @@ const toSlug = (value: string | null | undefined) =>
     .replace(/(^-|-$)+/g, "")
     .slice(0, 80);
 
+const buildPublicProfilePath = (
+  entityType: "restaurant" | "location" | "supplier",
+  id: string,
+  name: string | null | undefined,
+) => {
+  const slug = `${toSlug(name) || id}--${id}`;
+  if (entityType === "location") return `/location/${slug}`;
+  if (entityType === "supplier") return `/supplier/${slug}`;
+  return `/restaurant/${slug}`;
+};
+
 const publicProfileSettingsSchema = z.object({
   templatePreset: z.enum(["classic", "story", "bold", "minimal"]).optional(),
   theme: z.enum(["sunset", "slate", "forest", "amber"]).optional(),
@@ -574,13 +585,13 @@ export function registerAuthAccountRoutes(app: Express) {
             entity: "restaurant",
             id: row.id,
             title: row.name,
-            path: `/p/restaurant/${row.id}/${toSlug(row.name) || row.id}`,
+            path: buildPublicProfilePath("restaurant", String(row.id), row.name),
           })),
         ...ownedHosts.map((row: any) => ({
           entity: "host",
           id: row.id,
           title: row.businessName,
-          path: `/p/host/${row.id}/${toSlug(row.businessName) || row.id}`,
+          path: buildPublicProfilePath("location", String(row.id), row.businessName),
         })),
         ...ownedSuppliers
           .filter((row: any) => row?.isActive)
@@ -588,7 +599,7 @@ export function registerAuthAccountRoutes(app: Express) {
             entity: "supplier",
             id: row.id,
             title: row.businessName,
-            path: `/p/supplier/${row.id}/${toSlug(row.businessName) || row.id}`,
+            path: buildPublicProfilePath("supplier", String(row.id), row.businessName),
           })),
       ];
 

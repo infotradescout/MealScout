@@ -29,10 +29,25 @@ const resolveCityBySlug = async (citySlug: string) => {
 
 const cityLike = (cityName: string) => `%${String(cityName || "").trim()}%`;
 
+const buildPublicProfilePath = (input: {
+  profileType: "restaurant" | "truck" | "location";
+  id: string;
+  name: string;
+}) => {
+  const slug = `${toSlug(input.name) || input.id}--${input.id}`;
+  if (input.profileType === "truck") return `/truck/${encodeURIComponent(slug)}`;
+  if (input.profileType === "location") return `/location/${encodeURIComponent(slug)}`;
+  return `/restaurant/${encodeURIComponent(slug)}`;
+};
+
 const buildCard = (row: any) => {
   const profileType = row.isFoodTruck || row.businessType === "food_truck" ? "truck" : "restaurant";
   const slug = toSlug(row.name) || String(row.id);
-  const profilePath = `/p/${profileType}/${encodeURIComponent(String(row.id))}/${encodeURIComponent(slug)}`;
+  const profilePath = buildPublicProfilePath({
+    profileType,
+    id: String(row.id),
+    name: String(row.name || ""),
+  });
   return {
     id: String(row.id),
     profileType,
@@ -392,7 +407,11 @@ export function registerPublicSeoLandingRoutes(app: Express) {
         .map((entry) => {
           const id = String(entry.row.hostId);
           const slug = toSlug(entry.row.hostName) || id;
-          const profilePath = `/p/location/${encodeURIComponent(id)}/${encodeURIComponent(slug)}`;
+          const profilePath = buildPublicProfilePath({
+            profileType: "location",
+            id,
+            name: String(entry.row.hostName || ""),
+          });
           return {
             id,
             profileType: "location",

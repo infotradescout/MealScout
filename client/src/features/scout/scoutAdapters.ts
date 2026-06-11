@@ -1,22 +1,17 @@
 import type { ScoutSceneItem } from "./scoutTypes";
+import { buildPublicProfilePath } from "@/lib/public-profile-path";
 
 function toMiles(value?: number | null): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
-function slugify(value: unknown): string {
-  return String(value || "")
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
-
 function truckProfilePath(truck: any): string | null {
-  const id = String(truck?.id || "").trim();
-  if (!id) return null;
-  const slug = slugify(truck?.slug || truck?.name || "");
-  return slug ? `/p/truck/${id}/${slug}` : `/p/truck/${id}`;
+  return buildPublicProfilePath({
+    entityType: "truck",
+    id: truck?.id,
+    slug: truck?.slug,
+    name: truck?.name,
+  });
 }
 
 export function adaptRestaurantToSceneItem(restaurant: any): ScoutSceneItem {
@@ -27,7 +22,12 @@ export function adaptRestaurantToSceneItem(restaurant: any): ScoutSceneItem {
     title: restaurant?.businessName || restaurant?.name || "Local spot",
     subtitle: restaurant?.cuisineType || null,
     imageUrl: restaurant?.coverImageUrl || restaurant?.heroImageUrl || restaurant?.imageUrl || restaurant?.logoUrl || null,
-    href: restaurant?.id ? `/restaurant/${restaurant.id}` : null,
+    href: buildPublicProfilePath({
+      entityType: "restaurant",
+      id: restaurant?.id,
+      slug: restaurant?.slug,
+      name: restaurant?.businessName || restaurant?.name,
+    }),
     distanceMiles: toMiles(restaurant?.distanceMiles),
   };
 }
@@ -77,7 +77,11 @@ export function adaptMenuItemToSceneItem(menuItem: any): ScoutSceneItem {
     title: menuItem?.name || "Menu item",
     subtitle: menuItem?.restaurantName || menuItem?.description || null,
     imageUrl: menuItem?.imageUrl || null,
-    href: menuItem?.restaurantId ? `/restaurant/${menuItem.restaurantId}` : null,
+    href: buildPublicProfilePath({
+      entityType: "restaurant",
+      id: menuItem?.restaurantId,
+      name: menuItem?.restaurantName,
+    }),
     distanceMiles: toMiles(menuItem?.distanceMiles),
   };
 }
@@ -90,7 +94,19 @@ export function adaptCommunityRecordToSceneItem(record: any): ScoutSceneItem {
     title: record?.businessName || record?.name || "Community spot",
     subtitle: record?.reason || null,
     imageUrl: record?.coverImageUrl || record?.imageUrl || record?.logoUrl || null,
-    href: record?.restaurantId ? `/restaurant/${record.restaurantId}` : record?.id ? `/restaurant/${record.id}` : null,
+    href: record?.restaurantId
+      ? buildPublicProfilePath({
+          entityType: "restaurant",
+          id: record.restaurantId,
+          name: record?.businessName || record?.name,
+        })
+      : record?.id
+        ? buildPublicProfilePath({
+            entityType: "restaurant",
+            id: record.id,
+            name: record?.businessName || record?.name,
+          })
+        : null,
     distanceMiles: toMiles(record?.distanceMiles),
   };
 }

@@ -14,7 +14,6 @@ import { useToast } from "@/hooks/use-toast";
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/login";
 import Welcome from "@/pages/welcome";
-import RestaurantDetail from "@/pages/restaurant-detail";
 
 // Lazy load all other pages - they only download when the user navigates to them
 const CustomerSignup = lazy(() => import("@/pages/customer-signup"));
@@ -297,7 +296,8 @@ function Router() {
               path="/suppliers/:supplierId"
               component={SupplierDetailPage}
             />
-            <Route path="/supplier/:slug" component={SupplierDetailPage} />
+            <Route path="/supplier/:slug/:refTag" component={PublicProfilePage} />
+            <Route path="/supplier/:slug" component={PublicProfilePage} />
             <Route path="/video" component={VideoPage} />
             <Route path="/video/:id" component={VideoDetailPage} />
             <Route path="/category/:category" component={CategoryPage} />
@@ -305,10 +305,12 @@ function Router() {
             <Route path="/deals" component={FeaturedDealsPage} />
             <Route path="/deals/featured" component={FeaturedDealsPage} />
             <Route path="/deals/:city" component={DealsCityPage} />
-            <Route path="/restaurant/:id" component={RestaurantDetail} />
-            <Route path="/truck/:slug" component={RestaurantDetail} />
-            <Route path="/bar/:slug" component={RestaurantDetail} />
-            <Route path="/location/:slug" component={LocationDetailPage} />
+            <Route path="/restaurant/:id/:profileSlug" component={PublicProfilePage} />
+            <Route path="/restaurant/:id" component={PublicProfilePage} />
+            <Route path="/truck/:slug/:refTag" component={PublicProfilePage} />
+            <Route path="/truck/:slug" component={PublicProfilePage} />
+            <Route path="/bar/:slug/:refTag" component={PublicProfilePage} />
+            <Route path="/bar/:slug" component={PublicProfilePage} />
             <Route
               path="/location/:slug/food-trucks"
               component={LocationDetailPage}
@@ -321,6 +323,8 @@ function Router() {
               path="/location/:slug/food-trucks-tonight"
               component={LocationDiscoveryPage}
             />
+            <Route path="/location/:slug/:refTag" component={PublicProfilePage} />
+            <Route path="/location/:slug" component={PublicProfilePage} />
             <Route path="/city/:city" component={CityLanding} />
             <Route path="/city/:city/:mode" component={CityDiscoveryPage} />
             <Route path="/city/:city/food" component={PublicSeoLandingPage} />
@@ -467,7 +471,8 @@ function Router() {
               path="/suppliers/:supplierId"
               component={SupplierDetailPage}
             />
-            <Route path="/supplier/:slug" component={SupplierDetailPage} />
+            <Route path="/supplier/:slug/:refTag" component={PublicProfilePage} />
+            <Route path="/supplier/:slug" component={PublicProfilePage} />
             <Route path="/supply/orders" component={SupplyOrdersPage} />
             <Route path="/video" component={VideoPage} />
             <Route path="/favorites" component={Favorites} />
@@ -520,10 +525,12 @@ function Router() {
             <Route path="/deals" component={FeaturedDealsPage} />
             <Route path="/deals/featured" component={FeaturedDealsPage} />
             <Route path="/deals/:city" component={DealsCityPage} />
-            <Route path="/restaurant/:id" component={RestaurantDetail} />
-            <Route path="/truck/:slug" component={RestaurantDetail} />
-            <Route path="/bar/:slug" component={RestaurantDetail} />
-            <Route path="/location/:slug" component={LocationDetailPage} />
+            <Route path="/restaurant/:id/:profileSlug" component={PublicProfilePage} />
+            <Route path="/restaurant/:id" component={PublicProfilePage} />
+            <Route path="/truck/:slug/:refTag" component={PublicProfilePage} />
+            <Route path="/truck/:slug" component={PublicProfilePage} />
+            <Route path="/bar/:slug/:refTag" component={PublicProfilePage} />
+            <Route path="/bar/:slug" component={PublicProfilePage} />
             <Route
               path="/location/:slug/food-trucks"
               component={LocationDetailPage}
@@ -536,6 +543,8 @@ function Router() {
               path="/location/:slug/food-trucks-tonight"
               component={LocationDiscoveryPage}
             />
+            <Route path="/location/:slug/:refTag" component={PublicProfilePage} />
+            <Route path="/location/:slug" component={PublicProfilePage} />
             <Route path="/city/:city" component={CityLanding} />
             <Route path="/city/:city/:mode" component={CityDiscoveryPage} />
             <Route path="/city/:city/food" component={PublicSeoLandingPage} />
@@ -659,7 +668,11 @@ function Router() {
 function App() {
   const [location] = useLocation();
   const currentPath = location.split("?")[0];
-  const isPublicProfilePath = currentPath.startsWith("/p/");
+  const isPublicProfilePath =
+    currentPath.startsWith("/p/") ||
+    /^\/(restaurant|truck|bar|location|supplier)\/[^/]+(?:\/[^/]+)?$/i.test(
+      currentPath,
+    );
 
   if (isPublicProfilePath) {
     return (

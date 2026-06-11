@@ -1,6 +1,11 @@
 import type { PublicSupplierProfile } from "@shared/publicProfiles";
 import { toPublicProfileSeo } from "./toPublicProfileSeo";
-import { buildPublicCta, joinedAddressLabel, toSlug } from "./publicProfileUtils";
+import {
+  buildPublicCta,
+  buildPublicProfilePath,
+  joinedAddressLabel,
+  toSlug,
+} from "./publicProfileUtils";
 
 export function toPublicSupplierProfile(input: {
   row: any;
@@ -13,7 +18,11 @@ export function toPublicSupplierProfile(input: {
   const id = String(row.id || "");
   const displayName = String(row.businessName || "MealScout supplier");
   const slug = toSlug(displayName) || id;
-  const canonicalPath = `/p/supplier/${id}/${slug}`;
+  const canonicalPath = buildPublicProfilePath({
+    entityType: "supplier",
+    name: displayName,
+    id,
+  });
   const addressPublicLabel =
     input.showAddress === false
       ? null

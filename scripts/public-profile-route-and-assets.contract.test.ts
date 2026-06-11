@@ -67,11 +67,11 @@ if (
 }
 
 const scoutAdapters = readFileSync("client/src/features/scout/scoutAdapters.ts", "utf8");
-if (!scoutAdapters.includes("`/p/truck/${id}`")) {
-  throw new Error("Scout truck scene links must target /p/truck canonical paths");
+if (!scoutAdapters.includes("buildPublicProfilePath({")) {
+  throw new Error("Scout truck scene links must use clean public profile path helper");
 }
-if (scoutAdapters.includes("href: truck?.id ? `/truck/${truck.id}` : null")) {
-  throw new Error("Legacy truck links (/truck/:id) must not be used in scout adapters");
+if (scoutAdapters.includes("`/p/truck/${id}`")) {
+  throw new Error("Scout truck scene links must not emit legacy /p/truck canonical paths");
 }
 
 const cityLanding = readFileSync("client/src/pages/city-landing.tsx", "utf8");
@@ -79,7 +79,10 @@ if (cityLanding.includes("href={`/restaurant/${truck.id}`}")) {
   throw new Error("City landing truck cards must not link to /restaurant/:id");
 }
 if (!cityLanding.includes("truckPublicProfilePath(truck)")) {
-  throw new Error("City landing truck cards must use canonical /p/truck path helper");
+  throw new Error("City landing truck cards must use clean public profile path helper");
+}
+if (cityLanding.includes("`/p/truck/${id}`")) {
+  throw new Error("City landing truck cards must not emit legacy /p/truck paths");
 }
 
 console.log("public-profile-route-and-assets.contract: PASS");

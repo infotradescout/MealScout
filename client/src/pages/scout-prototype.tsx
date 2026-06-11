@@ -12,6 +12,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { getReverseGeocodedLocationName } from "@/utils/locationUtils";
 import { isBarBusinessType } from "@shared/businessTypes";
 import { apiUrl } from "@/lib/api";
+import { buildPublicProfilePath } from "@/lib/public-profile-path";
 
 /* ─── styles ─── */
 const customStyles = `
@@ -944,7 +945,12 @@ export default function ScoutPrototype() {
           tag: hasDeals ? "Deal available" : statusTag,
           tagColor: hasDeals ? "#10b981" : statusColor,
           distance: distLabel(r),
-          href: isBar ? `/p/bar/${r.id}` : `/restaurant/${r.id}`,
+          href:
+            buildPublicProfilePath({
+              entityType: isBar ? "bar" : "restaurant",
+              id: r.id,
+              name,
+            }) || (isBar ? `/bar/${r.id}` : `/restaurant/${r.id}`),
           routeHref: routeUrl(r.latitude ?? r.lat, r.longitude ?? r.lng, name),
           restaurantId: r.id,
           searchCity: String(r.city || r.state || ""),

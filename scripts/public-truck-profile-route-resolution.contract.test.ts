@@ -8,8 +8,9 @@ const requiredClientSnippets = [
   "const normalizePublicProfileEntity = (value: string | null | undefined) => {",
   'if (normalized === "food_truck" || normalized === "food-truck" || normalized === "foodtruck") {',
   'return "truck";',
-  'queryKey: ["/api/public/profiles", normalizedProfileType, profileId, locationSearch],',
-  '`/api/public/profiles/${encodeURIComponent(String(normalizedProfileType || ""))}/${encodeURIComponent(String(profileId || ""))}${locationSearch || ""}`',
+  'const resolvedProfileId = extractUuidFromSlug(rawProfileId) || rawProfileId;',
+  'queryKey: ["/api/public/profiles", normalizedProfileType, resolvedProfileId, locationSearch],',
+  '`/api/public/profiles/${encodeURIComponent(String(normalizedProfileType || ""))}/${encodeURIComponent(String(resolvedProfileId || ""))}${locationSearch || ""}`',
 ];
 
 for (const snippet of requiredClientSnippets) {
@@ -24,7 +25,7 @@ const requiredServerSnippets = [
   'if (normalized === "food_trucks") return "truck";',
   'app.get("/api/public/profiles/:entity/:id", async (req, res) => {',
   "const entity = normalizePublicProfileEntity(req.params.entity);",
-  "profilePath: `/p/truck/${mapped.id}/${mapped.slug}`,",
+  "profilePath: mapped.seo.canonicalUrl.replace(baseUrl, \"\"),",
 ];
 
 for (const snippet of requiredServerSnippets) {
@@ -33,8 +34,18 @@ for (const snippet of requiredServerSnippets) {
   }
 }
 
-if (!appRoutes.includes('path="/p/:profileType/:profileId/:profileSlug"')) {
-  throw new Error("Public profile slug route shape is missing from app routes");
+const requiredAppSnippets = [
+  'path="/p/:profileType/:profileId/:profileSlug"',
+  'path="/truck/:slug/:refTag"',
+  'path="/truck/:slug"',
+  'path="/restaurant/:id/:profileSlug"',
+  'path="/restaurant/:id"',
+];
+
+for (const snippet of requiredAppSnippets) {
+  if (!appRoutes.includes(snippet)) {
+    throw new Error(`Public profile route alias missing from app routes: ${snippet}`);
+  }
 }
 
 console.log("public-truck-profile-route-resolution.contract: PASS");

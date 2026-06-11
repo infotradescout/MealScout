@@ -1,6 +1,12 @@
 import type { PublicLocationProfile } from "@shared/publicProfiles";
 import { toPublicProfileSeo } from "./toPublicProfileSeo";
-import { buildPublicCta, imageAsset, joinedAddressLabel, toSlug } from "./publicProfileUtils";
+import {
+  buildPublicCta,
+  buildPublicProfilePath,
+  imageAsset,
+  joinedAddressLabel,
+  toSlug,
+} from "./publicProfileUtils";
 
 export function toPublicLocationProfile(input: {
   row: any;
@@ -12,7 +18,11 @@ export function toPublicLocationProfile(input: {
   const id = String(row.id || "");
   const displayName = String(row.businessName || "MealScout location");
   const slug = toSlug(displayName) || id;
-  const canonicalPath = `/p/location/${id}/${slug}`;
+  const canonicalPath = buildPublicProfilePath({
+    entityType: "location",
+    name: displayName,
+    id,
+  });
   const spotImageUrl = String(row.spotImageUrl || "").trim() || null;
   const coverImageUrl = String(row.coverImageUrl || "").trim() || null;
   const logoUrl = String(row.logoUrl || "").trim() || null;

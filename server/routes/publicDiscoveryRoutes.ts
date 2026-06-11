@@ -33,6 +33,7 @@ import {
   toPublicSupplierProfile,
   toPublicTruckProfile,
 } from "../publicProfiles";
+import { buildPublicProfilePath } from "../publicProfiles/publicProfileUtils";
 import { isAuthenticated } from "../unifiedAuth";
 
 const toSlug = (value: string | null | undefined) =>
@@ -195,8 +196,11 @@ const toDateOnly = (value: Date) => {
 const buildHostProfilePath = (hostId: string | null, hostName: string | null) => {
   const safeId = String(hostId || "").trim();
   if (!safeId) return null;
-  const slug = toSlug(hostName || "") || safeId;
-  return `/p/location/${safeId}/${slug}`;
+  return buildPublicProfilePath({
+    entityType: "location",
+    name: hostName || safeId,
+    id: safeId,
+  });
 };
 
 const buildDirectionsUrl = (input: {
@@ -1468,10 +1472,14 @@ export function registerPublicDiscoveryRoutes(app: Express) {
               ? "bar"
               : isTruckRestaurantRow(row)
                 ? "truck"
-                : row.businessType === "bar"
-                  ? "bar"
-                  : "restaurant";
-        const canonicalPath = `/p/${routeEntity}/${row.id}/${rowSlug}`;
+              : row.businessType === "bar"
+                ? "bar"
+                : "restaurant";
+        const canonicalPath = buildPublicProfilePath({
+          entityType: routeEntity,
+          name: row.name,
+          id: row.id,
+        });
         return sendPublicJson(res, {
           exists: true,
           entityType: routeEntity,
@@ -1494,7 +1502,11 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           return res.status(404).json({ exists: false, reason: "not_found" });
         }
         const rowSlug = toSlug(row.businessName) || String(row.id);
-        const canonicalPath = `/p/location/${row.id}/${rowSlug}`;
+        const canonicalPath = buildPublicProfilePath({
+          entityType: "location",
+          name: row.businessName,
+          id: row.id,
+        });
         return sendPublicJson(res, {
           exists: true,
           entityType: "location",
@@ -1514,7 +1526,11 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           return res.status(404).json({ exists: false, reason: "not_found" });
         }
         const rowSlug = toSlug(row.businessName) || String(row.id);
-        const canonicalPath = `/p/supplier/${row.id}/${rowSlug}`;
+        const canonicalPath = buildPublicProfilePath({
+          entityType: "supplier",
+          name: row.businessName,
+          id: row.id,
+        });
         return sendPublicJson(res, {
           exists: true,
           entityType: "supplier",
@@ -1564,7 +1580,15 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           (row.cuisineType ? 1 : 0) +
           ((row.isVerified || row.mobileOnline || row.isFoodTruck) ? 1 : 0);
 
-        const canonicalPath = `/restaurant/${row.id}`;
+        const canonicalPath = buildPublicProfilePath({
+          entityType: row.isFoodTruck || row.businessType === "food_truck"
+            ? "truck"
+            : row.businessType === "bar"
+              ? "bar"
+              : "restaurant",
+          name: row.name,
+          id: row.id,
+        });
 
         return sendPublicJson(res, {
           entityType: "restaurant",
@@ -1718,7 +1742,11 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           (row.isVerified ? 1 : 0) +
           (row.stripeOnboardingCompleted ? 1 : 0);
 
-        const canonicalPath = `/p/host/${row.id}`;
+        const canonicalPath = buildPublicProfilePath({
+          entityType: "location",
+          name: row.businessName,
+          id: row.id,
+        });
 
         return sendPublicJson(res, {
           entityType: "host",
@@ -1895,7 +1923,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           address: mapped.addressPublicLabel,
           phone: mapped.phonePublic,
           imageUrl: mapped.coverImageUrl || mapped.logoUrl,
-          profilePath: `/p/truck/${mapped.id}/${mapped.slug}`,
+          profilePath: mapped.seo.canonicalUrl.replace(baseUrl, ""),
           canonicalUrl: mapped.seo.canonicalUrl,
           websiteUrl: mapped.websiteUrl,
           profileSettings,
@@ -1939,7 +1967,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           address: mapped.addressPublicLabel,
           phone: mapped.phonePublic,
           imageUrl: mapped.coverImageUrl || mapped.logoUrl,
-          profilePath: `/p/bar/${mapped.id}/${mapped.slug}`,
+          profilePath: mapped.seo.canonicalUrl.replace(baseUrl, ""),
           canonicalUrl: mapped.seo.canonicalUrl,
           websiteUrl: mapped.websiteUrl,
           profileSettings,
@@ -1981,7 +2009,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           address: mapped.addressPublicLabel,
           phone: showContact ? String(row.contactPhone || "").trim() || null : null,
           imageUrl: mapped.spotImageUrl || mapped.coverImageUrl || mapped.logoUrl,
-          profilePath: `/p/location/${mapped.id}/${mapped.slug}`,
+          profilePath: mapped.seo.canonicalUrl.replace(baseUrl, ""),
           canonicalUrl: mapped.seo.canonicalUrl,
           websiteUrl: mapped.websiteUrl,
           profileSettings,
@@ -2028,7 +2056,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
             address: mapped.addressPublicLabel,
             phone: mapped.phonePublic,
             imageUrl: mapped.coverImageUrl || mapped.logoUrl,
-            profilePath: `/p/truck/${mapped.id}/${mapped.slug}`,
+            profilePath: mapped.seo.canonicalUrl.replace(baseUrl, ""),
             canonicalUrl: mapped.seo.canonicalUrl,
             websiteUrl: mapped.websiteUrl,
             profileSettings,
@@ -2055,7 +2083,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
             address: mapped.addressPublicLabel,
             phone: mapped.phonePublic,
             imageUrl: mapped.coverImageUrl || mapped.logoUrl,
-            profilePath: `/p/bar/${mapped.id}/${mapped.slug}`,
+            profilePath: mapped.seo.canonicalUrl.replace(baseUrl, ""),
             canonicalUrl: mapped.seo.canonicalUrl,
             websiteUrl: mapped.websiteUrl,
             profileSettings,
@@ -2081,7 +2109,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           address: mapped.addressPublicLabel,
           phone: mapped.phonePublic,
           imageUrl: mapped.coverImageUrl || mapped.logoUrl,
-          profilePath: `/p/restaurant/${mapped.id}/${mapped.slug}`,
+          profilePath: mapped.seo.canonicalUrl.replace(baseUrl, ""),
           canonicalUrl: mapped.seo.canonicalUrl,
           websiteUrl: mapped.websiteUrl,
           profileSettings,
@@ -2115,7 +2143,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           address: mapped.addressPublicLabel,
           phone: showContact ? String(row.contactPhone || "").trim() || null : null,
           imageUrl: mapped.spotImageUrl || mapped.coverImageUrl || mapped.logoUrl,
-          profilePath: `/p/location/${mapped.id}/${mapped.slug}`,
+          profilePath: mapped.seo.canonicalUrl.replace(baseUrl, ""),
           canonicalUrl: mapped.seo.canonicalUrl,
           websiteUrl: mapped.websiteUrl,
           profileSettings,
@@ -2162,7 +2190,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           address: mapped.addressPublicLabel,
           phone: mapped.phonePublic,
           imageUrl: mapped.logoUrl,
-          profilePath: `/p/supplier/${mapped.id}/${mapped.slug}`,
+          profilePath: mapped.seo.canonicalUrl.replace(baseUrl, ""),
           canonicalUrl: mapped.seo.canonicalUrl,
           websiteUrl: mapped.websiteUrl,
           profileSettings,

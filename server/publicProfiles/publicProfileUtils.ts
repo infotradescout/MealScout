@@ -8,6 +8,28 @@ export const toSlug = (value: unknown) =>
     .replace(/(^-|-$)+/g, "")
     .slice(0, 80);
 
+export const toPublicRouteSlug = (name: unknown, id: unknown) => {
+  const baseSlug = toSlug(name);
+  const safeId = String(id || "").trim();
+  if (baseSlug && safeId) return `${baseSlug}--${safeId}`;
+  return baseSlug || safeId;
+};
+
+export const buildPublicProfilePath = (input: {
+  entityType: "restaurant" | "truck" | "bar" | "location" | "supplier";
+  name: unknown;
+  id: unknown;
+}) => {
+  const routeSlug = toPublicRouteSlug(input.name, input.id);
+  if (!routeSlug) return "/";
+
+  if (input.entityType === "truck") return `/truck/${routeSlug}`;
+  if (input.entityType === "bar") return `/bar/${routeSlug}`;
+  if (input.entityType === "location") return `/location/${routeSlug}`;
+  if (input.entityType === "supplier") return `/supplier/${routeSlug}`;
+  return `/restaurant/${routeSlug}`;
+};
+
 const normalizeUrl = (value: unknown) => {
   const raw = String(value || "").trim();
   if (!raw) return null;
