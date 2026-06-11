@@ -35,7 +35,7 @@ assert(
 
 assert(
   shareHub.includes(
-    "Tracked links are ready. Add a custom share tag later if you want cleaner links.",
+    "Tracked links are active. Add a custom share tag any time for cleaner branding.",
   ) &&
     shareHub.includes(
       "!isAuthenticated || !normalizeShareHubTargetPath(item.href)",

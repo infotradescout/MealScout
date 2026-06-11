@@ -38,7 +38,7 @@ assert(
 
 assert(
   source.includes(
-    "Tracked links are ready. Add a custom share tag later if you want cleaner links.",
+    "Tracked links are active. Add a custom share tag any time for cleaner branding.",
   ),
   "Share Hub must show ready-state copy and treat custom share tags as optional",
 );
@@ -83,7 +83,7 @@ assert(
 );
 
 assert(
-  source.includes("Share tracked link"),
+  source.includes("Share Link"),
   "Share Hub primary CTA should be explicit tracked share action",
 );
 

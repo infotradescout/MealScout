@@ -26,48 +26,44 @@ const BASE_ITEMS: ShareHubItem[] = [
   {
     key: "signup",
     title: "Signup",
-    description: "General signup link for new users.",
+    description: "Best first link for anyone new to MealScout.",
     href: "/customer-signup",
     audience: "General",
     priority: 1,
-    outreachText:
-      "Join MealScout and get started here: ",
+    outreachText: "Join MealScout here: ",
   },
   {
     key: "host",
     title: "Host",
-    description: "Direct signup for host/location partners.",
+    description: "For property and venue owners who want to host food trucks.",
     href: "/host-signup",
     audience: "Hosts",
     priority: 2,
-    outreachText: "Become a MealScout host and create your listing: ",
+    outreachText: "Start your host listing on MealScout: ",
   },
   {
     key: "truck",
     title: "Truck",
-    description: "Direct page for food truck operators to claim and activate.",
+    description: "For food truck owners to claim and launch their profile.",
     href: "/claim-truck",
     audience: "Food Truck Owners",
     priority: 3,
-    outreachText:
-      "Claim your food truck profile here: ",
+    outreachText: "Claim your food truck profile: ",
   },
   {
     key: "restaurant",
     title: "Restaurant",
-    description:
-      "Direct signup flow for restaurant owners who want a public profile.",
+    description: "For restaurant owners to create their public MealScout page.",
     href: "/restaurant-signup?businessType=restaurant",
     audience: "Restaurant Owners",
     priority: 4,
-    outreachText:
-      "Create or claim your restaurant profile here: ",
+    outreachText: "Create your restaurant page on MealScout: ",
   },
 ];
 
 const STAFF_ADMIN_ITEMS: ShareHubItem[] = BASE_ITEMS;
 const SHARE_UNAVAILABLE_MESSAGE =
-  "Tracked links are ready. Add a custom share tag later if you want cleaner links.";
+  "Tracked links are active. Add a custom share tag any time for cleaner branding.";
 
 function sanitizeTargetPathForTrackedLink(targetPath: string): string {
   const parsed = new URL(targetPath, window.location.origin);
@@ -211,7 +207,7 @@ export default function ShareHub({
         const authenticated = Boolean(String(data?.id || "").trim());
         setIsAuthenticated(authenticated);
         setShareAuthError(
-          authenticated ? null : "Sign in to generate tracked links.",
+          authenticated ? null : "Sign in to generate share links.",
         );
 
         if (!authenticated) {
@@ -236,7 +232,7 @@ export default function ShareHub({
       .catch(() => {
         if (cancelled) return;
         setIsAuthenticated(false);
-        setShareAuthError("Sign in to generate tracked links.");
+        setShareAuthError("Sign in to generate share links.");
         setPublicProfilePath(null);
       });
     return () => {
@@ -250,11 +246,11 @@ export default function ShareHub({
     const publicProfileItem: ShareHubItem = {
       key: "public-profile",
       title: "Public Profile",
-      description: "Share your public MealScout profile.",
+      description: "Share your live public MealScout page.",
       href: publicProfilePath,
       audience: "Your audience",
       priority: 0,
-      outreachText: "View my public MealScout profile: ",
+      outreachText: "View my public MealScout page: ",
     };
     return [publicProfileItem, ...base];
   }, [mode, publicProfilePath]);
@@ -440,7 +436,7 @@ export default function ShareHub({
                   }
                   onClick={() => shareLink(item.title, item.href)}
                 >
-                  Share tracked link
+                  Share Link
                 </Button>
                 <Button
                   size="sm"

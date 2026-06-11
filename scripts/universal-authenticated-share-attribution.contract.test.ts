@@ -117,7 +117,7 @@ assert(
     !shareHub.includes('fetch("/api/affiliate/tag"') &&
     !shareHub.includes("/api/restaurants/my") &&
     shareHub.includes(
-      "Tracked links are ready. Add a custom share tag later if you want cleaner links.",
+      "Tracked links are active. Add a custom share tag any time for cleaner branding.",
     ),
   "Share Hub must allow tracked sharing for authenticated users without requiring a custom vanity tag.",
 );

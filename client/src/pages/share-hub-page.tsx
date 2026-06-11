@@ -17,8 +17,8 @@ export default function ShareHubPage() {
 
   const description =
     mode === "user"
-      ? "One-tap links you can share right now to bring in restaurant owners, food trucks, and host locations."
-      : "Quick-share portal for growth ops and outreach.";
+      ? "Share simple, ready-to-send links for signup, hosts, trucks, restaurants, and your public profile."
+      : "Share ready-to-send growth links for outreach and onboarding.";
 
   return (
     <div className="min-h-screen pb-28">
