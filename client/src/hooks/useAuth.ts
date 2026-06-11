@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { getQueryFn } from "@/lib/queryClient";
 import type { User } from "@shared/schema";
-import { isLikelyCleanAffiliateTagSegment, parseCleanAffiliateBusinessRoute } from "@shared/cleanAffiliateLinks";
+import { isLikelyCleanAffiliateTagSegment } from "@shared/cleanAffiliateLinks";
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { setAffiliateRef } from "@/lib/share";
@@ -45,11 +45,8 @@ function captureUrlAffiliateRef() {
   if (typeof window === "undefined") return;
   const urlParams = new URLSearchParams(window.location.search);
   const queryRef = String(urlParams.get("ref") || "").trim();
-  const cleanBusinessRoute = parseCleanAffiliateBusinessRoute(
-    window.location.pathname || "",
-  );
   const pathRef = extractPathAffiliateRef(window.location.pathname || "");
-  const ref = queryRef || pathRef || cleanBusinessRoute?.affiliateTag || "";
+  const ref = queryRef || pathRef || "";
   if (isLikelyCleanAffiliateTagSegment(ref)) {
     setAffiliateRef(ref);
   }

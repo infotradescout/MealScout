@@ -50,6 +50,7 @@ function requireIncludes(source: string, snippet: string, label: string) {
   "Capture affiliate `?ref=` on *all* requests before the SPA/static handlers run.",
   "const queryRef = typeof req.query?.ref === \"string\" ? req.query.ref.trim() : \"\";",
   "parseCleanAffiliateBusinessRoute",
+  "resolvedBusiness.status !== \"unique\"",
   'res.cookie("referralId", ref, {',
 ].forEach((snippet) =>
   requireIncludes(serverIndex, snippet, "server referral capture middleware"),
@@ -59,7 +60,6 @@ function requireIncludes(source: string, snippet: string, label: string) {
   "function captureUrlAffiliateRef()",
   'urlParams.get("ref")',
   "extractPathAffiliateRef(window.location.pathname || \"\")",
-  "parseCleanAffiliateBusinessRoute",
   "isLikelyCleanAffiliateTagSegment(ref)",
   "setAffiliateRef(ref)",
 ].forEach((snippet) =>

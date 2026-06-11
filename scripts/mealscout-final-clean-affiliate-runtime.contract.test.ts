@@ -11,11 +11,13 @@ const helper = readFileSync("shared/cleanAffiliateLinks.ts", "utf8");
 const appSource = readFileSync("client/src/App.tsx", "utf8");
 const shareLib = readFileSync("client/src/lib/share.ts", "utf8");
 const sharePolicy = readFileSync("server/shareTargetPolicy.ts", "utf8");
+const shareRoutes = readFileSync("server/shareRoutes.ts", "utf8");
 const publicProfile = readFileSync("client/src/pages/public-profile.tsx", "utf8");
 const publicDiscovery = readFileSync("server/routes/publicDiscoveryRoutes.ts", "utf8");
 const useAuth = readFileSync("client/src/hooks/useAuth.ts", "utf8");
 const serverIndex = readFileSync("server/index.ts", "utf8");
 const adminDashboard = readFileSync("client/src/pages/admin-dashboard.tsx", "utf8");
+const resolver = readFileSync("server/publicProfiles/publicBusinessSlugResolver.ts", "utf8");
 
 assert(
   helper.includes("buildCleanPublicBusinessPath") &&
@@ -69,50 +71,62 @@ for (const snippet of [
 assert(
   publicProfile.includes('"/api/public/resolve-business"') &&
     publicProfile.includes("parseCleanAffiliateBusinessRoute(pathname)") &&
-    publicProfile.includes("sharePath={cleanProfilePath}") &&
-    publicProfile.includes("new URL(cleanProfilePath, window.location.origin).toString()"),
+    publicProfile.includes("resolvedCleanBusinessPath") &&
+    publicProfile.includes("sharePath={resolvedCleanBusinessPath}") &&
+    publicProfile.includes("new URL(resolvedCleanBusinessPath, window.location.origin).toString()") &&
+    publicProfile.includes("if (!routeRef || !resolvedCleanBusinessPath) return;"),
   "Public profile page must resolve clean business slug routes and share from clean root profile paths.",
 );
 
 assert(
+  resolver.includes("listPublicBusinessSlugCandidates") &&
+    resolver.includes('status: "ambiguous"') &&
+    resolver.includes('status: "unique"') &&
+    resolver.includes('status: "not_found"') &&
+    resolver.includes("resolveUniqueCleanBusinessPathForEntity"),
+  "Business slug resolver must distinguish unique, ambiguous, and missing root slugs and expose a unique-only clean-path helper.",
+);
+
+assert(
   publicDiscovery.includes('app.get("/api/public/resolve-business/:businessSlug"') &&
-    publicDiscovery.includes("resolvePublicBusinessSlug"),
-  "Server must expose a clean business-slug resolver for root profile routes.",
+    publicDiscovery.includes('reason: "ambiguous_slug"') &&
+    publicDiscovery.includes("resolveUniqueCleanBusinessPathForEntity"),
+  "Server must expose root business-slug resolution and fail-safe ambiguity handling instead of silently choosing a colliding profile.",
 );
 
 assert(
-  sharePolicy.includes("buildCleanAffiliateBusinessPath") &&
-    sharePolicy.includes("const cleanBusinessPath = buildCleanAffiliateBusinessPath("),
-  "Server share policy must prefer clean business affiliate paths for eligible user-facing profile targets.",
+  shareRoutes.includes("resolveUniqueCleanShareTarget") &&
+    shareRoutes.includes("resolveUniqueCleanBusinessPathForEntity") &&
+    shareRoutes.includes("(await resolveUniqueCleanShareTarget(sharePath)) || sharePath") &&
+    !sharePolicy.includes("buildCleanAffiliateBusinessPath"),
+  "Tracked share generation must only emit clean root affiliate URLs for unique business/profile targets and must fall back to compatibility paths when slug resolution is ambiguous.",
 );
 
 assert(
-  shareLib.includes("buildCleanPublicBusinessPath") &&
-    shareLib.includes("buildCleanAffiliateBusinessPath") &&
-    shareLib.includes("const cleanBusinessPath = buildCleanAffiliateBusinessPath(") &&
-    shareLib.includes("const cleanBusinessPath = buildCleanPublicBusinessPath(path);"),
-  "Client share resolver must canonicalize eligible business/profile targets onto clean root paths with or without attribution.",
+  !shareLib.includes("buildCleanPublicBusinessPath") &&
+    !shareLib.includes("buildCleanAffiliateBusinessPath"),
+  "Client share fallback must not guess-clean stage1 profile paths locally when uniqueness is unknown.",
 );
 
 assert(
-  useAuth.includes("parseCleanAffiliateBusinessRoute") &&
+  !useAuth.includes("parseCleanAffiliateBusinessRoute") &&
     useAuth.includes("isLikelyCleanAffiliateTagSegment(ref)") &&
     useAuth.includes("setAffiliateRef(affiliateTag)") &&
     !useAuth.includes("setAffiliateRef(user.affiliateTag || user.id)"),
-  "Auth landing/share state must capture clean path tags and must not fall back to raw user ids.",
+  "Auth/share state must not fall back to raw user ids and must avoid locally trusting unresolved root clean-path tags before uniqueness is confirmed.",
 );
 
 assert(
   serverIndex.includes("parseCleanAffiliateBusinessRoute") &&
     serverIndex.includes("resolvePublicBusinessSlug") &&
+    serverIndex.includes('resolvedBusiness.status !== "unique"') &&
     serverIndex.includes("const ref = queryRef || cleanAffiliateRoute?.affiliateTag || \"\";"),
-  "Server request capture must preserve attribution from clean business affiliate paths before SPA/static handlers.",
+  "Server request capture must only preserve attribution from clean root affiliate paths after unique slug resolution succeeds.",
 );
 
 assert(
-  adminDashboard.includes("buildCleanAffiliateBusinessPath") &&
-    adminDashboard.includes("const cleanAffiliatePath = buildCleanAffiliateBusinessPath(profilePath, tag);"),
-  "Admin user-card affiliate links must emit the clean business slug format when a business profile path is available.",
+  !adminDashboard.includes("buildCleanAffiliateBusinessPath"),
+  "Admin user-card affiliate links must not guess-clean root business paths without uniqueness proof.",
 );
 
 const generatedPublicSamples = [

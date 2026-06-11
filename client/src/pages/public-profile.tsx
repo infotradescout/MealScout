@@ -8,13 +8,18 @@ import type {
   PublicRestaurantProfile,
   PublicSupplierProfile,
 } from "@shared/publicProfiles";
-import { buildCleanPublicBusinessPath, parseCleanAffiliateBusinessRoute } from "@shared/cleanAffiliateLinks";
+import {
+  buildCleanPublicBusinessPath,
+  isLikelyCleanAffiliateTagSegment,
+  parseCleanAffiliateBusinessRoute,
+} from "@shared/cleanAffiliateLinks";
 import {
   assessPublicMenuCompleteness,
   normalizeBusinessTypeLabel,
 } from "@/lib/publicMenuCompleteness";
 import { extractUuidFromSlug } from "@/lib/seo-slug";
 import { resolveCanonicalShareUrl } from "@/lib/share";
+import { setAffiliateRef } from "@/lib/share";
 import { SEOHead } from "@/components/seo-head";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -1858,9 +1863,18 @@ export default function PublicProfilePage() {
   const cleanProfilePath = cleanBusinessSlug
     ? buildCleanPublicBusinessPath(`/${cleanBusinessSlug}`)
     : null;
+  const resolvedCleanBusinessPath =
+    String((data as any)?.cleanBusinessPath || "").trim() || cleanProfilePath;
+
+  useEffect(() => {
+    const routeRef = String(cleanBusinessRoute?.affiliateTag || "").trim();
+    if (!routeRef || !resolvedCleanBusinessPath) return;
+    if (!isLikelyCleanAffiliateTagSegment(routeRef)) return;
+    setAffiliateRef(routeRef);
+  }, [cleanBusinessRoute?.affiliateTag, resolvedCleanBusinessPath]);
   const canonicalUrl =
-    (cleanProfilePath && typeof window !== "undefined"
-      ? new URL(cleanProfilePath, window.location.origin).toString()
+    (resolvedCleanBusinessPath && typeof window !== "undefined"
+      ? new URL(resolvedCleanBusinessPath, window.location.origin).toString()
       : null) ||
     data.seo?.canonicalUrl ||
     data.canonicalUrl;
@@ -1928,7 +1942,7 @@ export default function PublicProfilePage() {
         <HeroBlock profile={data} />
         <PublicProfileShareControls
           profile={data}
-          sharePath={cleanProfilePath}
+          sharePath={resolvedCleanBusinessPath}
           title={title}
           description={description}
           onShareAction={trackProfileEvent}

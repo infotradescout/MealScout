@@ -1069,15 +1069,9 @@ app.use((req, res, next) => {
     let cleanAffiliateRoute = parseCleanAffiliateBusinessRoute(
       String(req.path || "/"),
     );
-    if (
-      !queryRef &&
-      cleanAffiliateRoute?.businessSlug &&
-      cleanAffiliateRoute?.affiliateTag
-    ) {
-      const resolvedBusiness = await resolvePublicBusinessSlug(
-        cleanAffiliateRoute.businessSlug,
-      );
-      if (!resolvedBusiness) {
+    if (!queryRef && cleanAffiliateRoute?.businessSlug && cleanAffiliateRoute?.affiliateTag) {
+      const resolvedBusiness = await resolvePublicBusinessSlug(cleanAffiliateRoute.businessSlug);
+      if (resolvedBusiness.status !== "unique") {
         cleanAffiliateRoute = null;
       }
     }

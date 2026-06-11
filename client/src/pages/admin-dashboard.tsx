@@ -55,7 +55,6 @@ import HostLocationManager from "@/components/admin/host-location-manager";
 import ShareHub from "@/components/share-hub";
 import { getOptimizedImageUrl } from "@/lib/images";
 import { toSeoSlug } from "@/lib/seo-slug";
-import { buildCleanAffiliateBusinessPath } from "@shared/cleanAffiliateLinks";
 import LongPressHelp from "@/components/long-press-help";
 import {
   Dialog,
@@ -194,10 +193,6 @@ const buildCanonicalAffiliateLink = (
   if (!tag) return null;
   const profilePath = getAdminUserPublicProfilePath(user, attachedHostProfile);
   if (!profilePath || profilePath === "/") return null;
-  const cleanAffiliatePath = buildCleanAffiliateBusinessPath(profilePath, tag);
-  if (cleanAffiliatePath) {
-    return new URL(cleanAffiliatePath, canonicalMealScoutOrigin).toString();
-  }
   const url = new URL(profilePath, canonicalMealScoutOrigin);
   const normalizedPathname = url.pathname.replace(/\/+$/, "") || "/";
   url.pathname = `${normalizedPathname}/${encodeURIComponent(tag)}`;

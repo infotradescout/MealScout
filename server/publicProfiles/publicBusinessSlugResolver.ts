@@ -6,6 +6,25 @@ import { normalizeCleanBusinessSlug } from "@shared/cleanAffiliateLinks";
 import { db } from "../db";
 import { storage } from "../storage";
 
+export type PublicBusinessSlugCandidate = {
+  entityType: "restaurant" | "truck" | "bar" | "location" | "supplier";
+  id: string;
+  businessSlug: string;
+};
+
+export type PublicBusinessSlugResolution =
+  | { status: "not_found"; businessSlug: string }
+  | {
+      status: "ambiguous";
+      businessSlug: string;
+      candidates: PublicBusinessSlugCandidate[];
+    }
+  | {
+      status: "unique";
+      businessSlug: string;
+      match: PublicBusinessSlugCandidate;
+    };
+
 const toSlug = (value: unknown) =>
   String(value || "")
     .toLowerCase()
@@ -24,54 +43,97 @@ const classifyRestaurantEntityType = (row: any) => {
   return "restaurant" as const;
 };
 
-export async function resolvePublicBusinessSlug(businessSlug: string): Promise<{
-  entityType: "restaurant" | "truck" | "bar" | "location" | "supplier";
-  id: string;
-  businessSlug: string;
-} | null> {
+export async function listPublicBusinessSlugCandidates(
+  businessSlug: string,
+): Promise<PublicBusinessSlugCandidate[]> {
   const normalizedSlug = normalizeCleanBusinessSlug(businessSlug);
-  if (!normalizedSlug) return null;
+  if (!normalizedSlug) return [];
+
+  const candidates: PublicBusinessSlugCandidate[] = [];
 
   const restaurantRows = (await storage.getAllRestaurants()).filter((row: any) =>
     Boolean(row?.isActive),
   );
-  const restaurantMatch = restaurantRows.find(
-    (row: any) => toSlug(row?.name) === normalizedSlug,
-  );
-  if (restaurantMatch?.id) {
-    return {
-      entityType: classifyRestaurantEntityType(restaurantMatch),
-      id: String(restaurantMatch.id),
+  for (const row of restaurantRows) {
+    if (toSlug(row?.name) !== normalizedSlug) continue;
+    if (!row?.id) continue;
+    candidates.push({
+      entityType: classifyRestaurantEntityType(row),
+      id: String(row.id),
       businessSlug: normalizedSlug,
-    };
+    });
   }
 
   const hostRows = await db.select().from(hosts);
-  const hostMatch = hostRows.find(
-    (row: any) => toSlug(row?.businessName) === normalizedSlug,
-  );
-  if (hostMatch?.id) {
-    return {
+  for (const row of hostRows) {
+    if (toSlug(row?.businessName) !== normalizedSlug) continue;
+    if (!row?.id) continue;
+    candidates.push({
       entityType: "location",
-      id: String(hostMatch.id),
+      id: String(row.id),
       businessSlug: normalizedSlug,
-    };
+    });
   }
 
   const supplierRows = await db
     .select()
     .from(suppliers)
     .where(eq(suppliers.isActive, true));
-  const resolvedSupplier = supplierRows.find(
-    (row: any) => toSlug(row?.businessName) === normalizedSlug,
-  );
-  if (resolvedSupplier?.id) {
-    return {
+  for (const row of supplierRows) {
+    if (toSlug(row?.businessName) !== normalizedSlug) continue;
+    if (!row?.id) continue;
+    candidates.push({
       entityType: "supplier",
-      id: String(resolvedSupplier.id),
+      id: String(row.id),
       businessSlug: normalizedSlug,
+    });
+  }
+
+  return candidates;
+}
+
+export async function resolvePublicBusinessSlug(
+  businessSlug: string,
+): Promise<PublicBusinessSlugResolution> {
+  const normalizedSlug = normalizeCleanBusinessSlug(businessSlug) || "";
+  const candidates = await listPublicBusinessSlugCandidates(normalizedSlug);
+
+  if (candidates.length === 0) {
+    return { status: "not_found", businessSlug: normalizedSlug };
+  }
+
+  if (candidates.length > 1) {
+    return {
+      status: "ambiguous",
+      businessSlug: normalizedSlug,
+      candidates,
     };
   }
 
-  return null;
+  return {
+    status: "unique",
+    businessSlug: normalizedSlug,
+    match: candidates[0],
+  };
+}
+
+export async function resolveUniqueCleanBusinessPathForEntity(input: {
+  entityType: "restaurant" | "truck" | "bar" | "location" | "supplier";
+  id: string;
+  name: string;
+}): Promise<string | null> {
+  const businessSlug = normalizeCleanBusinessSlug(toSlug(input.name));
+  if (!businessSlug) return null;
+
+  const resolution = await resolvePublicBusinessSlug(businessSlug);
+  if (resolution.status !== "unique") return null;
+
+  if (
+    resolution.match.entityType !== input.entityType ||
+    resolution.match.id !== String(input.id)
+  ) {
+    return null;
+  }
+
+  return `/${encodeURIComponent(businessSlug)}`;
 }

@@ -42,7 +42,6 @@ function requireIncludes(source: string, snippet: string, label = snippet) {
 [
   "function captureUrlAffiliateRef",
   'urlParams.get("ref")',
-  "parseCleanAffiliateBusinessRoute",
   "isLikelyCleanAffiliateTagSegment(ref)",
   "setAffiliateRef(ref)",
   "if (!user) return;",
@@ -111,9 +110,10 @@ if (!app.includes('"/scout"')) {
   "buildAuthPath(\"/api/auth/facebook?userType=customer\")",
 ].forEach((snippet) => requireIncludes(login, snippet, `login referral preservation ${snippet}`));
 
-[
+[ 
   "Capture affiliate `?ref=` on *all* requests",
   "req.query?.ref",
+  "resolvedBusiness.status !== \"unique\"",
   'res.cookie("referralId"',
 ].forEach((snippet) => requireIncludes(serverIndex, snippet, `server referral capture ${snippet}`));
 
