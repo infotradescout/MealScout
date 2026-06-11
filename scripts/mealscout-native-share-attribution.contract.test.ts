@@ -6,6 +6,7 @@ const mapPage = readFileSync("client/src/pages/map.tsx", "utf8");
 const cityLanding = readFileSync("client/src/pages/city-landing.tsx", "utf8");
 const dealsCity = readFileSync("client/src/pages/deals-city.tsx", "utf8");
 const dealDetail = readFileSync("client/src/pages/deal-detail.tsx", "utf8");
+const publicProfile = readFileSync("client/src/pages/public-profile.tsx", "utf8");
 const shareHub = readFileSync("client/src/components/share-hub.tsx", "utf8");
 const shareButton = readFileSync("client/src/components/share-button.tsx", "utf8");
 const shareButtonCaps = readFileSync("client/src/components/ShareButton.tsx", "utf8");
@@ -23,12 +24,27 @@ assert(
   "Share library must centralize canonical tracked URL resolution for native share/copy/QR payloads.",
 );
 
-for (const file of [mapPage, cityLanding, dealsCity, dealDetail]) {
+for (const file of [mapPage, cityLanding, dealsCity, dealDetail, publicProfile]) {
   assert(
     file.includes("resolveCanonicalShareUrl"),
     "Native share call sites must resolve final URL via canonical share resolver.",
   );
 }
+
+assert(
+  publicProfile.includes('data-testid="button-public-profile-share"') &&
+    publicProfile.includes('data-testid="button-public-profile-copy-link"') &&
+    publicProfile.includes("PublicProfileShareControls"),
+  "Public profiles must expose visible Share and Copy Link controls.",
+);
+
+assert(
+  publicProfile.includes("const resolveShareUrl = async () => resolveCanonicalShareUrl(targetPath)") &&
+    publicProfile.includes("await navigator.share({") &&
+    publicProfile.includes("url: shareUrl") &&
+    publicProfile.includes("await navigator.clipboard.writeText(shareUrl)"),
+  "Public profile Share and Copy Link controls must use the canonical attributed URL resolver output.",
+);
 
 assert(
   ownerDashboard.includes("resolveCanonicalShareUrlSync(") &&
@@ -58,6 +74,7 @@ const finalShareSurfaces = [
   shareButtonCaps,
   shareHub,
   ownerDashboard,
+  publicProfile,
 ].join("\n");
 
 assert.equal(

@@ -12,18 +12,23 @@ import {
   assessPublicMenuCompleteness,
   normalizeBusinessTypeLabel,
 } from "@/lib/publicMenuCompleteness";
+import { resolveCanonicalShareUrl } from "@/lib/share";
 import { SEOHead } from "@/components/seo-head";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useToast } from "@/hooks/use-toast";
 import {
   CalendarDays,
+  Check,
   Clock3,
+  Copy,
   ExternalLink,
   MapPin,
   MenuSquare,
   Phone,
   Route,
+  Share2,
 } from "lucide-react";
 
 type PublicProfilePayload =
@@ -331,6 +336,109 @@ function HeroBlock({ profile }: { profile: PublicProfilePayload }) {
           <p className="line-clamp-3 text-sm leading-6 text-white/70">{profile.description}</p>
         ) : null}
       </div>
+    </section>
+  );
+}
+
+function PublicProfileShareControls({
+  profile,
+  title,
+  description,
+  onShareAction,
+}: {
+  profile: PublicProfilePayload;
+  title: string;
+  description: string;
+  onShareAction: (actionType: string, targetType?: string | null, href?: string | null) => void;
+}) {
+  const { toast } = useToast();
+  const [copied, setCopied] = useState(false);
+  const targetPath = profile.profilePath || (() => {
+    try {
+      return new URL(profile.canonicalUrl).pathname;
+    } catch {
+      return typeof window !== "undefined" ? window.location.pathname : "/";
+    }
+  })();
+
+  const resolveShareUrl = async () => resolveCanonicalShareUrl(targetPath);
+
+  const copyShareUrl = async () => {
+    const shareUrl = await resolveShareUrl();
+    await navigator.clipboard.writeText(shareUrl);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1800);
+    onShareAction("share_copy", "copy", shareUrl);
+    toast({
+      title: "Link copied",
+      description: "Public profile link copied to clipboard.",
+    });
+    return shareUrl;
+  };
+
+  const handleShare = async () => {
+    try {
+      const shareUrl = await resolveShareUrl();
+      if (navigator.share) {
+        await navigator.share({
+          title,
+          text: description,
+          url: shareUrl,
+        });
+        onShareAction("share_open", "native_share", shareUrl);
+        return;
+      }
+      await navigator.clipboard.writeText(shareUrl);
+      onShareAction("share_copy", "copy_fallback", shareUrl);
+      toast({
+        title: "Link copied",
+        description: "Sharing is not available here, so the profile link was copied.",
+      });
+    } catch {
+      toast({
+        title: "Share failed",
+        description: "Could not prepare the profile share link.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleCopy = async () => {
+    try {
+      await copyShareUrl();
+    } catch {
+      toast({
+        title: "Copy failed",
+        description: "Could not copy the profile share link.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  return (
+    <section
+      aria-label="Share public profile"
+      className="flex flex-wrap items-center gap-2 rounded-xl border border-white/10 bg-[#0f0d0b] p-3"
+    >
+      <Button
+        type="button"
+        onClick={handleShare}
+        className="bg-orange-500 text-black hover:bg-orange-400"
+        data-testid="button-public-profile-share"
+      >
+        <Share2 className="mr-2 h-4 w-4" />
+        Share
+      </Button>
+      <Button
+        type="button"
+        variant="outline"
+        onClick={handleCopy}
+        className="border-white/20 text-white hover:bg-white/10"
+        data-testid="button-public-profile-copy-link"
+      >
+        {copied ? <Check className="mr-2 h-4 w-4" /> : <Copy className="mr-2 h-4 w-4" />}
+        Copy Link
+      </Button>
     </section>
   );
 }
@@ -1768,6 +1876,12 @@ export default function PublicProfilePage() {
         }}
       >
         <HeroBlock profile={data} />
+        <PublicProfileShareControls
+          profile={data}
+          title={title}
+          description={description}
+          onShareAction={trackProfileEvent}
+        />
         <QuickActionRow profile={data} safeCtas={safeCtas} />
 
         {data.entity === "host" ? (
