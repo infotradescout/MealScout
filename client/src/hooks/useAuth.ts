@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { getQueryFn } from "@/lib/queryClient";
 import type { User } from "@shared/schema";
+import { isLikelyCleanAffiliateTagSegment, parseCleanAffiliateBusinessRoute } from "@shared/cleanAffiliateLinks";
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { setAffiliateRef } from "@/lib/share";
@@ -44,9 +45,14 @@ function captureUrlAffiliateRef() {
   if (typeof window === "undefined") return;
   const urlParams = new URLSearchParams(window.location.search);
   const queryRef = String(urlParams.get("ref") || "").trim();
+  const cleanBusinessRoute = parseCleanAffiliateBusinessRoute(
+    window.location.pathname || "",
+  );
   const pathRef = extractPathAffiliateRef(window.location.pathname || "");
-  const ref = queryRef || pathRef || "";
-  if (ref) setAffiliateRef(ref);
+  const ref = queryRef || pathRef || cleanBusinessRoute?.affiliateTag || "";
+  if (isLikelyCleanAffiliateTagSegment(ref)) {
+    setAffiliateRef(ref);
+  }
 }
 
 export function useAuth() {
@@ -202,10 +208,13 @@ export function useAuth() {
       setAffiliateRef(null);
       return;
     }
-    if (user?.affiliateTag || user?.id) {
-      setAffiliateRef(user.affiliateTag || user.id);
+    const affiliateTag = String(user?.affiliateTag || "").trim();
+    if (isLikelyCleanAffiliateTagSegment(affiliateTag)) {
+      setAffiliateRef(affiliateTag);
+      return;
     }
-  }, [user?.affiliateTag, user?.id, user?.userType]);
+    setAffiliateRef(null);
+  }, [user?.affiliateTag, user?.userType]);
 
   // Check for OAuth redirect completion and confirm the session with /api/auth/user.
   useEffect(() => {

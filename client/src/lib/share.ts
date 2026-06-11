@@ -1,4 +1,9 @@
 import { apiRequest } from "@/lib/queryClient";
+import {
+  buildCleanAffiliateBusinessPath,
+  buildCleanPublicBusinessPath,
+  isLikelyCleanAffiliateTagSegment,
+} from "@shared/cleanAffiliateLinks";
 
 const AFFILIATE_REF_STORAGE_KEY = "affiliate_ref";
 
@@ -58,10 +63,20 @@ function buildClientFallbackAttributedUrl(
 ): string {
   const ref = String(fallbackRef || "").trim();
   if (!ref) {
-    return new URL(normalizeSharePath(targetPath), window.location.origin).toString();
+    const cleanBusinessPath = buildCleanPublicBusinessPath(
+      normalizeSharePath(targetPath),
+    );
+    return new URL(
+      cleanBusinessPath || normalizeSharePath(targetPath),
+      window.location.origin,
+    ).toString();
   }
 
   const sanitized = sanitizeTargetPathForTrackedLink(targetPath);
+  const cleanBusinessPath = buildCleanAffiliateBusinessPath(sanitized, ref);
+  if (cleanBusinessPath) {
+    return new URL(cleanBusinessPath, window.location.origin).toString();
+  }
   const parsed = new URL(sanitized, window.location.origin);
   const normalizedPathname = parsed.pathname.replace(/\/+$/, "") || "/";
   if (normalizedPathname === "/") {
@@ -104,6 +119,28 @@ function isDirectAttributedShareLink(
       generatedParts[generatedParts.length - 1] || "",
     ).trim();
     if (!refSegment) return false;
+    const cleanBusinessPath = buildCleanAffiliateBusinessPath(
+      sanitizeTargetPathForTrackedLink(targetPath),
+      refSegment,
+    );
+    if (cleanBusinessPath) {
+      const expectedCleanTarget = new URL(
+        cleanBusinessPath,
+        window.location.origin,
+      );
+      return (
+        generated.pathname === expectedCleanTarget.pathname &&
+        generated.search === expectedCleanTarget.search &&
+        generated.hash === expectedCleanTarget.hash &&
+        generated.pathname.toLowerCase() !== "/ref" &&
+        !generated.pathname.toLowerCase().startsWith("/ref/") &&
+        !generated.searchParams.has("to") &&
+        !generated.searchParams.has("ref") &&
+        !shareLink.includes("to=") &&
+        !shareLink.includes("%2F") &&
+        !shareLink.includes("role=business")
+      );
+    }
     const generatedBasePath = `/${generatedParts.slice(0, -1).join("/")}`;
     const expectedBasePath = expectedTarget.pathname.replace(/\/+$/, "") || "/";
     return (
@@ -159,11 +196,16 @@ export async function resolveCanonicalShareUrl(
       String(options?.fallbackRef || "").trim() ||
       String(getStoredAffiliateRef() || "").trim();
 
-    if (fallbackRef && isEligiblePublicShareTarget(path)) {
+    if (
+      fallbackRef &&
+      isLikelyCleanAffiliateTagSegment(fallbackRef) &&
+      isEligiblePublicShareTarget(path)
+    ) {
       return buildClientFallbackAttributedUrl(path, fallbackRef);
     }
 
-    return new URL(path, window.location.origin).toString();
+    const cleanBusinessPath = buildCleanPublicBusinessPath(path);
+    return new URL(cleanBusinessPath || path, window.location.origin).toString();
   }
 }
 
@@ -180,9 +222,14 @@ export function resolveCanonicalShareUrlSync(
     String(options?.fallbackRef || "").trim() ||
     String(getStoredAffiliateRef() || "").trim();
 
-  if (fallbackRef && isEligiblePublicShareTarget(path)) {
+  if (
+    fallbackRef &&
+    isLikelyCleanAffiliateTagSegment(fallbackRef) &&
+    isEligiblePublicShareTarget(path)
+  ) {
     return buildClientFallbackAttributedUrl(path, fallbackRef);
   }
 
-  return new URL(path, window.location.origin).toString();
+  const cleanBusinessPath = buildCleanPublicBusinessPath(path);
+  return new URL(cleanBusinessPath || path, window.location.origin).toString();
 }

@@ -30,9 +30,11 @@ import { validateEnv } from "./utils/env";
 import { healthRouter } from "./routes/health";
 import { apiMetricsMiddleware, requestIdMiddleware } from "./observability";
 import { videoStories, restaurants, requestLogs } from "@shared/schema";
+import { parseCleanAffiliateBusinessRoute } from "@shared/cleanAffiliateLinks";
 import { and, eq } from "drizzle-orm";
 import { registerAcquisitionPrerenderRoutes } from "./seo/acquisitionPrerender";
 import { registerPublicProfilePrerenderRoutes } from "./seo/publicProfilePrerender";
+import { resolvePublicBusinessSlug } from "./publicProfiles/publicBusinessSlugResolver";
 
 validateEnv();
 
@@ -1063,7 +1065,23 @@ app.use((req, res, next) => {
   // Capture affiliate `?ref=` on *all* requests before the SPA/static handlers run.
   // This is required so referral attribution works even when the first page hit is the frontend.
   app.use(async (req: any, res: any, next: any) => {
-    const ref = typeof req.query?.ref === "string" ? req.query.ref.trim() : "";
+    const queryRef = typeof req.query?.ref === "string" ? req.query.ref.trim() : "";
+    let cleanAffiliateRoute = parseCleanAffiliateBusinessRoute(
+      String(req.path || "/"),
+    );
+    if (
+      !queryRef &&
+      cleanAffiliateRoute?.businessSlug &&
+      cleanAffiliateRoute?.affiliateTag
+    ) {
+      const resolvedBusiness = await resolvePublicBusinessSlug(
+        cleanAffiliateRoute.businessSlug,
+      );
+      if (!resolvedBusiness) {
+        cleanAffiliateRoute = null;
+      }
+    }
+    const ref = queryRef || cleanAffiliateRoute?.affiliateTag || "";
     if (!ref) return next();
 
     // Avoid recording for obvious static asset hits.

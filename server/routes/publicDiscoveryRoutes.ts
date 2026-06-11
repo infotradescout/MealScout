@@ -33,6 +33,7 @@ import {
   toPublicSupplierProfile,
   toPublicTruckProfile,
 } from "../publicProfiles";
+import { resolvePublicBusinessSlug } from "../publicProfiles/publicBusinessSlugResolver";
 import { buildPublicProfilePath } from "../publicProfiles/publicProfileUtils";
 import { isAuthenticated } from "../unifiedAuth";
 
@@ -1543,6 +1544,28 @@ export function registerPublicDiscoveryRoutes(app: Express) {
       return res.status(400).json({ exists: false, reason: "unsupported_entity" });
     } catch (error) {
       console.error("Error resolving public profile slug:", error);
+      res.status(500).json({ exists: false, reason: "server_error" });
+    }
+  });
+
+  app.get("/api/public/resolve-business/:businessSlug", async (req, res) => {
+    try {
+      const businessSlug = String(req.params.businessSlug || "").trim();
+      const resolved = await resolvePublicBusinessSlug(businessSlug);
+      if (!resolved) {
+        return res.status(404).json({ exists: false, reason: "not_found" });
+      }
+      const baseUrl = resolvePublicBaseUrl();
+
+      return sendPublicJson(res, {
+        exists: true,
+        entityType: resolved.entityType,
+        id: resolved.id,
+        businessSlug: resolved.businessSlug,
+        canonicalUrl: `${baseUrl}/${encodeURIComponent(resolved.businessSlug)}`,
+      });
+    } catch (error) {
+      console.error("Error resolving public business slug:", error);
       res.status(500).json({ exists: false, reason: "server_error" });
     }
   });

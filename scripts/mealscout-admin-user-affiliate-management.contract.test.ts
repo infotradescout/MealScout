@@ -40,15 +40,20 @@ for (const snippet of requiredAuditSnippets) {
 
 const requiredDashboardSnippets = [
   'import { toSeoSlug } from "@/lib/seo-slug";',
+  'import { buildPublicProfilePath } from "@/lib/public-profile-path";',
+  'import { buildCleanAffiliateBusinessPath } from "@shared/cleanAffiliateLinks";',
   "const isAffiliateEligibleUserType = (userType?: string | null) =>",
   '!isAdminFamilyUserType(String(userType || "").toLowerCase())',
   "const getAdminUserPublicProfilePath = (",
   "user?.businessIsFoodTruck === true",
-  "return `/p/${profileType}/${encodeURIComponent(restaurantId)}/${encodeURIComponent(slug || restaurantId)}`;",
-  "return `/p/location/${encodeURIComponent(hostId)}/${encodeURIComponent(slug || hostId)}`;",
+  "return (",
+  "buildPublicProfilePath({",
+  'entityType: "location"',
   "const buildCanonicalAffiliateLink = (",
   "const profilePath = getAdminUserPublicProfilePath(user, attachedHostProfile);",
   'if (!profilePath || profilePath === "/") return null;',
+  "const cleanAffiliatePath = buildCleanAffiliateBusinessPath(profilePath, tag);",
+  "if (cleanAffiliatePath) {",
   "const url = new URL(",
   "profilePath",
   "canonicalMealScoutOrigin",
@@ -177,6 +182,9 @@ const affiliateBuilderSlice = dashboard.slice(
 if (
   !affiliateBuilderSlice.includes(
     "const profilePath = getAdminUserPublicProfilePath(user, attachedHostProfile);",
+  ) ||
+  !affiliateBuilderSlice.includes(
+    "const cleanAffiliatePath = buildCleanAffiliateBusinessPath(profilePath, tag);",
   ) ||
   !affiliateBuilderSlice.includes("const url = new URL(") ||
   !affiliateBuilderSlice.includes("profilePath") ||

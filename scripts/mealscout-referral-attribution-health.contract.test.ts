@@ -48,7 +48,8 @@ function requireIncludes(source: string, snippet: string, label: string) {
 // 2) Simulate click / landing capture
 [
   "Capture affiliate `?ref=` on *all* requests before the SPA/static handlers run.",
-  "const ref = typeof req.query?.ref === \"string\" ? req.query.ref.trim() : \"\";",
+  "const queryRef = typeof req.query?.ref === \"string\" ? req.query.ref.trim() : \"\";",
+  "parseCleanAffiliateBusinessRoute",
   'res.cookie("referralId", ref, {',
 ].forEach((snippet) =>
   requireIncludes(serverIndex, snippet, "server referral capture middleware"),
@@ -58,7 +59,9 @@ function requireIncludes(source: string, snippet: string, label: string) {
   "function captureUrlAffiliateRef()",
   'urlParams.get("ref")',
   "extractPathAffiliateRef(window.location.pathname || \"\")",
-  "if (ref) setAffiliateRef(ref)",
+  "parseCleanAffiliateBusinessRoute",
+  "isLikelyCleanAffiliateTagSegment(ref)",
+  "setAffiliateRef(ref)",
 ].forEach((snippet) =>
   requireIncludes(useAuthSource, snippet, "client landing capture"),
 );
@@ -92,7 +95,9 @@ function requireIncludes(source: string, snippet: string, label: string) {
 );
 
 [
-  "setAffiliateRef(user.affiliateTag || user.id)",
+  "const affiliateTag = String(user?.affiliateTag || \"\").trim();",
+  "isLikelyCleanAffiliateTagSegment(affiliateTag)",
+  "setAffiliateRef(affiliateTag)",
   "if (!user) return;",
 ].forEach((snippet) =>
   requireIncludes(useAuthSource, snippet, "post-login attribution persistence"),

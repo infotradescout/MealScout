@@ -8,6 +8,7 @@ import type {
   PublicRestaurantProfile,
   PublicSupplierProfile,
 } from "@shared/publicProfiles";
+import { buildCleanPublicBusinessPath, parseCleanAffiliateBusinessRoute } from "@shared/cleanAffiliateLinks";
 import {
   assessPublicMenuCompleteness,
   normalizeBusinessTypeLabel,
@@ -343,18 +344,20 @@ function HeroBlock({ profile }: { profile: PublicProfilePayload }) {
 
 function PublicProfileShareControls({
   profile,
+  sharePath,
   title,
   description,
   onShareAction,
 }: {
   profile: PublicProfilePayload;
+  sharePath?: string | null;
   title: string;
   description: string;
   onShareAction: (actionType: string, targetType?: string | null, href?: string | null) => void;
 }) {
   const { toast } = useToast();
   const [copied, setCopied] = useState(false);
-  const targetPath = profile.profilePath || (() => {
+  const targetPath = sharePath || profile.profilePath || (() => {
     try {
       return new URL(profile.canonicalUrl).pathname;
     } catch {
@@ -1714,6 +1717,10 @@ export default function PublicProfilePage() {
   const params = useParams<Record<string, string | undefined>>();
   const pathname =
     typeof window !== "undefined" ? window.location.pathname : "";
+  const cleanBusinessRoute = useMemo(
+    () => parseCleanAffiliateBusinessRoute(pathname),
+    [pathname],
+  );
   const inferredProfileType = (() => {
     if (pathname.startsWith("/truck/")) return "truck";
     if (pathname.startsWith("/bar/")) return "bar";
@@ -1722,11 +1729,34 @@ export default function PublicProfilePage() {
     if (pathname.startsWith("/restaurant/")) return "restaurant";
     return String(params.profileType || "").trim();
   })();
+  const cleanBusinessSlug = cleanBusinessRoute?.businessSlug || null;
+  const isCleanBusinessRoute = !inferredProfileType && Boolean(cleanBusinessSlug);
+  const { data: cleanBusinessResolution, isLoading: cleanBusinessLoading } = useQuery<{
+    entityType: "restaurant" | "truck" | "bar" | "location" | "supplier";
+    id: string;
+    businessSlug: string;
+  }>({
+    queryKey: ["/api/public/resolve-business", cleanBusinessSlug],
+    enabled: Boolean(isCleanBusinessRoute && cleanBusinessSlug),
+    queryFn: async () => {
+      const res = await fetch(
+        apiUrl(
+          `/api/public/resolve-business/${encodeURIComponent(
+            String(cleanBusinessSlug || ""),
+          )}`,
+        ),
+      );
+      if (!res.ok) throw new Error("Profile not found");
+      return res.json();
+    },
+  });
   const rawProfileId = String(
-    params.profileId || params.id || params.slug || "",
+    params.profileId || params.id || params.slug || cleanBusinessResolution?.id || "",
   ).trim();
   const resolvedProfileId = extractUuidFromSlug(rawProfileId) || rawProfileId;
-  const normalizedProfileType = normalizePublicProfileEntity(inferredProfileType);
+  const normalizedProfileType = normalizePublicProfileEntity(
+    inferredProfileType || cleanBusinessResolution?.entityType,
+  );
 
   const locationSearch =
     typeof window !== "undefined" ? window.location.search : "";
@@ -1803,7 +1833,7 @@ export default function PublicProfilePage() {
     }
   }, [data?.id, data?.profileType, querySource, trackProfileEvent]);
 
-  if (isLoading) {
+  if (isLoading || cleanBusinessLoading) {
     return <div className="mx-auto max-w-4xl px-4 py-10">Loading profile...</div>;
   }
 
@@ -1825,7 +1855,15 @@ export default function PublicProfilePage() {
     data.seo?.seoDescription ||
     data.description ||
     "Find local food activity, menus, deals, and nearby places on MealScout.";
-  const canonicalUrl = data.seo?.canonicalUrl || data.canonicalUrl;
+  const cleanProfilePath = cleanBusinessSlug
+    ? buildCleanPublicBusinessPath(`/${cleanBusinessSlug}`)
+    : null;
+  const canonicalUrl =
+    (cleanProfilePath && typeof window !== "undefined"
+      ? new URL(cleanProfilePath, window.location.origin).toString()
+      : null) ||
+    data.seo?.canonicalUrl ||
+    data.canonicalUrl;
   const citySlug = String((data as any).citySlug || "").trim() || null;
   const restaurantProfile = isRestaurantLikeEntity(data.entity)
     ? (data as PublicRestaurantProfile)
@@ -1890,6 +1928,7 @@ export default function PublicProfilePage() {
         <HeroBlock profile={data} />
         <PublicProfileShareControls
           profile={data}
+          sharePath={cleanProfilePath}
           title={title}
           description={description}
           onShareAction={trackProfileEvent}

@@ -1,3 +1,5 @@
+import { buildCleanAffiliateBusinessPath } from "@shared/cleanAffiliateLinks";
+
 const BLOCKED_PREFIXES = ["/admin", "/staff", "/api", "/ref"];
 
 export function normalizeInternalShareTarget(value: unknown): string | null {
@@ -74,6 +76,15 @@ function buildDirectAttributedPath(
   if (sanitized.pathname === "/") {
     throw new Error("Invalid share target");
   }
+  const sanitizedTarget = `${sanitized.pathname}${sanitized.search}${sanitized.hash}`;
+  const cleanBusinessPath = buildCleanAffiliateBusinessPath(
+    sanitizedTarget,
+    normalizedTag,
+  );
+  if (cleanBusinessPath) {
+    return cleanBusinessPath;
+  }
+
   const encodedTag = encodeURIComponent(normalizedTag);
   return `${sanitized.pathname}/${encodedTag}${sanitized.search}${sanitized.hash}`;
 }

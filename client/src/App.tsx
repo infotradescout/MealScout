@@ -9,6 +9,7 @@ import Navigation from "@/components/navigation";
 import { apiUrl } from "@/lib/api";
 import { TimeOfDayBackground } from "@/components/TimeOfDayBackground";
 import { useToast } from "@/hooks/use-toast";
+import { parseCleanAffiliateBusinessRoute } from "@shared/cleanAffiliateLinks";
 
 // Eager load only critical pages (welcome, login) - everything else lazy loads
 import NotFound from "@/pages/not-found";
@@ -234,7 +235,7 @@ const publicRoutePrefixes = [
 const isPublicPath = (path: string) =>
   publicRoutePrefixes.some((prefix) =>
     prefix === "/" ? path === "/" : path.startsWith(prefix),
-  );
+  ) || Boolean(parseCleanAffiliateBusinessRoute(path));
 
 // Wrapper component to handle route props
 function DashboardSwitcherPage() {
@@ -424,6 +425,8 @@ function Router() {
               path="/order-confirmation/:orderId"
               component={OrderConfirmationPage}
             />
+            <Route path="/:businessSlug/:refTag" component={PublicProfilePage} />
+            <Route path="/:businessSlug" component={PublicProfilePage} />
           </>
         ) : (
           <>
@@ -657,6 +660,8 @@ function Router() {
             <Route path="/menu-builder" component={MenuBuilderPage} />
             <Route path="/kitchen" component={KitchenDisplayPage} />
             <Route path="/scoutcoin" component={ScoutcoinPage} />
+            <Route path="/:businessSlug/:refTag" component={PublicProfilePage} />
+            <Route path="/:businessSlug" component={PublicProfilePage} />
           </>
         )}
         <Route component={NotFound} />
@@ -670,6 +675,7 @@ function App() {
   const currentPath = location.split("?")[0];
   const isPublicProfilePath =
     currentPath.startsWith("/p/") ||
+    Boolean(parseCleanAffiliateBusinessRoute(currentPath)) ||
     /^\/(restaurant|truck|bar|location|supplier)\/[^/]+(?:\/[^/]+)?$/i.test(
       currentPath,
     );

@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useLocation } from "wouter";
 import { setAffiliateRef } from "@/lib/share";
+import { isLikelyCleanAffiliateTagSegment } from "@shared/cleanAffiliateLinks";
 
 function isDefaultLookingAffiliateTag(tag: string): boolean {
   return /^user\d{4}$/i.test(String(tag || "").trim());
@@ -38,7 +39,11 @@ export default function ReferralRedirect() {
     const tag = decodeURIComponent(
       window.location.pathname.replace(/^\/ref\/?/, ""),
     ).trim();
-    const hasValidTag = Boolean(tag && !isDefaultLookingAffiliateTag(tag));
+    const hasValidTag = Boolean(
+      tag &&
+        isLikelyCleanAffiliateTagSegment(tag) &&
+        !isDefaultLookingAffiliateTag(tag),
+    );
     if (hasValidTag) setAffiliateRef(tag);
     const target = normalizeReferralTarget(
       new URLSearchParams(window.location.search).get("to"),
