@@ -263,9 +263,49 @@ Known non-blocking note:
 
 - Owner dashboard completion still includes `Deal/special missing` as an optional improvement prompt. In the current protected copy and status model, this is framed as a marketing enhancement rather than a Scout visibility gate.
 
+### Referral / Attribution Integrity Pass - 2026-06-11
+
+Decision:
+FAIL
+
+Existing attribution protections confirmed by code inspection and contracts:
+
+- Canonical share generation:
+  `client/src/lib/share.ts`, `server/shareRoutes.ts`, and `server/shareTargetPolicy.ts` centralize canonical attributed URL generation, reject nested `to=` / query `ref` drift in generated links, and preserve clean path-segment attribution.
+- Silent fallback behavior:
+  `resolveCanonicalShareUrl(...)` only falls back to a direct canonical URL when no authenticated tracked link can be generated and no stored fallback attribution ref exists. When a fallback ref exists and the target is eligible, it still produces a canonical attributed path. `server/shareRoutes.ts` fail-closes with `401 authentication_required`, `409 attribution_identity_required`, or `409 share_target_required` rather than silently assigning a default/system identity.
+- Invalid/default referral tag rejection:
+  `server/shareRoutes.ts`, `client/src/pages/referral-redirect.tsx`, `server/routes/systemUtilityRoutes.ts`, and `scripts/mealscout-valid-ref-production-smoke.contract.test.ts` all preserve rejection of default-looking `userNNNN` tags.
+- Hydration and redirect preservation:
+  `client/src/hooks/useAuth.ts`, `client/src/pages/referral-redirect.tsx`, `server/index.ts`, and `scripts/mealscout-affiliate-referral-capture.contract.test.ts` preserve `?ref=` and path-segment refs through client capture, redirect compatibility, and server cookie capture before SPA/static handlers.
+- Auth/setup redirect safety:
+  `scripts/mealscout-auth-onboarding-alignment.contract.test.ts`, `scripts/login-continuation.contract.test.ts`, and `scripts/app-unification-dashboard-entry.contract.test.ts` protect continuation-path safety so auth/setup redirects do not bounce users through unsafe `/account-setup` continuation loops or strip guarded continuation state.
+- QR canonicality:
+  `client/src/pages/restaurant-owner-dashboard.tsx` resolves `publicProfileForQr.seo.canonicalUrl` through `resolveCanonicalShareUrlSync(...)` before building Profile QR, Menu QR, Specials QR, truck assets, and QR-kit copy actions.
+- Public share/copy canonicality:
+  Public profile Share/Copy production smoke remains documented above and still confirms canonical attributed output when attribution context exists.
+
+P0 blocker found:
+
+- Owner dashboard discovery empty-state copy still bypasses the canonical resolver.
+  In `client/src/pages/restaurant-owner-dashboard.tsx`, the `Copy public profile link` action under the `No discovery activity yet.` panel builds:
+  `const fullUrl = \`${window.location.origin}${publicProfilePath}\`;`
+  and copies that raw value with `navigator.clipboard.writeText(fullUrl)`.
+  This path can emit an unattributed raw public profile URL even when attribution context exists, which violates this slice's doctrine for owner-facing share/copy integrity.
+
+Launch-audit conclusion for this slice:
+
+- Public Share/Copy canonical attribution remains protected: YES.
+- QR/referral payloads remain canonical in the inspected QR kit paths: YES.
+- Invalid/default referral tags remain rejected: YES.
+- Hydration/redirect attribution preservation status: PASS by current contracts and inspected code.
+- Silent fallback behavior: FAIL-CLOSED on the server and attributed when a valid fallback ref exists on the client; no default/system attribution path was found.
+- Referral / attribution integrity decision: FAIL until the owner dashboard raw copy path is routed through the canonical attributed URL resolver or explicitly narrowed out of the launch surface.
+
 ## Required Fixes Before Launch
 
 1. Run a 10-profile data checklist: real identity, menu if available, schedule/location truth, no fabricated data, discoverable without deals, shareable with attribution.
 2. Credentialed owner dashboard smoke: profile link, share controls, menu status, schedule/location status, owner-dashboard QR.
 3. Credentialed admin/staff smoke: profile-quality review, duplicate/conflict visibility, public-ready vs needs-owner-info states.
-4. Product decision: confirm whether zero-menu profiles should appear in all Scout contexts or only public profile/search contexts.
+4. Route the owner dashboard `Copy public profile link` action through the canonical attributed URL resolver or explicitly remove it from launch-critical owner share surfaces.
+5. Product decision: confirm whether zero-menu profiles should appear in all Scout contexts or only public profile/search contexts.

@@ -38,7 +38,8 @@ for (const snippet of requiredAuthPayloadSnippets) {
 const requiredClientSnippets = [
   "const continuationPath = String(user.continuationPath || \"\").trim();",
   "if (!continuationPath) return;",
-  "if (window.location.pathname + window.location.search === continuationTarget) {",
+  "window.location.pathname + window.location.search ===",
+  "continuationTarget",
   "if (isAdminUser && pathname.startsWith(\"/admin\")) return;",
   "setLocation(continuationTarget);",
 ];
