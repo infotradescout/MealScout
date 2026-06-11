@@ -1,4 +1,7 @@
 import { apiRequest } from "@/lib/queryClient";
+import {
+  isLikelyCleanAffiliateTagSegment,
+} from "@shared/cleanAffiliateLinks";
 
 const AFFILIATE_REF_STORAGE_KEY = "affiliate_ref";
 
@@ -159,7 +162,11 @@ export async function resolveCanonicalShareUrl(
       String(options?.fallbackRef || "").trim() ||
       String(getStoredAffiliateRef() || "").trim();
 
-    if (fallbackRef && isEligiblePublicShareTarget(path)) {
+    if (
+      fallbackRef &&
+      isLikelyCleanAffiliateTagSegment(fallbackRef) &&
+      isEligiblePublicShareTarget(path)
+    ) {
       return buildClientFallbackAttributedUrl(path, fallbackRef);
     }
 
@@ -180,7 +187,11 @@ export function resolveCanonicalShareUrlSync(
     String(options?.fallbackRef || "").trim() ||
     String(getStoredAffiliateRef() || "").trim();
 
-  if (fallbackRef && isEligiblePublicShareTarget(path)) {
+  if (
+    fallbackRef &&
+    isLikelyCleanAffiliateTagSegment(fallbackRef) &&
+    isEligiblePublicShareTarget(path)
+  ) {
     return buildClientFallbackAttributedUrl(path, fallbackRef);
   }
 

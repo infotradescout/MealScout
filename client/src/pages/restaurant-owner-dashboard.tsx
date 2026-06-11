@@ -2417,8 +2417,11 @@ export default function RestaurantOwnerDashboard() {
                     Print or share these QR codes for profile, menu, and specials.
                   </p>
                   {(() => {
+                    const shareBaseTarget =
+                      String((publicProfileForQr as any)?.cleanBusinessPath || "").trim() ||
+                      publicProfileForQr.seo.canonicalUrl;
                     const canonicalUrl = resolveCanonicalShareUrlSync(
-                      publicProfileForQr.seo.canonicalUrl,
+                      shareBaseTarget,
                     );
                     const hasStructuredMenu = Array.isArray(publicProfileForQr.menuSections)
                       ? publicProfileForQr.menuSections.some(

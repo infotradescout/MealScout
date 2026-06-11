@@ -7,7 +7,7 @@
 import type { Express } from "express";
 import { resolveCanonicalShareOrigin } from "./shareMiddleware";
 import { db } from "./db";
-import { affiliateLinks, affiliateShareEvents, users } from "@shared/schema";
+import { affiliateLinks, affiliateShareEvents, hosts, suppliers, users } from "@shared/schema";
 import {
   isDefaultLookingAffiliateTag,
   isAffiliateTagValid,
@@ -18,6 +18,76 @@ import {
   normalizeInternalShareTarget,
 } from "./shareTargetPolicy";
 import { and, desc, eq } from "drizzle-orm";
+import { resolvePublicBusinessSlug, resolveUniqueCleanBusinessPathForEntity } from "./publicProfiles/publicBusinessSlugResolver";
+import { storage } from "./storage";
+
+async function resolveUniqueCleanShareTarget(sharePath: string): Promise<string | null> {
+  const parsed = new URL(sharePath, "https://www.mealscout.us");
+  const pathname = parsed.pathname.replace(/\/+$/, "") || "/";
+  if (pathname === "/") return null;
+
+  const directRootMatch = pathname.match(/^\/([a-z0-9-]+)$/i);
+  if (directRootMatch?.[1]) {
+    const resolution = await resolvePublicBusinessSlug(directRootMatch[1]);
+    if (resolution.status !== "unique") return null;
+    return `${pathname}${parsed.search}${parsed.hash}`;
+  }
+
+  const prefixedMatch = pathname.match(
+    /^\/(restaurant|truck|bar|location|supplier)\/([^/?#]+)$/i,
+  );
+  if (!prefixedMatch) return null;
+
+  const entityType = String(prefixedMatch[1] || "").toLowerCase();
+  const slugSegment = decodeURIComponent(String(prefixedMatch[2] || ""));
+  const idMatch = slugSegment.match(/([0-9a-f]{8}-[0-9a-f-]{27,})$/i);
+  const id = String(idMatch?.[1] || "").trim();
+  if (!id) return null;
+
+  let cleanBusinessPath: string | null = null;
+  if (entityType === "location") {
+    const hostRows = await db.select().from(hosts).where(eq(hosts.id, id)).limit(1);
+    const row = hostRows[0] as any;
+    if (row) {
+      cleanBusinessPath = await resolveUniqueCleanBusinessPathForEntity({
+        entityType: "location",
+        id,
+        name: String(row.businessName || row.name || id),
+      });
+    }
+  } else if (entityType === "supplier") {
+    const supplierRows = await db
+      .select()
+      .from(suppliers)
+      .where(eq(suppliers.id, id))
+      .limit(1);
+    const row = supplierRows[0] as any;
+    if (row) {
+      cleanBusinessPath = await resolveUniqueCleanBusinessPathForEntity({
+        entityType: "supplier",
+        id,
+        name: String(row.businessName || row.name || id),
+      });
+    }
+  } else {
+    const row = await storage.getRestaurant(id);
+    if (row) {
+      cleanBusinessPath = await resolveUniqueCleanBusinessPathForEntity({
+        entityType:
+          entityType === "truck"
+            ? "truck"
+            : entityType === "bar"
+              ? "bar"
+              : "restaurant",
+        id,
+        name: String((row as any).name || (row as any).businessName || id),
+      });
+    }
+  }
+
+  if (!cleanBusinessPath) return null;
+  return `${cleanBusinessPath}${parsed.search}${parsed.hash}`;
+}
 
 const INTERNAL_CODE_LENGTH = 8;
 const INTERNAL_CODE_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
@@ -183,9 +253,11 @@ export default function setupShareRoutes(app: Express) {
       }
 
       const baseUrl = resolveCanonicalShareOrigin(req);
+      const finalShareTarget =
+        (await resolveUniqueCleanShareTarget(sharePath)) || sharePath;
       const attribution = await resolveShareAttributionIdentity({
         req,
-        sharePath,
+        sharePath: finalShareTarget,
         baseUrl,
       });
       if (!attribution) {
@@ -203,21 +275,21 @@ export default function setupShareRoutes(app: Express) {
       const shareLink = buildTrackedAttributedUrl(
         baseUrl,
         attribution.attributionKey,
-        sharePath,
+        finalShareTarget,
       );
 
-      const resource = inferShareResource(sharePath);
+      const resource = inferShareResource(finalShareTarget);
       await db.insert(affiliateShareEvents).values({
         affiliateUserId: attribution.affiliateUserId,
         resourceType: resource.resourceType,
         resourceId: resource.resourceId,
-        destinationUrl: sharePath,
+        destinationUrl: finalShareTarget,
         shareMethod: "link",
       });
 
       res.json({
         shareLink,
-        shortPath: sharePath,
+        shortPath: finalShareTarget,
         attributionPath: `/ref/${encodeURIComponent(attribution.attributionKey)}`,
         attributionMode: attribution.attributionMode,
         message: "Share link generated",

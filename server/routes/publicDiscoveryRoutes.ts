@@ -33,6 +33,10 @@ import {
   toPublicSupplierProfile,
   toPublicTruckProfile,
 } from "../publicProfiles";
+import {
+  resolvePublicBusinessSlug,
+  resolveUniqueCleanBusinessPathForEntity,
+} from "../publicProfiles/publicBusinessSlugResolver";
 import { buildPublicProfilePath } from "../publicProfiles/publicProfileUtils";
 import { isAuthenticated } from "../unifiedAuth";
 
@@ -1547,6 +1551,36 @@ export function registerPublicDiscoveryRoutes(app: Express) {
     }
   });
 
+  app.get("/api/public/resolve-business/:businessSlug", async (req, res) => {
+    try {
+      const businessSlug = String(req.params.businessSlug || "").trim();
+      const resolved = await resolvePublicBusinessSlug(businessSlug);
+      if (resolved.status === "not_found") {
+        return res.status(404).json({ exists: false, reason: "not_found" });
+      }
+      if (resolved.status === "ambiguous") {
+        return res.status(409).json({
+          exists: false,
+          reason: "ambiguous_slug",
+          businessSlug: resolved.businessSlug,
+          candidateCount: resolved.candidates.length,
+        });
+      }
+      const baseUrl = resolvePublicBaseUrl();
+
+      return sendPublicJson(res, {
+        exists: true,
+        entityType: resolved.match.entityType,
+        id: resolved.match.id,
+        businessSlug: resolved.businessSlug,
+        canonicalUrl: `${baseUrl}/${encodeURIComponent(resolved.businessSlug)}`,
+      });
+    } catch (error) {
+      console.error("Error resolving public business slug:", error);
+      res.status(500).json({ exists: false, reason: "server_error" });
+    }
+  });
+
   app.get("/api/public/canonical/:entity/:id", async (req, res) => {
     try {
       const entity = normalizePublicProfileEntity(req.params.entity);
@@ -1915,6 +1949,11 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           showAddress,
           showContact,
         });
+        const cleanBusinessPath = await resolveUniqueCleanBusinessPathForEntity({
+          entityType: "truck",
+          id: String(row.id),
+          name: String((row as any).name || (row as any).businessName || row.id),
+        });
         return sendPublicJson(res, {
           ...mapped,
           entity: "truck",
@@ -1924,6 +1963,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           phone: mapped.phonePublic,
           imageUrl: mapped.coverImageUrl || mapped.logoUrl,
           profilePath: mapped.seo.canonicalUrl.replace(baseUrl, ""),
+          cleanBusinessPath,
           canonicalUrl: mapped.seo.canonicalUrl,
           websiteUrl: mapped.websiteUrl,
           profileSettings,
@@ -1959,6 +1999,11 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           showAddress,
           showContact,
         });
+        const cleanBusinessPath = await resolveUniqueCleanBusinessPathForEntity({
+          entityType: "bar",
+          id: String(row.id),
+          name: String((row as any).name || (row as any).businessName || row.id),
+        });
         return sendPublicJson(res, {
           ...mapped,
           entity: "restaurant",
@@ -1968,6 +2013,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           phone: mapped.phonePublic,
           imageUrl: mapped.coverImageUrl || mapped.logoUrl,
           profilePath: mapped.seo.canonicalUrl.replace(baseUrl, ""),
+          cleanBusinessPath,
           canonicalUrl: mapped.seo.canonicalUrl,
           websiteUrl: mapped.websiteUrl,
           profileSettings,
@@ -1991,6 +2037,11 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           showAddress,
           showContact,
         });
+        const cleanBusinessPath = await resolveUniqueCleanBusinessPathForEntity({
+          entityType: "location",
+          id: String(row.id),
+          name: String((row as any).businessName || (row as any).name || row.id),
+        });
         return sendPublicJson(res, {
           ...mapped,
           events: {
@@ -2010,6 +2061,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           phone: showContact ? String(row.contactPhone || "").trim() || null : null,
           imageUrl: mapped.spotImageUrl || mapped.coverImageUrl || mapped.logoUrl,
           profilePath: mapped.seo.canonicalUrl.replace(baseUrl, ""),
+          cleanBusinessPath,
           canonicalUrl: mapped.seo.canonicalUrl,
           websiteUrl: mapped.websiteUrl,
           profileSettings,
@@ -2048,6 +2100,11 @@ export function registerPublicDiscoveryRoutes(app: Express) {
             showAddress,
             showContact,
           });
+          const cleanBusinessPath = await resolveUniqueCleanBusinessPathForEntity({
+            entityType: "truck",
+            id: String(row.id),
+            name: String((row as any).name || (row as any).businessName || row.id),
+          });
           return sendPublicJson(res, {
             ...mapped,
             entity: "truck",
@@ -2057,6 +2114,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
             phone: mapped.phonePublic,
             imageUrl: mapped.coverImageUrl || mapped.logoUrl,
             profilePath: mapped.seo.canonicalUrl.replace(baseUrl, ""),
+            cleanBusinessPath,
             canonicalUrl: mapped.seo.canonicalUrl,
             websiteUrl: mapped.websiteUrl,
             profileSettings,
@@ -2075,6 +2133,11 @@ export function registerPublicDiscoveryRoutes(app: Express) {
             showAddress,
             showContact,
           });
+          const cleanBusinessPath = await resolveUniqueCleanBusinessPathForEntity({
+            entityType: "bar",
+            id: String(row.id),
+            name: String((row as any).name || (row as any).businessName || row.id),
+          });
           return sendPublicJson(res, {
             ...mapped,
             entity: "bar",
@@ -2084,6 +2147,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
             phone: mapped.phonePublic,
             imageUrl: mapped.coverImageUrl || mapped.logoUrl,
             profilePath: mapped.seo.canonicalUrl.replace(baseUrl, ""),
+            cleanBusinessPath,
             canonicalUrl: mapped.seo.canonicalUrl,
             websiteUrl: mapped.websiteUrl,
             profileSettings,
@@ -2101,6 +2165,11 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           showAddress,
           showContact,
         });
+        const cleanBusinessPath = await resolveUniqueCleanBusinessPathForEntity({
+          entityType: "restaurant",
+          id: String(row.id),
+          name: String((row as any).name || (row as any).businessName || row.id),
+        });
         return sendPublicJson(res, {
           ...mapped,
           entity: "restaurant",
@@ -2110,6 +2179,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           phone: mapped.phonePublic,
           imageUrl: mapped.coverImageUrl || mapped.logoUrl,
           profilePath: mapped.seo.canonicalUrl.replace(baseUrl, ""),
+          cleanBusinessPath,
           canonicalUrl: mapped.seo.canonicalUrl,
           websiteUrl: mapped.websiteUrl,
           profileSettings,
@@ -2132,6 +2202,11 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           showAddress,
           showContact,
         });
+        const cleanBusinessPath = await resolveUniqueCleanBusinessPathForEntity({
+          entityType: "location",
+          id: String(row.id),
+          name: String((row as any).businessName || (row as any).name || row.id),
+        });
         return sendPublicJson(res, {
           ...mapped,
           entity: "host",
@@ -2144,6 +2219,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           phone: showContact ? String(row.contactPhone || "").trim() || null : null,
           imageUrl: mapped.spotImageUrl || mapped.coverImageUrl || mapped.logoUrl,
           profilePath: mapped.seo.canonicalUrl.replace(baseUrl, ""),
+          cleanBusinessPath,
           canonicalUrl: mapped.seo.canonicalUrl,
           websiteUrl: mapped.websiteUrl,
           profileSettings,
@@ -2182,6 +2258,11 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           showAddress,
           showContact,
         });
+        const cleanBusinessPath = await resolveUniqueCleanBusinessPathForEntity({
+          entityType: "supplier",
+          id: String(row.id),
+          name: String(row.businessName || row.name || row.id),
+        });
         return sendPublicJson(res, {
           ...mapped,
           entity: "supplier",
@@ -2191,6 +2272,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           phone: mapped.phonePublic,
           imageUrl: mapped.logoUrl,
           profilePath: mapped.seo.canonicalUrl.replace(baseUrl, ""),
+          cleanBusinessPath,
           canonicalUrl: mapped.seo.canonicalUrl,
           websiteUrl: mapped.websiteUrl,
           profileSettings,

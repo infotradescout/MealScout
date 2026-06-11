@@ -42,11 +42,13 @@ function requireIncludes(source: string, snippet: string, label = snippet) {
 [
   "function captureUrlAffiliateRef",
   'urlParams.get("ref")',
-  "if (ref) setAffiliateRef(ref)",
+  "isLikelyCleanAffiliateTagSegment(ref)",
+  "setAffiliateRef(ref)",
   "if (!user) return;",
   "isInternalAdmin",
   'setAffiliateRef(null)',
-  "user?.affiliateTag || user?.id",
+  "const affiliateTag = String(user?.affiliateTag || \"\").trim();",
+  "isLikelyCleanAffiliateTagSegment(affiliateTag)",
 ].forEach((snippet) => requireIncludes(useAuth, snippet, `useAuth ref guard ${snippet}`));
 
 const userUndefinedClearPattern =
@@ -66,7 +68,11 @@ for (const occurrence of unguardedSetAffiliateRefNull) {
     .slice(Math.max(0, occurrence.lineNumber - 5), occurrence.lineNumber + 2)
     .join("\n");
   if (!nearby.includes("isInternalAdmin")) {
-    throw new Error(`setAffiliateRef(null) must stay limited to internal admin cleanup, found near line ${occurrence.lineNumber}.`);
+    if (
+      !nearby.includes("isLikelyCleanAffiliateTagSegment(affiliateTag)")
+    ) {
+      throw new Error(`setAffiliateRef(null) must stay limited to internal admin cleanup or invalid clean-tag cleanup, found near line ${occurrence.lineNumber}.`);
+    }
   }
 }
 
@@ -104,9 +110,10 @@ if (!app.includes('"/scout"')) {
   "buildAuthPath(\"/api/auth/facebook?userType=customer\")",
 ].forEach((snippet) => requireIncludes(login, snippet, `login referral preservation ${snippet}`));
 
-[
+[ 
   "Capture affiliate `?ref=` on *all* requests",
   "req.query?.ref",
+  "resolvedBusiness.status !== \"unique\"",
   'res.cookie("referralId"',
 ].forEach((snippet) => requireIncludes(serverIndex, snippet, `server referral capture ${snippet}`));
 

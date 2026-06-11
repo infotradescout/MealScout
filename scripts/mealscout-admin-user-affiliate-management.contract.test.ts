@@ -40,12 +40,14 @@ for (const snippet of requiredAuditSnippets) {
 
 const requiredDashboardSnippets = [
   'import { toSeoSlug } from "@/lib/seo-slug";',
+  'import { buildPublicProfilePath } from "@/lib/public-profile-path";',
   "const isAffiliateEligibleUserType = (userType?: string | null) =>",
   '!isAdminFamilyUserType(String(userType || "").toLowerCase())',
   "const getAdminUserPublicProfilePath = (",
   "user?.businessIsFoodTruck === true",
-  "return `/p/${profileType}/${encodeURIComponent(restaurantId)}/${encodeURIComponent(slug || restaurantId)}`;",
-  "return `/p/location/${encodeURIComponent(hostId)}/${encodeURIComponent(slug || hostId)}`;",
+  "return (",
+  "buildPublicProfilePath({",
+  'entityType: "location"',
   "const buildCanonicalAffiliateLink = (",
   "const profilePath = getAdminUserPublicProfilePath(user, attachedHostProfile);",
   'if (!profilePath || profilePath === "/") return null;',
