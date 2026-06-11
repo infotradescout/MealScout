@@ -35,6 +35,7 @@ Core product doctrine:
 - Owner dashboard and admin/staff launch readiness were checked by static contracts and route inventory only in this pass; a credentialed production smoke is still needed.
 - QR is currently treated as owner-dashboard-only based on inspected owner dashboard QR code paths. Anonymous public profile QR is not required unless product decides to expose it.
 - Production route checks confirmed SPA responses, but not authenticated owner/admin flows.
+- A fully empty menu state on public profiles is currently handled by omission when there is no menu evidence at all; this is honest and non-blocking, but product can still decide later whether that should become a visible informational card.
 
 ## P2 Polish
 
@@ -186,6 +187,42 @@ Notes:
 
 - Automation cannot read the OS-native share sheet UI directly, so the smoke intercepted the production `navigator.share(...)` payload. That payload is the URL handed to the native share sheet.
 - Anonymous `/api/share/generate` returned 401 during the smoke, as expected without login. The canonical resolver then used the captured referral context from `localStorage.affiliate_ref = "smoke-ref"` and produced a clean path-style attributed URL.
+
+### Public Profile Incomplete-State Trust Pass - 2026-06-11
+
+Decision:
+PASS
+
+Protected incomplete states confirmed by code inspection and contracts:
+
+- Missing logo/photo:
+  `HeroBlock` falls back from `spotImageUrl` / `coverImageUrl` / `logoUrl` / `profileImageUrl` / `truckPhotoLogo` to initials artwork instead of inventing imagery.
+- Missing menu but menu evidence exists:
+  `MenuSection` renders `Menu unavailable right now.` when menu completeness resolves to `unavailable`.
+- Partial menu evidence:
+  `MenuSection` renders `Partial menu from available evidence. More items may be available from this business directly.`
+- Missing truck schedule / live status:
+  `RestaurantSchedule` and `HeroBlock` honor `schedule.statusLabel`, which supports honest text like `No schedule posted`.
+- Missing live location coordinates on host profiles:
+  `LocationMapSection` renders `Map coordinates are not available yet.` instead of fake coordinates.
+- No trucks currently listed at a host:
+  `LocationNowSection` and `LocationTruckOptionsSection` render `No trucks listed right now` plus `Check back soon or explore nearby food.`
+- No deals present:
+  `DealsSection` returns `null` when `dealItems.length === 0`, so deals stay optional and do not block profile usefulness or visibility.
+
+Coverage added in this slice:
+
+- `scripts/public-profile-menu-logo-schedule.contract.test.ts` now protects:
+  hero image fallback,
+  honest menu unavailable state,
+  honest missing-coordinates state,
+  honest no-trucks state,
+  optional deals absence.
+
+Gap found:
+
+- No P0 trust bug found.
+- Remaining product nuance: when there is zero menu evidence at all, the page omits the menu card entirely rather than showing an explicit “menu unavailable” note. That is still honest and does not block profile usefulness, so this stays a P1 product decision rather than a bug.
 
 ## Required Fixes Before Launch
 
