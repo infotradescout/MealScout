@@ -6,9 +6,9 @@ Local baseline commit before this pass: `33b44685b204d54348f820e3759bdea471cd95a
 
 ## Decision
 
-NOT READY
+PUBLIC PROFILE SHARE/COPY P0 PASSED
 
-MealScout is closer to launch readiness after this pass, but the launch decision remains NOT READY until the new public profile Share/Copy controls are deployed and visually smoked in production. Production currently serves the prior hotfix commit. The contained P0 fix in this pass adds the missing public profile Share and Copy Link controls and routes both through the canonical attributed URL resolver.
+MealScout production now serves the public profile Share/Copy fix from commit `b5736159fd65c95ee61a104e3c28357a87fdaec7`, and the public profile Share/Copy runtime smoke passed on 2026-06-11. The native share payload and copied link both resolve to canonical attributed URLs when attribution context exists. The broader launch decision still depends on the remaining P1 launch risks and the 10-profile real-data checklist.
 
 Core product doctrine:
 
@@ -26,8 +26,8 @@ Core product doctrine:
 | Fixed locally | Public profile had no visible Share control. | Added `button-public-profile-share` in `client/src/pages/public-profile.tsx`. |
 | Fixed locally | Public profile had no visible Copy Link control. | Added `button-public-profile-copy-link` in `client/src/pages/public-profile.tsx`. |
 | Fixed locally | Public profile Share/Copy attribution was not contract-protected. | Extended `scripts/mealscout-native-share-attribution.contract.test.ts`. |
-| Remaining | Production does not yet serve this pass. | Deploy this commit and rerun visual smoke on the public profile URL. |
-| Remaining | Public profile native share sheet cannot be verified until deployment. | After deploy, verify the native share sheet URL is attributed/canonical. |
+| Passed | Production serves this pass. | `/api/version` reports `b5736159fd65c95ee61a104e3c28357a87fdaec7`. |
+| Passed | Public profile Share/Copy runtime smoke. | Native share payload and copied link both use the canonical attributed URL shape. |
 
 ## P1 Risks
 
@@ -45,7 +45,7 @@ Core product doctrine:
 
 | # | Surface | Status | Notes |
 | --- | --- | --- | --- |
-| 1 | Public Profile | P0 fixed locally | Share and Copy Link controls added. Menu/logo/schedule contract passes. Production smoke still required after deploy. |
+| 1 | Public Profile | P0 passed | Share and Copy Link controls are visible in production and produce canonical attributed URLs. Menu/logo/schedule contract passes. |
 | 2 | Scout / Discovery | P1 | Existing contracts prove unified truck discoverability and no deals gate found in inspected Scout contract. Menu gating remains a product decision. |
 | 3 | Map | Pass with caveat | Production map route returns 200. Prior smoke showed attributed fallback share URL. |
 | 4 | City Landing Pages | P1 | City/share attribution covered by native share contract. Pensacola food-trucks route needs content review because production previously showed city-not-found in one smoke. |
@@ -54,13 +54,13 @@ Core product doctrine:
 | 7 | Schedule / Location | P1 | Public profile renders honest schedule/location states. Static address vs live truck location remains a launch QA item. |
 | 8 | Owner Dashboard | P1 | Owner QR/share code uses `resolveCanonicalShareUrlSync`. Credentialed smoke still needed. |
 | 9 | Onboarding / Claim | P1 | Claim/update route is linked from public profile header. Full claim/provider smoke not run in this pass. |
-| 10 | Share / Copy / QR / Affiliate | P0 fixed locally | Public profile Share/Copy now use `resolveCanonicalShareUrl`; map/city/deals/deal detail/owner QR are contract-covered. |
+| 10 | Share / Copy / QR / Affiliate | P0 passed for public profile | Public profile Share/Copy use `resolveCanonicalShareUrl`; production smoke confirms attributed output. Map/city/deals/deal detail/owner QR are contract-covered. |
 | 11 | Admin / Staff Review | P1 | Admin/staff contracts exist, but credentialed production review smoke not run. |
 | 12 | Search / Filters | P1 | Search routes/tests exist; full production search smoke not run. Must not require deals. |
 | 13 | Mobile UX | P1 | Public profile controls added in mobile-friendly flex row. Visual mobile smoke required after deploy. |
 | 14 | Auth / Session | P1 | Public profile viewing/sharing is anonymous. Owner/admin session smoke requires credentials. |
 | 15 | Notifications / Email | P2 | Not launch-blocking for public profile usefulness unless a specific claim/review email is required. |
-| 16 | Production Freshness | P0 remaining | `/api/version` proves production is fresh for `33b44685...`; it must be rechecked after this commit deploys. |
+| 16 | Production Freshness | Pass | `/api/version` reports production commit `b5736159fd65c95ee61a104e3c28357a87fdaec7`. |
 | 17 | Data Quality / Imports | P1 | No fake data added. Ten-profile real-data launch checklist remains required. |
 | 18 | SEO / Social Preview | P1 | Public profile SEO metadata is present. Social preview quality needs post-deploy URL inspection. |
 | 19 | Error / Empty States | P1 | Public profile missing states are present for menu/schedule. Broader empty-state review remains useful. |
@@ -116,6 +116,7 @@ node scripts/smokeScoutSurface.mjs
 Invoke-WebRequest https://www.mealscout.us/api/version
 Invoke-WebRequest https://www.mealscout.us/api/health
 Invoke-WebRequest key production routes
+Playwright production smoke for public profile Share/Copy with navigator.share and clipboard interception
 ```
 
 ## Smoke Artifacts
@@ -161,13 +162,34 @@ Scout surface smoke:
 [smoke:scout-surface] PASS
 ```
 
+### Production Public Profile Share/Copy Smoke - 2026-06-11
+
+| Item | Result |
+| --- | --- |
+| Production deploy freshness | PASS |
+| Commit reported by `/api/version` | `b5736159fd65c95ee61a104e3c28357a87fdaec7` |
+| Environment | `production` |
+| Build time | `2026-06-11T16:14:16.054Z` |
+| Public profile URL tested | `https://www.mealscout.us/p/location/a5d30bff-1318-4d7a-8ee2-96190bbf378f/the-spot-tavern` |
+| Share button visible | Yes |
+| Copy Link visible | Yes |
+| Native share observed URL shape | `https://www.mealscout.us/p/location/<locationId>/<slug>/<ref>` |
+| Native share observed URL | `https://www.mealscout.us/p/location/a5d30bff-1318-4d7a-8ee2-96190bbf378f/the-spot-tavern/smoke-ref` |
+| Copied link observed URL shape | `https://www.mealscout.us/p/location/<locationId>/<slug>/<ref>` |
+| Copied link observed URL | `https://www.mealscout.us/p/location/a5d30bff-1318-4d7a-8ee2-96190bbf378f/the-spot-tavern/smoke-ref` |
+| Raw `/p/location/<id>` final output | No |
+| QR status | Owner-dashboard-only |
+| PASS/FAIL decision | PASS |
+| Remaining blocker | None for public profile Share/Copy P0 |
+
+Notes:
+
+- Automation cannot read the OS-native share sheet UI directly, so the smoke intercepted the production `navigator.share(...)` payload. That payload is the URL handed to the native share sheet.
+- Anonymous `/api/share/generate` returned 401 during the smoke, as expected without login. The canonical resolver then used the captured referral context from `localStorage.affiliate_ref = "smoke-ref"` and produced a clean path-style attributed URL.
+
 ## Required Fixes Before Launch
 
-1. Deploy this commit.
-2. Confirm `/api/version` reports this commit or later.
-3. Open `https://www.mealscout.us/p/location/a5d30bff-1318-4d7a-8ee2-96190bbf378f/the-spot-tavern`.
-4. Confirm visible Share and Copy Link controls on desktop and mobile.
-5. Click Share and confirm the native share sheet URL is attributed/canonical when attribution exists, not raw `/p/location/<id>`.
-6. Click Copy Link and confirm the pasted URL is attributed/canonical when attribution exists.
-7. Confirm QR remains owner-dashboard-only, or expose public profile QR and route it through the same resolver.
-8. Run a 10-profile data checklist: real identity, menu if available, schedule/location truth, no fabricated data, discoverable without deals, shareable with attribution.
+1. Run a 10-profile data checklist: real identity, menu if available, schedule/location truth, no fabricated data, discoverable without deals, shareable with attribution.
+2. Credentialed owner dashboard smoke: profile link, share controls, menu status, schedule/location status, owner-dashboard QR.
+3. Credentialed admin/staff smoke: profile-quality review, duplicate/conflict visibility, public-ready vs needs-owner-info states.
+4. Product decision: confirm whether zero-menu profiles should appear in all Scout contexts or only public profile/search contexts.
