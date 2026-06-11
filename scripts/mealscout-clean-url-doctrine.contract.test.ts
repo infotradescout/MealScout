@@ -17,6 +17,12 @@ for (const snippet of [
   "All public and user-facing MealScout URLs must describe the destination",
   "target public profile architecture is:",
   "/{businessSlug}",
+  "Preferred final public affiliate format:",
+  "https://www.mealscout.us/{businessSlug}/{affiliateTag}",
+  "userNNNN",
+  "/referral-redirect",
+  "/p/location",
+  "does not yet satisfy the final no-ID affiliate URL end state",
   "Stage 1 canonical public route families:",
   "/restaurant/{slug}--{id}",
   "/truck/{slug}--{id}",
@@ -29,7 +35,9 @@ for (const snippet of [
 
 assert(
   audit.includes("Clean URL Doctrine / Stage 1 Migration") &&
-    audit.includes("launch-critical user-facing outputs must stop treating `/p/...` as canonical final output"),
+    audit.includes("launch-critical user-facing outputs must stop treating `/p/...` as canonical final output") &&
+    audit.includes("Preferred final user-facing affiliate shape is `https://www.mealscout.us/{businessSlug}/{affiliateTag}`") &&
+    audit.includes("final clean affiliate URL doctrine remains an explicit follow-up slice"),
   "Launch audit must record the clean URL doctrine slice and stage 1 migration rule.",
 );
 

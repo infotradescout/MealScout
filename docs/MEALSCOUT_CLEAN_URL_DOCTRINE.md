@@ -36,6 +36,42 @@ Stage 1 canonical public route families:
 
 These are migration routes, not the final doctrine end state.
 
+## Clean Affiliate Tag Rule
+
+Affiliate and referral URLs must also stay clean.
+
+Preferred final public affiliate format:
+
+- `https://www.mealscout.us/{businessSlug}/{affiliateTag}`
+
+Examples:
+
+- `https://www.mealscout.us/thespottavern/thomas`
+- `https://www.mealscout.us/3deats/pensacolafoodies`
+
+Do not emit final user-facing affiliate URLs with:
+
+- `userNNNN` default tags
+- raw user ids
+- UUIDs
+- role-heavy params
+- query-heavy tracking URLs
+- `/referral-redirect`
+- `/p/location`
+- database identifiers
+
+Invalid/default affiliate tags such as `userNNNN` must remain rejected.
+
+## Affiliate Stage Rule
+
+The current branch preserves clean path-segment attribution and rejects invalid/default tags, but it does not yet satisfy the final no-ID affiliate URL end state because Stage 1 public profile routes still use `slug--id` migration paths.
+
+That means:
+
+- attribution integrity can pass
+- Stage 1 clean public route migration can pass
+- final clean affiliate URL doctrine is still a follow-up architecture slice
+
 ## Banned As Final User-Facing Output
 
 Unless explicitly internal, admin-only, API-only, or legacy fallback:

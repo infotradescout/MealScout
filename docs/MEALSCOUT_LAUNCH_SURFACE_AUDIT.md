@@ -340,9 +340,21 @@ Known remaining risks:
 - Collision handling is still using deterministic `slug--id` route tokens in this slice. That is safer than `/p/...` canonical output, but it is not the final no-ID doctrine end state.
 - Some internal/admin and analytics references still mention legacy `/p/...` routes for compatibility or historical event data and should be treated as non-canonical.
 
+Affiliate clean-tag doctrine correction:
+
+- Preferred final user-facing affiliate shape is `https://www.mealscout.us/{businessSlug}/{affiliateTag}`.
+- Invalid/default affiliate tags such as `userNNNN` must remain rejected.
+- Final user-facing affiliate URLs must not expose `/p/location`, `/referral-redirect`, UUIDs, raw IDs, or query-heavy tracking params.
+- This branch does not yet satisfy that final affiliate doctrine end state because Stage 1 public profile routes still rely on `slug--id` migration paths.
+- Current status is therefore:
+  attribution integrity can pass,
+  Stage 1 route-family migration can pass,
+  final clean affiliate URL doctrine remains an explicit follow-up slice and must not be treated as done.
+
 ## Required Fixes Before Launch
 
 1. Run a 10-profile data checklist: real identity, menu if available, schedule/location truth, no fabricated data, discoverable without deals, shareable with attribution.
 2. Credentialed owner dashboard smoke: profile link, share controls, menu status, schedule/location status, owner-dashboard QR.
 3. Credentialed admin/staff smoke: profile-quality review, duplicate/conflict visibility, public-ready vs needs-owner-info states.
 4. Product decision: confirm whether zero-menu profiles should appear in all Scout contexts or only public profile/search contexts.
+5. Final clean affiliate URL architecture: move user-facing affiliate/share/copy/QR/email/onboarding outputs from `slug--id` migration paths to no-ID public URLs such as `/{businessSlug}/{affiliateTag}`.
