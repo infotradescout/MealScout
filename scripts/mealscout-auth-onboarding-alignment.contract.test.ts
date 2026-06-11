@@ -18,6 +18,7 @@ const restaurantSignupRoutes = readFileSync("server/routes/restaurantSignupRoute
 const truckClaimRoutes = readFileSync("server/routes/truckClaimRoutes.ts", "utf8");
 const accountSetupUtils = readFileSync("server/utils/accountSetup.ts", "utf8");
 const loginContinuation = readFileSync("server/services/loginContinuation.ts", "utf8");
+const dashboardRoute = readFileSync("client/src/lib/dashboard-route.ts", "utf8");
 const adminTruth = readFileSync("MEALSCOUT_ADMIN_TRUTH_AUDIT.md", "utf8");
 
 const requiredAuditSnippets = [
@@ -65,7 +66,6 @@ const requiredAccountSetupSnippets = [
   "Continuing to your dashboard...",
   "getNoTokenContinuationPath",
   "setLocation(\"/login\")",
-  "!continuationPath.startsWith(\"/account-setup\")",
   "isAuthLoading || isAuthenticated",
   "if (isValidatingToken) {",
   "Token not found or already used",
@@ -117,15 +117,13 @@ if (
   throw new Error("Authenticated no-token account setup must not render setup-link or handoff UI");
 }
 
-const noTokenContinuationIndex = accountSetup.indexOf("function getNoTokenContinuationPath");
-const noTokenContinuationSlice = accountSetup.slice(
-  noTokenContinuationIndex,
-  accountSetup.indexOf("export default function AccountSetup"),
+const noTokenContinuationIndex = accountSetup.indexOf(
+  "const getNoTokenContinuationPath = getAccountContinuationPath",
 );
 if (
   noTokenContinuationIndex === -1 ||
-  !noTokenContinuationSlice.includes("!continuationPath.startsWith(\"/account-setup\")") ||
-  noTokenContinuationSlice.includes("return \"/account-setup\"")
+  !dashboardRoute.includes("!continuationPath.startsWith(\"/account-setup\")") ||
+  dashboardRoute.includes("return \"/account-setup\"")
 ) {
   throw new Error("Authenticated no-token account setup continuation must never return /account-setup");
 }

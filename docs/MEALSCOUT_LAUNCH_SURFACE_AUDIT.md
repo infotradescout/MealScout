@@ -224,6 +224,45 @@ Gap found:
 - No P0 trust bug found.
 - Remaining product nuance: when there is zero menu evidence at all, the page omits the menu card entirely rather than showing an explicit “menu unavailable” note. That is still honest and does not block profile usefulness, so this stays a P1 product decision rather than a bug.
 
+### Owner Onboarding / Claim-to-Profile Trust Pass - 2026-06-11
+
+Decision:
+PASS
+
+Owner/admin trust protections confirmed by code inspection and existing contracts:
+
+- Claim/profile attach behavior:
+  `scripts/business-owner-attachment-invariant.contract.test.ts` protects attached, pending-claim, pending-invite, admin-import-draft, orphan-repair, and create-and-attach business states so owner/admin surfaces do not pretend a broken attachment is complete.
+- Owner/business access linkage:
+  `scripts/business-user-ownership-link.contract.test.ts` requires business team flows to keep explicit connect/claim language, including `Connect or claim your business to continue.`
+- Setup link and post-verification honesty:
+  `client/src/pages/account-setup.tsx` and `scripts/mealscout-auth-onboarding-alignment.contract.test.ts` protect setup-link-required, invalid-link, token-required, and safe continuation behavior. The setup completion copy explicitly says: verify email, then connect or claim your business profile if you are an owner.
+- Claim flow next action clarity:
+  `client/src/pages/claim-truck.tsx` exposes search, claim, and setup-reminder paths with explicit fallback guidance when email delivery or admin setup is needed. It does not frame deals as a prerequisite for visibility or claiming.
+- Owner setup routing clarity:
+  `scripts/owner-dashboard-setup-routing.contract.test.ts` protects setup-mode deep links for profile, menu, profile media, and schedule so owners can land directly on the next missing setup area.
+- Owner setup gating:
+  `scripts/owner-dashboard-setup-gating.contract.test.ts` protects setup-mode affordances such as business onboarding, menu builder, and schedule/live tools so missing work is surfaced as work to complete rather than silently assumed complete.
+- Missing profile data honesty/actionability:
+  `scripts/owner-profile-completion.contract.test.ts` requires explicit missing-state labels including `Menu missing`, `Photos missing`, `Business hours missing`, `Service area missing`, `Contact method missing`, `Social link missing`, `Catering/private event info missing`, `Deal/special missing`, plus `Update next missing item`.
+- Shared completion doctrine:
+  `scripts/owner-profile-completion-status.contract.test.ts` protects the shared completion-status adapter used by owner UI and reconciliation logic. Deals are tracked as optional completion context and not as a gate for profile existence.
+- Public discoverability and menu-state safeguards:
+  `scripts/owner-discoverability-menu-state.contract.test.ts`, `scripts/unified-truck-discoverability.contract.test.ts`, and `scripts/public-profile-menu-logo-schedule.contract.test.ts` confirm discoverability and public-profile honesty without requiring deals.
+- Claim-to-useful-profile reconciliation:
+  `scripts/mealscout-claim-profile-update-reconciliation.contract.test.ts` protects launch reporting around claimed profiles becoming useful with real menu, schedule, contact, and photo evidence, while forbidding fake/sample/generated data markers.
+
+Launch-audit conclusion for this slice:
+
+- Deals are optional in owner/admin setup surfaces: YES.
+- Missing profile data is honest and actionable: YES.
+- Public visibility is not blocked by deals in the inspected owner/claim/setup flows.
+- No P0 owner onboarding or claim-to-profile trust bug was found in this pass.
+
+Known non-blocking note:
+
+- Owner dashboard completion still includes `Deal/special missing` as an optional improvement prompt. In the current protected copy and status model, this is framed as a marketing enhancement rather than a Scout visibility gate.
+
 ## Required Fixes Before Launch
 
 1. Run a 10-profile data checklist: real identity, menu if available, schedule/location truth, no fabricated data, discoverable without deals, shareable with attribution.

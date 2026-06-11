@@ -3,12 +3,11 @@ import { readFileSync } from "node:fs";
 const page = readFileSync("client/src/pages/restaurant-owner-dashboard.tsx", "utf8");
 
 const requiredSnippets = [
-  'const setupRefParam = dashboardParams.get("ref");',
-  "const buildSetupHref = (",
-  'if (setupRefParam) params.set("ref", setupRefParam);',
-  'href={buildSetupHref("profile")}',
-  'href={buildSetupHref("menu")}',
-  'href={buildSetupHref("profile-media")}',
+  "const buildOwnerSetupHref = (",
+  'href={buildOwnerSetupHref("profile")}',
+  'href={buildOwnerSetupHref("menu")}',
+  'href={buildOwnerSetupHref("profile-media")}',
+  'href={buildOwnerSetupHref("schedule", isFoodTruck ? { truck: "1" } : undefined)}',
   'setupMode === "profile" || setupMode === "profile-media"',
   'setupMode === "menu" ? (',
   'setupMode === "schedule" ? (',
