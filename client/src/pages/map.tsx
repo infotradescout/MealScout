@@ -56,6 +56,7 @@ import {
 } from "@/utils/geoAds";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import { resolveCanonicalShareUrl } from "@/lib/share";
 import { trackUxEvent } from "@/utils/uxTelemetry";
 import { useIsStandalone } from "@/hooks/useIsStandalone";
 import {
@@ -4042,7 +4043,9 @@ export default function MapPage() {
               type="button"
               onClick={async () => {
                 try {
-                  const url = window.location.href;
+                  const url = await resolveCanonicalShareUrl(
+                    `${window.location.pathname}${window.location.search}${window.location.hash}`,
+                  );
                   if (navigator.share) {
                     await navigator.share({
                       title: "MealScout map view",

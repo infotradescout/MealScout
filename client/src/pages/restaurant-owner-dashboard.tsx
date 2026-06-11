@@ -21,6 +21,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { resolveCanonicalShareUrlSync } from "@/lib/share";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useForm } from "react-hook-form";
@@ -2416,7 +2417,9 @@ export default function RestaurantOwnerDashboard() {
                     Print or share these QR codes for profile, menu, and specials.
                   </p>
                   {(() => {
-                    const canonicalUrl = publicProfileForQr.seo.canonicalUrl;
+                    const canonicalUrl = resolveCanonicalShareUrlSync(
+                      publicProfileForQr.seo.canonicalUrl,
+                    );
                     const hasStructuredMenu = Array.isArray(publicProfileForQr.menuSections)
                       ? publicProfileForQr.menuSections.some(
                           (section) =>

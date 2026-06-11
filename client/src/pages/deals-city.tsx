@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { BackHeader } from "@/components/back-header";
 import { useAuth } from "@/hooks/useAuth";
+import { resolveCanonicalShareUrl } from "@/lib/share";
 import { Tag, Share2, MapPin, ChevronRight } from "lucide-react";
 
 type DealRow = {
@@ -323,17 +324,18 @@ export default function DealsCityPage() {
               <Button
                 size="sm"
                 className="food-gradient-primary border-0"
-                onClick={() => {
-                  const url = `${window.location.origin}/deals/${citySlug}?ref=${affiliateTagData.tag}`;
+                onClick={async () => {
+                  const url = await resolveCanonicalShareUrl(`/deals/${citySlug}`, {
+                    fallbackRef: affiliateTagData.tag,
+                  });
                   if (navigator.share) {
-                    navigator.share({
+                    await navigator.share({
                       title: `Food Deals in ${cityLabel} | MealScout`,
                       url,
                     });
                   } else {
-                    navigator.clipboard
-                      .writeText(url)
-                      .then(() => alert("Link copied!"));
+                    await navigator.clipboard.writeText(url);
+                    alert("Link copied!");
                   }
                 }}
               >
@@ -344,17 +346,16 @@ export default function DealsCityPage() {
                 size="sm"
                 variant="outline"
                 className="border-[color:var(--border-subtle)]"
-                onClick={() => {
-                  const url = `${window.location.origin}/deals/${citySlug}`;
+                onClick={async () => {
+                  const url = await resolveCanonicalShareUrl(`/deals/${citySlug}`);
                   if (navigator.share) {
-                    navigator.share({
+                    await navigator.share({
                       title: `Food Deals in ${cityLabel} | MealScout`,
                       url,
                     });
                   } else {
-                    navigator.clipboard
-                      .writeText(url)
-                      .then(() => alert("Link copied!"));
+                    await navigator.clipboard.writeText(url);
+                    alert("Link copied!");
                   }
                 }}
               >

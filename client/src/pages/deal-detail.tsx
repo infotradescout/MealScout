@@ -15,6 +15,7 @@ import { Tag, ArrowLeft, Share2 } from "lucide-react";
 import { SEOHead } from "@/components/seo-head";
 import { extractUuidFromSlug } from "@/lib/seo-slug";
 import { authUrl } from "@/lib/api";
+import { resolveCanonicalShareUrl } from "@/lib/share";
 
 interface Deal {
   id: string;
@@ -495,26 +496,22 @@ export default function DealDetail() {
                 <Button
                   size="sm"
                   className="w-full food-gradient-primary border-0 text-sm"
-                  onClick={() => {
+                  onClick={async () => {
                     const dealSlug = encodeURIComponent(
                       `${(deal as Deal)?.title?.toLowerCase().replace(/[^a-z0-9]+/g, "-") || (deal as Deal)?.id}--${(deal as Deal)?.id}`,
                     );
-                    const ref = affiliateTagData?.tag
-                      ? `?ref=${affiliateTagData.tag}`
-                      : "";
-                    const url = `${window.location.origin}/deal/${dealSlug}${ref}`;
+                    const url = await resolveCanonicalShareUrl(
+                      `/deal/${dealSlug}`,
+                      { fallbackRef: affiliateTagData?.tag || null },
+                    );
                     if (navigator.share) {
-                      navigator.share({ title: (deal as Deal)?.title, url });
+                      await navigator.share({ title: (deal as Deal)?.title, url });
                     } else {
-                      navigator.clipboard
-                        .writeText(url)
-                        .then(() =>
-                          toast({
-                            title: "Link copied!",
-                            description:
-                              "Share it with friends to earn credits.",
-                          }),
-                        );
+                      await navigator.clipboard.writeText(url);
+                      toast({
+                        title: "Link copied!",
+                        description: "Share it with friends to earn credits.",
+                      });
                     }
                   }}
                 >

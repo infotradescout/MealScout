@@ -35,6 +35,45 @@ function normalizeSharePath(input: string): string {
   return `/${input}`;
 }
 
+function isEligiblePublicShareTarget(path: string): boolean {
+  const target = normalizeSharePath(path);
+  const pathname = target.split(/[?#]/, 1)[0].toLowerCase();
+  if (
+    pathname === "/" ||
+    pathname === "" ||
+    pathname === "/ref" ||
+    pathname.startsWith("/ref/") ||
+    pathname.startsWith("/admin") ||
+    pathname.startsWith("/staff") ||
+    pathname.startsWith("/api")
+  ) {
+    return false;
+  }
+  return true;
+}
+
+function buildClientFallbackAttributedUrl(
+  targetPath: string,
+  fallbackRef: string,
+): string {
+  const ref = String(fallbackRef || "").trim();
+  if (!ref) {
+    return new URL(normalizeSharePath(targetPath), window.location.origin).toString();
+  }
+
+  const sanitized = sanitizeTargetPathForTrackedLink(targetPath);
+  const parsed = new URL(sanitized, window.location.origin);
+  const normalizedPathname = parsed.pathname.replace(/\/+$/, "") || "/";
+  if (normalizedPathname === "/") {
+    return parsed.toString();
+  }
+
+  parsed.pathname = `${normalizedPathname}/${encodeURIComponent(ref)}`;
+  parsed.searchParams.delete("to");
+  parsed.searchParams.delete("ref");
+  return parsed.toString();
+}
+
 function sanitizeTargetPathForTrackedLink(targetPath: string): string {
   const parsed = new URL(targetPath, window.location.origin);
   parsed.searchParams.delete("to");
@@ -102,4 +141,48 @@ export async function getAffiliateShareUrl(input: string): Promise<string> {
     );
   }
   return shareLink;
+}
+
+export async function resolveCanonicalShareUrl(
+  input: string,
+  options?: { fallbackRef?: string | null },
+): Promise<string> {
+  if (typeof window === "undefined") {
+    throw new Error("Tracked links are available in the browser session only.");
+  }
+
+  const path = normalizeSharePath(input);
+  try {
+    return await getAffiliateShareUrl(path);
+  } catch {
+    const fallbackRef =
+      String(options?.fallbackRef || "").trim() ||
+      String(getStoredAffiliateRef() || "").trim();
+
+    if (fallbackRef && isEligiblePublicShareTarget(path)) {
+      return buildClientFallbackAttributedUrl(path, fallbackRef);
+    }
+
+    return new URL(path, window.location.origin).toString();
+  }
+}
+
+export function resolveCanonicalShareUrlSync(
+  input: string,
+  options?: { fallbackRef?: string | null },
+): string {
+  if (typeof window === "undefined") {
+    return normalizeSharePath(input);
+  }
+
+  const path = normalizeSharePath(input);
+  const fallbackRef =
+    String(options?.fallbackRef || "").trim() ||
+    String(getStoredAffiliateRef() || "").trim();
+
+  if (fallbackRef && isEligiblePublicShareTarget(path)) {
+    return buildClientFallbackAttributedUrl(path, fallbackRef);
+  }
+
+  return new URL(path, window.location.origin).toString();
 }

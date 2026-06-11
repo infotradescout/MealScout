@@ -16,6 +16,7 @@ import {
 import { SEOHead } from "@/components/seo-head";
 import { SEOInternalLinks } from "@/components/seo-internal-links";
 import { apiUrl } from "@/lib/api";
+import { resolveCanonicalShareUrl } from "@/lib/share";
 import { useAuth } from "@/hooks/useAuth";
 import {
   buildFoodTrucksCityCanonicalUrl,
@@ -682,17 +683,19 @@ export default function CityLanding() {
               <Button
                 size="sm"
                 className="food-gradient-primary border-0"
-                onClick={() => {
-                  const url = `${window.location.origin}/food-trucks/${data.city.slug}?ref=${affiliateTagData.tag}`;
+                onClick={async () => {
+                  const url = await resolveCanonicalShareUrl(
+                    `/food-trucks/${data.city.slug}`,
+                    { fallbackRef: affiliateTagData.tag },
+                  );
                   if (navigator.share) {
-                    navigator.share({
+                    await navigator.share({
                       title: `Food Trucks in ${cityLabel}`,
                       url,
                     });
                   } else {
-                    navigator.clipboard
-                      .writeText(url)
-                      .then(() => alert("Link copied!"));
+                    await navigator.clipboard.writeText(url);
+                    alert("Link copied!");
                   }
                 }}
               >
