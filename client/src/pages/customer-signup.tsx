@@ -128,7 +128,7 @@ const signupFlowOptions: SignupFlowOption[] = [
   {
     id: "diner",
     accountType: "diner",
-    label: "Customer",
+    label: "Find Food",
     description: "Save favorite spots, deals, and local food finds.",
     href: "/customer-signup?role=diner",
     icon: UserPlus,
@@ -934,7 +934,7 @@ export default function CustomerSignup() {
                     : "bg-transparent text-[color:var(--text-secondary)] hover:bg-[var(--bg-surface-muted)]"
                 }`}
               >
-                Customer
+                Find Food
               </button>
               <button
                 type="button"
@@ -1113,7 +1113,7 @@ export default function CustomerSignup() {
                       : "bg-transparent text-[color:var(--text-secondary)] hover:bg-[var(--bg-surface-muted)]"
                   }`}
                 >
-                  Customer
+                  Find Food
                 </button>
                 <button
                   type="button"
