@@ -161,7 +161,7 @@ export default function Home() {
                     Discover deals, trucks, and local restaurants.
                   </p>
                   <Button variant="outline" className="mt-4">
-                    Start Exploring
+                    Find Food
                   </Button>
                 </div>
               </CardContent>

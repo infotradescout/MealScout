@@ -323,7 +323,7 @@ export const roleLandingContent = {
     headline: "Find what's actually local.",
     subhead:
       "Discover food trucks, restaurants, and bars nearby--built by locals, updated by locals.",
-    primaryCta: { label: "Start searching", href: "/search" },
+    primaryCta: { label: "Find Food", href: "/search" },
     secondaryCta: {
       label: "Create account",
       href: "/customer-signup?role=diner",
@@ -392,7 +392,7 @@ export const roleLandingContent = {
     finalCta: {
       title: "Ready to find your next spot?",
       copy: "Search locally and support the businesses around you.",
-      primary: { label: "Start searching", href: "/search" },
+      primary: { label: "Find Food", href: "/search" },
       secondary: { label: "Create account", href: "/customer-signup?role=diner" },
     },
   },
