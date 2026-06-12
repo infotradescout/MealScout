@@ -134,7 +134,7 @@ function HostSignup() {
       validationErrors.contactName = "Contact name is required";
     if (!contactEmail.trim())
       validationErrors.contactEmail = "Contact email is required";
-    if (!contactPhone.trim())
+    if (contactPhone.replace(/\D/g, "").length < 10)
       validationErrors.contactPhone = "Contact phone is required";
     if (!locationType) validationErrors.locationType = "Select a location type";
 
@@ -386,7 +386,9 @@ function HostSignup() {
                 </div>
 
                 <div className="grid gap-2">
-                  <Label htmlFor="contactPhone" className="text-xs font-semibold uppercase tracking-[0.08em] text-[color:var(--text-secondary)]">Phone</Label>
+                  <Label htmlFor="contactPhone" className="text-xs font-semibold uppercase tracking-[0.08em] text-[color:var(--text-secondary)]">
+                    Phone <span className="text-[color:var(--status-error)]">*</span>
+                  </Label>
                   <Input
                     id="contactPhone"
                     type="tel"

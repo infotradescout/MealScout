@@ -58,7 +58,12 @@ export function registerRestaurantSignupRoutes(
             email: z.string().email(),
             firstName: z.string().min(1),
             lastName: z.string().min(1),
-            phone: z.string().min(10),
+            phone: z
+              .string()
+              .refine(
+                (value) => value.replace(/\D/g, "").length >= 10,
+                "Valid phone number is required",
+              ),
             password: z
               .string()
               .min(1, PASSWORD_REQUIREMENTS)
@@ -76,9 +81,10 @@ export function registerRestaurantSignupRoutes(
         }
 
         const passwordHash = await bcrypt.hash(validatedUserData.password, 10);
+        const normalizedPhone = validatedUserData.phone.replace(/\D/g, "");
         user = await storage.upsertUserByAuth(
           "email",
-          { ...validatedUserData, passwordHash },
+          { ...validatedUserData, phone: normalizedPhone, passwordHash },
           "restaurant_owner",
         );
 

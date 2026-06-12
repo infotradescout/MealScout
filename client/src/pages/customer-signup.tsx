@@ -53,7 +53,13 @@ const signupSchema = z
     email: z.string().email("Valid email is required"),
     firstName: z.string().min(1, "First name is required"),
     lastName: z.string().min(1, "Last name is required"),
-    phone: z.string().min(10, "Phone number must be at least 10 digits"),
+    phone: z
+      .string()
+      .refine(
+        (value) => value.replace(/\D/g, "").length >= 10,
+        "Phone number must include at least 10 digits",
+      ),
+    phoneContactConsent: z.boolean().default(true),
     otpCode: z.string().optional(),
     password: z
       .string()
@@ -362,6 +368,7 @@ export default function CustomerSignup() {
       firstName: "",
       lastName: "",
       phone: "",
+      phoneContactConsent: true,
       otpCode: "",
       password: "",
       confirmPassword: "",
@@ -1537,7 +1544,9 @@ export default function CustomerSignup() {
                   name="phone"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Phone</FormLabel>
+                      <FormLabel>
+                        Phone <span className="text-[color:var(--status-error)]">*</span>
+                      </FormLabel>
                       <FormControl>
                         <div className="flex gap-2">
                           <Input
@@ -1593,6 +1602,31 @@ export default function CustomerSignup() {
                     )}
                   />
                 )}
+
+                <FormField
+                  control={form.control}
+                  name="phoneContactConsent"
+                  render={({ field }) => (
+                    <FormItem className="rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)] p-3">
+                      <div className="flex items-start gap-2">
+                        <FormControl>
+                          <input
+                            type="checkbox"
+                            checked={field.value}
+                            onChange={(event) => field.onChange(event.target.checked)}
+                            className="mt-1 h-4 w-4"
+                            data-testid="checkbox-phone-contact-consent"
+                          />
+                        </FormControl>
+                        <FormLabel className="text-sm font-normal leading-5">
+                          I agree MealScout may call or text me about onboarding.
+                          I can opt out anytime.
+                        </FormLabel>
+                      </div>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
                 <FormField
                   control={form.control}

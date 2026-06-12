@@ -26,6 +26,15 @@ export function registerHostProfileRoutes(app: Express) {
         ...req.body,
         userId,
       });
+      const normalizedContactPhone = String(parsed.contactPhone || "").replace(
+        /\D/g,
+        "",
+      );
+      if (normalizedContactPhone.length < 10) {
+        return res.status(400).json({
+          message: "A valid contact phone number is required",
+        });
+      }
 
       const validation = await validateUsAddress({
         address: parsed.address,
@@ -117,6 +126,7 @@ export function registerHostProfileRoutes(app: Express) {
 
       const host = await storage.createHost({
         ...parsed,
+        contactPhone: normalizedContactPhone,
         address: validatedAddress,
         city: validatedCity ?? null,
         state: validatedState ?? null,
@@ -131,6 +141,14 @@ export function registerHostProfileRoutes(app: Express) {
             ? coords.lng.toString()
             : null,
       });
+      const currentUser = req.user as User;
+      if (!currentUser.phone) {
+        await storage
+          .updateUser(userId, { phone: normalizedContactPhone })
+          .catch((error: unknown) => {
+            console.error("Failed to backfill host user phone:", error);
+          });
+      }
       const parkingPassSeriesReady = await storage
         .ensureDraftParkingPassForHost(host.id)
         .catch(() => false);

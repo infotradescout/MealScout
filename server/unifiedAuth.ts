@@ -2212,6 +2212,13 @@ export async function setupUnifiedAuth(app: Express) {
           .json({ error: "Profile details and password are required" });
       }
 
+      const normalizedSetupPhone = normalizePhone(String(phone));
+      if (normalizedSetupPhone.length < 10) {
+        return res
+          .status(400)
+          .json({ error: "Valid phone number is required" });
+      }
+
       if (!isPasswordStrong(password)) {
         return res.status(400).json({ error: PASSWORD_REQUIREMENTS });
       }
@@ -2255,17 +2262,22 @@ export async function setupUnifiedAuth(app: Express) {
         passwordHash,
         firstName,
         lastName,
-        phone,
+        phone: normalizedSetupPhone,
         emailVerified: true,
       };
 
-      await storage.updateUser(user.id, updateData);
+      const updatedUser = await storage.updateUser(user.id, updateData);
 
       // Mark token as used
       await storage.markAccountSetupTokenUsed(setupToken.id);
 
       // Send welcome email with verification link after profile completion
-      void sendWelcomeOrVerification(user, req, "account setup", "/dashboard");
+      void sendWelcomeOrVerification(
+        updatedUser || { ...user, ...updateData },
+        req,
+        "account setup",
+        "/dashboard",
+      );
 
       res.json({ message: "Account setup completed successfully" });
     } catch (error) {

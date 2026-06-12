@@ -285,7 +285,13 @@ export function registerHostRoutes(app: Express) {
         city: z.string().min(1).optional(),
         state: z.string().min(2).optional(),
         locationType: z.string().min(1).optional(),
-        contactPhone: z.string().min(5).optional(),
+        contactPhone: z
+          .string()
+          .refine(
+            (value) => value.replace(/\D/g, "").length >= 10,
+            "A valid contact phone number is required",
+          )
+          .optional(),
         notes: z.string().optional().nullable(),
         amenities: z.record(z.boolean()).optional().nullable(),
         spotCount: z.number().int().min(1).optional(),
@@ -399,7 +405,9 @@ export function registerHostRoutes(app: Express) {
           city: validatedCity,
           state: validatedState,
           locationType: parsed.locationType ?? host.locationType,
-          contactPhone: parsed.contactPhone ?? host.contactPhone,
+          contactPhone: parsed.contactPhone
+            ? parsed.contactPhone.replace(/\D/g, "")
+            : host.contactPhone,
           notes: parsed.notes ?? host.notes,
           amenities: parsed.amenities ?? host.amenities ?? null,
           spotCount: parsed.spotCount ?? host.spotCount ?? 1,

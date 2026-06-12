@@ -715,6 +715,7 @@ The MealScout Team
         <strong>User Information:</strong><br>
         Name: ${user.firstName || ""} ${user.lastName || ""}<br>
         Email: ${user.email}<br>
+        Phone: ${user.phone || "Not provided"}<br>
         User Type: ${userTypeDisplay}<br>
         Registration Date: ${new Date().toLocaleDateString()}<br>
         ${locationInfo}
@@ -792,6 +793,7 @@ This notification was generated automatically by the MealScout system.
         <strong>📋 User Summary</strong><br>
         <strong>Name:</strong> ${user.firstName || ""} ${user.lastName || ""}<br>
         <strong>Email:</strong> ${user.email}<br>
+        <strong>Phone:</strong> ${user.phone || "Not provided"}<br>
         <strong>User Type:</strong> ${userTypeDisplay}<br>
         <strong>Signup Method:</strong> ${signupMethod}<br>
         <strong>Registration Date:</strong> ${new Date().toLocaleDateString()}
@@ -837,6 +839,7 @@ A new user has registered for MealScout:
 User Information:
 Name: ${user.firstName || ""} ${user.lastName || ""}
 Email: ${user.email}
+Phone: ${user.phone || "Not provided"}
 User Type: ${userTypeDisplay}
 Signup Method: ${signupMethod}
 Registration Date: ${new Date().toLocaleDateString()}

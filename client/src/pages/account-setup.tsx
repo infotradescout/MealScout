@@ -35,7 +35,12 @@ const accountSetupSchema = z
     confirmPassword: z.string().min(1, "Please confirm your password"),
     firstName: z.string().min(1, "First name is required"),
     lastName: z.string().min(1, "Last name is required"),
-    phone: z.string().min(5, "Phone number is required"),
+    phone: z
+      .string()
+      .refine(
+        (value) => value.replace(/\D/g, "").length >= 10,
+        "Phone number must include at least 10 digits",
+      ),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: "Passwords don't match",

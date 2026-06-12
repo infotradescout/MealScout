@@ -52,7 +52,10 @@ const restaurantSchema = z
     address: z.string().min(1, COPY.validation.restaurant.addressRequired),
     city: z.string().min(1, "City is required"),
     state: z.string().min(2, "State is required"),
-    phone: z.string().min(10, COPY.validation.restaurant.phoneInvalid),
+    phone: z.string().refine(
+      (value) => value.replace(/\D/g, "").length >= 10,
+      COPY.validation.restaurant.phoneInvalid,
+    ),
     businessType: z.enum(
       ["restaurant", "bar", "food_truck", "caterer", "private_chef"],
       {
@@ -108,7 +111,11 @@ const signupSchema = z
     email: z.string().email(COPY.validation.signup.emailInvalid),
     firstName: z.string().min(1, COPY.validation.signup.firstNameRequired),
     lastName: z.string().min(1, COPY.validation.signup.lastNameRequired),
-    phone: z.string().min(10, COPY.validation.signup.phoneInvalid),
+    phone: z.string().refine(
+      (value) => value.replace(/\D/g, "").length >= 10,
+      COPY.validation.signup.phoneInvalid,
+    ),
+    phoneContactConsent: z.boolean().default(true),
     password: z
       .string()
       .min(1, PASSWORD_REQUIREMENTS)
@@ -308,6 +315,7 @@ export default function RestaurantSignup() {
       firstName: "",
       lastName: "",
       phone: "",
+      phoneContactConsent: true,
       password: "",
       confirmPassword: "",
     },
@@ -1025,7 +1033,8 @@ export default function RestaurantSignup() {
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>
-                              {COPY.forms.signup.phoneLabel}
+                              {COPY.forms.signup.phoneLabel}{" "}
+                              <span className="text-[color:var(--status-error)]">*</span>
                             </FormLabel>
                             <FormControl>
                               <Input
@@ -1036,6 +1045,33 @@ export default function RestaurantSignup() {
                                 {...field}
                               />
                             </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={signupForm.control}
+                        name="phoneContactConsent"
+                        render={({ field }) => (
+                          <FormItem className="rounded-md border p-3">
+                            <div className="flex items-start gap-2">
+                              <FormControl>
+                                <input
+                                  type="checkbox"
+                                  checked={field.value}
+                                  onChange={(event) =>
+                                    field.onChange(event.target.checked)
+                                  }
+                                  className="mt-1 h-4 w-4"
+                                  data-testid="checkbox-phone-contact-consent"
+                                />
+                              </FormControl>
+                              <FormLabel className="text-sm font-normal leading-5">
+                                I agree MealScout may call or text me about
+                                onboarding. I can opt out anytime.
+                              </FormLabel>
+                            </div>
                             <FormMessage />
                           </FormItem>
                         )}
@@ -1578,7 +1614,8 @@ export default function RestaurantSignup() {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel data-testid="label-phone">
-                            {COPY.forms.restaurant.phoneLabel}
+                            {COPY.forms.restaurant.phoneLabel}{" "}
+                            <span className="text-[color:var(--status-error)]">*</span>
                           </FormLabel>
                           <FormControl>
                             <Input
