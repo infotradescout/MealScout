@@ -137,8 +137,16 @@ const isAffiliateEligibleUserType = (userType?: string | null) =>
 
 const getAdminUserPublicProfilePath = (
   user: any,
+  attachedRestaurant?: any | null,
   attachedHostProfile?: any | null,
 ) => {
+  const attachedCleanPath = String(
+    attachedRestaurant?.cleanBusinessPath ||
+      attachedHostProfile?.cleanBusinessPath ||
+      "",
+  ).trim();
+  if (attachedCleanPath) return attachedCleanPath;
+
   const restaurantId = String(user?.restaurantId || "").trim();
   if (restaurantId) {
     const businessType = String(user?.businessType || "").toLowerCase();
@@ -187,11 +195,16 @@ const getAdminUserPublicProfilePath = (
 const buildCanonicalAffiliateLink = (
   affiliateTag?: string | null,
   user?: any,
+  attachedRestaurant?: any | null,
   attachedHostProfile?: any | null,
 ) => {
   const tag = String(affiliateTag || "").trim();
   if (!tag) return null;
-  const profilePath = getAdminUserPublicProfilePath(user, attachedHostProfile);
+  const profilePath = getAdminUserPublicProfilePath(
+    user,
+    attachedRestaurant,
+    attachedHostProfile,
+  );
   if (!profilePath || profilePath === "/") return null;
   const url = new URL(profilePath, canonicalMealScoutOrigin);
   const normalizedPathname = url.pathname.replace(/\/+$/, "") || "/";
@@ -4983,12 +4996,16 @@ export default function AdminDashboard() {
 
   const selectedUserPublicProfilePath = useMemo(() => {
     if (!selectedUser) return null;
+    const attachedBusiness = Array.isArray(userRestaurants)
+      ? userRestaurants[0]
+      : null;
     const path = getAdminUserPublicProfilePath(
       selectedUser,
+      attachedBusiness,
       Array.isArray(userHosts) && userHosts.length > 0 ? userHosts[0] : null,
     );
     return path && path !== "/" ? path : null;
-  }, [selectedUser, userHosts]);
+  }, [selectedUser, userHosts, userRestaurants]);
 
   const selectedUserPublicProfileUrl = useMemo(() => {
     if (!selectedUserPublicProfilePath) return null;
@@ -12529,12 +12546,34 @@ export default function AdminDashboard() {
                       const affiliateLink = buildCanonicalAffiliateLink(
                         selectedUser.affiliateTag,
                         selectedUser,
+                        Array.isArray(userRestaurants) && userRestaurants.length > 0
+                          ? userRestaurants[0]
+                          : null,
                         Array.isArray(userHosts) && userHosts.length > 0
                           ? userHosts[0]
                           : null,
                       );
+                      const slugGovernanceTarget =
+                        (Array.isArray(userRestaurants) && userRestaurants[0]) ||
+                        (Array.isArray(userHosts) && userHosts[0]) ||
+                        null;
                       return (
                         <div className="space-y-3">
+                          <div className="grid gap-2 rounded-md border bg-muted/30 p-2 text-xs sm:grid-cols-2">
+                            <div>
+                              <p className="text-muted-foreground">Public slug</p>
+                              <p className="font-mono">
+                                {String(slugGovernanceTarget?.cleanBusinessPath || "")
+                                  .replace(/^\/+/, "") || "Unassigned"}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-muted-foreground">Slug status</p>
+                              <Badge variant="outline">
+                                {slugGovernanceTarget?.publicSlugStatus || "unassigned"}
+                              </Badge>
+                            </div>
+                          </div>
                           <div className="space-y-1">
                             <p className="text-xs text-muted-foreground">
                               Affiliate Link

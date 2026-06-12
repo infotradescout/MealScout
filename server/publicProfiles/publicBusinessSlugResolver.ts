@@ -5,6 +5,11 @@ import { normalizeCleanBusinessSlug } from "@shared/cleanAffiliateLinks";
 
 import { db } from "../db";
 import { storage } from "../storage";
+import {
+  ensurePublicBusinessSlugOwnershipForEntity,
+  listPublicBusinessSlugOwnershipsBySlug,
+  verifyOwnedSlugTarget,
+} from "./publicBusinessSlugOwnership";
 
 export type PublicBusinessSlugCandidate = {
   entityType: "restaurant" | "truck" | "bar" | "location" | "supplier";
@@ -50,6 +55,18 @@ export async function listPublicBusinessSlugCandidates(
   if (!normalizedSlug) return [];
 
   const candidates: PublicBusinessSlugCandidate[] = [];
+  const ownedSlugRows = await listPublicBusinessSlugOwnershipsBySlug(normalizedSlug);
+  if (ownedSlugRows.length > 0) {
+    for (const row of ownedSlugRows) {
+      if (!(await verifyOwnedSlugTarget(row))) continue;
+      candidates.push({
+        entityType: row.entityType,
+        id: row.entityId,
+        businessSlug: row.slug,
+      });
+    }
+    return candidates;
+  }
 
   const restaurantRows = (await storage.getAllRestaurants()).filter((row: any) =>
     Boolean(row?.isActive),
@@ -122,8 +139,9 @@ export async function resolveUniqueCleanBusinessPathForEntity(input: {
   id: string;
   name: string;
 }): Promise<string | null> {
-  const businessSlug = normalizeCleanBusinessSlug(toSlug(input.name));
-  if (!businessSlug) return null;
+  const ownership = await ensurePublicBusinessSlugOwnershipForEntity(input);
+  const businessSlug = normalizeCleanBusinessSlug(ownership?.slug);
+  if (!businessSlug || !ownership) return null;
 
   const resolution = await resolvePublicBusinessSlug(businessSlug);
   if (resolution.status !== "unique") return null;

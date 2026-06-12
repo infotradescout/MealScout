@@ -1,6 +1,7 @@
 // Phase 5 schema modularization: domain barrel over legacy exports
 export {
   restaurants,
+  publicBusinessSlugOwnerships,
   businessStaffInvites,
   businessStaffMemberships,
   truckImportBatches,

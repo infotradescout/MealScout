@@ -37,6 +37,7 @@ import {
   verificationRequests,
 } from "@shared/schema";
 import { getBusinessAccessContext } from "../../services/businessTeamAccess";
+import { resolveUniqueCleanBusinessPathForEntity } from "../../publicProfiles/publicBusinessSlugResolver";
 
 type DenyStaffEdits = (req: any, res: any) => boolean;
 type RequireAdminUser = (req: any, res: any) => boolean;
@@ -53,6 +54,20 @@ type GetHostPricingColumnsCheck = () => Promise<HostPricingColumnsCheck>;
 type HasHostSpotImageColumn = () => Promise<boolean>;
 type ResetHostPricingColumnsCache = () => void;
 type IsMissingColumnError = (error: unknown, columnName?: string) => boolean;
+
+const toPublicSlugSegment = (value: unknown) =>
+  String(value || "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)+/g, "")
+    .slice(0, 80);
+
+const classifyPublicSlugStatus = (name: unknown, cleanBusinessPath: string | null) => {
+  const assignedSlug = String(cleanBusinessPath || "").replace(/^\/+/, "");
+  if (!assignedSlug) return "unassigned";
+  return assignedSlug === toPublicSlugSegment(name) ? "assigned" : "assigned_variant";
+};
 
 export function registerUserAdminRoutes(
   app: Express,
@@ -1494,7 +1509,24 @@ export function registerUserAdminRoutes(
     async (req: any, res) => {
       try {
         const hostsForUser = await storage.getHostsByUserId(req.params.id);
-        res.json(hostsForUser);
+        const rows = await Promise.all(
+          hostsForUser.map(async (host: any) => {
+            const cleanBusinessPath = await resolveUniqueCleanBusinessPathForEntity({
+              entityType: "location",
+              id: String(host.id),
+              name: String(host.businessName || host.name || host.id),
+            });
+            return {
+              ...host,
+              cleanBusinessPath,
+              publicSlugStatus: classifyPublicSlugStatus(
+                host.businessName || host.name,
+                cleanBusinessPath,
+              ),
+            };
+          }),
+        );
+        res.json(rows);
       } catch (error) {
         console.error("Error fetching user hosts:", error);
         res.status(500).json({ message: "Failed to fetch hosts" });
@@ -1511,7 +1543,30 @@ export function registerUserAdminRoutes(
         const restaurantsForUser = await storage.getRestaurantsByOwner(
           req.params.id,
         );
-        res.json(restaurantsForUser);
+        const rows = await Promise.all(
+          restaurantsForUser.map(async (restaurant: any) => {
+            const entityType =
+              restaurant.isFoodTruck || restaurant.businessType === "food_truck"
+                ? "truck"
+                : restaurant.businessType === "bar"
+                  ? "bar"
+                  : "restaurant";
+            const cleanBusinessPath = await resolveUniqueCleanBusinessPathForEntity({
+              entityType,
+              id: String(restaurant.id),
+              name: String(restaurant.name || restaurant.businessName || restaurant.id),
+            });
+            return {
+              ...restaurant,
+              cleanBusinessPath,
+              publicSlugStatus: classifyPublicSlugStatus(
+                restaurant.name || restaurant.businessName,
+                cleanBusinessPath,
+              ),
+            };
+          }),
+        );
+        res.json(rows);
       } catch (error) {
         console.error("Error fetching user restaurants:", error);
         res.status(500).json({ message: "Failed to fetch restaurants" });

@@ -456,6 +456,34 @@ export const suppliers = pgTable(
   ],
 );
 
+export const publicBusinessSlugOwnerships = pgTable(
+  "public_business_slug_ownerships",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    slug: varchar("slug", { length: 100 }).notNull(),
+    entityType: varchar("entity_type").notNull(),
+    entityId: varchar("entity_id").notNull(),
+    preferredSlug: varchar("preferred_slug", { length: 100 }),
+    sourceName: varchar("source_name"),
+    assignmentStatus: varchar("assignment_status").notNull().default("assigned"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    unique("uq_public_business_slug_ownerships_slug").on(table.slug),
+    unique("uq_public_business_slug_ownerships_entity").on(
+      table.entityType,
+      table.entityId,
+    ),
+    index("idx_public_business_slug_ownerships_entity").on(
+      table.entityType,
+      table.entityId,
+    ),
+  ],
+);
+
 export const supplierProducts = pgTable(
   "supplier_products",
   {
