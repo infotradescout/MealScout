@@ -12,7 +12,7 @@ const requiredScoutLayoutSnippets = [
   "\"--scout-bottom-dock-height\":",
   "\"--scout-help-bottom-clearance\":",
   "const scoutDockBottom = \"calc(var(--scout-safe-bottom) + var(--scout-nav-height) + var(--scout-dock-gap))\"",
-  "const feedBottomClearance = \"calc(var(--scout-bottom-dock-height) + 28px)\"",
+  "\"calc(var(--scout-nav-height) + var(--scout-dock-gap) + var(--scout-bottom-dock-height) + 28px)\"",
   "overflow-x-auto no-scrollbar",
 ];
 

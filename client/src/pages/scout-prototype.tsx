@@ -519,7 +519,8 @@ export default function ScoutPrototype() {
       "calc(var(--scout-bottom-dock-height) + 16px)",
   } as React.CSSProperties;
   const scoutDockBottom = "calc(var(--scout-safe-bottom) + var(--scout-nav-height) + var(--scout-dock-gap))";
-  const feedBottomClearance = "calc(var(--scout-bottom-dock-height) + 28px)";
+  const feedBottomClearance =
+    "calc(var(--scout-nav-height) + var(--scout-dock-gap) + var(--scout-bottom-dock-height) + 28px)";
 
   const scoutPreviewCity = useMemo(() => {
     if (typeof window === "undefined") return "";
