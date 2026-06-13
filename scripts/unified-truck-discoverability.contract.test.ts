@@ -18,7 +18,7 @@ const requiredSnippets = [
   "liveTrucks.forEach((truck) => {",
   "const aScheduledRank = a.scheduledToday ? 1 : 0;",
   "const aCompleteness = (a.menuAvailable ? 1 : 0) + (a.photosAvailable ? 1 : 0);",
-  "\"Menu coming soon\"",
+  "\"Menu: none found\"",
   "\"Photos coming soon\"",
   "\"Verified truck\"",
   "\"Scheduled today\"",

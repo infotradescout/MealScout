@@ -896,7 +896,7 @@ export default function ScoutPrototype() {
                 ? "Scheduled today"
               : "Serving area",
             t.liveNow ? null : "Not live now",
-            t.menuAvailable ? "Menu available" : "Menu coming soon",
+            t.menuAvailable ? "Menu available" : "Menu: none found",
             t.photosAvailable ? null : "Photos coming soon",
             t.verifiedTruck ? "Verified truck" : null,
           ]

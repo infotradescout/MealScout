@@ -20,6 +20,7 @@ const requiredSnippets = [
   "\"Live now · Scheduled\"",
   "\"Serving area\"",
   "\"Not live now\"",
+  "\"Menu: none found\"",
 ];
 
 for (const snippet of requiredSnippets) {

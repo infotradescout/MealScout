@@ -946,7 +946,8 @@ function MenuSection({
     Boolean(profile.menuUrl) ||
     Boolean(profile.menuImageUrl) ||
     Boolean(profile.menuPdfUrl) ||
-    featuredItems.length > 0;
+    featuredItems.length > 0 ||
+    profile.profileType === "truck";
   if (!hasSection) return null;
 
   const fallbackMenuLink =
@@ -1038,7 +1039,14 @@ function MenuSection({
         ) : null}
         {menuCompleteness.state === "unavailable" ? (
           <p className="rounded-md border border-white/15 bg-white/5 px-3 py-2 text-xs text-white/75">
-            Menu unavailable right now.
+            {profile.profileType === "truck"
+              ? "Menu: none found."
+              : "Menu unavailable right now."}
+          </p>
+        ) : null}
+        {profile.profileType === "truck" && !hasStructuredMenu && menuCompleteness.state !== "unavailable" ? (
+          <p className="rounded-md border border-white/15 bg-white/5 px-3 py-2 text-xs text-white/75">
+            Menu: none found.
           </p>
         ) : null}
         {updatedLabel ? (
@@ -1507,7 +1515,7 @@ function RestaurantSchedule({ profile }: { profile: PublicRestaurantProfile }) {
     Boolean(String(schedule?.statusLabel || "").trim()) ||
     Boolean(String(schedule?.nextWindowLabel || "").trim()) ||
     Number(schedule?.upcomingCount || 0) > 0;
-  if (!hasHours && !hasTruckSchedule) return null;
+  if (!hasHours && !hasTruckSchedule && profile.profileType !== "truck") return null;
 
   const stopRow = (
     label: string,
@@ -1597,6 +1605,11 @@ function RestaurantSchedule({ profile }: { profile: PublicRestaurantProfile }) {
               </div>
             ) : null}
           </div>
+        ) : null}
+        {profile.profileType === "truck" && !hasTruckSchedule ? (
+          <p className="rounded-md border border-white/15 bg-white/5 px-3 py-2 text-xs text-white/75">
+            Schedule: none found.
+          </p>
         ) : null}
       </CardContent>
     </Card>

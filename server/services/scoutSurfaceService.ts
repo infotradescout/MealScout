@@ -3,7 +3,7 @@ import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "../db";
 import { storage } from "../storage";
 import { isPublicBusinessVisible } from "../utils/publicBusinessVisibility";
-import { isTruckDiscoverableForScout, hasTruckScheduleSignal } from "../utils/truckListingEligibility";
+import { hasTruckScheduleSignal } from "../utils/truckListingEligibility";
 import { buildLocalRecommendations } from "./recommendationEngine";
 import {
   deals,
@@ -559,11 +559,7 @@ export async function buildScoutSurface(
   const restaurants = (Array.isArray(allRestaurants) ? allRestaurants : [])
     .filter((row: any) => row?.isActive)
     .filter((row: any) => isPublicBusinessVisible(row));
-  const scoutEligibleRestaurants = restaurants.filter((row: any) => {
-    const isTruck = Boolean(row?.isFoodTruck || String(row?.businessType || "").toLowerCase() === "food_truck");
-    if (!isTruck) return true;
-    return isTruckDiscoverableForScout(row);
-  });
+  const scoutEligibleRestaurants = restaurants;
 
   const restaurantById = new Map(
     scoutEligibleRestaurants.map((restaurant: any) => [String(restaurant.id), restaurant]),

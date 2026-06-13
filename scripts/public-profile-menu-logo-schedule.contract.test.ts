@@ -22,12 +22,19 @@ if (!page.includes('{heroImage ? (') || !page.includes('{initials}')) {
   throw new Error("Hero must fall back to initials artwork when logo or photo data is missing.");
 }
 
-if (!page.includes('Boolean(String(schedule?.statusLabel || "").trim())')) {
-  throw new Error("Truck schedule section must render honest status text like 'No schedule posted'");
+if (
+  !page.includes('Boolean(String(schedule?.statusLabel || "").trim())') ||
+  !page.includes("Schedule: none found.")
+) {
+  throw new Error("Truck schedule section must render honest status text or a none-found placeholder.");
 }
 
-if (!page.includes('Menu unavailable right now.')) {
-  throw new Error("Menu section must render an honest unavailable state when menu evidence exists but is not currently usable.");
+if (
+  !page.includes('Menu unavailable right now.') ||
+  !page.includes("Menu: none found.") ||
+  !page.includes('profile.profileType === "truck"')
+) {
+  throw new Error("Menu section must render an honest unavailable/none-found state.");
 }
 
 if (!page.includes('Map coordinates are not available yet.')) {

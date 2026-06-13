@@ -1982,6 +1982,7 @@ export function registerRestaurantOperationsRoutes(
         .map((truck: any) => String(truck?.id || "").trim())
         .filter(Boolean);
       const menuEligibleIds = new Set<string>();
+      const menuCounts = new Map<string, number>();
       if (truckIds.length > 0) {
         const menuRows = await db
           .select({
@@ -1992,20 +1993,18 @@ export function registerRestaurantOperationsRoutes(
           .where(inArray(menuItems.restaurantId, truckIds))
           .groupBy(menuItems.restaurantId);
         for (const row of menuRows) {
+          menuCounts.set(String(row.restaurantId), Number(row.count || 0));
           if (Number(row.count || 0) > 0) {
             menuEligibleIds.add(String(row.restaurantId));
           }
         }
       }
-      const menuEligibleTrucks = payloadTrucks.filter((truck: any) =>
-        menuEligibleIds.has(String(truck?.id || "").trim()),
-      );
-      if (menuEligibleTrucks.length !== payloadTrucks.length) {
-        res.setHeader(
-          "X-MealScout-Filtered-Missing-Menu",
-          String(payloadTrucks.length - menuEligibleTrucks.length),
-        );
-      }
+      const menuEligibleTrucks = payloadTrucks.map((truck: any) => ({
+        ...truck,
+        menuItemCount: menuCounts.get(String(truck?.id || "").trim()) || 0,
+        menuAvailable: menuEligibleIds.has(String(truck?.id || "").trim()),
+      }));
+      res.setHeader("X-MealScout-Filtered-Missing-Menu", "0");
       const suppressedTruckIds = await getSuppressedLocationResourceIds({
         resourceIds: menuEligibleTrucks
           .map((truck: any) => String(truck?.id || "").trim())

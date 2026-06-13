@@ -7,8 +7,13 @@ const loginContinuation = readFileSync("server/services/loginContinuation.ts", "
 
 const requiredLocationSnippets = [
   "const menuEligibleIds = new Set<string>();",
+  "const menuCounts: Record<string, number> = {};",
   ".from(menuItems)",
   "const discoverableRestaurants = restaurants.filter",
+  'String(restaurant?.businessType || "").toLowerCase() === "food_truck"',
+  "return isTruck || menuEligibleIds.has",
+  "menuItemCount: menuCounts[String(restaurant.id)] || 0,",
+  "menuAvailable: menuEligibleIds.has(String(restaurant.id)),",
   "X-MealScout-Filtered-Missing-Menu",
 ];
 
@@ -19,9 +24,11 @@ for (const snippet of requiredLocationSnippets) {
 }
 
 const requiredTruckSnippets = [
-  "const menuEligibleTrucks = payloadTrucks.filter",
+  "const menuEligibleTrucks = payloadTrucks.map",
   ".from(menuItems)",
-  "X-MealScout-Filtered-Missing-Menu",
+  'res.setHeader("X-MealScout-Filtered-Missing-Menu", "0");',
+  "menuItemCount: menuCounts.get(String(truck?.id || \"\").trim()) || 0,",
+  "menuAvailable: menuEligibleIds.has(String(truck?.id || \"\").trim()),",
   "const trustedPayloadTrucks = menuEligibleTrucks.filter",
 ];
 

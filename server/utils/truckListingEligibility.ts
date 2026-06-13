@@ -26,7 +26,7 @@ export function hasTruckScheduleSignal(truck: TruckLike): boolean {
 
 export function isTruckDiscoverableForScout(truck: TruckLike): boolean {
   // Product rule:
-  // - Truck must have menu OR schedule to be listed/discoverable in Scout/search.
-  // - Schedule-only trucks remain discoverable (e.g., during free trial).
-  return hasTruckMenuSignal(truck) || hasTruckScheduleSignal(truck);
+  // - Menu/schedule absence must not hide otherwise eligible trucks.
+  // - Missing menu/schedule is represented as an honest "none found" state.
+  return Boolean(truck);
 }

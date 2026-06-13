@@ -157,6 +157,7 @@ export function registerLocationUtilityRoutes(
 
       const restaurantIds = restaurants.map((restaurant) => restaurant.id);
       const menuEligibleIds = new Set<string>();
+      const menuCounts: Record<string, number> = {};
       if (restaurantIds.length > 0) {
         const menuRows = await db
           .select({
@@ -167,14 +168,20 @@ export function registerLocationUtilityRoutes(
           .where(inArray(menuItems.restaurantId, restaurantIds))
           .groupBy(menuItems.restaurantId);
         for (const row of menuRows) {
-          if (Number(row.count || 0) > 0) {
-            menuEligibleIds.add(String(row.restaurantId));
+          const restaurantId = String(row.restaurantId);
+          const count = Number(row.count || 0);
+          menuCounts[restaurantId] = count;
+          if (count > 0) {
+            menuEligibleIds.add(restaurantId);
           }
         }
       }
-      const discoverableRestaurants = restaurants.filter((restaurant: any) =>
-        menuEligibleIds.has(String(restaurant.id || "")),
-      );
+      const discoverableRestaurants = restaurants.filter((restaurant: any) => {
+        const isTruck =
+          restaurant?.isFoodTruck === true ||
+          String(restaurant?.businessType || "").toLowerCase() === "food_truck";
+        return isTruck || menuEligibleIds.has(String(restaurant.id || ""));
+      });
       if (discoverableRestaurants.length !== restaurants.length) {
         res.setHeader(
           "X-MealScout-Filtered-Missing-Menu",
@@ -209,6 +216,8 @@ export function registerLocationUtilityRoutes(
       res.json(
         discoverableRestaurants.map((restaurant) => ({
           ...sanitizeRestaurantMedia(restaurant),
+          menuItemCount: menuCounts[String(restaurant.id)] || 0,
+          menuAvailable: menuEligibleIds.has(String(restaurant.id)),
           activeDealsCount: dealCounts[restaurant.id] || 0,
         })),
       );

@@ -6,10 +6,12 @@ const source = fs.readFileSync(routePath, "utf8");
 
 const requiredSnippets = [
   "const isTruckRestaurantRow = (row: any) =>",
-  "entity === \"truck\"\n            ? await resolveTruckRestaurantForPublicId(idHint)",
+  'entity === "truck"',
+  "await resolveTruckRestaurantForPublicId(idHint)",
   "entity: \"truck\"",
   "const trucks = cityRestaurants.filter((row: any) => isTruckRestaurantRow(row));",
-  "const restaurantsOnly = cityRestaurants.filter(\n        (row: any) => !isTruckRestaurantRow(row),",
+  "const restaurantsOnly = cityRestaurants.filter(",
+  "(row: any) => !isTruckRestaurantRow(row),",
 ];
 
 const missing = requiredSnippets.filter((snippet) => !source.includes(snippet));
