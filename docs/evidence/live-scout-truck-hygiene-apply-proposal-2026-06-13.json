@@ -1,0 +1,126 @@
+{
+  "proposalName": "Live Scout truck hygiene apply proposal",
+  "repo": "MealScout",
+  "generatedAt": "2026-06-13T00:00:00.000-05:00",
+  "baselineSha": "16b2b34bc843d6ad175f10034b00f6b1be49abfd",
+  "workflowMode": "review_only_apply_proposal",
+  "productionMutationAllowed": false,
+  "productionApplied": false,
+  "sourceEvidenceBatch": "docs/evidence/live-scout-truck-evidence-batch-1-2026-06-13.json",
+  "scope": {
+    "includedTrucks": [
+      "Jays Southern Cuisine",
+      "Blessed Berry Bowls"
+    ],
+    "allowedFieldsForFutureApplyOnlyAfterApproval": [
+      "restaurants.name whitespace-only trim for Jays Southern Cuisine",
+      "restaurants.instagramUrl for Blessed Berry Bowls",
+      "restaurants.facebookPageUrl for Blessed Berry Bowls"
+    ],
+    "excludedFields": [
+      "logos",
+      "covers",
+      "menus",
+      "schedules",
+      "descriptions",
+      "Jays external Big Jay's candidate",
+      "Toast menu completeness"
+    ]
+  },
+  "rules": [
+    "This artifact is a proposal only and must not mutate production records.",
+    "Run any future apply through the manual intake or approved admin path only after explicit owner/operator approval.",
+    "Do not apply logos, menus, schedules, covers, or descriptions from this lane.",
+    "Do not treat Toast as a complete owner-approved menu.",
+    "Do not apply Jays external Big Jay's candidate without owner/operator confirmation.",
+    "Keep ownerApprovalNeeded true unless a later reviewed artifact explicitly records approval evidence."
+  ],
+  "preserve": [
+    "/truck/{slug}--{uuid} compatibility paths",
+    "invalid UUID safe 404",
+    "missing logo/menu/schedule no-500 behavior",
+    "clean affiliate / clean URL doctrine",
+    "food-truck location privacy rules"
+  ],
+  "proposals": [
+    {
+      "proposalId": "jays-display-name-whitespace-trim",
+      "truckName": "Jays Southern Cuisine",
+      "truckId": "96cc9541-c39a-47e9-ba9f-2e15e0d0a6f2",
+      "publicProfilePath": "/truck/jays-southern-cuisine--96cc9541-c39a-47e9-ba9f-2e15e0d0a6f2",
+      "proposalType": "display_name_whitespace_hygiene",
+      "field": "restaurants.name",
+      "currentProductionValue": "Jays Southern Cuisine ",
+      "proposedValue": "Jays Southern Cuisine",
+      "classification": "whitespace_only_hygiene_correction",
+      "sourceUrls": [
+        "https://mealscout.onrender.com/api/public/profiles/truck/96cc9541-c39a-47e9-ba9f-2e15e0d0a6f2"
+      ],
+      "sourceArtifactPaths": [
+        "docs/evidence/live-scout-truck-evidence-batch-1-2026-06-13.json"
+      ],
+      "confidence": "high",
+      "ownerApprovalNeeded": true,
+      "productionApplied": false,
+      "notes": "Future apply would trim only trailing whitespace. No rename or identity change is proposed."
+    },
+    {
+      "proposalId": "blessed-instagram-url-cleanup",
+      "truckName": "Blessed Berry Bowls",
+      "truckId": "e77ac77a-c432-42d0-ac0f-22c48b6306c9",
+      "publicProfilePath": "/truck/blessed-berry-bowls--e77ac77a-c432-42d0-ac0f-22c48b6306c9",
+      "proposalType": "source_backed_social_url_cleanup",
+      "field": "restaurants.instagramUrl",
+      "currentProductionValue": "https://@blessed.berrybowls",
+      "proposedValue": "https://www.instagram.com/blessedberrybowls/",
+      "classification": "malformed_url_to_source_backed_candidate",
+      "sourceUrls": [
+        "https://mealscout.onrender.com/api/public/profiles/truck/e77ac77a-c432-42d0-ac0f-22c48b6306c9",
+        "https://www.instagram.com/blessedberrybowls/"
+      ],
+      "sourceArtifactPaths": [
+        "docs/evidence/live-scout-truck-evidence-batch-1-2026-06-13.json"
+      ],
+      "confidence": "medium",
+      "ownerApprovalNeeded": true,
+      "productionApplied": false,
+      "notes": "Candidate is source-backed but still owner/operator confirmation gated."
+    },
+    {
+      "proposalId": "blessed-facebook-url-cleanup",
+      "truckName": "Blessed Berry Bowls",
+      "truckId": "e77ac77a-c432-42d0-ac0f-22c48b6306c9",
+      "publicProfilePath": "/truck/blessed-berry-bowls--e77ac77a-c432-42d0-ac0f-22c48b6306c9",
+      "proposalType": "source_backed_social_url_cleanup",
+      "field": "restaurants.facebookPageUrl",
+      "currentProductionValue": "https://facebook.com/Blessed Berry Bowls",
+      "proposedValue": "https://www.facebook.com/p/Blessed-Berry-Bowls-61561713173410/",
+      "classification": "malformed_url_to_source_backed_candidate",
+      "sourceUrls": [
+        "https://mealscout.onrender.com/api/public/profiles/truck/e77ac77a-c432-42d0-ac0f-22c48b6306c9",
+        "https://www.facebook.com/p/Blessed-Berry-Bowls-61561713173410/"
+      ],
+      "sourceArtifactPaths": [
+        "docs/evidence/live-scout-truck-evidence-batch-1-2026-06-13.json"
+      ],
+      "confidence": "medium",
+      "ownerApprovalNeeded": true,
+      "productionApplied": false,
+      "notes": "Candidate is source-backed but still owner/operator confirmation gated."
+    }
+  ],
+  "explicitNonActions": [
+    {
+      "item": "Jays external Big Jay's Southern Cuisine candidate",
+      "reason": "Ambiguous identity; not included in apply proposal."
+    },
+    {
+      "item": "Blessed Berry Bowls Toast page",
+      "reason": "Candidate menu/order evidence only; not treated as complete owner-approved menu."
+    },
+    {
+      "item": "Any schedule from social posts",
+      "reason": "No current/recurring owner-confirmed schedule is included in this proposal."
+    }
+  ]
+}
