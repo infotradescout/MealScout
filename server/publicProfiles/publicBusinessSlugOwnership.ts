@@ -55,21 +55,34 @@ const asOwnership = (row: any): PublicBusinessSlugOwnership => ({
   assignmentStatus: String(row.assignmentStatus || "assigned"),
 });
 
+const isMissingSlugOwnershipTable = (error: unknown) => {
+  const err = error as { code?: string; message?: string } | null;
+  return Boolean(
+    err?.code === "42P01" &&
+      String(err?.message || "").includes("public_business_slug_ownerships"),
+  );
+};
+
 export async function getPublicBusinessSlugOwnership(input: {
   entityType: PublicBusinessSlugEntityType;
   id: string;
 }): Promise<PublicBusinessSlugOwnership | null> {
-  const [row] = await db
-    .select()
-    .from(publicBusinessSlugOwnerships)
-    .where(
-      and(
-        eq(publicBusinessSlugOwnerships.entityType, input.entityType),
-        eq(publicBusinessSlugOwnerships.entityId, input.id),
-      ),
-    )
-    .limit(1);
-  return row ? asOwnership(row) : null;
+  try {
+    const [row] = await db
+      .select()
+      .from(publicBusinessSlugOwnerships)
+      .where(
+        and(
+          eq(publicBusinessSlugOwnerships.entityType, input.entityType),
+          eq(publicBusinessSlugOwnerships.entityId, input.id),
+        ),
+      )
+      .limit(1);
+    return row ? asOwnership(row) : null;
+  } catch (error) {
+    if (isMissingSlugOwnershipTable(error)) return null;
+    throw error;
+  }
 }
 
 export async function listPublicBusinessSlugOwnershipsBySlug(
@@ -77,11 +90,16 @@ export async function listPublicBusinessSlugOwnershipsBySlug(
 ): Promise<PublicBusinessSlugOwnership[]> {
   const normalized = normalizeCleanBusinessSlug(slug);
   if (!normalized) return [];
-  const rows = await db
-    .select()
-    .from(publicBusinessSlugOwnerships)
-    .where(eq(publicBusinessSlugOwnerships.slug, normalized));
-  return rows.map(asOwnership);
+  try {
+    const rows = await db
+      .select()
+      .from(publicBusinessSlugOwnerships)
+      .where(eq(publicBusinessSlugOwnerships.slug, normalized));
+    return rows.map(asOwnership);
+  } catch (error) {
+    if (isMissingSlugOwnershipTable(error)) return [];
+    throw error;
+  }
 }
 
 function buildSlugCandidates(input: AssignmentInput): string[] {
@@ -134,7 +152,8 @@ export async function ensurePublicBusinessSlugOwnership(
         })
         .returning();
       if (inserted) return asOwnership(inserted);
-    } catch {
+    } catch (error) {
+      if (isMissingSlugOwnershipTable(error)) return null;
       const claimedByEntity = await getPublicBusinessSlugOwnership({
         entityType,
         id,

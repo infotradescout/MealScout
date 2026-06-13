@@ -917,7 +917,12 @@ export default function ScoutPrototype() {
             : "Not live now",
           tagColor: t.liveNow ? "#10b981" : "#9333ea",
           distance: distLabel(t),
-          href: `/truck/${t.id}`,
+          href:
+            buildPublicProfilePath({
+              entityType: "truck",
+              id: t.id,
+              name,
+            }) || `/truck/${t.id}`,
           routeHref: t.liveNow
             ? routeUrl(t.latitude ?? t.lat, t.longitude ?? t.lng, name)
             : null,
@@ -1115,7 +1120,15 @@ export default function ScoutPrototype() {
         iconSize: [32, 32], iconAnchor: [16, 16],
       });
       const marker = L.marker([lat, lng], { icon }).addTo(map.current!);
-      marker.on("click", () => navigate(`/truck/${t.id}`));
+      marker.on("click", () =>
+        navigate(
+          buildPublicProfilePath({
+            entityType: "truck",
+            id: t.id,
+            name: t.name || "Food Truck",
+          }) || `/truck/${t.id}`,
+        ),
+      );
     });
 
     // Restaurant pins (must have schedule status, or stay off map)

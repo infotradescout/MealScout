@@ -12,6 +12,8 @@ const requiredSnippets = [
   "const trucksById = new Map<string, Truck>();",
   "discoverableTruckProfiles.forEach((truck) => {",
   "liveTrucks.forEach((truck) => {",
+  'buildPublicProfilePath({',
+  'entityType: "truck"',
   ".sort((a, b) => {",
   "const aLiveRank = a.liveNow ? (a.liveSource === \"location_update\" ? 2 : 1) : 0;",
   "const aDistance = Number(a.distanceMiles ?? Number.POSITIVE_INFINITY);",
