@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Eye, EyeOff, CheckCircle, KeyRound, AlertTriangle } from "lucide-react";
 import { BackHeader } from "@/components/back-header";
 import { SEOHead } from "@/components/seo-head";
@@ -49,6 +49,18 @@ const accountSetupSchema = z
 
 type AccountSetupFormData = z.infer<typeof accountSetupSchema>;
 
+const phoneOnlySetupSchema = z.object({
+  phone: z
+    .string()
+    .refine(
+      (value) => value.replace(/\D/g, "").length >= 10,
+      "Phone number must include at least 10 digits",
+    ),
+  phoneContactConsent: z.boolean().default(true),
+});
+
+type PhoneOnlySetupFormData = z.infer<typeof phoneOnlySetupSchema>;
+
 const getNoTokenContinuationPath = getAccountContinuationPath;
 
 export default function AccountSetup() {
@@ -61,6 +73,17 @@ export default function AccountSetup() {
     const urlParams = new URLSearchParams(window.location.search);
     return urlParams.get("token");
   });
+  const [phoneRequired, setPhoneRequired] = useState(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    return urlParams.get("phoneRequired") === "1";
+  });
+  const [phoneRedirectPath, setPhoneRedirectPath] = useState(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const redirect = urlParams.get("redirect") || "";
+    return redirect.startsWith("/") && !redirect.startsWith("//")
+      ? redirect
+      : "";
+  });
   const [setupComplete, setSetupComplete] = useState(false);
 
   // Extract token from URL parameters
@@ -68,12 +91,17 @@ export default function AccountSetup() {
     const urlParams = new URLSearchParams(window.location.search);
     const tokenParam = urlParams.get("token");
     setToken(tokenParam);
+    setPhoneRequired(urlParams.get("phoneRequired") === "1");
+    const redirect = urlParams.get("redirect") || "";
+    setPhoneRedirectPath(
+      redirect.startsWith("/") && !redirect.startsWith("//") ? redirect : "",
+    );
   }, []);
 
   useEffect(() => {
-    if (token || isAuthLoading || !isAuthenticated) return;
+    if (token || phoneRequired || isAuthLoading || !isAuthenticated) return;
     setLocation(getNoTokenContinuationPath(user));
-  }, [token, isAuthLoading, isAuthenticated, user, setLocation]);
+  }, [token, phoneRequired, isAuthLoading, isAuthenticated, user, setLocation]);
 
   const form = useForm<AccountSetupFormData>({
     resolver: zodResolver(accountSetupSchema),
@@ -83,6 +111,14 @@ export default function AccountSetup() {
       firstName: "",
       lastName: "",
       phone: "",
+    },
+  });
+
+  const phoneOnlyForm = useForm<PhoneOnlySetupFormData>({
+    resolver: zodResolver(phoneOnlySetupSchema),
+    defaultValues: {
+      phone: "",
+      phoneContactConsent: true,
     },
   });
 
@@ -129,6 +165,13 @@ export default function AccountSetup() {
       form.setValue("phone", tokenValidation.phone);
     }
   }, [tokenValidation, form]);
+
+  useEffect(() => {
+    const existingPhone = String((user as any)?.phone || "");
+    if (existingPhone) {
+      phoneOnlyForm.setValue("phone", existingPhone);
+    }
+  }, [user, phoneOnlyForm]);
 
   const setupMutation = useMutation({
     mutationFn: async (data: AccountSetupFormData) => {
@@ -183,6 +226,39 @@ export default function AccountSetup() {
     setupMutation.mutate(data);
   };
 
+  const phoneOnlySetupMutation = useMutation({
+    mutationFn: async (data: PhoneOnlySetupFormData) => {
+      const res = await apiRequest("POST", "/api/auth/complete-phone-setup", {
+        phone: data.phone,
+        phoneContactConsent: data.phoneContactConsent,
+        redirect: phoneRedirectPath || getNoTokenContinuationPath(user),
+      });
+      return await res.json();
+    },
+    onSuccess: async (payload: any) => {
+      await queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+      toast({
+        title: "Phone number saved",
+        description: "Thanks. We'll use it for onboarding follow-up.",
+      });
+      setLocation(
+        payload?.redirect || phoneRedirectPath || getNoTokenContinuationPath(user),
+      );
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Phone setup failed",
+        description:
+          error.message || "Failed to save phone number. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const onPhoneOnlySubmit = (data: PhoneOnlySetupFormData) => {
+    phoneOnlySetupMutation.mutate(data);
+  };
+
   // Get password strength info
   const password = form.watch("password");
   const getPasswordStrength = (password: string) => {
@@ -228,6 +304,97 @@ export default function AccountSetup() {
           : passwordStrength.color === "green"
             ? "text-[color:var(--status-success)]"
             : "text-[color:var(--text-muted)]";
+
+  if (!token && phoneRequired && (isAuthLoading || isAuthenticated)) {
+    if (isAuthLoading) {
+      return (
+        <div className="min-h-screen bg-[var(--bg-layered)] flex items-center justify-center p-4">
+          <SEOHead
+            title="Continuing - MealScout"
+            description="Preparing your MealScout phone setup."
+            noIndex={true}
+          />
+          <Card className="w-full max-w-md border-[color:var(--border-subtle)] bg-[var(--bg-card)]">
+            <CardContent className="pt-6 text-center">
+              <p className="text-[color:var(--text-secondary)]">Loading phone setup...</p>
+            </CardContent>
+          </Card>
+        </div>
+      );
+    }
+
+    return (
+      <div className="min-h-screen bg-[var(--bg-layered)]">
+        <SEOHead
+          title="Add Phone Number - MealScout"
+          description="Add a phone number for MealScout onboarding follow-up."
+          noIndex={true}
+        />
+        <h1 className="sr-only">Add your MealScout phone number</h1>
+        <BackHeader
+          title="Add Phone Number"
+          fallbackHref="/login"
+          icon={KeyRound}
+          className="bg-[hsl(var(--background))/0.94] border-b border-[color:var(--border-subtle)] shadow-clean"
+        />
+        <div className="flex items-center justify-center min-h-[calc(100vh-4rem)] p-4">
+          <Card className="w-full max-w-md border-[color:var(--border-subtle)] bg-[var(--bg-card)]">
+            <CardHeader>
+              <CardTitle>Add your phone number</CardTitle>
+              <CardDescription>
+                A phone number is required so MealScout can follow up on onboarding.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form
+                onSubmit={phoneOnlyForm.handleSubmit(onPhoneOnlySubmit)}
+                className="space-y-4"
+              >
+                <div className="space-y-2">
+                  <Label htmlFor="phoneOnly">
+                    Phone Number <span className="text-[color:var(--status-error)]">*</span>
+                  </Label>
+                  <Input
+                    id="phoneOnly"
+                    type="tel"
+                    autoComplete="tel"
+                    {...phoneOnlyForm.register("phone")}
+                    placeholder="(555) 123-4567"
+                    disabled={phoneOnlySetupMutation.isPending}
+                  />
+                  {phoneOnlyForm.formState.errors.phone && (
+                    <p className="text-sm text-[color:var(--status-error)]">
+                      {phoneOnlyForm.formState.errors.phone.message}
+                    </p>
+                  )}
+                </div>
+
+                <label className="flex items-start gap-2 rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)] p-3 text-sm leading-5">
+                  <input
+                    type="checkbox"
+                    className="mt-1 h-4 w-4"
+                    {...phoneOnlyForm.register("phoneContactConsent")}
+                    defaultChecked
+                  />
+                  <span>
+                    I agree MealScout may call or text me about onboarding. I can opt out anytime.
+                  </span>
+                </label>
+
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={phoneOnlySetupMutation.isPending}
+                >
+                  {phoneOnlySetupMutation.isPending ? "Saving..." : "Continue"}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   // Missing setup token: authenticated OAuth/login redirects must leave this setup-link surface.
   if (!token && (isAuthLoading || isAuthenticated)) {

@@ -213,7 +213,7 @@ const signupFlowOptions: SignupFlowOption[] = [
 export default function CustomerSignup() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const { isAuthenticated, isLoading } = useAuth();
+  const { user, isAuthenticated, isLoading } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [otpSending, setOtpSending] = useState(false);
@@ -651,18 +651,36 @@ export default function CustomerSignup() {
     },
   });
 
-  const continueWithExistingAccount = () => {
+  const hasRequiredPhone = (phone: unknown) =>
+    String(phone || "").replace(/\D/g, "").length >= 10;
+
+  const getExistingAccountContinuationPath = () => {
     if (accountType === "host") {
-      setLocation("/host-signup");
-      return;
+      return "/host-signup";
     }
     if (accountType === "event_organizer") {
-      setLocation("/event-coordinator/dashboard?setup=onboarding");
-      return;
+      return "/event-coordinator/dashboard?setup=onboarding";
     }
 
     if (accountType === "business") {
-      setLocation(getBusinessRedirectPath());
+      return getBusinessRedirectPath();
+    }
+
+    if (accountType === "supplier") {
+      return "/supplier/dashboard";
+    }
+
+    return "/dashboard";
+  };
+
+  const continueWithExistingAccount = () => {
+    const continuationPath = getExistingAccountContinuationPath();
+    if (!hasRequiredPhone((user as any)?.phone)) {
+      setLocation(
+        `/account-setup?phoneRequired=1&redirect=${encodeURIComponent(
+          continuationPath,
+        )}`,
+      );
       return;
     }
 
@@ -671,7 +689,7 @@ export default function CustomerSignup() {
       return;
     }
 
-    setLocation("/dashboard");
+    setLocation(continuationPath);
   };
 
   const onSubmit = (data: SignupFormData) => {

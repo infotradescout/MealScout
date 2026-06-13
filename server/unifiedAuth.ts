@@ -47,6 +47,8 @@ declare module "express-session" {
     googleAppContext?: "mealscout" | "tradescout";
     oauthUserType?: User["userType"];
     oauthRedirectPath?: string;
+    pendingPhoneSignupMethod?: string;
+    pendingPhoneRedirectPath?: string;
     adminMarketSelection?: {
       marketKey?: string | null;
       city?: string | null;
@@ -239,6 +241,18 @@ export async function setupUnifiedAuth(app: Express) {
     if (path.includes("://")) return null;
     if (isAccountSetupPathWithoutToken(path)) return null;
     return path;
+  };
+
+  const normalizePhone = (phone: string) => phone.replace(/\D/g, "");
+  const hasRequiredPhone = (user: Pick<User, "phone"> | null | undefined) =>
+    normalizePhone(String(user?.phone || "")).length >= 10;
+  const buildPhoneRequiredSetupPath = (redirectPath: string | null) => {
+    const params = new URLSearchParams({ phoneRequired: "1" });
+    const safeRedirect = getSafeRedirectPath(redirectPath);
+    if (safeRedirect) {
+      params.set("redirect", safeRedirect);
+    }
+    return `/account-setup?${params.toString()}`;
   };
 
   const getOAuthRedirectPath = (req: any): string | null =>
@@ -501,6 +515,7 @@ export async function setupUnifiedAuth(app: Express) {
       signupMethod: string;
       intendedNextPath?: string | null;
       notifyAdmin?: boolean;
+      skipAgeGate?: boolean;
     },
   ) => {
     try {
@@ -510,7 +525,7 @@ export async function setupUnifiedAuth(app: Express) {
       const accountAgeMs = Number.isFinite(createdAtMs)
         ? Date.now() - createdAtMs
         : Number.POSITIVE_INFINITY;
-      if (accountAgeMs > 10 * 60 * 1000) {
+      if (!params.skipAgeGate && accountAgeMs > 10 * 60 * 1000) {
         console.log("[auth] Existing account login; skipping creation emails", {
           userId: user.id,
           signupMethod: params.signupMethod,
@@ -734,12 +749,14 @@ export async function setupUnifiedAuth(app: Express) {
               })
               .catch((err) => console.error("Failed to emit LISA claim:", err));
 
-            if (!existingOAuthUser) {
+            if (!existingOAuthUser && hasRequiredPhone(user)) {
               void sendAccountCreationEmails(user, req, {
                 welcomeLabel: "customer",
                 signupMethod: "google",
                 notifyAdmin: false,
               });
+            } else if (!existingOAuthUser) {
+              req.session.pendingPhoneSignupMethod = "google";
             }
             return done(null, user);
           } catch (error) {
@@ -844,12 +861,14 @@ export async function setupUnifiedAuth(app: Express) {
               })
               .catch((err) => console.error("Failed to emit LISA claim:", err));
 
-            if (!existingOAuthUser) {
+            if (!existingOAuthUser && hasRequiredPhone(user)) {
               void sendAccountCreationEmails(user, req, {
                 welcomeLabel: "restaurant owner",
                 signupMethod: "google",
                 notifyAdmin: false,
               });
+            } else if (!existingOAuthUser) {
+              req.session.pendingPhoneSignupMethod = "google";
             }
             return done(null, user);
           } catch (error) {
@@ -913,6 +932,19 @@ export async function setupUnifiedAuth(app: Express) {
             appContext === "tradescout" ? tradeScoutBaseUrl : baseUrl;
           const redirectPath =
             getOAuthRedirectPath(req) || (await resolveOAuthContinuationPath(user));
+          if (appContext === "mealscout" && !hasRequiredPhone(user)) {
+            req.session.pendingPhoneSignupMethod =
+              req.session.pendingPhoneSignupMethod || "google";
+            req.session.pendingPhoneRedirectPath = redirectPath;
+            req.session.oauthRedirectPath = undefined;
+            return req.session.save((saveErr: unknown) => {
+              if (saveErr) {
+                console.error("❌ Session save error:", saveErr);
+                return res.redirect("/?error=session_error");
+              }
+              return res.redirect(buildPhoneRequiredSetupPath(redirectPath));
+            });
+          }
           req.session.save((saveErr: unknown) => {
             if (saveErr) {
               console.error("❌ Session save error:", saveErr);
@@ -986,6 +1018,19 @@ export async function setupUnifiedAuth(app: Express) {
             appContext === "tradescout" ? tradeScoutBaseUrl : baseUrl;
           const redirectPath =
             getOAuthRedirectPath(req) || (await resolveOAuthContinuationPath(user));
+          if (appContext === "mealscout" && !hasRequiredPhone(user)) {
+            req.session.pendingPhoneSignupMethod =
+              req.session.pendingPhoneSignupMethod || "google";
+            req.session.pendingPhoneRedirectPath = redirectPath;
+            req.session.oauthRedirectPath = undefined;
+            return req.session.save((saveErr: unknown) => {
+              if (saveErr) {
+                console.error("❌ Session save error:", saveErr);
+                return res.redirect("/restaurant-signup?error=session_error");
+              }
+              return res.redirect(buildPhoneRequiredSetupPath(redirectPath));
+            });
+          }
           req.session.save((saveErr: unknown) => {
             if (saveErr) {
               console.error("❌ Session save error:", saveErr);
@@ -1136,12 +1181,14 @@ export async function setupUnifiedAuth(app: Express) {
               })
               .catch((err) => console.error("Failed to emit LISA claim:", err));
 
-            if (!existingOAuthUser) {
+            if (!existingOAuthUser && hasRequiredPhone(user)) {
               void sendAccountCreationEmails(user, req, {
                 welcomeLabel: "customer",
                 signupMethod: "facebook",
                 notifyAdmin: false,
               });
+            } else if (!existingOAuthUser) {
+              req.session.pendingPhoneSignupMethod = "facebook";
             }
             return done(null, user);
           } catch (error) {
@@ -1214,6 +1261,21 @@ export async function setupUnifiedAuth(app: Express) {
         const fallbackRedirectPath = await resolveOAuthContinuationPath(user);
         const resolvedRedirectPath =
           getOAuthRedirectPath(req) || fallbackRedirectPath;
+        if (appContext === "mealscout" && !hasRequiredPhone(user)) {
+          req.session.pendingPhoneSignupMethod =
+            req.session.pendingPhoneSignupMethod || "facebook";
+          req.session.pendingPhoneRedirectPath = resolvedRedirectPath;
+          req.session.oauthRedirectPath = undefined;
+          return req.session.save((err) => {
+            if (err) {
+              console.error("❌ Session save error:", err);
+              return res.redirect("/?error=session_error");
+            }
+            return res.redirect(
+              buildPhoneRequiredSetupPath(resolvedRedirectPath),
+            );
+          });
+        }
 
         console.log("✅ Facebook OAuth callback success:", {
           userId: user?.id,
@@ -1258,7 +1320,6 @@ export async function setupUnifiedAuth(app: Express) {
     );
   }
 
-  const normalizePhone = (phone: string) => phone.replace(/\D/g, "");
   const requirePhoneVerification = false;
 
   const verifyPhoneCode = async (phone: string, code: string) => {
@@ -2283,6 +2344,73 @@ export async function setupUnifiedAuth(app: Express) {
     } catch (error) {
       console.error("Account setup error:", error);
       res.status(500).json({ error: "Unable to complete account setup" });
+    }
+  });
+
+  app.post("/api/auth/complete-phone-setup", async (req: any, res) => {
+    try {
+      if (!req.isAuthenticated?.() || !req.user?.id) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+
+      const normalizedSetupPhone = normalizePhone(String(req.body?.phone || ""));
+      if (normalizedSetupPhone.length < 10) {
+        return res
+          .status(400)
+          .json({ error: "Valid phone number is required" });
+      }
+      const existingPhoneUser =
+        await storage.getUserByPhone(normalizedSetupPhone);
+      if (existingPhoneUser && existingPhoneUser.id !== req.user.id) {
+        return res.status(400).json({ error: "Phone number already in use" });
+      }
+
+      const redirectPath =
+        getSafeRedirectPath(req.body?.redirect) ||
+        getSafeRedirectPath(req.session?.pendingPhoneRedirectPath) ||
+        (await resolveOAuthContinuationPath(req.user as User));
+
+      const updatedUser = await storage.updateUser(req.user.id, {
+        phone: normalizedSetupPhone,
+      });
+      const userForEmail = (updatedUser || {
+        ...(req.user as User),
+        phone: normalizedSetupPhone,
+      }) as User;
+
+      if (updatedUser) {
+        req.login(updatedUser, (loginErr: unknown) => {
+          if (loginErr) {
+            console.error("Phone setup session refresh error:", loginErr);
+          }
+        });
+      }
+
+      const pendingSignupMethod =
+        req.session?.pendingPhoneSignupMethod || "phone_setup";
+      void sendAccountCreationEmails(userForEmail, req, {
+        welcomeLabel: "phone setup",
+        signupMethod: `${pendingSignupMethod}_phone_setup`,
+        intendedNextPath: redirectPath,
+        skipAgeGate: true,
+      });
+
+      req.session.pendingPhoneSignupMethod = undefined;
+      req.session.pendingPhoneRedirectPath = undefined;
+      req.session.save((saveErr: unknown) => {
+        if (saveErr) {
+          console.error("Phone setup session save error:", saveErr);
+        }
+      });
+
+      res.json({
+        message: "Phone number saved",
+        user: userForEmail,
+        redirect: redirectPath,
+      });
+    } catch (error) {
+      console.error("Phone setup error:", error);
+      res.status(500).json({ error: "Unable to save phone number" });
     }
   });
 
