@@ -1,0 +1,153 @@
+{
+  "trackerName": "Live Scout truck content completion",
+  "repo": "MealScout",
+  "generatedAt": "2026-06-13T00:00:00.000-05:00",
+  "baselineSha": "db4219a2893f9c572f946f9726294a45cf841a39",
+  "scope": {
+    "sourceOfTruth": "Live Scout trucks visible on https://www.mealscout.us/scout after db4219a2",
+    "workflowMode": "review_only",
+    "productionMutationAllowed": false,
+    "notes": [
+      "This tracker represents completion state and next review actions only.",
+      "Do not apply logos, covers, menus, schedules, or social links from this file without owner/operator review.",
+      "Use the manual truck intake dry-run workflow before any apply operation."
+    ]
+  },
+  "completionWorkflow": {
+    "existingRunbook": "docs/MANUAL_TRUCK_INTAKE_RUNBOOK.md",
+    "dryRunEndpoint": "POST /api/admin/profile-evidence/apply",
+    "safeApplyRule": "Apply mode requires explicit review; existing menu/logo values are not overwritten without explicit approvals.",
+    "publicProfileCompatibility": "/truck/{slug}--{uuid}",
+    "publicProfileApi": "/api/public/profiles/truck/{uuid}"
+  },
+  "allowedStatuses": {
+    "logoStatus": ["missing", "sourced", "applied", "needs_owner_confirmation"],
+    "coverStatus": ["missing", "sourced", "applied", "needs_owner_confirmation"],
+    "menuStatus": ["missing", "sourced", "applied", "needs_owner_confirmation"],
+    "scheduleStatus": [
+      "missing",
+      "current_week_only",
+      "recurring",
+      "needs_owner_confirmation",
+      "applied"
+    ]
+  },
+  "trucks": [
+    {
+      "truckName": "3D Eats & Tea",
+      "truckId": "95c4e656-f3cc-46ab-ae18-53f549cecfd1",
+      "profileId": "95c4e656-f3cc-46ab-ae18-53f549cecfd1",
+      "publicProfilePath": "/truck/3d-eats-tea--95c4e656-f3cc-46ab-ae18-53f549cecfd1",
+      "logoStatus": "missing",
+      "coverStatus": "applied",
+      "menuStatus": "needs_owner_confirmation",
+      "scheduleStatus": "needs_owner_confirmation",
+      "sourceUrls": [
+        "https://mealscout.onrender.com/api/public/profiles/truck/95c4e656-f3cc-46ab-ae18-53f549cecfd1",
+        "https://3deats.us/",
+        "https://www.instagram.com/3deats",
+        "https://www.facebook.com/3deatsandtea"
+      ],
+      "sourceArtifactPaths": [],
+      "confidence": "medium",
+      "ownerApprovalNeeded": true,
+      "productionApplied": false,
+      "notes": "Production profile has a cover image and public social/website links, but no logoUrl. Live API showed one structured menu item and no posted schedule; treat menu/schedule as requiring owner confirmation before calling the profile complete."
+    },
+    {
+      "truckName": "Blessed Berry Bowls",
+      "truckId": "e77ac77a-c432-42d0-ac0f-22c48b6306c9",
+      "profileId": "e77ac77a-c432-42d0-ac0f-22c48b6306c9",
+      "publicProfilePath": "/truck/blessed-berry-bowls--e77ac77a-c432-42d0-ac0f-22c48b6306c9",
+      "logoStatus": "missing",
+      "coverStatus": "applied",
+      "menuStatus": "needs_owner_confirmation",
+      "scheduleStatus": "needs_owner_confirmation",
+      "sourceUrls": [
+        "https://mealscout.onrender.com/api/public/profiles/truck/e77ac77a-c432-42d0-ac0f-22c48b6306c9",
+        "https://@blessed.berrybowls",
+        "https://facebook.com/Blessed Berry Bowls"
+      ],
+      "sourceArtifactPaths": [],
+      "confidence": "low",
+      "ownerApprovalNeeded": true,
+      "productionApplied": false,
+      "notes": "Production profile has a Google Places cover image and public social links, but no logoUrl. Live API showed one structured menu item and no posted schedule. Social URL formatting should be reviewed before any owner-facing completion claim."
+    },
+    {
+      "truckName": "Sweet Love",
+      "truckId": "f3b76054-f355-43b0-a2d3-901277748557",
+      "profileId": "f3b76054-f355-43b0-a2d3-901277748557",
+      "publicProfilePath": "/truck/sweet-love--f3b76054-f355-43b0-a2d3-901277748557",
+      "logoStatus": "missing",
+      "coverStatus": "applied",
+      "menuStatus": "sourced",
+      "scheduleStatus": "needs_owner_confirmation",
+      "sourceUrls": [
+        "https://mealscout.onrender.com/api/public/profiles/truck/f3b76054-f355-43b0-a2d3-901277748557",
+        "https://ursweetlove.square.site/"
+      ],
+      "sourceArtifactPaths": [],
+      "confidence": "medium",
+      "ownerApprovalNeeded": true,
+      "productionApplied": false,
+      "notes": "Production profile has a cover image and Square menu/website CTA, but no logoUrl and no posted schedule. Menu URL exists; item-level menu completion still needs owner/operator confirmation."
+    },
+    {
+      "truckName": "All Gas No Brakes Reloaded",
+      "truckId": "6ca08365-f8af-4c1d-9754-6c998c803869",
+      "profileId": "6ca08365-f8af-4c1d-9754-6c998c803869",
+      "publicProfilePath": "/truck/all-gas-no-brakes-reloaded--6ca08365-f8af-4c1d-9754-6c998c803869",
+      "logoStatus": "missing",
+      "coverStatus": "missing",
+      "menuStatus": "missing",
+      "scheduleStatus": "needs_owner_confirmation",
+      "sourceUrls": [
+        "https://mealscout.onrender.com/api/public/profiles/truck/6ca08365-f8af-4c1d-9754-6c998c803869"
+      ],
+      "sourceArtifactPaths": [],
+      "confidence": "low",
+      "ownerApprovalNeeded": true,
+      "productionApplied": false,
+      "notes": "Production profile API returned 200 but exposed no logo, cover, menu URL, structured menu items, or posted schedule. Prepare owner review packet before any content apply."
+    },
+    {
+      "truckName": "CREATIVBOWLS",
+      "truckId": "75dd470e-2692-4579-bde0-a64dcc3f6fcb",
+      "profileId": "75dd470e-2692-4579-bde0-a64dcc3f6fcb",
+      "publicProfilePath": "/truck/creativbowls--75dd470e-2692-4579-bde0-a64dcc3f6fcb",
+      "logoStatus": "missing",
+      "coverStatus": "missing",
+      "menuStatus": "missing",
+      "scheduleStatus": "needs_owner_confirmation",
+      "sourceUrls": [
+        "https://mealscout.onrender.com/api/public/profiles/truck/75dd470e-2692-4579-bde0-a64dcc3f6fcb",
+        "https://creativbowls.company.site/",
+        "https://www.instagram.com/creativbowls?igsh=dTE1ajd2aTJhM2Ew&utm_source=qr"
+      ],
+      "sourceArtifactPaths": [],
+      "confidence": "medium",
+      "ownerApprovalNeeded": true,
+      "productionApplied": false,
+      "notes": "Production profile has website and Instagram CTAs, but no logo, cover, structured menu, menu URL, or posted schedule in the public profile payload. June 2026 seed migrations exist historically, but live API currently reports no posted schedule."
+    },
+    {
+      "truckName": "Jays Southern Cuisine",
+      "truckId": "96cc9541-c39a-47e9-ba9f-2e15e0d0a6f2",
+      "profileId": "96cc9541-c39a-47e9-ba9f-2e15e0d0a6f2",
+      "publicProfilePath": "/truck/jays-southern-cuisine--96cc9541-c39a-47e9-ba9f-2e15e0d0a6f2",
+      "logoStatus": "missing",
+      "coverStatus": "missing",
+      "menuStatus": "missing",
+      "scheduleStatus": "needs_owner_confirmation",
+      "sourceUrls": [
+        "https://mealscout.onrender.com/api/public/profiles/truck/96cc9541-c39a-47e9-ba9f-2e15e0d0a6f2"
+      ],
+      "sourceArtifactPaths": [],
+      "confidence": "low",
+      "ownerApprovalNeeded": true,
+      "productionApplied": false,
+      "notes": "Production displayName includes trailing whitespace. Public profile API returned 200 but exposed no logo, cover, menu URL, structured menu items, or posted schedule. Prepare owner review packet before any content apply."
+    }
+  ]
+}
