@@ -1,0 +1,87 @@
+{
+  "artifactType": "live_scout_truck_hygiene_apply_lane",
+  "artifactVersion": 1,
+  "repo": "MealScout",
+  "createdDate": "2026-06-13",
+  "laneName": "Live Scout Truck Hygiene Apply Lane 1",
+  "workflowMode": "approved_tiny_production_hygiene_apply",
+  "baselineSha": "3d621b50ab7a3e35c0fcf67a97ae4570ca75053d",
+  "sourceArtifacts": [
+    "docs/evidence/live-scout-truck-evidence-batch-1-2026-06-13.json",
+    "docs/evidence/live-scout-truck-hygiene-apply-proposal-2026-06-13.json"
+  ],
+  "applyScript": "scripts/applyLiveScoutTruckHygieneLane1.ts",
+  "applyCommand": "npx --yes tsx scripts/applyLiveScoutTruckHygieneLane1.ts --apply --allow-production",
+  "productionMutationAllowed": true,
+  "productionApplied": true,
+  "appliedChanges": [
+    {
+      "changeId": "jays-display-name-whitespace-trim",
+      "truckName": "Jays Southern Cuisine",
+      "truckId": "96cc9541-c39a-47e9-ba9f-2e15e0d0a6f2",
+      "publicProfilePath": "/truck/jays-southern-cuisine--96cc9541-c39a-47e9-ba9f-2e15e0d0a6f2",
+      "field": "restaurants.name",
+      "before": "Jays Southern Cuisine ",
+      "after": "Jays Southern Cuisine",
+      "classification": "whitespace_only_hygiene_correction",
+      "ownerApprovalNeeded": false,
+      "productionApplied": true,
+      "productionApplyResult": "applied",
+      "liveApiVerification": {
+        "url": "https://mealscout.onrender.com/api/public/profiles/truck/96cc9541-c39a-47e9-ba9f-2e15e0d0a6f2",
+        "status": 200,
+        "displayName": "Jays Southern Cuisine",
+        "profilePath": "/truck/jays-southern-cuisine--96cc9541-c39a-47e9-ba9f-2e15e0d0a6f2",
+        "canonicalUrl": "https://mealscout.us/truck/jays-southern-cuisine--96cc9541-c39a-47e9-ba9f-2e15e0d0a6f2"
+      },
+      "notes": "Only trailing whitespace was removed. No identity, slug, social, menu, schedule, cover, logo, or description data was changed."
+    }
+  ],
+  "gatedChanges": [
+    {
+      "changeId": "blessed-social-url-cleanup-gated",
+      "truckName": "Blessed Berry Bowls",
+      "truckId": "e77ac77a-c432-42d0-ac0f-22c48b6306c9",
+      "publicProfilePath": "/truck/blessed-berry-bowls--e77ac77a-c432-42d0-ac0f-22c48b6306c9",
+      "fields": [
+        "restaurants.instagramUrl",
+        "restaurants.facebookPageUrl"
+      ],
+      "currentProductionValues": {
+        "instagramUrl": "https://@blessed.berrybowls",
+        "facebookPageUrl": "https://facebook.com/Blessed Berry Bowls"
+      },
+      "candidateValues": {
+        "instagramUrl": "https://www.instagram.com/blessedberrybowls/",
+        "facebookPageUrl": "https://www.facebook.com/p/Blessed-Berry-Bowls-61561713173410/"
+      },
+      "ownerApprovalNeeded": true,
+      "productionApplied": false,
+      "gateReason": "Existing evidence/proposal artifacts require owner approval, and the current profile evidence apply paths fill blank social fields but treat non-blank social URL changes as conflicts for review.",
+      "liveApiVerification": {
+        "url": "https://mealscout.onrender.com/api/public/profiles/truck/e77ac77a-c432-42d0-ac0f-22c48b6306c9",
+        "status": 200,
+        "displayName": "Blessed Berry Bowls",
+        "profilePath": "/truck/blessed-berry-bowls--e77ac77a-c432-42d0-ac0f-22c48b6306c9",
+        "canonicalUrl": "https://mealscout.us/truck/blessed-berry-bowls--e77ac77a-c432-42d0-ac0f-22c48b6306c9",
+        "socialLinks": {
+          "instagramUrl": "https://@blessed.berrybowls",
+          "facebookPageUrl": "https://facebook.com/Blessed Berry Bowls",
+          "xUrl": null
+        }
+      }
+    }
+  ],
+  "explicitNonActions": [
+    "No Blessed Berry Bowls social URL fields were mutated.",
+    "No logo, cover, menu, schedule, description, Toast, or Big Jay's candidate data was applied.",
+    "No clean URL, affiliate URL, public truck profile routing, invalid UUID, or missing-content behavior was changed."
+  ],
+  "preservedContracts": [
+    "/truck/{slug}--{uuid} compatibility paths",
+    "invalid UUID safe 404",
+    "missing logo/menu/schedule no-500 behavior",
+    "clean affiliate / clean URL doctrine",
+    "food-truck location privacy"
+  ]
+}
