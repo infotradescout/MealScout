@@ -854,7 +854,8 @@ export default function ScoutPrototype() {
       const isTruckType =
         String(restaurant.businessType || "").toLowerCase() === "food_truck" ||
         restaurant.isFoodTruck === true;
-      if (isTruckType && truckCanonicalKeys.has(restaurantKey)) return false;
+      if (isTruckType) return false;
+      if (truckCanonicalKeys.has(restaurantKey)) return false;
       return true;
     })
     .slice(0, 20);
@@ -883,6 +884,10 @@ export default function ScoutPrototype() {
     if (activeScene === "food_trucks" || activeScene === "for_you" || activeScene === "nearby_now") {
       trucks.forEach(t => {
         const name = t.name || "Food Truck";
+        const hasExactLocation =
+          Number.isFinite(Number(t.latitude ?? t.lat)) &&
+          Number.isFinite(Number(t.longitude ?? t.lng));
+        const nonLiveLocationLabel = hasExactLocation ? "Serving area" : "Location not posted";
         items.push({
           id: `truck-${t.id}`, type: "FOOD TRUCK", typeColor: "#9333ea",
           image: imgSrc(t), title: name,
@@ -894,7 +899,7 @@ export default function ScoutPrototype() {
                 : "Live now"
               : t.scheduledToday
                 ? "Scheduled today"
-              : "Serving area",
+              : nonLiveLocationLabel,
             t.liveNow ? null : "Not live now",
             t.menuAvailable ? "Menu available" : "Menu: none found",
             t.photosAvailable ? null : "Photos coming soon",
@@ -912,7 +917,9 @@ export default function ScoutPrototype() {
           tagColor: t.liveNow ? "#10b981" : "#9333ea",
           distance: distLabel(t),
           href: `/truck/${t.id}`,
-          routeHref: routeUrl(t.latitude ?? t.lat, t.longitude ?? t.lng, name),
+          routeHref: t.liveNow
+            ? routeUrl(t.latitude ?? t.lat, t.longitude ?? t.lng, name)
+            : null,
           searchCity: "",
           searchDescription: [t.cuisineType, t.liveSource, t.source].filter(Boolean).join(" "),
           searchOrder: sourceOrder++,

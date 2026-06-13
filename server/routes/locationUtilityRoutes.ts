@@ -4,7 +4,8 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../db";
 import { storage } from "../storage";
 import { forwardGeocode, reverseGeocode } from "../utils/geocoding";
-import { deals, menuItems } from "@shared/schema";
+import { isPublicBusinessVisible } from "../utils/publicBusinessVisibility";
+import { deals, menuItems, restaurants as restaurantsTable } from "@shared/schema";
 
 type LocationUtilityRouteDependencies = {
   hasBusinessDistributionAccess: (userId: string) => Promise<boolean>;
@@ -43,6 +44,52 @@ const sanitizeRestaurantMedia = <T extends Record<string, unknown>>(restaurant: 
   }
   return next as T;
 };
+
+const PENSACOLA_MARKET = { lat: 30.4213, lng: -87.2169 };
+const PENSACOLA_SERVICE_CITIES = new Set([
+  "pensacola",
+  "brent",
+  "gulf breeze",
+  "pensacola beach",
+  "milton",
+  "pace",
+  "navarre",
+  "fort walton beach",
+  "destin",
+  "escambia county",
+  "santa rosa county",
+]);
+const PENSACOLA_SERVICE_COUNTIES = new Set(["12033", "12113"]);
+
+const distanceMilesBetween = (
+  aLat: number,
+  aLng: number,
+  bLat: number,
+  bLng: number,
+) => {
+  const toRad = (v: number) => (v * Math.PI) / 180;
+  const R = 3958.8;
+  const dLat = toRad(bLat - aLat);
+  const dLng = toRad(bLng - aLng);
+  const s1 = Math.sin(dLat / 2);
+  const s2 = Math.sin(dLng / 2);
+  const aa =
+    s1 * s1 +
+    Math.cos(toRad(aLat)) * Math.cos(toRad(bLat)) * s2 * s2;
+  return R * 2 * Math.atan2(Math.sqrt(aa), Math.sqrt(1 - aa));
+};
+
+const isPensacolaMarketRequest = (lat: number, lng: number, radiusMiles: number) =>
+  distanceMilesBetween(lat, lng, PENSACOLA_MARKET.lat, PENSACOLA_MARKET.lng) <=
+  Math.max(radiusMiles, 25);
+
+const isTruckBusiness = (restaurant: any) =>
+  restaurant?.isFoodTruck === true ||
+  String(restaurant?.businessType || restaurant?.business_type || "").toLowerCase() ===
+    "food_truck";
+
+const canonicalRestaurantKey = (restaurant: any) =>
+  String(restaurant?.id || "").trim();
 
 export function registerLocationUtilityRoutes(
   app: Express,
@@ -135,9 +182,43 @@ export function registerLocationUtilityRoutes(
         longitude,
         radius,
       );
-      const subscribedRestaurants = (
+      const pensacolaServiceCitySql = sql.join(
+        Array.from(PENSACOLA_SERVICE_CITIES).map((city) => sql`${city}`),
+        sql`, `,
+      );
+      const pensacolaServiceCountySql = sql.join(
+        Array.from(PENSACOLA_SERVICE_COUNTIES).map((county) => sql`${county}`),
+        sql`, `,
+      );
+      const serviceAreaTrucks = isPensacolaMarketRequest(latitude, longitude, radius)
+        ? (
+            await db
+              .select()
+              .from(restaurantsTable)
+              .where(
+                and(
+                  eq(restaurantsTable.isActive, true),
+                  sql`(${restaurantsTable.isFoodTruck} = true OR lower(coalesce(${restaurantsTable.businessType}, '')) = 'food_truck')`,
+                  sql`(${restaurantsTable.latitude} is null OR ${restaurantsTable.longitude} is null)`,
+                  sql`(
+                    lower(trim(coalesce(${restaurantsTable.city}, ''))) in (${pensacolaServiceCitySql})
+                    OR coalesce(${restaurantsTable.countyFips}, '') in (${pensacolaServiceCountySql})
+                  )`,
+                ),
+              )
+          ).filter((restaurant: any) => isPublicBusinessVisible(restaurant))
+        : [];
+
+      const candidatesById = new Map<string, any>();
+      for (const restaurant of [...nearbyRestaurants, ...serviceAreaTrucks]) {
+        const key = canonicalRestaurantKey(restaurant);
+        if (key) candidatesById.set(key, restaurant);
+      }
+      const candidateRestaurants = Array.from(candidatesById.values());
+
+      const accessEligibleRestaurants = (
         await Promise.all(
-          nearbyRestaurants.map(async (restaurant) => {
+          candidateRestaurants.map(async (restaurant) => {
             const ownerId = String((restaurant as any)?.ownerId || "").trim();
             if (!ownerId) return null;
             const hasAccess = await hasBusinessDistributionAccess(ownerId);
@@ -146,13 +227,30 @@ export function registerLocationUtilityRoutes(
         )
       ).filter(Boolean) as any[];
 
-      const restaurants =
-        subscribedRestaurants.length > 0 || nearbyRestaurants.length === 0
-          ? subscribedRestaurants
-          : nearbyRestaurants;
+      const publicTruckProfiles = candidateRestaurants.filter((restaurant) =>
+        isTruckBusiness(restaurant),
+      );
+      const publicTruckIds = new Set(publicTruckProfiles.map(canonicalRestaurantKey));
+      const mergedAccessAndTruckProfiles = [
+        ...accessEligibleRestaurants,
+        ...publicTruckProfiles.filter(
+          (restaurant) =>
+            !accessEligibleRestaurants.some(
+              (eligible) => canonicalRestaurantKey(eligible) === canonicalRestaurantKey(restaurant),
+            ),
+        ),
+      ];
 
-      if (subscribedRestaurants.length === 0 && nearbyRestaurants.length > 0) {
+      const restaurants =
+        mergedAccessAndTruckProfiles.length > 0 || candidateRestaurants.length === 0
+          ? mergedAccessAndTruckProfiles
+          : candidateRestaurants;
+
+      if (accessEligibleRestaurants.length === 0 && candidateRestaurants.length > 0) {
         res.setHeader("X-MealScout-Fallback", "unfiltered-restaurants");
+      }
+      if (publicTruckIds.size > 0) {
+        res.setHeader("X-MealScout-Public-Truck-Profiles", String(publicTruckIds.size));
       }
 
       const restaurantIds = restaurants.map((restaurant) => restaurant.id);
