@@ -1,0 +1,154 @@
+{
+  "batchName": "Live Scout truck evidence collection batch 1",
+  "repo": "MealScout",
+  "generatedAt": "2026-06-13T00:00:00.000-05:00",
+  "baselineSha": "daf2c27946be0ff3a284a95c999e84e79d25557a",
+  "workflowMode": "review_only",
+  "productionMutationAllowed": false,
+  "productionApplied": false,
+  "parentTracker": "docs/evidence/live-scout-truck-content-completion-2026-06-13.json",
+  "rules": [
+    "Evidence only; do not mutate production records from this artifact.",
+    "Do not invent logos, menus, schedules, social links, or descriptions.",
+    "Do not treat old social posts as current schedules unless explicitly recurring/current.",
+    "Run manual truck intake in dry-run mode before any apply operation.",
+    "Keep ownerApprovalNeeded true until owner/operator review is complete."
+  ],
+  "preserve": [
+    "/truck/{slug}--{uuid} compatibility paths",
+    "invalid UUID safe 404",
+    "missing logo/menu/schedule no-500 behavior",
+    "clean affiliate / clean URL doctrine"
+  ],
+  "sourceObservations": {
+    "publicProfileApi": "https://mealscout.onrender.com/api/public/profiles/truck/{uuid}",
+    "observedAt": "2026-06-13",
+    "notes": [
+      "Both Batch 1 profiles returned HTTP 200 from the live public profile API.",
+      "Production public profile API is the source of truth for current MealScout-rendered values.",
+      "External source URLs are candidate evidence only and require owner/operator review before apply."
+    ]
+  },
+  "entries": [
+    {
+      "truckName": "Jays Southern Cuisine",
+      "truckId": "96cc9541-c39a-47e9-ba9f-2e15e0d0a6f2",
+      "profileId": "96cc9541-c39a-47e9-ba9f-2e15e0d0a6f2",
+      "publicProfilePath": "/truck/jays-southern-cuisine--96cc9541-c39a-47e9-ba9f-2e15e0d0a6f2",
+      "currentProductionDisplayName": "Jays Southern Cuisine ",
+      "correctedDisplayNameProposal": "Jays Southern Cuisine",
+      "displayNameCorrectionType": "whitespace_only",
+      "isWhitespaceOnlyHygieneCorrection": true,
+      "currentProductionSocialUrls": {
+        "instagramUrl": null,
+        "facebookPageUrl": null,
+        "xUrl": null
+      },
+      "suspectedMalformedSocialValues": [],
+      "correctedSocialUrlProposals": [],
+      "logoEvidenceStatus": "missing",
+      "coverEvidenceStatus": "missing",
+      "menuEvidenceStatus": "missing",
+      "scheduleEvidenceStatus": "needs_owner_confirmation",
+      "sourceUrls": [
+        "https://mealscout.onrender.com/api/public/profiles/truck/96cc9541-c39a-47e9-ba9f-2e15e0d0a6f2",
+        "https://www.facebook.com/p/Big-Jays-Southern-Cuisine-100095382883103/"
+      ],
+      "sourceArtifactPaths": [],
+      "externalEvidenceCandidates": [
+        {
+          "url": "https://www.facebook.com/p/Big-Jays-Southern-Cuisine-100095382883103/",
+          "evidenceType": "possible_identity_social_page",
+          "confidence": "low",
+          "ownerApprovalNeeded": true,
+          "notes": "Search result references Big Jay's Southern Cuisine food truck. Do not use for name/social/profile updates without owner confirmation because production name is Jays Southern Cuisine."
+        }
+      ],
+      "confidence": "medium",
+      "ownerApprovalNeeded": true,
+      "productionApplied": false,
+      "notes": "Whitespace-only display-name cleanup is mechanically clear from the live public profile payload. Logo, cover, menu, and schedule remain missing or owner-confirmation gated."
+    },
+    {
+      "truckName": "Blessed Berry Bowls",
+      "truckId": "e77ac77a-c432-42d0-ac0f-22c48b6306c9",
+      "profileId": "e77ac77a-c432-42d0-ac0f-22c48b6306c9",
+      "publicProfilePath": "/truck/blessed-berry-bowls--e77ac77a-c432-42d0-ac0f-22c48b6306c9",
+      "currentProductionDisplayName": "Blessed Berry Bowls",
+      "correctedDisplayNameProposal": null,
+      "displayNameCorrectionType": "none",
+      "isWhitespaceOnlyHygieneCorrection": false,
+      "currentProductionSocialUrls": {
+        "instagramUrl": "https://@blessed.berrybowls",
+        "facebookPageUrl": "https://facebook.com/Blessed Berry Bowls",
+        "xUrl": null
+      },
+      "suspectedMalformedSocialValues": [
+        {
+          "field": "instagramUrl",
+          "value": "https://@blessed.berrybowls",
+          "reason": "URL has scheme followed directly by @handle instead of an instagram.com profile path."
+        },
+        {
+          "field": "facebookPageUrl",
+          "value": "https://facebook.com/Blessed Berry Bowls",
+          "reason": "URL contains unescaped spaces and a display name path rather than a confirmed Facebook page id/path."
+        }
+      ],
+      "correctedSocialUrlProposals": [
+        {
+          "field": "instagramUrl",
+          "proposedValue": "https://www.instagram.com/blessedberrybowls/",
+          "sourceUrl": "https://www.instagram.com/blessedberrybowls/",
+          "confidence": "medium",
+          "ownerApprovalNeeded": true
+        },
+        {
+          "field": "facebookPageUrl",
+          "proposedValue": "https://www.facebook.com/p/Blessed-Berry-Bowls-61561713173410/",
+          "sourceUrl": "https://www.facebook.com/p/Blessed-Berry-Bowls-61561713173410/",
+          "confidence": "medium",
+          "ownerApprovalNeeded": true
+        }
+      ],
+      "logoEvidenceStatus": "missing",
+      "coverEvidenceStatus": "applied",
+      "menuEvidenceStatus": "needs_owner_confirmation",
+      "scheduleEvidenceStatus": "needs_owner_confirmation",
+      "sourceUrls": [
+        "https://mealscout.onrender.com/api/public/profiles/truck/e77ac77a-c432-42d0-ac0f-22c48b6306c9",
+        "https://www.instagram.com/blessedberrybowls/",
+        "https://www.facebook.com/p/Blessed-Berry-Bowls-61561713173410/",
+        "https://www.toasttab.com/local/order/blessed-berry-bowls-1922-creighton-road"
+      ],
+      "sourceArtifactPaths": [],
+      "externalEvidenceCandidates": [
+        {
+          "url": "https://www.instagram.com/blessedberrybowls/",
+          "evidenceType": "social_url_candidate",
+          "confidence": "medium",
+          "ownerApprovalNeeded": true,
+          "notes": "Search/open result identifies Blessed Berry Bowls Instagram. Confirm with owner before apply."
+        },
+        {
+          "url": "https://www.facebook.com/p/Blessed-Berry-Bowls-61561713173410/",
+          "evidenceType": "social_url_candidate",
+          "confidence": "medium",
+          "ownerApprovalNeeded": true,
+          "notes": "Search/open result identifies Blessed Berry Bowls Facebook page. Confirm with owner before apply."
+        },
+        {
+          "url": "https://www.toasttab.com/local/order/blessed-berry-bowls-1922-creighton-road",
+          "evidenceType": "menu_ordering_candidate",
+          "confidence": "medium",
+          "ownerApprovalNeeded": true,
+          "notes": "Toast page lists Blessed Berry Bowls at 1922 Creighton Road and restaurant info. Use as candidate menu/order evidence only after owner review."
+        }
+      ],
+      "confidence": "medium",
+      "ownerApprovalNeeded": true,
+      "productionApplied": false,
+      "notes": "Live public profile has a cover image and one structured menu item, but no logoUrl and no posted schedule. Corrected social URL proposals are source-backed candidates only; do not apply without owner/operator confirmation."
+    }
+  ]
+}

@@ -56,6 +56,10 @@ const explicitTrusted = toPublicRestaurantProfile({
         status: "quarantined",
         allowPublicTrustFields: true,
       },
+      profileLocations: {
+        addressKind: "operating_location",
+        customerFacingLocationSource: "owner_confirmed_operating_location",
+      },
     },
   },
 });
