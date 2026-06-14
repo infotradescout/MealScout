@@ -5918,6 +5918,98 @@ export const menuImportLogs = pgTable(
   ],
 );
 
+export const menuDraftReviews = pgTable(
+  "menu_draft_reviews",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    restaurantId: varchar("restaurant_id")
+      .notNull()
+      .references(() => restaurants.id, { onDelete: "cascade" }),
+    profileId: varchar("profile_id"),
+    businessName: varchar("business_name").notNull(),
+    publicProfilePath: varchar("public_profile_path"),
+    sourceType: varchar("source_type").notNull(),
+    sourceUrl: text("source_url").notNull(),
+    sourceUrls: jsonb("source_urls").default(sql`'[]'::jsonb`),
+    sourceArtifactPaths: jsonb("source_artifact_paths").default(
+      sql`'[]'::jsonb`,
+    ),
+    capturedAt: timestamp("captured_at"),
+    artifactPath: varchar("artifact_path"),
+    artifactGeneratedAt: timestamp("artifact_generated_at"),
+    importStatus: varchar("import_status").notNull().default("pending_review"),
+    reviewStatus: varchar("review_status").notNull().default("pending_review"),
+    confidence: varchar("confidence").notNull().default("low"),
+    currentness: varchar("currentness").notNull().default("unknown"),
+    ownerApprovalNeeded: boolean("owner_approval_needed")
+      .notNull()
+      .default(true),
+    ownerApproved: boolean("owner_approved").notNull().default(false),
+    ownerApprovalEvidenceUrl: text("owner_approval_evidence_url"),
+    reviewedByUserId: varchar("reviewed_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    reviewedAt: timestamp("reviewed_at"),
+    productionApplied: boolean("production_applied").notNull().default(false),
+    appliedMenuId: varchar("applied_menu_id").references(() => menus.id, {
+      onDelete: "set null",
+    }),
+    notes: jsonb("notes").default(sql`'[]'::jsonb`),
+    metadata: jsonb("metadata").default(sql`'{}'::jsonb`),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_menu_draft_reviews_restaurant").on(table.restaurantId),
+    index("idx_menu_draft_reviews_status").on(table.reviewStatus),
+    index("idx_menu_draft_reviews_owner_approved").on(table.ownerApproved),
+    index("idx_menu_draft_reviews_production_applied").on(
+      table.productionApplied,
+    ),
+  ],
+);
+
+export const menuDraftReviewItems = pgTable(
+  "menu_draft_review_items",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    draftReviewId: varchar("draft_review_id")
+      .notNull()
+      .references(() => menuDraftReviews.id, { onDelete: "cascade" }),
+    restaurantId: varchar("restaurant_id")
+      .notNull()
+      .references(() => restaurants.id, { onDelete: "cascade" }),
+    sectionName: varchar("section_name"),
+    sectionOrder: integer("section_order").notNull().default(0),
+    itemName: varchar("item_name").notNull(),
+    baseItemName: varchar("base_item_name"),
+    variantLabel: varchar("variant_label"),
+    description: text("description"),
+    priceCents: integer("price_cents"),
+    priceLabel: varchar("price_label"),
+    category: varchar("category"),
+    options: jsonb("options").default(sql`'[]'::jsonb`),
+    sourceConfidence: varchar("source_confidence").notNull().default("low"),
+    sourceRef: text("source_ref"),
+    ownerApprovalNeeded: boolean("owner_approval_needed")
+      .notNull()
+      .default(true),
+    ownerApproved: boolean("owner_approved").notNull().default(false),
+    sortOrder: integer("sort_order").notNull().default(0),
+    metadata: jsonb("metadata").default(sql`'{}'::jsonb`),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_menu_draft_review_items_review").on(table.draftReviewId),
+    index("idx_menu_draft_review_items_restaurant").on(table.restaurantId),
+  ],
+);
+
 // ── PICKUP ORDERS ────────────────────────────────────────────────────────────
 
 /**
@@ -6706,6 +6798,8 @@ export type InsertMenuItemModifier = z.infer<
   typeof insertMenuItemModifierSchema
 >;
 export type MenuImportLog = typeof menuImportLogs.$inferSelect;
+export type MenuDraftReview = typeof menuDraftReviews.$inferSelect;
+export type MenuDraftReviewItem = typeof menuDraftReviewItems.$inferSelect;
 export type PickupOrder = typeof pickupOrders.$inferSelect;
 export type InsertPickupOrder = z.infer<typeof insertPickupOrderSchema>;
 export type PickupOrderItem = typeof pickupOrderItems.$inferSelect;

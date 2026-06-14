@@ -23,6 +23,8 @@ import {
   menuItemVariants,
   menuItemModifiers,
   menuImportLogs,
+  menuDraftReviews,
+  menuDraftReviewItems,
   imageUploads,
   restaurants,
   restaurantFavorites,
@@ -47,7 +49,7 @@ import {
   type MenuItemVariant,
   type MenuItemModifier,
 } from "@shared/schema";
-import { eq, and, asc, inArray, isNotNull, isNull, sql } from "drizzle-orm";
+import { eq, and, asc, desc, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { isAuthenticated, isStaffOrAdmin } from "../unifiedAuth";
 import { storage } from "../storage";
 import { parseMenuCsv } from "../utils/menuCsvParser";
@@ -124,6 +126,19 @@ function wrap(handler: (req: any, res: any) => Promise<void>) {
       res.status(status).json({ message });
     }
   };
+}
+
+function toDateOrNull(value: unknown): Date | null {
+  if (!value) return null;
+  const parsed = new Date(String(value));
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function dollarsToCents(value: unknown, fallbackLabel?: unknown): number | null {
+  const direct = Number(value);
+  if (Number.isFinite(direct)) return Math.round(direct * 100);
+  const fromLabel = Number(String(fallbackLabel || "").replace(/[^0-9.]/g, ""));
+  return Number.isFinite(fromLabel) ? Math.round(fromLabel * 100) : null;
 }
 
 const dayKeys = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
@@ -317,6 +332,55 @@ export function registerMenuRoutes(app: Express) {
     discoveryReasons: z.array(z.string().max(80)).max(8).optional().nullable(),
   });
 
+  const menuDraftImportItemSchema = z
+    .object({
+      itemName: z.string().min(1).max(255),
+      baseItemName: z.string().max(255).optional().nullable(),
+      variantLabel: z.string().max(120).optional().nullable(),
+      description: z.string().max(3000).optional().nullable(),
+      price: z.number().optional().nullable(),
+      priceLabel: z.string().max(80).optional().nullable(),
+      category: z.string().max(255).optional().nullable(),
+      options: z.array(z.string().max(255)).optional().default([]),
+      sourceConfidence: z.string().max(40).optional().default("low"),
+      sourceRef: z.string().max(1000).optional().nullable(),
+      ownerApprovalNeeded: z.boolean().default(true),
+      ownerApproved: z.boolean().default(false),
+    })
+    .passthrough();
+
+  const menuDraftImportEntrySchema = z
+    .object({
+      truckId: z.string().min(1).max(128),
+      profileId: z.string().max(128).optional().nullable(),
+      businessName: z.string().min(1).max(255),
+      publicProfilePath: z.string().max(500).optional().nullable(),
+      sourceType: z.string().min(1).max(80),
+      sourceUrl: z.string().min(1).max(1000),
+      sourceUrls: z.array(z.string().max(1000)).optional().default([]),
+      sourceArtifactPaths: z.array(z.string().max(1000)).optional().default([]),
+      capturedAt: z.string().optional().nullable(),
+      importStatus: z.string().max(80).optional().default("pending_review"),
+      importedSections: z.array(z.record(z.any())).optional().default([]),
+      importedItems: z.array(menuDraftImportItemSchema).optional().default([]),
+      confidence: z.string().max(40).optional().default("low"),
+      ownerApprovalNeeded: z.boolean().default(true),
+      ownerApproved: z.boolean().default(false),
+      currentness: z.string().max(40).optional().default("unknown"),
+      productionApplied: z.boolean().default(false),
+      notes: z.array(z.string().max(2000)).optional().default([]),
+    })
+    .passthrough();
+
+  const menuDraftArtifactSchema = z
+    .object({
+      artifactType: z.literal("review_gated_external_menu_import"),
+      generatedAt: z.string().optional().nullable(),
+      productionApplied: z.boolean().default(false),
+      entries: z.array(menuDraftImportEntrySchema).min(1).max(25),
+    })
+    .passthrough();
+
   app.post(
     "/api/menus/local-items/engagement",
     wrap(async (req, res) => {
@@ -344,6 +408,327 @@ export function registerMenuRoutes(app: Express) {
       });
 
       res.json({ ok: true });
+    }),
+  );
+
+  app.get(
+    "/api/admin/menu-draft-reviews",
+    isAuthenticated,
+    isStaffOrAdmin,
+    wrap(async (req, res) => {
+      const limit = Math.max(
+        1,
+        Math.min(100, Number.parseInt(String(req.query.limit || "50"), 10) || 50),
+      );
+      const includeItems = String(req.query.includeItems || "") === "1";
+      const status = String(req.query.status || "").trim();
+
+      const rows = await db
+        .select()
+        .from(menuDraftReviews)
+        .where(status ? eq(menuDraftReviews.reviewStatus, status) : sql`true`)
+        .orderBy(desc(menuDraftReviews.createdAt))
+        .limit(limit);
+
+      if (!includeItems || rows.length === 0) {
+        return res.json({ reviews: rows, productionApplied: false });
+      }
+
+      const reviewIds = rows.map((row: any) => row.id);
+      const items = await db
+        .select()
+        .from(menuDraftReviewItems)
+        .where(inArray(menuDraftReviewItems.draftReviewId, reviewIds))
+        .orderBy(
+          asc(menuDraftReviewItems.sectionOrder),
+          asc(menuDraftReviewItems.sortOrder),
+        );
+      const itemsByReview = new Map<string, any[]>();
+      for (const item of items as any[]) {
+        const key = String(item.draftReviewId);
+        itemsByReview.set(key, [...(itemsByReview.get(key) || []), item]);
+      }
+
+      res.json({
+        reviews: rows.map((row: any) => ({
+          ...row,
+          items: itemsByReview.get(String(row.id)) || [],
+        })),
+        productionApplied: false,
+      });
+    }),
+  );
+
+  app.post(
+    "/api/admin/menu-draft-reviews/import-artifact",
+    isAuthenticated,
+    isStaffOrAdmin,
+    wrap(async (req, res) => {
+      const artifact = menuDraftArtifactSchema.parse(req.body?.artifact || req.body || {});
+      const artifactPath =
+        String(req.body?.artifactPath || artifact.artifactPath || "").trim() ||
+        null;
+
+      if (artifact.productionApplied === true) {
+        return res.status(400).json({
+          message: "Published artifacts cannot be imported as draft reviews",
+        });
+      }
+
+      const unsafeEntry = artifact.entries.find(
+        (entry: any) => entry.productionApplied === true || entry.ownerApproved === true,
+      );
+      if (unsafeEntry) {
+        return res.status(400).json({
+          message:
+            "Draft import entries must not be production-applied or owner-approved by default",
+        });
+      }
+
+      let importedReviews = 0;
+      let importedItems = 0;
+      const reviewIds: string[] = [];
+
+      await db.transaction(async (tx: any) => {
+        for (const entry of artifact.entries) {
+          const sectionOrderByName = new Map<string, number>();
+          entry.importedSections.forEach((section: any, index: number) => {
+            const name = String(section?.category || section?.name || "").trim();
+            if (name) {
+              sectionOrderByName.set(
+                name,
+                Number(section?.displayOrder || section?.sortOrder || index + 1),
+              );
+            }
+          });
+
+          const [review] = await tx
+            .insert(menuDraftReviews)
+            .values({
+              restaurantId: entry.truckId,
+              profileId: entry.profileId || entry.truckId,
+              businessName: entry.businessName,
+              publicProfilePath: entry.publicProfilePath || null,
+              sourceType: entry.sourceType,
+              sourceUrl: entry.sourceUrl,
+              sourceUrls: entry.sourceUrls as any,
+              sourceArtifactPaths: entry.sourceArtifactPaths as any,
+              capturedAt: toDateOrNull(entry.capturedAt),
+              artifactPath,
+              artifactGeneratedAt: toDateOrNull(artifact.generatedAt),
+              importStatus: entry.importStatus,
+              reviewStatus:
+                entry.importedItems.length > 0
+                  ? "pending_review"
+                  : "needs_manual_extraction",
+              confidence: entry.confidence,
+              currentness: entry.currentness,
+              ownerApprovalNeeded: true,
+              ownerApproved: false,
+              productionApplied: false,
+              notes: entry.notes as any,
+              metadata: {
+                artifactType: artifact.artifactType,
+                originalImportStatus: entry.importStatus,
+              },
+            } as any)
+            .returning();
+
+          importedReviews += 1;
+          reviewIds.push(review.id);
+
+          if (entry.importedItems.length === 0) continue;
+
+          const draftItems = entry.importedItems.map((item: any, index: number) => {
+            const category = String(item.category || "Menu").trim() || "Menu";
+            return {
+              draftReviewId: review.id,
+              restaurantId: entry.truckId,
+              sectionName: category,
+              sectionOrder: sectionOrderByName.get(category) || 0,
+              itemName: item.itemName,
+              baseItemName: item.baseItemName || item.itemName,
+              variantLabel: item.variantLabel || null,
+              description: item.description || null,
+              priceCents: dollarsToCents(item.price, item.priceLabel),
+              priceLabel: item.priceLabel || null,
+              category,
+              options: item.options || [],
+              sourceConfidence: item.sourceConfidence || entry.confidence,
+              sourceRef: item.sourceRef || entry.sourceUrl,
+              ownerApprovalNeeded: true,
+              ownerApproved: false,
+              sortOrder: index,
+              metadata: {
+                sourceType: entry.sourceType,
+                currentness: entry.currentness,
+              },
+            };
+          });
+
+          await tx.insert(menuDraftReviewItems).values(draftItems as any);
+          importedItems += draftItems.length;
+        }
+      });
+
+      res.status(201).json({
+        status: "draft_reviews_created",
+        importedReviews,
+        importedItems,
+        reviewIds,
+        productionApplied: false,
+      });
+    }),
+  );
+
+  app.post(
+    "/api/admin/menu-draft-reviews/:reviewId/review",
+    isAuthenticated,
+    isStaffOrAdmin,
+    wrap(async (req, res) => {
+      const reviewId = String(req.params.reviewId || "").trim();
+      const body = z
+        .object({
+          reviewStatus: z.enum([
+            "pending_review",
+            "needs_manual_extraction",
+            "needs_owner_confirmation",
+            "approved_for_apply",
+            "rejected",
+          ]),
+          ownerApproved: z.boolean().default(false),
+          currentness: z
+            .enum(["confirmed_current", "likely_current", "unknown", "stale"])
+            .optional(),
+          ownerApprovalEvidenceUrl: z.string().url().optional().nullable().or(z.literal("")),
+          reviewNote: z.string().max(2000).optional().nullable(),
+        })
+        .parse(req.body || {});
+
+      if (!reviewId) {
+        return res.status(400).json({ message: "reviewId is required" });
+      }
+      if (body.reviewStatus === "approved_for_apply" && body.ownerApproved !== true) {
+        return res.status(400).json({
+          message: "approved_for_apply requires ownerApproved=true",
+        });
+      }
+      if (
+        body.ownerApproved === true &&
+        !String(body.ownerApprovalEvidenceUrl || "").trim() &&
+        !String(body.reviewNote || "").trim()
+      ) {
+        return res.status(400).json({
+          message: "Owner approval requires evidence URL or review note",
+        });
+      }
+
+      const [updated] = await db
+        .update(menuDraftReviews)
+        .set({
+          reviewStatus: body.reviewStatus,
+          ownerApproved: body.ownerApproved,
+          currentness: body.currentness || undefined,
+          ownerApprovalEvidenceUrl:
+            String(body.ownerApprovalEvidenceUrl || "").trim() || null,
+          reviewedByUserId: req.user.id,
+          reviewedAt: new Date(),
+          productionApplied: false,
+          updatedAt: new Date(),
+          metadata: {
+            lastReviewNote: String(body.reviewNote || "").trim() || null,
+            lastReviewedAt: new Date().toISOString(),
+          },
+        } as any)
+        .where(eq(menuDraftReviews.id, reviewId))
+        .returning();
+
+      if (!updated) {
+        return res.status(404).json({ message: "Draft review not found" });
+      }
+
+      if (body.ownerApproved === true) {
+        await db
+          .update(menuDraftReviewItems)
+          .set({
+            ownerApproved: true,
+            ownerApprovalNeeded: false,
+            updatedAt: new Date(),
+          } as any)
+          .where(eq(menuDraftReviewItems.draftReviewId, reviewId));
+      }
+
+      res.json({ review: updated, productionApplied: false });
+    }),
+  );
+
+  app.post(
+    "/api/admin/menu-draft-reviews/:reviewId/apply-plan",
+    isAuthenticated,
+    isStaffOrAdmin,
+    wrap(async (req, res) => {
+      const reviewId = String(req.params.reviewId || "").trim();
+      const body = z
+        .object({
+          mode: z.literal("plan"),
+          confirmOwnerApproved: z.literal(true),
+          confirmNoOverwrite: z.literal(true),
+        })
+        .parse(req.body || {});
+      void body;
+
+      const [review] = await db
+        .select()
+        .from(menuDraftReviews)
+        .where(eq(menuDraftReviews.id, reviewId))
+        .limit(1);
+      if (!review) {
+        return res.status(404).json({ message: "Draft review not found" });
+      }
+      if (!review.ownerApproved || review.reviewStatus !== "approved_for_apply") {
+        return res.status(409).json({
+          message:
+            "Draft review must be owner-approved and approved_for_apply before an apply plan can be generated",
+          productionApplied: false,
+        });
+      }
+
+      const activeMenus = await db
+        .select({ id: menus.id })
+        .from(menus)
+        .where(
+          and(eq(menus.restaurantId, review.restaurantId), eq(menus.isActive, true)),
+        );
+      const activeMenuIds = activeMenus.map((menu: any) => menu.id);
+      const activeItems =
+        activeMenuIds.length > 0
+          ? await db
+              .select({ id: menuItems.id })
+              .from(menuItems)
+              .where(inArray(menuItems.menuId, activeMenuIds))
+          : [];
+      const draftItems = await db
+        .select({ id: menuDraftReviewItems.id })
+        .from(menuDraftReviewItems)
+        .where(eq(menuDraftReviewItems.draftReviewId, reviewId));
+
+      res.json({
+        status: "apply_plan_only",
+        reviewId,
+        restaurantId: review.restaurantId,
+        draftItemCount: draftItems.length,
+        existingActiveMenuCount: activeMenus.length,
+        existingActiveItemCount: activeItems.length,
+        productionApplied: false,
+        wouldCreateMenu: activeMenus.length === 0,
+        wouldRequireOverwriteDecision: activeItems.length > 0,
+        requiredSignals: [
+          "confirmOwnerApproved=true",
+          "confirmNoOverwrite=true",
+          "reviewStatus=approved_for_apply",
+          "ownerApproved=true",
+        ],
+      });
     }),
   );
 
