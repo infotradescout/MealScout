@@ -1531,7 +1531,9 @@ function RestaurantSchedule({ profile }: { profile: PublicRestaurantProfile }) {
     >
       <p className="text-xs font-semibold uppercase tracking-wide text-white/65">{label}</p>
       <p className="mt-1 text-sm font-semibold text-white">
-        {stop.locationName || stop.addressPublicLabel || "Location update"}
+        {stop.locationName ||
+          stop.addressPublicLabel ||
+          (stop.status === "closed" ? "Closed" : "Location update")}
       </p>
       <p className="text-xs text-white/70">
         {[stop.date, stop.timeWindowLabel].filter(Boolean).join(" · ")}
@@ -1589,7 +1591,9 @@ function RestaurantSchedule({ profile }: { profile: PublicRestaurantProfile }) {
                       className="rounded-lg border border-white/10 bg-black/20 p-2.5"
                     >
                       <p className="text-sm font-medium text-white">
-                        {stop.locationName || stop.addressPublicLabel || "Scheduled stop"}
+                        {stop.locationName ||
+                          stop.addressPublicLabel ||
+                          (stop.status === "closed" ? "Closed" : "Scheduled stop")}
                       </p>
                       <p className="text-xs text-white/70">
                         {[stop.date, stop.timeWindowLabel].filter(Boolean).join(" · ")}

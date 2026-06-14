@@ -891,6 +891,9 @@ export function registerPublicMapRoutes(app: Express) {
             city: truckManualSchedules.city,
             state: truckManualSchedules.state,
             notes: truckManualSchedules.notes,
+            status: truckManualSchedules.status,
+            mapEligible: truckManualSchedules.mapEligible,
+            liveFeedEligible: truckManualSchedules.liveFeedEligible,
             lastConfirmedAt: truckManualSchedules.lastConfirmedAt,
             truckName: restaurants.name,
             truckOwnerId: restaurants.ownerId,
@@ -1136,7 +1139,11 @@ export function registerPublicMapRoutes(app: Express) {
         .filter((schedule) => {
           const address = String(schedule.address || "").trim();
           const truckName = String(schedule.truckName || "").trim();
+          const status = String(schedule.status || "open").trim().toLowerCase();
           if (!address || !truckName) return false;
+          if (status !== "open" || schedule.mapEligible === false || schedule.liveFeedEligible === false) {
+            return false;
+          }
           if (suppressedManualScheduleIds.has(String(schedule.id))) {
             return false;
           }

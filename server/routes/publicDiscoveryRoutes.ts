@@ -227,16 +227,18 @@ const buildDirectionsUrl = (input: {
 };
 
 const classifyTruckStopStatus = (input: {
-  startsAt: Date;
-  endsAt: Date;
+  startsAt: Date | null;
+  endsAt: Date | null;
   now: Date;
   sourceStatus?: string | null;
 }) => {
   const sourceStatus = String(input.sourceStatus || "").trim().toLowerCase();
+  if (sourceStatus === "closed") return "closed" as const;
   if (sourceStatus.includes("cancel")) return "canceled" as const;
   if (sourceStatus.includes("sold_out")) return "sold_out" as const;
   if (sourceStatus.includes("closed_early")) return "closed_early" as const;
   if (sourceStatus.includes("move")) return "moved" as const;
+  if (!input.startsAt || !input.endsAt) return "scheduled" as const;
   if (input.now >= input.startsAt && input.now <= input.endsAt) return "here_now" as const;
   if (input.now > input.endsAt) return "completed" as const;
   return "scheduled" as const;
@@ -283,7 +285,7 @@ const buildPublicTruckSchedulePayload = async (restaurantId: string) => {
       date: truckManualSchedules.date,
       startTime: truckManualSchedules.startTime,
       endTime: truckManualSchedules.endTime,
-      sourceStatus: sql<string>`'scheduled'`,
+      sourceStatus: truckManualSchedules.status,
       locationName: truckManualSchedules.locationName,
       address: truckManualSchedules.address,
       city: truckManualSchedules.city,
@@ -295,6 +297,8 @@ const buildPublicTruckSchedulePayload = async (restaurantId: string) => {
       updatedAt: truckManualSchedules.updatedAt,
       lastConfirmedAt: truckManualSchedules.lastConfirmedAt,
       notice: truckManualSchedules.notes,
+      mapEligible: truckManualSchedules.mapEligible,
+      liveFeedEligible: truckManualSchedules.liveFeedEligible,
     })
     .from(truckManualSchedules)
     .where(
@@ -312,21 +316,23 @@ const buildPublicTruckSchedulePayload = async (restaurantId: string) => {
       if (!date) return null;
       const startRaw = String(row.startTime || "").trim();
       const endRaw = String(row.endTime || "").trim();
-      const startDate = new Date(date);
-      const endDate = new Date(date);
-      if (/^\d{1,2}:\d{2}/.test(startRaw)) {
+      const sourceStatus = String(row.sourceStatus || "").trim().toLowerCase();
+      const isClosedDay = sourceStatus === "closed";
+      const startDate = isClosedDay ? null : new Date(date);
+      const endDate = isClosedDay ? null : new Date(date);
+      if (startDate && /^\d{1,2}:\d{2}/.test(startRaw)) {
         const [h, m] = startRaw.split(":").map(Number);
         startDate.setHours(h || 0, m || 0, 0, 0);
-      } else {
+      } else if (startDate) {
         startDate.setHours(0, 0, 0, 0);
       }
-      if (/^\d{1,2}:\d{2}/.test(endRaw)) {
+      if (endDate && /^\d{1,2}:\d{2}/.test(endRaw)) {
         const [h, m] = endRaw.split(":").map(Number);
         endDate.setHours(h || 0, m || 0, 0, 0);
-      } else {
+      } else if (endDate) {
         endDate.setHours(23, 59, 0, 0);
       }
-      if (endDate < startDate) {
+      if (startDate && endDate && endDate < startDate) {
         endDate.setDate(endDate.getDate() + 1);
       }
       const status = classifyTruckStopStatus({
@@ -359,20 +365,23 @@ const buildPublicTruckSchedulePayload = async (restaurantId: string) => {
         addressPublicLabel: addressPublicLabel || null,
         city: String(row.city || "").trim() || null,
         state: String(row.state || "").trim() || null,
-        latitude,
-        longitude,
+        latitude: isClosedDay || row.mapEligible === false ? null : latitude,
+        longitude: isClosedDay || row.mapEligible === false ? null : longitude,
         hostProfilePath: buildHostProfilePath(
           String(row.hostId || "").trim() || null,
           String(row.hostName || "").trim() || null,
         ),
-        directionsUrl: buildDirectionsUrl({
-          latitude,
-          longitude,
-          addressPublicLabel: addressPublicLabel || null,
-        }),
+        directionsUrl:
+          isClosedDay || row.mapEligible === false
+            ? null
+            : buildDirectionsUrl({
+                latitude,
+                longitude,
+                addressPublicLabel: addressPublicLabel || null,
+              }),
         status,
-        startsAt: startDate,
-        endsAt: endDate,
+        startsAt: startDate || date,
+        endsAt: endDate || date,
         updatedAt: row.updatedAt ? new Date(row.updatedAt) : null,
         lastConfirmedAt: row.lastConfirmedAt ? new Date(row.lastConfirmedAt) : null,
         notice: String(row.notice || "").trim() || null,
@@ -433,6 +442,7 @@ const buildPublicTruckSchedulePayload = async (restaurantId: string) => {
     here_now: "Here now",
     scheduled: "Scheduled",
     completed: "Completed",
+    closed: "Closed",
     canceled: "Canceled",
     moved: "Moved",
     sold_out: "Sold out",
