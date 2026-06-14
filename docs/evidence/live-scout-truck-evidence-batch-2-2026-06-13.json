@@ -1,0 +1,185 @@
+{
+  "batchName": "Live Scout truck evidence collection batch 2",
+  "repo": "MealScout",
+  "generatedAt": "2026-06-13T00:00:00.000-05:00",
+  "baselineSha": "c9e67ee62688d9a01ec1830f428463eaebaeac15",
+  "workflowMode": "review_only",
+  "productionMutationAllowed": false,
+  "productionApplied": false,
+  "parentTracker": "docs/evidence/live-scout-truck-content-completion-2026-06-13.json",
+  "rules": [
+    "Evidence only; do not mutate production records from this artifact.",
+    "Do not invent logos, menus, schedules, social links, covers, or descriptions.",
+    "Do not treat an external menu URL as full owner-approved structured menu data unless doctrine later explicitly allows it.",
+    "Do not treat old social posts as current schedules unless explicitly recurring/current.",
+    "Run manual truck intake in dry-run mode before any apply operation.",
+    "Keep ownerApprovalNeeded true until owner/operator review is complete."
+  ],
+  "preserve": [
+    "/truck/{slug}--{uuid} compatibility paths",
+    "invalid UUID safe 404",
+    "missing logo/menu/schedule no-500 behavior",
+    "clean affiliate / clean URL doctrine",
+    "food-truck location privacy rules",
+    "Blessed Berry Bowls social URL owner-confirmation gate",
+    "Jays Southern Cuisine trimmed display name"
+  ],
+  "sourceObservations": {
+    "publicProfileApi": "https://mealscout.onrender.com/api/public/profiles/truck/{uuid}",
+    "observedAt": "2026-06-13",
+    "notes": [
+      "Both Batch 2 profiles returned HTTP 200 from the live public profile API.",
+      "Production public profile API is the source of truth for current MealScout-rendered values.",
+      "External source URLs are candidate evidence only and require owner/operator review before apply."
+    ]
+  },
+  "entries": [
+    {
+      "truckName": "3D Eats & Tea",
+      "truckId": "95c4e656-f3cc-46ab-ae18-53f549cecfd1",
+      "profileId": "95c4e656-f3cc-46ab-ae18-53f549cecfd1",
+      "publicProfilePath": "/truck/3d-eats-tea--95c4e656-f3cc-46ab-ae18-53f549cecfd1",
+      "currentProductionDisplayName": "3D Eats & Tea",
+      "currentProductionWebsiteUrl": "https://3deats.us/",
+      "currentProductionSocialUrls": {
+        "instagramUrl": "https://www.instagram.com/3deats",
+        "facebookPageUrl": "https://www.facebook.com/3deatsandtea",
+        "xUrl": null
+      },
+      "currentCoverStatus": "applied",
+      "currentCoverUrl": "/business-assets/3d-eats-and-tea/cover-photo.png",
+      "currentLogoUrl": null,
+      "currentStructuredMenuStatus": "one_live_structured_item",
+      "currentStructuredMenuSummary": {
+        "menuSectionsCount": 1,
+        "featuredMenuItemsCount": 0,
+        "observedItems": [
+          {
+            "name": "Classic Burger",
+            "priceLabel": "$5.00",
+            "ownerApprovalNeeded": true
+          }
+        ]
+      },
+      "currentExternalMenuUrl": null,
+      "currentScheduleStatusLabel": "No schedule posted",
+      "logoEvidenceStatus": "missing",
+      "coverEvidenceStatus": "applied",
+      "menuEvidenceStatus": "needs_owner_confirmation",
+      "scheduleEvidenceStatus": "needs_owner_confirmation",
+      "sourceUrls": [
+        "https://mealscout.onrender.com/api/public/profiles/truck/95c4e656-f3cc-46ab-ae18-53f549cecfd1",
+        "https://3deats.us/",
+        "https://3deats.us/menu-us98",
+        "https://www.instagram.com/3deats",
+        "https://www.facebook.com/3deatsandtea"
+      ],
+      "sourceArtifactPaths": [
+        "docs/evidence/live-scout-truck-content-completion-2026-06-13.json",
+        "docs/evidence/3d-eats-tea-append-only-profile-read-2026-06-07.json",
+        "artifacts/mealscout-onboarding/3d-eats-and-tea/profile-enrichment.json",
+        "artifacts/mealscout-onboarding/3d-eats-and-tea/evidence-assets.md"
+      ],
+      "externalEvidenceCandidates": [
+        {
+          "url": "https://3deats.us/",
+          "evidenceType": "website_identity_and_contact_candidate",
+          "confidence": "medium",
+          "ownerApprovalNeeded": true,
+          "notes": "Website identifies 3-D Eats in Pensacola and exposes contact details. It says truck schedules are coming soon, so it is not current schedule evidence."
+        },
+        {
+          "url": "https://3deats.us/menu-us98",
+          "evidenceType": "menu_or_gallery_candidate",
+          "confidence": "low",
+          "ownerApprovalNeeded": true,
+          "notes": "Page title/menu nav exists, but fetched page text primarily exposes a photo gallery, not a current structured menu suitable for direct apply."
+        },
+        {
+          "url": "docs/evidence/3d-eats-tea-append-only-profile-read-2026-06-07.json",
+          "evidenceType": "local_append_only_menu_and_profile_candidate",
+          "confidence": "medium",
+          "ownerApprovalNeeded": true,
+          "notes": "Local evidence contains menu candidates and cover evidence, but explicitly lists missing owner approval that the menu is current and missing confirmed live operating location."
+        }
+      ],
+      "confidence": "medium",
+      "ownerApprovalNeeded": true,
+      "productionApplied": false,
+      "notes": "Live MealScout profile has a cover image and one structured menu item, but no logoUrl and no posted schedule. Do not apply the richer local 3D menu candidate or any static address/location data without owner/operator confirmation."
+    },
+    {
+      "truckName": "Sweet Love",
+      "truckId": "f3b76054-f355-43b0-a2d3-901277748557",
+      "profileId": "f3b76054-f355-43b0-a2d3-901277748557",
+      "publicProfilePath": "/truck/sweet-love--f3b76054-f355-43b0-a2d3-901277748557",
+      "currentProductionDisplayName": "Sweet Love",
+      "currentProductionWebsiteUrl": "https://ursweetlove.square.site/",
+      "currentProductionSocialUrls": {
+        "instagramUrl": null,
+        "facebookPageUrl": "https://www.facebook.com/ursweetlove.square.site",
+        "xUrl": null
+      },
+      "currentCoverStatus": "applied",
+      "currentCoverUrl": "https://ursweetlove.square.site/uploads/b/07b88d80-a327-11ec-a357-6b16056183a2/varius%20pics.jpg",
+      "currentLogoUrl": null,
+      "currentStructuredMenuStatus": "none",
+      "currentStructuredMenuSummary": {
+        "menuSectionsCount": 0,
+        "featuredMenuItemsCount": 0,
+        "observedItems": []
+      },
+      "currentExternalMenuUrl": "https://ursweetlove.square.site/?utm_id=97758_v0_s00_e0_tv0&fbclid=IwY2xjawRnRwVleHRuA2FlbQIxMABicmlkETFkSVBpWnFLRTNOUzlObk1ic3J0YwZhcHBfaWQQMjIyMDM5MTc4ODIwMDg5MgABHp7gbCQymDzSRz8dZooN2GHefvmWkFOVEaGPKJxsQXOzJiNKaylFapUFIqG1_aem_8nkhMTxkqhue9oUJEau3KQ",
+      "currentScheduleStatusLabel": "No schedule posted",
+      "logoEvidenceStatus": "missing",
+      "coverEvidenceStatus": "applied",
+      "menuEvidenceStatus": "sourced",
+      "scheduleEvidenceStatus": "missing",
+      "sourceUrls": [
+        "https://mealscout.onrender.com/api/public/profiles/truck/f3b76054-f355-43b0-a2d3-901277748557",
+        "https://ursweetlove.square.site/",
+        "https://streetfoodfinder.com/sweetlove?tab=menu",
+        "https://www.bestfoodtrucks.com/truck/sweet-love",
+        "https://guidetoflorida.com/pensacola/food-drink/sweet-love-llc",
+        "https://www.facebook.com/ursweetlove.square.site"
+      ],
+      "sourceArtifactPaths": [
+        "docs/evidence/live-scout-truck-content-completion-2026-06-13.json"
+      ],
+      "externalEvidenceCandidates": [
+        {
+          "url": "https://ursweetlove.square.site/",
+          "evidenceType": "external_menu_and_website_candidate",
+          "confidence": "medium",
+          "ownerApprovalNeeded": true,
+          "notes": "Live MealScout already exposes this Square site as website/menu CTA evidence. Treat it as external menu evidence only, not owner-approved structured menu rows."
+        },
+        {
+          "url": "https://streetfoodfinder.com/sweetlove?tab=menu",
+          "evidenceType": "third_party_profile_menu_candidate",
+          "confidence": "low",
+          "ownerApprovalNeeded": true,
+          "notes": "Page identifies Sweet Love as an ice cream food truck in Pensacola and has schedule/menu/photos tabs, but fetched content does not expose reliable item-level menu data."
+        },
+        {
+          "url": "https://www.bestfoodtrucks.com/truck/sweet-love",
+          "evidenceType": "third_party_profile_schedule_candidate",
+          "confidence": "medium",
+          "ownerApprovalNeeded": true,
+          "notes": "Page identifies Sweet Love in Pensacola and says it has no public events. Do not treat this as a recurring/current owner-confirmed schedule."
+        },
+        {
+          "url": "https://guidetoflorida.com/pensacola/food-drink/sweet-love-llc",
+          "evidenceType": "third_party_identity_and_menu_description_candidate",
+          "confidence": "medium",
+          "ownerApprovalNeeded": true,
+          "notes": "Directory profile identifies Sweet Love LLC, phone, Square website, and soft-serve/menu-category style details. Use as candidate evidence only."
+        }
+      ],
+      "confidence": "medium",
+      "ownerApprovalNeeded": true,
+      "productionApplied": false,
+      "notes": "Live MealScout profile has a cover image and external Square menu URL, but no logoUrl, no structured menu sections, and no posted schedule. External menu/description evidence needs owner/operator review before structured content apply."
+    }
+  ]
+}
