@@ -1,0 +1,178 @@
+{
+  "batchName": "Live Scout truck evidence collection batch 3",
+  "repo": "MealScout",
+  "generatedAt": "2026-06-13T00:00:00.000-05:00",
+  "baselineSha": "9ac57d226cc8ddd8d362ba65790704d3d7caa417",
+  "workflowMode": "review_only",
+  "productionMutationAllowed": false,
+  "productionApplied": false,
+  "parentTracker": "docs/evidence/live-scout-truck-content-completion-2026-06-13.json",
+  "rules": [
+    "Evidence only; do not mutate production records from this artifact.",
+    "Do not invent logos, covers, menus, schedules, social links, or descriptions.",
+    "Do not treat third-party listings or social snippets as owner-approved menu data unless doctrine later explicitly allows it.",
+    "Classify schedule evidence as current_week_only only when the source is dated/current, recurring only when the source clearly describes a repeating stop, and needs_owner_confirmation when plausible but ambiguous.",
+    "Run manual truck intake in dry-run mode before any apply operation.",
+    "Keep ownerApprovalNeeded true until owner/operator review is complete."
+  ],
+  "preserve": [
+    "/truck/{slug}--{uuid} compatibility paths",
+    "invalid UUID safe 404",
+    "missing logo/menu/schedule no-500 behavior",
+    "clean affiliate / clean URL doctrine",
+    "food-truck location privacy rules",
+    "Blessed Berry Bowls social URL owner-confirmation gate",
+    "Jays Southern Cuisine trimmed display name"
+  ],
+  "sourceObservations": {
+    "publicProfileApi": "https://mealscout.onrender.com/api/public/profiles/truck/{uuid}",
+    "observedAt": "2026-06-13",
+    "notes": [
+      "Both Batch 3 profiles returned HTTP 200 from the live public profile API.",
+      "Production public profile API is the source of truth for current MealScout-rendered values.",
+      "External source URLs are candidate evidence only and require owner/operator review before apply."
+    ]
+  },
+  "entries": [
+    {
+      "truckName": "All Gas No Brakes Reloaded",
+      "truckId": "6ca08365-f8af-4c1d-9754-6c998c803869",
+      "profileId": "6ca08365-f8af-4c1d-9754-6c998c803869",
+      "publicProfilePath": "/truck/all-gas-no-brakes-reloaded--6ca08365-f8af-4c1d-9754-6c998c803869",
+      "currentApiStatus": 200,
+      "currentProductionDisplayName": "All gas no brakes reloaded",
+      "currentProductionWebsiteUrl": null,
+      "currentProductionSocialUrls": {
+        "instagramUrl": null,
+        "facebookPageUrl": null,
+        "xUrl": null
+      },
+      "currentCoverStatus": "missing",
+      "currentCoverUrl": null,
+      "currentLogoStatus": "missing",
+      "currentLogoUrl": null,
+      "currentMenuStatus": "missing",
+      "currentMenuUrl": null,
+      "currentStructuredMenuSummary": {
+        "menuSectionsCount": 0,
+        "featuredMenuItemsCount": 0,
+        "observedItems": []
+      },
+      "currentScheduleStatus": "missing",
+      "currentScheduleStatusLabel": "No schedule posted",
+      "logoEvidenceStatus": "missing",
+      "coverEvidenceStatus": "missing",
+      "menuEvidenceStatus": "needs_owner_confirmation",
+      "scheduleEvidenceStatus": "needs_owner_confirmation",
+      "sourceUrls": [
+        "https://mealscout.onrender.com/api/public/profiles/truck/6ca08365-f8af-4c1d-9754-6c998c803869",
+        "https://www.facebook.com/Allgasnobrakesfoodtruck111/",
+        "https://www.instagram.com/all.gasnobrakesreloaded/"
+      ],
+      "sourceArtifactPaths": [
+        "docs/evidence/live-scout-truck-content-completion-2026-06-13.json"
+      ],
+      "externalEvidenceCandidates": [
+        {
+          "url": "https://www.facebook.com/Allgasnobrakesfoodtruck111/",
+          "evidenceType": "social_identity_and_schedule_candidate",
+          "confidence": "medium",
+          "ownerApprovalNeeded": true,
+          "notes": "Search result identifies All Gas No Brakes Reloaded and shows Pensacola pop-up/location language. Facebook open was throttled, so do not apply social URL, menu, logo, or schedule data without owner/operator confirmation."
+        },
+        {
+          "url": "https://www.instagram.com/all.gasnobrakesreloaded/",
+          "evidenceType": "social_identity_candidate",
+          "confidence": "medium",
+          "ownerApprovalNeeded": true,
+          "notes": "Search result identifies the Instagram handle and recent Pensacola/location/menu mentions. Treat as candidate-only because fetched Instagram pages were throttled and snippets do not prove a current recurring schedule."
+        },
+        {
+          "url": "https://www.instagram.com/reel/DXkIi_FEfwL/",
+          "evidenceType": "current_week_or_location_candidate",
+          "confidence": "low",
+          "ownerApprovalNeeded": true,
+          "notes": "Search result references a Pensacola Healthy Habits Market stop and TODAY ONLY language. Do not treat as current schedule without directly verified post date and owner/operator confirmation."
+        }
+      ],
+      "confidence": "low",
+      "ownerApprovalNeeded": true,
+      "productionApplied": false,
+      "notes": "Live MealScout profile has no website, social links, logo, cover, menu URL, structured menu items, or posted schedule. Public evidence is social-snippet based only in this lane; prepare owner review before any apply."
+    },
+    {
+      "truckName": "CREATIVBOWLS",
+      "truckId": "75dd470e-2692-4579-bde0-a64dcc3f6fcb",
+      "profileId": "75dd470e-2692-4579-bde0-a64dcc3f6fcb",
+      "publicProfilePath": "/truck/creativbowls--75dd470e-2692-4579-bde0-a64dcc3f6fcb",
+      "currentApiStatus": 200,
+      "currentProductionDisplayName": "CREATIVBOWLS",
+      "currentProductionWebsiteUrl": "https://creativbowls.company.site/",
+      "currentProductionSocialUrls": {
+        "instagramUrl": "https://www.instagram.com/creativbowls?igsh=dTE1ajd2aTJhM2Ew&utm_source=qr",
+        "facebookPageUrl": null,
+        "xUrl": null
+      },
+      "currentCoverStatus": "missing",
+      "currentCoverUrl": null,
+      "currentLogoStatus": "missing",
+      "currentLogoUrl": null,
+      "currentMenuStatus": "missing",
+      "currentMenuUrl": null,
+      "currentStructuredMenuSummary": {
+        "menuSectionsCount": 0,
+        "featuredMenuItemsCount": 0,
+        "observedItems": []
+      },
+      "currentScheduleStatus": "missing",
+      "currentScheduleStatusLabel": "No schedule posted",
+      "logoEvidenceStatus": "sourced",
+      "coverEvidenceStatus": "sourced",
+      "menuEvidenceStatus": "sourced",
+      "scheduleEvidenceStatus": "needs_owner_confirmation",
+      "sourceUrls": [
+        "https://mealscout.onrender.com/api/public/profiles/truck/75dd470e-2692-4579-bde0-a64dcc3f6fcb",
+        "https://creativbowls.company.site/",
+        "https://www.instagram.com/creativbowls/",
+        "https://www.facebook.com/p/CreativBowls-61573189791673/"
+      ],
+      "sourceArtifactPaths": [
+        "docs/evidence/live-scout-truck-content-completion-2026-06-13.json"
+      ],
+      "externalEvidenceCandidates": [
+        {
+          "url": "https://creativbowls.company.site/",
+          "evidenceType": "owned_site_identity_logo_cover_menu_candidate",
+          "confidence": "medium",
+          "ownerApprovalNeeded": true,
+          "notes": "Site identifies CreativBowls, shows brand imagery, menu sections, food/category descriptions, contact details, and booking/contact paths. Treat images/menu as sourced candidates only until dry-run and owner/operator review."
+        },
+        {
+          "url": "https://creativbowls.company.site/",
+          "evidenceType": "schedule_process_candidate",
+          "confidence": "medium",
+          "ownerApprovalNeeded": true,
+          "notes": "Site says weekly schedules are posted on Facebook and mentions a conditional Southern Raceway pattern. This supports schedule-discovery direction but not a current posted schedule in MealScout."
+        },
+        {
+          "url": "https://www.facebook.com/p/CreativBowls-61573189791673/",
+          "evidenceType": "social_identity_and_schedule_candidate",
+          "confidence": "medium",
+          "ownerApprovalNeeded": true,
+          "notes": "Search result identifies CreativBowls as a food bowl truck in the Pensacola/Milton region. Facebook open was throttled, so do not apply social/schedule values directly."
+        },
+        {
+          "url": "https://www.instagram.com/creativbowls/",
+          "evidenceType": "social_identity_logo_candidate",
+          "confidence": "medium",
+          "ownerApprovalNeeded": true,
+          "notes": "Search result identifies the Instagram account and references a new logo and recent food-truck posts. Treat as candidate-only until owner/operator review."
+        }
+      ],
+      "confidence": "medium",
+      "ownerApprovalNeeded": true,
+      "productionApplied": false,
+      "notes": "Live MealScout profile has website and Instagram CTAs but no logo, cover, menu URL, structured menu items, or posted schedule. The owned site provides promising logo/cover/menu evidence and schedule-process clues, but nothing was applied."
+    }
+  ]
+}
