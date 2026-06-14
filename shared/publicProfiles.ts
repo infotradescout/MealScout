@@ -157,8 +157,10 @@ export type PublicTruckScheduleSummary = {
   todayStop: PublicTruckScheduleStop | null;
   nextStop: PublicTruckScheduleStop | null;
   upcomingStops: PublicTruckScheduleStop[];
+  closedStops: PublicTruckScheduleStop[];
   nextWindowLabel: string | null;
   upcomingCount: number;
+  closedCount?: number;
 };
 
 export type PublicTruckScheduleStop = {
@@ -175,6 +177,7 @@ export type PublicTruckScheduleStop = {
   longitude: number | null;
   hostProfilePath: string | null;
   directionsUrl: string | null;
+  notice?: string | null;
   status:
     | "scheduled"
     | "here_now"

@@ -74,9 +74,17 @@ assert(migration.includes("ALTER COLUMN address DROP NOT NULL"));
 assert(publicDiscovery.includes('if (sourceStatus === "closed") return "closed" as const;'));
 assert(publicDiscovery.includes('closed: "Closed"'));
 assert(publicDiscovery.includes("isClosedDay || row.mapEligible === false"));
+assert(publicDiscovery.includes("const openStops = allStops.filter((stop) => stop.status !== \"closed\");"));
+assert(publicDiscovery.includes("const closedStops = allStops.filter((stop) => stop.status === \"closed\");"));
+assert(publicDiscovery.includes("upcomingStops = openStops"));
+assert(publicDiscovery.includes("closedStops: closedScheduleStops"));
+assert(publicDiscovery.includes("closedCount: closedScheduleStops.length"));
 assert(publicMap.includes('status !== "open"'));
 assert(publicMap.includes("schedule.mapEligible === false"));
 assert(publicMap.includes("schedule.liveFeedEligible === false"));
 assert(publicProfile.includes('stop.status === "closed" ? "Closed"'));
+assert(publicProfile.includes("Closed days"));
+assert(publicProfile.includes("closedStops.map"));
+assert(publicProfile.includes("{stop.notice ? ("));
 
 console.log("blessed-berry-current-week-schedule-apply.contract: PASS");

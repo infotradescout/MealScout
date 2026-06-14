@@ -689,6 +689,9 @@ export function toPublicRestaurantProfile(input: {
             upcomingStops: Array.isArray(row?.truckSchedule?.upcomingStops)
               ? row.truckSchedule.upcomingStops
               : [],
+            closedStops: Array.isArray(row?.truckSchedule?.closedStops)
+              ? row.truckSchedule.closedStops
+              : [],
             nextWindowLabel:
               String(row?.truckSchedule?.nextWindowLabel || "").trim() ||
               nextWindowLabelValue ||
@@ -700,6 +703,10 @@ export function toPublicRestaurantProfile(input: {
                   upcomingCountValue ??
                   0,
               ) || 0,
+            ),
+            closedCount: Math.max(
+              0,
+              Number(row?.truckSchedule?.closedCount ?? 0) || 0,
             ),
           }
         : null,

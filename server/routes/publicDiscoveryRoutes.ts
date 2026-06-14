@@ -390,13 +390,16 @@ const buildPublicTruckSchedulePayload = async (restaurantId: string) => {
     .filter(Boolean)
     .sort((a: any, b: any) => a.startsAt.getTime() - b.startsAt.getTime()) as Array<any>;
 
-  const currentStop = allStops.find((stop) => stop.status === "here_now") || null;
+  const openStops = allStops.filter((stop) => stop.status !== "closed");
+  const closedStops = allStops.filter((stop) => stop.status === "closed");
+
+  const currentStop = openStops.find((stop) => stop.status === "here_now") || null;
   const todayKey = toDateOnly(now);
   const todayStop =
-    allStops.find((stop) => stop.date === todayKey && stop.status !== "completed") || null;
+    openStops.find((stop) => stop.date === todayKey && stop.status !== "completed") || null;
   const nextStop =
-    allStops.find((stop) => stop.startsAt.getTime() > now.getTime()) || null;
-  const upcomingStops = allStops
+    openStops.find((stop) => stop.startsAt.getTime() > now.getTime()) || null;
+  const upcomingStops = openStops
     .filter((stop) => stop !== currentStop)
     .slice(0, 8)
     .map((stop) => ({
@@ -413,8 +416,26 @@ const buildPublicTruckSchedulePayload = async (restaurantId: string) => {
       longitude: stop.longitude,
       hostProfilePath: stop.hostProfilePath,
       directionsUrl: stop.directionsUrl,
+      notice: stop.notice,
       status: stop.status,
     }));
+  const closedScheduleStops = closedStops.map((stop) => ({
+    stopId: stop.stopId,
+    date: stop.date,
+    startTime: stop.startTime,
+    endTime: stop.endTime,
+    timeWindowLabel: stop.timeWindowLabel,
+    locationName: stop.locationName,
+    addressPublicLabel: stop.addressPublicLabel,
+    city: stop.city,
+    state: stop.state,
+    latitude: null,
+    longitude: null,
+    hostProfilePath: null,
+    directionsUrl: null,
+    notice: stop.notice,
+    status: stop.status,
+  }));
 
   const latestTouch = allStops
     .map((stop) => stop.lastConfirmedAt || stop.updatedAt || stop.startsAt)
@@ -436,7 +457,7 @@ const buildPublicTruckSchedulePayload = async (restaurantId: string) => {
     currentStop?.status ||
     todayStop?.status ||
     nextStop?.status ||
-    (allStops.length > 0 ? "scheduled" : "unknown");
+    (openStops.length > 0 ? "scheduled" : closedStops.length > 0 ? "closed" : "unknown");
 
   const statusLabelMap: Record<string, string> = {
     here_now: "Here now",
@@ -466,6 +487,7 @@ const buildPublicTruckSchedulePayload = async (restaurantId: string) => {
           longitude: stop.longitude,
           hostProfilePath: stop.hostProfilePath,
           directionsUrl: stop.directionsUrl,
+          notice: stop.notice,
           status: stop.status,
         }
       : null;
@@ -480,8 +502,10 @@ const buildPublicTruckSchedulePayload = async (restaurantId: string) => {
       todayStop: compactStop(todayStop),
       nextStop: compactStop(nextStop),
       upcomingStops,
+      closedStops: closedScheduleStops,
       nextWindowLabel: nextStop?.timeWindowLabel || todayStop?.timeWindowLabel || null,
       upcomingCount: upcomingStops.length,
+      closedCount: closedScheduleStops.length,
     },
   };
 };

@@ -1507,11 +1507,15 @@ function RestaurantSchedule({ profile }: { profile: PublicRestaurantProfile }) {
   const upcomingStops = Array.isArray(schedule?.upcomingStops)
     ? schedule!.upcomingStops.slice(0, 6)
     : [];
+  const closedStops = Array.isArray(schedule?.closedStops)
+    ? schedule!.closedStops.slice(0, 7)
+    : [];
   const hasTruckSchedule =
     Boolean(currentStop) ||
     Boolean(todayStop) ||
     Boolean(nextStop) ||
     upcomingStops.length > 0 ||
+    closedStops.length > 0 ||
     Boolean(String(schedule?.statusLabel || "").trim()) ||
     Boolean(String(schedule?.nextWindowLabel || "").trim()) ||
     Number(schedule?.upcomingCount || 0) > 0;
@@ -1598,6 +1602,29 @@ function RestaurantSchedule({ profile }: { profile: PublicRestaurantProfile }) {
                       <p className="text-xs text-white/70">
                         {[stop.date, stop.timeWindowLabel].filter(Boolean).join(" · ")}
                       </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+            {closedStops.length > 0 ? (
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-white/65">
+                  Closed days
+                </p>
+                <div className="space-y-2">
+                  {closedStops.map((stop, index) => (
+                    <div
+                      key={`${stop.stopId || stop.date || "closed"}:${index}`}
+                      className="rounded-lg border border-white/10 bg-black/20 p-2.5"
+                    >
+                      <p className="text-sm font-medium text-white">Closed</p>
+                      <p className="text-xs text-white/70">
+                        {[stop.date, stop.timeWindowLabel].filter(Boolean).join(" · ")}
+                      </p>
+                      {stop.notice ? (
+                        <p className="mt-1 text-xs text-white/65">{stop.notice}</p>
+                      ) : null}
                     </div>
                   ))}
                 </div>
