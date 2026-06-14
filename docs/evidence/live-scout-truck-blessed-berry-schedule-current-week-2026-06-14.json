@@ -1,0 +1,122 @@
+{
+  "artifactName": "Blessed Berry Bowls current-week schedule evidence",
+  "repo": "MealScout",
+  "generatedAt": "2026-06-14T00:00:00.000-05:00",
+  "baselineSha": "bfacfbdd6394e1bd339f0f91dfc88925fe3b82b7",
+  "workflowMode": "review_only",
+  "productionMutationAllowed": false,
+  "productionApplied": false,
+  "parentTracker": "docs/evidence/live-scout-truck-content-completion-2026-06-13.json",
+  "source": {
+    "sourceType": "uploaded_schedule_image",
+    "sourceArtifact": "719523676_2163800804470829_7581408798811548725_n.jpg",
+    "sourceArtifactPresentInRepo": false,
+    "providedBy": "operator",
+    "transcribedAt": "2026-06-14T00:00:00.000-05:00",
+    "notes": [
+      "Operator supplied the image transcription directly.",
+      "Use the uploaded image as source evidence before production apply.",
+      "Do not treat this weekly schedule as recurring."
+    ]
+  },
+  "preserve": [
+    "/truck/{slug}--{uuid} compatibility paths",
+    "invalid UUID safe 404",
+    "missing logo/menu/schedule no-500 behavior",
+    "clean affiliate / clean URL doctrine",
+    "Blessed Berry Bowls social URL cleanup gate"
+  ],
+  "entry": {
+    "truckName": "Blessed Berry Bowls",
+    "truckId": "e77ac77a-c432-42d0-ac0f-22c48b6306c9",
+    "profileId": "e77ac77a-c432-42d0-ac0f-22c48b6306c9",
+    "publicProfilePath": "/truck/blessed-berry-bowls--e77ac77a-c432-42d0-ac0f-22c48b6306c9",
+    "scheduleStatus": "current_week_only",
+    "sourceType": "uploaded_schedule_image",
+    "sourceArtifact": "719523676_2163800804470829_7581408798811548725_n.jpg",
+    "weekOf": "2026-06-15",
+    "logoEvidenceStatus": "sourced",
+    "coverEvidenceStatus": "applied",
+    "menuEvidenceStatus": "needs_owner_confirmation",
+    "scheduleEvidenceStatus": "current_week_only",
+    "socialEvidenceStatus": "sourced",
+    "contactEvidenceStatus": "sourced",
+    "scheduleTranscriptionOwnerApprovalNeeded": false,
+    "recurringReuseOwnerApprovalNeeded": true,
+    "ownerApprovalNeeded": true,
+    "productionApplied": false,
+    "confidence": "high",
+    "events": [
+      {
+        "date": "2026-06-15",
+        "day": "Monday",
+        "locationName": "The Tristan Apartments",
+        "address": "1559 W Nine Mile Rd.",
+        "time": "4 PM - 7 PM"
+      },
+      {
+        "date": "2026-06-16",
+        "day": "Tuesday",
+        "locationName": "Pruitt Health-Santa Rosa",
+        "address": "5530 Northrop Rd.",
+        "time": "11 AM - 2 PM"
+      },
+      {
+        "date": "2026-06-17",
+        "day": "Wednesday",
+        "locationName": "Century Health & Rehab",
+        "address": "6020 Industrial Blvd.",
+        "time": "11 AM - 1 PM"
+      },
+      {
+        "date": "2026-06-18",
+        "day": "Thursday",
+        "locationName": "Escambia County Jail",
+        "address": "3080 N Pace Blvd.",
+        "time": "11 AM - 2 PM"
+      },
+      {
+        "date": "2026-06-19",
+        "day": "Friday",
+        "locationName": "Community Health",
+        "address": "2315 W Jackson St.",
+        "time": "11 AM - 1 PM"
+      },
+      {
+        "date": "2026-06-19",
+        "day": "Friday",
+        "locationName": "Molino Ballpark",
+        "address": "2340 Crabtree Church Rd.",
+        "time": "4 PM - 9 PM"
+      },
+      {
+        "date": "2026-06-20",
+        "day": "Saturday",
+        "status": "closed"
+      },
+      {
+        "date": "2026-06-21",
+        "day": "Sunday",
+        "status": "closed",
+        "note": "Happy Father's Day"
+      }
+    ],
+    "contact": {
+      "phone": "256-479-6490",
+      "website": "blessedberrybowls.com",
+      "email": null
+    },
+    "social": {
+      "facebook": "@blessedberrybowls",
+      "tiktok": "@blessedberrybowls",
+      "instagram": "@blessedberrybowls"
+    },
+    "productionApplyRecommendation": "Apply schedule as current_week_only for 2026-06-15 through 2026-06-21 only; do not mark recurring.",
+    "notes": [
+      "Schedule is for the week shown only.",
+      "Do not mark as recurring.",
+      "Use uploaded image as source artifact.",
+      "This image supports correcting the malformed social handle to blessedberrybowls, but full URL correction should still follow the existing social cleanup gate."
+    ]
+  }
+}

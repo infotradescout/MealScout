@@ -59,20 +59,24 @@
       "truckId": "e77ac77a-c432-42d0-ac0f-22c48b6306c9",
       "profileId": "e77ac77a-c432-42d0-ac0f-22c48b6306c9",
       "publicProfilePath": "/truck/blessed-berry-bowls--e77ac77a-c432-42d0-ac0f-22c48b6306c9",
-      "logoStatus": "missing",
+      "logoStatus": "sourced",
       "coverStatus": "applied",
       "menuStatus": "needs_owner_confirmation",
-      "scheduleStatus": "needs_owner_confirmation",
+      "scheduleStatus": "current_week_only",
       "sourceUrls": [
         "https://mealscout.onrender.com/api/public/profiles/truck/e77ac77a-c432-42d0-ac0f-22c48b6306c9",
         "https://@blessed.berrybowls",
-        "https://facebook.com/Blessed Berry Bowls"
+        "https://facebook.com/Blessed Berry Bowls",
+        "blessedberrybowls.com"
       ],
-      "sourceArtifactPaths": [],
-      "confidence": "low",
+      "sourceArtifactPaths": [
+        "docs/evidence/live-scout-truck-blessed-berry-schedule-current-week-2026-06-14.json",
+        "operator-upload:719523676_2163800804470829_7581408798811548725_n.jpg"
+      ],
+      "confidence": "high",
       "ownerApprovalNeeded": true,
       "productionApplied": false,
-      "notes": "Production profile has a Google Places cover image and public social links, but no logoUrl. Live API showed one structured menu item and no posted schedule. Social URL formatting should be reviewed before any owner-facing completion claim."
+      "notes": "Production profile has a Google Places cover image and public social links, but no logoUrl. Operator-supplied schedule image evidence transcribes a current-week-only schedule for 2026-06-15 through 2026-06-21; productionApplied remains false until the schedule is entered/applied. The same image sources logo/brand mark, phone 256-479-6490, website blessedberrybowls.com, and @blessedberrybowls social handle evidence. Do not mark schedule as recurring, and keep full social URL correction behind the existing cleanup gate."
     },
     {
       "truckName": "Sweet Love",
