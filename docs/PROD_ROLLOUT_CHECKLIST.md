@@ -2,6 +2,10 @@
 
 Use this checklist for each production release.
 
+Before approving any user-facing release, complete the QA evidence gate in
+`docs/process/QA_DRY_RELEASE_GATE.md` and attach a release packet using
+`docs/process/QA_RELEASE_PACKET_TEMPLATE.md`.
+
 ## 1. Pre-deploy (local)
 
 1. Ensure branch is clean:
@@ -9,7 +13,11 @@ Use this checklist for each production release.
 2. Run checks:
    - `npm run check`
    - `npm run test:supplier-payments`
+   - relevant contract tests for the changed lane
+   - `git diff --check`
 3. Ensure migrations are committed and ordered.
+4. Confirm Critical/High UX defects from QA are fixed or explicitly held outside
+   the release.
 
 ## 2. Deploy to Render
 

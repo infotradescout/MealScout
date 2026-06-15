@@ -4,6 +4,11 @@ Status: Active freeze window for the current refactor cycle.
 
 This document is the enforcement layer for the refactor sequence. If a change does not fit the allowed lane below, it waits until the cycle closes.
 
+Refactor work also follows the QA + DRY release gate in
+`docs/process/QA_DRY_RELEASE_GATE.md`. Do not start pure cleanup until current
+behavior has QA evidence, Critical/High UX defects are handled, and the refactor
+has behavior-parity evidence plus re-QA.
+
 ## Allowed During This Cycle
 
 - Bug fixes
@@ -50,6 +55,18 @@ Track:
 - Ordering gate success/failure telemetry
 - App boot success
 - Error volume
+
+## Mandatory Refactor Intake
+
+Before opening a refactor PR, complete
+`docs/process/DRY_REFACTOR_INTAKE_CHECKLIST.md`.
+
+Before merging a pure refactor, attach:
+
+- behavior-parity evidence
+- relevant contracts/tests
+- manual QA repeated after cleanup
+- confirmation that no feature expansion is mixed into the refactor
 
 ## Sacred Flow Protection
 
