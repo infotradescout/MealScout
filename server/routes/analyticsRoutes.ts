@@ -5,7 +5,7 @@ import { z } from "zod";
 import { db } from "../db";
 import { emailService } from "../emailService";
 import { storage } from "../storage";
-import { insertDealFeedbackSchema, searchQueryEvents, type User } from "@shared/schema";
+import { insertDealFeedbackSchema, requestLogs, searchQueryEvents, type User } from "@shared/schema";
 
 function normalizeSearchQuery(input: string) {
   return String(input || "")
@@ -27,7 +27,85 @@ function shouldDropSearchQuery(normalized: string) {
   return false;
 }
 
+const PUBLIC_PROFILE_QUALITY_SIGNAL_TYPES = new Set([
+  "public_profile_page_error",
+  "public_profile_not_found_viewed",
+  "missing_menu_viewed",
+  "missing_schedule_viewed",
+  "failed_profile_image",
+]);
+
+const PUBLIC_PROFILE_QUALITY_IMAGE_TYPES = new Set(["logo", "cover"]);
+
 export function registerAnalyticsRoutes(app: Express) {
+  app.post("/api/analytics/shell", async (req: any, res) => {
+    try {
+      const schema = z
+        .object({
+          type: z.string().trim().min(1).max(80),
+          profile_id: z.string().trim().min(1).max(120).optional().nullable(),
+          profile_type: z
+            .enum(["restaurant", "truck", "bar", "location", "supplier"])
+            .optional()
+            .nullable(),
+          path: z.string().trim().min(1).max(240),
+          missing_menu: z.boolean().optional(),
+          missing_schedule: z.boolean().optional(),
+          failed_image_type: z.string().trim().max(32).optional().nullable(),
+          timestamp: z.string().trim().max(64).optional().nullable(),
+        })
+        .strip();
+      const parsed = schema.parse(req.body || {});
+      if (!PUBLIC_PROFILE_QUALITY_SIGNAL_TYPES.has(parsed.type)) {
+        return res.status(400).json({ message: "Unsupported quality signal" });
+      }
+      if (
+        parsed.type === "failed_profile_image" &&
+        !PUBLIC_PROFILE_QUALITY_IMAGE_TYPES.has(String(parsed.failed_image_type || ""))
+      ) {
+        return res.status(400).json({ message: "Unsupported image signal" });
+      }
+
+      const profileEntityType = parsed.profile_type === "location" ? "host" : parsed.profile_type || null;
+
+      await db.insert(requestLogs).values({
+        method: "EVENT",
+        path: parsed.path,
+        statusCode: 202,
+        durationMs: 0,
+        userId: null,
+        sessionId: null,
+        anonymousActorId: null,
+        actorType: "human",
+        sourceType: "human",
+        eventType: parsed.type,
+        surface: "public_profile",
+        entityId: parsed.profile_id || null,
+        entityType: profileEntityType,
+        ip: null,
+        userAgent: null,
+        metadata: {
+          type: parsed.type,
+          profile_id: parsed.profile_id || null,
+          profile_type: parsed.profile_type || null,
+          path: parsed.path,
+          missing_menu: parsed.missing_menu === true,
+          missing_schedule: parsed.missing_schedule === true,
+          failed_image_type: parsed.failed_image_type || null,
+          timestamp: parsed.timestamp || new Date().toISOString(),
+        },
+      });
+
+      return res.status(202).json({ ok: true });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid quality signal" });
+      }
+      console.error("Error recording public profile quality signal:", error);
+      return res.status(202).json({ ok: false });
+    }
+  });
+
   app.get("/api/search/trending", async (req, res) => {
     try {
       const limitRaw = Number(req.query?.limit ?? 8);
