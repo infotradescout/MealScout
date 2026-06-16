@@ -30,10 +30,19 @@ requireIncludes(
   "Get food",
   "Public profile must expose a single business-critical action rail.",
 );
-requireIncludes(
-  'const preferredOrder: PublicCta["type"][] = [\n    "menu",\n    "map",\n    "order",\n    "phone"',
-  "Action rail must prioritize menu, directions, order, and call before secondary actions.",
-);
+const preferredOrderStart = source.indexOf('const preferredOrder: PublicCta["type"][] = [');
+const preferredActionOrder = ["menu", "map", "order", "phone"].map((action) => {
+  const index = source.indexOf(`"${action}"`, preferredOrderStart);
+  if (index < 0) {
+    throw new Error(`Action rail missing preferred action: ${action}`);
+  }
+  return index;
+});
+for (let index = 1; index < preferredActionOrder.length; index += 1) {
+  if (preferredActionOrder[index] <= preferredActionOrder[index - 1]) {
+    throw new Error("Action rail must prioritize menu, directions, order, and call before secondary actions.");
+  }
+}
 requireIncludes(
   '<CardTitle className="text-xl text-white">Social links</CardTitle>',
   "Social links must be separated below business-critical actions.",
@@ -46,6 +55,7 @@ requireIncludes(
 const mainOrder = [
   "<HeroBlock profile={data} />",
   "<QuickActionRow profile={data} safeCtas={safeCtas} />",
+  "<PublicProfileShareControls",
   "<MenuSection profile={restaurantProfile} safeCtas={safeCtas} />",
   "<RestaurantSchedule profile={restaurantProfile} />",
   "<GalleryStrip profile={restaurantProfile} />",
@@ -61,6 +71,12 @@ for (let index = 1; index < mainOrder.length; index += 1) {
   if (mainOrder[index] <= mainOrder[index - 1]) {
     throw new Error("Public profile mobile hierarchy regressed.");
   }
+}
+
+const quickActionIndex = source.indexOf("<QuickActionRow profile={data} safeCtas={safeCtas} />");
+const shareControlsIndex = source.indexOf("<PublicProfileShareControls");
+if (quickActionIndex < 0 || shareControlsIndex < 0 || quickActionIndex > shareControlsIndex) {
+  throw new Error("Primary quick actions must appear before public profile Share/Copy controls.");
 }
 
 requireExcludes(

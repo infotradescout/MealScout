@@ -1984,6 +1984,7 @@ export default function PublicProfilePage() {
         }}
       >
         <HeroBlock profile={data} />
+        <QuickActionRow profile={data} safeCtas={safeCtas} />
         <PublicProfileShareControls
           profile={data}
           sharePath={resolvedCleanBusinessPath}
@@ -1991,7 +1992,6 @@ export default function PublicProfilePage() {
           description={description}
           onShareAction={trackProfileEvent}
         />
-        <QuickActionRow profile={data} safeCtas={safeCtas} />
 
         {data.entity === "host" ? (
           <>
