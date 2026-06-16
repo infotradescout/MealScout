@@ -675,7 +675,11 @@ export async function buildScoutSurface(
       availability: servingNow ? "serving_now" : "nearby",
       cta: {
         label: servingNow ? "Go now" : "View details",
-        href: `/truck/${encodeURIComponent(truckId)}`,
+        href: buildPublicProfilePath(
+          "truck",
+          truckId,
+          String((truck as any)?.name || "Food truck"),
+        ),
       },
       score: 90 - Math.min(40, Number(distanceMiles || 0) * 4),
       source: "truck_activity",
@@ -756,9 +760,11 @@ export async function buildScoutSurface(
       availability: openNow ? "open_now" : "nearby",
       cta: {
         label: "View menu",
-        href: entityType === "truck"
-          ? `/truck/${encodeURIComponent(restaurantId)}`
-          : `/restaurant/${encodeURIComponent(restaurantId)}`,
+        href: buildPublicProfilePath(
+          entityType === "truck" ? "truck" : "restaurant",
+          restaurantId,
+          String((restaurant as any)?.name || "Restaurant"),
+        ),
       },
       score:
         (openNow ? 70 : hasSchedule ? 42 : 30) +
