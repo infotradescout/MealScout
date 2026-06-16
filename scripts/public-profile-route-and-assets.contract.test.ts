@@ -85,4 +85,39 @@ if (cityLanding.includes("`/p/truck/${id}`")) {
   throw new Error("City landing truck cards must not emit legacy /p/truck paths");
 }
 
+const publicProfilePage = readFileSync("client/src/pages/public-profile.tsx", "utf8");
+const publicProfileComponentIndex = publicProfilePage.indexOf(
+  "export default function PublicProfilePage()",
+);
+if (publicProfileComponentIndex < 0) {
+  throw new Error("PublicProfilePage component must be present");
+}
+
+const loadingGuardIndex = publicProfilePage.indexOf(
+  "if (isLoading || cleanBusinessLoading)",
+  publicProfileComponentIndex,
+);
+const canonicalUrlIndex = publicProfilePage.indexOf(
+  "const canonicalUrl =",
+  publicProfileComponentIndex,
+);
+const affiliateRefEffectIndex = publicProfilePage.indexOf(
+  "const routeRef = String(cleanBusinessRoute?.affiliateTag || \"\").trim();",
+  publicProfileComponentIndex,
+);
+if (loadingGuardIndex < 0 || canonicalUrlIndex < 0 || affiliateRefEffectIndex < 0) {
+  throw new Error("PublicProfilePage must keep expected loading, canonical, and affiliate-ref blocks");
+}
+if (affiliateRefEffectIndex > loadingGuardIndex) {
+  throw new Error("PublicProfilePage affiliate-ref hook must run before conditional loading returns");
+}
+
+const postGuardSetup = publicProfilePage.slice(loadingGuardIndex, canonicalUrlIndex);
+const hookAfterGuard = postGuardSetup.match(/\buse(?:State|Effect|Memo|Callback|Ref|Query)\s*\(/);
+if (hookAfterGuard) {
+  throw new Error(
+    `PublicProfilePage must not call React/query hooks after conditional profile guards: ${hookAfterGuard[0]}`,
+  );
+}
+
 console.log("public-profile-route-and-assets.contract: PASS");
