@@ -21,6 +21,7 @@ import { extractUuidFromSlug } from "@/lib/seo-slug";
 import { resolveCanonicalShareUrl } from "@/lib/share";
 import { setAffiliateRef } from "@/lib/share";
 import { SEOHead } from "@/components/seo-head";
+import { ProfileErrorBoundary } from "@/components/public-profile/ProfileErrorBoundary";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -71,6 +72,93 @@ type PublicProfilePayload =
     });
 
 const DEFAULT_IMAGE = "/og-default.jpg";
+
+type PublicProfileQualitySignalType =
+  | "public_profile_page_error"
+  | "public_profile_not_found_viewed"
+  | "missing_menu_viewed"
+  | "missing_schedule_viewed"
+  | "failed_profile_image";
+
+type PublicProfileQualitySignalPayload = {
+  type: PublicProfileQualitySignalType;
+  profile_id?: string | null;
+  profile_type?: string | null;
+  path: string;
+  missing_menu?: boolean;
+  missing_schedule?: boolean;
+  failed_image_type?: "logo" | "cover" | null;
+  timestamp: string;
+};
+
+const sendPublicProfileQualitySignal = (
+  payload: PublicProfileQualitySignalPayload,
+  dedupeKey?: string,
+) => {
+  try {
+    if (dedupeKey && typeof window !== "undefined") {
+      const storageKey = `mealscout:public-profile-quality:${dedupeKey}`;
+      if (window.sessionStorage.getItem(storageKey)) return;
+      window.sessionStorage.setItem(storageKey, "1");
+    }
+
+    void fetch(apiUrl("/api/analytics/shell"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      keepalive: true,
+      body: JSON.stringify(payload),
+    }).catch(() => {});
+  } catch {
+    // Quality telemetry must never affect public profile rendering.
+  }
+};
+
+const hasStructuredPublicMenu = (profile: PublicProfilePayload) => {
+  const sections = Array.isArray((profile as any).menuSections)
+    ? (profile as any).menuSections
+    : [];
+  if (
+    sections.some(
+      (section: any) =>
+        String(section?.name || section?.category || "").trim() ||
+        (Array.isArray(section?.items) && section.items.length > 0),
+    )
+  ) {
+    return true;
+  }
+
+  const variants = Array.isArray((profile as any).menuVariants)
+    ? (profile as any).menuVariants
+    : [];
+  return variants.some((variant: any) =>
+    Array.isArray(variant?.menuSections)
+      ? variant.menuSections.some(
+          (section: any) =>
+            String(section?.name || section?.category || "").trim() ||
+            (Array.isArray(section?.items) && section.items.length > 0),
+        )
+      : false,
+  );
+};
+
+const hasPostedScheduleOrTimeWindow = (profile: PublicProfilePayload) => {
+  if (!isRestaurantLikeEntity(profile.entity)) return true;
+  const restaurant = profile as PublicRestaurantProfile;
+  if (String(restaurant.hours || "").trim()) return true;
+  if (restaurant.profileType !== "truck") return false;
+
+  const schedule = restaurant.truckSchedule;
+  return Boolean(
+    schedule?.currentStop ||
+      schedule?.todayStop ||
+      schedule?.nextStop ||
+      (Array.isArray(schedule?.upcomingStops) && schedule.upcomingStops.length > 0) ||
+      (Array.isArray(schedule?.closedStops) && schedule.closedStops.length > 0) ||
+      String(schedule?.statusLabel || "").trim() ||
+      String(schedule?.nextWindowLabel || "").trim() ||
+      Number(schedule?.upcomingCount || 0) > 0,
+  );
+};
 
 const normalizePublicProfileEntity = (value: string | null | undefined) => {
   const normalized = String(value || "").toLowerCase().trim();
@@ -1822,6 +1910,7 @@ export default function PublicProfilePage() {
 
   const safeCtas = useMemo(() => asSafeCtas(data?.cta), [data?.cta]);
   const sentViewRef = useRef<string>("");
+  const imageFailureRef = useRef<Set<string>>(new Set());
   const querySource = useMemo(() => {
     if (typeof window === "undefined") return "public_profile";
     const params = new URLSearchParams(window.location.search);
@@ -1867,6 +1956,41 @@ export default function PublicProfilePage() {
     [data?.id, data?.profileType, querySource],
   );
 
+  const trackQualitySignal = useCallback(
+    (
+      type: PublicProfileQualitySignalType,
+      extra?: Partial<
+        Pick<
+          PublicProfileQualitySignalPayload,
+          "missing_menu" | "missing_schedule" | "failed_image_type"
+        >
+      >,
+      dedupeSuffix?: string,
+    ) => {
+      const profileId = String(data?.id || resolvedProfileId || "").trim() || null;
+      const profileType = String(data?.profileType || normalizedProfileType || "").trim() || null;
+      const path = typeof window !== "undefined" ? window.location.pathname : pathname || "/";
+      const dedupeKey = dedupeSuffix
+        ? `${type}:${profileType || "unknown"}:${profileId || path}:${dedupeSuffix}`
+        : undefined;
+
+      sendPublicProfileQualitySignal(
+        {
+          type,
+          profile_id: profileId,
+          profile_type: profileType,
+          path,
+          missing_menu: extra?.missing_menu,
+          missing_schedule: extra?.missing_schedule,
+          failed_image_type: extra?.failed_image_type || null,
+          timestamp: new Date().toISOString(),
+        },
+        dedupeKey,
+      );
+    },
+    [data?.id, data?.profileType, normalizedProfileType, pathname, resolvedProfileId],
+  );
+
   useEffect(() => {
     if (!data?.id || !data?.profileType) return;
     const key = `${data.profileType}:${data.id}`;
@@ -1881,6 +2005,59 @@ export default function PublicProfilePage() {
       else trackProfileEvent("qr_profile_open", "qr", window.location.href);
     }
   }, [data?.id, data?.profileType, querySource, trackProfileEvent]);
+
+  useEffect(() => {
+    if (isLoading || cleanBusinessLoading || data) return;
+    if (!normalizedProfileType && !resolvedProfileId) return;
+    trackQualitySignal("public_profile_not_found_viewed", undefined, "not-found");
+  }, [
+    cleanBusinessLoading,
+    data,
+    isLoading,
+    normalizedProfileType,
+    resolvedProfileId,
+    trackQualitySignal,
+  ]);
+
+  useEffect(() => {
+    if (!data || !isRestaurantLikeEntity(data.entity)) return;
+    if (!hasStructuredPublicMenu(data)) {
+      trackQualitySignal("missing_menu_viewed", { missing_menu: true }, "missing-menu");
+    }
+    if (!hasPostedScheduleOrTimeWindow(data)) {
+      trackQualitySignal(
+        "missing_schedule_viewed",
+        { missing_schedule: true },
+        "missing-schedule",
+      );
+    }
+  }, [data, trackQualitySignal]);
+
+  useEffect(() => {
+    if (!data) return;
+    const imageCandidates = [
+      { type: "cover", url: String((data as any).coverImageUrl || "").trim() },
+      { type: "logo", url: String((data as any).logoUrl || "").trim() },
+    ].filter((candidate): candidate is { type: "logo" | "cover"; url: string } =>
+      Boolean(candidate.url),
+    );
+
+    imageCandidates.forEach((candidate) => {
+      const imageKey = `${data.profileType}:${data.id}:${candidate.type}:${candidate.url}`;
+      if (imageFailureRef.current.has(imageKey)) return;
+      const image = new Image();
+      image.onerror = () => {
+        if (imageFailureRef.current.has(imageKey)) return;
+        imageFailureRef.current.add(imageKey);
+        trackQualitySignal(
+          "failed_profile_image",
+          { failed_image_type: candidate.type },
+          `failed-image:${candidate.type}:${candidate.url}`,
+        );
+      };
+      image.src = candidate.url;
+    });
+  }, [data, trackQualitySignal]);
 
   const cleanProfilePath = cleanBusinessSlug
     ? buildCleanPublicBusinessPath(`/${cleanBusinessSlug}`)
@@ -1969,71 +2146,77 @@ export default function PublicProfilePage() {
         </div>
       </header>
 
-      <main
-        className="mx-auto max-w-5xl space-y-6 px-4 py-6 sm:py-8"
-        onClickCapture={(event) => {
-          const target = event.target as HTMLElement | null;
-          const anchor = target?.closest("a[data-analytics-action]") as HTMLAnchorElement | null;
-          if (!anchor) return;
-          const action = String(anchor.dataset.analyticsAction || "").trim();
-          if (!action) return;
-          trackProfileEvent(
-            action,
-            String(anchor.dataset.analyticsTargetType || "").trim() || null,
-            anchor.getAttribute("href"),
-          );
-        }}
+      <ProfileErrorBoundary
+        onPageError={() =>
+          trackQualitySignal("public_profile_page_error", undefined, "render-error")
+        }
       >
-        <HeroBlock profile={data} />
-        <PublicProfileShareControls
-          profile={data}
-          sharePath={resolvedCleanBusinessPath}
-          title={title}
-          description={description}
-          onShareAction={trackProfileEvent}
-        />
-        <QuickActionRow profile={data} safeCtas={safeCtas} />
+        <main
+          className="mx-auto max-w-5xl space-y-6 px-4 py-6 sm:py-8"
+          onClickCapture={(event) => {
+            const target = event.target as HTMLElement | null;
+            const anchor = target?.closest("a[data-analytics-action]") as HTMLAnchorElement | null;
+            if (!anchor) return;
+            const action = String(anchor.dataset.analyticsAction || "").trim();
+            if (!action) return;
+            trackProfileEvent(
+              action,
+              String(anchor.dataset.analyticsTargetType || "").trim() || null,
+              anchor.getAttribute("href"),
+            );
+          }}
+        >
+          <HeroBlock profile={data} />
+          <PublicProfileShareControls
+            profile={data}
+            sharePath={resolvedCleanBusinessPath}
+            title={title}
+            description={description}
+            onShareAction={trackProfileEvent}
+          />
+          <QuickActionRow profile={data} safeCtas={safeCtas} />
 
-        {data.entity === "host" ? (
-          <>
-            <LocationNowSection profile={data} />
-            <LocationTruckOptionsSection profile={data} />
-            <EventsSection profile={data} />
-            <LocationMapSection profile={data} />
-            <LocationAmenitiesSection profile={data} />
-          </>
-        ) : restaurantProfile ? (
-          <>
-            <MenuSection profile={restaurantProfile} safeCtas={safeCtas} />
-            <RestaurantSchedule profile={restaurantProfile} />
-            <DealsSection profile={restaurantProfile} />
-            <RestaurantSignals profile={restaurantProfile} />
-            <AboutFoodStyle profile={restaurantProfile} />
-            <EventsSection profile={restaurantProfile} />
-            <GalleryStrip profile={restaurantProfile} />
-            <FeaturedBartendersSection profile={restaurantProfile} />
-            <ProofSection profile={restaurantProfile} />
-            <RestaurantSocial profile={restaurantProfile} safeCtas={safeCtas} />
-          </>
-        ) : (
-          <Card className="border-white/10 bg-[#0f0d0b]">
-            <CardHeader>
-              <CardTitle className="text-xl text-white">Supplier profile</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3 text-sm text-white/80">
-              {data.description ? <p>{data.description}</p> : null}
-              {typeof (data as any).metrics?.activeProductCount === "number" ? (
-                <p>Active products: {(data as any).metrics.activeProductCount}</p>
-              ) : null}
-            </CardContent>
-          </Card>
-        )}
-        <RelatedLocalDiscovery
-          data={data}
-          citySlug={citySlug}
-          restaurantProfile={restaurantProfile}
-        />
-      </main>
+          {data.entity === "host" ? (
+            <>
+              <LocationNowSection profile={data} />
+              <LocationTruckOptionsSection profile={data} />
+              <EventsSection profile={data} />
+              <LocationMapSection profile={data} />
+              <LocationAmenitiesSection profile={data} />
+            </>
+          ) : restaurantProfile ? (
+            <>
+              <MenuSection profile={restaurantProfile} safeCtas={safeCtas} />
+              <RestaurantSchedule profile={restaurantProfile} />
+              <DealsSection profile={restaurantProfile} />
+              <RestaurantSignals profile={restaurantProfile} />
+              <AboutFoodStyle profile={restaurantProfile} />
+              <EventsSection profile={restaurantProfile} />
+              <GalleryStrip profile={restaurantProfile} />
+              <FeaturedBartendersSection profile={restaurantProfile} />
+              <ProofSection profile={restaurantProfile} />
+              <RestaurantSocial profile={restaurantProfile} safeCtas={safeCtas} />
+            </>
+          ) : (
+            <Card className="border-white/10 bg-[#0f0d0b]">
+              <CardHeader>
+                <CardTitle className="text-xl text-white">Supplier profile</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3 text-sm text-white/80">
+                {data.description ? <p>{data.description}</p> : null}
+                {typeof (data as any).metrics?.activeProductCount === "number" ? (
+                  <p>Active products: {(data as any).metrics.activeProductCount}</p>
+                ) : null}
+              </CardContent>
+            </Card>
+          )}
+          <RelatedLocalDiscovery
+            data={data}
+            citySlug={citySlug}
+            restaurantProfile={restaurantProfile}
+          />
+        </main>
+      </ProfileErrorBoundary>
 
       <footer className="mt-8 border-t border-white/10 bg-[#0b0908]">
         <div className="mx-auto flex w-full max-w-5xl flex-col gap-2 px-4 py-5 text-sm text-white/70 sm:flex-row sm:items-center sm:justify-between">
