@@ -1882,6 +1882,19 @@ export default function PublicProfilePage() {
     }
   }, [data?.id, data?.profileType, querySource, trackProfileEvent]);
 
+  const cleanProfilePath = cleanBusinessSlug
+    ? buildCleanPublicBusinessPath(`/${cleanBusinessSlug}`)
+    : null;
+  const resolvedCleanBusinessPath =
+    String((data as any)?.cleanBusinessPath || "").trim() || cleanProfilePath;
+
+  useEffect(() => {
+    const routeRef = String(cleanBusinessRoute?.affiliateTag || "").trim();
+    if (!routeRef || !resolvedCleanBusinessPath) return;
+    if (!isLikelyCleanAffiliateTagSegment(routeRef)) return;
+    setAffiliateRef(routeRef);
+  }, [cleanBusinessRoute?.affiliateTag, resolvedCleanBusinessPath]);
+
   if (isLoading || cleanBusinessLoading) {
     return <div className="mx-auto max-w-4xl px-4 py-10">Loading profile...</div>;
   }
@@ -1904,18 +1917,6 @@ export default function PublicProfilePage() {
     data.seo?.seoDescription ||
     data.description ||
     "Find local food activity, menus, deals, and nearby places on MealScout.";
-  const cleanProfilePath = cleanBusinessSlug
-    ? buildCleanPublicBusinessPath(`/${cleanBusinessSlug}`)
-    : null;
-  const resolvedCleanBusinessPath =
-    String((data as any)?.cleanBusinessPath || "").trim() || cleanProfilePath;
-
-  useEffect(() => {
-    const routeRef = String(cleanBusinessRoute?.affiliateTag || "").trim();
-    if (!routeRef || !resolvedCleanBusinessPath) return;
-    if (!isLikelyCleanAffiliateTagSegment(routeRef)) return;
-    setAffiliateRef(routeRef);
-  }, [cleanBusinessRoute?.affiliateTag, resolvedCleanBusinessPath]);
   const canonicalUrl =
     (resolvedCleanBusinessPath && typeof window !== "undefined"
       ? new URL(resolvedCleanBusinessPath, window.location.origin).toString()
