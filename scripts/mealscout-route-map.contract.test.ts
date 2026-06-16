@@ -95,6 +95,15 @@ function requireMatch(pattern: RegExp, label: string) {
 ].forEach((snippet) => requireIncludes(snippet, `server route group ${snippet}`));
 
 [
+  "registerMealScoutIntakeRoutes",
+  "GET /api/mealscout/intake/action-cards",
+  "stable empty JSON collection",
+  "B2 owns any future `POST /api/mealscout/intake/preview` `actionCards` response-shape mapping",
+].forEach((snippet) =>
+  requireIncludes(snippet, `intake action-card route-surface guardrail ${snippet}`),
+);
+
+[
   "/admin/dashboard",
   "/api/admin/launch-board",
   "/api/admin/users/:id/verify-insurance",

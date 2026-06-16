@@ -67,6 +67,7 @@ import { registerAdminMarketHeatmapRoutes } from "./routes/adminMarketHeatmapRou
 import { registerSupportRoutes } from "./routes/supportRoutes";
 import { registerRecommendationRoutes } from "./routes/recommendationRoutes";
 import { registerScoutcoinRoutes } from "./routes/scoutcoinRoutes";
+import { registerMealScoutIntakeRoutes } from "./routes/mealscoutIntakeRoutes";
 import {
   notifyNearbyDealSubscribers,
   notifyRestaurantFollowersOfDeal,
@@ -151,6 +152,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerPublicSeoLandingRoutes(app);
   registerRecommendationRoutes(app);
   registerScoutcoinRoutes(app);
+  registerMealScoutIntakeRoutes(app);
   registerScoutSurfaceRoutes(app);
 
   registerSeoRoutes(app);

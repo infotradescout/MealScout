@@ -154,8 +154,13 @@ Public discovery/profile/SEO/search:
 - `registerLocationDemandRoutes`
 - `registerLocationUtilityRoutes`
 - `registerRecommendationRoutes`
+- `registerMealScoutIntakeRoutes`
 - `registerScoutSurfaceRoutes`
 - `app.get("/api/signals")`
+
+Intake route-surface guardrail:
+
+- `GET /api/mealscout/intake/action-cards` returns a stable empty JSON collection for B1 route-surface compatibility only. B2 owns any future `POST /api/mealscout/intake/preview` `actionCards` response-shape mapping.
 
 Restaurant operations:
 
