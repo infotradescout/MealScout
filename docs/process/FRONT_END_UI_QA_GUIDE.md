@@ -52,4 +52,3 @@ Record:
 - Screenshot or video path when visual behavior matters
 - Any console/network errors
 - PASS/FAIL and follow-up lane
-

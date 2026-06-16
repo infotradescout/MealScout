@@ -51,4 +51,3 @@ Refactor evidence must name:
 ## Evidence Location
 
 Use `docs/evidence/` for lane-specific proof packets and link them from release notes or review packets.
-

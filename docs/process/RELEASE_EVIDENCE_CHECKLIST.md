@@ -39,4 +39,3 @@ Minimum evidence:
 - tests/contracts proving parity
 - user journey rechecked after refactor
 - rollback/split plan
-

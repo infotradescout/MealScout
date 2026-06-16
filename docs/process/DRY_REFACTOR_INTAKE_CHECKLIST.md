@@ -33,4 +33,3 @@ Use this before touching oversized files, shared fetch layers, shared storage, r
 - Schema or data-shape redesign without a separate approved lane.
 - Removing try/catch or fallback handling without parity proof.
 - Converting raw fetch calls globally without user journey QA.
-

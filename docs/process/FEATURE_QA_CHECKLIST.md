@@ -37,4 +37,3 @@ Use this checklist for any feature, bug fix, or public-facing data lane.
 - [ ] Screenshots/video linked when visual
 - [ ] Open defects prioritized
 - [ ] Final git status recorded
-

@@ -31,4 +31,3 @@ Action: batch with cleanup or design polish.
 Behavior is intentional, unsupported, or requires a product decision.
 
 Action: document the decision or route to product.
-

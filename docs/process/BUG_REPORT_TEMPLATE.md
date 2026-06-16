@@ -55,4 +55,3 @@ Who is affected and what workflow is blocked or degraded.
 ## Proposed Next Action
 
 Fix now / route to backlog / needs owner/product decision / cannot reproduce.
-
