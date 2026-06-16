@@ -22,6 +22,7 @@ import { resolveCanonicalShareUrl } from "@/lib/share";
 import { setAffiliateRef } from "@/lib/share";
 import { SEOHead } from "@/components/seo-head";
 import { ProfileErrorBoundary } from "@/components/public-profile/ProfileErrorBoundary";
+import { TruckHero } from "@/components/public-profile/TruckHero";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -1650,7 +1651,10 @@ function RestaurantSchedule({ profile }: { profile: PublicRestaurantProfile }) {
   );
 
   return (
-    <Card className="border-white/10 bg-[#0f0d0b]">
+    <Card
+      id={profile.profileType === "truck" ? "truck-schedule" : undefined}
+      className="border-white/10 bg-[#0f0d0b]"
+    >
       <CardHeader>
         <CardTitle className="text-xl text-white">Hours and schedule</CardTitle>
       </CardHeader>
@@ -1727,7 +1731,7 @@ function RestaurantSchedule({ profile }: { profile: PublicRestaurantProfile }) {
         ) : null}
         {profile.profileType === "truck" && !hasTruckSchedule ? (
           <p className="rounded-md border border-white/15 bg-white/5 px-3 py-2 text-xs text-white/75">
-            Schedule: none found.
+            No upcoming stops listed
           </p>
         ) : null}
       </CardContent>
@@ -2166,7 +2170,11 @@ export default function PublicProfilePage() {
             );
           }}
         >
-          <HeroBlock profile={data} />
+          {restaurantProfile?.profileType === "truck" ? (
+            <TruckHero profile={restaurantProfile} safeCtas={safeCtas} />
+          ) : (
+            <HeroBlock profile={data} />
+          )}
           <PublicProfileShareControls
             profile={data}
             sharePath={resolvedCleanBusinessPath}
