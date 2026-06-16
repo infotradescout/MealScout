@@ -7,6 +7,7 @@ const manualTruckIntakeRunbook = readFileSync("docs/MANUAL_TRUCK_INTAKE_RUNBOOK.
 const publicProfilePage = readFileSync("client/src/pages/public-profile.tsx", "utf8");
 const publicDiscoveryRoutes = readFileSync("server/routes/publicDiscoveryRoutes.ts", "utf8");
 const scoutPage = readFileSync("client/src/pages/scout-prototype.tsx", "utf8");
+const scoutSurfaceService = readFileSync("server/services/scoutSurfaceService.ts", "utf8");
 
 const expectedTruckIds = new Map([
   ["3D Eats & Tea", "95c4e656-f3cc-46ab-ae18-53f549cecfd1"],
@@ -65,6 +66,28 @@ assert(
     scoutPage.includes("\"Not live now\""),
   "Scout cards must keep clean truck profile links and honest incomplete-state labels.",
 );
+
+const scoutSurfaceCompact = scoutSurfaceService.replace(/\s+/g, " ");
+assert(
+  scoutSurfaceCompact.includes('href: buildPublicProfilePath( "truck", truckId') &&
+    scoutSurfaceCompact.includes('entityType === "truck" ? "truck" : "restaurant"') &&
+    !scoutSurfaceService.includes('href: `/truck/${encodeURIComponent(truckId)}`') &&
+    !scoutSurfaceService.includes('? `/truck/${encodeURIComponent(restaurantId)}`') &&
+    !scoutSurfaceService.includes(': `/restaurant/${encodeURIComponent(restaurantId)}`'),
+  "Scout surface truck CTAs must emit clean /truck/{slug}--{uuid} paths, not /truck/:id or /restaurant/:id.",
+);
+
+for (const [name, id] of expectedTruckIds) {
+  const slug = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
+  const expectedPath = `/truck/${slug}--${id}`;
+  assert.match(expectedPath, /^\/truck\/[a-z0-9-]+--[a-f0-9-]{36}$/);
+  assert(!expectedPath.includes("/restaurant/"));
+  assert(!/^\/truck\/[a-f0-9-]{36}$/.test(expectedPath));
+}
 
 assert(Array.isArray(tracker.trucks), "Tracker must expose a trucks array.");
 assert.equal(tracker.trucks.length, expectedTruckIds.size);
