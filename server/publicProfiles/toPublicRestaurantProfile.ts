@@ -330,8 +330,9 @@ export function toPublicRestaurantProfile(input: {
         .map((item: any) => {
           const itemName = String(item?.name || "").trim();
           if (!itemName) return null;
+          const hasPrice = item?.priceCents !== null && item?.priceCents !== undefined;
           const priceValue = Number(item?.priceCents);
-          const priceLabel = Number.isFinite(priceValue)
+          const priceLabel = hasPrice && Number.isFinite(priceValue)
             ? `$${(priceValue / 100).toFixed(2)}`
             : null;
           return {

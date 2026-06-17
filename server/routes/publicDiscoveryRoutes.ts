@@ -794,7 +794,7 @@ const buildPublicMenuPayload = async (
               if (!itemName) return acc;
               const priceRaw = String(item?.price || "").trim();
               const numericPrice = Number(priceRaw.replace(/[^0-9.]/g, ""));
-              const priceCents = Number.isFinite(numericPrice)
+              const priceCents = priceRaw && Number.isFinite(numericPrice)
                 ? Math.round(numericPrice * 100)
                 : null;
               if (!acc[sectionName]) {
