@@ -1,8 +1,10 @@
 import { readFileSync } from "node:fs";
 
-const applyScript = readFileSync("scripts/applySweetLovePartialMenu.ts", "utf8");
-const publicDiscoveryRoutes = readFileSync("server/routes/publicDiscoveryRoutes.ts", "utf8");
-const publicProfileMapper = readFileSync("server/publicProfiles/toPublicRestaurantProfile.ts", "utf8");
+const readText = (path: string) => readFileSync(path, "utf8").replace(/\r\n/g, "\n");
+
+const applyScript = readText("scripts/applySweetLovePartialMenu.ts");
+const publicDiscoveryRoutes = readText("server/routes/publicDiscoveryRoutes.ts");
+const publicProfileMapper = readText("server/publicProfiles/toPublicRestaurantProfile.ts");
 
 const requireIncludes = (source: string, snippet: string, message: string) => {
   if (!source.includes(snippet)) throw new Error(message);
