@@ -650,6 +650,12 @@ export default function RestaurantOwnerDashboard() {
       : currentRestaurant?.businessType === "bar"
         ? "bar"
         : "restaurant";
+  const currentMenuApproval = (currentRestaurant as any)?.menuApproval || null;
+  const menuApprovalRequired = Boolean(
+    currentMenuApproval?.ownerApprovalRequired &&
+      (currentRestaurant?.isFoodTruck ||
+        currentRestaurant?.businessType === "food_truck"),
+  );
   const { data: publicProfileForQr } = useQuery<PublicProfileQrPayload | null>({
     queryKey: ["/api/public/profiles", currentPublicEntityType, selectedRestaurant, "qr-kit"],
     enabled: Boolean(selectedRestaurant),
@@ -1661,6 +1667,43 @@ export default function RestaurantOwnerDashboard() {
     },
   });
 
+  const updateMenuApprovalMutation = useMutation({
+    mutationFn: async (payload: { action: "approve" | "reject" | "skip" }) => {
+      return await apiRequest(
+        "PATCH",
+        `/api/restaurants/${selectedRestaurant}/menu-approval`,
+        payload,
+      );
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: ["/api/restaurants/my-restaurants"],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/public/profiles", currentPublicEntityType, selectedRestaurant, "qr-kit"],
+      });
+      toast({
+        title:
+          variables.action === "approve"
+            ? "Menu approved"
+            : variables.action === "reject"
+              ? "Menu marked not current"
+              : "Menu review skipped",
+        description:
+          variables.action === "skip"
+            ? "The reminder will stay active until you approve or mark the menu not current."
+            : "Your public menu trust label has been updated.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Unable to update menu review",
+        description: error?.message || "Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const uploadProfileMediaMutation = useMutation({
     mutationFn: async (payload: {
       file: File;
@@ -1975,6 +2018,63 @@ export default function RestaurantOwnerDashboard() {
           </p>
         </CardContent>
       </Card>
+
+      {currentRestaurant && menuApprovalRequired ? (
+        <Card
+          className="mb-6 border-amber-300 bg-amber-50"
+          data-testid="truck-menu-owner-approval-task"
+        >
+          <CardHeader>
+            <CardTitle className="text-base text-amber-950">
+              Review your public menu
+            </CardTitle>
+            <CardDescription className="text-amber-900/80">
+              This truck has menu details visible on MealScout, but they still need owner confirmation before we call them owner-approved.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-amber-950">
+              Public label now: {String(currentMenuApproval?.label || "Needs owner confirmation")}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => updateMenuApprovalMutation.mutate({ action: "approve" })}
+                disabled={updateMenuApprovalMutation.isPending}
+              >
+                Approve menu as current
+              </Button>
+              <Link href={menuBuilderHref}>
+                <Button type="button" size="sm" variant="outline">
+                  Edit menu items/prices
+                </Button>
+              </Link>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => updateMenuApprovalMutation.mutate({ action: "reject" })}
+                disabled={updateMenuApprovalMutation.isPending}
+              >
+                Mark menu not current
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => updateMenuApprovalMutation.mutate({ action: "skip" })}
+                disabled={updateMenuApprovalMutation.isPending}
+              >
+                Skip for now
+              </Button>
+            </div>
+            <p className="text-xs text-amber-900/75">
+              Skipping keeps this reminder active. Viewing this page never approves the menu automatically.
+            </p>
+          </CardContent>
+        </Card>
+      ) : null}
 
       {/* Restaurant Selector */}
       {restaurants.length > 1 && (
