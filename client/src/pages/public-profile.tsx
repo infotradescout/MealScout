@@ -22,6 +22,10 @@ import { resolveCanonicalShareUrl } from "@/lib/share";
 import { setAffiliateRef } from "@/lib/share";
 import { SEOHead } from "@/components/seo-head";
 import { ProfileErrorBoundary } from "@/components/public-profile/ProfileErrorBoundary";
+import {
+  ProfileHeroMedia,
+  buildPublicProfileHeroAssets,
+} from "@/components/public-profile/ProfileHeroMedia";
 import { TruckHero } from "@/components/public-profile/TruckHero";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -318,27 +322,16 @@ const renderCtaButton = (cta: PublicCta, variant: "default" | "outline", key: st
 );
 
 function HeroBlock({ profile }: { profile: PublicProfilePayload }) {
-  const heroImage =
-    profile.entity === "host"
-      ? profile.spotImageUrl ||
-        profile.coverImageUrl ||
-        profile.logoUrl ||
-        (profile as any).profileImageUrl ||
-        (profile as any).truckPhotoLogo ||
-        profile.imageUrl
-      : isRestaurantLikeEntity(profile.entity)
-        ? (profile as any).coverImageUrl ||
-          (profile as any).logoUrl ||
-          (profile as any).profileImageUrl ||
-          (profile as any).truckPhotoLogo ||
-          (profile as any).imageUrl
-        : (profile as any).logoUrl || (profile as any).profileImageUrl || (profile as any).imageUrl;
-  const initials = String(profile.displayName || "MS")
-    .split(" ")
-    .map((part) => part[0] || "")
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
+  const heroAssets = buildPublicProfileHeroAssets({
+    entity: profile.entity === "host" ? profile.profileType : profile.entity,
+    displayName: profile.displayName,
+    spotImageUrl: "spotImageUrl" in profile ? profile.spotImageUrl : null,
+    coverImageUrl: "coverImageUrl" in profile ? profile.coverImageUrl : null,
+    logoUrl: "logoUrl" in profile ? profile.logoUrl : null,
+    profileImageUrl: (profile as any).profileImageUrl,
+    truckPhotoLogo: (profile as any).truckPhotoLogo,
+    imageUrl: profile.imageUrl,
+  });
   const decisionLocation = decisionLocationLine(profile);
   const hours = isRestaurantLikeEntity(profile.entity)
     ? String((profile as PublicRestaurantProfile).hours || "").trim()
@@ -363,22 +356,11 @@ function HeroBlock({ profile }: { profile: PublicProfilePayload }) {
 
   return (
     <section className="overflow-hidden rounded-xl border border-white/10 bg-[#0f0d0b]">
-      {heroImage ? (
-        <div
-          className="h-28 w-full bg-cover bg-center md:h-48"
-          style={{
-            backgroundImage: `linear-gradient(180deg, rgba(0,0,0,.16), rgba(0,0,0,.78)), url('${heroImage}')`,
-          }}
-        />
-      ) : (
-        <div className="relative h-28 w-full bg-[radial-gradient(circle_at_22%_24%,rgba(255,96,35,0.34),transparent_48%),linear-gradient(145deg,#1d100a_0%,#120d09_48%,#0d0a08_100%)] md:h-48">
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="flex h-16 w-16 items-center justify-center rounded-full border border-orange-300/35 bg-black/30 text-xl font-black text-orange-100">
-              {initials}
-            </div>
-          </div>
-        </div>
-      )}
+      <ProfileHeroMedia
+        displayName={profile.displayName}
+        coverImageUrl={heroAssets.coverImageUrl}
+        logoImageUrl={heroAssets.logoImageUrl}
+      />
       <div className="space-y-3 p-4 sm:p-5">
         <div className="flex flex-wrap items-center gap-2 text-xs">
           {liveStatus ? <Badge variant="secondary">{liveStatus}</Badge> : null}
