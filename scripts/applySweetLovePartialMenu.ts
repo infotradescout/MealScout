@@ -4,7 +4,7 @@ import { count, eq } from "drizzle-orm";
 import { db, pool } from "../server/db";
 import { menuItems, restaurants, truckImportListings } from "../shared/schema";
 
-const TRUCK_ID = "f3b76054-f355-43b0-ae18-53f549cecfd1";
+const TRUCK_ID = "f3b76054-f355-43b0-a2d3-901277748557";
 const TRUCK_NAME = "Sweet Love";
 const SOURCE_TYPE = "uploaded_menu_pdf";
 const SOURCE_LABEL = "uploaded Sweet Love menu PDF";

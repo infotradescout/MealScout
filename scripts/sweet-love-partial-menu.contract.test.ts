@@ -16,8 +16,18 @@ const requireExcludes = (source: string, snippet: string, message: string) => {
 
 requireIncludes(
   applyScript,
-  'const TRUCK_ID = "f3b76054-f355-43b0-ae18-53f549cecfd1";',
-  "Sweet Love menu script must target only the known Sweet Love truck id.",
+  'const TRUCK_ID = "f3b76054-f355-43b0-a2d3-901277748557";',
+  "Sweet Love menu script must target only the active Sweet Love public truck profile id.",
+);
+requireExcludes(
+  applyScript,
+  "f3b76054-f355-43b0-ae18-53f549cecfd1",
+  "Sweet Love menu script must not keep the stale expected id.",
+);
+requireExcludes(
+  applyScript,
+  "6c60d5c0-3e68-4cf6-b48f-804a51921291",
+  "Sweet Love menu script must not target the inactive Sweet Love-like row.",
 );
 requireIncludes(
   applyScript,
