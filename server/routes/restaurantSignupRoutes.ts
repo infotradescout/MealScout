@@ -24,6 +24,54 @@ type RestaurantSignupRouteDependencies = {
   }) => Promise<any>;
 };
 
+const restaurantSignupUserSchema = z.object({
+  email: z.string({ required_error: "Email is required" }).email("Valid email is required"),
+  firstName: z
+    .string({ required_error: "First name is required" })
+    .min(1, "First name is required"),
+  lastName: z
+    .string({ required_error: "Last name is required" })
+    .min(1, "Last name is required"),
+  phone: z
+    .string({ required_error: "Phone number is required" })
+    .refine(
+      (value) => value.replace(/\D/g, "").length >= 10,
+      "Valid phone number is required",
+    ),
+  password: z
+    .string({
+      required_error: "Create a password to finish your free profile.",
+    })
+    .min(1, PASSWORD_REQUIREMENTS)
+    .refine(isPasswordStrong, PASSWORD_REQUIREMENTS),
+});
+
+function getFriendlySignupValidationMessage(error: z.ZodError): string {
+  const { fieldErrors, formErrors } = error.flatten();
+
+  if (fieldErrors.password?.length) {
+    return fieldErrors.password[0] || "Create a password to finish your free profile.";
+  }
+
+  if (fieldErrors.email?.length) {
+    return fieldErrors.email[0] || "Please complete the required fields.";
+  }
+
+  if (fieldErrors.firstName?.length) {
+    return fieldErrors.firstName[0] || "Please complete the required fields.";
+  }
+
+  if (fieldErrors.lastName?.length) {
+    return fieldErrors.lastName[0] || "Please complete the required fields.";
+  }
+
+  if (fieldErrors.phone?.length) {
+    return fieldErrors.phone[0] || "Please complete the required fields.";
+  }
+
+  return formErrors[0] || "Please complete the required fields.";
+}
+
 export function registerRestaurantSignupRoutes(
   app: Express,
   { ensureTrialForUser, queueSocialPost }: RestaurantSignupRouteDependencies,
@@ -53,23 +101,17 @@ export function registerRestaurantSignupRoutes(
           user = (await storage.getUserById(user.id)) || user;
         }
       } else {
-        const validatedUserData = z
-          .object({
-            email: z.string().email(),
-            firstName: z.string().min(1),
-            lastName: z.string().min(1),
-            phone: z
-              .string()
-              .refine(
-                (value) => value.replace(/\D/g, "").length >= 10,
-                "Valid phone number is required",
-              ),
-            password: z
-              .string()
-              .min(1, PASSWORD_REQUIREMENTS)
-              .refine(isPasswordStrong, PASSWORD_REQUIREMENTS),
-          })
-          .parse(userData);
+        const userParseResult = restaurantSignupUserSchema.safeParse(
+          userData || {},
+        );
+        if (!userParseResult.success) {
+          return res.status(400).json({
+            message: getFriendlySignupValidationMessage(
+              userParseResult.error,
+            ),
+          });
+        }
+        const validatedUserData = userParseResult.data;
 
         const existingUser = await storage.getUserByEmail(
           validatedUserData.email,
@@ -118,9 +160,15 @@ export function registerRestaurantSignupRoutes(
         });
       }
 
-      const validatedRestaurantData = insertRestaurantSchema
+      const restaurantParseResult = insertRestaurantSchema
         .omit({ ownerId: true })
-        .parse(restaurantData);
+        .safeParse(restaurantData || {});
+      if (!restaurantParseResult.success) {
+        return res.status(400).json({
+          message: "Please complete the required fields.",
+        });
+      }
+      const validatedRestaurantData = restaurantParseResult.data;
       const promoted = await promoteBusinessSetupToProfile(user.id, {
         businessName: validatedRestaurantData.name,
         businessType: validatedRestaurantData.businessType,
@@ -300,8 +348,13 @@ export function registerRestaurantSignupRoutes(
       });
     } catch (error: any) {
       console.error("Error in restaurant signup:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({
+          message: getFriendlySignupValidationMessage(error),
+        });
+      }
       res.status(400).json({
-        message: error.message || "Failed to create restaurant account",
+        message: "Please complete the required fields.",
       });
     }
   });
