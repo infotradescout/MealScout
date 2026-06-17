@@ -19,6 +19,31 @@ requireIncludes(
 );
 requireIncludes(
   applyScript,
+  'const targetId = getArg("--target-id");',
+  "Sweet Love menu script must accept an explicit target id.",
+);
+requireIncludes(
+  applyScript,
+  "if (apply && allowProduction && !targetId)",
+  "Production apply without explicit --target-id must fail closed.",
+);
+requireIncludes(
+  applyScript,
+  "Production apply requires explicit --target-id <ACTUAL_PRODUCTION_ID>",
+  "Production apply failure must clearly explain the required target id.",
+);
+requireIncludes(
+  applyScript,
+  "const resolvedTargetId = targetId || TRUCK_ID;",
+  "Dry-run may use the known Sweet Love id, while production apply must use --target-id.",
+);
+requireIncludes(
+  applyScript,
+  'String((restaurant as any).id || "").trim() !== TRUCK_ID',
+  "Resolved target id must be verified against the expected Sweet Love profile before writing.",
+);
+requireIncludes(
+  applyScript,
   "price: null",
   "Sweet Love menu must preserve missing prices as null.",
 );

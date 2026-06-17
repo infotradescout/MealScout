@@ -12,6 +12,14 @@ const SOURCE_LABEL = "uploaded Sweet Love menu PDF";
 const apply = process.argv.includes("--apply");
 const allowProduction = process.argv.includes("--allow-production");
 
+const getArg = (flag: string) => {
+  const index = process.argv.indexOf(flag);
+  if (index < 0) return "";
+  return String(process.argv[index + 1] || "").trim();
+};
+
+const targetId = getArg("--target-id");
+
 type SweetLoveMenuItem = {
   section: string;
   item_name: string;
@@ -108,13 +116,24 @@ const run = async () => {
   if (apply && !allowProduction && /mealscout/i.test(String(process.env.DATABASE_URL || ""))) {
     throw new Error("Production-looking DATABASE_URL requires --allow-production.");
   }
+  if (apply && allowProduction && !targetId) {
+    throw new Error(
+      "Production apply requires explicit --target-id <ACTUAL_PRODUCTION_ID>; refusing name/default targeting.",
+    );
+  }
 
+  const resolvedTargetId = targetId || TRUCK_ID;
   const [restaurant] = await db
     .select()
     .from(restaurants)
-    .where(eq(restaurants.id, TRUCK_ID))
+    .where(eq(restaurants.id, resolvedTargetId))
     .limit(1);
-  if (!restaurant) throw new Error(`Missing restaurant ${TRUCK_ID}`);
+  if (!restaurant) throw new Error(`Missing restaurant ${resolvedTargetId}`);
+  if (String((restaurant as any).id || "").trim() !== TRUCK_ID) {
+    throw new Error(
+      `Resolved target ${String((restaurant as any).id || "").trim()} is not the expected Sweet Love profile ${TRUCK_ID}.`,
+    );
+  }
   if (String((restaurant as any).name || "").trim() !== TRUCK_NAME) {
     throw new Error(`Restaurant name mismatch for ${TRUCK_ID}`);
   }
@@ -133,7 +152,7 @@ const run = async () => {
   const [activeMenuCountRow] = await db
     .select({ value: count(menuItems.id) })
     .from(menuItems)
-    .where(eq(menuItems.restaurantId, TRUCK_ID));
+    .where(eq(menuItems.restaurantId, resolvedTargetId));
   const activeMenuItemCount = Number(activeMenuCountRow?.value || 0);
   if (activeMenuItemCount > 0) {
     throw new Error(
