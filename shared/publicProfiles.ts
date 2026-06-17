@@ -139,6 +139,14 @@ export type PublicMenuVariant = {
   menuUrl: string | null;
 };
 
+export type PublicMenuApprovalState = {
+  status: "owner_approved" | "needs_owner_confirmation" | "rejected" | "unavailable";
+  label: string;
+  ownerApproved: boolean;
+  ownerApprovalRequired: boolean;
+  reviewedAt: string | null;
+};
+
 export type PublicTruckScheduleSummary = {
   status:
     | "scheduled"
@@ -222,6 +230,7 @@ export type PublicRestaurantProfile = {
   activeMenuId: string | null;
   menuContextNote: string | null;
   menuLastUpdatedAt: string | null;
+  menuApproval: PublicMenuApprovalState;
   menuImageUrl: string | null;
   menuPdfUrl: string | null;
   menuUrl: string | null;

@@ -106,6 +106,54 @@ function getSocialPublishingConfig(req: any) {
   };
 }
 
+const asRecord = (value: unknown): Record<string, any> =>
+  value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, any>)
+    : {};
+
+const isTruckRow = (restaurant: any) =>
+  Boolean(
+    restaurant?.isFoodTruck ||
+      String(restaurant?.businessType || "").toLowerCase() === "food_truck",
+  );
+
+const buildOwnerMenuApprovalState = (restaurant: any, menuItemCount: number) => {
+  const rawData = asRecord(restaurant?.rawData);
+  const approval = asRecord(rawData.ownerMenuApproval);
+  const status = String(approval.status || "").trim().toLowerCase();
+  const ownerApproved = status === "approved" || approval.ownerApproved === true;
+  const rejected = status === "rejected" || status === "not_current";
+  const hasMenuSurface = Boolean(
+    menuItemCount > 0 ||
+      restaurant?.menuUrl ||
+      restaurant?.menuImageUrl ||
+      restaurant?.menuPdfUrl,
+  );
+  const ownerApprovalRequired = Boolean(
+    isTruckRow(restaurant) && hasMenuSurface && !ownerApproved && !rejected,
+  );
+  return {
+    status: ownerApproved
+      ? "owner_approved"
+      : rejected
+        ? "rejected"
+        : ownerApprovalRequired
+          ? "needs_owner_confirmation"
+          : "unavailable",
+    label: ownerApproved
+      ? "Owner-approved menu"
+      : rejected
+        ? "Menu unavailable / pending update"
+        : ownerApprovalRequired
+          ? "Menu added from available source — needs owner confirmation"
+          : "Menu unavailable / pending update",
+    ownerApproved,
+    ownerApprovalRequired,
+    reviewedAt: String(approval.reviewedAt || "").trim() || null,
+    skippedAt: String(approval.skippedAt || "").trim() || null,
+  };
+};
+
 function getSafeRedirectPath(value: unknown, fallback = "/parking-pass?tab=schedule") {
   if (typeof value !== "string") return fallback;
   const trimmed = value.trim();
@@ -299,17 +347,27 @@ export function registerRestaurantOperationsRoutes(
         const attachVerificationState = async (rows: any[]) => {
           if (!rows.length) return rows;
           const ids = rows.map((row) => row.id);
-          const verificationRows = await db
-            .select({
-              restaurantId: verificationRequests.restaurantId,
-              status: verificationRequests.status,
-              documents: verificationRequests.documents,
-              licenseNumber: verificationRequests.licenseNumber,
-              submittedAt: verificationRequests.submittedAt,
-            })
-            .from(verificationRequests)
-            .where(inArray(verificationRequests.restaurantId, ids))
-            .orderBy(sql`${verificationRequests.submittedAt} desc nulls last`);
+          const [verificationRows, menuCountRows] = await Promise.all([
+            db
+              .select({
+                restaurantId: verificationRequests.restaurantId,
+                status: verificationRequests.status,
+                documents: verificationRequests.documents,
+                licenseNumber: verificationRequests.licenseNumber,
+                submittedAt: verificationRequests.submittedAt,
+              })
+              .from(verificationRequests)
+              .where(inArray(verificationRequests.restaurantId, ids))
+              .orderBy(sql`${verificationRequests.submittedAt} desc nulls last`),
+            db
+              .select({
+                restaurantId: menuItems.restaurantId,
+                count: sql<number>`count(*)::integer`,
+              })
+              .from(menuItems)
+              .where(inArray(menuItems.restaurantId, ids))
+              .groupBy(menuItems.restaurantId),
+          ]);
 
           const latestByRestaurant = new Map<string, any>();
           for (const row of verificationRows) {
@@ -317,9 +375,17 @@ export function registerRestaurantOperationsRoutes(
             if (!restaurantId || latestByRestaurant.has(restaurantId)) continue;
             latestByRestaurant.set(restaurantId, row);
           }
+          const menuCountByRestaurant = new Map<string, number>();
+          for (const row of menuCountRows) {
+            menuCountByRestaurant.set(
+              String(row.restaurantId || ""),
+              Number(row.count || 0),
+            );
+          }
 
           return rows.map((restaurant) => {
             const latestVerification = latestByRestaurant.get(String(restaurant.id));
+            const menuItemCount = menuCountByRestaurant.get(String(restaurant.id)) || 0;
             const businessInsuranceSubmitted =
               Boolean(String(latestVerification?.licenseNumber || "").trim()) ||
               (Array.isArray(latestVerification?.documents) &&
@@ -327,6 +393,8 @@ export function registerRestaurantOperationsRoutes(
               String(latestVerification?.status || "").toLowerCase() === "approved";
             return {
               ...restaurant,
+              menuItemCount,
+              menuApproval: buildOwnerMenuApprovalState(restaurant, menuItemCount),
               verificationState: getBusinessVerificationState({
                 isActive: restaurant.isActive,
                 isVerified: restaurant.isVerified,
@@ -373,6 +441,104 @@ export function registerRestaurantOperationsRoutes(
       } catch (error) {
         console.error("Error fetching user restaurants:", error);
         res.status(500).json({ message: "Failed to fetch restaurants" });
+      }
+    },
+  );
+
+  app.patch(
+    "/api/restaurants/:restaurantId/menu-approval",
+    isAuthenticated,
+    async (req: any, res) => {
+      try {
+        const { restaurantId } = req.params;
+        const canBypassOwnership = isAdminLikeUserType(req.user?.userType);
+        if (!canBypassOwnership) {
+          const isAuthorized = await storage.verifyRestaurantOwnership(
+            restaurantId,
+            req.user.id,
+            "manageProfile",
+          );
+          if (!isAuthorized) {
+            return res.status(403).json({
+              message:
+                "Unauthorized: You can only review menus for restaurants you own",
+            });
+          }
+        }
+
+        const body = z
+          .object({
+            action: z.enum(["approve", "reject", "skip"]),
+            note: z.string().trim().max(1000).optional().nullable(),
+          })
+          .parse(req.body || {});
+
+        const [restaurant] = await db
+          .select()
+          .from(restaurants)
+          .where(eq(restaurants.id, restaurantId))
+          .limit(1);
+        if (!restaurant) {
+          return res.status(404).json({ message: "Restaurant not found" });
+        }
+        if (!isTruckRow(restaurant)) {
+          return res.status(400).json({
+            message: "Menu owner approval gate is only required for food trucks",
+          });
+        }
+
+        const [menuCountRow] = await db
+          .select({ value: sql<number>`count(*)::integer` })
+          .from(menuItems)
+          .where(eq(menuItems.restaurantId, restaurantId));
+        const menuItemCount = Number(menuCountRow?.value || 0);
+        const currentApproval = buildOwnerMenuApprovalState(
+          restaurant,
+          menuItemCount,
+        );
+        if (body.action === "approve" && menuItemCount <= 0) {
+          return res.status(409).json({
+            message: "Cannot approve an empty menu",
+          });
+        }
+
+        const rawData = asRecord((restaurant as any).rawData);
+        const now = new Date().toISOString();
+        const ownerMenuApproval = {
+          ...asRecord(rawData.ownerMenuApproval),
+          status:
+            body.action === "approve"
+              ? "approved"
+              : body.action === "reject"
+                ? "rejected"
+                : "skipped",
+          ownerApproved: body.action === "approve",
+          ownerApprovalRequired: body.action === "skip",
+          reviewedByUserId: req.user.id,
+          reviewedAt: body.action === "skip" ? null : now,
+          skippedAt: body.action === "skip" ? now : null,
+          note: String(body.note || "").trim() || null,
+          previousStatus: currentApproval.status,
+        };
+
+        const [updated] = await db
+          .update(restaurants)
+          .set({
+            rawData: {
+              ...rawData,
+              ownerMenuApproval,
+            } as any,
+            updatedAt: new Date(),
+          } as any)
+          .where(eq(restaurants.id, restaurantId))
+          .returning();
+
+        res.json({
+          menuApproval: buildOwnerMenuApprovalState(updated, menuItemCount),
+        });
+      } catch (error) {
+        console.error("Error updating owner menu approval:", error);
+        res.status(500).json({ message: "Failed to update menu approval" });
       }
     },
   );

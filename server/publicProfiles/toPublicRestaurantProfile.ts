@@ -400,6 +400,67 @@ export function toPublicRestaurantProfile(input: {
   const menuLastUpdatedAt = row.menuLastUpdatedAt
     ? new Date(row.menuLastUpdatedAt).toISOString()
     : null;
+  const rawMenuApproval =
+    rawData && typeof rawData.ownerMenuApproval === "object" && rawData.ownerMenuApproval
+      ? (rawData.ownerMenuApproval as Record<string, any>)
+      : {};
+  const ownerMenuApprovalStatus = String(rawMenuApproval.status || "")
+    .trim()
+    .toLowerCase();
+  const ownerMenuApproved =
+    ownerMenuApprovalStatus === "approved" || rawMenuApproval.ownerApproved === true;
+  const ownerMenuRejected =
+    ownerMenuApprovalStatus === "rejected" || ownerMenuApprovalStatus === "not_current";
+  const hasAnyMenuSurface = Boolean(
+    menuSections.length > 0 ||
+      menuVariants.some((variant) => variant.menuSections.length > 0) ||
+      menuUrl ||
+      menuImageUrl ||
+      menuPdfUrl ||
+      featuredMenuItems.length > 0,
+  );
+  const menuApproval =
+    profileType === "truck" && ownerMenuApproved
+      ? {
+          status: "owner_approved" as const,
+          label: "Owner-approved menu",
+          ownerApproved: true,
+          ownerApprovalRequired: false,
+          reviewedAt: String(rawMenuApproval.reviewedAt || "").trim() || null,
+        }
+      : profileType === "truck" && ownerMenuRejected
+        ? {
+            status: "rejected" as const,
+            label: "Menu unavailable / pending update",
+            ownerApproved: false,
+            ownerApprovalRequired: false,
+            reviewedAt: String(rawMenuApproval.reviewedAt || "").trim() || null,
+          }
+        : profileType === "truck" && hasAnyMenuSurface
+          ? {
+              status: "needs_owner_confirmation" as const,
+              label: "Menu added from available source — needs owner confirmation",
+              ownerApproved: false,
+              ownerApprovalRequired: true,
+              reviewedAt: String(rawMenuApproval.reviewedAt || "").trim() || null,
+            }
+          : {
+              status: "unavailable" as const,
+              label: "Menu unavailable / pending update",
+              ownerApproved: false,
+              ownerApprovalRequired: false,
+              reviewedAt: null,
+            };
+  const publicMenuSections = menuApproval.status === "rejected" ? [] : menuSections;
+  const publicMenuVariants =
+    menuApproval.status === "rejected"
+      ? []
+      : menuVariants;
+  const publicFeaturedMenuItems =
+    menuApproval.status === "rejected" ? [] : featuredMenuItems;
+  const publicMenuUrl = menuApproval.status === "rejected" ? null : menuUrl;
+  const publicMenuImageUrl = menuApproval.status === "rejected" ? null : menuImageUrl;
+  const publicMenuPdfUrl = menuApproval.status === "rejected" ? null : menuPdfUrl;
   const dealCount = Math.max(
     0,
     Number(
@@ -573,7 +634,7 @@ export function toPublicRestaurantProfile(input: {
     buildPublicCta({ label: "Profile", href: canonicalPath, type: "internal" }),
     buildPublicCta({ label: "Order online", href: onlineOrderingUrl, type: "order", priority: 100 }),
     buildPublicCta({ label: "Delivery", href: deliveryUrl, type: "order", priority: 96 }),
-    buildPublicCta({ label: "Menu", href: menuUrl, type: "menu", priority: 94 }),
+    buildPublicCta({ label: "Menu", href: publicMenuUrl, type: "menu", priority: 94 }),
     buildPublicCta({
       label: "Get directions",
       href:
@@ -648,15 +709,16 @@ export function toPublicRestaurantProfile(input: {
     locallyOwned: Boolean(
       row.locallyOwned ?? row.isLocallyOwned ?? row.localOwned ?? false,
     ),
-    menuSections,
-    menuVariants,
+    menuSections: publicMenuSections,
+    menuVariants: publicMenuVariants,
     activeMenuId: String(row.activeMenuId || "").trim() || null,
     menuContextNote: String(row.menuContextNote || "").trim() || null,
     menuLastUpdatedAt,
-    menuImageUrl,
-    menuPdfUrl,
-    menuUrl,
-    featuredMenuItems,
+    menuApproval,
+    menuImageUrl: publicMenuImageUrl,
+    menuPdfUrl: publicMenuPdfUrl,
+    menuUrl: publicMenuUrl,
+    featuredMenuItems: publicFeaturedMenuItems,
     deals: {
       totalActive: Math.max(dealCount, dealItems.length),
       items: dealItems,

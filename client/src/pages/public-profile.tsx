@@ -1039,6 +1039,8 @@ function MenuSection({
     profile.profileType === "truck";
   if (!hasSection) return null;
 
+  const menuApproval = profile.menuApproval;
+  const menuRejected = menuApproval?.status === "rejected";
   const fallbackMenuLink =
     profile.menuPdfUrl || profile.menuImageUrl || activeVariant?.menuUrl || profile.menuUrl || null;
   const updatedLabel = (activeVariant?.menuLastUpdatedAt || profile.menuLastUpdatedAt)
@@ -1121,9 +1123,22 @@ function MenuSection({
             {profile.menuContextNote}
           </p>
         ) : null}
+        {profile.profileType === "truck" && menuApproval?.label ? (
+          <p
+            className={`rounded-md border px-3 py-2 text-xs ${
+              menuApproval.ownerApproved
+                ? "border-emerald-300/35 bg-emerald-500/10 text-emerald-100"
+                : menuRejected
+                  ? "border-white/15 bg-white/5 text-white/75"
+                  : "border-amber-300/35 bg-amber-500/10 text-amber-100"
+            }`}
+          >
+            {menuApproval.label}
+          </p>
+        ) : null}
         {menuCompleteness.state === "partial" ? (
           <p className="rounded-md border border-amber-300/35 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
-            Partial menu from available evidence. More items may be available from this business directly.
+            Partial menu from available source. More items may be available from this business directly.
           </p>
         ) : null}
         {menuCompleteness.state === "unavailable" ? (
