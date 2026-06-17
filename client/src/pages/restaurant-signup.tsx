@@ -176,6 +176,27 @@ function hostOnboardingTransition(
   }
 }
 
+function getSafeFreeProfileErrorMessage(
+  message: string | undefined,
+  fallback: string,
+): string {
+  const normalized = String(message || "").trim();
+  if (!normalized) return fallback;
+
+  const lower = normalized.toLowerCase();
+  if (
+    lower.includes("zoderror") ||
+    lower.includes("invalid_type") ||
+    lower.includes("received undefined") ||
+    lower.includes('path: ["password"]') ||
+    lower.includes("expected: string")
+  ) {
+    return "Please complete the required fields.";
+  }
+
+  return normalized;
+}
+
 export default function RestaurantSignup() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -445,8 +466,10 @@ export default function RestaurantSignup() {
     onError: (error) => {
       toast({
         title: COPY.notifications.signup.errorTitle,
-        description:
-          error.message || COPY.notifications.signup.errorDescription,
+        description: getSafeFreeProfileErrorMessage(
+          error.message,
+          COPY.notifications.signup.errorDescription,
+        ),
         variant: "destructive",
       });
     },
@@ -610,8 +633,10 @@ export default function RestaurantSignup() {
       }
       toast({
         title: COPY.notifications.restaurant.errorTitle,
-        description:
-          error.message || COPY.notifications.restaurant.errorDescription,
+        description: getSafeFreeProfileErrorMessage(
+          error.message,
+          COPY.notifications.restaurant.errorDescription,
+        ),
         variant: "destructive",
       });
     },

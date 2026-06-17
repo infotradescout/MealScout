@@ -6,6 +6,32 @@
 const IS_DEV = import.meta.env.DEV;
 const SHARED_API_FALLBACK = "https://www.mealscout.us";
 const MEALSCOUT_API_ORIGIN_FALLBACK = "https://mealscout.onrender.com";
+
+function isMealScoutSameOriginPath(path: string): boolean {
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+
+  if (
+    normalizedPath.startsWith("/api/auth/") ||
+    normalizedPath.startsWith("/api/admin/") ||
+    normalizedPath.startsWith("/api/affiliate/") ||
+    normalizedPath.startsWith("/api/business-access/")
+  ) {
+    return true;
+  }
+
+  // Owner onboarding depends on the active MealScout session cookie.
+  if (
+    normalizedPath.startsWith("/api/truck-claims") ||
+    normalizedPath === "/api/restaurants/signup"
+  ) {
+    return true;
+  }
+
+  return /^\/api\/restaurants\/[^/]+\/verification\/request(?:\/)?(?:\?|$)/.test(
+    normalizedPath,
+  );
+}
+
 function resolveApiBaseUrl() {
   if (IS_DEV) return "";
 
@@ -52,16 +78,9 @@ export function apiUrl(path: string): string {
       host === "www.mealscout.us" ||
       host === "mealscout.us" ||
       host.endsWith(".mealscout.us");
-    const isAuthPath = path.startsWith("/api/auth/");
-    const isAdminPath = path.startsWith("/api/admin/");
-    const isProtectedAccountPath =
-      path.startsWith("/api/affiliate/") ||
-      path.startsWith("/api/business-access/");
-    // Keep auth/session bootstrap same-origin on MealScout hosts so OAuth/session
-    // cookies remain first-party and survive mobile browser privacy rules.
-    // Keep admin and protected account routes same-origin as well because sessions
-    // are scoped to the frontend host and cross-origin calls can appear anonymous.
-    if (isMealScoutHost && (isAuthPath || isAdminPath || isProtectedAccountPath)) {
+    // Keep auth and protected account routes same-origin on MealScout hosts so
+    // session cookies remain first-party and survive mobile browser privacy rules.
+    if (isMealScoutHost && isMealScoutSameOriginPath(path)) {
       return path.startsWith("/") ? path : `/${path}`;
     }
   }
