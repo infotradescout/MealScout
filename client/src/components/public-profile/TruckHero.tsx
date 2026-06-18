@@ -3,6 +3,11 @@ import { assessPublicMenuCompleteness, normalizeBusinessTypeLabel } from "@/lib/
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ProfileHeroMedia, buildPublicProfileHeroAssets } from "@/components/public-profile/ProfileHeroMedia";
+import {
+  getTruckScheduleAvailabilityLabel,
+  getTruckSchedulePrimaryStop,
+  hasTruckScheduleCta,
+} from "@/components/public-profile/truckScheduleTruth";
 import { CalendarDays, Clock3, MapPin, Route, Truck } from "lucide-react";
 
 type TruckHeroProps = {
@@ -15,21 +20,6 @@ const stopLabel = (stop: PublicTruckScheduleStop | null | undefined) =>
 
 const stopTimeLabel = (stop: PublicTruckScheduleStop | null | undefined) =>
   [stop?.date, stop?.timeWindowLabel].filter(Boolean).join(" · ");
-
-const firstAvailableStop = (profile: PublicRestaurantProfile) => {
-  const schedule = profile.truckSchedule;
-  if (!schedule) return { label: "No upcoming stops listed", stop: null, kind: "empty" as const };
-  if (schedule.currentStop) return { label: "Here now", stop: schedule.currentStop, kind: "current" as const };
-  if (schedule.todayStop) return { label: "Today", stop: schedule.todayStop, kind: "today" as const };
-  if (schedule.nextStop) return { label: "Next stop", stop: schedule.nextStop, kind: "next" as const };
-  if (Array.isArray(schedule.upcomingStops) && schedule.upcomingStops[0]) {
-    return { label: "Upcoming schedule", stop: schedule.upcomingStops[0], kind: "upcoming" as const };
-  }
-  if (String(schedule.statusLabel || "").trim() || String(schedule.nextWindowLabel || "").trim()) {
-    return { label: "Schedule posted", stop: null, kind: "summary" as const };
-  }
-  return { label: "No upcoming stops listed", stop: null, kind: "empty" as const };
-};
 
 const menuTrustLabel = (profile: PublicRestaurantProfile) => {
   const menuCompleteness = assessPublicMenuCompleteness({
@@ -55,12 +45,9 @@ export function TruckHero({ profile, safeCtas }: TruckHeroProps) {
     truckPhotoLogo: (profile as any).truckPhotoLogo,
     imageUrl: (profile as any).imageUrl,
   });
-  const primaryStop = firstAvailableStop(profile);
+  const primaryStop = getTruckSchedulePrimaryStop(schedule);
   const primaryStopName = stopLabel(primaryStop.stop);
-  const primaryStopTime =
-    stopTimeLabel(primaryStop.stop) ||
-    String(schedule?.nextWindowLabel || "").trim() ||
-    String(schedule?.statusLabel || "").trim();
+  const primaryStopTime = stopTimeLabel(primaryStop.stop);
   const directionsHref = primaryStop.stop?.directionsUrl || null;
   const menuLabel = menuTrustLabel(profile);
   const serviceLabel = normalizeBusinessTypeLabel(profile.serviceType || "") || "Food Truck";
@@ -68,12 +55,8 @@ export function TruckHero({ profile, safeCtas }: TruckHeroProps) {
     .map((value) => String(value || "").trim())
     .filter(Boolean)
     .join(" · ");
-  const hasSchedule =
-    primaryStop.kind !== "empty" ||
-    Boolean(String(schedule?.statusLabel || "").trim()) ||
-    Boolean(String(schedule?.nextWindowLabel || "").trim()) ||
-    Number(schedule?.upcomingCount || 0) > 0;
-  const scheduleLabel = hasSchedule ? "Schedule available" : "No upcoming stops listed";
+  const hasSchedule = hasTruckScheduleCta(schedule);
+  const scheduleLabel = getTruckScheduleAvailabilityLabel(schedule);
   const websiteCta = safeCtas.find((cta) => cta.type === "external" || cta.type === "social");
 
   return (
@@ -159,14 +142,14 @@ export function TruckHero({ profile, safeCtas }: TruckHeroProps) {
                   Get directions
                 </a>
               </Button>
-            ) : (
+            ) : hasSchedule ? (
               <Button asChild className="bg-orange-500 font-bold text-black hover:bg-orange-400">
                 <a href="#truck-schedule">
                   <CalendarDays className="mr-2 h-4 w-4" />
                   View schedule
                 </a>
               </Button>
-            )}
+            ) : null}
             {websiteCta ? (
               <Button asChild variant="outline" className="border-white/20 text-white hover:bg-white/10">
                 <a

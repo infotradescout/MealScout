@@ -45,7 +45,7 @@ assert(
 );
 
 assert(
-  publicProfilePage.includes("No upcoming stops listed") &&
+  publicProfilePage.includes("getTruckScheduleEmptyStateLabel()") &&
     publicProfilePage.includes("profile.profileType === \"truck\" && !hasTruckSchedule"),
   "Public truck profiles must keep rendering a safe schedule empty state.",
 );

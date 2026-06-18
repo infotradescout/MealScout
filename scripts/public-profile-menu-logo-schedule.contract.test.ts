@@ -3,6 +3,10 @@ import { readFileSync } from "node:fs";
 const page = readFileSync("client/src/pages/public-profile.tsx", "utf8");
 const truckHero = readFileSync("client/src/components/public-profile/TruckHero.tsx", "utf8");
 const heroMedia = readFileSync("client/src/components/public-profile/ProfileHeroMedia.tsx", "utf8");
+const truckScheduleTruth = readFileSync(
+  "client/src/components/public-profile/truckScheduleTruth.ts",
+  "utf8",
+);
 
 if (!page.includes('entity === "restaurant" || entity === "truck"')) {
   throw new Error("Public profile must treat truck entity as restaurant-like for render routing");
@@ -29,8 +33,11 @@ if (
 }
 
 if (
-  !page.includes('Boolean(String(schedule?.statusLabel || "").trim())') ||
-  !page.includes("No upcoming stops listed")
+  !page.includes("getTruckScheduleRows(schedule)") ||
+  !page.includes("getTruckScheduleEmptyStateLabel()") ||
+  !truckHero.includes("getTruckScheduleAvailabilityLabel(schedule)") ||
+  !truckHero.includes("hasTruckScheduleCta(schedule)") ||
+  !truckScheduleTruth.includes('const EMPTY_SCHEDULE_LABEL = "No schedule posted"')
 ) {
   throw new Error("Truck schedule section must render honest status text or a none-found placeholder.");
 }
