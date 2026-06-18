@@ -16,9 +16,15 @@ const gate = readFileSync(gatePath, "utf8");
 
 const requiredHealthSnippets = [
   'healthRouter.get(["/api/version", "/health/version"]',
+  "detectDeploymentPlatform",
+  "getCommitMetadata",
+  "getBuildTimeMetadata",
   "getVersionSnapshot",
-  "commit: getBuildCommit()",
-  "buildTime: getBuildTime()",
+  "commit: commit.value",
+  "commitSource: commit.source",
+  "buildTime: buildTime.value || serverStartedAt",
+  'buildTimeSource: buildTime.source || "serverStartedAt"',
+  "platform,",
   'environment: String(process.env.NODE_ENV || "development")',
   "frontendAssetManifest: hasFrontendAssetManifest()",
   "RENDER_GIT_COMMIT",

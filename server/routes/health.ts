@@ -11,9 +11,112 @@ import { getPaymentHealthSnapshot } from "../services/paymentHealth";
 
 export const healthRouter = Router();
 const serverStartedAt = new Date().toISOString();
+type DeploymentPlatform = "vercel" | "render" | "unknown";
+
+type BuildMetadataValue = {
+  source: string | null;
+  value: string | null;
+};
 
 function envPresent(name: string) {
   return Boolean(String(process.env[name] || "").trim());
+}
+
+function detectDeploymentPlatform(): DeploymentPlatform {
+  if (
+    envPresent("VERCEL") ||
+    envPresent("VERCEL_ENV") ||
+    envPresent("VERCEL_URL") ||
+    envPresent("VERCEL_GIT_COMMIT_SHA")
+  ) {
+    return "vercel";
+  }
+
+  if (
+    envPresent("RENDER") ||
+    envPresent("RENDER_SERVICE_ID") ||
+    envPresent("RENDER_SERVICE_NAME") ||
+    envPresent("RENDER_GIT_COMMIT")
+  ) {
+    return "render";
+  }
+
+  return "unknown";
+}
+
+function selectBuildMetadataValue(
+  candidates: Array<[string, string | undefined]>,
+): BuildMetadataValue {
+  for (const [source, rawValue] of candidates) {
+    const value = String(rawValue || "").trim();
+    if (value) {
+      return { source, value };
+    }
+  }
+
+  return { source: null, value: null };
+}
+
+function getCommitMetadata() {
+  const platform = detectDeploymentPlatform();
+  if (platform === "vercel") {
+    return selectBuildMetadataValue([
+      ["VERCEL_GIT_COMMIT_SHA", process.env.VERCEL_GIT_COMMIT_SHA],
+      ["GIT_COMMIT", process.env.GIT_COMMIT],
+      ["COMMIT_SHA", process.env.COMMIT_SHA],
+      ["SOURCE_VERSION", process.env.SOURCE_VERSION],
+      ["RENDER_GIT_COMMIT", process.env.RENDER_GIT_COMMIT],
+    ]);
+  }
+
+  if (platform === "render") {
+    return selectBuildMetadataValue([
+      ["RENDER_GIT_COMMIT", process.env.RENDER_GIT_COMMIT],
+      ["GIT_COMMIT", process.env.GIT_COMMIT],
+      ["COMMIT_SHA", process.env.COMMIT_SHA],
+      ["SOURCE_VERSION", process.env.SOURCE_VERSION],
+      ["VERCEL_GIT_COMMIT_SHA", process.env.VERCEL_GIT_COMMIT_SHA],
+    ]);
+  }
+
+  return selectBuildMetadataValue([
+    ["GIT_COMMIT", process.env.GIT_COMMIT],
+    ["COMMIT_SHA", process.env.COMMIT_SHA],
+    ["SOURCE_VERSION", process.env.SOURCE_VERSION],
+    ["VERCEL_GIT_COMMIT_SHA", process.env.VERCEL_GIT_COMMIT_SHA],
+    ["RENDER_GIT_COMMIT", process.env.RENDER_GIT_COMMIT],
+  ]);
+}
+
+function getBuildTimeMetadata() {
+  const platform = detectDeploymentPlatform();
+  if (platform === "vercel") {
+    return (
+      selectBuildMetadataValue([
+        ["BUILD_TIME", process.env.BUILD_TIME],
+        ["VERCEL_DEPLOYMENT_CREATED_AT", process.env.VERCEL_DEPLOYMENT_CREATED_AT],
+        ["RENDER_DEPLOY_CREATED_AT", process.env.RENDER_DEPLOY_CREATED_AT],
+      ]) || { source: null, value: null }
+    );
+  }
+
+  if (platform === "render") {
+    return (
+      selectBuildMetadataValue([
+        ["BUILD_TIME", process.env.BUILD_TIME],
+        ["RENDER_DEPLOY_CREATED_AT", process.env.RENDER_DEPLOY_CREATED_AT],
+        ["VERCEL_DEPLOYMENT_CREATED_AT", process.env.VERCEL_DEPLOYMENT_CREATED_AT],
+      ]) || { source: null, value: null }
+    );
+  }
+
+  return (
+    selectBuildMetadataValue([
+      ["BUILD_TIME", process.env.BUILD_TIME],
+      ["VERCEL_DEPLOYMENT_CREATED_AT", process.env.VERCEL_DEPLOYMENT_CREATED_AT],
+      ["RENDER_DEPLOY_CREATED_AT", process.env.RENDER_DEPLOY_CREATED_AT],
+    ]) || { source: null, value: null }
+  );
 }
 
 function parseDatabaseHostHint(rawUrl: string | undefined) {
@@ -54,16 +157,11 @@ function getConfigSnapshot() {
 }
 
 function getBuildSnapshot() {
-  const gitCommit =
-    String(
-      process.env.RENDER_GIT_COMMIT ||
-        process.env.VERCEL_GIT_COMMIT_SHA ||
-        process.env.GIT_COMMIT ||
-        "",
-    ).trim() || null;
+  const commit = getCommitMetadata();
 
   return {
-    gitCommit,
+    gitCommit: commit.value,
+    gitCommitSource: commit.source,
     dbHost: parseDatabaseHostHint(process.env.DATABASE_URL),
     service: String(process.env.RENDER_SERVICE_NAME || "").trim() || null,
     environment: String(process.env.RENDER_SERVICE_ID || "").trim() || null,
@@ -71,27 +169,11 @@ function getBuildSnapshot() {
 }
 
 function getBuildCommit() {
-  return (
-    String(
-      process.env.RENDER_GIT_COMMIT ||
-        process.env.VERCEL_GIT_COMMIT_SHA ||
-        process.env.GIT_COMMIT ||
-        process.env.COMMIT_SHA ||
-        process.env.SOURCE_VERSION ||
-        "",
-    ).trim() || null
-  );
+  return getCommitMetadata().value;
 }
 
 function getBuildTime() {
-  return (
-    String(
-      process.env.BUILD_TIME ||
-        process.env.RENDER_DEPLOY_CREATED_AT ||
-        process.env.VERCEL_DEPLOYMENT_CREATED_AT ||
-        "",
-    ).trim() || serverStartedAt
-  );
+  return getBuildTimeMetadata().value || serverStartedAt;
 }
 
 function hasFrontendAssetManifest() {
@@ -105,9 +187,16 @@ function hasFrontendAssetManifest() {
 }
 
 function getVersionSnapshot() {
+  const platform = detectDeploymentPlatform();
+  const commit = getCommitMetadata();
+  const buildTime = getBuildTimeMetadata();
+
   return {
-    commit: getBuildCommit(),
-    buildTime: getBuildTime(),
+    commit: commit.value,
+    commitSource: commit.source,
+    buildTime: buildTime.value || serverStartedAt,
+    buildTimeSource: buildTime.source || "serverStartedAt",
+    platform,
     environment: String(process.env.NODE_ENV || "development"),
     frontendAssetManifest: hasFrontendAssetManifest(),
     commitEnvVars: [
