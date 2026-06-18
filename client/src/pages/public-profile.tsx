@@ -27,6 +27,12 @@ import {
   buildPublicProfileHeroAssets,
 } from "@/components/public-profile/ProfileHeroMedia";
 import { TruckHero } from "@/components/public-profile/TruckHero";
+import {
+  getTruckScheduleEmptyStateLabel,
+  getTruckScheduleRows,
+  getTruckScheduleStatusBadgeLabel,
+  hasTruckScheduleSignal,
+} from "@/components/public-profile/truckScheduleTruth";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -152,17 +158,7 @@ const hasPostedScheduleOrTimeWindow = (profile: PublicProfilePayload) => {
   if (String(restaurant.hours || "").trim()) return true;
   if (restaurant.profileType !== "truck") return false;
 
-  const schedule = restaurant.truckSchedule;
-  return Boolean(
-    schedule?.currentStop ||
-      schedule?.todayStop ||
-      schedule?.nextStop ||
-      (Array.isArray(schedule?.upcomingStops) && schedule.upcomingStops.length > 0) ||
-      (Array.isArray(schedule?.closedStops) && schedule.closedStops.length > 0) ||
-      String(schedule?.statusLabel || "").trim() ||
-      String(schedule?.nextWindowLabel || "").trim() ||
-      Number(schedule?.upcomingCount || 0) > 0,
-  );
+  return hasTruckScheduleSignal(restaurant.truckSchedule);
 };
 
 const normalizePublicProfileEntity = (value: string | null | undefined) => {
@@ -892,7 +888,7 @@ function RestaurantSignals({ profile }: { profile: PublicRestaurantProfile }) {
   if (profile.deals.totalActive > 0) signals.push("Deal today");
   if (menuCompleteness.state === "complete") signals.push("Menu available");
   if (menuCompleteness.state === "partial") signals.push("Partial menu evidence");
-  if (profile.profileType === "truck" && profile.truckSchedule?.nextWindowLabel) {
+  if (profile.profileType === "truck" && hasTruckScheduleSignal(profile.truckSchedule)) {
     signals.push("Truck schedule available");
   }
   if (profile.recommendations.total > 0) signals.push("Local favorite");
@@ -1587,24 +1583,15 @@ function GalleryStrip({ profile }: { profile: PublicRestaurantProfile }) {
 function RestaurantSchedule({ profile }: { profile: PublicRestaurantProfile }) {
   const hasHours = Boolean(String(profile.hours || "").trim());
   const schedule = profile.profileType === "truck" ? profile.truckSchedule : null;
-  const currentStop = schedule?.currentStop || null;
-  const todayStop = schedule?.todayStop || null;
-  const nextStop = schedule?.nextStop || null;
-  const upcomingStops = Array.isArray(schedule?.upcomingStops)
-    ? schedule!.upcomingStops.slice(0, 6)
-    : [];
-  const closedStops = Array.isArray(schedule?.closedStops)
-    ? schedule!.closedStops.slice(0, 7)
-    : [];
-  const hasTruckSchedule =
-    Boolean(currentStop) ||
-    Boolean(todayStop) ||
-    Boolean(nextStop) ||
-    upcomingStops.length > 0 ||
-    closedStops.length > 0 ||
-    Boolean(String(schedule?.statusLabel || "").trim()) ||
-    Boolean(String(schedule?.nextWindowLabel || "").trim()) ||
-    Number(schedule?.upcomingCount || 0) > 0;
+  const scheduleRows = getTruckScheduleRows(schedule);
+  const currentStop = scheduleRows.currentStop;
+  const todayStop = scheduleRows.todayStop;
+  const nextStop = scheduleRows.nextStop;
+  const upcomingStops = scheduleRows.upcomingStops.slice(0, 6);
+  const closedStops = scheduleRows.closedStops.slice(0, 7);
+  const hasTruckSchedule = scheduleRows.hasActionableSchedule;
+  const scheduleEmptyState = getTruckScheduleEmptyStateLabel();
+  const scheduleStatusBadge = getTruckScheduleStatusBadgeLabel(schedule);
   if (!hasHours && !hasTruckSchedule && profile.profileType !== "truck") return null;
 
   const stopRow = (
@@ -1664,9 +1651,9 @@ function RestaurantSchedule({ profile }: { profile: PublicRestaurantProfile }) {
         ) : null}
         {profile.profileType === "truck" && hasTruckSchedule ? (
           <div className="space-y-3">
-            {schedule?.statusLabel ? (
+            {scheduleStatusBadge ? (
               <Badge variant="outline" className="border-orange-300/35 text-orange-200">
-                {schedule.statusLabel}
+                {scheduleStatusBadge}
               </Badge>
             ) : null}
             {currentStop ? stopRow("Here now", currentStop, true) : null}
@@ -1728,7 +1715,7 @@ function RestaurantSchedule({ profile }: { profile: PublicRestaurantProfile }) {
         ) : null}
         {profile.profileType === "truck" && !hasTruckSchedule ? (
           <p className="rounded-md border border-white/15 bg-white/5 px-3 py-2 text-xs text-white/75">
-            No upcoming stops listed
+            {scheduleEmptyState}
           </p>
         ) : null}
       </CardContent>
