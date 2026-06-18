@@ -1,6 +1,8 @@
 import { readFileSync } from "node:fs";
 
 const page = readFileSync("client/src/pages/public-profile.tsx", "utf8");
+const truckHero = readFileSync("client/src/components/public-profile/TruckHero.tsx", "utf8");
+const heroMedia = readFileSync("client/src/components/public-profile/ProfileHeroMedia.tsx", "utf8");
 
 if (!page.includes('entity === "restaurant" || entity === "truck"')) {
   throw new Error("Public profile must treat truck entity as restaurant-like for render routing");
@@ -11,20 +13,24 @@ if (!page.includes(") : restaurantProfile ? (")) {
 }
 
 if (
-  !page.includes("profile.coverImageUrl ||") ||
-  !page.includes("(profile as any).profileImageUrl") ||
-  !page.includes("(profile as any).truckPhotoLogo")
+  !page.includes("buildPublicProfileHeroAssets({") ||
+  !truckHero.includes("buildPublicProfileHeroAssets({") ||
+  !heroMedia.includes("profile.profileImageUrl") ||
+  !heroMedia.includes("profile.truckPhotoLogo")
 ) {
-  throw new Error("Hero logo/image render must include profileImageUrl and truckPhotoLogo fallbacks");
+  throw new Error("Hero asset mapping must preserve dedicated cover fields and legacy logo fallbacks");
 }
 
-if (!page.includes('{heroImage ? (') || !page.includes('{initials}')) {
-  throw new Error("Hero must fall back to initials artwork when logo or photo data is missing.");
+if (
+  !heroMedia.includes('data-testid="public-profile-hero-cover-fallback"') ||
+  !heroMedia.includes('data-testid={showLogoImage ? "public-profile-hero-avatar" : "public-profile-hero-avatar-fallback"}')
+) {
+  throw new Error("Hero must fall back to clean cover and avatar placeholders when image data is missing or broken.");
 }
 
 if (
   !page.includes('Boolean(String(schedule?.statusLabel || "").trim())') ||
-  !page.includes("Schedule: none found.")
+  !page.includes("No upcoming stops listed")
 ) {
   throw new Error("Truck schedule section must render honest status text or a none-found placeholder.");
 }

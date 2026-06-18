@@ -2,6 +2,7 @@ import type { PublicCta, PublicRestaurantProfile, PublicTruckScheduleStop } from
 import { assessPublicMenuCompleteness, normalizeBusinessTypeLabel } from "@/lib/publicMenuCompleteness";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ProfileHeroMedia, buildPublicProfileHeroAssets } from "@/components/public-profile/ProfileHeroMedia";
 import { CalendarDays, Clock3, MapPin, Route, Truck } from "lucide-react";
 
 type TruckHeroProps = {
@@ -30,22 +31,6 @@ const firstAvailableStop = (profile: PublicRestaurantProfile) => {
   return { label: "No upcoming stops listed", stop: null, kind: "empty" as const };
 };
 
-const truckHeroImage = (profile: PublicRestaurantProfile) =>
-  profile.coverImageUrl ||
-  profile.logoUrl ||
-  (profile as any).profileImageUrl ||
-  (profile as any).truckPhotoLogo ||
-  (profile as any).imageUrl ||
-  null;
-
-const initialsFor = (name: string) =>
-  String(name || "MS")
-    .split(" ")
-    .map((part) => part[0] || "")
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
-
 const menuTrustLabel = (profile: PublicRestaurantProfile) => {
   const menuCompleteness = assessPublicMenuCompleteness({
     menuSections: profile.menuSections,
@@ -61,7 +46,15 @@ const menuTrustLabel = (profile: PublicRestaurantProfile) => {
 
 export function TruckHero({ profile, safeCtas }: TruckHeroProps) {
   const schedule = profile.truckSchedule;
-  const heroImage = truckHeroImage(profile);
+  const heroAssets = buildPublicProfileHeroAssets({
+    entity: profile.profileType,
+    displayName: profile.displayName,
+    coverImageUrl: profile.coverImageUrl,
+    logoUrl: profile.logoUrl,
+    profileImageUrl: (profile as any).profileImageUrl,
+    truckPhotoLogo: (profile as any).truckPhotoLogo,
+    imageUrl: (profile as any).imageUrl,
+  });
   const primaryStop = firstAvailableStop(profile);
   const primaryStopName = stopLabel(primaryStop.stop);
   const primaryStopTime =
@@ -89,31 +82,20 @@ export function TruckHero({ profile, safeCtas }: TruckHeroProps) {
       className="overflow-hidden rounded-2xl border border-orange-300/20 bg-[#0f0d0b] shadow-[0_20px_80px_rgba(0,0,0,0.28)]"
     >
       <div className="grid gap-0 md:grid-cols-[0.92fr_1.08fr]">
-        <div className="relative min-h-[15rem] overflow-hidden bg-[radial-gradient(circle_at_20%_20%,rgba(251,146,60,0.36),transparent_34%),linear-gradient(145deg,#24130b_0%,#110d0a_52%,#060504_100%)]">
-          {heroImage ? (
-            <div
-              data-testid="truck-profile-hero-image"
-              className="absolute inset-0 bg-cover bg-center opacity-80"
-              style={{
-                backgroundImage: `linear-gradient(180deg,rgba(0,0,0,.12),rgba(0,0,0,.68)),url('${heroImage}')`,
-              }}
-            />
-          ) : (
-            <div
-              data-testid="truck-profile-hero-fallback"
-              className="absolute inset-0 flex items-center justify-center p-6"
-            >
-              <div className="flex h-24 w-24 items-center justify-center rounded-full border border-orange-200/40 bg-black/25 text-3xl font-black text-orange-100">
-                {initialsFor(profile.displayName)}
+        <div className="relative">
+          <ProfileHeroMedia
+            displayName={profile.displayName}
+            coverImageUrl={heroAssets.coverImageUrl}
+            logoImageUrl={heroAssets.logoImageUrl}
+            theme="truck"
+            heightClassName="min-h-[15rem]"
+            badge={
+              <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-black/50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-orange-100 backdrop-blur">
+                <Truck className="h-3.5 w-3.5" />
+                Food Truck
               </div>
-            </div>
-          )}
-          <div className="absolute inset-x-0 bottom-0 p-4">
-            <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-black/50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-orange-100 backdrop-blur">
-              <Truck className="h-3.5 w-3.5" />
-              Food Truck
-            </div>
-          </div>
+            }
+          />
         </div>
 
         <div className="space-y-5 p-5 sm:p-6">
