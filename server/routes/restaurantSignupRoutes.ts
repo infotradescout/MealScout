@@ -46,6 +46,8 @@ const restaurantSignupUserSchema = z.object({
     .refine(isPasswordStrong, PASSWORD_REQUIREMENTS),
 });
 
+const LEGAL_ACCEPTANCE_REQUIRED_MESSAGE = "You must accept the terms";
+
 function getFriendlySignupValidationMessage(error: z.ZodError): string {
   const { fieldErrors, formErrors } = error.flatten();
 
@@ -79,6 +81,11 @@ export function registerRestaurantSignupRoutes(
   app.post("/api/restaurants/signup", async (req: any, res) => {
     try {
       const { userData, restaurantData } = req.body;
+      if (restaurantData?.acceptTerms !== true) {
+        return res.status(400).json({
+          message: LEGAL_ACCEPTANCE_REQUIRED_MESSAGE,
+        });
+      }
       let user: User;
 
       if (req.isAuthenticated && req.isAuthenticated() && req.user) {
