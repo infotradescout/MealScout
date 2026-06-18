@@ -123,6 +123,12 @@ const signupSchema = z
     confirmPassword: z
       .string()
       .min(1, COPY.validation.signup.confirmPasswordRequired),
+    acceptTerms: z
+      .boolean()
+      .refine(
+        (val) => val === true,
+        COPY.validation.restaurant.acceptTermsRequired,
+      ),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: COPY.validation.signup.passwordsMismatch,
@@ -137,10 +143,7 @@ const loginSchema = z.object({
 type RestaurantFormData = z.infer<typeof restaurantSchema>;
 type SignupFormData = z.infer<typeof signupSchema>;
 type LoginFormData = z.infer<typeof loginSchema>;
-type RestaurantSubmissionData = Omit<
-  RestaurantFormData,
-  "acceptTerms" | "confirmNotFoodTruck"
->;
+type RestaurantSubmissionData = Omit<RestaurantFormData, "confirmNotFoodTruck">;
 
 type HostOnboardingStep = "restaurant" | "verification";
 
@@ -195,6 +198,31 @@ function getSafeFreeProfileErrorMessage(
   }
 
   return normalized;
+}
+
+const SIGNUP_TERMS_ACCEPTANCE_KEY =
+  "mealscout:restaurant-signup-accepted-terms";
+
+function getStoredSignupTermsAccepted() {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.sessionStorage.getItem(SIGNUP_TERMS_ACCEPTANCE_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
+function setStoredSignupTermsAccepted(accepted: boolean) {
+  if (typeof window === "undefined") return;
+  try {
+    if (accepted) {
+      window.sessionStorage.setItem(SIGNUP_TERMS_ACCEPTANCE_KEY, "true");
+    } else {
+      window.sessionStorage.removeItem(SIGNUP_TERMS_ACCEPTANCE_KEY);
+    }
+  } catch {
+    // Legal-gate carryover is a convenience for the same session only.
+  }
 }
 
 export default function RestaurantSignup() {
@@ -339,6 +367,7 @@ export default function RestaurantSignup() {
       phoneContactConsent: true,
       password: "",
       confirmPassword: "",
+      acceptTerms: getStoredSignupTermsAccepted(),
     },
   });
 
@@ -351,6 +380,7 @@ export default function RestaurantSignup() {
   });
 
   const selectedBusinessType = form.watch("businessType");
+  const signupAcceptedTerms = signupForm.watch("acceptTerms");
   const mainHero =
     selectedBusinessType === "food_truck"
       ? COPY.main.hero.foodTruck
@@ -435,6 +465,20 @@ export default function RestaurantSignup() {
     });
     return () => subscription.unsubscribe();
   }, [form]);
+
+  useEffect(() => {
+    const subscription = signupForm.watch((value, info) => {
+      if (info.name !== "acceptTerms") return;
+      setStoredSignupTermsAccepted(value.acceptTerms === true);
+    });
+    return () => subscription.unsubscribe();
+  }, [signupForm]);
+
+  useEffect(() => {
+    if (!isAuthenticated || form.getValues("acceptTerms")) return;
+    if (!getStoredSignupTermsAccepted()) return;
+    form.setValue("acceptTerms", true, { shouldValidate: true });
+  }, [form, isAuthenticated]);
 
   const signupMutation = useMutation({
     mutationFn: async (data: SignupFormData) => {
@@ -610,6 +654,7 @@ export default function RestaurantSignup() {
         businessType: selectedBusinessType,
       });
 
+      setStoredSignupTermsAccepted(false);
       setCreatedRestaurant(restaurant);
       dispatchOnboarding({ type: "GO_TO_VERIFICATION" });
       toast({
@@ -688,7 +733,7 @@ export default function RestaurantSignup() {
   });
 
   const onSubmit = async (data: RestaurantFormData) => {
-    const { acceptTerms, confirmNotFoodTruck, ...restaurantData } = data;
+    const { confirmNotFoodTruck, ...restaurantData } = data;
 
     trackFunnelEvent(FUNNEL_EVENTS.signupSubmitted, {
       page: "restaurant-signup",
@@ -861,6 +906,32 @@ export default function RestaurantSignup() {
     loginMutation.mutate(data);
   };
 
+  const handleSignupInvalid = (errors: Record<string, any>) => {
+    const firstError = Object.values(errors)[0] as any;
+    toast({
+      title: "Check the form",
+      description: firstError?.message || "Please fix the highlighted fields.",
+      variant: "destructive",
+    });
+  };
+
+  const handleGoogleSignup = () => {
+    if (authMode === "signup" && !signupForm.getValues("acceptTerms")) {
+      signupForm.setError("acceptTerms", {
+        type: "manual",
+        message: COPY.validation.restaurant.acceptTermsRequired,
+      });
+      toast({
+        title: "Check the form",
+        description: COPY.validation.restaurant.acceptTermsRequired,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    window.location.href = authUrl("/api/auth/google/restaurant");
+  };
+
   if (isLoading) {
     return (
       <div className="max-w-md mx-auto bg-background min-h-screen flex items-center justify-center">
@@ -936,11 +1007,7 @@ export default function RestaurantSignup() {
                   type="button"
                   data-testid="button-google-signin"
                   variant="outline"
-                  onClick={() =>
-                    (window.location.href = authUrl(
-                      "/api/auth/google/restaurant",
-                    ))
-                  }
+                  onClick={handleGoogleSignup}
                   className="mb-4 w-full justify-center gap-2 border-[color:var(--border-subtle)]"
                 >
                   <svg className="h-5 w-5" viewBox="0 0 24 24">
@@ -971,10 +1038,58 @@ export default function RestaurantSignup() {
                   </span>
                 </div>
 
+                {authMode === "signup" && (
+                  <div className="mb-4 rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-4">
+                    <div className="flex items-start gap-3">
+                      <Checkbox
+                        checked={signupAcceptedTerms}
+                        onCheckedChange={(checked) => {
+                          signupForm.setValue("acceptTerms", checked === true, {
+                            shouldDirty: true,
+                            shouldValidate: true,
+                          });
+                          if (checked === true) {
+                            signupForm.clearErrors("acceptTerms");
+                          }
+                        }}
+                        className="mt-1"
+                        data-testid="checkbox-signup-terms"
+                      />
+                      <div className="space-y-1">
+                        <p
+                          className="text-sm text-[color:var(--text-secondary)]"
+                          data-testid="label-signup-terms"
+                        >
+                          {COPY.terms.labelPrefix}{" "}
+                          <Link href="/terms-of-service">
+                            <span className="cursor-pointer text-[color:var(--accent-text)] underline">
+                              {COPY.terms.termsText}
+                            </span>
+                          </Link>{" "}
+                          {COPY.terms.andText}{" "}
+                          <Link href="/privacy-policy">
+                            <span className="cursor-pointer text-[color:var(--accent-text)] underline">
+                              {COPY.terms.privacyText}
+                            </span>
+                          </Link>
+                        </p>
+                        {signupForm.formState.errors.acceptTerms?.message ? (
+                          <p className="text-sm text-[color:var(--status-error)]">
+                            {signupForm.formState.errors.acceptTerms.message}
+                          </p>
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {authMode === "signup" ? (
                   <Form {...signupForm}>
                     <form
-                      onSubmit={signupForm.handleSubmit(onSignup)}
+                      onSubmit={signupForm.handleSubmit(
+                        onSignup,
+                        handleSignupInvalid,
+                      )}
                       className="space-y-4"
                     >
                       <div className="grid gap-4 sm:grid-cols-2">

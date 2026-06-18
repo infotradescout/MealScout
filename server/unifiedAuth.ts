@@ -1511,7 +1511,8 @@ export async function setupUnifiedAuth(app: Express) {
   // Email/password registration for restaurant owners
   app.post("/api/auth/restaurant/register", async (req, res) => {
     try {
-      const { email, firstName, lastName, phone, password, otpCode } = req.body;
+      const { email, firstName, lastName, phone, password, otpCode, acceptTerms } =
+        req.body;
       const businessType = String(req.body?.businessType || "").trim();
       const registrationUserType =
         businessType === "food_truck"
@@ -1524,6 +1525,10 @@ export async function setupUnifiedAuth(app: Express) {
 
       if (!email || !firstName || !lastName || !phone || !password) {
         return res.status(400).json({ error: "All fields are required" });
+      }
+
+      if (acceptTerms !== true) {
+        return res.status(400).json({ error: "You must accept the terms" });
       }
 
       if (!isPasswordStrong(password)) {

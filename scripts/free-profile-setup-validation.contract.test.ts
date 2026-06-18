@@ -5,6 +5,8 @@ const readText = (path: string) => readFileSync(path, "utf8").replace(/\r\n/g, "
 const apiClient = readText("client/src/lib/api.ts");
 const signupPage = readText("client/src/pages/restaurant-signup.tsx");
 const signupRoute = readText("server/routes/restaurantSignupRoutes.ts");
+const unifiedAuth = readText("server/unifiedAuth.ts");
+const legacyRestaurantAuth = readText("server/restaurantAuth.ts");
 const publicProfileContract = readText(
   "scripts/public-profile-route-and-assets.contract.test.ts",
 );
@@ -46,6 +48,26 @@ requireIncludes(
 );
 requireIncludes(
   signupPage,
+  'name="acceptTerms"',
+  "Public account creation must keep a legal-acceptance field in signup validation.",
+);
+requireIncludes(
+  signupPage,
+  'acceptTerms: getStoredSignupTermsAccepted()',
+  "Public account creation must restore same-session legal acceptance state.",
+);
+requireIncludes(
+  signupPage,
+  'data-testid="checkbox-signup-terms"',
+  "Public account creation shell must visibly expose the legal acceptance checkbox.",
+);
+requireIncludes(
+  signupPage,
+  'data-testid="label-signup-terms"',
+  "Public account creation shell must visibly expose legal copy with Terms and Privacy links.",
+);
+requireIncludes(
+  signupPage,
   'Link href="/terms-of-service"',
   "Free profile setup must link to Terms of Service.",
 );
@@ -64,6 +86,16 @@ requireIncludes(
   'lower.includes("invalid_type")',
   "Free profile setup must suppress raw Zod invalid_type errors in UI copy.",
 );
+requireIncludes(
+  signupPage,
+  'authMode === "signup" && !signupForm.getValues("acceptTerms")',
+  "Google account creation must respect the same legal gate as password signup.",
+);
+requireIncludes(
+  signupPage,
+  'setStoredSignupTermsAccepted(false);',
+  "Free profile legal acceptance carryover must clear after business profile creation succeeds.",
+);
 
 requireIncludes(
   apiClient,
@@ -81,6 +113,36 @@ requireIncludes(
   "Business verification submission must stay same-origin on MealScout hosts.",
 );
 
+requireIncludes(
+  signupRoute,
+  "restaurantData?.acceptTerms !== true",
+  "Business profile creation must enforce legal acceptance on the server.",
+);
+requireIncludes(
+  signupRoute,
+  'message: LEGAL_ACCEPTANCE_REQUIRED_MESSAGE',
+  "Business profile creation must return a user-facing legal acceptance message.",
+);
+requireIncludes(
+  unifiedAuth,
+  "acceptTerms !== true",
+  "Restaurant account registration must enforce legal acceptance on the server.",
+);
+requireIncludes(
+  unifiedAuth,
+  'error: "You must accept the terms"',
+  "Restaurant account registration must return a human-readable legal acceptance message.",
+);
+requireIncludes(
+  legacyRestaurantAuth,
+  "acceptTerms !== true",
+  "Legacy restaurant registration flow must keep the same legal gate.",
+);
+requireIncludes(
+  legacyRestaurantAuth,
+  'error: "You must accept the terms"',
+  "Legacy restaurant registration flow must return a human-readable legal acceptance message.",
+);
 requireIncludes(
   signupRoute,
   "Create a password to finish your free profile.",
