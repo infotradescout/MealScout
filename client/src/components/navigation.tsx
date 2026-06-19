@@ -22,6 +22,7 @@ import {
   MoreHorizontal,
   X,
   Compass,
+  MapPin,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -42,7 +43,11 @@ type NavigationProps = {
 };
 
 const NAV_HELP: Record<string, string> = {
-  Scout: "Find food trucks, restaurants, deals, and local food options near you.",
+  Scout: "Find food trucks and limited early-access local coverage near you.",
+  Map: "Open the truck-first map with limited early-access coverage.",
+  Truck: "List a food truck for early MealScout coverage.",
+  Claim: "Claim or update a food truck profile.",
+  Login: "Sign in to your MealScout account.",
   Deals: "Find or create local food deals based on your account type.",
   "Parking Pass": "Food trucks use this to book approved host parking spots.",
   Profile: "Manage your account, saved items, and business setup.",
@@ -248,9 +253,13 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
 
   const primarySlotsByLane: Record<typeof lane, NavItem[]> = {
     guest: [
-      { path: "/video", icon: Clapperboard, label: "Video" },
-      { path: "/events", icon: Calendar, label: "Events" },
-      { path: "/customer-signup", icon: UserPlus, label: "Join" },
+      { path: "/map", icon: MapPin, label: "Map" },
+      {
+        path: "/restaurant-signup?businessType=food_truck",
+        icon: Store,
+        label: "Truck",
+      },
+      { path: "/login", icon: User, label: "Login" },
     ],
     customer: [
       { path: "/video", icon: Clapperboard, label: "Video" },
@@ -317,7 +326,9 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     basePrimary[0],
     basePrimary[1],
     basePrimary[2],
-    { path: "/share-hub", icon: Share2, label: "Share" },
+    lane === "guest"
+      ? { path: "/claim-truck", icon: Truck, label: "Claim" }
+      : { path: "/share-hub", icon: Share2, label: "Share" },
     { icon: MoreHorizontal, label: "More", onClick: () => setMoreOpen((v) => !v) },
   ];
 
@@ -336,8 +347,9 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
 
     if (lane === "guest") {
       items.push(
-        { path: "/login", icon: User, label: "Log In" },
-        { path: "/customer-signup", icon: UserPlus, label: "Join" },
+        { path: "/login", icon: User, label: "Login" },
+        { path: "/restaurant-signup?businessType=food_truck", icon: Store, label: "Truck" },
+        { path: "/claim-truck", icon: Truck, label: "Claim" },
       );
     } else if (lane === "customer") {
       items.push(
