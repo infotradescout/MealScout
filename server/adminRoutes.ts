@@ -31,6 +31,7 @@ import { isAdmin, isStaffOrAdmin } from "./unifiedAuth";
 import { logAudit } from "./auditLogger";
 import { storage } from "./storage";
 import { sendAccountSetupInvite } from "./utils/accountSetup";
+import { resolveRequestLogDateRange } from "./utils/requestLogDateRange";
 import { getJobQueueStats } from "./jobs/jobQueue";
 import {
   canAssignUserType,
@@ -584,13 +585,19 @@ router.get("/moderation-events/:id", isAdmin, async (req, res) => {
  */
 router.get("/request-logs", isStaffOrAdmin, async (req, res) => {
   try {
-    const startParam = req.query.startDate as string | undefined;
-    const endParam = req.query.endDate as string | undefined;
+    const dateRange = resolveRequestLogDateRange({
+      startDate: req.query.startDate,
+      endDate: req.query.endDate,
+    });
+    if (!dateRange.ok) {
+      return res.status(400).json({
+        error: dateRange.error,
+        field: dateRange.field,
+      });
+    }
+
     const limit = Number(req.query.limit || 2000);
-    const startDate = startParam
-      ? new Date(`${startParam}T00:00:00`)
-      : new Date(Date.now() - 48 * 60 * 60 * 1000);
-    const endDate = endParam ? new Date(`${endParam}T23:59:59`) : new Date();
+    const { startDate, endDate } = dateRange;
 
     const logs = await db
       .select(requestLogLegacySelect)
