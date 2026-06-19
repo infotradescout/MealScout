@@ -49,6 +49,7 @@
     "smoke:mobile-deeplinks:with-server": "node scripts/mobileDeepLinkSmokeWithServer.mjs",
     "smoke:referral-live-attribution": "tsx scripts/mealscout-referral-live-attribution-smoke.ts",
     "test:referral-live-attribution-contract": "npx --yes tsx scripts/mealscout-referral-live-attribution-smoke.contract.test.ts",
+    "test:live-exposure-guardrails": "npx --yes tsx scripts/mealscout-live-exposure-guardrails.contract.test.ts",
     "verify:deal-writes": "npx dotenv-cli -e .env -- npx tsx scripts/verifyDealWrites.ts",
     "test:incidents": "npx --yes tsx scripts/testIncidents.ts",
     "checklist:incidents": "node scripts/runIncidentStagingChecklist.mjs",

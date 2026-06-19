@@ -2,15 +2,14 @@ import { useEffect, useRef, useState, useMemo, useCallback } from "react";
 import { Link, useLocation as useWouterLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import {
-  Bookmark, Bell, Compass, Search, Heart, User,
-  Navigation2, MapPin, Truck, Utensils, DollarSign,
-  Clock, Star, Award, Flame, CalendarDays, Tag,
+  Bookmark, Compass, Search, Heart, User,
+  Navigation2, MapPin, Truck,
+  Clock, Award, Flame,
 } from "lucide-react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { useAuth } from "@/hooks/useAuth";
 import { getReverseGeocodedLocationName } from "@/utils/locationUtils";
-import { isBarBusinessType } from "@shared/businessTypes";
 import { apiUrl } from "@/lib/api";
 import { buildPublicProfilePath } from "@/lib/public-profile-path";
 
@@ -137,38 +136,12 @@ interface Truck {
   hasServiceArea?: boolean;
 }
 
-interface Deal {
-  id: string;
-  title?: string | null;
-  description?: string | null;
-  restaurantName?: string | null;
-  imageUrl?: string | null;
-  discountText?: string | null;
-}
-
-interface ScoutEvent {
-  id: string;
-  title?: string | null;
-  name?: string | null;
-  startsAt?: string | null;
-  venueName?: string | null;
-  imageUrl?: string | null;
-  latitude?: number | null;
-  longitude?: number | null;
-  lat?: number | null;
-  lng?: number | null;
-}
-
 /* ─── scene lanes ─── */
 const SCENE_LANES = [
   { id: "for_you", label: "For You", icon: <Compass size={14} />, color: "#ff5c00" },
   { id: "community", label: "Community", icon: <User size={14} />, color: "#9333ea" },
   { id: "nearby_now", label: "Nearby", icon: <Navigation2 size={14} />, color: "#3b82f6" },
   { id: "food_trucks", label: "Food Trucks", icon: <Truck size={14} />, color: "#ff5c00" },
-  { id: "restaurants", label: "Restaurants", icon: <Utensils size={14} />, color: "#ff5c00" },
-  { id: "deals", label: "Deals", icon: <DollarSign size={14} />, color: "#10b981" },
-  { id: "events", label: "Events", icon: <CalendarDays size={14} />, color: "#3b82f6" },
-  { id: "new_menus", label: "New Menus", icon: <Star size={14} />, color: "#ec4899" },
   { id: "late_night", label: "Late Night", icon: <Clock size={14} />, color: "#6366f1" },
   { id: "worth_discovering", label: "Worth Discovering", icon: <Award size={14} />, color: "#eab308" },
 ];
@@ -177,13 +150,12 @@ const SCENE_LANES = [
 const EXPLORE_TILES = [
   { id: "community", label: "Community", count: "", icon: <User size={18} />, color: "#9333ea", href: "/scout?scene=community" },
   { id: "food_trucks", label: "Food Trucks", count: "", icon: <Truck size={18} />, color: "#ff5c00", href: "/scout?scene=food_trucks" },
-  { id: "restaurants", label: "Restaurants", count: "", icon: <Utensils size={18} />, color: "#ff5c00", href: "/scout?scene=restaurants" },
-  { id: "deals", label: "Deals", count: "", icon: <DollarSign size={18} />, color: "#10b981", href: "/scout?scene=deals" },
-  { id: "events", label: "Events", count: "", icon: <CalendarDays size={18} />, color: "#3b82f6", href: "/scout?scene=events" },
-  { id: "new_menus", label: "New Menus", count: "", icon: <Star size={18} />, color: "#ec4899", href: "/scout?scene=new_menus" },
+  { id: "nearby_now", label: "Nearby", count: "", icon: <Navigation2 size={18} />, color: "#3b82f6", href: "/scout?scene=nearby_now" },
   { id: "late_night", label: "Late Night", count: "", icon: <Clock size={18} />, color: "#6366f1", href: "/scout?scene=late_night" },
   { id: "worth_discovering", label: "Worth Discovering", count: "", icon: <Award size={18} />, color: "#eab308", href: "/scout?scene=worth_discovering" },
 ];
+
+const CONTAINED_SCOUT_SCENE_IDS = new Set(SCENE_LANES.map((lane) => lane.id));
 
 /* ─── helpers ─── */
 function distLabel(r: Restaurant | Truck) {
@@ -289,54 +261,6 @@ function isDiscoverableTruckProfile(restaurant: Restaurant) {
     Boolean(restaurant.serviceArea) ||
     (Array.isArray(restaurant.serviceAreas) && restaurant.serviceAreas.length > 0);
   return isFoodTruckType && active && notSuspended && verified && insured && (hasCoords || hasServiceArea);
-}
-
-function hasRestaurantScheduleData(restaurant: Restaurant) {
-  const candidate = restaurant as Restaurant & {
-    operatingHours?: unknown;
-    hours?: unknown;
-    businessHours?: unknown;
-    schedule?: unknown;
-    isOpen?: unknown;
-    openNow?: unknown;
-  };
-  const schedule =
-    candidate.operatingHours ??
-    candidate.hours ??
-    candidate.businessHours ??
-    candidate.schedule;
-  if (Array.isArray(schedule)) return schedule.length > 0;
-  if (schedule && typeof schedule === "object") return Object.keys(schedule as object).length > 0;
-  if (typeof schedule === "string" && schedule.trim().length > 0) return true;
-  if (typeof candidate.isOpen === "boolean" || typeof candidate.openNow === "boolean") return true;
-  return false;
-}
-
-function restaurantServingStatus(restaurant: Restaurant): "open_now" | "closed_now" | "no_schedule" {
-  const candidate = restaurant as Restaurant & {
-    isOpen?: unknown;
-    openNow?: unknown;
-    currentlyOpen?: unknown;
-    isCurrentlyOpen?: unknown;
-    openStatus?: unknown;
-    status?: unknown;
-    hoursStatus?: unknown;
-  };
-  if (!hasRestaurantScheduleData(restaurant)) return "no_schedule";
-  const explicit = [
-    candidate.isOpen,
-    candidate.openNow,
-    candidate.currentlyOpen,
-    candidate.isCurrentlyOpen,
-  ].find((value) => typeof value === "boolean");
-  if (typeof explicit === "boolean") return explicit ? "open_now" : "closed_now";
-  const statusText = String(
-    candidate.openStatus ?? candidate.status ?? candidate.hoursStatus ?? "",
-  )
-    .trim()
-    .toLowerCase();
-  if (statusText.includes("open") && !statusText.includes("closed")) return "open_now";
-  return "closed_now";
 }
 
 function distanceMilesBetween(
@@ -661,28 +585,6 @@ export default function ScoutPrototype() {
     staleTime: 120_000,
   });
 
-  const { data: dealsRaw = [] } = useQuery<Deal[]>({
-    queryKey: ["/api/deals/nearby", location.lat, location.lng],
-    queryFn: async () => {
-      const r = await fetch(apiUrl(`/api/deals/nearby/${location.lat}/${location.lng}?radius=25`), { credentials: "include" });
-      if (!r.ok) return [];
-      const d = await r.json();
-      return Array.isArray(d) ? d : (d?.deals ?? []);
-    },
-    staleTime: 60_000,
-  });
-
-  const { data: eventsRaw = [] } = useQuery<ScoutEvent[]>({
-    queryKey: ["/api/events/public"],
-    queryFn: async () => {
-      const r = await fetch(apiUrl("/api/events/public"), { credentials: "include" });
-      if (!r.ok) return [];
-      const d = await r.json();
-      return Array.isArray(d) ? d : (d?.events ?? []);
-    },
-    staleTime: 60_000,
-  });
-
   /* ─── derived counts for tiles ─── */
   const filterByResolvedLocation = useCallback(
     <T extends { latitude?: number | null; longitude?: number | null; lat?: number | null; lng?: number | null; distanceMiles?: number | null }>(
@@ -846,29 +748,10 @@ export default function ScoutPrototype() {
       return String(a.name || "").localeCompare(String(b.name || ""));
     })
     .slice(0, 20);
-  const truckCanonicalKeys = new Set(
-    trucks.map((truck) => canonicalScoutEntityKey(truck)).filter(Boolean),
-  );
-  const restaurants = filterByResolvedLocation(restaurantsRaw)
-    .filter((restaurant) => {
-      const restaurantKey = canonicalScoutEntityKey(restaurant);
-      const isTruckType =
-        String(restaurant.businessType || "").toLowerCase() === "food_truck" ||
-        restaurant.isFoodTruck === true;
-      if (isTruckType) return false;
-      if (truckCanonicalKeys.has(restaurantKey)) return false;
-      return true;
-    })
-    .slice(0, 20);
-  const deals = dealsRaw.slice(0, 10);
-  const events = eventsRaw.slice(0, 10);
-
   const tileCounts = useMemo(() => ({
     food_trucks: trucks.length > 0 ? `${trucks.length} nearby` : "",
-    restaurants: restaurants.length > 0 ? `${restaurants.length} nearby` : "",
-    deals: deals.length > 0 ? `${deals.length} today` : "",
-    events: events.length > 0 ? `${events.length} tonight` : "",
-  }), [trucks, restaurants, deals, events]);
+    nearby_now: trucks.length > 0 ? "limited" : "",
+  }), [trucks]);
 
   /* ─── feed items based on active scene ─── */
   const feedItems = useMemo(() => {
@@ -882,7 +765,7 @@ export default function ScoutPrototype() {
     }> = [];
     let sourceOrder = 0;
 
-    if (activeScene === "food_trucks" || activeScene === "for_you" || activeScene === "nearby_now") {
+    if (CONTAINED_SCOUT_SCENE_IDS.has(activeScene)) {
       trucks.forEach(t => {
         const name = t.name || "Food Truck";
         const hasExactLocation =
@@ -933,78 +816,6 @@ export default function ScoutPrototype() {
       });
     }
 
-    if (activeScene === "restaurants" || activeScene === "for_you" || activeScene === "nearby_now") {
-      restaurants.forEach(r => {
-        const isBar = isBarBusinessType(r.businessType);
-        const name = r.businessName || r.name || (isBar ? "Bar" : "Restaurant");
-        const hasDeals = (r.activeDealsCount ?? r.activeDealCount ?? 0) > 0;
-        const serviceStatus = restaurantServingStatus(r);
-        const statusTag =
-          serviceStatus === "open_now"
-            ? "Open now"
-            : serviceStatus === "closed_now"
-              ? "Closed now"
-              : "No schedule";
-        const statusColor =
-          serviceStatus === "open_now"
-            ? "#10b981"
-            : serviceStatus === "closed_now"
-              ? "#f59e0b"
-              : "#94a3b8";
-        items.push({
-          id: `rest-${r.id}`, type: isBar ? "BAR" : "RESTAURANT", typeColor: "#ff5c00",
-          image: imgSrc(r), title: name,
-          subtitle: [isBar ? "Bar" : r.cuisineType, r.neighborhood || r.city, statusTag].filter(Boolean).join(" • "),
-          tag: hasDeals ? "Deal available" : statusTag,
-          tagColor: hasDeals ? "#10b981" : statusColor,
-          distance: distLabel(r),
-          href:
-            buildPublicProfilePath({
-              entityType: isBar ? "bar" : "restaurant",
-              id: r.id,
-              name,
-            }) || (isBar ? `/bar/${r.id}` : `/restaurant/${r.id}`),
-          routeHref: routeUrl(r.latitude ?? r.lat, r.longitude ?? r.lng, name),
-          restaurantId: r.id,
-          searchCity: String(r.city || r.state || ""),
-          searchDescription: [r.cuisineType, r.neighborhood, r.businessType].filter(Boolean).join(" "),
-          searchOrder: sourceOrder++,
-        });
-      });
-    }
-
-    if (activeScene === "deals" || activeScene === "for_you") {
-      deals.forEach(d => {
-        items.push({
-          id: `deal-${d.id}`, type: "DEAL", typeColor: "#10b981",
-          image: d.imageUrl || null, title: d.title || "Deal",
-          subtitle: [d.restaurantName, d.discountText || d.description].filter(Boolean).join(" • "),
-          tag: d.discountText || "Deal today", tagColor: "#10b981",
-          distance: null, href: `/search?q=deals`, routeHref: null,
-          searchCity: "",
-          searchDescription: [d.restaurantName, d.description, d.discountText].filter(Boolean).join(" "),
-          searchOrder: sourceOrder++,
-        });
-      });
-    }
-
-    if (activeScene === "events" || activeScene === "for_you") {
-      events.forEach(e => {
-        const name = e.title || e.name || "Event";
-        items.push({
-          id: `event-${e.id}`, type: "EVENT", typeColor: "#3b82f6",
-          image: e.imageUrl || null, title: name,
-          subtitle: [e.venueName, e.startsAt ? new Date(e.startsAt).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }) : null].filter(Boolean).join(" • "),
-          tag: "Happening soon", tagColor: "#3b82f6",
-          distance: null,
-          href: `/event/${e.id}`,
-          routeHref: routeUrl(e.latitude ?? e.lat, e.longitude ?? e.lng, name),
-          searchCity: "",
-          searchDescription: [e.venueName].filter(Boolean).join(" "),
-          searchOrder: sourceOrder++,
-        });
-      });
-    }
     const query = submittedQuery.trim();
     if (!query) return items.slice(0, 15);
 
@@ -1036,7 +847,7 @@ export default function ScoutPrototype() {
 
     if (relevant.length > 0) return relevant.slice(0, 15);
     return items.slice(0, 15);
-  }, [activeScene, trucks, restaurants, deals, events, submittedQuery]);
+  }, [activeScene, trucks, submittedQuery]);
 
   /* ─── toggle saved ─── */
   const toggleSaved = useCallback(async (id: string) => {
@@ -1131,42 +942,7 @@ export default function ScoutPrototype() {
       );
     });
 
-    // Restaurant pins (must have schedule status, or stay off map)
-    restaurants
-      .filter((restaurant) => restaurantServingStatus(restaurant) !== "no_schedule")
-      .slice(0, 8)
-      .forEach(r => {
-      const lat = r.latitude ?? r.lat;
-      const lng = r.longitude ?? r.lng;
-      if (!lat || !lng) return;
-      const icon = L.divIcon({
-        className: "sp-pin",
-        html: pinHtml("#ff5c00", PIN_SVGS.restaurant),
-        iconSize: [32, 32], iconAnchor: [16, 16],
-      });
-      const marker = L.marker([lat, lng], { icon }).addTo(map.current!);
-      marker.on("click", () => navigate(`/restaurant/${r.id}`));
-      });
-
-    // Event pins
-    events.slice(0, 4).forEach(e => {
-      const lat = e.latitude ?? e.lat;
-      const lng = e.longitude ?? e.lng;
-      if (!lat || !lng) return;
-      const icon = L.divIcon({
-        className: "sp-pin",
-        html: pinHtml("#3b82f6", PIN_SVGS.event),
-        iconSize: [32, 32], iconAnchor: [16, 16],
-      });
-      L.marker([lat, lng], { icon }).addTo(map.current!);
-    });
-
-    // Deal pins
-    deals.slice(0, 4).forEach(d => {
-      // deals don't always have coords — skip if missing
-    });
-
-  }, [trucks, restaurants, events, location, navigate]);
+  }, [trucks, location, navigate]);
 
   /* ─── section title based on scene ─── */
   const sectionTitle = useMemo(() => {
@@ -1175,17 +951,18 @@ export default function ScoutPrototype() {
   }, [activeScene]);
 
   const sectionSubtitle = useMemo(() => {
-    if (activeScene === "for_you") return "A local mix of what people are finding, with clear open/closed/schedule status.";
-    if (activeScene === "food_trucks") return `${trucks.length || "No"} food trucks near ${location.label}.`;
-    if (activeScene === "restaurants") return `${restaurants.length || "No"} restaurants near ${location.label}.`;
-    if (activeScene === "deals") return `${deals.length || "No"} active deals near you.`;
-    if (activeScene === "events") return `${events.length || "No"} events happening soon.`;
-    return `Showing ${sectionTitle.toLowerCase()} near ${location.label}.`;
-  }, [activeScene, trucks, restaurants, deals, events, location, sectionTitle]);
+    if (activeScene === "for_you") {
+      return `Truck-first early access near ${location.label}. Coverage is limited while profiles are verified.`;
+    }
+    if (activeScene === "food_trucks") {
+      return `${trucks.length || "No"} verified or discoverable food trucks near ${location.label}.`;
+    }
+    return `Showing limited truck-first ${sectionTitle.toLowerCase()} coverage near ${location.label}.`;
+  }, [activeScene, trucks, location, sectionTitle]);
 
   /* ─── empty state ─── */
   const isEmpty = feedItems.length === 0;
-  const quickSearchChips = ["Burgers", "Tacos", "Food Trucks", "Deals", "Events", "Late Night"];
+  const quickSearchChips = ["Tacos", "BBQ", "Dessert", "Food Trucks", "Late Night"];
   const handleSearchSubmit = () => {
     const q = searchQuery.trim();
     if (!q) return;
@@ -1210,13 +987,20 @@ export default function ScoutPrototype() {
             className="h-8 w-8 object-contain"
             loading="eager"
           />
+          <span className="ml-2 rounded-full border border-orange-500/25 bg-[#1d130d] px-2 py-1 text-[9px] font-black uppercase tracking-[0.18em] text-orange-200">
+            Early access
+          </span>
         </div>
         <div className="flex items-center gap-3">
-          <Link href="/alerts" className="relative">
-            <Bell size={22} className="text-white/70 hover:text-white transition-colors" />
-            <div className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-orange-500 rounded-full border-2 border-[#0d0d0d]" />
-          </Link>
-          <Link href="/profile">
+          <button
+            type="button"
+            onClick={() => setSearchOpen(true)}
+            className="text-white/70 hover:text-white transition-colors"
+            aria-label="Open Scout search"
+          >
+            <Search size={22} />
+          </button>
+          <Link href={user ? "/profile" : "/login"}>
             {user ? (
               <div className="w-8 h-8 rounded-full bg-orange-500/20 border border-orange-500/30 flex items-center justify-center">
                 <User size={16} className="text-orange-400" />
@@ -1277,7 +1061,7 @@ export default function ScoutPrototype() {
                   onKeyDown={(e) => {
                     if (e.key === "Enter") handleSearchSubmit();
                   }}
-                  placeholder="Search food, places, trucks, events"
+                  placeholder="Search truck names, cuisine, or nearby food"
                   className="h-9 flex-1 rounded-xl border border-white/10 bg-[#171412] px-3 text-sm text-white outline-none placeholder:text-white/40 focus:border-orange-400/45"
                 />
                 <button
@@ -1339,10 +1123,10 @@ export default function ScoutPrototype() {
               type="button"
               onClick={() => setSearchOpen(true)}
               className="flex h-[46px] w-full items-center gap-2 border-0 border-t border-white/8 bg-transparent px-4 text-left text-[13px] font-semibold text-white/88"
-              aria-label="Search food, places, trucks, events"
+              aria-label="Search truck names, cuisine, or nearby food"
             >
               <Search size={16} className="text-orange-400 shrink-0" />
-              <span className="truncate">Search food, places, trucks, events</span>
+              <span className="truncate">Search truck names, cuisine, or nearby food</span>
             </button>
           </div>
         </div>
@@ -1358,7 +1142,7 @@ export default function ScoutPrototype() {
           <section className="mb-3 mt-3 rounded-2xl border border-white/8 bg-[#151210] px-4 py-3">
             <h3 className="text-sm font-bold text-white">Results for "{submittedQuery}"</h3>
             <p className="mt-1 text-xs text-white/70">
-              Local matches will include places, dishes, trucks, deals, and events.
+              Local matches are limited during early access and prioritize truck-safe surfaces.
             </p>
             <div className="mt-2 flex items-center gap-2">
               <button
@@ -1387,9 +1171,9 @@ export default function ScoutPrototype() {
             <h2 className="text-lg font-black uppercase tracking-tighter leading-none mb-0.5">{sectionTitle}</h2>
             <p className="text-[11px] leading-tight text-gray-400 font-medium">{sectionSubtitle}</p>
           </div>
-          <Link href="/search" className="text-orange-500 font-bold text-xs uppercase tracking-wider shrink-0 ml-3 hover:text-orange-400">
-            See all
-          </Link>
+          <span className="text-orange-500 font-bold text-xs uppercase tracking-wider shrink-0 ml-3">
+            Limited
+          </span>
         </div>
 
         {/* Feed cards */}

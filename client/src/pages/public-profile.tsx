@@ -1783,29 +1783,27 @@ function RestaurantSocial({
 function RelatedLocalDiscovery({
   data,
   citySlug,
-  restaurantProfile,
 }: {
   data: PublicProfilePayload;
   citySlug: string | null;
-  restaurantProfile: PublicRestaurantProfile | null;
 }) {
   if (!data.city || !citySlug) return null;
-  const cuisineTag = restaurantProfile?.cuisineTags?.find((tag) =>
-    String(tag || "").trim().length > 0,
-  );
   return (
     <Card className="border-white/10 bg-[#0f0d0b]">
       <CardHeader>
         <CardTitle className="text-base text-white">
-          Keep exploring {data.city}
+          Truck-first discovery in {data.city}
         </CardTitle>
+        <p className="text-sm text-white/60">
+          MealScout coverage is limited while public profiles are verified.
+        </p>
       </CardHeader>
       <CardContent className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
         <a
-          href={`/city/${encodeURIComponent(citySlug)}/food`}
+          href="/scout"
           className="rounded-md border border-white/10 px-3 py-2 text-white/85 hover:bg-white/10"
         >
-          Places to eat nearby
+          Open Scout
         </a>
         <a
           href={`/food-trucks-today/${encodeURIComponent(citySlug)}`}
@@ -1814,25 +1812,17 @@ function RelatedLocalDiscovery({
           Food trucks today
         </a>
         <a
-          href={`/deals-today/${encodeURIComponent(citySlug)}`}
+          href="/claim-truck"
           className="rounded-md border border-white/10 px-3 py-2 text-white/85 hover:bg-white/10"
         >
-          Deals today
+          Claim or update a truck
         </a>
         <a
-          href={`/events-today/${encodeURIComponent(citySlug)}`}
+          href="/restaurant-signup?businessType=food_truck"
           className="rounded-md border border-white/10 px-3 py-2 text-white/85 hover:bg-white/10"
         >
-          Local food events
+          List a food truck
         </a>
-        {cuisineTag ? (
-          <a
-            href={`/cuisine/${encodeURIComponent(String(cuisineTag).toLowerCase().replace(/[^a-z0-9]+/g, "-"))}/${encodeURIComponent(citySlug)}`}
-            className="rounded-md border border-white/10 px-3 py-2 text-white/85 hover:bg-white/10 sm:col-span-2"
-          >
-            Find similar spots nearby
-          </a>
-        ) : null}
       </CardContent>
     </Card>
   );
@@ -2081,7 +2071,7 @@ export default function PublicProfilePage() {
   const description =
     data.seo?.seoDescription ||
     data.description ||
-    "Find local food activity, menus, deals, and nearby places on MealScout.";
+    "Find truck-first local food coverage, public menus, and posted schedule details on MealScout.";
   const canonicalUrl =
     (resolvedCleanBusinessPath && typeof window !== "undefined"
       ? new URL(resolvedCleanBusinessPath, window.location.origin).toString()
@@ -2125,7 +2115,7 @@ export default function PublicProfilePage() {
           </Link>
           <div className="flex items-center gap-3 text-xs sm:text-sm">
             <Link href="/scout" className="text-white/75 hover:text-white">
-              Find local food
+              Scout trucks
             </Link>
             <Link href="/claim-truck" className="text-orange-200 hover:text-orange-100">
               Claim or update
@@ -2205,7 +2195,6 @@ export default function PublicProfilePage() {
           <RelatedLocalDiscovery
             data={data}
             citySlug={citySlug}
-            restaurantProfile={restaurantProfile}
           />
         </main>
       </ProfileErrorBoundary>
@@ -2215,7 +2204,7 @@ export default function PublicProfilePage() {
           <p>MealScout</p>
           <div className="flex items-center gap-4">
             <Link href="/scout" className="hover:text-white">
-              Find local food
+              Scout trucks
             </Link>
             <Link href="/claim-truck" className="hover:text-white">
               Business owner?

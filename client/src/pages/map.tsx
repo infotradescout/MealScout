@@ -98,16 +98,16 @@ const resolveMapBranding = (): MapBranding => {
     appName: "MealScout",
     mapName: "MealScout Map",
     canonicalBaseUrl: "https://www.mealscout.us",
-    seoTitle: "Map View - MealScout | Find Deals Near You",
+    seoTitle: "MealScout Map | Truck-First Early Access Coverage",
     seoDescription:
-      "Explore food deals on an interactive map. See nearby restaurants, view deal locations, and discover dining discounts in your area. Find the perfect meal deal near you!",
+      "Explore truck-first early access coverage on MealScout. See nearby food trucks, posted truck status, and limited verified local map context while coverage expands.",
     seoKeywords:
-      "food truck map near me, restaurant deals map, local food map, nearby food trucks, meal deals near me, interactive food map, food truck parking map, local dining map",
+      "food truck map near me, local food truck map, nearby food trucks, interactive food truck map, food truck parking map, local dining map",
     mapSchemaDescription:
-      "Interactive map of food trucks, nearby deals, host parking spots, and event locations.",
-    exploreHeading: "Explore MealScout Pages",
+      "Interactive truck-first map with limited early access coverage.",
+    exploreHeading: "Truck-First Early Access",
     exploreDescription:
-      "Continue browsing local food trucks, restaurants, and active deals.",
+      "Continue through safe MealScout surfaces while coverage is verified.",
   };
 };
 
@@ -1117,6 +1117,13 @@ function HostMarkerLayer({
             slug: toProfileSlug(host.name),
             name: host.name,
           }) || "/";
+        const hostedTruckProfileHref = hostedTruck
+          ? buildPublicProfilePath({
+              entityType: "truck",
+              id: hostedTruck.truck.id,
+              name: hostedTruck.truck.name,
+            }) || `/truck/${hostedTruck.truck.id}`
+          : null;
 
         return (
           <Marker
@@ -1194,7 +1201,7 @@ function HostMarkerLayer({
                             restaurantId: hostedTruck.truck.id,
                             source: "host_popup",
                           });
-                          window.location.href = `/restaurant/${hostedTruck.truck.id}`;
+                          window.location.href = hostedTruckProfileHref || "/";
                         }}
                       >
                         View menu
@@ -1899,6 +1906,21 @@ export default function MapPage() {
       }) || "/"
     );
   }, []);
+
+  const getPublicProfileHrefForTruck = useCallback(
+    (truck: Pick<LiveTruck, "id" | "name"> | Pick<MissingTruckReportTarget, "truckId" | "truckName">) => {
+      const id = "truckId" in truck ? truck.truckId : truck.id;
+      const name = "truckName" in truck ? truck.truckName : truck.name;
+      return (
+        buildPublicProfilePath({
+          entityType: "truck",
+          id,
+          name,
+        }) || `/truck/${id}`
+      );
+    },
+    [],
+  );
 
   const resolveHostCoords = (host: HostLocation) => {
     const lat = toNumberOrNull(host.latitude);
@@ -3596,70 +3618,27 @@ export default function MapPage() {
     }),
     [visibleDeals, mapBranding],
   );
-  type TrendingSearchRow = {
-    query: string;
-    count: number;
-    context?: string | null;
-  };
-  const { data: trendingSearches = [] } = useQuery<TrendingSearchRow[]>({
-    queryKey: [
-      "/api/search/trending",
-      "map-discovery",
-      adLocation?.lat ?? null,
-      adLocation?.lng ?? null,
-    ],
-    queryFn: async () => {
-      const params = new URLSearchParams({
-        limit: "8",
-        windowDays: "7",
-        radiusKm: "25",
-      });
-      if (adLocation) {
-        params.set("lat", String(adLocation.lat));
-        params.set("lng", String(adLocation.lng));
-      }
-      const res = await fetch(apiUrl(`/api/search/trending?${params}`));
-      if (!res.ok) throw new Error("Failed to fetch trending searches");
-      return res.json();
-    },
-    staleTime: 30_000,
-    enabled: !deferSecondaryQueries,
-  });
   const mapExploreLinks = [
     {
-      href: "/search",
-      title: "Search Food Deals",
-      description: `Search by cuisine, restaurant, and deal type across ${mapBranding.appName}.`,
+      href: "/scout",
+      title: "Open Scout",
+      description: `Browse truck-first early access coverage in ${mapBranding.appName}.`,
     },
     {
-      href: "/events",
-      title: "Food Truck Events",
+      href: "/restaurant-signup?businessType=food_truck",
+      title: "List a Food Truck",
       description:
-        "Check upcoming public events with trucks and pop-up vendors.",
+        "Add a food truck to the verified early access intake lane.",
     },
     {
-      href: "/faq",
-      title: "Map & Deal FAQ",
+      href: "/claim-truck",
+      title: "Claim a Truck",
       description:
-        "Learn how map pins, live trucks, and deal availability work.",
+        "Claim or update a food truck profile without opening broader surfaces.",
     },
   ];
-  const trendingLinks = (
-    Array.isArray(trendingSearches)
-      ? trendingSearches
-          .map((row) => ({
-            query: row?.query,
-            context: row?.context || null,
-          }))
-          .filter((row) => Boolean(row.query))
-      : []
-  )
-    .slice(0, 8)
-    .map((row) => ({
-      href: `/search?q=${encodeURIComponent(String(row.query))}`,
-      title: String(row.query),
-      context: row.context,
-    }));
+  const trendingLinks: Array<{ href: string; title: string; context: string | null }> = [];
+  const showContainedMapExtendedSections = false;
 
   const activeMapCalloutAnchor = useMemo<GeoPoint | null>(() => {
     if (selectedDeal) {
@@ -3910,7 +3889,7 @@ export default function MapPage() {
                 return (
                   <Link
                     key={truck.id}
-                    href={`/restaurant/${truck.id}`}
+                    href={getPublicProfileHrefForTruck(truck)}
                     className="flex items-center justify-between gap-3 rounded-md border border-[color:var(--border-subtle)] bg-black/15 px-3 py-2 text-left hover:bg-muted/40"
                   >
                     <div className="flex min-w-0 items-center gap-2">
@@ -4479,7 +4458,8 @@ export default function MapPage() {
                                 restaurantId: target.truckId,
                                 source: "truck_preview",
                               });
-                              window.location.href = `/restaurant/${target.truckId}`;
+                              window.location.href =
+                                getPublicProfileHrefForTruck(target);
                             }}
                           >
                             Details
@@ -4717,8 +4697,7 @@ export default function MapPage() {
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
               {visibleLiveTrucks.length} trucks · {visibleHostLocations.length}{" "}
-              hosts · {visibleEventLocations.length} events ·{" "}
-              {visibleSupplierLocations.length} suppliers · {deals.length} deals
+              hosts · limited early access coverage
             </p>
           </header>
 
@@ -4735,7 +4714,8 @@ export default function MapPage() {
                         type="button"
                         className="flex w-full items-start justify-between gap-3 px-3 py-2 text-left hover:bg-muted/40"
                         onClick={() => {
-                          window.location.href = `/restaurant/${truck.id}`;
+                          window.location.href =
+                            getPublicProfileHrefForTruck(truck);
                         }}
                       >
                         <div className="min-w-0">
@@ -4807,7 +4787,7 @@ export default function MapPage() {
               </section>
             )}
 
-            {visibleEventLocations.length > 0 && (
+            {showContainedMapExtendedSections && visibleEventLocations.length > 0 && (
               <section data-testid="list-section-events">
                 <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
                   Events
@@ -4841,7 +4821,7 @@ export default function MapPage() {
               </section>
             )}
 
-            {visibleSupplierLocations.length > 0 && (
+            {showContainedMapExtendedSections && visibleSupplierLocations.length > 0 && (
               <section data-testid="list-section-suppliers">
                 <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
                   Suppliers
@@ -4876,6 +4856,7 @@ export default function MapPage() {
               </section>
             )}
 
+            {showContainedMapExtendedSections && (
             <section data-testid="list-section-deals">
               <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
                 Deals
@@ -4919,6 +4900,7 @@ export default function MapPage() {
                 </div>
               )}
             </section>
+            )}
           </div>
         </div>
       )}
