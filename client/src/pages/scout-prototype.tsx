@@ -12,6 +12,10 @@ import { useAuth } from "@/hooks/useAuth";
 import { getReverseGeocodedLocationName } from "@/utils/locationUtils";
 import { apiUrl } from "@/lib/api";
 import { buildPublicProfilePath } from "@/lib/public-profile-path";
+import type {
+  ScoutSurfaceCard,
+  ScoutSurfaceResponse,
+} from "@shared/constants/scoutSurface";
 
 /* ─── styles ─── */
 const customStyles = `
@@ -324,6 +328,30 @@ type ScoutSearchableRecord = {
   description?: string;
 };
 
+type SurfaceScoutCard = ScoutSurfaceCard & {
+  sectionId: string;
+  sectionTitle: string;
+};
+
+type ScoutFeedItem = {
+  id: string;
+  type: string;
+  typeColor: string;
+  image: string | null;
+  title: string;
+  subtitle: string;
+  tag?: string;
+  tagColor?: string;
+  distance: string | null;
+  href: string;
+  routeHref: string | null;
+  restaurantId?: string;
+  searchCity?: string;
+  searchDescription?: string;
+  searchOrder?: number;
+  ctaLabel?: string;
+};
+
 function scoreScoutSearchResult(record: ScoutSearchableRecord, query: string): number {
   const q = normalizeScoutSearchText(query);
   if (!q) return 0;
@@ -358,15 +386,157 @@ function scoreScoutSearchResult(record: ScoutSearchableRecord, query: string): n
   return 0;
 }
 
+function surfaceCardKey(card: Pick<ScoutSurfaceCard, "entityType" | "entityId">) {
+  return `${card.entityType}:${card.entityId}`;
+}
+
+function dedupeSurfaceCards(cards: SurfaceScoutCard[]) {
+  const seen = new Set<string>();
+  return cards.filter((card) => {
+    const key = surfaceCardKey(card);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function getSurfaceTypeLabel(card: ScoutSurfaceCard) {
+  if (card.source === "community" || card.source === "recommendation") {
+    return "COMMUNITY PICK";
+  }
+  switch (card.entityType) {
+    case "truck":
+      return "FOOD TRUCK";
+    case "restaurant":
+      return "RESTAURANT";
+    case "deal":
+      return "DEAL";
+    case "event":
+      return "EVENT";
+    case "host_spot":
+      return "HOST SPOT";
+    default:
+      return "LOCAL FOOD";
+  }
+}
+
+function getSurfaceTypeColor(card: ScoutSurfaceCard) {
+  if (card.source === "community" || card.source === "recommendation") {
+    return "#9333ea";
+  }
+  switch (card.entityType) {
+    case "truck":
+      return "#ff5c00";
+    case "restaurant":
+      return "#3b82f6";
+    case "deal":
+      return "#10b981";
+    case "event":
+      return "#f59e0b";
+    case "host_spot":
+      return "#14b8a6";
+    default:
+      return "#f97316";
+  }
+}
+
+function getSurfaceTag(card: ScoutSurfaceCard) {
+  if (card.availability === "serving_now") return "Serving now";
+  if (card.availability === "open_now") return "Open now";
+  if (card.availability === "deal_today") return "Deal today";
+  if (card.availability === "event_today") return "Today";
+  if (card.availability === "upcoming") return "Upcoming";
+  if (card.statusLabel === "No schedule") return "Hours not posted";
+  if (card.source === "community" || card.source === "recommendation") {
+    return "Community pick";
+  }
+  return card.statusLabel || "Nearby";
+}
+
+function getSurfaceTagColor(card: ScoutSurfaceCard) {
+  if (card.availability === "serving_now" || card.availability === "open_now") {
+    return "#10b981";
+  }
+  if (card.availability === "deal_today") return "#10b981";
+  if (card.availability === "event_today" || card.availability === "upcoming") {
+    return "#f59e0b";
+  }
+  if (card.source === "community" || card.source === "recommendation") {
+    return "#9333ea";
+  }
+  if (card.statusLabel === "No schedule") return "#f97316";
+  return getSurfaceTypeColor(card);
+}
+
+function buildSurfaceRouteHref(card: ScoutSurfaceCard) {
+  const lat = Number((card.metadata as { lat?: number } | undefined)?.lat);
+  const lng = Number((card.metadata as { lng?: number } | undefined)?.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  return routeUrl(lat, lng, card.title);
+}
+
+function buildSurfaceSubtitle(card: ScoutSurfaceCard) {
+  const honestThinLabel =
+    !card.imageUrl && (card.entityType === "restaurant" || card.entityType === "truck")
+      ? "Photo coming soon"
+      : card.statusLabel === "No schedule"
+        ? "Hours not posted"
+        : "";
+  return [
+    card.subtitle,
+    ...card.reasons.slice(0, 2),
+    honestThinLabel,
+  ]
+    .filter(Boolean)
+    .join(" • ");
+}
+
+function buildSurfaceSearchDescription(card: SurfaceScoutCard) {
+  return [
+    card.source,
+    card.sectionTitle,
+    card.statusLabel,
+    ...card.badges,
+    ...card.reasons,
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
+function buildSurfaceFeedItem(card: SurfaceScoutCard, searchOrder: number): ScoutFeedItem {
+  return {
+    id: `surface-${card.id}`,
+    type: getSurfaceTypeLabel(card),
+    typeColor: getSurfaceTypeColor(card),
+    image: card.imageUrl || null,
+    title: card.title,
+    subtitle: buildSurfaceSubtitle(card),
+    tag: getSurfaceTag(card),
+    tagColor: getSurfaceTagColor(card),
+    distance:
+      typeof card.distanceMiles === "number" && card.distanceMiles > 0
+        ? `${card.distanceMiles.toFixed(1)} mi`
+        : null,
+    href: card.cta.href,
+    routeHref: buildSurfaceRouteHref(card),
+    restaurantId: card.entityType === "restaurant" ? card.entityId : undefined,
+    searchCity: "",
+    searchDescription: buildSurfaceSearchDescription(card),
+    searchOrder,
+    ctaLabel: card.cta.label,
+  };
+}
+
 /* ─── feed card ─── */
 function FeedCard({
   type, typeColor, image, title, subtitle, tag, tagColor,
-  distance, href, routeHref, restaurantId, isFavorited, onToggleFavorite,
+  distance, href, routeHref, restaurantId, isFavorited, onToggleFavorite, ctaLabel,
 }: {
   type: string; typeColor: string; image: string | null;
   title: string; subtitle: string; tag?: string; tagColor?: string;
   distance: string | null; href: string; routeHref: string | null;
   restaurantId?: string; isFavorited?: boolean; onToggleFavorite?: (id: string) => void;
+  ctaLabel?: string;
 }) {
   return (
     <div className="flex gap-3 bg-[#1a1a1a] rounded-2xl p-3 border border-white/5 hover:border-orange-500/20 transition-all duration-300">
@@ -396,7 +566,7 @@ function FeedCard({
         )}
         <div className="flex items-center gap-3 mt-auto">
           <Link href={href} className="text-[10px] font-black text-orange-500 uppercase tracking-widest hover:text-orange-400">
-            View
+            {ctaLabel || "View"}
           </Link>
           {routeHref && (
             <a href={routeHref} target="_blank" rel="noopener noreferrer"
@@ -404,13 +574,15 @@ function FeedCard({
               Route
             </a>
           )}
-          <button
-            onClick={() => restaurantId && onToggleFavorite?.(restaurantId)}
-            className="ml-auto"
-            aria-label={isFavorited ? "Remove from saved" : "Save"}
-          >
-            <Bookmark size={15} className={isFavorited ? "text-orange-500 fill-orange-500" : "text-gray-600 hover:text-orange-500 transition-colors"} />
-          </button>
+          {restaurantId ? (
+            <button
+              onClick={() => onToggleFavorite?.(restaurantId)}
+              className="ml-auto"
+              aria-label={isFavorited ? "Remove from saved" : "Save"}
+            >
+              <Bookmark size={15} className={isFavorited ? "text-orange-500 fill-orange-500" : "text-gray-600 hover:text-orange-500 transition-colors"} />
+            </button>
+          ) : null}
         </div>
       </div>
     </div>
@@ -453,6 +625,12 @@ export default function ScoutPrototype() {
       .trim()
       .toLowerCase();
   }, [routePath]);
+  const routeScene = useMemo(() => {
+    if (typeof window === "undefined") return "";
+    return String(new URLSearchParams(window.location.search).get("scene") || "")
+      .trim()
+      .toLowerCase();
+  }, [routePath]);
   const isAdminPreviewEligible = useMemo(() => {
     const userType = String(user?.userType || "").toLowerCase();
     const rolesRaw = (user as { roles?: unknown } | null | undefined)?.roles;
@@ -476,6 +654,15 @@ export default function ScoutPrototype() {
       setAdminPreviewLocked(true);
     }
   }, [scoutPreviewCity, isAdminPreviewEligible]);
+  useEffect(() => {
+    if (routeScene && CONTAINED_SCOUT_SCENE_IDS.has(routeScene)) {
+      setActiveScene(routeScene);
+      return;
+    }
+    if (!routeScene) {
+      setActiveScene("for_you");
+    }
+  }, [routeScene]);
 
   // Admin lane is hard-locked to Pensacola for Scout prototype consistency.
   const isPensacolaScoutPreview =
@@ -583,6 +770,32 @@ export default function ScoutPrototype() {
       return r.json();
     },
     staleTime: 120_000,
+  });
+
+  const { data: scoutSurfaceData } = useQuery<ScoutSurfaceResponse>({
+    queryKey: ["/api/scout/surface", location.lat, location.lng],
+    queryFn: async () => {
+      const r = await fetch(
+        apiUrl(`/api/scout/surface?lat=${location.lat}&lng=${location.lng}&radiusMiles=20&limit=30`),
+        { credentials: "include" },
+      );
+      if (!r.ok) {
+        return {
+          generatedAt: new Date(0).toISOString(),
+          mode: "quiet" as const,
+          location: {
+            lat: location.lat,
+            lng: location.lng,
+            radiusMiles: 20,
+          },
+          map: { markers: [] },
+          sections: [],
+        };
+      }
+      return r.json();
+    },
+    staleTime: 30_000,
+    refetchInterval: 60_000,
   });
 
   /* ─── derived counts for tiles ─── */
@@ -748,33 +961,143 @@ export default function ScoutPrototype() {
       return String(a.name || "").localeCompare(String(b.name || ""));
     })
     .slice(0, 20);
-  const tileCounts = useMemo(() => ({
-    food_trucks: trucks.length > 0 ? `${trucks.length} nearby` : "",
-    nearby_now: trucks.length > 0 ? "limited" : "",
-  }), [trucks]);
 
-  /* ─── feed items based on active scene ─── */
-  const feedItems = useMemo(() => {
-    const items: Array<{
-      id: string; type: string; typeColor: string; image: string | null;
-      title: string; subtitle: string; tag?: string; tagColor?: string;
-      distance: string | null; href: string; routeHref: string | null; restaurantId?: string;
-      searchCity?: string;
-      searchDescription?: string;
-      searchOrder?: number;
-    }> = [];
-    let sourceOrder = 0;
+  const surfaceCards = useMemo<SurfaceScoutCard[]>(() => {
+    const sections = scoutSurfaceData?.sections ?? [];
+    return sections.flatMap((section) =>
+      (section.cards || []).map((card) => ({
+        ...card,
+        sectionId: section.id,
+        sectionTitle: section.title,
+      })),
+    );
+  }, [scoutSurfaceData]);
 
-    if (CONTAINED_SCOUT_SCENE_IDS.has(activeScene)) {
-      trucks.forEach(t => {
+  const todayAroundYouCards = useMemo(
+    () => surfaceCards.filter((card) => card.sectionId === "nearby-now"),
+    [surfaceCards],
+  );
+  const communitySurfaceCards = useMemo(
+    () =>
+      dedupeSurfaceCards(
+        surfaceCards.filter(
+          (card) =>
+            card.sectionId === "recommended-nearby" ||
+            card.source === "community" ||
+            card.source === "recommendation",
+        ),
+      ),
+    [surfaceCards],
+  );
+  const nearbyNowSurfaceCards = useMemo(
+    () =>
+      dedupeSurfaceCards(
+        surfaceCards.filter(
+          (card) =>
+            ["serving_now", "open_now", "deal_today", "event_today"].includes(card.availability) ||
+            ["open-near-you", "deals-today", "happening-today"].includes(card.sectionId),
+        ),
+      ),
+    [surfaceCards],
+  );
+  const worthDiscoveringSurfaceCards = useMemo(
+    () =>
+      dedupeSurfaceCards(
+        surfaceCards.filter(
+          (card) =>
+            card.sectionId === "more-nearby" ||
+            card.availability === "nearby" ||
+            card.availability === "upcoming" ||
+            card.statusLabel === "No schedule",
+        ),
+      ),
+    [surfaceCards],
+  );
+  const lateNightSurfaceCards = useMemo(
+    () => nearbyNowSurfaceCards.filter((card) => card.availability === "open_now"),
+    [nearbyNowSurfaceCards],
+  );
+  const foodTruckSurfaceCards = useMemo(
+    () => dedupeSurfaceCards(surfaceCards.filter((card) => card.entityType === "truck")),
+    [surfaceCards],
+  );
+  const fallbackSurfaceCards = useMemo(
+    () =>
+      dedupeSurfaceCards([
+        ...todayAroundYouCards,
+        ...nearbyNowSurfaceCards,
+        ...communitySurfaceCards,
+        ...worthDiscoveringSurfaceCards,
+      ]),
+    [
+      communitySurfaceCards,
+      nearbyNowSurfaceCards,
+      todayAroundYouCards,
+      worthDiscoveringSurfaceCards,
+    ],
+  );
+  const sceneSurfaceCards = useMemo(() => {
+    if (activeScene === "community") {
+      return dedupeSurfaceCards([
+        ...communitySurfaceCards,
+        ...nearbyNowSurfaceCards,
+        ...worthDiscoveringSurfaceCards,
+      ]);
+    }
+    if (activeScene === "nearby_now") {
+      return dedupeSurfaceCards([
+        ...nearbyNowSurfaceCards,
+        ...todayAroundYouCards,
+        ...worthDiscoveringSurfaceCards,
+      ]);
+    }
+    if (activeScene === "late_night") {
+      return dedupeSurfaceCards([
+        ...lateNightSurfaceCards,
+        ...nearbyNowSurfaceCards,
+        ...worthDiscoveringSurfaceCards,
+      ]);
+    }
+    if (activeScene === "worth_discovering") {
+      return dedupeSurfaceCards([
+        ...worthDiscoveringSurfaceCards,
+        ...communitySurfaceCards,
+        ...nearbyNowSurfaceCards,
+      ]);
+    }
+    if (activeScene === "food_trucks") {
+      return foodTruckSurfaceCards;
+    }
+    return dedupeSurfaceCards([
+      ...todayAroundYouCards,
+      ...communitySurfaceCards,
+      ...nearbyNowSurfaceCards,
+      ...worthDiscoveringSurfaceCards,
+    ]);
+  }, [
+    activeScene,
+    communitySurfaceCards,
+    foodTruckSurfaceCards,
+    lateNightSurfaceCards,
+    nearbyNowSurfaceCards,
+    todayAroundYouCards,
+    worthDiscoveringSurfaceCards,
+  ]);
+
+  const truckFeedItems = useMemo<ScoutFeedItem[]>(
+    () =>
+      trucks.map((t) => {
         const name = t.name || "Food Truck";
         const hasExactLocation =
           Number.isFinite(Number(t.latitude ?? t.lat)) &&
           Number.isFinite(Number(t.longitude ?? t.lng));
         const nonLiveLocationLabel = hasExactLocation ? "Serving area" : "Location not posted";
-        items.push({
-          id: `truck-${t.id}`, type: "FOOD TRUCK", typeColor: "#9333ea",
-          image: imgSrc(t), title: name,
+        return {
+          id: `truck-${t.id}`,
+          type: "FOOD TRUCK",
+          typeColor: "#9333ea",
+          image: imgSrc(t),
+          title: name,
           subtitle: [
             t.cuisineType,
             t.liveNow
@@ -783,7 +1106,7 @@ export default function ScoutPrototype() {
                 : "Live now"
               : t.scheduledToday
                 ? "Scheduled today"
-              : nonLiveLocationLabel,
+                : nonLiveLocationLabel,
             t.liveNow ? null : "Not live now",
             t.menuAvailable ? "Menu available" : "Menu: none found",
             t.photosAvailable ? null : "Photos coming soon",
@@ -797,7 +1120,7 @@ export default function ScoutPrototype() {
               : "Live now"
             : t.scheduledToday
               ? "Scheduled today"
-            : "Not live now",
+              : "Not live now",
           tagColor: t.liveNow ? "#10b981" : "#9333ea",
           distance: distLabel(t),
           href:
@@ -811,9 +1134,79 @@ export default function ScoutPrototype() {
             : null,
           searchCity: "",
           searchDescription: [t.cuisineType, t.liveSource, t.source].filter(Boolean).join(" "),
-          searchOrder: sourceOrder++,
-        });
+          ctaLabel: t.liveNow ? "Go now" : "View details",
+        };
+      }),
+    [trucks],
+  );
+
+  const tileCounts = useMemo(
+    () => ({
+      community:
+        communitySurfaceCards.length > 0 ? `${communitySurfaceCards.length} picks` : "",
+      food_trucks:
+        trucks.length > 0
+          ? `${trucks.length} nearby`
+          : foodTruckSurfaceCards.length > 0
+            ? `${foodTruckSurfaceCards.length} nearby`
+            : "",
+      nearby_now:
+        nearbyNowSurfaceCards.length > 0 ? `${nearbyNowSurfaceCards.length} live` : "",
+      late_night:
+        lateNightSurfaceCards.length > 0 ? `${lateNightSurfaceCards.length} open` : "",
+      worth_discovering:
+        worthDiscoveringSurfaceCards.length > 0
+          ? `${worthDiscoveringSurfaceCards.length} to try`
+          : "",
+    }),
+    [
+      communitySurfaceCards.length,
+      foodTruckSurfaceCards.length,
+      lateNightSurfaceCards.length,
+      nearbyNowSurfaceCards.length,
+      trucks.length,
+      worthDiscoveringSurfaceCards.length,
+    ],
+  );
+
+  /* ─── feed items based on active scene ─── */
+  const feedItems = useMemo(() => {
+    const items: ScoutFeedItem[] = [];
+    const seen = new Set<string>();
+    let sourceOrder = 0;
+
+    const addFeedItem = (item: ScoutFeedItem) => {
+      const key = item.href || item.id;
+      if (seen.has(key)) return;
+      seen.add(key);
+      items.push({
+        ...item,
+        searchOrder: sourceOrder++,
       });
+    };
+
+    const addSurfaceCards = (cards: SurfaceScoutCard[], maxItems: number) => {
+      for (const card of cards) {
+        addFeedItem(buildSurfaceFeedItem(card, sourceOrder));
+        if (items.length >= maxItems) break;
+      }
+    };
+
+    const addTruckCards = (maxItems: number) => {
+      for (const item of truckFeedItems) {
+        addFeedItem(item);
+        if (items.length >= maxItems) break;
+      }
+    };
+
+    if (activeScene === "food_trucks") {
+      addTruckCards(10);
+      if (items.length < 12) addSurfaceCards(foodTruckSurfaceCards, 12);
+    } else {
+      addSurfaceCards(sceneSurfaceCards, 12);
+      if (items.length < 6) addTruckCards(8);
+      if (items.length < 10) addSurfaceCards(fallbackSurfaceCards, 12);
+      if (items.length < 12 && CONTAINED_SCOUT_SCENE_IDS.has(activeScene)) addTruckCards(12);
     }
 
     const query = submittedQuery.trim();
@@ -847,7 +1240,14 @@ export default function ScoutPrototype() {
 
     if (relevant.length > 0) return relevant.slice(0, 15);
     return items.slice(0, 15);
-  }, [activeScene, trucks, submittedQuery]);
+  }, [
+    activeScene,
+    fallbackSurfaceCards,
+    foodTruckSurfaceCards,
+    sceneSurfaceCards,
+    submittedQuery,
+    truckFeedItems,
+  ]);
 
   /* ─── toggle saved ─── */
   const toggleSaved = useCallback(async (id: string) => {
@@ -920,29 +1320,73 @@ export default function ScoutPrototype() {
     });
     L.marker([location.lat, location.lng], { icon: userIcon }).addTo(map.current);
 
-    // Truck pins (live and discoverable truck profiles)
-    trucks.slice(0, 8).forEach(t => {
-      const lat = t.latitude ?? t.lat;
-      const lng = t.longitude ?? t.lng;
-      if (!lat || !lng) return;
-      const icon = L.divIcon({
-        className: "sp-pin",
-        html: pinHtml("#9333ea", PIN_SVGS.truck),
-        iconSize: [32, 32], iconAnchor: [16, 16],
+    const addSurfaceMarkers = (cards: SurfaceScoutCard[], maxItems: number) => {
+      let count = 0;
+      cards.forEach((card) => {
+        if (count >= maxItems) return;
+        const lat = Number((card.metadata as { lat?: number } | undefined)?.lat);
+        const lng = Number((card.metadata as { lng?: number } | undefined)?.lng);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+        const iconSvg =
+          card.entityType === "truck"
+            ? PIN_SVGS.truck
+            : card.entityType === "deal"
+              ? PIN_SVGS.deal
+              : card.entityType === "event" || card.entityType === "host_spot"
+                ? PIN_SVGS.event
+                : card.source === "community" || card.source === "recommendation"
+                  ? PIN_SVGS.star
+                  : PIN_SVGS.restaurant;
+        const icon = L.divIcon({
+          className: "sp-pin",
+          html: pinHtml(getSurfaceTagColor(card), iconSvg),
+          iconSize: [32, 32],
+          iconAnchor: [16, 16],
+        });
+        const marker = L.marker([lat, lng], { icon }).addTo(map.current!);
+        marker.on("click", () => navigate(card.cta.href));
+        count += 1;
       });
-      const marker = L.marker([lat, lng], { icon }).addTo(map.current!);
-      marker.on("click", () =>
-        navigate(
-          buildPublicProfilePath({
-            entityType: "truck",
-            id: t.id,
-            name: t.name || "Food Truck",
-          }) || `/truck/${t.id}`,
-        ),
-      );
-    });
+      return count;
+    };
 
-  }, [trucks, location, navigate]);
+    const addTruckMarkers = (maxItems: number) => {
+      let count = 0;
+      trucks.forEach((t) => {
+        if (count >= maxItems) return;
+        const lat = t.latitude ?? t.lat;
+        const lng = t.longitude ?? t.lng;
+        if (!lat || !lng) return;
+        const icon = L.divIcon({
+          className: "sp-pin",
+          html: pinHtml("#9333ea", PIN_SVGS.truck),
+          iconSize: [32, 32], iconAnchor: [16, 16],
+        });
+        const marker = L.marker([lat, lng], { icon }).addTo(map.current!);
+        marker.on("click", () =>
+          navigate(
+            buildPublicProfilePath({
+              entityType: "truck",
+              id: t.id,
+              name: t.name || "Food Truck",
+            }) || `/truck/${t.id}`,
+          ),
+        );
+        count += 1;
+      });
+      return count;
+    };
+
+    if (activeScene === "food_trucks") {
+      addTruckMarkers(8);
+      return;
+    }
+
+    const sceneMarkerCount = addSurfaceMarkers(sceneSurfaceCards, 8);
+    if (sceneMarkerCount < 4) {
+      addTruckMarkers(8 - sceneMarkerCount);
+    }
+  }, [activeScene, location, navigate, sceneSurfaceCards, trucks]);
 
   /* ─── section title based on scene ─── */
   const sectionTitle = useMemo(() => {
@@ -950,15 +1394,53 @@ export default function ScoutPrototype() {
     return lane?.label ?? "Today Around You";
   }, [activeScene]);
 
+  const scoutSurfaceMode = scoutSurfaceData?.mode || "quiet";
+  const coverageBadgeLabel =
+    scoutSurfaceMode === "activity"
+      ? "Live"
+      : scoutSurfaceMode === "discovery"
+        ? "Discovery"
+        : "Low coverage";
   const sectionSubtitle = useMemo(() => {
     if (activeScene === "for_you") {
-      return `Truck-first early access near ${location.label}. Coverage is limited while profiles are verified.`;
+      return scoutSurfaceMode === "quiet"
+        ? `Showing the safest nearby mix we have around ${location.label} while local coverage builds.`
+        : `Showing restaurants, trucks, deals, and events near ${location.label}.`;
+    }
+    if (activeScene === "community") {
+      return communitySurfaceCards.length > 0
+        ? `${communitySurfaceCards.length} community-backed food picks near ${location.label}.`
+        : `Community-backed picks are light here, so nearby food options stay visible.`;
+    }
+    if (activeScene === "nearby_now") {
+      return nearbyNowSurfaceCards.length > 0
+        ? `${nearbyNowSurfaceCards.length} nearby places with live, open, or today signals near ${location.label}.`
+        : `Live/open-now signals are light here, so Scout is showing the nearest honest food options.`;
     }
     if (activeScene === "food_trucks") {
       return `${trucks.length || "No"} verified or discoverable food trucks near ${location.label}.`;
     }
-    return `Showing limited truck-first ${sectionTitle.toLowerCase()} coverage near ${location.label}.`;
-  }, [activeScene, trucks, location, sectionTitle]);
+    if (activeScene === "late_night") {
+      return lateNightSurfaceCards.length > 0
+        ? `${lateNightSurfaceCards.length} open-now options with current hours signals near ${location.label}.`
+        : `Late-night coverage is light here, so Scout is keeping nearby food options visible instead of showing a blank lane.`;
+    }
+    if (activeScene === "worth_discovering") {
+      return worthDiscoveringSurfaceCards.length > 0
+        ? `${worthDiscoveringSurfaceCards.length} nearby spots worth checking even if they are still thin on profile detail.`
+        : `Worth Discovering is quiet here, so Scout is falling back to the nearest honest local options.`;
+    }
+    return `Showing limited local food coverage near ${location.label}.`;
+  }, [
+    activeScene,
+    communitySurfaceCards.length,
+    lateNightSurfaceCards.length,
+    location,
+    nearbyNowSurfaceCards.length,
+    scoutSurfaceMode,
+    trucks.length,
+    worthDiscoveringSurfaceCards.length,
+  ]);
 
   /* ─── empty state ─── */
   const isEmpty = feedItems.length === 0;
@@ -1103,7 +1585,10 @@ export default function ScoutPrototype() {
                 return (
                   <button
                     key={tile.id}
-                    onClick={() => setActiveScene(tile.id)}
+                    onClick={() => {
+                      setActiveScene(tile.id);
+                      navigate(`/scout?scene=${encodeURIComponent(tile.id)}`);
+                    }}
                     className={`shrink-0 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 border transition-all duration-200 min-w-[84px] h-8 ${
                       activeScene === tile.id
                         ? "bg-[#1f1a15] border-orange-500/35 text-orange-200"
@@ -1142,7 +1627,7 @@ export default function ScoutPrototype() {
           <section className="mb-3 mt-3 rounded-2xl border border-white/8 bg-[#151210] px-4 py-3">
             <h3 className="text-sm font-bold text-white">Results for "{submittedQuery}"</h3>
             <p className="mt-1 text-xs text-white/70">
-              Local matches are limited during early access and prioritize truck-safe surfaces.
+              Local matches use nearby, live, and community-backed discovery signals when available.
             </p>
             <div className="mt-2 flex items-center gap-2">
               <button
@@ -1172,7 +1657,7 @@ export default function ScoutPrototype() {
             <p className="text-[11px] leading-tight text-gray-400 font-medium">{sectionSubtitle}</p>
           </div>
           <span className="text-orange-500 font-bold text-xs uppercase tracking-wider shrink-0 ml-3">
-            Limited
+            {coverageBadgeLabel}
           </span>
         </div>
 
@@ -1180,8 +1665,8 @@ export default function ScoutPrototype() {
         {isEmpty ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <Flame size={32} className="text-orange-500/30 mb-3" />
-            <p className="text-white/40 text-sm font-semibold">Nothing here yet</p>
-            <p className="text-white/25 text-xs mt-1">Check back soon or try a different category</p>
+            <p className="text-white/40 text-sm font-semibold">No strong local signals yet</p>
+            <p className="text-white/25 text-xs mt-1">Try another lane or search a wider nearby area</p>
           </div>
         ) : (
           <div className="space-y-3">
