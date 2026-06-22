@@ -26,6 +26,26 @@ Confirmed CREATIVBOWLS profile target:
 - alias route: `https://www.mealscout.us/p/truck/75dd470e-2692-4579-bde0-a64dcc3f6fcb`
 - public profile API: `https://mealscout.onrender.com/api/public/profiles/truck/75dd470e-2692-4579-bde0-a64dcc3f6fcb`
 
+### Duplicate identity constraint
+
+`CREATIVBOWLS` must have one canonical truck profile identity.
+
+Allowed route posture:
+
+- canonical clean route: `/truck/creativbowls--75dd470e-2692-4579-bde0-a64dcc3f6fcb`
+- alias / legacy / direct route: `/p/truck/75dd470e-2692-4579-bde0-a64dcc3f6fcb`
+- same profile id: `75dd470e-2692-4579-bde0-a64dcc3f6fcb`
+
+These routes are acceptable only if they resolve to the same canonical profile record.
+
+This lane does not approve or create a second truck account, a second public profile, or a competing owner identity for `CREATIVBOWLS`.
+
+MealScout-wide rule carried forward from this lane:
+
+- public route aliases are allowed only when they resolve to the same canonical profile record
+- MealScout must not create or preserve duplicate truck accounts, duplicate public profiles, or competing owner identities for the same truck
+- any duplicate truck identity must be blocked, merged, redirected, or deactivated only after verified owner/Knight evidence confirms the match
+
 Intended target field for a future apply:
 
 - `restaurants.logoUrl`
