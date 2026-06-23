@@ -352,6 +352,28 @@ type ScoutFeedItem = {
   ctaLabel?: string;
 };
 
+type ScoutProfileContext = {
+  entityType: "truck" | "restaurant";
+  verifiedProfile: boolean;
+  hasMenu: boolean;
+  hasPhoto: boolean;
+  liveNow: boolean;
+  scheduledToday: boolean;
+};
+
+type SurfaceProfileSignals = {
+  verifiedProfile: boolean;
+  hasMenu: boolean;
+  hasPhoto: boolean;
+  liveConfidence: boolean;
+  scheduledConfidence: boolean;
+  communitySource: boolean;
+  unverifiedCommunity: boolean;
+  missingSchedule: boolean;
+  thinProfile: boolean;
+  associatedRestaurantId?: string;
+};
+
 function scoreScoutSearchResult(record: ScoutSearchableRecord, query: string): number {
   const q = normalizeScoutSearchText(query);
   if (!q) return 0;
@@ -388,6 +410,32 @@ function scoreScoutSearchResult(record: ScoutSearchableRecord, query: string): n
 
 function surfaceCardKey(card: Pick<ScoutSurfaceCard, "entityType" | "entityId">) {
   return `${card.entityType}:${card.entityId}`;
+}
+
+function buildEntityAliases(entity: {
+  canonicalBusinessId?: string | null;
+  businessId?: string | null;
+  profileId?: string | null;
+  publicProfileId?: string | null;
+  restaurantId?: string | null;
+  truckId?: string | null;
+  id?: string | null;
+}) {
+  return Array.from(
+    new Set(
+      [
+        entity.id,
+        entity.canonicalBusinessId,
+        entity.businessId,
+        entity.profileId,
+        entity.publicProfileId,
+        entity.restaurantId,
+        entity.truckId,
+      ]
+        .map((value) => String(value || "").trim())
+        .filter(Boolean),
+    ),
+  );
 }
 
 function dedupeSurfaceCards(cards: SurfaceScoutCard[]) {
@@ -440,20 +488,74 @@ function getSurfaceTypeColor(card: ScoutSurfaceCard) {
   }
 }
 
-function getSurfaceTag(card: ScoutSurfaceCard) {
+function getAssociatedRestaurantId(card: SurfaceScoutCard) {
+  const metadata = (card.metadata || {}) as { restaurantId?: unknown };
+  if (card.entityType === "restaurant") return String(card.entityId || "").trim();
+  if (card.entityType === "deal") return String(metadata.restaurantId || "").trim();
+  return "";
+}
+
+function getSurfaceProfileSignals(
+  card: SurfaceScoutCard,
+  profileContextById: Map<string, ScoutProfileContext>,
+): SurfaceProfileSignals {
+  const restaurantId = getAssociatedRestaurantId(card);
+  const profileContext =
+    profileContextById.get(card.entityId) ||
+    (restaurantId ? profileContextById.get(restaurantId) : undefined);
+  const communitySource = card.source === "community" || card.source === "recommendation";
+  const hasPhoto = Boolean(card.imageUrl) || Boolean(profileContext?.hasPhoto);
+  const hasMenu = Boolean(profileContext?.hasMenu);
+  const verifiedProfile = Boolean(profileContext?.verifiedProfile);
+  const liveConfidence =
+    card.availability === "serving_now" ||
+    card.availability === "open_now" ||
+    card.availability === "deal_today" ||
+    card.availability === "event_today" ||
+    Boolean(profileContext?.liveNow);
+  const scheduledConfidence = Boolean(profileContext?.scheduledToday);
+  const missingSchedule = card.statusLabel === "No schedule";
+  const thinProfile =
+    (card.entityType === "restaurant" || card.entityType === "truck") &&
+    (!hasMenu || !hasPhoto || missingSchedule);
+
+  return {
+    verifiedProfile,
+    hasMenu,
+    hasPhoto,
+    liveConfidence,
+    scheduledConfidence,
+    communitySource,
+    unverifiedCommunity: communitySource && !verifiedProfile,
+    missingSchedule,
+    thinProfile,
+    associatedRestaurantId: restaurantId || undefined,
+  };
+}
+
+function getSurfaceTag(
+  card: SurfaceScoutCard,
+  signals: SurfaceProfileSignals,
+) {
   if (card.availability === "serving_now") return "Serving now";
   if (card.availability === "open_now") return "Open now";
   if (card.availability === "deal_today") return "Deal today";
   if (card.availability === "event_today") return "Today";
   if (card.availability === "upcoming") return "Upcoming";
   if (card.statusLabel === "No schedule") return "Hours not posted";
-  if (card.source === "community" || card.source === "recommendation") {
+  if (signals.unverifiedCommunity) {
+    return "Community profile";
+  }
+  if (signals.communitySource) {
     return "Community pick";
   }
   return card.statusLabel || "Nearby";
 }
 
-function getSurfaceTagColor(card: ScoutSurfaceCard) {
+function getSurfaceTagColor(
+  card: SurfaceScoutCard,
+  signals: SurfaceProfileSignals,
+) {
   if (card.availability === "serving_now" || card.availability === "open_now") {
     return "#10b981";
   }
@@ -461,7 +563,7 @@ function getSurfaceTagColor(card: ScoutSurfaceCard) {
   if (card.availability === "event_today" || card.availability === "upcoming") {
     return "#f59e0b";
   }
-  if (card.source === "community" || card.source === "recommendation") {
+  if (signals.communitySource) {
     return "#9333ea";
   }
   if (card.statusLabel === "No schedule") return "#f97316";
@@ -475,17 +577,28 @@ function buildSurfaceRouteHref(card: ScoutSurfaceCard) {
   return routeUrl(lat, lng, card.title);
 }
 
-function buildSurfaceSubtitle(card: ScoutSurfaceCard) {
-  const honestThinLabel =
-    !card.imageUrl && (card.entityType === "restaurant" || card.entityType === "truck")
-      ? "Photo coming soon"
-      : card.statusLabel === "No schedule"
-        ? "Hours not posted"
-        : "";
+function buildSurfaceSubtitle(
+  card: SurfaceScoutCard,
+  signals: SurfaceProfileSignals,
+) {
+  const honestProfileLabels = [
+    signals.unverifiedCommunity ? "Community-submitted profile" : "",
+    signals.verifiedProfile &&
+    (card.entityType === "restaurant" || card.entityType === "truck")
+      ? "Verified profile"
+      : "",
+    signals.hasMenu || !(card.entityType === "restaurant" || card.entityType === "truck")
+      ? ""
+      : "Menu not posted yet",
+    signals.missingSchedule ? "Hours not posted" : "",
+    signals.hasPhoto || !(card.entityType === "restaurant" || card.entityType === "truck")
+      ? ""
+      : "Photo coming soon",
+  ].filter(Boolean);
   return [
     card.subtitle,
-    ...card.reasons.slice(0, 2),
-    honestThinLabel,
+    ...card.reasons.slice(0, 1),
+    ...honestProfileLabels.slice(0, 2),
   ]
     .filter(Boolean)
     .join(" • ");
@@ -503,23 +616,123 @@ function buildSurfaceSearchDescription(card: SurfaceScoutCard) {
     .join(" ");
 }
 
-function buildSurfaceFeedItem(card: SurfaceScoutCard, searchOrder: number): ScoutFeedItem {
+function getSurfaceQualityScore(
+  card: SurfaceScoutCard,
+  signals: SurfaceProfileSignals,
+  laneId: string,
+) {
+  let score = Number(card.score || 0);
+
+  if (signals.verifiedProfile) score += 8;
+  if (signals.hasMenu) score += 6;
+  if (signals.hasPhoto) score += 4;
+  if (signals.liveConfidence) score += 8;
+  if (signals.scheduledConfidence) score += 2;
+  if (card.entityType === "truck" || card.entityType === "restaurant" || card.entityType === "deal") {
+    score += 4;
+  }
+  if (signals.unverifiedCommunity) score -= 6;
+  if (signals.missingSchedule) score -= 5;
+  if (signals.thinProfile) score -= 2;
+  if (!signals.hasPhoto && (card.entityType === "restaurant" || card.entityType === "truck")) {
+    score -= 2;
+  }
+  if (!signals.hasMenu && (card.entityType === "restaurant" || card.entityType === "truck")) {
+    score -= 3;
+  }
+
+  if (laneId === "community") {
+    if (signals.communitySource) score += 12;
+    if (signals.verifiedProfile) score += 4;
+  } else if (laneId === "nearby_now" || laneId === "for_you") {
+    if (signals.liveConfidence) score += 10;
+    if (card.availability === "upcoming") score -= 6;
+  } else if (laneId === "late_night") {
+    if (card.availability === "open_now") score += 12;
+    if (card.availability === "upcoming") score -= 8;
+  } else if (laneId === "worth_discovering") {
+    if (card.sectionId === "more-nearby") score += 8;
+    if (signals.communitySource) score -= 2;
+  } else if (laneId === "food_trucks") {
+    if (card.entityType === "truck") score += 12;
+  }
+
+  return score;
+}
+
+function prioritizeSurfaceCards(
+  cards: SurfaceScoutCard[],
+  options: {
+    laneId: string;
+    profileContextById: Map<string, ScoutProfileContext>;
+    suppressKeys?: Set<string>;
+    suppressLimit?: number;
+  },
+) {
+  const {
+    laneId,
+    profileContextById,
+    suppressKeys = new Set<string>(),
+    suppressLimit = 0,
+  } = options;
+  const ranked = [...cards].sort((a, b) => {
+    const aSignals = getSurfaceProfileSignals(a, profileContextById);
+    const bSignals = getSurfaceProfileSignals(b, profileContextById);
+    const aScore = getSurfaceQualityScore(a, aSignals, laneId);
+    const bScore = getSurfaceQualityScore(b, bSignals, laneId);
+    if (aScore !== bScore) return bScore - aScore;
+    const aDistance = typeof a.distanceMiles === "number" ? a.distanceMiles : Number.POSITIVE_INFINITY;
+    const bDistance = typeof b.distanceMiles === "number" ? b.distanceMiles : Number.POSITIVE_INFINITY;
+    if (aDistance !== bDistance) return aDistance - bDistance;
+    return String(a.title || "").localeCompare(String(b.title || ""));
+  });
+
+  const seen = new Set<string>();
+  const preferred: SurfaceScoutCard[] = [];
+  const suppressed: SurfaceScoutCard[] = [];
+  let repeatedCount = 0;
+
+  for (const card of ranked) {
+    const key = surfaceCardKey(card);
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    if (suppressKeys.has(key) && repeatedCount >= suppressLimit) {
+      suppressed.push(card);
+      continue;
+    }
+    if (suppressKeys.has(key)) repeatedCount += 1;
+    preferred.push(card);
+  }
+
+  return [...preferred, ...suppressed];
+}
+
+function buildSurfaceFeedItem(
+  card: SurfaceScoutCard,
+  searchOrder: number,
+  profileContextById: Map<string, ScoutProfileContext>,
+): ScoutFeedItem {
+  const signals = getSurfaceProfileSignals(card, profileContextById);
   return {
     id: `surface-${card.id}`,
     type: getSurfaceTypeLabel(card),
     typeColor: getSurfaceTypeColor(card),
     image: card.imageUrl || null,
     title: card.title,
-    subtitle: buildSurfaceSubtitle(card),
-    tag: getSurfaceTag(card),
-    tagColor: getSurfaceTagColor(card),
+    subtitle: buildSurfaceSubtitle(card, signals),
+    tag: getSurfaceTag(card, signals),
+    tagColor: getSurfaceTagColor(card, signals),
     distance:
       typeof card.distanceMiles === "number" && card.distanceMiles > 0
         ? `${card.distanceMiles.toFixed(1)} mi`
         : null,
     href: card.cta.href,
     routeHref: buildSurfaceRouteHref(card),
-    restaurantId: card.entityType === "restaurant" ? card.entityId : undefined,
+    restaurantId:
+      card.entityType === "restaurant"
+        ? card.entityId
+        : signals.associatedRestaurantId,
     searchCity: "",
     searchDescription: buildSurfaceSearchDescription(card),
     searchOrder,
@@ -962,6 +1175,51 @@ export default function ScoutPrototype() {
     })
     .slice(0, 20);
 
+  const surfaceProfileContextById = useMemo(() => {
+    const map = new Map<string, ScoutProfileContext>();
+    const indexContext = (aliases: string[], context: ScoutProfileContext) => {
+      aliases.forEach((alias) => {
+        if (!alias) return;
+        map.set(alias, context);
+      });
+    };
+
+    restaurantsRaw.forEach((restaurant) => {
+      const aliases = buildEntityAliases(restaurant);
+      if (aliases.length === 0) return;
+      indexContext(aliases, {
+        entityType:
+          restaurant.isFoodTruck === true ||
+          String(restaurant.businessType || "").toLowerCase() === "food_truck"
+            ? "truck"
+            : "restaurant",
+        verifiedProfile:
+          restaurant.adminVerified === true ||
+          restaurant.emailVerified === true ||
+          restaurant.isVerified === true,
+        hasMenu: Number(restaurant.menuItemCount ?? restaurant.canonicalMenuCount ?? 0) > 0,
+        hasPhoto: Boolean(imgSrc(restaurant)),
+        liveNow: false,
+        scheduledToday: false,
+      });
+    });
+
+    trucks.forEach((truck) => {
+      const aliases = buildEntityAliases(truck);
+      if (aliases.length === 0) return;
+      indexContext(aliases, {
+        entityType: "truck",
+        verifiedProfile: truck.verifiedTruck === true,
+        hasMenu: truck.menuAvailable === true,
+        hasPhoto: Boolean(imgSrc(truck)),
+        liveNow: truck.liveNow === true,
+        scheduledToday: truck.scheduledToday === true,
+      });
+    });
+
+    return map;
+  }, [restaurantsRaw, trucks]);
+
   const surfaceCards = useMemo<SurfaceScoutCard[]>(() => {
     const sections = scoutSurfaceData?.sections ?? [];
     return sections.flatMap((section) =>
@@ -974,112 +1232,210 @@ export default function ScoutPrototype() {
   }, [scoutSurfaceData]);
 
   const todayAroundYouCards = useMemo(
-    () => surfaceCards.filter((card) => card.sectionId === "nearby-now"),
-    [surfaceCards],
+    () =>
+      prioritizeSurfaceCards(
+        surfaceCards.filter((card) => card.sectionId === "nearby-now"),
+        {
+          laneId: "for_you",
+          profileContextById: surfaceProfileContextById,
+        },
+      ),
+    [surfaceCards, surfaceProfileContextById],
   );
   const communitySurfaceCards = useMemo(
     () =>
-      dedupeSurfaceCards(
-        surfaceCards.filter(
-          (card) =>
-            card.sectionId === "recommended-nearby" ||
-            card.source === "community" ||
-            card.source === "recommendation",
+      prioritizeSurfaceCards(
+        dedupeSurfaceCards(
+          surfaceCards.filter(
+            (card) =>
+              card.sectionId === "recommended-nearby" ||
+              card.source === "community" ||
+              card.source === "recommendation",
+          ),
         ),
+        {
+          laneId: "community",
+          profileContextById: surfaceProfileContextById,
+        },
       ),
-    [surfaceCards],
+    [surfaceCards, surfaceProfileContextById],
   );
   const nearbyNowSurfaceCards = useMemo(
     () =>
-      dedupeSurfaceCards(
-        surfaceCards.filter(
-          (card) =>
-            ["serving_now", "open_now", "deal_today", "event_today"].includes(card.availability) ||
-            ["open-near-you", "deals-today", "happening-today"].includes(card.sectionId),
+      prioritizeSurfaceCards(
+        dedupeSurfaceCards(
+          surfaceCards.filter(
+            (card) =>
+              ["serving_now", "open_now", "deal_today", "event_today"].includes(card.availability) ||
+              ["open-near-you", "deals-today", "happening-today"].includes(card.sectionId),
+          ),
         ),
+        {
+          laneId: "nearby_now",
+          profileContextById: surfaceProfileContextById,
+        },
       ),
-    [surfaceCards],
+    [surfaceCards, surfaceProfileContextById],
   );
   const worthDiscoveringSurfaceCards = useMemo(
     () =>
-      dedupeSurfaceCards(
-        surfaceCards.filter(
-          (card) =>
-            card.sectionId === "more-nearby" ||
-            card.availability === "nearby" ||
-            card.availability === "upcoming" ||
-            card.statusLabel === "No schedule",
+      prioritizeSurfaceCards(
+        dedupeSurfaceCards(
+          surfaceCards.filter(
+            (card) =>
+              card.sectionId === "more-nearby" ||
+              card.availability === "nearby" ||
+              card.availability === "upcoming" ||
+              card.statusLabel === "No schedule",
+          ),
         ),
+        {
+          laneId: "worth_discovering",
+          profileContextById: surfaceProfileContextById,
+        },
       ),
-    [surfaceCards],
+    [surfaceCards, surfaceProfileContextById],
   );
   const lateNightSurfaceCards = useMemo(
-    () => nearbyNowSurfaceCards.filter((card) => card.availability === "open_now"),
-    [nearbyNowSurfaceCards],
+    () =>
+      prioritizeSurfaceCards(
+        nearbyNowSurfaceCards.filter((card) => card.availability === "open_now"),
+        {
+          laneId: "late_night",
+          profileContextById: surfaceProfileContextById,
+        },
+      ),
+    [nearbyNowSurfaceCards, surfaceProfileContextById],
   );
   const foodTruckSurfaceCards = useMemo(
-    () => dedupeSurfaceCards(surfaceCards.filter((card) => card.entityType === "truck")),
-    [surfaceCards],
+    () =>
+      prioritizeSurfaceCards(
+        dedupeSurfaceCards(surfaceCards.filter((card) => card.entityType === "truck")),
+        {
+          laneId: "food_trucks",
+          profileContextById: surfaceProfileContextById,
+        },
+      ),
+    [surfaceCards, surfaceProfileContextById],
+  );
+  const featuredTodayKeys = useMemo(
+    () => new Set(todayAroundYouCards.slice(0, 4).map((card) => surfaceCardKey(card))),
+    [todayAroundYouCards],
+  );
+  const featuredCommunityKeys = useMemo(
+    () => new Set(communitySurfaceCards.slice(0, 3).map((card) => surfaceCardKey(card))),
+    [communitySurfaceCards],
   );
   const fallbackSurfaceCards = useMemo(
     () =>
-      dedupeSurfaceCards([
-        ...todayAroundYouCards,
-        ...nearbyNowSurfaceCards,
-        ...communitySurfaceCards,
-        ...worthDiscoveringSurfaceCards,
-      ]),
+      prioritizeSurfaceCards(
+        dedupeSurfaceCards([
+          ...todayAroundYouCards,
+          ...nearbyNowSurfaceCards,
+          ...communitySurfaceCards,
+          ...worthDiscoveringSurfaceCards,
+        ]),
+        {
+          laneId: "for_you",
+          profileContextById: surfaceProfileContextById,
+          suppressKeys: featuredTodayKeys,
+          suppressLimit: 3,
+        },
+      ),
     [
       communitySurfaceCards,
       nearbyNowSurfaceCards,
+      featuredTodayKeys,
+      surfaceProfileContextById,
       todayAroundYouCards,
       worthDiscoveringSurfaceCards,
     ],
   );
   const sceneSurfaceCards = useMemo(() => {
     if (activeScene === "community") {
-      return dedupeSurfaceCards([
-        ...communitySurfaceCards,
-        ...nearbyNowSurfaceCards,
-        ...worthDiscoveringSurfaceCards,
-      ]);
+      return prioritizeSurfaceCards(
+        dedupeSurfaceCards([
+          ...communitySurfaceCards,
+          ...nearbyNowSurfaceCards,
+          ...worthDiscoveringSurfaceCards,
+        ]),
+        {
+          laneId: "community",
+          profileContextById: surfaceProfileContextById,
+          suppressKeys: featuredTodayKeys,
+          suppressLimit: 2,
+        },
+      );
     }
     if (activeScene === "nearby_now") {
-      return dedupeSurfaceCards([
-        ...nearbyNowSurfaceCards,
-        ...todayAroundYouCards,
-        ...worthDiscoveringSurfaceCards,
-      ]);
+      return prioritizeSurfaceCards(
+        dedupeSurfaceCards([
+          ...nearbyNowSurfaceCards,
+          ...todayAroundYouCards,
+          ...worthDiscoveringSurfaceCards,
+        ]),
+        {
+          laneId: "nearby_now",
+          profileContextById: surfaceProfileContextById,
+          suppressKeys: featuredTodayKeys,
+          suppressLimit: 2,
+        },
+      );
     }
     if (activeScene === "late_night") {
-      return dedupeSurfaceCards([
-        ...lateNightSurfaceCards,
-        ...nearbyNowSurfaceCards,
-        ...worthDiscoveringSurfaceCards,
-      ]);
+      return prioritizeSurfaceCards(
+        dedupeSurfaceCards([
+          ...lateNightSurfaceCards,
+          ...nearbyNowSurfaceCards,
+          ...worthDiscoveringSurfaceCards,
+        ]),
+        {
+          laneId: "late_night",
+          profileContextById: surfaceProfileContextById,
+          suppressKeys: featuredTodayKeys,
+          suppressLimit: 1,
+        },
+      );
     }
     if (activeScene === "worth_discovering") {
-      return dedupeSurfaceCards([
-        ...worthDiscoveringSurfaceCards,
-        ...communitySurfaceCards,
-        ...nearbyNowSurfaceCards,
-      ]);
+      return prioritizeSurfaceCards(
+        dedupeSurfaceCards([
+          ...worthDiscoveringSurfaceCards,
+          ...communitySurfaceCards,
+          ...nearbyNowSurfaceCards,
+        ]),
+        {
+          laneId: "worth_discovering",
+          profileContextById: surfaceProfileContextById,
+          suppressKeys: new Set([...featuredTodayKeys, ...featuredCommunityKeys]),
+          suppressLimit: 1,
+        },
+      );
     }
     if (activeScene === "food_trucks") {
       return foodTruckSurfaceCards;
     }
-    return dedupeSurfaceCards([
-      ...todayAroundYouCards,
-      ...communitySurfaceCards,
-      ...nearbyNowSurfaceCards,
-      ...worthDiscoveringSurfaceCards,
-    ]);
+    return prioritizeSurfaceCards(
+      dedupeSurfaceCards([
+        ...todayAroundYouCards,
+        ...communitySurfaceCards,
+        ...nearbyNowSurfaceCards,
+        ...worthDiscoveringSurfaceCards,
+      ]),
+      {
+        laneId: "for_you",
+        profileContextById: surfaceProfileContextById,
+      },
+    );
   }, [
     activeScene,
     communitySurfaceCards,
+    featuredCommunityKeys,
+    featuredTodayKeys,
     foodTruckSurfaceCards,
     lateNightSurfaceCards,
     nearbyNowSurfaceCards,
+    surfaceProfileContextById,
     todayAroundYouCards,
     worthDiscoveringSurfaceCards,
   ]);
@@ -1187,7 +1543,7 @@ export default function ScoutPrototype() {
 
     const addSurfaceCards = (cards: SurfaceScoutCard[], maxItems: number) => {
       for (const card of cards) {
-        addFeedItem(buildSurfaceFeedItem(card, sourceOrder));
+        addFeedItem(buildSurfaceFeedItem(card, sourceOrder, surfaceProfileContextById));
         if (items.length >= maxItems) break;
       }
     };
@@ -1245,6 +1601,7 @@ export default function ScoutPrototype() {
     fallbackSurfaceCards,
     foodTruckSurfaceCards,
     sceneSurfaceCards,
+    surfaceProfileContextById,
     submittedQuery,
     truckFeedItems,
   ]);
@@ -1339,7 +1696,13 @@ export default function ScoutPrototype() {
                   : PIN_SVGS.restaurant;
         const icon = L.divIcon({
           className: "sp-pin",
-          html: pinHtml(getSurfaceTagColor(card), iconSvg),
+          html: pinHtml(
+            getSurfaceTagColor(
+              card,
+              getSurfaceProfileSignals(card, surfaceProfileContextById),
+            ),
+            iconSvg,
+          ),
           iconSize: [32, 32],
           iconAnchor: [16, 16],
         });
@@ -1386,7 +1749,7 @@ export default function ScoutPrototype() {
     if (sceneMarkerCount < 4) {
       addTruckMarkers(8 - sceneMarkerCount);
     }
-  }, [activeScene, location, navigate, sceneSurfaceCards, trucks]);
+  }, [activeScene, location, navigate, sceneSurfaceCards, surfaceProfileContextById, trucks]);
 
   /* ─── section title based on scene ─── */
   const sectionTitle = useMemo(() => {
