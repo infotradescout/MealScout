@@ -494,27 +494,30 @@ function PublicProfileShareControls({
   return (
     <section
       aria-label="Share public profile"
-      className="flex flex-wrap items-center gap-2 rounded-xl border border-white/10 bg-[#0f0d0b] p-3"
+      className="flex flex-col gap-2 rounded-xl border border-white/10 bg-[#0f0d0b] px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between"
     >
-      <Button
-        type="button"
-        onClick={handleShare}
-        className="bg-orange-500 text-black hover:bg-orange-400"
-        data-testid="button-public-profile-share"
-      >
-        <Share2 className="mr-2 h-4 w-4" />
-        Share
-      </Button>
-      <Button
-        type="button"
-        variant="outline"
-        onClick={handleCopy}
-        className="border-white/20 text-white hover:bg-white/10"
-        data-testid="button-public-profile-copy-link"
-      >
-        {copied ? <Check className="mr-2 h-4 w-4" /> : <Copy className="mr-2 h-4 w-4" />}
-        Copy Link
-      </Button>
+      <p className="text-xs font-medium text-white/58">Share this profile</p>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          type="button"
+          onClick={handleShare}
+          className="bg-orange-500 text-black hover:bg-orange-400"
+          data-testid="button-public-profile-share"
+        >
+          <Share2 className="mr-2 h-4 w-4" />
+          Share
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={handleCopy}
+          className="border-white/20 text-white hover:bg-white/10"
+          data-testid="button-public-profile-copy-link"
+        >
+          {copied ? <Check className="mr-2 h-4 w-4" /> : <Copy className="mr-2 h-4 w-4" />}
+          Copy Link
+        </Button>
+      </div>
     </section>
   );
 }
@@ -570,6 +573,7 @@ function QuickActionRow({
     "phone",
     "catering",
     "booking",
+    "external",
   ];
   const actionPool = pickActionCtas(profile, safeCtas, 16).filter(
     (cta) =>
@@ -586,13 +590,24 @@ function QuickActionRow({
       acc.push(cta);
       return acc;
     }, [] as PublicCta[])
+    .concat(
+      actionPool.filter((cta) => !preferredOrder.includes(cta.type) || cta.type === "external"),
+    )
+    .reduce((acc, cta) => {
+      if (acc.find((existing) => existing.href === cta.href)) return acc;
+      acc.push(cta);
+      return acc;
+    }, [] as PublicCta[])
     .slice(0, 7);
   if (actions.length === 0) return null;
+  const headerLabel = actions.some((cta) => cta.type === "menu" || cta.type === "order")
+    ? "Get food"
+    : "Quick links";
   return (
     <Card id="actions" className="border-white/10 bg-[#0f0d0b]">
       <CardContent className="space-y-3 p-4">
         <p className="text-xs font-semibold uppercase tracking-wide text-white/60">
-          Get food
+          {headerLabel}
         </p>
         <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
           {actions.map((cta, idx) =>
@@ -1002,6 +1017,7 @@ function MenuSection({
       items: section.items.filter((item) => Boolean(String(item.priceLabel || "").trim())),
     }))
     .filter((section) => section.items.length > 0);
+  const pricedItemCount = pricedSections.reduce((count, section) => count + section.items.length, 0);
   const unpricedItems = structuredSections.flatMap((section) =>
     section.items
       .filter((item) => !String(item.priceLabel || "").trim())
@@ -1024,6 +1040,19 @@ function MenuSection({
   const updatedLabel = (activeVariant?.menuLastUpdatedAt || profile.menuLastUpdatedAt)
     ? new Date(activeVariant?.menuLastUpdatedAt || profile.menuLastUpdatedAt || "").toLocaleDateString()
     : null;
+  const shouldCompactThinMenu =
+    profile.profileType === "truck" &&
+    menuCompleteness.state === "partial" &&
+    pricedItemCount <= 2 &&
+    featuredItems.length === 0 &&
+    !fallbackMenuLink;
+  const compactMenuPreviewItems = pricedSections
+    .flatMap((section) =>
+      section.items.map((item) => ({
+        label: item.priceLabel ? `${item.name} · ${item.priceLabel}` : item.name,
+      })),
+    )
+    .slice(0, 3);
   const submitRecommendation = async (menuItemId: string) => {
     if (!menuItemId) return;
     setSubmittingItemId(menuItemId);
@@ -1069,7 +1098,9 @@ function MenuSection({
   return (
     <Card className="border-white/10 bg-[#0f0d0b]">
       <CardHeader>
-        <CardTitle className="text-xl text-white">Menu</CardTitle>
+        <CardTitle className="text-xl text-white">
+          {shouldCompactThinMenu ? "Menu preview" : "Menu"}
+        </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         {menuVariants.length > 1 ? (
@@ -1115,9 +1146,15 @@ function MenuSection({
           </p>
         ) : null}
         {menuCompleteness.state === "partial" ? (
-          <p className="rounded-md border border-amber-300/35 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
-            Partial menu from available source. More items may be available from this business directly.
-          </p>
+          shouldCompactThinMenu ? (
+            <p className="rounded-md border border-amber-300/35 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+              Limited menu info from available source. Full menu still needs owner confirmation.
+            </p>
+          ) : (
+            <p className="rounded-md border border-amber-300/35 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+              Partial menu from available source. More items may be available from this business directly.
+            </p>
+          )
         ) : null}
         {menuCompleteness.state === "unavailable" ? (
           <p className="rounded-md border border-white/15 bg-white/5 px-3 py-2 text-xs text-white/75">
@@ -1135,7 +1172,22 @@ function MenuSection({
           <p className="text-xs text-white/65">Menu last updated {updatedLabel}</p>
         ) : null}
 
-        {pricedSections.length > 0 ? (
+        {shouldCompactThinMenu && compactMenuPreviewItems.length > 0 ? (
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-white/60">
+              Sourced items spotted
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {compactMenuPreviewItems.map((item) => (
+                <Badge key={item.label} variant="outline" className="border-white/20 text-white/80">
+                  {item.label}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        {!shouldCompactThinMenu && pricedSections.length > 0 ? (
           <div className="space-y-4">
             {pricedSections.map((section) => (
               <div key={section.name} className="space-y-2">
@@ -1240,7 +1292,7 @@ function MenuSection({
           </div>
         ) : null}
 
-        {unpricedItems.length > 0 ? (
+        {!shouldCompactThinMenu && unpricedItems.length > 0 ? (
           <div className="space-y-2">
             <p className="text-sm font-medium text-white/90">Unpriced items from evidence</p>
             <div className="space-y-1">
@@ -2149,13 +2201,6 @@ export default function PublicProfilePage() {
           ) : (
             <HeroBlock profile={data} />
           )}
-          <PublicProfileShareControls
-            profile={data}
-            sharePath={resolvedCleanBusinessPath}
-            title={title}
-            description={description}
-            onShareAction={trackProfileEvent}
-          />
           <QuickActionRow profile={data} safeCtas={safeCtas} />
 
           {data.entity === "host" ? (
@@ -2192,6 +2237,13 @@ export default function PublicProfilePage() {
               </CardContent>
             </Card>
           )}
+          <PublicProfileShareControls
+            profile={data}
+            sharePath={resolvedCleanBusinessPath}
+            title={title}
+            description={description}
+            onShareAction={trackProfileEvent}
+          />
           <RelatedLocalDiscovery
             data={data}
             citySlug={citySlug}
