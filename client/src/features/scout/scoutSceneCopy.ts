@@ -3,30 +3,30 @@ import type { ScoutSceneCopy, ScoutSceneId } from "./scoutTypes";
 export const SCOUT_SCENE_COPY: Record<ScoutSceneId, ScoutSceneCopy> = {
   for_you: {
     title: "For You",
-    subtitle: "Local favorites, open spots, new menus, and places worth finding.",
+    subtitle: "Open now, trending this week, and worth trying near you.",
   },
   community: {
-    title: "Community",
+    title: "Community Picks",
     subtitle: "What locals are saving, sharing, and coming back to.",
   },
   nearby_now: {
-    title: "Nearby",
-    subtitle: "Food, drinks, events, and trucks close to you.",
+    title: "Open Now",
+    subtitle: "Food, drinks, events, and trucks close to you right now.",
   },
   food_trucks: {
-    title: "Food Trucks",
-    subtitle: "Trucks posted up, scheduled, or serving nearby.",
+    title: "Food Trucks Today",
+    subtitle: "Trucks posted up, scheduled, or serving nearby today.",
   },
   restaurants: {
-    title: "Restaurants",
+    title: "Nearby Restaurants",
     subtitle: "Open tables, local kitchens, and menu highlights.",
   },
   deals: {
-    title: "Deals",
+    title: "Hot Deals",
     subtitle: "Active offers from nearby spots.",
   },
   events: {
-    title: "Events",
+    title: "Events & Pop-Ups",
     subtitle: "Food, music, pop-ups, and things happening around town.",
   },
   new_menus: {

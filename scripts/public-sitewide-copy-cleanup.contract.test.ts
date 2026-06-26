@@ -5,6 +5,7 @@ const publicUiFiles = [
   "client/src/components/navigation.tsx",
   "client/src/components/scout/ScoutEmptyState.tsx",
   "client/src/pages/map.tsx",
+  "client/src/pages/explore-preview.tsx",
   "client/src/pages/public-profile.tsx",
   "client/src/pages/scout-prototype.tsx",
   "client/src/pages/trending.tsx",
@@ -38,6 +39,7 @@ const prohibitedPublicPhrases = [
   "coverage is verified",
   "verified or discoverable food trucks",
   "thin on profile detail",
+  "scout • customer discovery",
 ];
 
 const classifyPhrase = (value: string) => {

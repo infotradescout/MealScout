@@ -83,6 +83,8 @@ type PublicProfilePayload =
     });
 
 const DEFAULT_IMAGE = "/og-default.jpg";
+const UUID_LIKE_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 type PublicProfileQualitySignalType =
   | "public_profile_page_error"
@@ -1914,6 +1916,7 @@ export default function PublicProfilePage() {
       if (!res.ok) throw new Error("Profile not found");
       return res.json();
     },
+    retry: false,
   });
   const rawProfileId = String(
     params.profileId || params.id || params.slug || cleanBusinessResolution?.id || "",
@@ -1922,18 +1925,23 @@ export default function PublicProfilePage() {
   const normalizedProfileType = normalizePublicProfileEntity(
     inferredProfileType || cleanBusinessResolution?.entityType,
   );
+  const invalidRestaurantRoute =
+    normalizedProfileType === "restaurant" &&
+    Boolean(rawProfileId) &&
+    !UUID_LIKE_RE.test(resolvedProfileId);
 
   const locationSearch =
     typeof window !== "undefined" ? window.location.search : "";
   const { data, isLoading } = useQuery<PublicProfilePayload>({
     queryKey: ["/api/public/profiles", normalizedProfileType, resolvedProfileId, locationSearch],
-    enabled: !!normalizedProfileType && !!resolvedProfileId,
+    enabled: !!normalizedProfileType && !!resolvedProfileId && !invalidRestaurantRoute,
     queryFn: async () => {
       const res = await fetch(apiUrl(`/api/public/profiles/${encodeURIComponent(String(normalizedProfileType || ""))}/${encodeURIComponent(String(resolvedProfileId || ""))}${locationSearch || ""}`),
       );
       if (!res.ok) throw new Error("Profile not found");
       return res.json();
     },
+    retry: false,
   });
 
   const safeCtas = useMemo(() => asSafeCtas(data?.cta), [data?.cta]);
@@ -2100,7 +2108,7 @@ export default function PublicProfilePage() {
     setAffiliateRef(routeRef);
   }, [cleanBusinessRoute?.affiliateTag, resolvedCleanBusinessPath]);
 
-  if (isLoading || cleanBusinessLoading) {
+  if ((isLoading || cleanBusinessLoading) && !invalidRestaurantRoute) {
     return <div className="mx-auto max-w-4xl px-4 py-10">Loading profile...</div>;
   }
 

@@ -148,8 +148,17 @@ async function resolveWorkingRestaurantRoute(page, baseUrl) {
 
 async function verifyScout(page, baseUrl, viewportLabel) {
   await openRoute(page, baseUrl, "/scout");
-  await expectVisibleText(page, "For You");
-  await expectVisibleText(page, "Community");
+  await expectVisibleText(page, "Search dishes, trucks, places, or events");
+  const bodyText = normalizeText(await page.locator("body").innerText());
+  assert(
+    bodyText.includes("find what is worth eating nearby.") ||
+      bodyText.includes("what is worth eating in"),
+    `${viewportLabel} /scout did not render the canonical Scout header`,
+  );
+  assert(
+    bodyText.includes("open now") || bodyText.includes("the local board is quiet right now."),
+    `${viewportLabel} /scout did not render a valid discovery or sparse-state body`,
+  );
   await verifyNoProhibitedText(page, `${viewportLabel} /scout`);
 }
 

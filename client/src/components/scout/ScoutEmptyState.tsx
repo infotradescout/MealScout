@@ -10,7 +10,7 @@ export function ScoutEmptyState({ laneId }: { laneId: ScoutSceneId }) {
       : laneId === "deals"
         ? "No active deals nearby right now."
         : laneId === "food_trucks"
-          ? "No trucks posted up nearby right now."
+          ? "No food trucks nearby right now."
           : laneId === "events"
             ? "No food events nearby right now."
             : "Nothing strong here yet.";

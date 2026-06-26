@@ -147,7 +147,7 @@ const KitchenDisplayPage = lazy(() => import("@/pages/kitchen-display"));
 const OnlineMenuPage = lazy(() => import("@/pages/online-menu"));
 const PickupCheckoutPage = lazy(() => import("@/pages/pickup-checkout"));
 const OrderConfirmationPage = lazy(() => import("@/pages/order-confirmation"));
-const ScoutPage = lazy(() => import("@/pages/scout-prototype"));
+const ScoutPage = lazy(() => import("@/pages/explore-preview"));
 const ScoutPrototype = lazy(() => import("@/pages/scout-prototype"));
 const FoodTruckRush = lazy(() => import("@/pages/food-truck-rush"));
 const HiringPage = lazy(() => import("@/pages/hiring"));
