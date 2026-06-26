@@ -5,8 +5,8 @@ const page = readFileSync("client/src/pages/public-profile.tsx", "utf8");
 const truckHero = readFileSync("client/src/components/public-profile/TruckHero.tsx", "utf8");
 
 assert(
-  truckHero.includes('const trustLabel = profile.verifiedProfile ? "Verified profile" : "Community/evidence-based profile";'),
-  "Truck hero must reflect verified-vs-community trust state instead of hard-coding a single trust badge",
+  !truckHero.includes("Community/evidence-based profile"),
+  "Truck hero should stop leading with community-profile narration in the primary badge row",
 );
 
 assert(
@@ -15,13 +15,18 @@ assert(
 );
 
 assert(
-  truckHero.includes('Profile snapshot'),
-  "Truck hero must switch thin truck profiles into a snapshot card instead of a hero-dominant empty schedule card",
+  !truckHero.includes("Profile snapshot"),
+  "Truck hero should show direct business facts instead of a snapshot explainer heading",
 );
 
 assert(
-  page.includes('Limited menu info from available source. Full menu still needs owner confirmation.'),
-  "Thin partial truck menus must frame sparse sourced items as limited info pending owner confirmation",
+  page.includes("Limited menu info"),
+  "Thin partial truck menus must keep a compact limited-info label",
+);
+
+assert(
+  !page.includes("Limited menu info from available source. Full menu still needs owner confirmation."),
+  "Thin partial truck menus should not lead with a long owner-confirmation disclaimer",
 );
 
 assert(

@@ -71,3 +71,64 @@ Role authority
 - Entity state controls warnings and repair prompts.
 - Trust/risk state controls guardrails.
 - Every authorized feature remains accessible even when it is not the primary action.
+
+## Public Copy Guardrails
+
+Protected copy rule:
+
+- Do not change approved user-specific, brand-specific, campaign, legal, owner-provided, or business-provided language.
+- `Follow the Flavor` is protected and must not be changed, removed, renamed, or rewritten.
+- Do not perform broad string replacement across public copy.
+
+Protected examples include:
+
+- `Follow the Flavor`
+- MealScout brand/tagline language
+- truck names
+- restaurant names
+- dish names
+- menu item names
+- owner-submitted descriptions
+- owner notes
+- profile-specific copy supplied by an owner, business, Knight, or user
+- event names
+- deal names
+- city and location names
+- legal, privacy, and terms copy
+- transactional, account, and security copy where exact wording matters
+- approved onboarding copy
+- approved marketing headlines
+
+Protected-copy classification must happen before any public-copy edit:
+
+1. Protected brand/user/legal/business language: do not change.
+2. Public UX process/audit language: eligible for compression or removal.
+3. Necessary trust qualifier: keep, but shorten and contextualize.
+4. Internal/admin/operator copy: leave alone unless explicitly in scope.
+
+Operating rule:
+
+```text
+Preserve brand voice.
+Remove process voice.
+```
+
+Public-facing copy should:
+
+- show the useful thing
+- prefer food, place, time, action, and trust qualifier order
+- keep trust qualifiers compact and attached to the content they qualify
+
+Public-facing copy should not:
+
+- explain the system when a button, label, menu item, image, schedule, or link can do the job
+- make internal trust/process language the page personality
+- flatten MealScout's approved voice into bland generic copy
+
+Blunt rule:
+
+```text
+Cut the AI/process sludge.
+Do not cut the brand voice.
+Do not rewrite owner/user/business content.
+```

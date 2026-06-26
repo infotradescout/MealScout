@@ -43,9 +43,9 @@ type NavigationProps = {
 };
 
 const NAV_HELP: Record<string, string> = {
-  Scout: "Find food trucks and limited early-access local coverage near you.",
-  Map: "Open the truck-first map with limited early-access coverage.",
-  Truck: "List a food truck for early MealScout coverage.",
+  Scout: "Find food trucks and local food near you.",
+  Map: "Open the truck-first map for nearby food and trucks.",
+  Truck: "List a food truck on MealScout.",
   Claim: "Claim or update a food truck profile.",
   Login: "Sign in to your MealScout account.",
   Deals: "Find or create local food deals based on your account type.",

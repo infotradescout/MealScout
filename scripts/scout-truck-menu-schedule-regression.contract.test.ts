@@ -32,9 +32,9 @@ if (scoutSurface.includes("return isTruckDiscoverableForScout(row);")) {
 }
 
 for (const snippet of [
-  "\"Menu: none found\"",
-  "Menu: none found.",
-  "Schedule: none found.",
+  "\"No menu posted yet.\"",
+  "No menu posted yet.",
+  "No upcoming stops posted.",
 ]) {
   if (!scoutPage.includes(snippet) && !publicProfile.includes(snippet)) {
     throw new Error(`Missing none-found public placeholder: ${snippet}`);

@@ -570,16 +570,14 @@ function QuickActionRow({
     "menu",
     "map",
     "order",
+    "external",
+    "social",
     "phone",
     "catering",
     "booking",
-    "external",
   ];
   const actionPool = pickActionCtas(profile, safeCtas, 16).filter(
-    (cta) =>
-      cta.type !== "social" &&
-      cta.type !== "share" &&
-      !(cta.type === "external" && /instagram|facebook|x\.com|twitter/i.test(cta.href)),
+    (cta) => cta.type !== "share",
   );
   const actions = preferredOrder
     .flatMap((type) =>
@@ -902,7 +900,7 @@ function RestaurantSignals({ profile }: { profile: PublicRestaurantProfile }) {
   if (profile.openStatus) signals.push(profile.openStatus);
   if (profile.deals.totalActive > 0) signals.push("Deal today");
   if (menuCompleteness.state === "complete") signals.push("Menu available");
-  if (menuCompleteness.state === "partial") signals.push("Partial menu evidence");
+  if (menuCompleteness.state === "partial") signals.push("Menu preview");
   if (profile.profileType === "truck" && hasTruckScheduleSignal(profile.truckSchedule)) {
     signals.push("Truck schedule available");
   }
@@ -1053,6 +1051,12 @@ function MenuSection({
       })),
     )
     .slice(0, 3);
+  const menuStateLabel =
+    menuCompleteness.state === "partial"
+      ? shouldCompactThinMenu
+        ? "Limited menu info"
+        : "Menu preview"
+      : null;
   const submitRecommendation = async (menuItemId: string) => {
     if (!menuItemId) return;
     setSubmittingItemId(menuItemId);
@@ -1103,6 +1107,13 @@ function MenuSection({
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        {menuStateLabel ? (
+          <div className="flex flex-wrap gap-2">
+            <Badge variant="outline" className="border-amber-300/35 text-amber-100">
+              {menuStateLabel}
+            </Badge>
+          </div>
+        ) : null}
         {menuVariants.length > 1 ? (
           <div className="space-y-2">
             <p className="text-xs font-semibold uppercase tracking-wide text-white/60">Select menu</p>
@@ -1145,27 +1156,14 @@ function MenuSection({
             {menuApproval.label}
           </p>
         ) : null}
-        {menuCompleteness.state === "partial" ? (
-          shouldCompactThinMenu ? (
-            <p className="rounded-md border border-amber-300/35 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
-              Limited menu info from available source. Full menu still needs owner confirmation.
-            </p>
-          ) : (
-            <p className="rounded-md border border-amber-300/35 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
-              Partial menu from available source. More items may be available from this business directly.
-            </p>
-          )
-        ) : null}
         {menuCompleteness.state === "unavailable" ? (
           <p className="rounded-md border border-white/15 bg-white/5 px-3 py-2 text-xs text-white/75">
-            {profile.profileType === "truck"
-              ? "Menu: none found."
-              : "Menu unavailable right now."}
+            {profile.profileType === "truck" ? "No menu posted yet." : "Menu unavailable right now."}
           </p>
         ) : null}
         {profile.profileType === "truck" && !hasStructuredMenu && menuCompleteness.state !== "unavailable" ? (
           <p className="rounded-md border border-white/15 bg-white/5 px-3 py-2 text-xs text-white/75">
-            Menu: none found.
+            No menu posted yet.
           </p>
         ) : null}
         {updatedLabel ? (
@@ -1174,9 +1172,6 @@ function MenuSection({
 
         {shouldCompactThinMenu && compactMenuPreviewItems.length > 0 ? (
           <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-white/60">
-              Sourced items spotted
-            </p>
             <div className="flex flex-wrap gap-2">
               {compactMenuPreviewItems.map((item) => (
                 <Badge key={item.label} variant="outline" className="border-white/20 text-white/80">
@@ -1294,7 +1289,7 @@ function MenuSection({
 
         {!shouldCompactThinMenu && unpricedItems.length > 0 ? (
           <div className="space-y-2">
-            <p className="text-sm font-medium text-white/90">Unpriced items from evidence</p>
+            <p className="text-sm font-medium text-white/90">More items listed</p>
             <div className="space-y-1">
               {unpricedItems.map((item, index) => (
                 <p key={`${item.sectionName}:${item.name}:${index}`} className="text-xs text-white/75">
@@ -1575,7 +1570,7 @@ function ProofSection({ profile }: { profile: PublicRestaurantProfile }) {
   return (
     <Card className="border-white/10 bg-[#0f0d0b]">
       <CardHeader>
-        <CardTitle className="text-xl text-white">Local proof</CardTitle>
+        <CardTitle className="text-xl text-white">From locals</CardTitle>
       </CardHeader>
       <CardContent className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {metrics.map((metric) => (
@@ -1644,6 +1639,10 @@ function RestaurantSchedule({ profile }: { profile: PublicRestaurantProfile }) {
   const hasTruckSchedule = scheduleRows.hasActionableSchedule;
   const scheduleEmptyState = getTruckScheduleEmptyStateLabel();
   const scheduleStatusBadge = getTruckScheduleStatusBadgeLabel(schedule);
+  const truckEmptyScheduleLabel =
+    profile.profileType === "truck" && scheduleEmptyState === "No schedule posted"
+      ? "No upcoming stops posted."
+      : scheduleEmptyState;
   if (!hasHours && !hasTruckSchedule && profile.profileType !== "truck") return null;
 
   const stopRow = (
@@ -1692,7 +1691,9 @@ function RestaurantSchedule({ profile }: { profile: PublicRestaurantProfile }) {
       className="border-white/10 bg-[#0f0d0b]"
     >
       <CardHeader>
-        <CardTitle className="text-xl text-white">Hours and schedule</CardTitle>
+        <CardTitle className="text-xl text-white">
+          {profile.profileType === "truck" ? "Schedule" : "Hours and schedule"}
+        </CardTitle>
       </CardHeader>
       <CardContent className="space-y-2 text-sm text-white/80">
         {hasHours ? (
@@ -1767,7 +1768,7 @@ function RestaurantSchedule({ profile }: { profile: PublicRestaurantProfile }) {
         ) : null}
         {profile.profileType === "truck" && !hasTruckSchedule ? (
           <p className="rounded-md border border-white/15 bg-white/5 px-3 py-2 text-xs text-white/75">
-            {scheduleEmptyState}
+            {truckEmptyScheduleLabel}
           </p>
         ) : null}
       </CardContent>
@@ -1846,9 +1847,6 @@ function RelatedLocalDiscovery({
         <CardTitle className="text-base text-white">
           Truck-first discovery in {data.city}
         </CardTitle>
-        <p className="text-sm text-white/60">
-          MealScout coverage is limited while public profiles are verified.
-        </p>
       </CardHeader>
       <CardContent className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
         <a
