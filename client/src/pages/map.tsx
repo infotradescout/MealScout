@@ -98,16 +98,16 @@ const resolveMapBranding = (): MapBranding => {
     appName: "MealScout",
     mapName: "MealScout Map",
     canonicalBaseUrl: "https://www.mealscout.us",
-    seoTitle: "MealScout Map | Truck-First Early Access Coverage",
+    seoTitle: "MealScout Map | Nearby Food Trucks and Local Food",
     seoDescription:
-      "Explore truck-first early access coverage on MealScout. See nearby food trucks, posted truck status, and limited verified local map context while coverage expands.",
+      "Explore nearby food trucks, posted truck status, and local food spots on MealScout.",
     seoKeywords:
       "food truck map near me, local food truck map, nearby food trucks, interactive food truck map, food truck parking map, local dining map",
     mapSchemaDescription:
-      "Interactive truck-first map with limited early access coverage.",
-    exploreHeading: "Truck-First Early Access",
+      "Interactive truck-first map for nearby food trucks and local food spots.",
+    exploreHeading: "Truck-First Map",
     exploreDescription:
-      "Continue through safe MealScout surfaces while coverage is verified.",
+      "See nearby trucks, places, and local food stops.",
   };
 };
 

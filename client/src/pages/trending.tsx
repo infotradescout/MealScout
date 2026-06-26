@@ -102,8 +102,8 @@ export default function TrendingPage() {
   const signalCopy = useMemo(() => {
     if (!data) return "Reading the local food pulse.";
     const clicks = data.signals.find((s) => s.eventName.includes("click"));
-    if (clicks) return `${clicks.count} recent action signals in the mix.`;
-    return `Built from the last ${data.windowDays} days of local food movement.`;
+    if (clicks) return `${clicks.count} recent local food actions.`;
+    return `Hot over the last ${data.windowDays} days.`;
   }, [data]);
 
   return (
@@ -155,7 +155,7 @@ export default function TrendingPage() {
               </div>
               <div className="rounded-[2rem] border border-orange-300/20 bg-black/35 p-4 shadow-2xl shadow-black/40">
                 <p className="text-xs font-bold uppercase tracking-[0.22em] text-orange-300/70">
-                  Trend engine
+                  What's hot
                 </p>
                 <p className="mt-2 text-2xl font-black text-orange-50">
                   {signalCopy}
@@ -184,8 +184,7 @@ export default function TrendingPage() {
             <Sparkles className="mx-auto h-10 w-10 text-orange-300" />
             <h2 className="mt-4 text-3xl font-black">The heat map is waking up.</h2>
             <p className="mt-3 text-orange-100/70">
-              As people browse menus, favorite places, click dishes, and post
-              recommendations, this page turns into a live local taste report.
+              Browse menus, save places, and check back for what is heating up nearby.
             </p>
           </section>
         ) : (

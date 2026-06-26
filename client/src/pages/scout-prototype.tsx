@@ -544,7 +544,7 @@ function getSurfaceTag(
   if (card.availability === "upcoming") return "Upcoming";
   if (card.statusLabel === "No schedule") return "Hours not posted";
   if (signals.unverifiedCommunity) {
-    return "Community profile";
+    return "Community";
   }
   if (signals.communitySource) {
     return "Community pick";
@@ -582,7 +582,7 @@ function buildSurfaceSubtitle(
   signals: SurfaceProfileSignals,
 ) {
   const honestProfileLabels = [
-    signals.unverifiedCommunity ? "Community-submitted profile" : "",
+    signals.unverifiedCommunity ? "Community" : "",
     signals.verifiedProfile &&
     (card.entityType === "restaurant" || card.entityType === "truck")
       ? "Verified profile"
@@ -1767,33 +1767,33 @@ export default function ScoutPrototype() {
   const sectionSubtitle = useMemo(() => {
     if (activeScene === "for_you") {
       return scoutSurfaceMode === "quiet"
-        ? `Showing the safest nearby mix we have around ${location.label} while local coverage builds.`
-        : `Showing restaurants, trucks, deals, and events near ${location.label}.`;
+        ? `Nearby food, trucks, deals, and events around ${location.label}.`
+        : `Restaurants, trucks, deals, and events near ${location.label}.`;
     }
     if (activeScene === "community") {
       return communitySurfaceCards.length > 0
-        ? `${communitySurfaceCards.length} community-backed food picks near ${location.label}.`
-        : `Community-backed picks are light here, so nearby food options stay visible.`;
+        ? `${communitySurfaceCards.length} local picks near ${location.label}.`
+        : `Explore nearby food and local favorites around ${location.label}.`;
     }
     if (activeScene === "nearby_now") {
       return nearbyNowSurfaceCards.length > 0
         ? `${nearbyNowSurfaceCards.length} nearby places with live, open, or today signals near ${location.label}.`
-        : `Live/open-now signals are light here, so Scout is showing the nearest honest food options.`;
+        : `Nearby food options around ${location.label}.`;
     }
     if (activeScene === "food_trucks") {
-      return `${trucks.length || "No"} verified or discoverable food trucks near ${location.label}.`;
+      return `${trucks.length || "No"} food trucks near ${location.label}.`;
     }
     if (activeScene === "late_night") {
       return lateNightSurfaceCards.length > 0
         ? `${lateNightSurfaceCards.length} open-now options with current hours signals near ${location.label}.`
-        : `Late-night coverage is light here, so Scout is keeping nearby food options visible instead of showing a blank lane.`;
+        : `Late-night food options near ${location.label}.`;
     }
     if (activeScene === "worth_discovering") {
       return worthDiscoveringSurfaceCards.length > 0
-        ? `${worthDiscoveringSurfaceCards.length} nearby spots worth checking even if they are still thin on profile detail.`
-        : `Worth Discovering is quiet here, so Scout is falling back to the nearest honest local options.`;
+        ? `${worthDiscoveringSurfaceCards.length} nearby spots worth checking.`
+        : `More nearby spots worth checking around ${location.label}.`;
     }
-    return `Showing limited local food coverage near ${location.label}.`;
+    return `Local food near ${location.label}.`;
   }, [
     activeScene,
     communitySurfaceCards.length,

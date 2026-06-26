@@ -900,7 +900,7 @@ function RestaurantSignals({ profile }: { profile: PublicRestaurantProfile }) {
   if (profile.openStatus) signals.push(profile.openStatus);
   if (profile.deals.totalActive > 0) signals.push("Deal today");
   if (menuCompleteness.state === "complete") signals.push("Menu available");
-  if (menuCompleteness.state === "partial") signals.push("Partial menu evidence");
+  if (menuCompleteness.state === "partial") signals.push("Menu preview");
   if (profile.profileType === "truck" && hasTruckScheduleSignal(profile.truckSchedule)) {
     signals.push("Truck schedule available");
   }
@@ -1570,7 +1570,7 @@ function ProofSection({ profile }: { profile: PublicRestaurantProfile }) {
   return (
     <Card className="border-white/10 bg-[#0f0d0b]">
       <CardHeader>
-        <CardTitle className="text-xl text-white">Local proof</CardTitle>
+        <CardTitle className="text-xl text-white">From locals</CardTitle>
       </CardHeader>
       <CardContent className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {metrics.map((metric) => (
@@ -1847,9 +1847,6 @@ function RelatedLocalDiscovery({
         <CardTitle className="text-base text-white">
           Truck-first discovery in {data.city}
         </CardTitle>
-        <p className="text-sm text-white/60">
-          MealScout coverage is limited while public profiles are verified.
-        </p>
       </CardHeader>
       <CardContent className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
         <a

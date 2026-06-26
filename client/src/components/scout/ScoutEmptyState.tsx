@@ -6,7 +6,7 @@ export function ScoutEmptyState({ laneId }: { laneId: ScoutSceneId }) {
   const title = isForYou
     ? "The local board is quiet right now."
     : laneId === "community"
-      ? "Community activity is still building here."
+      ? "No local favorites nearby yet."
       : laneId === "deals"
         ? "No active deals nearby right now."
         : laneId === "food_trucks"
@@ -17,7 +17,7 @@ export function ScoutEmptyState({ laneId }: { laneId: ScoutSceneId }) {
   const body = isForYou
     ? "Try Worth Discovering, New Menus, or widen your area."
     : laneId === "community"
-      ? "Explore nearby and save spots to help shape local favorites."
+      ? "Explore nearby and save spots to build your local favorites."
       : laneId === "deals"
         ? "Try Nearby or New Menus for fresh local options."
         : laneId === "food_trucks"
