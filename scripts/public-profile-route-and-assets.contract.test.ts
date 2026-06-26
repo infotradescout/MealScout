@@ -94,7 +94,7 @@ if (publicProfileComponentIndex < 0) {
 }
 
 const loadingGuardIndex = publicProfilePage.indexOf(
-  "if (isLoading || cleanBusinessLoading)",
+  "if ((isLoading || cleanBusinessLoading) && !invalidRestaurantRoute)",
   publicProfileComponentIndex,
 );
 const canonicalUrlIndex = publicProfilePage.indexOf(
