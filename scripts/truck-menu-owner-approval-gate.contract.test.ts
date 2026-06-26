@@ -115,8 +115,8 @@ requireIncludes(
 );
 requireIncludes(
   publicProfilePage,
-  "Partial menu from available source.",
-  "Public profile menu copy must use customer-facing source language, not internal audit wording.",
+  "Limited menu info",
+  "Public profile menu copy must keep partial-menu truth compact and customer-facing.",
 );
 
 requireIncludes(

@@ -44,10 +44,14 @@ if (
 
 if (
   !page.includes('Menu unavailable right now.') ||
-  !page.includes("Menu: none found.") ||
+  !page.includes("No menu posted yet.") ||
   !page.includes('profile.profileType === "truck"')
 ) {
   throw new Error("Menu section must render an honest unavailable/none-found state.");
+}
+
+if (!page.includes("No upcoming stops posted.")) {
+  throw new Error("Truck schedule empty states must read as compact public-facing no-upcoming-stops copy.");
 }
 
 if (!page.includes('Map coordinates are not available yet.')) {

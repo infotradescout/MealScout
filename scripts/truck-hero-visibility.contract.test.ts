@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 
 const publicProfile = readFileSync("client/src/pages/public-profile.tsx", "utf8");
 const truckHero = readFileSync("client/src/components/public-profile/TruckHero.tsx", "utf8");
+const heroMedia = readFileSync("client/src/components/public-profile/ProfileHeroMedia.tsx", "utf8");
 
 const requireIncludes = (source: string, snippet: string, message: string) => {
   if (!source.includes(snippet)) {
@@ -47,7 +48,7 @@ requireIncludes(
 );
 requireIncludes(
   publicProfile,
-  "No upcoming stops listed",
+  "No upcoming stops posted.",
   "Truck schedule empty state must be useful instead of blank or database-like.",
 );
 requireExcludes(
@@ -78,24 +79,19 @@ requireIncludes(
   "TruckHero must promote current/next stop information.",
 );
 requireIncludes(
-  truckHero,
-  'data-testid="truck-profile-hero-fallback"',
+  heroMedia,
+  'data-testid="public-profile-hero-cover-fallback"',
   "TruckHero must use a branded fallback when no cover image is available.",
 );
 requireIncludes(
   truckHero,
-  "No upcoming stops listed",
-  "TruckHero must show a clear empty schedule state.",
+  "profile.description ? (",
+  "TruckHero must show direct descriptive business content when it exists.",
 );
 requireIncludes(
   truckHero,
-  "Community/evidence-based profile",
-  "TruckHero must use neutral trust language when ownership/currentness is not proven.",
-);
-requireIncludes(
-  truckHero,
-  "Menu partial",
-  "TruckHero must honestly label partial menu evidence.",
+  "Limited menu info",
+  "TruckHero must keep partial menu messaging compact.",
 );
 requireIncludes(
   truckHero,
@@ -109,18 +105,18 @@ requireIncludes(
 );
 requireExcludes(
   truckHero,
-  "Verified",
-  "TruckHero must not show generic Verified copy for imported or incomplete truck profiles.",
+  "Community/evidence-based profile",
+  "TruckHero must not lead with community-profile explainer copy.",
 );
 requireExcludes(
   truckHero,
-  "Owner verified",
-  "TruckHero must not claim owner verification without a dedicated data-backed field.",
+  "Profile snapshot",
+  "TruckHero must remove snapshot narration in favor of direct facts.",
 );
 requireExcludes(
   truckHero,
-  "updated 2 hours ago",
-  "TruckHero must not invent fake freshness.",
+  "Public links",
+  "TruckHero must not replace direct links with a links-count explainer.",
 );
 
 console.log("truck-hero-visibility.contract: PASS");
