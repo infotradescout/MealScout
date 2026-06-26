@@ -17,5 +17,5 @@ function run(command, args) {
 }
 
 console.log(`[platformBuild] repoRoot=${repoRoot}`);
-run("npm", ["run", "build:client"]);
+run("npx", ["vite", "build"]);
 run("npm", ["run", "build:server"]);

@@ -5,6 +5,7 @@ const scoutPage = readFileSync("client/src/pages/explore-preview.tsx", "utf8");
 const scoutCopy = readFileSync("client/src/features/scout/scoutSceneCopy.ts", "utf8");
 const scoutSearchDock = readFileSync("client/src/components/scout/ScoutSearchDock.tsx", "utf8");
 const publicProfilePage = readFileSync("client/src/pages/public-profile.tsx", "utf8");
+const platformBuild = readFileSync("scripts/platformBuild.mjs", "utf8");
 
 if (!appSource.includes('const ScoutPage = lazy(() => import("@/pages/explore-preview"));')) {
   throw new Error("Canonical /scout route must lazy-load explore-preview.");
@@ -76,6 +77,14 @@ for (const publicProfileSnippet of [
   if (!publicProfilePage.includes(publicProfileSnippet)) {
     throw new Error(`Public profile route hardening missing snippet: ${publicProfileSnippet}`);
   }
+}
+
+if (!platformBuild.includes('run("npx", ["vite", "build"]);')) {
+  throw new Error("Platform build must emit the production client bundle to dist/public.");
+}
+
+if (platformBuild.includes('run("npm", ["run", "build:client"]);')) {
+  throw new Error("Platform build must not emit only the standalone client/dist bundle.");
 }
 
 console.log("scout-canonical-runtime-build.contract: PASS");

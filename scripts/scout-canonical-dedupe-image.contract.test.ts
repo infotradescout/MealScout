@@ -1,27 +1,39 @@
 import { readFileSync } from "node:fs";
 
-const scoutPage = readFileSync("client/src/pages/scout-prototype.tsx", "utf8");
+const scoutPage = readFileSync("client/src/pages/explore-preview.tsx", "utf8");
+const scoutModel = readFileSync("client/src/features/scout/scoutDiscoveryModel.ts", "utf8");
 
 const requiredSnippets = [
-  "function canonicalScoutEntityKey(",
-  "canonicalBusinessId",
-  "function getBestBusinessImage(",
-  "r.logoUrl ||",
-  "r.profileImageUrl ||",
-  "r.coverImageUrl ||",
-  "r.truckPhotoLogo ||",
-  "r.heroImageUrl ||",
-  "r.imageUrl ||",
-  "const trucksById = new Map<string, Truck>();",
-  "const key = canonicalScoutEntityKey(truck);",
-  "const existing = trucksById.get(key);",
-  "liveNow: Boolean(existing.liveNow || truck.liveNow),",
-  "const truckCanonicalKeys = new Set(",
-  "if (isTruckType && truckCanonicalKeys.has(restaurantKey)) return false;",
+  "function getScoutBusinessKey(",
+  '"businessId"',
+  '"profileId"',
+  '"restaurantId"',
+  '"truckId"',
+  "export function assignScoutBusinessCardsBySection<T>(",
+  "SCOUT_PRIMARY_SECTION_PRIORITY",
+  "filterUniqueScoutBusinessCards(",
+  "claimedBusinessKeys",
+  "normalizeScoutBusinessKind(source, \"restaurant\")",
+  "const nearbyFoodBusinesses = useMemo<RestaurantSummary[]>(() => {",
+  "const nearbyFoodTruckBusinesses = useMemo<RestaurantSummary[]>(() => {",
+  "const scoutTruckInventory = useMemo(() => {",
+  "const byId = new Map<string, LiveTruckSummary>();",
+  "liveTrucks.forEach((truck) => byId.set(String(truck.id), truck));",
+  "fallbackTruckBusinesses.forEach((truck) => {",
+  "getRestaurantImage(restaurant)",
+  "getTruckImage(truck)",
+  "restaurant.coverImageUrl ||",
+  "restaurant.heroImageUrl ||",
+  "restaurant.imageUrl ||",
+  "restaurant.logoUrl ||",
+  "truck.heroImageUrl ||",
+  "truck.coverImageUrl ||",
+  "truck.imageUrl ||",
+  "truck.logoUrl ||",
 ];
 
 for (const snippet of requiredSnippets) {
-  if (!scoutPage.includes(snippet)) {
+  if (!scoutPage.includes(snippet) && !scoutModel.includes(snippet)) {
     throw new Error(`Missing scout canonical dedupe/image snippet: ${snippet}`);
   }
 }
