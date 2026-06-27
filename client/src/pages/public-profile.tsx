@@ -27,6 +27,17 @@ import {
   buildPublicProfileHeroAssets,
 } from "@/components/public-profile/ProfileHeroMedia";
 import { TruckHero } from "@/components/public-profile/TruckHero";
+import { ElevatedTruckHero } from "@/components/public-profile/ElevatedTruckHero";
+import { ElevatedProfileHero } from "@/components/public-profile/ElevatedProfileHero";
+import { WhyGoNowPanel } from "@/components/public-profile/WhyGoNowPanel";
+import { MobileActionDock } from "@/components/public-profile/MobileActionDock";
+import { MenuHighlightsRail } from "@/components/public-profile/MenuHighlightsRail";
+import { TruckSchedulePanel } from "@/components/public-profile/TruckSchedulePanel";
+import { RestaurantHoursPanel } from "@/components/public-profile/RestaurantHoursPanel";
+import { PlanYourVisitPanel } from "@/components/public-profile/PlanYourVisitPanel";
+import { ThinProfileState, isThinProfile } from "@/components/public-profile/ThinProfileState";
+import { PersonalizedRelatedRail } from "@/components/public-profile/PersonalizedRelatedRail";
+import { useAuth } from "@/hooks/useAuth";
 import {
   getTruckScheduleEmptyStateLabel,
   getTruckScheduleRows,
@@ -1945,6 +1956,35 @@ export default function PublicProfilePage() {
   });
 
   const safeCtas = useMemo(() => asSafeCtas(data?.cta), [data?.cta]);
+
+  // Auth + personalization context
+  const { user, isAuthenticated } = useAuth();
+
+  // Load user's favorited restaurant IDs when authenticated
+  const { data: userFavorites } = useQuery<Array<{ restaurantId: string; restaurant?: { id: string } }>>(
+    {
+      queryKey: ["/api/favorites/restaurants", "profile-personalization"],
+      enabled: isAuthenticated && Boolean(data?.id),
+      queryFn: async () => {
+        const res = await fetch("/api/favorites/restaurants", { credentials: "include" });
+        if (!res.ok) return [];
+        return res.json();
+      },
+      staleTime: 5 * 60_000,
+    },
+  );
+
+  const userFavoriteIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const row of userFavorites ?? []) {
+      const id = String(row.restaurantId || row.restaurant?.id || "").trim();
+      if (id) ids.add(id);
+    }
+    return ids;
+  }, [userFavorites]);
+
+  const isCurrentProfileFavorited = Boolean(data?.id && userFavoriteIds.has(data.id));
+
   const sentViewRef = useRef<string>("");
   const imageFailureRef = useRef<Set<string>>(new Set());
   const querySource = useMemo(() => {
@@ -2202,47 +2242,184 @@ export default function PublicProfilePage() {
             );
           }}
         >
+          {/* ── TRUCK PROFILE LAYOUT ── */}
           {restaurantProfile?.profileType === "truck" ? (
-            <TruckHero profile={restaurantProfile} safeCtas={safeCtas} />
-          ) : (
-            <HeroBlock profile={data} />
-          )}
-          <QuickActionRow profile={data} safeCtas={safeCtas} />
-
-          {data.entity === "host" ? (
             <>
+              {/* Elevated truck hero — answers "what truck, where, when" */}
+              <ElevatedTruckHero
+                profile={restaurantProfile as any}
+                isAuthenticated={isAuthenticated}
+                isFavorited={isCurrentProfileFavorited}
+              />
+
+              {/* Why go now — time-sensitive signals */}
+              <WhyGoNowPanel profile={restaurantProfile} />
+
+              {/* Quick actions — desktop in-flow */}
+              <div className="hidden md:block">
+                <QuickActionRow profile={data} safeCtas={safeCtas} />
+              </div>
+
+              {/* Thin profile state — graceful when data is sparse */}
+              {isThinProfile(restaurantProfile) ? (
+                <ThinProfileState
+                  profile={restaurantProfile}
+                  safeCtas={safeCtas}
+                  initials={restaurantProfile.displayName
+                    .split(" ")
+                    .map((p: string) => p[0] || "")
+                    .join("")
+                    .slice(0, 2)
+                    .toUpperCase()}
+                />
+              ) : (
+                <>
+                  {/* Menu highlights rail — personalized, featured first */}
+                  {(restaurantProfile.menuSections?.length > 0 ||
+                    (restaurantProfile.menuVariants?.[0]?.menuSections?.length ?? 0) > 0) ? (
+                    <MenuHighlightsRail
+                      menuSections={
+                        restaurantProfile.menuVariants?.[0]?.menuSections ??
+                        restaurantProfile.menuSections
+                      }
+                      featuredMenuItems={restaurantProfile.featuredMenuItems}
+                      userFavoriteItemNames={new Set()}
+                    />
+                  ) : null}
+
+                  {/* Full menu section */}
+                  <MenuSection profile={restaurantProfile} safeCtas={safeCtas} />
+
+                  {/* Truck schedule — elevated panel */}
+                  <TruckSchedulePanel profile={restaurantProfile} />
+
+                  {/* Deals */}
+                  <DealsSection profile={restaurantProfile} />
+
+                  {/* Events */}
+                  <EventsSection profile={restaurantProfile} />
+
+                  {/* About / food style */}
+                  <AboutFoodStyle profile={restaurantProfile} />
+
+                  {/* Gallery */}
+                  <GalleryStrip profile={restaurantProfile} />
+
+                  {/* Community proof */}
+                  <ProofSection profile={restaurantProfile} />
+
+                  {/* Social links */}
+                  <RestaurantSocial profile={restaurantProfile} safeCtas={safeCtas} />
+                </>
+              )}
+            </>
+          ) : restaurantProfile ? (
+            /* ── RESTAURANT / BAR PROFILE LAYOUT ── */
+            <>
+              {/* Elevated restaurant hero — answers "what place, is it open, where" */}
+              <ElevatedProfileHero
+                profile={restaurantProfile as any}
+                isAuthenticated={isAuthenticated}
+                isFavorited={isCurrentProfileFavorited}
+              />
+
+              {/* Why go now — deals, events, open status */}
+              <WhyGoNowPanel profile={restaurantProfile} />
+
+              {/* Quick actions — desktop in-flow */}
+              <div className="hidden md:block">
+                <QuickActionRow profile={data} safeCtas={safeCtas} />
+              </div>
+
+              {/* Thin profile state */}
+              {isThinProfile(restaurantProfile) ? (
+                <ThinProfileState
+                  profile={restaurantProfile}
+                  safeCtas={safeCtas}
+                  initials={restaurantProfile.displayName
+                    .split(" ")
+                    .map((p: string) => p[0] || "")
+                    .join("")
+                    .slice(0, 2)
+                    .toUpperCase()}
+                />
+              ) : (
+                <>
+                  {/* Menu highlights rail */}
+                  {(restaurantProfile.menuSections?.length > 0 ||
+                    (restaurantProfile.menuVariants?.[0]?.menuSections?.length ?? 0) > 0) ? (
+                    <MenuHighlightsRail
+                      menuSections={
+                        restaurantProfile.menuVariants?.[0]?.menuSections ??
+                        restaurantProfile.menuSections
+                      }
+                      featuredMenuItems={restaurantProfile.featuredMenuItems}
+                      userFavoriteItemNames={new Set()}
+                    />
+                  ) : null}
+
+                  {/* Full menu */}
+                  <MenuSection profile={restaurantProfile} safeCtas={safeCtas} />
+
+                  {/* Hours */}
+                  <RestaurantHoursPanel profile={restaurantProfile} />
+
+                  {/* Deals */}
+                  <DealsSection profile={restaurantProfile} />
+
+                  {/* Events */}
+                  <EventsSection profile={restaurantProfile} />
+
+                  {/* Plan your visit — address, phone, website, social */}
+                  <PlanYourVisitPanel profile={restaurantProfile} />
+
+                  {/* About / food style */}
+                  <AboutFoodStyle profile={restaurantProfile} />
+
+                  {/* Gallery */}
+                  <GalleryStrip profile={restaurantProfile} />
+
+                  {/* Featured bartenders (bars) */}
+                  <FeaturedBartendersSection profile={restaurantProfile} />
+
+                  {/* Community proof */}
+                  <ProofSection profile={restaurantProfile} />
+
+                  {/* Social links */}
+                  <RestaurantSocial profile={restaurantProfile} safeCtas={safeCtas} />
+                </>
+              )}
+            </>
+          ) : data.entity === "host" ? (
+            /* ── LOCATION / HOST PROFILE LAYOUT ── */
+            <>
+              <HeroBlock profile={data} />
+              <QuickActionRow profile={data} safeCtas={safeCtas} />
               <LocationNowSection profile={data} />
               <LocationTruckOptionsSection profile={data} />
               <EventsSection profile={data} />
               <LocationMapSection profile={data} />
               <LocationAmenitiesSection profile={data} />
             </>
-          ) : restaurantProfile ? (
-            <>
-              <MenuSection profile={restaurantProfile} safeCtas={safeCtas} />
-              <RestaurantSchedule profile={restaurantProfile} />
-              <DealsSection profile={restaurantProfile} />
-              <RestaurantSignals profile={restaurantProfile} />
-              <AboutFoodStyle profile={restaurantProfile} />
-              <EventsSection profile={restaurantProfile} />
-              <GalleryStrip profile={restaurantProfile} />
-              <FeaturedBartendersSection profile={restaurantProfile} />
-              <ProofSection profile={restaurantProfile} />
-              <RestaurantSocial profile={restaurantProfile} safeCtas={safeCtas} />
-            </>
           ) : (
-            <Card className="border-white/10 bg-[#0f0d0b]">
-              <CardHeader>
-                <CardTitle className="text-xl text-white">Supplier profile</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3 text-sm text-white/80">
-                {data.description ? <p>{data.description}</p> : null}
-                {typeof (data as any).metrics?.activeProductCount === "number" ? (
-                  <p>Active products: {(data as any).metrics.activeProductCount}</p>
-                ) : null}
-              </CardContent>
-            </Card>
+            /* ── SUPPLIER PROFILE LAYOUT ── */
+            <>
+              <HeroBlock profile={data} />
+              <Card className="border-white/10 bg-[#0f0d0b]">
+                <CardHeader>
+                  <CardTitle className="text-xl text-white">Supplier profile</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3 text-sm text-white/80">
+                  {data.description ? <p>{data.description}</p> : null}
+                  {typeof (data as any).metrics?.activeProductCount === "number" ? (
+                    <p>Active products: {(data as any).metrics.activeProductCount}</p>
+                  ) : null}
+                </CardContent>
+              </Card>
+            </>
           )}
+
+          {/* Share controls */}
           <PublicProfileShareControls
             profile={data}
             sharePath={resolvedCleanBusinessPath}
@@ -2250,9 +2427,26 @@ export default function PublicProfilePage() {
             description={description}
             onShareAction={trackProfileEvent}
           />
-          <RelatedLocalDiscovery
-            data={data}
-            citySlug={citySlug}
+
+          {/* Personalized related discovery rail */}
+          {restaurantProfile ? (
+            <PersonalizedRelatedRail
+              profile={restaurantProfile as any}
+              citySlug={citySlug}
+              userFavoriteIds={userFavoriteIds}
+            />
+          ) : (
+            <RelatedLocalDiscovery
+              data={data}
+              citySlug={citySlug}
+            />
+          )}
+
+          {/* Mobile sticky action dock — always accessible */}
+          <MobileActionDock
+            safeCtas={safeCtas}
+            profileId={data?.id}
+            onAction={(actionType, href) => trackProfileEvent(actionType, "dock", href)}
           />
         </main>
       </ProfileErrorBoundary>
