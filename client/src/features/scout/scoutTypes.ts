@@ -13,9 +13,14 @@ export type ScoutSceneId =
 export type ScoutSceneItemType =
   | "restaurant"
   | "food_truck"
+  | "truck_stop"
   | "deal"
+  | "happy_hour"
   | "event"
   | "menu_item"
+  | "community_pick"
+  | "map_place"
+  | "local_activity"
   | "community";
 
 export type ScoutSceneItem = {
