@@ -23,6 +23,7 @@
 import type { PublicRestaurantProfile } from "@shared/publicProfiles";
 import { ProfileHeroMedia, buildPublicProfileHeroAssets } from "./ProfileHeroMedia";
 import { ProfileFavoriteButton } from "./ProfileFavoriteButton";
+import { ProfilePill, profileSurfaceClass } from "./ProfileVisualPrimitives";
 import {
   getTruckSchedulePrimaryStop,
   hasTruckScheduleSignal,
@@ -93,7 +94,7 @@ export function ElevatedTruckHero({
   return (
     <section
       aria-label={`${profile.displayName} food truck profile`}
-      className="overflow-hidden rounded-2xl border border-white/10 bg-[#0f0d0b]"
+      className={profileSurfaceClass}
     >
       {/* Cover + logo */}
       <ProfileHeroMedia
@@ -101,7 +102,7 @@ export function ElevatedTruckHero({
         coverImageUrl={heroAssets.coverImageUrl}
         logoImageUrl={heroAssets.logoImageUrl}
         theme="truck"
-        heightClassName="h-40 md:h-56"
+        heightClassName="h-56 md:h-[22rem]"
         badge={
           <ProfileFavoriteButton
             restaurantId={profile.id}
@@ -116,24 +117,18 @@ export function ElevatedTruckHero({
       <div className="space-y-3 p-4 sm:p-5">
         {/* Type badge + live status */}
         <div className="flex flex-wrap items-center gap-2">
-          <span className="rounded-full border border-orange-400/30 bg-orange-500/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.18em] text-orange-200">
-            Food truck
-          </span>
+          <ProfilePill tone="orange">Food truck</ProfilePill>
           {profile.verifiedProfile ? (
-            <span className="rounded-full border border-white/15 px-2 py-0.5 text-[10px] font-semibold text-white/55">
-              Verified
-            </span>
+            <ProfilePill>Verified</ProfilePill>
           ) : null}
           {profile.locallyOwned ? (
-            <span className="rounded-full border border-emerald-400/20 bg-emerald-500/8 px-2 py-0.5 text-[10px] font-semibold text-emerald-200/80">
-              Locally owned
-            </span>
+            <ProfilePill tone="green">Locally owned</ProfilePill>
           ) : null}
           <LiveStatusPill kind={primaryStop.kind} />
         </div>
 
         {/* Name */}
-        <h1 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
+        <h1 className="text-[2rem] font-black leading-[0.95] tracking-tight text-white sm:text-5xl">
           {profile.displayName}
         </h1>
 
@@ -152,10 +147,10 @@ export function ElevatedTruckHero({
         {/* Primary stop card — the "where is it?" answer */}
         {hasSchedule && primaryStop.stop ? (
           <div
-            className={`rounded-2xl border p-3.5 space-y-1.5 ${
+            className={`space-y-1.5 rounded-[1.15rem] border p-3.5 ${
               primaryStop.kind === "current"
-                ? "border-orange-400/30 bg-orange-500/10"
-                : "border-white/10 bg-black/20"
+                ? "border-orange-300/30 bg-orange-500/12"
+                : "border-white/10 bg-black/24"
             }`}
           >
             <p

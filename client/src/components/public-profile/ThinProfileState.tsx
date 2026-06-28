@@ -16,7 +16,8 @@
  */
 import type { PublicRestaurantProfile, PublicCta } from "@shared/publicProfiles";
 import { normalizeBusinessTypeLabel } from "@/lib/publicMenuCompleteness";
-import { MapPin, MenuSquare, CalendarDays, Globe } from "lucide-react";
+import { ProfilePill } from "./ProfileVisualPrimitives";
+import { MapPin, MenuSquare, CalendarDays, Globe, Phone } from "lucide-react";
 
 type ThinProfileStateProps = {
   profile: PublicRestaurantProfile;
@@ -59,7 +60,7 @@ export function ThinProfileState({
     profile.profileType === "truck" ? "/claim-truck" : "/claim-truck";
 
   return (
-    <div className="flex flex-col items-center gap-6 py-8 px-4 text-center">
+    <div className="flex flex-col items-center gap-6 rounded-[1.35rem] border border-white/10 bg-[#100b08]/92 px-4 py-8 text-center shadow-[0_22px_70px_rgba(0,0,0,0.42)]">
       {/* Logo / initials */}
       <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-3xl border border-orange-300/25 bg-[radial-gradient(circle_at_30%_30%,rgba(251,146,60,0.25),transparent_60%),linear-gradient(145deg,#1d100a,#0d0a08)] shadow-[0_12px_32px_rgba(0,0,0,0.4)]">
         {logoImageUrl ? (
@@ -75,9 +76,7 @@ export function ThinProfileState({
 
       {/* Name and type */}
       <div className="space-y-1">
-        <span className="inline-block rounded-full border border-orange-400/30 bg-orange-500/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.18em] text-orange-200">
-          {typeLabel}
-        </span>
+        <ProfilePill tone="orange">{typeLabel}</ProfilePill>
         <h1 className="text-2xl font-bold tracking-tight text-white">
           {profile.displayName}
         </h1>
@@ -100,7 +99,7 @@ export function ThinProfileState({
           className="inline-flex items-center gap-2 rounded-xl bg-orange-500 px-5 py-2.5 text-sm font-bold text-black hover:bg-orange-400"
         >
           {bestCta.type === "map" && <MapPin className="h-4 w-4" />}
-          {bestCta.type === "phone" && <MapPin className="h-4 w-4" />}
+          {bestCta.type === "phone" && <Phone className="h-4 w-4" />}
           {bestCta.type === "menu" && <MenuSquare className="h-4 w-4" />}
           {bestCta.type === "order" && <Globe className="h-4 w-4" />}
           {bestCta.label}

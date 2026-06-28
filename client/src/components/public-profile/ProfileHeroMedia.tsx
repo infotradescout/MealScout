@@ -88,8 +88,8 @@ export function ProfileHeroMedia({
   const showLogoImage = Boolean(logoImageUrl && !logoImageFailed);
   const containerClassName =
     theme === "truck"
-      ? `relative overflow-hidden ${heightClassName} bg-[radial-gradient(circle_at_18%_22%,rgba(251,146,60,0.34),transparent_32%),linear-gradient(145deg,#24130b_0%,#110d0a_52%,#060504_100%)]`
-      : `relative overflow-hidden ${heightClassName} bg-[radial-gradient(circle_at_22%_24%,rgba(255,96,35,0.28),transparent_46%),linear-gradient(145deg,#1d100a_0%,#120d09_48%,#0d0a08_100%)]`;
+      ? `relative overflow-hidden ${heightClassName} bg-[radial-gradient(circle_at_18%_22%,rgba(251,146,60,0.34),transparent_32%),linear-gradient(145deg,#2a1308_0%,#120b08_52%,#050403_100%)]`
+      : `relative overflow-hidden ${heightClassName} bg-[radial-gradient(circle_at_22%_24%,rgba(255,96,35,0.28),transparent_46%),linear-gradient(145deg,#211008_0%,#120b08_48%,#070504_100%)]`;
   const avatarShellClassName =
     theme === "truck"
       ? "flex h-24 w-24 items-center justify-center overflow-hidden rounded-3xl border border-orange-200/40 bg-black/35 shadow-[0_18px_44px_rgba(0,0,0,0.34)]"
@@ -114,11 +114,11 @@ export function ProfileHeroMedia({
       ) : (
         <div
           data-testid="public-profile-hero-cover-fallback"
-          className="absolute inset-0 bg-[radial-gradient(circle_at_72%_20%,rgba(255,255,255,0.09),transparent_22%),linear-gradient(180deg,rgba(255,255,255,0.06),transparent_38%)]"
+        className="absolute inset-0 bg-[radial-gradient(circle_at_72%_20%,rgba(255,255,255,0.10),transparent_22%),radial-gradient(circle_at_26%_34%,rgba(251,146,60,0.22),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.06),transparent_38%)]"
         />
       )}
 
-      <div className="absolute inset-0 bg-gradient-to-b from-black/8 via-black/18 to-black/62" />
+      <div className="absolute inset-0 bg-gradient-to-b from-black/4 via-black/18 to-black/74" />
 
       <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 p-4">
         <div

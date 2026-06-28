@@ -23,6 +23,7 @@
 import type { PublicRestaurantProfile } from "@shared/publicProfiles";
 import { ProfileHeroMedia, buildPublicProfileHeroAssets } from "./ProfileHeroMedia";
 import { ProfileFavoriteButton } from "./ProfileFavoriteButton";
+import { ProfilePill, profileSurfaceClass } from "./ProfileVisualPrimitives";
 import { normalizeBusinessTypeLabel } from "@/lib/publicMenuCompleteness";
 import { MapPin, Clock3 } from "lucide-react";
 
@@ -83,7 +84,7 @@ export function ElevatedProfileHero({
   return (
     <section
       aria-label={`${profile.displayName} profile hero`}
-      className="overflow-hidden rounded-2xl border border-white/10 bg-[#0f0d0b]"
+      className={profileSurfaceClass}
     >
       {/* Cover + logo */}
       <ProfileHeroMedia
@@ -91,7 +92,7 @@ export function ElevatedProfileHero({
         coverImageUrl={heroAssets.coverImageUrl}
         logoImageUrl={heroAssets.logoImageUrl}
         theme="default"
-        heightClassName="h-36 md:h-52"
+        heightClassName="h-52 md:h-[21rem]"
         badge={
           <ProfileFavoriteButton
             restaurantId={profile.id}
@@ -106,22 +107,16 @@ export function ElevatedProfileHero({
       <div className="space-y-3 p-4 sm:p-5">
         {/* Type badge + open status */}
         <div className="flex flex-wrap items-center gap-2">
-          <span className="rounded-full border border-orange-400/30 bg-orange-500/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.18em] text-orange-200">
-            {typeLabel}
-          </span>
+          <ProfilePill tone="orange">{typeLabel}</ProfilePill>
           {profile.verifiedProfile ? (
-            <span className="rounded-full border border-white/15 px-2 py-0.5 text-[10px] font-semibold text-white/55">
-              Verified
-            </span>
+            <ProfilePill>Verified</ProfilePill>
           ) : null}
           {profile.locallyOwned ? (
-            <span className="rounded-full border border-emerald-400/20 bg-emerald-500/8 px-2 py-0.5 text-[10px] font-semibold text-emerald-200/80">
-              Locally owned
-            </span>
+            <ProfilePill tone="green">Locally owned</ProfilePill>
           ) : null}
           {profile.openStatus ? (
             <span
-              className={`flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[10px] font-bold ${statusStyle.bg} ${statusStyle.border}`}
+              className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] ${statusStyle.bg} ${statusStyle.border}`}
             >
               <span className={`h-1.5 w-1.5 rounded-full ${statusStyle.dot}`} />
               <span className={statusStyle.text}>{profile.openStatus}</span>
@@ -130,7 +125,7 @@ export function ElevatedProfileHero({
         </div>
 
         {/* Name */}
-        <h1 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
+        <h1 className="text-[2rem] font-black leading-[0.95] tracking-tight text-white sm:text-5xl">
           {profile.displayName}
         </h1>
 

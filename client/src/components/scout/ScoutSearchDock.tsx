@@ -1,17 +1,120 @@
-import { Link } from "wouter";
-import { Search } from "lucide-react";
+import { Search, X } from "lucide-react";
 
-export function ScoutSearchDock() {
+export type ScoutSearchFilterId =
+  | "now"
+  | "trucks"
+  | "restaurants"
+  | "dishes"
+  | "deals"
+  | "happy_hour"
+  | "events"
+  | "community"
+  | "new"
+  | "best";
+
+const SEARCH_FILTERS: Array<{ id: ScoutSearchFilterId; label: string }> = [
+  { id: "now", label: "Now" },
+  { id: "trucks", label: "Trucks" },
+  { id: "restaurants", label: "Restaurants" },
+  { id: "dishes", label: "Dishes" },
+  { id: "deals", label: "Deals" },
+  { id: "happy_hour", label: "Happy Hour" },
+  { id: "events", label: "Events" },
+  { id: "community", label: "Community Picks" },
+  { id: "new", label: "New" },
+  { id: "best", label: "Best" },
+];
+
+export function ScoutSearchDock({
+  searchMode,
+  query,
+  activeFilter,
+  resultSummary,
+  onOpen,
+  onClose,
+  onQueryChange,
+  onFilterChange,
+}: {
+  searchMode: boolean;
+  query: string;
+  activeFilter: ScoutSearchFilterId | null;
+  resultSummary?: string | null;
+  onOpen: () => void;
+  onClose: () => void;
+  onQueryChange: (value: string) => void;
+  onFilterChange: (filter: ScoutSearchFilterId | null) => void;
+}) {
   return (
     <div className="fixed inset-x-4 z-40 md:mx-auto md:max-w-[608px]" style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 5.1rem)" }}>
-      <Link
-        href="/search"
-        className="flex h-12 w-full items-center justify-between rounded-full bg-[#0f1015]/92 px-4 text-sm font-semibold text-white/88 ring-1 ring-orange-400/35 backdrop-blur-xl shadow-[0_18px_44px_rgba(0,0,0,0.52)]"
-        aria-label="Search dishes, cravings, places, trucks, and events"
+      <form
+        role="search"
+        data-scout-search-mode={searchMode ? "active" : "default"}
+        onSubmit={(event) => {
+          event.preventDefault();
+          onOpen();
+        }}
+        className={`overflow-hidden rounded-[1.4rem] bg-[#0f0a07]/94 text-white ring-1 backdrop-blur-xl shadow-[0_18px_44px_rgba(0,0,0,0.52)] ${
+          searchMode ? "ring-orange-300/40" : "ring-orange-400/35"
+        }`}
       >
-        <span className="truncate text-[13px]">Search dishes, cravings, places, trucks, or events</span>
-        <Search className="h-4 w-4 shrink-0 text-orange-200" aria-hidden="true" />
-      </Link>
+        <div className="flex min-h-12 w-full items-center gap-2 px-3">
+          <Search className="h-4 w-4 shrink-0 text-orange-200" aria-hidden="true" />
+          <input
+            value={query}
+            onFocus={onOpen}
+            onChange={(event) => {
+              onOpen();
+              onQueryChange(event.target.value);
+            }}
+            className="h-12 min-w-0 flex-1 bg-transparent text-[13px] font-semibold text-white/90 outline-none placeholder:text-white/48"
+            placeholder="Search dishes, cravings, places, trucks, or events"
+            aria-label="Search dishes, cravings, places, trucks, and events"
+          />
+          {searchMode ? (
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/8 text-white/78 ring-1 ring-white/10 active:bg-white/12"
+              aria-label="Close Scout search"
+              data-scout-search-close="true"
+            >
+              <X className="h-4 w-4" aria-hidden="true" />
+            </button>
+          ) : null}
+        </div>
+
+        {searchMode ? (
+          <div className="border-t border-white/8 px-3 pb-3 pt-2" data-scout-search-filters="true">
+            {resultSummary ? (
+              <p className="mb-2 text-[11px] font-semibold text-white/58">{resultSummary}</p>
+            ) : null}
+            <div className="flex gap-2 overflow-x-auto overscroll-x-contain pb-0.5 atmo-hide-scrollbar">
+              {SEARCH_FILTERS.map((filter) => {
+                const selected = activeFilter === filter.id;
+                return (
+                  <button
+                    key={filter.id}
+                    type="button"
+                    onClick={() => onFilterChange(selected ? null : filter.id)}
+                    className={`shrink-0 rounded-full px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.08em] ring-1 ${
+                      selected
+                        ? "bg-orange-400 text-[#1c0d07] ring-orange-200/60"
+                        : "bg-white/[0.055] text-white/72 ring-white/10"
+                    }`}
+                    aria-pressed={selected}
+                  >
+                    {filter.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          <p className="border-t border-white/6 px-4 pb-2 text-[11px] font-semibold text-white/46">
+            {resultSummary || "Scout results update on the map and feed."}
+          </p>
+        )}
+      </form>
     </div>
   );
 }

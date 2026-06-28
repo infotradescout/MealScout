@@ -2160,17 +2160,25 @@ export default function PublicProfilePage() {
   }, [cleanBusinessRoute?.affiliateTag, resolvedCleanBusinessPath]);
 
   if ((isLoading || cleanBusinessLoading) && !invalidRestaurantRoute) {
-    return <div className="mx-auto max-w-4xl px-4 py-10">Loading profile...</div>;
+    return (
+      <div className="min-h-screen bg-[#070504] px-4 py-10 text-white">
+        <div className="mx-auto max-w-4xl rounded-[1.35rem] border border-white/10 bg-[#100b08]/92 p-5 text-sm text-white/70">
+          Loading profile...
+        </div>
+      </div>
+    );
   }
 
   if (!data) {
     return (
-      <div className="mx-auto max-w-4xl px-4 py-10">
+      <div className="min-h-screen bg-[#070504] px-4 py-10 text-white">
+        <div className="mx-auto max-w-4xl rounded-[1.35rem] border border-white/10 bg-[#100b08]/92 p-5 shadow-[0_22px_70px_rgba(0,0,0,0.48)]">
         <h1 className="text-2xl font-semibold">Profile not found</h1>
         <div className="mt-4">
           <Link href="/">
             <Button variant="outline">Back to home</Button>
           </Link>
+        </div>
         </div>
       </div>
     );
@@ -2208,7 +2216,13 @@ export default function PublicProfilePage() {
     DEFAULT_IMAGE;
 
   return (
-    <div className="min-h-screen bg-[#070605]">
+    <div
+      className="min-h-screen bg-[#070504] text-white"
+      style={{
+        backgroundImage:
+          "radial-gradient(92% 42% at 50% -10%, rgba(255,111,45,0.18) 0%, rgba(7,5,4,0) 58%), linear-gradient(180deg,#120905 0%,#070504 48%,#050403 100%)",
+      }}
+    >
       <SEOHead
         title={title}
         description={description}
@@ -2217,7 +2231,7 @@ export default function PublicProfilePage() {
         ogImage={ogImage}
       />
 
-      <header className="border-b border-white/10 bg-[#0b0908]/95">
+      <header className="border-b border-white/10 bg-[#0b0806]/92 backdrop-blur-md">
         <div className="mx-auto flex w-full max-w-5xl items-center justify-between px-4 py-3">
           <Link href="/" className="text-base font-semibold tracking-tight text-white">
             MealScout
@@ -2239,7 +2253,7 @@ export default function PublicProfilePage() {
         }
       >
         <main
-          className="mx-auto max-w-5xl space-y-6 px-4 pb-28 pt-6 sm:pb-32 sm:pt-8 md:pb-8"
+          className="mx-auto max-w-5xl space-y-5 px-4 pb-28 pt-5 sm:space-y-6 sm:pb-32 sm:pt-7 md:pb-8"
           onClickCapture={(event) => {
             const target = event.target as HTMLElement | null;
             const anchor = target?.closest("a[data-analytics-action]") as HTMLAnchorElement | null;
@@ -2300,6 +2314,7 @@ export default function PublicProfilePage() {
                       }
                       featuredMenuItems={restaurantProfile.featuredMenuItems}
                       userFavoriteItemNames={new Set()}
+                      safeCtas={safeCtas}
                     />
                   ) : null}
 
@@ -2379,6 +2394,7 @@ export default function PublicProfilePage() {
                       }
                       featuredMenuItems={restaurantProfile.featuredMenuItems}
                       userFavoriteItemNames={new Set()}
+                      safeCtas={safeCtas}
                     />
                   ) : null}
 

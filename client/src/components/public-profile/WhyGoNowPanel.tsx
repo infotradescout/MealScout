@@ -15,6 +15,7 @@
  */
 import type { PublicRestaurantProfile } from "@shared/publicProfiles";
 import { hasTruckScheduleSignal, getTruckSchedulePrimaryStop } from "./truckScheduleTruth";
+import { ProfileSectionLabel, profileSurfaceClass } from "./ProfileVisualPrimitives";
 import { Flame, Clock3, Tag, CalendarDays, Users, MapPin } from "lucide-react";
 
 type Signal = {
@@ -138,12 +139,10 @@ export function WhyGoNowPanel({ profile }: { profile: PublicRestaurantProfile })
   return (
     <section
       aria-label="Why go now"
-      className="rounded-2xl border border-white/10 bg-[#0f0d0b] overflow-hidden"
+      className={profileSurfaceClass}
     >
       <div className="px-4 pt-4 pb-1">
-        <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-white/45">
-          Why go now
-        </p>
+        <ProfileSectionLabel>Why go now</ProfileSectionLabel>
       </div>
       <div className="flex flex-col divide-y divide-white/6">
         {signals.map((signal, i) => {

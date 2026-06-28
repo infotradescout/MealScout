@@ -6,6 +6,7 @@
  * Thin state: renders a tasteful "Hours not posted" with a claim CTA.
  */
 import type { PublicRestaurantProfile } from "@shared/publicProfiles";
+import { ProfileSectionLabel, profileSurfaceClass } from "./ProfileVisualPrimitives";
 import { Clock3 } from "lucide-react";
 
 function parseOpenStatus(openStatus: string | null): {
@@ -32,12 +33,10 @@ export function RestaurantHoursPanel({ profile }: { profile: PublicRestaurantPro
 
   return (
     <section aria-label="Hours" className="space-y-3">
-      <p className="text-xs font-bold uppercase tracking-[0.18em] text-white/45">
-        Hours
-      </p>
+      <ProfileSectionLabel>Hours</ProfileSectionLabel>
 
       {hasAnyHoursData ? (
-        <div className="rounded-2xl border border-white/10 bg-[#0f0d0b] overflow-hidden">
+        <div className={profileSurfaceClass}>
           {statusLabel ? (
             <div
               className={`flex items-center gap-2 px-4 py-3 border-b border-white/8 ${

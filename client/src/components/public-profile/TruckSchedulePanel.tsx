@@ -14,6 +14,7 @@
  * Thin state: renders a tasteful "No schedule posted yet" with a claim CTA.
  */
 import type { PublicRestaurantProfile, PublicTruckScheduleStop } from "@shared/publicProfiles";
+import { ProfileSectionLabel } from "./ProfileVisualPrimitives";
 import {
   getTruckScheduleRows,
   getTruckScheduleEmptyStateLabel,
@@ -111,9 +112,7 @@ export function TruckSchedulePanel({ profile }: { profile: PublicRestaurantProfi
   return (
     <section aria-label="Truck schedule" className="space-y-3">
       <div className="flex items-center justify-between">
-        <p className="text-xs font-bold uppercase tracking-[0.18em] text-white/45">
-          Schedule
-        </p>
+        <ProfileSectionLabel>Schedule</ProfileSectionLabel>
         {statusBadge ? (
           <span className="rounded-full border border-orange-400/30 bg-orange-500/10 px-2 py-0.5 text-[10px] font-bold text-orange-200">
             {statusBadge}
