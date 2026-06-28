@@ -7,6 +7,7 @@ import {
 } from "../client/src/features/scout/scoutDiscoveryModel";
 
 const scoutPage = readFileSync("client/src/pages/explore-preview.tsx", "utf8");
+const normalizedScoutPage = scoutPage.replace(/\r\n/g, "\n");
 const scoutTypes = readFileSync("client/src/features/scout/scoutTypes.ts", "utf8");
 
 const knownTruck = {
@@ -134,7 +135,7 @@ const requiredScoutRuntimeSnippets = [
 ];
 
 for (const snippet of requiredScoutRuntimeSnippets) {
-  assert.ok(scoutPage.includes(snippet), `Canonical Scout runtime missing snippet: ${snippet}`);
+  assert.ok(normalizedScoutPage.includes(snippet), `Canonical Scout runtime missing snippet: ${snippet}`);
 }
 
 const forbiddenScoutRuntimeSnippets = [

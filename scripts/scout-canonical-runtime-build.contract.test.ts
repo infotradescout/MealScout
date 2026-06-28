@@ -22,12 +22,12 @@ for (const routeSnippet of [
 }
 
 for (const requiredScoutSnippet of [
-  'title: "Live Food Trucks Now"',
+  'title: "Now Serving Trucks"',
   'title: "Open Now Near You"',
-  'title: DISCOVERY_LAYERS.foodTrucks.title',
+  'title: "For You Nearby"',
   'title: DISCOVERY_LAYERS.restaurants.title',
-  'title: DISCOVERY_LAYERS.trending.title',
-  'title: "New to MealScout"',
+  "title: \"What's Hot\"",
+  'title: "Newest on MealScout"',
   'title: DISCOVERY_LAYERS.menuItems.title',
   'title: DISCOVERY_LAYERS.deals.title',
   'title: DISCOVERY_LAYERS.events.title',
