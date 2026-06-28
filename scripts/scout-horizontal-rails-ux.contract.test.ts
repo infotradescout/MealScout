@@ -8,6 +8,7 @@ import {
 } from "../client/src/features/scout/scoutDiscoveryModel";
 
 const scoutPage = readFileSync("client/src/pages/explore-preview.tsx", "utf8");
+const searchDock = readFileSync("client/src/components/scout/ScoutSearchDock.tsx", "utf8");
 
 const expectedRowIds = [
   "live_trucks_now",
@@ -16,14 +17,14 @@ const expectedRowIds = [
   "saved_favorites",
   "following",
   "order_again",
+  "community_picks",
+  "trending_this_week",
+  "new_to_mealscout",
   "popular_dishes",
   "hot_deals",
   "happy_hours",
   "events_popups",
   "nearby_restaurants",
-  "trending_this_week",
-  "new_to_mealscout",
-  "community_picks",
   "worth_discovering",
 ];
 
@@ -50,6 +51,18 @@ assert.deepEqual(rowById.get("events_popups")?.acceptedCardKinds, ["event"]);
 assert.ok(rowById.get("saved_favorites")?.acceptedCardKinds.includes("restaurant"));
 assert.ok(rowById.get("following")?.acceptedCardKinds.includes("restaurant"));
 assert.ok(rowById.get("order_again")?.acceptedCardKinds.includes("menu_item"));
+assert.ok(
+  (rowById.get("community_picks")?.priority ?? 99) < (rowById.get("nearby_restaurants")?.priority ?? 0),
+  "Community picks must outrank generic nearby restaurants.",
+);
+assert.ok(
+  (rowById.get("trending_this_week")?.priority ?? 99) < (rowById.get("nearby_restaurants")?.priority ?? 0),
+  "What's Hot/trending must outrank generic nearby restaurants.",
+);
+assert.ok(
+  (rowById.get("new_to_mealscout")?.priority ?? 99) < (rowById.get("nearby_restaurants")?.priority ?? 0),
+  "Newest listings must outrank generic nearby restaurants.",
+);
 
 for (const snippet of [
   "SCOUT_HORIZONTAL_ROW_REGISTRY",
@@ -64,7 +77,7 @@ for (const snippet of [
   'id: "saved_favorites"',
   'id: "following"',
   'id: "order_again"',
-  'title: "Live Food Trucks Now"',
+  'title: "Now Serving Trucks"',
   'title: "Open Now Near You"',
   'title: "Your Favorites"',
   'title: "Following"',
@@ -78,6 +91,9 @@ for (const snippet of [
   'dealRailCards(happyHourDeals, "happy_hour")',
   "eventRailCards(visibleSceneEvents)",
   "overflow-x-hidden",
+  "scoutSearchMode",
+  "scoutSearchIntent",
+  "restaurantSearchPriority",
 ]) {
   assert.ok(scoutPage.includes(snippet), `Scout horizontal rails runtime missing snippet: ${snippet}`);
 }
@@ -87,11 +103,22 @@ for (const staleSnippet of [
   'events={[]}',
   'deals={[]}',
 ]) {
-  assert.ok(
-    !scoutPage.includes(staleSnippet),
-    `Scout For You runtime must not keep stale mixed-list/OpenNow snippet: ${staleSnippet}`,
-  );
+  assert.ok(!scoutPage.includes(staleSnippet), `Scout For You runtime must not keep stale snippet: ${staleSnippet}`);
 }
+
+for (const snippet of [
+  'data-scout-search-mode={searchMode ? "active" : "default"}',
+  'data-scout-search-filters="true"',
+  'data-scout-search-close="true"',
+  "onFocus={onOpen}",
+  "event.preventDefault();",
+  "onQueryChange(event.target.value)",
+  "SEARCH_FILTERS",
+]) {
+  assert.ok(searchDock.includes(snippet), `Scout search dock missing persistent search-mode snippet: ${snippet}`);
+}
+
+assert.ok(!searchDock.includes('href="/search"'), "Scout search dock must not leave Scout for a one-off /search route.");
 
 const truck = { id: "truck-1", businessType: "food_truck", isFoodTruck: true };
 const restaurant = { id: "restaurant-1", businessType: "restaurant", isFoodTruck: false };
