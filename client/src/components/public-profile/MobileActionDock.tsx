@@ -54,6 +54,14 @@ function shortLabel(cta: PublicCta): string {
   return raw;
 }
 
+function isSelfProfileAction(cta: PublicCta, profileId?: string | null): boolean {
+  if (cta.type !== "internal") return false;
+  const href = String(cta.href || "");
+  const label = String(cta.label || "").trim().toLowerCase();
+  if (profileId && href.includes(String(profileId))) return true;
+  return label === "profile" || label === "details" || /\/(truck|restaurant|bar|cafe)\//.test(href);
+}
+
 export function MobileActionDock({
   safeCtas,
   profileId,
@@ -68,7 +76,7 @@ export function MobileActionDock({
   // Deduplicate by href, sort by priority, take top 4
   const seen = new Set<string>();
   const actions: DockAction[] = safeCtas
-    .filter((cta) => cta.type !== "share" && cta.type !== "social")
+    .filter((cta) => cta.type !== "share" && cta.type !== "social" && !isSelfProfileAction(cta, profileId))
     .sort((a, b) => (CTA_TYPE_PRIORITY[a.type] ?? 99) - (CTA_TYPE_PRIORITY[b.type] ?? 99))
     .reduce<DockAction[]>((acc, cta) => {
       if (seen.has(cta.href)) return acc;
@@ -86,6 +94,14 @@ export function MobileActionDock({
 
   const primary = actions[0];
   const rest = actions.slice(1);
+  const gridClass =
+    rest.length >= 3
+      ? "grid-cols-4"
+      : rest.length === 2
+        ? "grid-cols-3"
+        : rest.length === 1
+          ? "grid-cols-2"
+          : "grid-cols-1";
 
   return (
     // Only visible on mobile (< md). Uses safe-area-inset for notched phones.
@@ -93,9 +109,10 @@ export function MobileActionDock({
       className="fixed bottom-0 inset-x-0 z-50 md:hidden"
       style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
       aria-label="Quick actions"
+      data-mobile-action-dock="true"
     >
       <div className="border-t border-white/10 bg-[#0b0908]/96 backdrop-blur-md px-3 py-2.5">
-        <div className={`grid gap-2 ${rest.length > 0 ? `grid-cols-${Math.min(rest.length + 1, 4)}` : "grid-cols-1"}`}>
+        <div className={`grid gap-2 ${gridClass}`}>
           {/* Primary action — full orange */}
           <a
             href={primary.cta.href}

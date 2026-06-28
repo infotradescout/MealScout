@@ -10,6 +10,8 @@ export { ProfileFavoriteButton } from "./ProfileFavoriteButton";
 export { ElevatedProfileHero } from "./ElevatedProfileHero";
 export { ElevatedTruckHero } from "./ElevatedTruckHero";
 export { PersonalizedRelatedRail } from "./PersonalizedRelatedRail";
+export { PublicProfileDecisionBar } from "./PublicProfileDecisionBar";
+export { RelatedScoutRail } from "./RelatedScoutRail";
 export { ProfileErrorBoundary } from "./ProfileErrorBoundary";
 export { ProfileHeroMedia, buildPublicProfileHeroAssets } from "./ProfileHeroMedia";
 export { TruckHero } from "./TruckHero";
