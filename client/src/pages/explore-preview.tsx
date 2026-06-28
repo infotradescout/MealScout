@@ -2121,10 +2121,35 @@ export default function ExplorePreview() {
     staleTime: 120_000,
   });
 
+  const { data: nearbyPublicRestaurantsData } = useQuery<RestaurantSummary[]>({
+    queryKey: resolvedScoutLocation
+      ? ["/api/restaurants/nearby", resolvedScoutLocation.lat, resolvedScoutLocation.lng, discoveryRadiusKm]
+      : ["/api/restaurants/nearby", "no-location"],
+    enabled: !!resolvedScoutLocation,
+    queryFn: async () => {
+      if (!resolvedScoutLocation) return [];
+      const response = await fetch(
+        `/api/restaurants/nearby/${resolvedScoutLocation.lat}/${resolvedScoutLocation.lng}?radius=${discoveryRadiusKm}`,
+        { credentials: "include" },
+      );
+      if (!response.ok) return [];
+      const data = await response.json();
+      return Array.isArray(data) ? data : [];
+    },
+    staleTime: 120_000,
+  });
+
   const nearbyFoodBusinesses = useMemo<RestaurantSummary[]>(() => {
-    if (!nearbyRestaurantsData) return [];
-    if (!Array.isArray(nearbyRestaurantsData)) return [];
-    return nearbyRestaurantsData.filter((restaurant) => {
+    const byId = new Map<string, RestaurantSummary>();
+    for (const restaurant of [
+      ...(Array.isArray(nearbyRestaurantsData) ? nearbyRestaurantsData : []),
+      ...(Array.isArray(nearbyPublicRestaurantsData) ? nearbyPublicRestaurantsData : []),
+    ]) {
+      const id = String(restaurant?.id || "").trim();
+      if (!id || byId.has(id)) continue;
+      byId.set(id, restaurant);
+    }
+    return Array.from(byId.values()).filter((restaurant) => {
       const fallbackKm =
         typeof restaurant.distanceMiles === "number"
           ? restaurant.distanceMiles * 1.609344
@@ -2139,7 +2164,7 @@ export default function ExplorePreview() {
         fallbackKm,
       );
     });
-  }, [resolvedScoutCoords, discoveryRadiusKm, nearbyRestaurantsData]);
+  }, [resolvedScoutCoords, discoveryRadiusKm, nearbyPublicRestaurantsData, nearbyRestaurantsData]);
 
   const nearbyRestaurants = useMemo<RestaurantSummary[]>(() => {
     return nearbyFoodBusinesses.filter(
@@ -3816,6 +3841,7 @@ export default function ExplorePreview() {
               scoutTruckInventory={scoutTruckInventory}
               visibleTrucksServingNow={visibleTrucksServingNow}
               visibleOpenRestaurants={visibleOpenRestaurants}
+              nearbyRestaurants={nearbyRestaurants}
               visibleDeals={visibleDeals}
               hotDealCandidates={hotDealCandidates}
               happyHourDeals={happyHourDeals}
@@ -4161,6 +4187,7 @@ function ActiveSceneContent({
   scoutTruckInventory,
   visibleTrucksServingNow,
   visibleOpenRestaurants,
+  nearbyRestaurants,
   visibleDeals,
   hotDealCandidates,
   happyHourDeals,
@@ -4206,6 +4233,7 @@ function ActiveSceneContent({
   scoutTruckInventory: LiveTruckSummary[];
   visibleTrucksServingNow: LiveTruckSummary[];
   visibleOpenRestaurants: RestaurantSummary[];
+  nearbyRestaurants: RestaurantSummary[];
   visibleDeals: DealSummary[];
   hotDealCandidates: DealSummary[];
   happyHourDeals: DealSummary[];
@@ -4268,10 +4296,7 @@ function ActiveSceneContent({
 
     const liveTruckCandidates = visibleTrucksServingNow;
     const foodTrucksTodayCandidates = scoutTruckInventory;
-    const nearbyRestaurantCandidates = [
-      ...visibleOpenRestaurants,
-      ...visibleMoreFoodRestaurants,
-    ];
+    const nearbyRestaurantCandidates = nearbyRestaurants;
     const favoriteRestaurantCandidates = nearbyRestaurantCandidates.filter((restaurant) =>
       restaurantRelationships.favoriteIds.has(String(restaurant.id)),
     );
@@ -4367,6 +4392,7 @@ function ActiveSceneContent({
     const newToMealScoutCards = extractRestaurants(scoutBusinessAssignments.new_to_mealscout);
     const communityPickCards = extractRestaurants(scoutBusinessAssignments.community_picks);
     const worthDiscoveringCards = scoutBusinessAssignments.worth_discovering ?? [];
+    const knownTruckIds = new Set(scoutTruckInventory.map((truck) => String(truck.id)));
     const popularDishCards: LocalMenuItemFeedItem[] =
       popularDishes.length > 0
         ? popularDishes.map((item) => ({
@@ -4380,8 +4406,8 @@ function ActiveSceneContent({
             restaurantCity: item.restaurantCity ?? null,
             restaurantState: item.restaurantState ?? null,
             cuisineType: item.cuisineType ?? null,
-            businessType: item.businessType ?? null,
-            isFoodTruck: item.isFoodTruck ?? null,
+            businessType: item.businessType ?? (knownTruckIds.has(String(item.restaurantId)) ? "food_truck" : null),
+            isFoodTruck: item.isFoodTruck ?? knownTruckIds.has(String(item.restaurantId)),
           }))
         : localMenuItems.slice(0, 8);
 
@@ -4582,7 +4608,7 @@ function ActiveSceneContent({
         return card.cardKind === "food_truck" && card.truck.mobileOnline ? (
           <LiveTruckCard truck={card.truck} currentUserId={currentUserId} />
         ) : (
-          <TruckCard truck={card.truck} onSelect={selectLiveTruck} currentUserId={currentUserId} />
+          <TruckCard truck={card.truck} currentUserId={currentUserId} />
         );
       }
       if (card.cardType === "restaurant") {

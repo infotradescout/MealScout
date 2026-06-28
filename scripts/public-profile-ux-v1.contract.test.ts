@@ -12,6 +12,8 @@ const planYourVisit = readFileSync("client/src/components/public-profile/PlanYou
 const thinProfile = readFileSync("client/src/components/public-profile/ThinProfileState.tsx", "utf8");
 const mobileDock = readFileSync("client/src/components/public-profile/MobileActionDock.tsx", "utf8");
 const relatedRail = readFileSync("client/src/components/public-profile/PersonalizedRelatedRail.tsx", "utf8");
+const decisionBar = readFileSync("client/src/components/public-profile/PublicProfileDecisionBar.tsx", "utf8");
+const relatedScoutRail = readFileSync("client/src/components/public-profile/RelatedScoutRail.tsx", "utf8");
 
 for (const snippet of [
   "ElevatedTruckHero",
@@ -22,11 +24,19 @@ for (const snippet of [
   "RestaurantHoursPanel",
   "PlanYourVisitPanel",
   "ThinProfileState",
-  "PersonalizedRelatedRail",
+  "PublicProfileDecisionBar",
+  "RelatedScoutRail",
   "MobileActionDock",
+  "FullMenuSection",
 ]) {
   assert.ok(publicProfilePage.includes(snippet), `Public profile page missing elevated UX component: ${snippet}`);
 }
+
+assert.ok(
+  publicProfilePage.includes("client/src/components/public-profile") ||
+    publicProfilePage.includes("@/components/public-profile/PublicProfileDecisionBar"),
+  "Public profile runtime must import real public-profile runtime components.",
+);
 
 for (const snippet of [
   "where is this truck right now?",
@@ -45,6 +55,31 @@ assert.ok(
 );
 
 for (const snippet of [
+  'data-public-profile-decision-bar="true"',
+  'data-profile-kind={profile.profileType}',
+  "What to order",
+  "Best action",
+  "Schedule not posted yet",
+  "Hours not posted yet",
+  "Menu not posted yet",
+  "getTruckSchedulePrimaryStop",
+]) {
+  assert.ok(decisionBar.includes(snippet), `Decision bar missing food-decision runtime cue: ${snippet}`);
+}
+
+assert.ok(
+  publicProfilePage.includes("<PublicProfileDecisionBar") &&
+    publicProfilePage.includes("<FullMenuSection") &&
+    publicProfilePage.includes("<RelatedScoutRail"),
+  "Public profile page must render the decision bar, full menu section, and related Scout rail at runtime.",
+);
+
+assert.ok(
+  publicProfilePage.match(/profile=\{restaurantProfile\}[\s\S]{0,120}safeCtas=\{safeCtas\}/),
+  "PublicProfileDecisionBar must receive the real profile payload and safe CTAs.",
+);
+
+for (const snippet of [
   "Restaurant",
   "Open",
 ]) {
@@ -59,7 +94,11 @@ assert.ok(planYourVisit.includes("Plan your visit"), "Plan Your Visit panel must
 assert.ok(thinProfile.includes("Menu not posted yet"), "Thin profiles must show honest compact missing-menu state.");
 assert.ok(thinProfile.includes("Claim or update this profile"), "Thin profiles must keep claim/update CTA without implying verified ownership.");
 assert.ok(mobileDock.includes("fixed") && mobileDock.includes("bottom-0"), "Mobile action dock must be sticky on mobile.");
+assert.ok(mobileDock.includes("grid-cols-4") && !mobileDock.includes("`grid-cols-${"), "Mobile dock must use compile-time Tailwind grid classes.");
+assert.ok(mobileDock.includes('data-mobile-action-dock="true"'), "Mobile dock must expose a stable browser-smoke marker.");
+assert.ok(mobileDock.includes("isSelfProfileAction") && mobileDock.includes('cta.type !== "share"'), "Mobile dock must exclude self-profile, share, and social CTAs.");
 assert.ok(relatedRail.includes("overflow-x-auto"), "Related Scout rail must be horizontally scrollable.");
+assert.ok(relatedScoutRail.includes("PersonalizedRelatedRail"), "RelatedScoutRail must wrap the existing related discovery runtime.");
 
 for (const forbidden of [
   "audit",

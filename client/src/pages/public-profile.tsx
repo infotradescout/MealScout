@@ -36,7 +36,8 @@ import { TruckSchedulePanel } from "@/components/public-profile/TruckSchedulePan
 import { RestaurantHoursPanel } from "@/components/public-profile/RestaurantHoursPanel";
 import { PlanYourVisitPanel } from "@/components/public-profile/PlanYourVisitPanel";
 import { ThinProfileState, isThinProfile } from "@/components/public-profile/ThinProfileState";
-import { PersonalizedRelatedRail } from "@/components/public-profile/PersonalizedRelatedRail";
+import { PublicProfileDecisionBar } from "@/components/public-profile/PublicProfileDecisionBar";
+import { RelatedScoutRail } from "@/components/public-profile/RelatedScoutRail";
 import { useAuth } from "@/hooks/useAuth";
 import {
   getTruckScheduleEmptyStateLabel,
@@ -1344,6 +1345,16 @@ function MenuSection({
   );
 }
 
+function FullMenuSection({
+  profile,
+  safeCtas,
+}: {
+  profile: PublicRestaurantProfile;
+  safeCtas: PublicCta[];
+}) {
+  return <MenuSection profile={profile} safeCtas={safeCtas} />;
+}
+
 function DealsSection({ profile }: { profile: PublicRestaurantProfile }) {
   const dealItems = Array.isArray(profile.deals.items)
     ? profile.deals.items.filter(
@@ -2228,7 +2239,7 @@ export default function PublicProfilePage() {
         }
       >
         <main
-          className="mx-auto max-w-5xl space-y-6 px-4 py-6 sm:py-8"
+          className="mx-auto max-w-5xl space-y-6 px-4 pb-28 pt-6 sm:pb-32 sm:pt-8 md:pb-8"
           onClickCapture={(event) => {
             const target = event.target as HTMLElement | null;
             const anchor = target?.closest("a[data-analytics-action]") as HTMLAnchorElement | null;
@@ -2250,6 +2261,11 @@ export default function PublicProfilePage() {
                 profile={restaurantProfile as any}
                 isAuthenticated={isAuthenticated}
                 isFavorited={isCurrentProfileFavorited}
+              />
+
+              <PublicProfileDecisionBar
+                profile={restaurantProfile}
+                safeCtas={safeCtas}
               />
 
               {/* Why go now — time-sensitive signals */}
@@ -2288,10 +2304,13 @@ export default function PublicProfilePage() {
                   ) : null}
 
                   {/* Full menu section */}
-                  <MenuSection profile={restaurantProfile} safeCtas={safeCtas} />
+                  <FullMenuSection profile={restaurantProfile} safeCtas={safeCtas} />
 
                   {/* Truck schedule — elevated panel */}
                   <TruckSchedulePanel profile={restaurantProfile} />
+
+                  {/* Plan your visit — base area/contact/directions when public */}
+                  <PlanYourVisitPanel profile={restaurantProfile} />
 
                   {/* Deals */}
                   <DealsSection profile={restaurantProfile} />
@@ -2321,6 +2340,11 @@ export default function PublicProfilePage() {
                 profile={restaurantProfile as any}
                 isAuthenticated={isAuthenticated}
                 isFavorited={isCurrentProfileFavorited}
+              />
+
+              <PublicProfileDecisionBar
+                profile={restaurantProfile}
+                safeCtas={safeCtas}
               />
 
               {/* Why go now — deals, events, open status */}
@@ -2359,7 +2383,7 @@ export default function PublicProfilePage() {
                   ) : null}
 
                   {/* Full menu */}
-                  <MenuSection profile={restaurantProfile} safeCtas={safeCtas} />
+                  <FullMenuSection profile={restaurantProfile} safeCtas={safeCtas} />
 
                   {/* Hours */}
                   <RestaurantHoursPanel profile={restaurantProfile} />
@@ -2430,8 +2454,8 @@ export default function PublicProfilePage() {
 
           {/* Personalized related discovery rail */}
           {restaurantProfile ? (
-            <PersonalizedRelatedRail
-              profile={restaurantProfile as any}
+            <RelatedScoutRail
+              profile={restaurantProfile}
               citySlug={citySlug}
               userFavoriteIds={userFavoriteIds}
             />
