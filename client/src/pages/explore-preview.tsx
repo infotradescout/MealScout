@@ -34,9 +34,7 @@ import { useEffectiveLocationContext } from "@/hooks/useEffectiveLocationContext
 import { getReverseGeocodedLocationName } from "@/utils/locationUtils";
 import { SEOHead } from "@/components/seo-head";
 import { ScoutMapHero } from "@/components/scout/ScoutMapHero";
-import { SceneOptionsBar as ScoutSceneOptionsBar } from "@/components/scout/SceneOptionsBar";
 import { ActiveScenePanel } from "@/components/scout/ActiveScenePanel";
-import { ActiveSceneIntro as ScoutActiveSceneIntro } from "@/components/scout/ActiveSceneIntro";
 import { ScoutSearchDock, type ScoutSearchFilterId } from "@/components/scout/ScoutSearchDock";
 import { ScoutEmptyState as ScoutSceneEmptyState } from "@/components/scout/ScoutEmptyState";
 import {
@@ -3519,11 +3517,7 @@ export default function ExplorePreview() {
   const showTopLocalFavoritesSection =
     (isLowActivity || activeSceneLaneId === "community") &&
     topLocalFavoriteRestaurants.length > 0;
-  const compactMapHeight = isHighActivity
-    ? "clamp(360px, 42vh, 520px)"
-    : isMediumActivity
-      ? "clamp(340px, 40vh, 500px)"
-      : "clamp(320px, 38vh, 460px)";
+  const compactMapHeight = "clamp(250px, 32dvh, 310px)";
   const collapsedMapClass = isHighActivity
     ? "mx-0 mt-0 rounded-b-[2rem] ring-1 ring-orange-200/14 bg-[#070707]"
     : "mx-0 mt-0 rounded-b-[1.8rem] ring-1 ring-white/12 bg-[#0b0908]";
@@ -3656,6 +3650,7 @@ export default function ExplorePreview() {
         <ScoutMapHero>
         <section
           data-testid="scout-map-container"
+          data-scout-mobile-thirds-map="true"
           className={`relative overflow-hidden ${
             sheetState === "fullMap"
               ? "w-full bg-[#06070b]"
@@ -3958,17 +3953,9 @@ export default function ExplorePreview() {
         {/* ============================================================
              LOWER SHEET — discovery sections. Hidden when fullMap.
              Touch-swipe handlers sit on a thin drag handle at the top.
-           ============================================================ */}
+        ============================================================ */}
         {sheetState !== "fullMap" && (
           <ActiveScenePanel>
-            <ScoutSceneOptionsBar
-              lanes={SCOUT_SCENE_LANES}
-              activeSceneLaneId={activeSceneLaneId}
-              onSceneLaneSelect={handleSceneLaneChange}
-              renderIcon={getSceneOptionIcon}
-            />
-
-            <ScoutActiveSceneIntro laneId={activeSceneLaneId} />
             <ActiveSceneContent
               laneId={activeSceneLaneId}
               sceneMixedFeedItems={sceneMixedFeedItems}

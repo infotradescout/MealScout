@@ -91,6 +91,8 @@ for (const snippet of [
   'dealRailCards(happyHourDeals, "happy_hour")',
   "eventRailCards(visibleSceneEvents)",
   "overflow-x-hidden",
+  'data-scout-mobile-thirds-map="true"',
+  'const compactMapHeight = "clamp(250px, 32dvh, 310px)";',
   "scoutSearchMode",
   "scoutSearchIntent",
   "restaurantSearchPriority",
@@ -100,6 +102,8 @@ for (const snippet of [
 
 for (const staleSnippet of [
   "<OpenNowSection",
+  "<ScoutSceneOptionsBar",
+  "<ScoutActiveSceneIntro",
   'events={[]}',
   'deals={[]}',
 ]) {
