@@ -12,31 +12,188 @@ export type ScoutNormalizedCardKind =
 
 export type ScoutBusinessSourceHint = "restaurant" | "truck" | "location" | "activity";
 
-export type ScoutPrimarySectionId =
-  | "open_now"
+export type ScoutHorizontalRowId =
+  | "live_trucks_now"
   | "food_trucks_today"
+  | "open_now_near_you"
+  | "saved_favorites"
+  | "following"
+  | "order_again"
+  | "popular_dishes"
   | "hot_deals"
   | "happy_hours"
   | "events_popups"
-  | "popular_dishes"
   | "nearby_restaurants"
   | "trending_this_week"
   | "new_to_mealscout"
   | "community_picks"
   | "worth_discovering";
 
+export type ScoutRowDedupPolicy = "strict_business" | "content_entity";
+
+export type ScoutHorizontalRowDefinition = {
+  id: ScoutHorizontalRowId;
+  title: string;
+  acceptedCardKinds: ScoutNormalizedCardKind[];
+  priority: number;
+  maxCards: number;
+  hideWhenEmpty: true;
+  dedupPolicy: ScoutRowDedupPolicy;
+};
+
+export const SCOUT_HORIZONTAL_ROW_REGISTRY: ScoutHorizontalRowDefinition[] = [
+  {
+    id: "live_trucks_now",
+    title: "Live Food Trucks Now",
+    acceptedCardKinds: ["food_truck"],
+    priority: 1,
+    maxCards: 10,
+    hideWhenEmpty: true,
+    dedupPolicy: "strict_business",
+  },
+  {
+    id: "food_trucks_today",
+    title: "Food Trucks Today",
+    acceptedCardKinds: ["food_truck", "truck_stop"],
+    priority: 2,
+    maxCards: 10,
+    hideWhenEmpty: true,
+    dedupPolicy: "strict_business",
+  },
+  {
+    id: "open_now_near_you",
+    title: "Open Now Near You",
+    acceptedCardKinds: ["restaurant", "food_truck", "map_place", "local_activity"],
+    priority: 3,
+    maxCards: 12,
+    hideWhenEmpty: true,
+    dedupPolicy: "strict_business",
+  },
+  {
+    id: "saved_favorites",
+    title: "Your Favorites",
+    acceptedCardKinds: ["food_truck", "restaurant"],
+    priority: 4,
+    maxCards: 10,
+    hideWhenEmpty: true,
+    dedupPolicy: "strict_business",
+  },
+  {
+    id: "following",
+    title: "Following",
+    acceptedCardKinds: ["food_truck", "restaurant"],
+    priority: 5,
+    maxCards: 10,
+    hideWhenEmpty: true,
+    dedupPolicy: "strict_business",
+  },
+  {
+    id: "order_again",
+    title: "Order Again",
+    acceptedCardKinds: ["food_truck", "restaurant", "menu_item"],
+    priority: 6,
+    maxCards: 10,
+    hideWhenEmpty: true,
+    dedupPolicy: "strict_business",
+  },
+  {
+    id: "popular_dishes",
+    title: "Popular Dishes",
+    acceptedCardKinds: ["menu_item"],
+    priority: 7,
+    maxCards: 10,
+    hideWhenEmpty: true,
+    dedupPolicy: "content_entity",
+  },
+  {
+    id: "hot_deals",
+    title: "Hot Deals",
+    acceptedCardKinds: ["deal"],
+    priority: 8,
+    maxCards: 10,
+    hideWhenEmpty: true,
+    dedupPolicy: "content_entity",
+  },
+  {
+    id: "happy_hours",
+    title: "Happy Hours",
+    acceptedCardKinds: ["happy_hour"],
+    priority: 9,
+    maxCards: 8,
+    hideWhenEmpty: true,
+    dedupPolicy: "content_entity",
+  },
+  {
+    id: "events_popups",
+    title: "Events & Pop-Ups",
+    acceptedCardKinds: ["event"],
+    priority: 10,
+    maxCards: 10,
+    hideWhenEmpty: true,
+    dedupPolicy: "content_entity",
+  },
+  {
+    id: "nearby_restaurants",
+    title: "Nearby Restaurants",
+    acceptedCardKinds: ["restaurant"],
+    priority: 11,
+    maxCards: 10,
+    hideWhenEmpty: true,
+    dedupPolicy: "strict_business",
+  },
+  {
+    id: "trending_this_week",
+    title: "Trending This Week",
+    acceptedCardKinds: ["food_truck", "restaurant", "menu_item", "deal", "event"],
+    priority: 12,
+    maxCards: 10,
+    hideWhenEmpty: true,
+    dedupPolicy: "strict_business",
+  },
+  {
+    id: "new_to_mealscout",
+    title: "New to MealScout",
+    acceptedCardKinds: ["food_truck", "restaurant"],
+    priority: 13,
+    maxCards: 8,
+    hideWhenEmpty: true,
+    dedupPolicy: "strict_business",
+  },
+  {
+    id: "community_picks",
+    title: "Community Picks",
+    acceptedCardKinds: ["community_pick", "food_truck", "restaurant"],
+    priority: 14,
+    maxCards: 10,
+    hideWhenEmpty: true,
+    dedupPolicy: "strict_business",
+  },
+  {
+    id: "worth_discovering",
+    title: "Worth Discovering",
+    acceptedCardKinds: ["food_truck", "restaurant", "map_place", "local_activity"],
+    priority: 15,
+    maxCards: 10,
+    hideWhenEmpty: true,
+    dedupPolicy: "strict_business",
+  },
+];
+
+export type ScoutPrimarySectionId =
+  | ScoutHorizontalRowId
+  | "open_now"
+  | "hot_deals"
+  | "happy_hours"
+  | "events_popups"
+  | "popular_dishes";
+
 export const SCOUT_PRIMARY_SECTION_PRIORITY: ScoutPrimarySectionId[] = [
+  ...SCOUT_HORIZONTAL_ROW_REGISTRY.map((row) => row.id),
   "open_now",
-  "food_trucks_today",
   "hot_deals",
   "happy_hours",
   "events_popups",
   "popular_dishes",
-  "nearby_restaurants",
-  "trending_this_week",
-  "new_to_mealscout",
-  "community_picks",
-  "worth_discovering",
 ];
 
 const TRUCK_TYPES = new Set([

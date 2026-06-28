@@ -22,14 +22,15 @@ for (const routeSnippet of [
 }
 
 for (const requiredScoutSnippet of [
-  'title="Open Now"',
-  'title={DISCOVERY_LAYERS.foodTrucks.title}',
-  'title={DISCOVERY_LAYERS.restaurants.title}',
-  'title={DISCOVERY_LAYERS.trending.title}',
-  'title="New to MealScout"',
-  'title={DISCOVERY_LAYERS.menuItems.title}',
-  'title={DISCOVERY_LAYERS.deals.title}',
-  'title={DISCOVERY_LAYERS.events.title}',
+  'title: "Live Food Trucks Now"',
+  'title: "Open Now Near You"',
+  'title: DISCOVERY_LAYERS.foodTrucks.title',
+  'title: DISCOVERY_LAYERS.restaurants.title',
+  'title: DISCOVERY_LAYERS.trending.title',
+  'title: "New to MealScout"',
+  'title: DISCOVERY_LAYERS.menuItems.title',
+  'title: DISCOVERY_LAYERS.deals.title',
+  'title: DISCOVERY_LAYERS.events.title',
   'const { data: trendingData } = useQuery<ScoutTrendingResponse>({',
   '"/api/public/trending?limit=12&days=7"',
   'function getRestaurantProfilePath(restaurant: RestaurantSummary): string {',

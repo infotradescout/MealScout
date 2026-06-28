@@ -45,7 +45,7 @@ assert.equal(
 
 const sectionAssignments = assignScoutBusinessCardsBySection([
   {
-    id: "open_now",
+    id: "live_trucks_now",
     items: [knownTruck],
     getBusinessKey: (item) => getScoutBusinessKey(item),
   },
@@ -67,7 +67,7 @@ const sectionAssignments = assignScoutBusinessCardsBySection([
 ]);
 
 assert.deepEqual(
-  sectionAssignments.open_now?.map((item) => item.id),
+  sectionAssignments.live_trucks_now?.map((item) => item.id),
   ["blessed-berry-bowls"],
   "The strongest section should keep the truck business card.",
 );
@@ -107,20 +107,26 @@ for (const kind of requiredKinds) {
 }
 
 const requiredScoutRuntimeSnippets = [
-  'import {\n  assignScoutBusinessCardsBySection,',
+  'import {\n  SCOUT_HORIZONTAL_ROW_REGISTRY,',
+  "assignScoutBusinessCardsBySection,",
+  "SCOUT_HORIZONTAL_ROW_REGISTRY",
   'normalizeScoutBusinessKind(source, "restaurant")',
   'const nearbyFoodBusinesses = useMemo<RestaurantSummary[]>(() => {',
   'getScoutRestaurantLikeKind(restaurant) === "restaurant"',
   'getScoutRestaurantLikeKind(restaurant) === "food_truck"',
-  'events={[]}',
-  'deals={[]}',
-  'id: "open_now"',
+  'id: "live_trucks_now"',
   'id: "food_trucks_today"',
+  'id: "open_now_near_you"',
+  'id: "saved_favorites"',
+  'id: "following"',
+  'id: "order_again"',
   'id: "nearby_restaurants"',
   'id: "trending_this_week"',
   'id: "new_to_mealscout"',
   'id: "community_picks"',
   'id: "worth_discovering"',
+  "ScoutHorizontalCategoryRail",
+  "data-scout-horizontal-rail",
   'Food truck',
   'Restaurant',
   'getMenuItemProfilePath(item)',
