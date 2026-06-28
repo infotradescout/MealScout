@@ -1,0 +1,38 @@
+✅ Database connection established successfully
+🌐 trust proxy enabled
+Google OAuth not configured: GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET environment variables are missing
+Facebook OAuth not configured: FACEBOOK_APP_ID and FACEBOOK_APP_SECRET environment variables are missing
+✅ Static compliance pages registered
+✅ Operational endpoints registered
+[schedulers] timezone=America/Chicago marketing_email_window=8:00-20:00
+[schedulers] automated marketing/drip emails disabled (AUTOMATED_MARKETING_EMAILS_ENABLED=true not set)
+✅ Story cron jobs registered
+   POST /api/cron/cleanup-stories - Clean up expired stories
+   POST /api/cron/recalculate-levels - Recalculate reviewer levels
+   Include header: x-cron-secret: <CRON_SECRET>
+✅ All schedulers registered
+Socket.IO server setup complete at default path
+[express] WebSocket server initialized for food truck tracking
+[express] serving on port 5304
+âœ… Admin account already exists
+[seed] Development seed disabled. Set SEED_DEV_DATA=true (and NODE_ENV=development) to enable.
+✅ Database initialization completed successfully
+✅ Schema validation: phone column exists
+✅ Session cleanup completed
+✅ Ops cleanup completed (idempotency=0, rateLimit=1, reportTokens=0)
+auth_user_request { isAuthenticated: false, sessionId: '25c837c6f7' }
+auth_user_unauthenticated { isAuthenticated: false }
+auth_user_request { isAuthenticated: false, sessionId: '295478f0ff' }
+auth_user_unauthenticated { isAuthenticated: false }
+auth_user_request { isAuthenticated: false, sessionId: '60f63b0265' }
+auth_user_unauthenticated { isAuthenticated: false }
+auth_user_request { isAuthenticated: false, sessionId: 'a17a333b1b' }
+auth_user_unauthenticated { isAuthenticated: false }
+auth_user_request { isAuthenticated: false, sessionId: '81ccf0f5ec' }
+auth_user_unauthenticated { isAuthenticated: false }
+auth_user_request { isAuthenticated: false, sessionId: '7efeef0631' }
+auth_user_unauthenticated { isAuthenticated: false }
+auth_user_request { isAuthenticated: false, sessionId: 'e02fbd9aee' }
+auth_user_unauthenticated { isAuthenticated: false }
+auth_user_request { isAuthenticated: false, sessionId: 'b9a7efb5fb' }
+auth_user_unauthenticated { isAuthenticated: false }

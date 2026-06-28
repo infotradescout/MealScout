@@ -1,0 +1,34 @@
+{
+  "geolocationDefault": {
+    "url": "/scout",
+    "width": 390,
+    "overflowX": 0,
+    "mapY": 0,
+    "rows": [],
+    "links": {
+      "truck": null,
+      "restaurant": null
+    },
+    "pins": 0,
+    "searchMode": "default",
+    "hasSearchFilters": false
+  },
+  "searchRestaurants": {
+    "url": "/scout",
+    "width": 390,
+    "overflowX": 0,
+    "mapY": 0,
+    "rows": [],
+    "links": {
+      "truck": null,
+      "restaurant": null
+    },
+    "pins": 0,
+    "searchMode": "active",
+    "hasSearchFilters": true
+  },
+  "clicked": {
+    "truckHref": null,
+    "restaurantHref": null
+  }
+}

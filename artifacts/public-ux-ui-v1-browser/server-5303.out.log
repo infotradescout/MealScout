@@ -1,0 +1,35 @@
+✅ Database connection established successfully
+🌐 trust proxy enabled
+Google OAuth not configured: GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET environment variables are missing
+Facebook OAuth not configured: FACEBOOK_APP_ID and FACEBOOK_APP_SECRET environment variables are missing
+✅ Static compliance pages registered
+✅ Operational endpoints registered
+[schedulers] timezone=America/Chicago marketing_email_window=8:00-20:00
+[schedulers] automated marketing/drip emails disabled (AUTOMATED_MARKETING_EMAILS_ENABLED=true not set)
+✅ Story cron jobs registered
+   POST /api/cron/cleanup-stories - Clean up expired stories
+   POST /api/cron/recalculate-levels - Recalculate reviewer levels
+   Include header: x-cron-secret: <CRON_SECRET>
+✅ All schedulers registered
+Socket.IO server setup complete at default path
+[express] WebSocket server initialized for food truck tracking
+[express] serving on port 5303
+âœ… Admin account already exists
+[seed] Development seed disabled. Set SEED_DEV_DATA=true (and NODE_ENV=development) to enable.
+✅ Database initialization completed successfully
+✅ Schema validation: phone column exists
+✅ Session cleanup completed
+auth_user_request { isAuthenticated: false, sessionId: '2d3c1c1b0d' }
+auth_user_unauthenticated { isAuthenticated: false }
+auth_user_request { isAuthenticated: false, sessionId: 'eea9c41940' }
+auth_user_unauthenticated { isAuthenticated: false }
+auth_user_request { isAuthenticated: false, sessionId: '087c505811' }
+auth_user_unauthenticated { isAuthenticated: false }
+auth_user_request { isAuthenticated: false, sessionId: 'cf6580391b' }
+auth_user_unauthenticated { isAuthenticated: false }
+auth_user_request { isAuthenticated: false, sessionId: '4ff3062c4d' }
+auth_user_unauthenticated { isAuthenticated: false }
+auth_user_request { isAuthenticated: false, sessionId: '008f25f733' }
+auth_user_unauthenticated { isAuthenticated: false }
+auth_user_request { isAuthenticated: false, sessionId: '679753546c' }
+auth_user_unauthenticated { isAuthenticated: false }
