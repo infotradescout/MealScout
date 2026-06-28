@@ -1,0 +1,90 @@
+{
+  "desktopMetrics": {
+    "url": "/scout",
+    "width": 1280,
+    "overflowX": 0,
+    "mapY": 0,
+    "rows": [],
+    "searchMode": "default",
+    "hasSearchFilters": false,
+    "chipsVisibleByDefault": false,
+    "summary": "0 local food signals"
+  },
+  "mobileDefault": {
+    "url": "/scout",
+    "width": 390,
+    "overflowX": 0,
+    "mapY": 0,
+    "rows": [],
+    "searchMode": "default",
+    "hasSearchFilters": false,
+    "chipsVisibleByDefault": false,
+    "summary": "0 local food signals"
+  },
+  "afterType": {
+    "url": "/scout",
+    "width": 390,
+    "overflowX": 0,
+    "mapY": 0,
+    "rows": [],
+    "searchMode": "active",
+    "hasSearchFilters": true,
+    "chipsVisibleByDefault": false,
+    "summary": "0 matching map pins"
+  },
+  "afterBlur": {
+    "url": "/scout",
+    "width": 390,
+    "overflowX": 0,
+    "mapY": 0,
+    "rows": [],
+    "searchMode": "active",
+    "hasSearchFilters": true,
+    "chipsVisibleByDefault": false,
+    "summary": "0 matching map pins"
+  },
+  "afterEnter": {
+    "url": "/scout",
+    "width": 390,
+    "overflowX": 0,
+    "mapY": 0,
+    "rows": [],
+    "searchMode": "active",
+    "hasSearchFilters": true,
+    "chipsVisibleByDefault": false,
+    "summary": "0 matching map pins"
+  },
+  "afterScroll": {
+    "url": "/scout",
+    "width": 390,
+    "overflowX": 0,
+    "mapY": 0,
+    "rows": [],
+    "searchMode": "active",
+    "hasSearchFilters": true,
+    "chipsVisibleByDefault": false,
+    "summary": "0 matching map pins"
+  },
+  "afterMapTap": {
+    "url": "/scout",
+    "width": 390,
+    "overflowX": 0,
+    "mapY": 0,
+    "rows": [],
+    "searchMode": "active",
+    "hasSearchFilters": true,
+    "chipsVisibleByDefault": false,
+    "summary": "0 matching map pins"
+  },
+  "afterClose": {
+    "url": "/scout",
+    "width": 390,
+    "overflowX": 0,
+    "mapY": 0,
+    "rows": [],
+    "searchMode": "default",
+    "hasSearchFilters": false,
+    "chipsVisibleByDefault": false,
+    "summary": "0 local food signals"
+  }
+}
