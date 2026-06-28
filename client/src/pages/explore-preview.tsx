@@ -22,7 +22,6 @@ import {
   MessageCircle,
   Minimize2,
   Navigation2,
-  Search,
   Tag,
   TrendingUp,
   Users,
@@ -3450,7 +3449,7 @@ export default function ExplorePreview() {
       />
 
       <main
-        className={`relative z-10 overflow-x-hidden ${
+        className={`relative z-10 overflow-x-hidden md:-mt-16 ${
           sheetState === "fullMap"
             ? ""
             : "pb-44 md:mx-auto md:max-w-[640px] md:min-h-screen"
@@ -3462,56 +3461,6 @@ export default function ExplorePreview() {
               : "calc(8.5rem + env(safe-area-inset-bottom, 0px))",
         }}
       >
-        {sheetState !== "fullMap" ? (
-          <section className="px-3 pt-3 pb-2">
-            <div className="overflow-hidden rounded-[1.45rem] border border-white/10 bg-[#120d0c]/84 p-4 shadow-[0_18px_56px_rgba(0,0,0,0.28)]">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-[11px] font-black uppercase tracking-[0.18em] text-orange-200/72">
-                    Scout
-                  </p>
-                  <h1 className="mt-2 text-2xl font-black tracking-tight text-white">
-                    {hasResolvedLocation
-                      ? `What is worth eating in ${shortLocation}?`
-                      : "Find what is worth eating nearby."}
-                  </h1>
-                  <p className="mt-2 text-sm leading-relaxed text-white/72">
-                    Open now, trending this week, fresh dishes, deals, and food events in one local view.
-                  </p>
-                </div>
-                {locationStatus !== "ready" ? (
-                  <button
-                    type="button"
-                    onClick={requestLocation}
-                    className="shrink-0 rounded-full bg-white/92 px-3 py-1.5 text-[11px] font-black text-stone-900 ring-1 ring-white/40"
-                  >
-                    Use location
-                  </button>
-                ) : null}
-              </div>
-              <div className="mt-4 flex flex-wrap gap-2">
-                <Link
-                  href="/search"
-                  className="inline-flex items-center gap-2 rounded-full bg-[#ff6a2d] px-3.5 py-2 text-xs font-black text-white ring-1 ring-orange-200/25"
-                >
-                  <Search className="h-3.5 w-3.5" aria-hidden="true" />
-                  Search dishes, trucks, places, or events
-                </Link>
-                <button
-                  type="button"
-                  onClick={openScoutMap}
-                  className="inline-flex items-center gap-2 rounded-full bg-white/8 px-3.5 py-2 text-xs font-black text-white ring-1 ring-white/14"
-                >
-                  <MapPin className="h-3.5 w-3.5 text-orange-200" aria-hidden="true" />
-                  Open map
-                </button>
-                <span className="inline-flex items-center rounded-full bg-white/6 px-3 py-2 text-[11px] font-bold text-white/72 ring-1 ring-white/10">
-                  {hasResolvedLocation ? shortLocation : "Your area"} · {Math.round(discoveryRadiusKm)} km
-                </span>
-              </div>
-            </div>
-          </section>
-        ) : null}
         {/* ============================================================
              SCOUT SURFACE
              Default: compact map accessory.

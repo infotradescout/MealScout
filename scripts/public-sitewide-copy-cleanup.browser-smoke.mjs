@@ -148,12 +148,17 @@ async function resolveWorkingRestaurantRoute(page, baseUrl) {
 
 async function verifyScout(page, baseUrl, viewportLabel) {
   await openRoute(page, baseUrl, "/scout");
-  await expectVisibleText(page, "Search dishes, trucks, places, or events");
+  await page.locator('[data-testid="scout-map-container"]').first().waitFor({ state: "visible", timeout: 15000 });
   const bodyText = normalizeText(await page.locator("body").innerText());
   assert(
-    bodyText.includes("find what is worth eating nearby.") ||
-      bodyText.includes("what is worth eating in"),
-    `${viewportLabel} /scout did not render the canonical Scout header`,
+    !bodyText.includes("find what is worth eating nearby.") &&
+      !bodyText.includes("what is worth eating in"),
+    `${viewportLabel} /scout rendered the removed Scout hero/header copy`,
+  );
+  assert(
+    await page.locator("[data-scout-row-id]").count() > 0 ||
+      bodyText.includes("the local board is quiet right now."),
+    `${viewportLabel} /scout did not render discovery rails or a sparse-state body`,
   );
   assert(
     bodyText.includes("open now") || bodyText.includes("the local board is quiet right now."),

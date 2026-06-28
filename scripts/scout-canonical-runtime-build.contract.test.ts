@@ -36,17 +36,27 @@ for (const requiredScoutSnippet of [
   'function getRestaurantProfilePath(restaurant: RestaurantSummary): string {',
   'function getTruckProfilePath(truck: LiveTruckSummary): string {',
   'function getMenuItemProfilePath(item: LocalMenuItemFeedItem): string {',
-  'What is worth eating in ${shortLocation}?',
-  'Search dishes, trucks, places, or events',
+  'data-testid="scout-map-container"',
 ]) {
   if (!scoutPage.includes(requiredScoutSnippet)) {
     throw new Error(`Canonical Scout page missing snippet: ${requiredScoutSnippet}`);
   }
 }
 
+const mainStart = scoutPage.indexOf("<main");
+const mapIndex = scoutPage.indexOf('data-testid="scout-map-container"');
+const railsIndex = scoutPage.indexOf("<ActiveSceneContent");
+if (mainStart < 0 || mapIndex < 0 || railsIndex < 0 || !(mainStart < mapIndex && mapIndex < railsIndex)) {
+  throw new Error("Canonical Scout page must render the map as the first main surface before discovery rails.");
+}
+
 for (const forbiddenScoutSnippet of [
   "Scout • Customer discovery",
   "Community activity is still building here.",
+  "What is worth eating in",
+  "Find what is worth eating nearby.",
+  "Open now, trending this week, fresh dishes, deals, and food events in one local view.",
+  "Search dishes, trucks, places, or events",
 ]) {
   if (scoutPage.includes(forbiddenScoutSnippet)) {
     throw new Error(`Canonical Scout page must not include stale copy: ${forbiddenScoutSnippet}`);
