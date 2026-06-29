@@ -90,6 +90,25 @@ for (const snippet of [
   "dealRailCards(hotDealCandidates)",
   'dealRailCards(happyHourDeals, "happy_hour")',
   "eventRailCards(visibleSceneEvents)",
+  "function ScoutFirstScreenDecisionStack(",
+  'data-scout-first-screen-decision-stack="true"',
+  'data-scout-immediate-compact-card="true"',
+  "const highPriorityDecisionItems: ScoutImmediateDecisionItem[] = [",
+  'sourceRowId: "live_trucks_now" as const',
+  'sourceRowId: "food_trucks_today" as const',
+  'sourceRowId: "open_now_near_you" as const',
+  'sourceRowId: "community_picks" as const',
+  'sourceRowId: "trending_this_week" as const',
+  'sourceRowId: "new_to_mealscout" as const',
+  'sourceRowId: "popular_dishes" as const',
+  'sourceRowId: "hot_deals" as const',
+  'sourceRowId: "happy_hours" as const',
+  'sourceRowId: "events_popups" as const',
+  'sourceRowId: "nearby_restaurants" as const',
+  "highPriorityDecisionItems.length > 0",
+  "firstScreenSuppressedBusinessKey",
+  "suppressFirstScreenBusiness",
+  'placement="inline"',
   "overflow-x-hidden",
   'data-scout-mobile-thirds-map="true"',
   'const compactMapHeight = "clamp(250px, 32dvh, 310px)";',
@@ -100,10 +119,35 @@ for (const snippet of [
   assert.ok(scoutPage.includes(snippet), `Scout horizontal rails runtime missing snippet: ${snippet}`);
 }
 
+const immediateStackStart = scoutPage.indexOf("function ScoutFirstScreenDecisionStack(");
+const activeSceneStart = scoutPage.indexOf("function ActiveSceneContent(");
+assert.ok(
+  immediateStackStart >= 0 && activeSceneStart > immediateStackStart,
+  "Scout first-screen decision stack must be defined before the full rail runtime.",
+);
+const immediateStackSource = scoutPage.slice(immediateStackStart, activeSceneStart);
+assert.ok(
+  !immediateStackSource.includes("NearbyRestaurantCard"),
+  "Immediate decision stack must use compact cards instead of the full NearbyRestaurantCard rail layout.",
+);
+assert.ok(
+  scoutPage.includes(
+    "<ScoutFirstScreenDecisionStack items={firstScreenDecisionItems} />\n        {renderSearchDock?.()}\n        {scoutRows.map",
+  ),
+  "Scout default flow must render compact decision stack, then inline search, then full rails.",
+);
+assert.ok(
+  scoutPage.includes(
+    "highPriorityDecisionItems.length > 0\n        ? []\n        : nearbyRestaurantCards.map",
+  ),
+  "Nearby Restaurants may only seed the immediate stack when stronger real signals are empty.",
+);
+
 for (const staleSnippet of [
   "<OpenNowSection",
   "<ScoutSceneOptionsBar",
   "<ScoutActiveSceneIntro",
+  "<FilterNearbyChips",
   'events={[]}',
   'deals={[]}',
 ]) {
@@ -118,6 +162,9 @@ for (const snippet of [
   "event.preventDefault();",
   "onQueryChange(event.target.value)",
   "SEARCH_FILTERS",
+  'placement?: "fixed" | "inline";',
+  'data-scout-search-placement={placement}',
+  'placement === "inline"',
 ]) {
   assert.ok(searchDock.includes(snippet), `Scout search dock missing persistent search-mode snippet: ${snippet}`);
 }
