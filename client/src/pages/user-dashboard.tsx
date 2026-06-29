@@ -228,7 +228,7 @@ export default function UserDashboard() {
           className="bg-primary text-black font-bold uppercase tracking-[0.2em] text-[10px] rounded-xl px-8 py-6"
           data-testid="button-sign-in"
         >
-          <Link href="/login">Sign In</Link>
+          <Link href="/login?redirect=%2Fuser-dashboard">Sign In</Link>
         </Button>
       </div>
     );
