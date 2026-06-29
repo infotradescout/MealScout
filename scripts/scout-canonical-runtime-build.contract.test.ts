@@ -24,7 +24,7 @@ for (const routeSnippet of [
 for (const requiredScoutSnippet of [
   'title: "Now Serving Trucks"',
   'title: "Open Now Near You"',
-  'title: "For You Nearby"',
+  'title: "Food Trucks Today"',
   'title: DISCOVERY_LAYERS.restaurants.title',
   "title: \"What's Hot\"",
   'title: "Newest on MealScout"',
@@ -37,6 +37,13 @@ for (const requiredScoutSnippet of [
   'function getTruckProfilePath(truck: LiveTruckSummary): string {',
   'function getMenuItemProfilePath(item: LocalMenuItemFeedItem): string {',
   'data-testid="scout-map-container"',
+  "function ScoutFirstScreenDecisionStack(",
+  'data-scout-first-screen-decision-stack="true"',
+  'data-scout-immediate-compact-card="true"',
+  'placement="inline"',
+  "renderSearchDock?.()",
+  "No nearby food signals yet",
+  "Try search or move the map",
 ]) {
   if (!scoutPage.includes(requiredScoutSnippet)) {
     throw new Error(`Canonical Scout page missing snippet: ${requiredScoutSnippet}`);
@@ -77,6 +84,10 @@ for (const copySnippet of [
 
 if (!scoutSearchDock.includes("Search dishes, cravings, places, trucks, or events")) {
   throw new Error("Scout search dock must guide dish/craving/place/truck/event discovery.");
+}
+
+if (!scoutSearchDock.includes('data-scout-search-placement={placement}')) {
+  throw new Error("Scout search dock must expose fixed vs inline placement for the first-screen decision stack.");
 }
 
 for (const publicProfileSnippet of [

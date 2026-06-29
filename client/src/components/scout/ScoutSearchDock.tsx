@@ -30,6 +30,7 @@ export function ScoutSearchDock({
   query,
   activeFilter,
   resultSummary,
+  placement = "fixed",
   onOpen,
   onClose,
   onQueryChange,
@@ -39,13 +40,27 @@ export function ScoutSearchDock({
   query: string;
   activeFilter: ScoutSearchFilterId | null;
   resultSummary?: string | null;
+  placement?: "fixed" | "inline";
   onOpen: () => void;
   onClose: () => void;
   onQueryChange: (value: string) => void;
   onFilterChange: (filter: ScoutSearchFilterId | null) => void;
 }) {
+  const shellClassName =
+    placement === "inline"
+      ? "px-4 pb-4 md:mx-auto md:max-w-[608px]"
+      : "fixed inset-x-4 z-40 md:mx-auto md:max-w-[608px]";
+  const shellStyle =
+    placement === "inline"
+      ? undefined
+      : { bottom: "calc(env(safe-area-inset-bottom, 0px) + 5.1rem)" };
+
   return (
-    <div className="fixed inset-x-4 z-40 md:mx-auto md:max-w-[608px]" style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 5.1rem)" }}>
+    <div
+      className={shellClassName}
+      style={shellStyle}
+      data-scout-search-placement={placement}
+    >
       <form
         role="search"
         data-scout-search-mode={searchMode ? "active" : "default"}
