@@ -379,6 +379,7 @@ function Router() {
             <Route path="/events/public" component={EventsPage} />
             <Route path="/event/:slug" component={EventDetailPage} />
             <Route path="/dashboard" component={DashboardRouter} />
+            <Route path="/user-dashboard" component={UserDashboard} />
             <Route path="/food-trucks/:citySlug" component={CityLanding} />
             <Route
               path="/food-trucks/:citySlug/:cuisineSlug"
