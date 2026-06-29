@@ -96,7 +96,7 @@ type MapBranding = {
 const resolveMapBranding = (): MapBranding => {
   return {
     appName: "MealScout",
-    mapName: "MealScout Map",
+    mapName: "Nearby Food Map",
     canonicalBaseUrl: "https://www.mealscout.us",
     seoTitle: "MealScout Map | Nearby Food Trucks and Local Food",
     seoDescription:
@@ -105,9 +105,9 @@ const resolveMapBranding = (): MapBranding => {
       "food truck map near me, local food truck map, nearby food trucks, interactive food truck map, food truck parking map, local dining map",
     mapSchemaDescription:
       "Interactive truck-first map for nearby food trucks and local food spots.",
-    exploreHeading: "Truck-First Map",
+    exploreHeading: "Worth discovering",
     exploreDescription:
-      "See nearby trucks, places, and local food stops.",
+      "Jump back to Scout, refresh your location, or keep browsing nearby food on the map.",
   };
 };
 
@@ -1534,7 +1534,7 @@ export default function MapPage() {
       (error) => {
         console.log("Location error:", error);
         setLocationError(
-          "Location is off or imprecise. Enable precise location to see what's nearby.",
+          "Turn on precise location to see nearby food on the map.",
         );
       },
       { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 },
@@ -1561,7 +1561,7 @@ export default function MapPage() {
       stopLocationWatch();
       if (!userLocationRef.current) {
         setLocationError(
-          "Could not lock exact location. Check browser location permission and precision settings.",
+          "We couldn't lock your location. Check browser location permission and precision settings, or keep browsing Scout.",
         );
       }
     }, 25000);
@@ -2797,12 +2797,14 @@ export default function MapPage() {
   const userMapAttribution =
     '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
   const headerSubtitle = isLocating
-    ? "Locating live trucks, host spots, and supplier stops..."
+    ? "Looking for nearby food trucks, places to eat, and local stops..."
+    : locationError
+      ? "Turn on precise location to see nearby food on the map."
     : hasLocation && activityPins > 0
-      ? "Live trucks, hosts, and supplier stops nearby"
+      ? "See nearby food trucks, places to eat, and local food stops around you."
       : hasLocation
-        ? "No live trucks, hosts, or suppliers nearby right now"
-        : "Set your location to see live trucks, hosts, and suppliers.";
+        ? "Not much is pinned in this part of the map yet."
+        : "Turn on location to see nearby food trucks, places to eat, and local stops.";
 
   const handleRefreshHostParking = async () => {
     await queryClient.invalidateQueries({
@@ -3622,19 +3624,17 @@ export default function MapPage() {
     {
       href: "/scout",
       title: "Open Scout",
-      description: `Browse truck-first early access coverage in ${mapBranding.appName}.`,
+      description: "Browse what's open, new, and worth trying nearby.",
     },
     {
-      href: "/restaurant-signup?businessType=food_truck",
-      title: "List a Food Truck",
-      description:
-        "Add a food truck to the verified early access intake lane.",
+      href: "/search",
+      title: "Browse nearby",
+      description: "Scan nearby food spots, trucks, and deals in list form.",
     },
     {
-      href: "/claim-truck",
-      title: "Claim a Truck",
-      description:
-        "Claim or update a food truck profile without opening broader surfaces.",
+      href: "/trending",
+      title: "What's hot",
+      description: "See popular picks and jump back into the map when something looks good.",
     },
   ];
   const trendingLinks: Array<{ href: string; title: string; context: string | null }> = [];
@@ -3717,11 +3717,9 @@ export default function MapPage() {
               <h1 className="text-xl font-bold text-foreground">
                 {mapBranding.mapName}
               </h1>
-              {showMapDiagnostics ? (
-                <p className="line-clamp-2 text-sm text-muted-foreground">
-                  {headerSubtitle}
-                </p>
-              ) : null}
+              <p className="line-clamp-2 text-sm text-muted-foreground">
+                {headerSubtitle}
+              </p>
             </div>
           </div>
           <div className="flex shrink-0 flex-wrap justify-end gap-2">
@@ -3771,13 +3769,42 @@ export default function MapPage() {
           </div>
         </div>
 
+        <div className="flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            onClick={requestUserLocation}
+            disabled={isLocating}
+            data-testid="button-use-my-location"
+          >
+            <NavigationIcon className="mr-2 h-4 w-4" />
+            {isLocating
+              ? "Locating..."
+              : hasLocation
+                ? "Refresh location"
+                : "Use my location"}
+          </Button>
+          <Button asChild variant="outline" size="sm">
+            <Link href="/scout">Open Scout</Link>
+          </Button>
+          {activityPins > 0 ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowList(true)}
+              data-testid="button-browse-nearby"
+            >
+              Browse nearby
+            </Button>
+          ) : null}
+        </div>
+
         {/* Location Status */}
-        {showMapDiagnostics && locationError && (
+        {locationError && (
           <div
-            className="text-xs text-[color:var(--status-error)] mb-4 bg-[color:var(--status-error)]/10 border border-[color:var(--status-error)]/30 rounded p-2"
+            className="mb-4 rounded-xl border border-[color:var(--status-warning)]/30 bg-[color:var(--status-warning)]/10 px-3 py-2 text-xs text-[color:var(--text-primary)]"
             role="alert"
           >
-            Warning: {locationError}
+            {locationError}
           </div>
         )}
         {showMapDiagnostics && googleMapsRuntimeError && (
@@ -4105,11 +4132,24 @@ export default function MapPage() {
               >
                 <div className="pointer-events-auto max-w-xs rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)]/95 px-4 py-3 text-center shadow-clean backdrop-blur">
                   <p className="text-sm font-medium text-foreground mb-1">
-                    No trucks, events, hosts, or suppliers in this area
+                    No nearby food is pinned in this part of the map yet
                   </p>
-                  <p className="text-xs text-muted-foreground">
-                    Zoom out or pan the map to explore another area.
+                  <p className="text-xs text-muted-foreground mb-3">
+                    Pan or zoom out to check another area, or open Scout for more food options nearby.
                   </p>
+                  <div className="flex flex-wrap justify-center gap-2">
+                    <Button asChild size="sm">
+                      <Link href="/scout">Open Scout</Link>
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={requestUserLocation}
+                      disabled={isLocating}
+                    >
+                      {isLocating ? "Locating..." : "Use my location"}
+                    </Button>
+                  </div>
                 </div>
               </div>
             )}
@@ -4697,7 +4737,7 @@ export default function MapPage() {
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
               {visibleLiveTrucks.length} trucks · {visibleHostLocations.length}{" "}
-              hosts · limited early access coverage
+              hosts visible in this part of the map
             </p>
           </header>
 

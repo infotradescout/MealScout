@@ -169,8 +169,8 @@ async function verifyScout(page, baseUrl, viewportLabel) {
 
 async function verifyMap(page, baseUrl, viewportLabel) {
   await openRoute(page, baseUrl, "/map");
-  await expectVisibleText(page, "Truck-First Map");
-  await expectVisibleText(page, "See nearby trucks, places, and local food stops.");
+  await expectVisibleText(page, "Nearby Food Map");
+  await expectVisibleText(page, "Open Scout");
   await verifyNoProhibitedText(page, `${viewportLabel} /map`);
 }
 
