@@ -14,7 +14,8 @@ function isMealScoutSameOriginPath(path: string): boolean {
     normalizedPath.startsWith("/api/auth/") ||
     normalizedPath.startsWith("/api/admin/") ||
     normalizedPath.startsWith("/api/affiliate/") ||
-    normalizedPath.startsWith("/api/business-access/")
+    normalizedPath.startsWith("/api/business-access/") ||
+    normalizedPath.startsWith("/api/location/context")
   ) {
     return true;
   }
