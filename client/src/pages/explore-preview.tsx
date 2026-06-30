@@ -30,7 +30,10 @@ import {
 } from "lucide-react";
 
 import { useAuth } from "@/hooks/useAuth";
-import { useEffectiveLocationContext } from "@/hooks/useEffectiveLocationContext";
+import {
+  useEffectiveLocationContext,
+  type EffectiveLocationContext,
+} from "@/hooks/useEffectiveLocationContext";
 import { getReverseGeocodedLocationName } from "@/utils/locationUtils";
 import { SEOHead } from "@/components/seo-head";
 import { ScoutMapHero } from "@/components/scout/ScoutMapHero";
@@ -71,6 +74,12 @@ const ThemedScoutMap = lazy(() => import("@/components/maps/themed-scout-map"));
  *   - /atmospheric/mealscout-welcome-map-night.png (welcome map-pin scene)
  */
 const SCOUT_BACKGROUND_IMAGE = "/atmospheric/foodpark-night-hero.jpg";
+const PENSACOLA_LAUNCH_MARKET = {
+  label: "Pensacola, FL",
+  lat: 30.4213,
+  lng: -87.2169,
+  marketKey: "pensacola-fl",
+} as const;
 
 type MapRuntimeResponse = {
   hasGoogleMapsKey: boolean;
@@ -1073,6 +1082,11 @@ function formatScoutCount(count: number, singular: string, plural: string): stri
   return `${count} ${count === 1 ? singular : plural}`;
 }
 
+function formatScoutResultSummary(count: number): string {
+  if (count <= 0) return "Try search, the map, or a wider area";
+  return `${count} nearby food ${count === 1 ? "result" : "results"}`;
+}
+
 function getRestaurantArea(restaurant: RestaurantSummary): string | null {
   return restaurant.neighborhood || restaurant.city || null;
 }
@@ -1850,7 +1864,16 @@ function shiftCenterForRightQuadrant(
 
 export default function ExplorePreview() {
   const { user } = useAuth();
-  const { effectiveLocationContext } = useEffectiveLocationContext();
+  const authEffectiveLocationContext = useMemo(
+    () =>
+      (((user as { effectiveLocationContext?: EffectiveLocationContext | null } | null)
+        ?.effectiveLocationContext ?? null) as EffectiveLocationContext | null),
+    [user],
+  );
+  const { effectiveLocationContext: fetchedLocationContext } =
+    useEffectiveLocationContext(Boolean(user?.id) && !authEffectiveLocationContext);
+  const effectiveLocationContext =
+    authEffectiveLocationContext ?? fetchedLocationContext;
   const [location, navigate] = useWouterLocation();
 
   const firstName =
@@ -1930,25 +1953,39 @@ export default function ExplorePreview() {
   const previewLocation = useMemo(
     () =>
       isPensacolaScoutPreview
-        ? { label: "Pensacola", lat: 30.4213, lng: -87.2169, source: "admin_preview" as const }
+        ? {
+            label: PENSACOLA_LAUNCH_MARKET.label,
+            lat: PENSACOLA_LAUNCH_MARKET.lat,
+            lng: PENSACOLA_LAUNCH_MARKET.lng,
+            source: "admin_preview" as const,
+          }
         : null,
     [isPensacolaScoutPreview],
   );
   const manualSelectedLocation = null;
   const savedLocation = useMemo(() => {
+    if (!effectiveLocationContext) return null;
     const lat = Number(effectiveLocationContext?.latitude);
     const lng = Number(effectiveLocationContext?.longitude);
     const hasCoords = Number.isFinite(lat) && Number.isFinite(lng);
-    if (!effectiveLocationContext) return null;
-    if (!hasCoords) return null;
     const city = String(effectiveLocationContext.city || "").trim();
     const state = String(effectiveLocationContext.state || "").trim();
-    const label = [city, state].filter(Boolean).join(", ") || "Saved market";
+    const marketKey = String(effectiveLocationContext.marketKey || "")
+      .trim()
+      .toLowerCase();
+    const isPensacolaDefault =
+      effectiveLocationContext.source === "super_admin_default" ||
+      marketKey === PENSACOLA_LAUNCH_MARKET.marketKey ||
+      (city.toLowerCase() === "pensacola" && state.toLowerCase() === "fl");
+    if (!hasCoords && !isPensacolaDefault) return null;
+    const label =
+      [city, state].filter(Boolean).join(", ") ||
+      (isPensacolaDefault ? PENSACOLA_LAUNCH_MARKET.label : "Saved market");
     return {
       label,
-      lat,
-      lng,
-      source: "saved" as const,
+      lat: hasCoords ? lat : PENSACOLA_LAUNCH_MARKET.lat,
+      lng: hasCoords ? lng : PENSACOLA_LAUNCH_MARKET.lng,
+      source: isPensacolaDefault ? "super_admin_default" as const : "saved" as const,
     };
   }, [effectiveLocationContext]);
   const fallbackLocation = null;
@@ -2032,10 +2069,13 @@ export default function ExplorePreview() {
   }, [isPensacolaScoutPreview, isScoutPreviewEligible, location, normalizedUserType]);
 
   useEffect(() => {
+    if (savedLocation?.source === "super_admin_default") {
+      setLocationStatus("ready");
+    }
     if (!isPensacolaScoutPreview || !previewLocation) return;
     setLocationStatus("ready");
     setMapCenter({ lat: previewLocation.lat, lng: previewLocation.lng });
-  }, [isPensacolaScoutPreview, previewLocation]);
+  }, [isPensacolaScoutPreview, previewLocation, savedLocation?.source]);
 
   const requestLocation = useCallback(() => {
     if (isPensacolaScoutPreview && previewLocation) {
@@ -2090,8 +2130,9 @@ export default function ExplorePreview() {
 
   // Auto-request on mount
   useEffect(() => {
+    if (savedLocation?.source === "super_admin_default") return;
     requestLocation();
-  }, [requestLocation]);
+  }, [requestLocation, savedLocation?.source]);
 
   const updateDiscoveryRadiusKm = useCallback((value: number) => {
     const nextRadius = clampDiscoveryRadiusKm(value);
@@ -3541,7 +3582,10 @@ export default function ExplorePreview() {
   const showTopLocalFavoritesSection =
     (isLowActivity || activeSceneLaneId === "community") &&
     topLocalFavoriteRestaurants.length > 0;
-  const compactMapHeight = "clamp(250px, 32dvh, 310px)";
+  const isThinScoutViewport = isLowActivity && localActivityCount <= 1;
+  const compactMapHeight = isThinScoutViewport
+    ? "clamp(208px, 24dvh, 238px)"
+    : "clamp(250px, 32dvh, 310px)";
   const collapsedMapClass = isHighActivity
     ? "mx-0 mt-0 rounded-b-[2rem] ring-1 ring-orange-200/14 bg-[#070707]"
     : "mx-0 mt-0 rounded-b-[1.8rem] ring-1 ring-white/12 bg-[#0b0908]";
@@ -4037,7 +4081,7 @@ export default function ExplorePreview() {
                   resultSummary={
                     scoutSearchMode
                       ? `${sceneFilteredMapMarkers.filter((marker) => marker.kind !== "user").length} matching map pins`
-                      : `${localActivityCount} local food signals`
+                      : formatScoutResultSummary(localActivityCount)
                   }
                   onOpen={() => setScoutSearchMode(true)}
                   onClose={closeScoutSearch}
@@ -4386,8 +4430,10 @@ function ScoutHorizontalCategoryRail({
 
 function ScoutFirstScreenDecisionStack({
   items,
+  thinMarket,
 }: {
   items: ScoutImmediateDecisionItem[];
+  thinMarket: boolean;
 }) {
   const primary = items[0] ?? null;
 
@@ -4405,6 +4451,7 @@ function ScoutFirstScreenDecisionStack({
           <p className="mt-1 text-sm font-semibold text-white/70">
             Try search or move the map
           </p>
+          <ScoutRecoveryActions className="mt-3" />
         </div>
       </section>
     );
@@ -4431,8 +4478,47 @@ function ScoutFirstScreenDecisionStack({
           </span>
         </div>
         <ScoutImmediateCompactCard item={primary} />
+        {thinMarket ? (
+          <div
+            className="mt-3 rounded-2xl bg-white/[0.045] px-3 py-3 ring-1 ring-white/10"
+            data-testid="scout-thin-market-state"
+          >
+            <p className="text-sm font-black text-white">
+              Coverage is still thin here, so Scout is showing the closest real place first.
+            </p>
+            <p className="mt-1 text-xs font-semibold leading-relaxed text-white/62">
+              Browse nearby, open the map, or check trending while you widen the board.
+            </p>
+            <ScoutRecoveryActions className="mt-3" />
+          </div>
+        ) : null}
       </div>
     </section>
+  );
+}
+
+function ScoutRecoveryActions({ className = "" }: { className?: string }) {
+  return (
+    <div className={`flex flex-wrap gap-2 ${className}`.trim()}>
+      <Link
+        href="/search"
+        className="rounded-full bg-[#ff7945] px-3 py-1.5 text-[11px] font-black text-white ring-1 ring-white/20"
+      >
+        Browse nearby
+      </Link>
+      <Link
+        href="/map"
+        className="rounded-full bg-white/[0.06] px-3 py-1.5 text-[11px] font-black text-white/90 ring-1 ring-white/16"
+      >
+        View map
+      </Link>
+      <Link
+        href="/trending"
+        className="rounded-full bg-white/[0.06] px-3 py-1.5 text-[11px] font-black text-white/90 ring-1 ring-white/16"
+      >
+        See trending
+      </Link>
+    </div>
   );
 }
 
@@ -4555,16 +4641,29 @@ function CompactDecisionCardShell({
   primaryActionLabel: string;
   directionsUrl?: string | null;
 }) {
+  const [imageFailed, setImageFailed] = useState(false);
+  const showImage = Boolean(imageUrl) && !imageFailed;
   return (
     <div
       className="flex min-h-[82px] items-center gap-3 rounded-[0.9rem] bg-white/[0.055] p-2.5 ring-1 ring-white/10"
       data-scout-immediate-compact-card="true"
     >
       <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white/[0.07] ring-1 ring-white/10">
-        {imageUrl ? (
-          <img src={imageUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
+        {showImage ? (
+          <img
+            src={imageUrl || undefined}
+            alt=""
+            className="h-full w-full object-cover"
+            loading="lazy"
+            onError={() => setImageFailed(true)}
+          />
         ) : (
-          fallbackIcon
+          <div
+            className="flex h-full w-full items-center justify-center bg-[radial-gradient(circle_at_top,rgba(255,153,92,0.18),rgba(255,255,255,0.02))]"
+            data-testid="scout-compact-card-image-fallback"
+          >
+            {fallbackIcon}
+          </div>
         )}
       </div>
       <div className="min-w-0 flex-1">
@@ -4694,6 +4793,7 @@ function ActiveSceneContent({
   scoutSearchIntent: ScoutSearchIntent;
   renderSearchDock?: () => ReactNode;
 }) {
+  const isLowActivityLane = scoutActivityMode === "low_activity";
   if (laneId === "for_you") {
     type ScoutBusinessSectionCard =
       | { cardType: "truck"; truck: LiveTruckSummary }
@@ -4979,7 +5079,10 @@ function ActiveSceneContent({
     if (!hasForYouSections) {
       return (
         <>
-          <ScoutFirstScreenDecisionStack items={firstScreenDecisionItems} />
+          <ScoutFirstScreenDecisionStack
+            items={firstScreenDecisionItems}
+            thinMarket={isLowActivityLane && firstScreenDecisionItems.length <= 1}
+          />
           {renderSearchDock?.()}
           <ScoutSceneEmptyState laneId="for_you" />
         </>
@@ -5201,7 +5304,10 @@ function ActiveSceneContent({
 
     return (
       <>
-        <ScoutFirstScreenDecisionStack items={firstScreenDecisionItems} />
+        <ScoutFirstScreenDecisionStack
+          items={firstScreenDecisionItems}
+          thinMarket={isLowActivityLane && firstScreenDecisionItems.length <= 1}
+        />
         {renderSearchDock?.()}
         {scoutRows.map((row) => (
           <ScoutHorizontalCategoryRail

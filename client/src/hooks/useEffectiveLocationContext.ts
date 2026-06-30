@@ -23,10 +23,11 @@ type LocationContextResponse = {
   deviceLocationContext?: EffectiveLocationContext | null;
 };
 
-export function useEffectiveLocationContext() {
+export function useEffectiveLocationContext(enabled = true) {
   const query = useQuery<LocationContextResponse | null>({
     queryKey: ["/api/location/context"],
     queryFn: getQueryFn({ on401: "returnNull", timeoutMs: 6000 }),
+    enabled,
     staleTime: 2 * 60_000,
     refetchOnWindowFocus: false,
   });
@@ -38,4 +39,3 @@ export function useEffectiveLocationContext() {
     deviceLocationContext: query.data?.deviceLocationContext ?? null,
   };
 }
-
