@@ -81,6 +81,48 @@ const PENSACOLA_LAUNCH_MARKET = {
   marketKey: "pensacola-fl",
 } as const;
 
+function formatScoutMarketLabel({
+  city,
+  state,
+  marketKey,
+  fallbackLabel,
+}: {
+  city?: string | null;
+  state?: string | null;
+  marketKey?: string | null;
+  fallbackLabel?: string;
+}): string {
+  const normalizedCity = String(city || "").trim();
+  const normalizedState = String(state || "").trim();
+  if (normalizedCity && normalizedState) return `${normalizedCity}, ${normalizedState}`;
+  if (normalizedCity) return normalizedCity;
+  if (normalizedState) return normalizedState;
+
+  const normalizedMarketKey = String(marketKey || "")
+    .trim()
+    .toLowerCase();
+  if (normalizedMarketKey) {
+    const parts = normalizedMarketKey
+      .split("-")
+      .map((part) => part.trim())
+      .filter(Boolean);
+    if (parts.length >= 2) {
+      const stateCandidate = parts[parts.length - 1];
+      const cityLabel = parts
+        .slice(0, -1)
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(" ");
+      const stateLabel =
+        stateCandidate.length <= 3
+          ? stateCandidate.toUpperCase()
+          : stateCandidate.charAt(0).toUpperCase() + stateCandidate.slice(1);
+      return cityLabel ? `${cityLabel}, ${stateLabel}` : stateLabel;
+    }
+  }
+
+  return fallbackLabel || "Your market";
+}
+
 type MapRuntimeResponse = {
   hasGoogleMapsKey: boolean;
   googleMapsApiKey?: string | null;
@@ -1979,8 +2021,14 @@ export default function ExplorePreview() {
       (city.toLowerCase() === "pensacola" && state.toLowerCase() === "fl");
     if (!hasCoords && !isPensacolaDefault) return null;
     const label =
-      [city, state].filter(Boolean).join(", ") ||
-      (isPensacolaDefault ? PENSACOLA_LAUNCH_MARKET.label : "Saved market");
+      isPensacolaDefault
+        ? PENSACOLA_LAUNCH_MARKET.label
+        : formatScoutMarketLabel({
+            city,
+            state,
+            marketKey,
+            fallbackLabel: "Your market",
+          });
     return {
       label,
       lat: hasCoords ? lat : PENSACOLA_LAUNCH_MARKET.lat,
@@ -2151,6 +2199,24 @@ export default function ExplorePreview() {
     const trimmed = (resolvedScoutLocation?.label || "").trim();
     return trimmed.length > 0 && trimmed.toLowerCase() !== "your area";
   }, [resolvedScoutLocation]);
+  const isPensacolaOperatorMarket = useMemo(() => {
+    const label = String(resolvedScoutLocation?.label || "")
+      .trim()
+      .toLowerCase();
+    return (
+      resolvedScoutLocation?.source === "super_admin_default" ||
+      resolvedScoutLocation?.source === "admin_preview" ||
+      label === PENSACOLA_LAUNCH_MARKET.label.toLowerCase() ||
+      label === "pensacola"
+    );
+  }, [resolvedScoutLocation]);
+  const scoutMarketEyebrow = isPensacolaOperatorMarket
+    ? "Pensacola launch market"
+    : resolvedScoutLocation?.source === "device"
+      ? "Your live location"
+      : hasResolvedLocation
+        ? "Active market"
+        : "Nearby market";
 
   /* --------- trucks --------- */
 
@@ -3647,6 +3713,14 @@ export default function ExplorePreview() {
               : activeSceneLaneId === "worth_discovering"
                 ? "New and under-scouted spots nearby"
                 : "Tap the map to explore nearby food";
+  const compactMapMarketHint =
+    trucksServingNow.length > 0
+      ? `${scoutMarketEyebrow} • ${formatScoutCount(
+          trucksServingNow.length,
+          "truck nearby now",
+          "trucks nearby now",
+        )}`
+      : scoutMarketEyebrow;
   const laneHasContent =
     sceneMixedFeedItems.length > 0 ||
     (sceneWantsFoodTrucks && visibleTrucksServingNow.length > 0) ||
@@ -3701,7 +3775,7 @@ export default function ExplorePreview() {
         className={`relative z-10 overflow-x-hidden md:-mt-16 ${
           sheetState === "fullMap"
             ? ""
-            : "pb-44 md:mx-auto md:max-w-[640px] md:min-h-screen"
+            : "pb-44 md:mx-auto md:min-h-screen md:max-w-[1120px] md:px-4 xl:max-w-[1280px]"
         }`}
         style={{
           paddingBottom:
@@ -3902,6 +3976,7 @@ export default function ExplorePreview() {
           {sheetState === "fullMap" && (
             <ScoutMapHud
               locationLabel={shortLocation}
+              marketEyebrow={scoutMarketEyebrow}
               liveTruckCount={liveTrucks.length}
               restaurantCount={nearbyRestaurants.length}
               eventCount={visibleEvents.length}
@@ -4003,6 +4078,9 @@ export default function ExplorePreview() {
                     {hasResolvedLocation ? shortLocation : "Nearby now"}
                   </p>
                   <p className="truncate text-[11px] font-semibold text-white/65 drop-shadow-[0_2px_10px_rgba(0,0,0,0.7)]">
+                    {compactMapMarketHint}
+                  </p>
+                  <p className="truncate text-[11px] font-semibold text-white/50 drop-shadow-[0_2px_10px_rgba(0,0,0,0.7)]">
                     {compactMapSceneHint}
                   </p>
                 </div>
@@ -4121,14 +4199,14 @@ function SectionHeader({
 
   return (
     <div className="mb-4 pr-5">
-      <div className="flex items-end justify-between gap-3">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between sm:gap-3">
         <div className="min-w-0">
-          <h2 className="truncate text-xl font-black tracking-tight text-white sm:text-2xl">{title}</h2>
+          <h2 className="text-xl font-black tracking-tight text-white sm:text-2xl">{title}</h2>
         </div>
         {showLink ? (
           <Link
             href={linkHref}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-orange-500/10 px-3 py-1.5 text-xs font-black uppercase tracking-[0.08em] text-orange-100 ring-1 ring-orange-200/20 transition-colors hover:bg-orange-500/16 sm:text-sm sm:normal-case sm:tracking-normal"
+            className="inline-flex w-fit shrink-0 items-center gap-1.5 rounded-full bg-orange-500/10 px-3 py-1.5 text-xs font-black uppercase tracking-[0.08em] text-orange-100 ring-1 ring-orange-200/20 transition-colors hover:bg-orange-500/16 sm:text-sm sm:normal-case sm:tracking-normal"
           >
             See All <ChevronRight className="h-4 w-4" aria-hidden="true" />
           </Link>
@@ -4392,7 +4470,7 @@ function ScoutHorizontalCategoryRail({
   if (!row.cards.length || !rowMeta?.hideWhenEmpty) return null;
   return (
     <section
-      className={row.className}
+      className={`${row.className} relative`}
       data-scout-row-id={row.id}
       data-scout-row-priority={rowMeta.priority}
       data-scout-accepted-kinds={rowMeta.acceptedCardKinds.join(",")}
@@ -4424,6 +4502,13 @@ function ScoutHorizontalCategoryRail({
           ))}
         </ul>
       </div>
+      {row.cards.length > 2 ? (
+        <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-20 items-center justify-end bg-gradient-to-l from-[#070609] via-[#070609]/82 to-transparent pr-2 sm:flex">
+          <span className="rounded-full bg-white/10 px-2 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-white/68 ring-1 ring-white/10">
+            Scroll
+          </span>
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -5042,6 +5127,10 @@ function ActiveSceneContent({
       ...nearbyOnlyDecisionItems,
     ];
     const primaryFirstScreenDecision = firstScreenDecisionItems[0] ?? null;
+    const popularDishesRailTitle =
+      primaryFirstScreenDecision?.sourceRowId === "popular_dishes"
+        ? "More Dishes Nearby"
+        : DISCOVERY_LAYERS.menuItems.title;
     const firstScreenSuppressedBusinessKey =
       primaryFirstScreenDecision?.cardType === "truck" ||
       primaryFirstScreenDecision?.cardType === "restaurant"
@@ -5174,7 +5263,7 @@ function ActiveSceneContent({
       },
       {
         id: "popular_dishes",
-        title: DISCOVERY_LAYERS.menuItems.title,
+        title: popularDishesRailTitle,
         subtitle: popularDishes.length > 0 ? DISCOVERY_LAYERS.menuItems.subtitle : "Recent menu items from nearby restaurants and trucks.",
         linkHref: DISCOVERY_LAYERS.menuItems.href,
         cards: menuItemRailCards(popularDishCards),
@@ -7529,6 +7618,7 @@ function MapLayerToggles({
 
 function ScoutMapHud({
   locationLabel,
+  marketEyebrow,
   liveTruckCount,
   restaurantCount,
   eventCount,
@@ -7539,6 +7629,7 @@ function ScoutMapHud({
   onRecenter,
 }: {
   locationLabel: string;
+  marketEyebrow: string;
   liveTruckCount: number;
   restaurantCount: number;
   eventCount: number;
@@ -7586,6 +7677,9 @@ function ScoutMapHud({
         </div>
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0">
+            <p className="mb-1 text-[10px] font-black uppercase tracking-[0.14em] text-orange-200/72">
+              {marketEyebrow}
+            </p>
             <h2 className="truncate text-base font-black text-orange-50">
               {locationLabel}
             </h2>
