@@ -231,6 +231,9 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     : "/dashboard";
   const isScoutRoute =
     currentPath === "/scout" || currentPath.startsWith("/scout/");
+  const desktopNavPositionClass = isScoutRoute
+    ? "left-1/2 right-auto -translate-x-1/2"
+    : "right-6";
   const disableScoutHelpBubbles = isScoutRoute;
 
   const lane: "guest" | "admin_staff" | "event" | "supplier" | "food_truck" | "restaurant" | "host" | "customer" =
@@ -446,7 +449,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     <>
       <div
         data-nav-root={scope}
-        className="hidden lg:block fixed top-6 right-6 z-50"
+        className={`hidden lg:block fixed top-6 z-50 ${desktopNavPositionClass}`}
       >
         <div className="rounded-2xl border border-white/5 bg-[#120805]/40 backdrop-blur-xl shadow-[0_8px_32px_rgba(0,0,0,0.4)] p-2">
           <div className="flex items-center gap-1">
