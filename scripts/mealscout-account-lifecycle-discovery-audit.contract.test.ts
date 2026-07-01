@@ -120,8 +120,8 @@ for (const forbidden of ["[cite:", "create placeholder", "add sample", "invented
 [
   "## C9A - Account Lifecycle + Discovery Boundary Audit",
   "Status: `DONE`",
-  "Inserted stabilization audit; C8 remains `NEXT`",
-  "The queued payment/webhook safety map remains queued",
+  "Inserted stabilization audit; C8, C9, and C10 are now complete.",
+  "did not rename, advance, or imply completion of unrelated runtime work",
 ].forEach((snippet) => requireIncludes(cleanupMap, snippet, `cleanup map snippet ${snippet}`));
 
 requireIncludes(app, '"/scout"', "public /scout prefix");
@@ -137,7 +137,9 @@ requireIncludes(app, '<Route path="/parking-pass-manage" component={ParkingPassM
 [
   "function captureUrlAffiliateRef",
   'urlParams.get("ref")',
-  "if (ref) setAffiliateRef(ref)",
+  "extractPathAffiliateRef(window.location.pathname || \"\")",
+  "isLikelyCleanAffiliateTagSegment(ref)",
+  "setAffiliateRef(ref)",
   "oauthConfirmationPending",
   "hasOAuthCompletionHint",
   'getQueryFn({ on401: "returnNull"',
@@ -148,7 +150,8 @@ requireIncludes(app, '<Route path="/parking-pass-manage" component={ParkingPassM
 ].forEach((snippet) => requireIncludes(useAuth, snippet, `useAuth snippet ${snippet}`));
 
 [
-  'label: "Customer"',
+  'id: "diner"',
+  'label: "Find Food"',
   'href: "/customer-signup?role=diner"',
   "getRegistrationUserType",
   ': "customer";',

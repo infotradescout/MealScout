@@ -199,7 +199,7 @@ Disallowed changes: Auth middleware behavior, public route expansion, admin/staf
 
 Validation command: `node scripts/mealscout-public-auth-route-boundary-audit.contract.test.ts` and `npm run gate:production`.
 
-Handoff value: Public/private access boundaries are explicit before cleanup moves code. No hard public/auth boundary mismatch was found in C8. C9 Payment/Webhook Safety Map and C10 Production Smoke Fixture Plan remain queued.
+Handoff value: Public/private access boundaries are explicit before cleanup moves code. No hard public/auth boundary mismatch was found in C8. C9 Payment/Webhook Safety Map and C10 Production Smoke Fixture Plan are now complete.
 
 ## C9A - Account Lifecycle + Discovery Boundary Audit
 
@@ -215,7 +215,7 @@ Disallowed changes: Runtime behavior, auth middleware, routes, role names, onboa
 
 Validation command: `node scripts/mealscout-account-lifecycle-discovery-audit.contract.test.ts`.
 
-Handoff value: Inserted stabilization audit; C8 remains `NEXT` and can still perform the public/auth route boundary audit. The queued payment/webhook safety map remains queued and is not renamed, advanced, or implied complete by this docs-only audit.
+Handoff value: Inserted stabilization audit; C8, C9, and C10 are now complete. The account lifecycle/discovery audit remains a stabilization boundary record and did not rename, advance, or imply completion of unrelated runtime work.
 
 ## C9 - Payment/Webhook Safety Map
 
@@ -231,7 +231,7 @@ Disallowed changes: Payment intent creation, webhook mutation logic, payout math
 
 Validation command: `node scripts/mealscout-payment-webhook-safety-map.contract.test.ts` and `npm run gate:production`.
 
-Handoff value: Payment cleanup has an explicit safety map before any code moves. Follow-ups are documented as audit findings only; C10 remains queued for production smoke fixture planning.
+Handoff value: Payment cleanup has an explicit safety map before any code moves. Follow-ups are documented as audit findings only; C10 production smoke fixture planning is now complete.
 
 ## C10 - Production Smoke Fixture Plan
 
