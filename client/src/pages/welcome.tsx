@@ -1,13 +1,5 @@
 import { Link } from "wouter";
 import { SEOHead } from "@/components/seo-head";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 
 export default function Welcome() {
   return (
@@ -50,40 +42,12 @@ export default function Welcome() {
             </Link>
           </div>
 
-          <Dialog>
-            <DialogTrigger asChild>
-              <button
-                type="button"
-                className="mt-7 inline-flex rounded-full border border-orange-300/22 bg-[#1a0d08]/32 px-5 py-2 text-[13px] font-black uppercase tracking-[0.24em] text-orange-100/95 shadow-[0_0_24px_rgba(255,90,47,0.18)] backdrop-blur-md transition hover:bg-[#2a1208]/60 focus:outline-none focus:ring-2 focus:ring-orange-200/70 focus:ring-offset-2 focus:ring-offset-[#120805] active:scale-[0.98]"
-              >
-                Follow The Flavor
-              </button>
-            </DialogTrigger>
-            <DialogContent className="max-w-sm border-orange-200/20 bg-[#160b07] text-orange-50 shadow-[0_0_42px_rgba(255,90,47,0.22)] sm:max-w-md">
-              <DialogHeader>
-                <DialogTitle className="text-left text-2xl font-black text-orange-50">
-                  MealScout is your local food radar.
-                </DialogTitle>
-                <DialogDescription className="text-left text-sm leading-6 text-orange-50/78">
-                  Find the food trucks, pop-ups, neighborhood deals, and hidden spots moving around your city. We help diners discover what is nearby, owners get found, and local hosts bring good food to the right parking lot.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="flex flex-col gap-2 pt-2 sm:flex-row">
-                <Link
-                  href="/scout"
-                  className="inline-flex h-11 flex-1 items-center justify-center rounded-full bg-[#ff5a2f] px-5 text-sm font-black text-[#1a0d08] transition hover:bg-[#ff7448] active:scale-[0.98]"
-                >
-                  Explore nearby
-                </Link>
-                <Link
-                  href="/customer-signup"
-                  className="inline-flex h-11 flex-1 items-center justify-center rounded-full border border-orange-200/25 bg-orange-50/8 px-5 text-sm font-black text-orange-50 transition hover:bg-orange-50/14 active:scale-[0.98]"
-                >
-                  Pick your path
-                </Link>
-              </div>
-            </DialogContent>
-          </Dialog>
+          <Link
+            href="/scout"
+            className="mt-7 inline-flex rounded-full border border-orange-300/22 bg-[#1a0d08]/32 px-5 py-2 text-[13px] font-black uppercase tracking-[0.24em] text-orange-100/95 shadow-[0_0_24px_rgba(255,90,47,0.18)] backdrop-blur-md transition hover:bg-[#2a1208]/60 focus:outline-none focus:ring-2 focus:ring-orange-200/70 focus:ring-offset-2 focus:ring-offset-[#120805] active:scale-[0.98]"
+          >
+            Follow The Flavor
+          </Link>
         </section>
       </main>
     </>
