@@ -106,13 +106,13 @@ function requireMatch(source: string, pattern: RegExp, label: string) {
   "MEALSCOUT_PAYMENT_WEBHOOK_SAFETY_MAP.md",
   "scripts/mealscout-payment-webhook-safety-map.contract.test.ts",
   "## C10 - Production Smoke Fixture Plan",
-  "Status: `QUEUED`",
+  "Status: `DONE`",
 ].forEach((snippet) => requireIncludes(cleanupMap, snippet, `cleanup map snippet ${snippet}`));
 
 requireMatch(
   cleanupMap,
-  /## C9 - Payment\/Webhook Safety Map[\s\S]*Status: `DONE`[\s\S]*## C10 - Production Smoke Fixture Plan[\s\S]*Status: `QUEUED`/,
-  "C9 done and C10 queued",
+  /## C9 - Payment\/Webhook Safety Map[\s\S]*Status: `DONE`[\s\S]*## C10 - Production Smoke Fixture Plan[\s\S]*Status: `DONE`/,
+  "C9 and C10 done",
 );
 
 [
