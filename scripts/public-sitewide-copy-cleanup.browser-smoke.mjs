@@ -168,15 +168,16 @@ async function verifyScout(page, baseUrl, viewportLabel) {
 }
 
 async function verifyMap(page, baseUrl, viewportLabel) {
+  // /map intentionally redirects into the Scout discovery experience.
   await openRoute(page, baseUrl, "/map");
-  await expectVisibleText(page, "Nearby Food Map");
-  await expectVisibleText(page, "Open Scout");
+  await page.locator('[data-testid="scout-map-container"]').first().waitFor({ state: "visible", timeout: 15000 });
   await verifyNoProhibitedText(page, `${viewportLabel} /map`);
 }
 
 async function verifyTrending(page, baseUrl, viewportLabel) {
+  // /trending intentionally redirects into the Scout discovery experience.
   await openRoute(page, baseUrl, "/trending");
-  await expectVisibleText(page, "What's hot");
+  await page.locator('[data-testid="scout-map-container"]').first().waitFor({ state: "visible", timeout: 15000 });
   await verifyNoProhibitedText(page, `${viewportLabel} /trending`);
 }
 
