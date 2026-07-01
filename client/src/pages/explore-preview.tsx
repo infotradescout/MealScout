@@ -4727,6 +4727,9 @@ function CompactDecisionCardShell({
   directionsUrl?: string | null;
 }) {
   const [imageFailed, setImageFailed] = useState(false);
+  useEffect(() => {
+    setImageFailed(false);
+  }, [imageUrl]);
   const showImage = Boolean(imageUrl) && !imageFailed;
   return (
     <div
@@ -4793,6 +4796,9 @@ function ScoutCardMedia({
   fallbackClassName?: string;
 }) {
   const [imageFailed, setImageFailed] = useState(false);
+  useEffect(() => {
+    setImageFailed(false);
+  }, [imageUrl]);
   const showImage = Boolean(imageUrl) && !imageFailed;
 
   if (showImage) {

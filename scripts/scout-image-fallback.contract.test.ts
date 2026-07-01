@@ -5,6 +5,9 @@ const scoutPage = readFileSync("client/src/pages/explore-preview.tsx", "utf8");
 
 assert.ok(
   scoutPage.includes("function ScoutCardMedia(") &&
+    scoutPage.includes("useEffect(() => {") &&
+    scoutPage.includes("setImageFailed(false);") &&
+    scoutPage.includes("}, [imageUrl]);") &&
     scoutPage.includes("onError={() => setImageFailed(true)}"),
   "Scout cards must centralize image failure handling through ScoutCardMedia.",
 );
