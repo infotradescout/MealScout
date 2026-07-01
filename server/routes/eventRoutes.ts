@@ -95,9 +95,6 @@ export const isParkingPassFeedCandidate = (event: any) => {
 };
 
 export const hasParkingPassAvailability = (event: any) => {
-  if (!Boolean(event?.hardCapEnabled)) {
-    return true;
-  }
   if (Array.isArray(event?.availableSpotNumbers)) {
     return event.availableSpotNumbers.length > 0;
   }
@@ -106,6 +103,12 @@ export const hasParkingPassAvailability = (event: any) => {
   }
   const maxSpots = Number(event?.spotCount ?? event?.maxTrucks ?? 0);
   const booked = Number(event?.bookedSpots ?? 0);
+  if (Number.isFinite(maxSpots) && maxSpots > 0 && Number.isFinite(booked)) {
+    if (maxSpots - booked <= 0) return false;
+  }
+  if (!Boolean(event?.hardCapEnabled)) {
+    return true;
+  }
   if (!Number.isFinite(maxSpots) || maxSpots <= 0) return false;
   if (!Number.isFinite(booked)) return true;
   return maxSpots - booked > 0;
