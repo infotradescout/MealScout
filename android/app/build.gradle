@@ -1,5 +1,35 @@
 apply plugin: 'com.android.application'
 
+def signingValue = { name ->
+    def value = project.findProperty(name)
+    if (value == null || value.toString().trim().isEmpty()) {
+        value = System.getenv(name)
+    }
+    return value == null ? null : value.toString()
+}
+
+def releaseStoreFile = signingValue('MEALSCOUT_ANDROID_UPLOAD_STORE_FILE')
+def releaseStorePassword = signingValue('MEALSCOUT_ANDROID_UPLOAD_STORE_PASSWORD')
+def releaseKeyAlias = signingValue('MEALSCOUT_ANDROID_UPLOAD_KEY_ALIAS')
+def releaseKeyPassword = signingValue('MEALSCOUT_ANDROID_UPLOAD_KEY_PASSWORD')
+def hasReleaseSigning = [releaseStoreFile, releaseStorePassword, releaseKeyAlias, releaseKeyPassword].every {
+    it != null && !it.trim().isEmpty()
+}
+
+if (hasReleaseSigning && !file(releaseStoreFile).exists()) {
+    throw new GradleException("MEALSCOUT_ANDROID_UPLOAD_STORE_FILE does not point to an existing keystore.")
+}
+
+gradle.taskGraph.whenReady { graph ->
+    def requiresReleaseSigning = graph.allTasks.any { task ->
+        def taskName = task.name.toLowerCase()
+        taskName in ['assemblerelease', 'bundlerelease']
+    }
+    if (requiresReleaseSigning && !hasReleaseSigning) {
+        throw new GradleException("Android release signing is not configured. Set MEALSCOUT_ANDROID_UPLOAD_STORE_FILE, MEALSCOUT_ANDROID_UPLOAD_STORE_PASSWORD, MEALSCOUT_ANDROID_UPLOAD_KEY_ALIAS, and MEALSCOUT_ANDROID_UPLOAD_KEY_PASSWORD.")
+    }
+}
+
 android {
     namespace = "us.mealscout.app"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -16,8 +46,21 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        if (hasReleaseSigning) {
+            release {
+                storeFile file(releaseStoreFile)
+                storePassword releaseStorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
+            }
+        }
+    }
     buildTypes {
         release {
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
