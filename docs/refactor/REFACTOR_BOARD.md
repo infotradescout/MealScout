@@ -10,8 +10,11 @@ Use this board to track every refactor item from queue to verification.
 - [ ] [site-drift-sweep] Fix inconsistent business-role label generation in `client/src/pages/customer-signup.tsx` (~line 1093) - one shared label source instead of 3+ code paths - see `docs/audits/site-drift-sweep-2026-07.md`
 - [ ] [site-drift-sweep] Fix `/search` page React Query misconfiguration for `/api/deals/featured` (missing queryFn, masked as empty state) - see `docs/audits/site-drift-sweep-2026-07.md`
 - [ ] [site-drift-sweep] Redirect orphaned `/host-signup` direct route to the working `/customer-signup?role=host` flow - see `docs/audits/site-drift-sweep-2026-07.md`
-- [ ] [site-drift-sweep] Owner decision needed: `/map` and `/trending` are hard-redirected to `/scout` in `client/src/App.tsx`, but the existing smoke test `scripts/public-sitewide-copy-cleanup.browser-smoke.mjs` still expects dedicated Map/Trending pages and is currently failing on main. Decide: keep redirect + fix stale test, or restore dedicated pages - see `docs/audits/site-drift-sweep-2026-07.md`
 - [ ] [site-drift-sweep] Higher-risk: consolidate the two near-duplicate route blocks in `client/src/App.tsx` (guest vs logged-in, ~170 routes each) into one shared route table - needs its own dedicated PR with exact before/after route-list diff - see `docs/audits/site-drift-sweep-2026-07.md`
+- [ ] [site-drift-sweep] Owner decision needed: `/scoutcoin` renders a full wallet UI (Buy/Send/Redeem/history) but all 4 backend endpoints 500 (`/api/scoutcoin/config`, `/wallet`, `/transactions`, `/api/business-access/me`) - finish wiring it or hide the nav entry/route until ready - see `docs/audits/site-drift-sweep-2026-07.md`
+- [ ] [site-drift-sweep] Fix `/share-hub` for logged-in users - renders nearly blank, `/api/auth/user` returns 500 specifically on this page - see `docs/audits/site-drift-sweep-2026-07.md`
+- [ ] [site-drift-sweep] `/dashboard` router: `/api/public/resolve-business/dashboard` returns 500 for accounts with no business (falls back to Scout silently) - should be a clean non-error response, not a swallowed 500 - see `docs/audits/site-drift-sweep-2026-07.md`
+- [ ] [site-drift-sweep] Confirm intent of `503` from `/api/subscription/status` on `/parking-pass` for non-subscribed diners - likely wrong status code for "not subscribed" - see `docs/audits/site-drift-sweep-2026-07.md`
 
 ## In Progress
 
