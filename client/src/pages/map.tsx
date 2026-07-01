@@ -3631,11 +3631,6 @@ export default function MapPage() {
       title: "Browse nearby",
       description: "Scan nearby food spots, trucks, and deals in list form.",
     },
-    {
-      href: "/trending",
-      title: "What's hot",
-      description: "See popular picks and jump back into the map when something looks good.",
-    },
   ];
   const trendingLinks: Array<{ href: string; title: string; context: string | null }> = [];
   const showContainedMapExtendedSections = false;

@@ -542,7 +542,7 @@ export default function UserDashboard() {
               )}
             </Button>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3">
             <Button
               variant="secondary"
               className="justify-start h-auto py-3 px-4 rounded-xl bg-white/5 border border-white/10 text-white"
@@ -556,20 +556,6 @@ export default function UserDashboard() {
                   {showVideos ? "Hide recent videos" : "Upload or watch community clips"}
                 </span>
               </span>
-            </Button>
-            <Button
-              asChild
-              variant="secondary"
-              className="justify-start h-auto py-3 px-4 rounded-xl bg-white/5 border border-white/10 text-white"
-            >
-              <Link href="/trending">
-                <span className="text-left">
-                  <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary block">
-                    What&apos;s hot
-                  </span>
-                  <span className="text-sm">See food moments nearby</span>
-                </span>
-              </Link>
             </Button>
           </div>
           {showVideos && <VideoCreatorSection userId={user?.id} />}

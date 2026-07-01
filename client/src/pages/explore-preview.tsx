@@ -615,7 +615,7 @@ const DISCOVERY_LAYERS: Record<
   },
   trending: {
     title: "Trending This Week",
-    href: "/trending",
+    href: "/search",
     subtitle: "Food and places getting real attention this week.",
   },
   menuItems: {
@@ -4572,7 +4572,7 @@ function ScoutFirstScreenDecisionStack({
               Coverage is still thin here, so Scout is showing the closest real place first.
             </p>
             <p className="mt-1 text-xs font-semibold leading-relaxed text-white/62">
-              Browse nearby, open the map, or check trending while you widen the board.
+              Browse nearby or open the map while you widen the board.
             </p>
             <ScoutRecoveryActions className="mt-3" />
           </div>
@@ -4598,10 +4598,10 @@ function ScoutRecoveryActions({ className = "" }: { className?: string }) {
         View map
       </Link>
       <Link
-        href="/trending"
+        href="/search"
         className="rounded-full bg-white/[0.06] px-3 py-1.5 text-[11px] font-black text-white/90 ring-1 ring-white/16"
       >
-        See trending
+        Search nearby
       </Link>
     </div>
   );
