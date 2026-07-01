@@ -4727,6 +4727,9 @@ function CompactDecisionCardShell({
   directionsUrl?: string | null;
 }) {
   const [imageFailed, setImageFailed] = useState(false);
+  useEffect(() => {
+    setImageFailed(false);
+  }, [imageUrl]);
   const showImage = Boolean(imageUrl) && !imageFailed;
   return (
     <div
@@ -4774,6 +4777,56 @@ function CompactDecisionCardShell({
             </a>
           ) : null}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function ScoutCardMedia({
+  imageUrl,
+  fallbackIcon,
+  fallbackTestId,
+  imageClassName,
+  fallbackClassName = "",
+}: {
+  imageUrl?: string | null;
+  fallbackIcon: ReactNode;
+  fallbackTestId: string;
+  imageClassName: string;
+  fallbackClassName?: string;
+}) {
+  const [imageFailed, setImageFailed] = useState(false);
+  useEffect(() => {
+    setImageFailed(false);
+  }, [imageUrl]);
+  const showImage = Boolean(imageUrl) && !imageFailed;
+
+  if (showImage) {
+    return (
+      <img
+        src={imageUrl || undefined}
+        alt=""
+        className={imageClassName}
+        loading="lazy"
+        onError={() => setImageFailed(true)}
+      />
+    );
+  }
+
+  return (
+    <div
+      className={[
+        "absolute inset-0 flex items-center justify-center overflow-hidden",
+        "bg-[radial-gradient(circle_at_top,rgba(255,153,92,0.18),rgba(255,255,255,0.02))]",
+        fallbackClassName,
+      ].join(" ")}
+      data-testid={fallbackTestId}
+      aria-hidden="true"
+    >
+      <div className="absolute inset-0 bg-[linear-gradient(160deg,rgba(255,90,47,0.18),rgba(0,0,0,0.6))]" />
+      <div className="absolute inset-x-0 bottom-0 h-1/2 bg-[linear-gradient(180deg,rgba(0,0,0,0),rgba(0,0,0,0.32))]" />
+      <div className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-white/[0.08] ring-1 ring-white/10 shadow-[0_10px_24px_rgba(0,0,0,0.28)]">
+        {fallbackIcon}
       </div>
     </div>
   );
@@ -6319,23 +6372,12 @@ function LiveTruckCard({
       style={{ boxShadow: "0 18px 54px rgba(0,0,0,0.56)" }}
     >
       <div className="relative aspect-[4/5] w-full bg-[#120805]/60">
-        {heroImage ? (
-          <img
-            src={heroImage}
-            alt=""
-            className="absolute inset-0 h-full w-full object-cover"
-            loading="lazy"
-          />
-        ) : (
-          <div
-            className="absolute inset-0"
-            style={{
-              backgroundImage:
-                "linear-gradient(160deg, rgba(255,90,47,0.18), rgba(0,0,0,0.6))",
-            }}
-            aria-hidden="true"
-          />
-        )}
+        <ScoutCardMedia
+          imageUrl={heroImage || null}
+          fallbackIcon={<Flame className="h-5 w-5 text-white/80" aria-hidden="true" />}
+          fallbackTestId="scout-live-truck-card-image-fallback"
+          imageClassName="absolute inset-0 h-full w-full object-cover"
+        />
         <div
           className="absolute inset-0"
           style={{
@@ -6426,23 +6468,13 @@ function DealCard({
       aria-label={`Open deal ${deal.title || ""}`}
     >
       <div className="relative aspect-[4/5] w-full bg-[#120805]/60">
-        {deal.imageUrl ? (
-          <img
-            src={deal.imageUrl}
-            alt=""
-            className="absolute inset-0 h-full w-full object-cover"
-            loading="lazy"
-          />
-        ) : (
-          <div
-            className="absolute inset-0"
-            style={{
-              backgroundImage:
-                "linear-gradient(160deg, rgba(34,197,94,0.18), rgba(0,0,0,0.6))",
-            }}
-            aria-hidden="true"
-          />
-        )}
+        <ScoutCardMedia
+          imageUrl={deal.imageUrl || null}
+          fallbackIcon={<Tag className="h-5 w-5 text-white/80" aria-hidden="true" />}
+          fallbackTestId="scout-deal-card-image-fallback"
+          imageClassName="absolute inset-0 h-full w-full object-cover"
+          fallbackClassName="bg-[radial-gradient(circle_at_top,rgba(132,204,22,0.18),rgba(255,255,255,0.02))]"
+        />
         <div
           className="absolute inset-0"
           style={{
@@ -6573,23 +6605,13 @@ function LocalMenuItemCard({
       data-testid="scout-local-menu-item-card"
     >
       <div className="relative aspect-[4/3] w-full bg-[#120805]/60">
-        {item.imageUrl ? (
-          <img
-            src={item.imageUrl}
-            alt=""
-            className="absolute inset-0 h-full w-full object-cover"
-            loading="lazy"
-          />
-        ) : (
-          <div
-            className="absolute inset-0"
-            style={{
-              backgroundImage:
-                "radial-gradient(circle at 28% 20%, rgba(255,120,55,0.36), transparent 34%), linear-gradient(160deg, rgba(255,90,47,0.16), rgba(0,0,0,0.66))",
-            }}
-            aria-hidden="true"
-          />
-        )}
+        <ScoutCardMedia
+          imageUrl={item.imageUrl || null}
+          fallbackIcon={<Utensils className="h-5 w-5 text-white/80" aria-hidden="true" />}
+          fallbackTestId="scout-local-menu-item-card-image-fallback"
+          imageClassName="absolute inset-0 h-full w-full object-cover"
+          fallbackClassName="bg-[radial-gradient(circle_at_top,rgba(255,120,55,0.24),rgba(255,255,255,0.02))]"
+        />
         <div
           className="absolute inset-0"
           style={{
@@ -6697,23 +6719,13 @@ function EventCard({
       aria-label={`Open event ${title}`}
     >
       <div className="relative aspect-[4/5] w-full bg-[#120805]/60">
-        {img ? (
-          <img
-            src={img}
-            alt=""
-            className="absolute inset-0 h-full w-full object-cover"
-            loading="lazy"
-          />
-        ) : (
-          <div
-            className="absolute inset-0"
-            style={{
-              backgroundImage:
-                "linear-gradient(160deg, rgba(217,70,239,0.18), rgba(0,0,0,0.6))",
-            }}
-            aria-hidden="true"
-          />
-        )}
+        <ScoutCardMedia
+          imageUrl={img || null}
+          fallbackIcon={<CalendarDays className="h-5 w-5 text-white/80" aria-hidden="true" />}
+          fallbackTestId="scout-event-card-image-fallback"
+          imageClassName="absolute inset-0 h-full w-full object-cover"
+          fallbackClassName="bg-[radial-gradient(circle_at_top,rgba(217,70,239,0.14),rgba(255,255,255,0.02))]"
+        />
         <div
           className="absolute inset-0"
           style={{
@@ -6977,22 +6989,12 @@ function NearbyRestaurantCard({
     >
       {/* Image */}
       <div className="relative aspect-[4/3] w-full bg-[#120805]/60">
-        {img ? (
-          <img
-            src={img}
-            alt=""
-            className="absolute inset-0 h-full w-full object-cover"
-            loading="lazy"
-          />
-        ) : (
-          <div
-            className="absolute inset-0"
-            style={{
-              backgroundImage: "linear-gradient(160deg, rgba(255,90,47,0.18), rgba(0,0,0,0.6))",
-            }}
-            aria-hidden="true"
-          />
-        )}
+        <ScoutCardMedia
+          imageUrl={img || null}
+          fallbackIcon={<Utensils className="h-5 w-5 text-white/80" aria-hidden="true" />}
+          fallbackTestId="scout-nearby-restaurant-card-image-fallback"
+          imageClassName="absolute inset-0 h-full w-full object-cover"
+        />
         <div
           className="absolute inset-0"
           style={{ backgroundImage: "linear-gradient(180deg, rgba(0,0,0,0) 40%, rgba(0,0,0,0.75) 100%)" }}
@@ -7167,23 +7169,13 @@ function SavedRestaurantCard({ restaurant }: { restaurant: RestaurantSummary }) 
       aria-label={`Open saved ${canonicalLabel.toLowerCase()} ${name}`}
     >
       <div className="relative h-24 bg-[#120805]/50">
-        {img ? (
-          <img
-            src={img}
-            alt=""
-            className="absolute inset-0 h-full w-full object-cover"
-            loading="lazy"
-          />
-        ) : (
-          <div
-            className="absolute inset-0"
-            style={{
-              backgroundImage:
-                "linear-gradient(145deg, rgba(255,90,47,0.22), rgba(2,6,23,0.92))",
-            }}
-            aria-hidden="true"
-          />
-        )}
+        <ScoutCardMedia
+          imageUrl={img || null}
+          fallbackIcon={<Heart className="h-5 w-5 text-white/80" aria-hidden="true" />}
+          fallbackTestId="scout-saved-restaurant-card-image-fallback"
+          imageClassName="absolute inset-0 h-full w-full object-cover"
+          fallbackClassName="bg-[radial-gradient(circle_at_top,rgba(255,90,47,0.18),rgba(255,255,255,0.02))]"
+        />
         <div
           className="absolute inset-0"
           style={{
@@ -7948,18 +7940,12 @@ function TruckCard({
     >
       {/* Hero image */}
       <div className="relative aspect-[4/3] w-full bg-[#120805]/40 overflow-hidden">
-        {img ? (
-          <img
-            src={img}
-            alt=""
-            className="h-full w-full object-cover"
-            loading="lazy"
-          />
-        ) : (
-          <div className="h-full w-full flex items-center justify-center">
-            <Flame className="h-8 w-8 text-orange-500/40" aria-hidden="true" />
-          </div>
-        )}
+        <ScoutCardMedia
+          imageUrl={img || null}
+          fallbackIcon={<Flame className="h-5 w-5 text-white/80" aria-hidden="true" />}
+          fallbackTestId="scout-truck-card-image-fallback"
+          imageClassName="h-full w-full object-cover"
+        />
         <div
           className="absolute inset-0"
           style={{ backgroundImage: "linear-gradient(180deg, rgba(0,0,0,0) 40%, rgba(0,0,0,0.75) 100%)" }}
