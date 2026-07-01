@@ -7,3 +7,6 @@ RBAC_BASE_URL=http://localhost:5200
 RBAC_COOKIE_CUSTOMER=connect.sid=replace_with_customer_cookie
 RBAC_COOKIE_STAFF=connect.sid=replace_with_staff_cookie
 RBAC_COOKIE_ADMIN=connect.sid=replace_with_admin_cookie
+
+# These must be real authenticated session cookies captured from the target
+# environment. Placeholder cookies intentionally fail the RBAC runtime check.

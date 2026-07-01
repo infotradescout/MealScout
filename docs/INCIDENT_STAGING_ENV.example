@@ -3,8 +3,11 @@
 # Copy these keys into your staging secret manager and set real values.
 # Do NOT commit real secrets.
 
-BREVO_API_KEY=replace_with_brevo_api_key
+BREVO_API_KEY=replace_with_real_brevo_api_key
 INCIDENT_EMAIL_RECIPIENTS=alerts@example.com,security@example.com
 INCIDENT_SMS_RECIPIENTS=+15555550123,+15555550124
 SLACK_WEBHOOK_URL=https://hooks.slack.com/services/replace/with/real
-INCIDENT_SIGNATURE_SECRET=replace_with_long_random_secret
+INCIDENT_SIGNATURE_SECRET=replace_with_long_random_64_char_secret
+
+# Placeholder values are for shape only. The incident checklist sends test
+# notifications and requires real Brevo credentials plus reachable recipients.

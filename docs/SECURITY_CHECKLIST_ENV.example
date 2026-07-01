@@ -9,13 +9,19 @@ CHECKLIST_REQUIRE_SLACK=true
 
 # Incident checklist environment
 BREVO_API_KEY=replace_with_brevo_api_key
-INCIDENT_EMAIL_RECIPIENTS=info.mealscout@gmail.com
+INCIDENT_EMAIL_RECIPIENTS=alerts@example.com,security@example.com
 INCIDENT_SMS_RECIPIENTS=+15555550123,+15555550124
 SLACK_WEBHOOK_URL=https://hooks.slack.com/services/replace/with/real
-INCIDENT_SIGNATURE_SECRET=23784523483848238548234582854
+INCIDENT_SIGNATURE_SECRET=replace_with_long_random_64_char_secret
 
 # RBAC runtime test environment
 RBAC_BASE_URL=http://localhost:5200
 RBAC_COOKIE_CUSTOMER=connect.sid=replace_with_customer_cookie
 RBAC_COOKIE_STAFF=connect.sid=replace_with_staff_cookie
 RBAC_COOKIE_ADMIN=connect.sid=replace_with_admin_cookie
+
+# Notes:
+# - Placeholder values are for shape only. `npm run checklist:security` requires real
+#   Brevo credentials, recipient inboxes, and authenticated session cookies.
+# - `npm run checklist:security:prod` skips RBAC cookies but still requires real
+#   incident notification env.
