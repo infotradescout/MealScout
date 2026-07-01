@@ -557,20 +557,6 @@ export default function UserDashboard() {
                 </span>
               </span>
             </Button>
-            <Button
-              asChild
-              variant="secondary"
-              className="justify-start h-auto py-3 px-4 rounded-xl bg-white/5 border border-white/10 text-white"
-            >
-              <Link href="/trending">
-                <span className="text-left">
-                  <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary block">
-                    What&apos;s hot
-                  </span>
-                  <span className="text-sm">See food moments nearby</span>
-                </span>
-              </Link>
-            </Button>
           </div>
           {showVideos && <VideoCreatorSection userId={user?.id} />}
           {showShare && (
