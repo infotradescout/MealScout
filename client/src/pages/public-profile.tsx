@@ -47,7 +47,7 @@ import {
 } from "@/components/public-profile/truckScheduleTruth";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import {
   CalendarDays,
@@ -1871,6 +1871,9 @@ function RelatedLocalDiscovery({
         <CardTitle className="text-base text-white">
           Truck-first discovery in {data.city}
         </CardTitle>
+        <CardDescription className="text-white/60">
+          MealScout coverage is limited and grows as local trucks and places update their profiles.
+        </CardDescription>
       </CardHeader>
       <CardContent className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
         <a
