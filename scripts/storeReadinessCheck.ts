@@ -12,6 +12,14 @@ const repoRoot = process.cwd();
 const hasFile = (relativePath: string): boolean =>
   fs.existsSync(path.join(repoRoot, relativePath));
 
+const readFile = (relativePath: string): string => {
+  const fullPath = path.join(repoRoot, relativePath);
+  return fs.existsSync(fullPath) ? fs.readFileSync(fullPath, "utf8") : "";
+};
+
+const androidBuildGradle = readFile("android/app/build.gradle");
+const rootGitignore = readFile(".gitignore");
+
 const checks: CheckResult[] = [
   {
     name: "Store checklist doc",
@@ -47,6 +55,21 @@ const checks: CheckResult[] = [
     name: "Privacy policy route page",
     ok: hasFile("client/src/pages/privacy-policy.tsx"),
     detail: "Expect in-app privacy policy page",
+  },
+  {
+    name: "Android release signing guard",
+    ok:
+      androidBuildGradle.includes("MEALSCOUT_ANDROID_UPLOAD_STORE_FILE") &&
+      androidBuildGradle.includes("MEALSCOUT_ANDROID_UPLOAD_STORE_PASSWORD") &&
+      androidBuildGradle.includes("MEALSCOUT_ANDROID_UPLOAD_KEY_ALIAS") &&
+      androidBuildGradle.includes("MEALSCOUT_ANDROID_UPLOAD_KEY_PASSWORD") &&
+      androidBuildGradle.includes("Android release signing is not configured"),
+    detail: "Expect release bundle tasks to require upload-key signing configuration",
+  },
+  {
+    name: "Android keystore files ignored",
+    ok: rootGitignore.includes("*.jks") && rootGitignore.includes("*.keystore"),
+    detail: "Expect upload keystores to stay out of git",
   },
 ];
 
