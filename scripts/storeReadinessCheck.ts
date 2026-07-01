@@ -23,6 +23,7 @@ const readFile = (relativePath: string): string => {
 };
 
 const androidBuildGradle = readFile("android/app/build.gradle");
+const androidManifest = readFile("android/app/src/main/AndroidManifest.xml");
 const rootGitignore = readFile(".gitignore");
 const publicContactSourceFiles = [
   "client/src/pages/about.tsx",
@@ -83,6 +84,18 @@ const checks: CheckResult[] = [
       androidBuildGradle.includes("MEALSCOUT_ANDROID_UPLOAD_KEY_PASSWORD") &&
       androidBuildGradle.includes("Android release signing is not configured"),
     detail: "Expect release bundle tasks to require upload-key signing configuration",
+  },
+  {
+    name: "Android native shell disables backup",
+    ok:
+      androidManifest.includes('android:allowBackup="false"') &&
+      !androidManifest.includes('android:allowBackup="true"'),
+    detail: "Expect Android app data backups disabled for the session-bearing production shell",
+  },
+  {
+    name: "Android native shell blocks cleartext traffic",
+    ok: androidManifest.includes('android:usesCleartextTraffic="false"'),
+    detail: "Expect native shell to explicitly reject cleartext HTTP traffic",
   },
   {
     name: "Android keystore files ignored",
