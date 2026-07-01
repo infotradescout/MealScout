@@ -12,6 +12,11 @@ const repoRoot = process.cwd();
 const hasFile = (relativePath: string): boolean =>
   fs.existsSync(path.join(repoRoot, relativePath));
 
+const fileSize = (relativePath: string): number => {
+  const fullPath = path.join(repoRoot, relativePath);
+  return fs.existsSync(fullPath) ? fs.statSync(fullPath).size : 0;
+};
+
 const readFile = (relativePath: string): string => {
   const fullPath = path.join(repoRoot, relativePath);
   return fs.existsSync(fullPath) ? fs.readFileSync(fullPath, "utf8") : "";
@@ -70,6 +75,26 @@ const checks: CheckResult[] = [
     name: "Android keystore files ignored",
     ok: rootGitignore.includes("*.jks") && rootGitignore.includes("*.keystore"),
     detail: "Expect upload keystores to stay out of git",
+  },
+  {
+    name: "Android launcher icon is branded",
+    ok: fileSize("android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png") > 20_000,
+    detail: "Expect native launcher icon to be MealScout branded, not the default Capacitor placeholder",
+  },
+  {
+    name: "Android splash asset is branded",
+    ok: fileSize("android/app/src/main/res/drawable/splash.png") > 10_000,
+    detail: "Expect native splash image to be MealScout branded, not the default Capacitor placeholder",
+  },
+  {
+    name: "iOS App Store icon is branded",
+    ok: fileSize("ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png") > 500_000,
+    detail: "Expect 1024px iOS app icon to be MealScout branded, not the default Capacitor placeholder",
+  },
+  {
+    name: "iOS splash asset is branded",
+    ok: fileSize("ios/App/App/Assets.xcassets/Splash.imageset/splash-2732x2732.png") > 500_000,
+    detail: "Expect iOS splash image to be MealScout branded, not the default Capacitor placeholder",
   },
 ];
 
