@@ -340,7 +340,7 @@ export default function PrivacyPolicy() {
                   </div>
                 </div>
                 <p className="text-[color:var(--text-secondary)] leading-relaxed mt-4">
-                  To exercise these rights, contact us at privacy@mealscout.com.
+                  To exercise these rights, contact us at privacy@mealscout.us.
                   We will respond within the timeframe required by applicable
                   law.
                 </p>
@@ -479,19 +479,19 @@ export default function PrivacyPolicy() {
                   <p className="text-[color:var(--text-secondary)]">
                     <strong>Privacy Officer:</strong>{" "}
                     <a
-                      href="mailto:info.mealscout@gmail.com"
+                      href="mailto:privacy@mealscout.us"
                       className="text-[color:var(--accent-text)] hover:text-[color:var(--accent-text)] underline"
                     >
-                      info.mealscout@gmail.com
+                      privacy@mealscout.us
                     </a>
                   </p>
                   <p className="text-[color:var(--text-secondary)]">
                     <strong>General Inquiries:</strong>{" "}
                     <a
-                      href="mailto:info.mealscout@gmail.com"
+                      href="mailto:support@mealscout.us"
                       className="text-[color:var(--accent-text)] hover:text-[color:var(--accent-text)] underline"
                     >
-                      info.mealscout@gmail.com
+                      support@mealscout.us
                     </a>
                   </p>
                   <p className="text-[color:var(--text-secondary)]">

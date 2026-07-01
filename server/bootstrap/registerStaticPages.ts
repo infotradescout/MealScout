@@ -121,7 +121,7 @@ const PRIVACY_POLICY_HTML = `<!DOCTYPE html>
   <div class="section">
     <h2>8. Contact Us</h2>
     <div class="contact">
-      <p><strong>Email:</strong> <a href="mailto:info.mealscout@gmail.com">info.mealscout@gmail.com</a></p>
+      <p><strong>Email:</strong> <a href="mailto:support@mealscout.us">support@mealscout.us</a></p>
       <p><strong>Phone:</strong> <a href="tel:+19856626247">(985) 662-6247</a></p>
       <p>We will respond to your inquiry within 30 days.</p>
     </div>
@@ -178,8 +178,8 @@ const DATA_DELETION_HTML = `<!DOCTYPE html>
     <h2>Manual Deletion Request</h2>
     <div class="contact">
       <h3>Contact Information:</h3>
-      <p><strong>Email:</strong> <a href="mailto:privacy@mealscout.com">privacy@mealscout.com</a></p>
-      <p><strong>General Support:</strong> <a href="mailto:info.mealscout@gmail.com">info.mealscout@gmail.com</a></p>
+      <p><strong>Email:</strong> <a href="mailto:privacy@mealscout.us">privacy@mealscout.us</a></p>
+      <p><strong>General Support:</strong> <a href="mailto:support@mealscout.us">support@mealscout.us</a></p>
       <p><strong>Subject Line:</strong> "Data Deletion Request"</p>
     </div>
   </div>

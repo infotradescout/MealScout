@@ -24,6 +24,19 @@ const readFile = (relativePath: string): string => {
 
 const androidBuildGradle = readFile("android/app/build.gradle");
 const rootGitignore = readFile(".gitignore");
+const publicContactSourceFiles = [
+  "client/src/pages/about.tsx",
+  "client/src/pages/contact.tsx",
+  "client/src/pages/data-deletion.tsx",
+  "client/src/pages/oauth-setup-guide.tsx",
+  "client/src/pages/privacy-policy.tsx",
+  "client/src/pages/profile/help.tsx",
+  "client/src/pages/terms-of-service.tsx",
+  "server/bootstrap/registerStaticPages.ts",
+];
+const publicContactSource = publicContactSourceFiles
+  .map((relativePath) => readFile(relativePath))
+  .join("\n");
 
 const checks: CheckResult[] = [
   {
@@ -95,6 +108,15 @@ const checks: CheckResult[] = [
     name: "iOS splash asset is branded",
     ok: fileSize("ios/App/App/Assets.xcassets/Splash.imageset/splash-2732x2732.png") > 500_000,
     detail: "Expect iOS splash image to be MealScout branded, not the default Capacitor placeholder",
+  },
+  {
+    name: "Public contact emails match store domain",
+    ok:
+      !publicContactSource.includes("mealscout.com") &&
+      !publicContactSource.includes("info.mealscout@gmail.com") &&
+      publicContactSource.includes("support@mealscout.us") &&
+      publicContactSource.includes("privacy@mealscout.us"),
+    detail: "Expect public support/legal surfaces to use mealscout.us contact emails",
   },
 ];
 

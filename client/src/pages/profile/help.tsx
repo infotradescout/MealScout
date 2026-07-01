@@ -224,7 +224,7 @@ export default function HelpSupportPage() {
     description: "",
   });
   const [directMessage, setDirectMessage] = useState("");
-  const supportEmail = "info.mealscout@gmail.com";
+  const supportEmail = "support@mealscout.us";
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
