@@ -1,15 +1,39 @@
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import net from "node:net";
+import path from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 
 function log(...args) {
   console.log("[mobile-deeplinks:with-server]", ...args);
 }
 
+function npmCliPath() {
+  const npmExecPath = process.env.npm_execpath;
+  if (npmExecPath && existsSync(npmExecPath)) {
+    return npmExecPath;
+  }
+
+  const fallback = path.join(path.dirname(process.execPath), "node_modules", "npm", "bin", "npm-cli.js");
+  return existsSync(fallback) ? fallback : null;
+}
+
+function resolveCommand(cmd, args) {
+  if (process.platform === "win32" && cmd === "npm") {
+    const npmCli = npmCliPath();
+    if (npmCli) {
+      return { cmd: process.execPath, args: [npmCli, ...args] };
+    }
+  }
+
+  return { cmd, args };
+}
+
 function spawnCmd(cmd, args, opts = {}) {
-  return spawn(cmd, args, {
+  const resolved = resolveCommand(cmd, args);
+  return spawn(resolved.cmd, resolved.args, {
     stdio: "inherit",
-    shell: process.platform === "win32",
+    shell: false,
     ...opts,
   });
 }
@@ -57,9 +81,9 @@ function killTree(child) {
   if (!child || child.killed) return;
   try {
     if (process.platform === "win32") {
-      spawn("taskkill", ["/PID", String(child.pid), "/T", "/F"], {
+      spawn("taskkill.exe", ["/PID", String(child.pid), "/T", "/F"], {
         stdio: "ignore",
-        shell: true,
+        shell: false,
       });
     } else {
       child.kill("SIGTERM");

@@ -7,13 +7,13 @@ const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "..");
 
 const isWindows = process.platform === "win32";
-const locator = isWindows ? "where" : "which";
+const locator = isWindows ? "where.exe" : "which";
 
 function findCommand(command) {
   const result = spawnSync(locator, [command], {
     cwd: repoRoot,
     encoding: "utf8",
-    shell: isWindows,
+    shell: false,
   });
 
   if (result.status !== 0) {
