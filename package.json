@@ -100,7 +100,7 @@
     "audit:theme": "node scripts/audit-theme-colors.mjs"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.88.0",
+    "@anthropic-ai/sdk": "^0.109.0",
     "@capacitor/android": "8.3.0",
     "@capacitor/cli": "8.3.0",
     "@capacitor/core": "8.3.0",
