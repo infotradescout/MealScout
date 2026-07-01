@@ -114,8 +114,8 @@ requireMatch(
 
 requireMatch(
   cleanupMap,
-  /C5 - Launch Board SQL Safety Map[\s\S]*Status: `NEXT`/,
-  "CLEANUP_MAP.md marks C5 NEXT",
+  /C5 - Launch Board SQL Safety Map[\s\S]*Status: `DONE`/,
+  "CLEANUP_MAP.md marks C5 DONE",
 );
 
 const productFeatureLines = combined

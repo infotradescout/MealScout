@@ -49,7 +49,9 @@ const requiredDashboardSnippets = [
   "buildPublicProfilePath({",
   'entityType: "location"',
   "const buildCanonicalAffiliateLink = (",
-  "const profilePath = getAdminUserPublicProfilePath(user, attachedHostProfile);",
+  "const profilePath = getAdminUserPublicProfilePath(",
+  "attachedRestaurant",
+  "attachedHostProfile",
   'if (!profilePath || profilePath === "/") return null;',
   "const url = new URL(",
   "profilePath",
@@ -177,9 +179,9 @@ const affiliateBuilderSlice = dashboard.slice(
   dashboard.indexOf("const businessTypeOptions"),
 );
 if (
-  !affiliateBuilderSlice.includes(
-    "const profilePath = getAdminUserPublicProfilePath(user, attachedHostProfile);",
-  ) ||
+  !affiliateBuilderSlice.includes("const profilePath = getAdminUserPublicProfilePath(") ||
+  !affiliateBuilderSlice.includes("attachedRestaurant") ||
+  !affiliateBuilderSlice.includes("attachedHostProfile") ||
   !affiliateBuilderSlice.includes("const url = new URL(") ||
   !affiliateBuilderSlice.includes("profilePath") ||
   !affiliateBuilderSlice.includes("canonicalMealScoutOrigin") ||
