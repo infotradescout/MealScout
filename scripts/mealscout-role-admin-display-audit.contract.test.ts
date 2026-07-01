@@ -114,9 +114,9 @@ const affiliateBuilderSlice = adminDashboard.slice(
 );
 if (
   affiliateBuilderIndex === -1 ||
-  !affiliateBuilderSlice.includes(
-    "const profilePath = getAdminUserPublicProfilePath(user, attachedHostProfile);",
-  ) ||
+  !affiliateBuilderSlice.includes("const profilePath = getAdminUserPublicProfilePath(") ||
+  !affiliateBuilderSlice.includes("attachedRestaurant") ||
+  !affiliateBuilderSlice.includes("attachedHostProfile") ||
   !affiliateBuilderSlice.includes("const url = new URL(") ||
   !affiliateBuilderSlice.includes("profilePath") ||
   !affiliateBuilderSlice.includes("canonicalMealScoutOrigin") ||
@@ -132,7 +132,7 @@ if (
   affiliateBuilderSlice.includes("focusUser")
 ) {
   throw new Error(
-    "Admin primary Affiliate Link must use direct <profile>?ref=<tag> links, not admin paths",
+    "Admin primary Affiliate Link must use direct clean public profile links, not admin paths",
   );
 }
 

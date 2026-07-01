@@ -53,7 +53,12 @@ const requiredDashboardSnippets = [
   "Attach Business",
   "Create Business Shell",
   "Affiliate Link",
-  'url.searchParams.set("to", profilePath);',
+  "const buildCanonicalAffiliateLink = (",
+  "const profilePath = getAdminUserPublicProfilePath(",
+  "const url = new URL(profilePath, canonicalMealScoutOrigin);",
+  "url.pathname = `${normalizedPathname}/${encodeURIComponent(tag)}`;",
+  'url.searchParams.delete("ref");',
+  'url.searchParams.delete("to");',
   "https://www.mealscout.us",
   "Copy Link",
   "Open Link",
@@ -73,6 +78,34 @@ const requiredDashboardSnippets = [
 for (const snippet of requiredDashboardSnippets) {
   if (!dashboard.includes(snippet)) {
     throw new Error(`Missing admin truth correction snippet: ${snippet}`);
+  }
+}
+
+const affiliateBuilderIndex = dashboard.indexOf(
+  "const buildCanonicalAffiliateLink = (",
+);
+const affiliateBuilderEnd = dashboard.indexOf(
+  "const businessTypeOptions",
+  affiliateBuilderIndex,
+);
+if (affiliateBuilderIndex === -1 || affiliateBuilderEnd === -1) {
+  throw new Error("Canonical affiliate link builder must remain discoverable");
+}
+const affiliateBuilderSlice = dashboard.slice(
+  affiliateBuilderIndex,
+  affiliateBuilderEnd,
+);
+for (const forbidden of [
+  'url.searchParams.set("to"',
+  "?ref=",
+  "/ref/",
+  "/admin/dashboard",
+  "focusUser",
+]) {
+  if (affiliateBuilderSlice.includes(forbidden)) {
+    throw new Error(
+      `Canonical affiliate link builder must not use stale/admin attribution: ${forbidden}`,
+    );
   }
 }
 
