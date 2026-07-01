@@ -91,6 +91,8 @@ checks.push({
 });
 
 const locationButton = readText("client/src/components/location-button.tsx") ?? "";
+const iosInfoPlist = readText("ios/App/App/Info.plist") ?? "";
+const androidManifest = readText("android/app/src/main/AndroidManifest.xml") ?? "";
 checks.push({
   name: "Geolocation runtime support",
   ok:
@@ -98,6 +100,15 @@ checks.push({
     locationButton.includes("permissions.query") &&
     locationButton.includes("Location access is permanently denied"),
   detail: "Expect geolocation permission prompt/check/recovery support in location-button",
+});
+
+checks.push({
+  name: "Native geolocation permission declarations",
+  ok:
+    iosInfoPlist.includes("NSLocationWhenInUseUsageDescription") &&
+    androidManifest.includes("android.permission.ACCESS_COARSE_LOCATION") &&
+    androidManifest.includes("android.permission.ACCESS_FINE_LOCATION"),
+  detail: "Expect iOS and Android native shells to declare location permissions used by Scout, Map, and Parking Pass",
 });
 
 const parkingPassPage = readText("client/src/pages/parking-pass.tsx") ?? "";
