@@ -67,11 +67,18 @@ const runRepoHygieneChecks = () => {
 
 const allChecks = [
   {
+    id: "rbacGuardrails",
+    title: "Staff RBAC non-mutating guardrails",
+    command: "npm",
+    args: ["run", "test:staff-rbac-guardrails"],
+    blockOnMissingEnv: false,
+  },
+  {
     id: "incidents",
     title: "Incident tri-channel checklist",
     command: "npm",
     args: ["run", "checklist:incidents"],
-    blockOnMissingEnv: false,
+    blockOnMissingEnv: true,
   },
   {
     id: "rbac",
@@ -85,12 +92,16 @@ const allChecks = [
 const skipRbac = truthy(process.env.CHECKLIST_SKIP_RBAC);
 const requireSms = truthy(process.env.CHECKLIST_REQUIRE_SMS);
 const requireSlack = truthy(process.env.CHECKLIST_REQUIRE_SLACK);
+const requireRuntime = truthy(process.env.CHECKLIST_REQUIRE_RUNTIME);
+const requireIncidents =
+  requireRuntime || requireSms || requireSlack || truthy(process.env.CHECKLIST_REQUIRE_INCIDENTS);
+const requireRbacCookies =
+  requireRuntime || truthy(process.env.CHECKLIST_REQUIRE_RBAC_COOKIES);
 
-const checks = skipRbac
-  ? allChecks.filter((check) => check.id !== "rbac")
-  : allChecks;
+const checks = allChecks.filter((check) => !(skipRbac && check.id === "rbac"));
 
 const requiredEnvByCheck = {
+  rbacGuardrails: [],
   incidents: [
     "BREVO_API_KEY",
     "INCIDENT_EMAIL_RECIPIENTS",
@@ -102,6 +113,7 @@ const requiredEnvByCheck = {
 };
 
 const optionalEnvByCheck = {
+  rbacGuardrails: [],
   incidents: [
     ...(requireSms ? [] : ["INCIDENT_SMS_RECIPIENTS"]),
     ...(requireSlack ? [] : ["SLACK_WEBHOOK_URL"]),
@@ -154,6 +166,15 @@ const getRerunCommand = () => {
   if (requireSms && requireSlack) {
     return "npm run checklist:security:strict";
   }
+  if (requireRuntime) {
+    return "cross-env CHECKLIST_REQUIRE_RUNTIME=true npm run checklist:security";
+  }
+  if (requireIncidents) {
+    return "cross-env CHECKLIST_REQUIRE_INCIDENTS=true npm run checklist:security";
+  }
+  if (requireRbacCookies) {
+    return "cross-env CHECKLIST_REQUIRE_RBAC_COOKIES=true npm run checklist:security";
+  }
   if (requireSms || requireSlack) {
     const env = [];
     if (requireSms) env.push("CHECKLIST_REQUIRE_SMS=true");
@@ -165,6 +186,32 @@ const getRerunCommand = () => {
 
 const runCheck = (check) => {
   const missing = missingByCheck[check.id] || [];
+
+  if (check.id === "incidents" && missing.length && !requireIncidents) {
+    console.log(`\n> ${check.title}`);
+    console.log("  Skipped because incident runtime env is not present in this shell.");
+    console.log("  Set CHECKLIST_REQUIRE_INCIDENTS=true or CHECKLIST_REQUIRE_RUNTIME=true to enforce.");
+    return {
+      ...check,
+      passed: true,
+      skipped: true,
+      skipReason: "missing optional incident runtime env",
+      exitCode: 0,
+    };
+  }
+
+  if (check.id === "rbac" && missing.length && !requireRbacCookies) {
+    console.log(`\n> ${check.title}`);
+    console.log("  Skipped because RBAC browser session cookies are not present in this shell.");
+    console.log("  Set CHECKLIST_REQUIRE_RBAC_COOKIES=true or CHECKLIST_REQUIRE_RUNTIME=true to enforce.");
+    return {
+      ...check,
+      passed: true,
+      skipped: true,
+      skipReason: "missing optional RBAC runtime cookies",
+      exitCode: 0,
+    };
+  }
 
   if (check.blockOnMissingEnv && missing.length) {
     console.log(`\n> ${check.title}`);
@@ -217,6 +264,12 @@ const main = () => {
   if (skipRbac) {
     console.log("RBAC check is skipped via CHECKLIST_SKIP_RBAC.");
   }
+  if (!requireIncidents) {
+    console.log("Incident runtime checklist is optional in this shell (set CHECKLIST_REQUIRE_INCIDENTS=true to enforce).");
+  }
+  if (!requireRbacCookies && !skipRbac) {
+    console.log("RBAC runtime cookie smoke is optional in this shell (set CHECKLIST_REQUIRE_RBAC_COOKIES=true to enforce).");
+  }
   if (!requireSms) {
     console.log("Incident SMS env is optional (set CHECKLIST_REQUIRE_SMS=true to enforce).");
   }
@@ -234,7 +287,13 @@ const main = () => {
 
   const hasFailure = results.some((result) => !result.passed);
   for (const result of results) {
-    const status = result.blocked ? "BLOCKED (missing env)" : result.passed ? "PASS" : "FAIL";
+    const status = result.skipped
+      ? `SKIPPED (${result.skipReason || "not required"})`
+      : result.blocked
+        ? "BLOCKED (missing env)"
+        : result.passed
+          ? "PASS"
+          : "FAIL";
     console.log(`- ${result.title}: ${status}`);
   }
 
