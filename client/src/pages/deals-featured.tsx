@@ -227,7 +227,7 @@ export default function FeaturedDealsPage() {
                   variant="outline"
                   data-testid="button-open-map-featured"
                 >
-                  Open Map
+                  Open Scout
                 </Button>
               </Link>
             </div>

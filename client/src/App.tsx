@@ -26,8 +26,6 @@ const DealEdit = lazy(() => import("@/pages/deal-edit"));
 const DealDetail = lazy(() => import("@/pages/deal-detail"));
 const Subscribe = lazy(() => import("@/pages/subscribe"));
 const Search = lazy(() => import("@/pages/search"));
-const Trending = lazy(() => import("@/pages/trending"));
-const MapPage = lazy(() => import("@/pages/map"));
 const ReviewsPage = lazy(() => import("@/pages/reviews"));
 const Favorites = lazy(() => import("@/pages/favorites"));
 const Orders = lazy(() => import("@/pages/orders"));
@@ -290,8 +288,8 @@ function Router() {
             <Route path="/deal-creation" component={DealCreation} />
             <Route path="/deal/:id" component={DealDetail} />
             <Route path="/search" component={Search} />
-            <Route path="/trending" component={Trending} />
-            <Route path="/map" component={MapPage} />
+            <Route path="/trending" component={RedirectToScout} />
+            <Route path="/map" component={RedirectToScout} />
             <Route path="/suppliers" component={SuppliersPage} />
             <Route
               path="/suppliers/:supplierId"
@@ -468,8 +466,8 @@ function Router() {
             <Route path="/jobs" component={HiringPage} />
             <Route path="/private-chefs" component={HiringPage} />
             <Route path="/search" component={Search} />
-            <Route path="/trending" component={Trending} />
-            <Route path="/map" component={MapPage} />
+            <Route path="/trending" component={RedirectToScout} />
+            <Route path="/map" component={RedirectToScout} />
             <Route path="/suppliers" component={SuppliersPage} />
             <Route
               path="/suppliers/:supplierId"

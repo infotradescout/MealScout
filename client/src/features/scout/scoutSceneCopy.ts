@@ -3,7 +3,7 @@ import type { ScoutSceneCopy, ScoutSceneId } from "./scoutTypes";
 export const SCOUT_SCENE_COPY: Record<ScoutSceneId, ScoutSceneCopy> = {
   for_you: {
     title: "For You",
-    subtitle: "Open now, trending this week, and worth trying near you.",
+    subtitle: "Open now and worth trying near you.",
   },
   community: {
     title: "Community Picks",

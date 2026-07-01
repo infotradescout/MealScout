@@ -22,7 +22,6 @@ import {
   MoreHorizontal,
   X,
   Compass,
-  MapPin,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -256,7 +255,6 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
 
   const primarySlotsByLane: Record<typeof lane, NavItem[]> = {
     guest: [
-      { path: "/map", icon: MapPin, label: "Map" },
       {
         path: "/restaurant-signup?businessType=food_truck",
         icon: Store,

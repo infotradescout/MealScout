@@ -260,7 +260,7 @@ export default function UserDashboard() {
       </header>
 
       <section className="px-6 pt-4 pb-3">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3">
           <Button
             asChild
             className="bg-primary text-black font-bold uppercase tracking-[0.2em] text-[10px] rounded-xl h-12"
@@ -269,12 +269,6 @@ export default function UserDashboard() {
               Open Scout
               <ArrowRight className="h-4 w-4 ml-2" />
             </Link>
-          </Button>
-          <Button
-            asChild
-            className="bg-white/5 border border-white/10 text-white font-bold uppercase tracking-[0.2em] text-[10px] rounded-xl h-12"
-          >
-            <Link href="/map">Open Map</Link>
           </Button>
         </div>
       </section>
