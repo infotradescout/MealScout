@@ -542,7 +542,7 @@ export default function UserDashboard() {
               )}
             </Button>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3">
             <Button
               variant="secondary"
               className="justify-start h-auto py-3 px-4 rounded-xl bg-white/5 border border-white/10 text-white"
