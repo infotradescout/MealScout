@@ -31,7 +31,7 @@ const routeRequired = [
   "accountTypeMap",
   'bar_owner: { userType: "restaurant_owner", businessType: "bar" }',
   'food_truck_owner: { userType: "food_truck", businessType: "food_truck" }',
-  'host_venue_operator: { userType: "host", businessType: "venue" }',
+  'host_venue_operator: { userType: "host", businessType: "host_venue" }',
   "const resolvedBusinessType =",
   "businessType: resolvedBusinessType",
   "isFoodTruck:",

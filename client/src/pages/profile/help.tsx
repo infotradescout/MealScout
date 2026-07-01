@@ -57,16 +57,15 @@ export default function HelpSupportPage() {
       guide: "Universal",
       title: "Getting Started",
       summary:
-        "Use Scout, Map, Search, Deals, and Events to discover local food quickly.",
+        "Use Scout, Search, Deals, and Events to discover local food quickly.",
       steps: [
         "Open Scout and browse local spots.",
-        "Use Map and Search to compare options nearby.",
+        "Use Search to compare options nearby.",
         "Check Time-Sensitive Specials and Events.",
         "Save or share the best options.",
       ],
       links: [
         { label: "Scout", href: "/scout" },
-        { label: "Map", href: "/map" },
         { label: "Search", href: "/search" },
         { label: "Deals", href: "/deals/featured" },
         { label: "Events", href: "/events" },

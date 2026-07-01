@@ -26,8 +26,6 @@ const DealEdit = lazy(() => import("@/pages/deal-edit"));
 const DealDetail = lazy(() => import("@/pages/deal-detail"));
 const Subscribe = lazy(() => import("@/pages/subscribe"));
 const Search = lazy(() => import("@/pages/search"));
-const Trending = lazy(() => import("@/pages/trending"));
-const MapPage = lazy(() => import("@/pages/map"));
 const ReviewsPage = lazy(() => import("@/pages/reviews"));
 const Favorites = lazy(() => import("@/pages/favorites"));
 const Orders = lazy(() => import("@/pages/orders"));
@@ -152,6 +150,13 @@ const ScoutPrototype = lazy(() => import("@/pages/scout-prototype"));
 const FoodTruckRush = lazy(() => import("@/pages/food-truck-rush"));
 const HiringPage = lazy(() => import("@/pages/hiring"));
 const ScoutcoinPage = lazy(() => import("@/pages/scoutcoin"));
+const ForRestaurants = lazy(() => import("@/pages/for-restaurants"));
+const ForBars = lazy(() => import("@/pages/for-bars"));
+const ForHosts = lazy(() => import("@/pages/for-hosts"));
+const ForEvents = lazy(() => import("@/pages/for-events"));
+const HostLocationPartnerPage = lazy(
+  () => import("@/pages/host-location-partner"),
+);
 
 // Loading fallback component
 const PageLoader = () => (
@@ -168,6 +173,14 @@ const RedirectToScout = () => {
   }, [setLocation]);
 
   return <PageLoader />;
+};
+
+const CleanPublicProfileRoute = () => {
+  const [location] = useLocation();
+  const currentPath = location.split("?")[0];
+  return parseCleanAffiliateBusinessRoute(currentPath) ? (
+    <PublicProfilePage />
+  ) : null;
 };
 
 const publicRoutePrefixes = [
@@ -201,6 +214,11 @@ const publicRoutePrefixes = [
   "/contact",
   "/install",
   "/host-signup",
+  "/for-restaurants",
+  "/for-bars",
+  "/for-hosts",
+  "/for-events",
+  "/host-location-partner",
   "/hiring",
   "/jobs",
   "/private-chefs",
@@ -236,6 +254,20 @@ const isPublicPath = (path: string) =>
   publicRoutePrefixes.some((prefix) =>
     prefix === "/" ? path === "/" : path.startsWith(prefix),
   ) || Boolean(parseCleanAffiliateBusinessRoute(path));
+
+const shouldRenderShellNotFound = (path: string) => {
+  const segments = path.split("/").filter(Boolean);
+  if (segments.length <= 2) return false;
+  if (isPublicPath(path)) return false;
+  if (
+    /^\/(restaurant|truck|bar|location|supplier)\/[^/]+(?:\/[^/]+)?$/i.test(
+      path,
+    )
+  ) {
+    return false;
+  }
+  return true;
+};
 
 // Wrapper component to handle route props
 function DashboardSwitcherPage() {
@@ -290,8 +322,8 @@ function Router() {
             <Route path="/deal-creation" component={DealCreation} />
             <Route path="/deal/:id" component={DealDetail} />
             <Route path="/search" component={Search} />
-            <Route path="/trending" component={Trending} />
-            <Route path="/map" component={MapPage} />
+            <Route path="/trending" component={RedirectToScout} />
+            <Route path="/map" component={RedirectToScout} />
             <Route path="/suppliers" component={SuppliersPage} />
             <Route
               path="/suppliers/:supplierId"
@@ -372,6 +404,14 @@ function Router() {
             <Route path="/contact" component={Contact} />
             <Route path="/install" component={InstallApp} />
             <Route path="/host-signup" component={HostSignup} />
+            <Route path="/for-restaurants" component={ForRestaurants} />
+            <Route path="/for-bars" component={ForBars} />
+            <Route path="/for-hosts" component={ForHosts} />
+            <Route path="/for-events" component={ForEvents} />
+            <Route
+              path="/host-location-partner"
+              component={HostLocationPartnerPage}
+            />
             <Route path="/hiring" component={HiringPage} />
             <Route path="/jobs" component={HiringPage} />
             <Route path="/private-chefs" component={HiringPage} />
@@ -416,6 +456,7 @@ function Router() {
             <Route path="/post-verification" component={PostVerification} />
             <Route path="/admin" component={AdminLogin} />
             <Route path="/admin/login" component={AdminLogin} />
+            <Route path="/admin/dashboard" component={AdminLogin} />
             <Route path="/scoutcoin" component={ScoutcoinPage} />
             <Route path="/menu/:restaurantId" component={OnlineMenuPage} />
             <Route
@@ -426,8 +467,11 @@ function Router() {
               path="/order-confirmation/:orderId"
               component={OrderConfirmationPage}
             />
-            <Route path="/:businessSlug/:refTag" component={PublicProfilePage} />
-            <Route path="/:businessSlug" component={PublicProfilePage} />
+            <Route
+              path="/:businessSlug/:refTag"
+              component={CleanPublicProfileRoute}
+            />
+            <Route path="/:businessSlug" component={CleanPublicProfileRoute} />
           </>
         ) : (
           <>
@@ -468,8 +512,8 @@ function Router() {
             <Route path="/jobs" component={HiringPage} />
             <Route path="/private-chefs" component={HiringPage} />
             <Route path="/search" component={Search} />
-            <Route path="/trending" component={Trending} />
-            <Route path="/map" component={MapPage} />
+            <Route path="/trending" component={RedirectToScout} />
+            <Route path="/map" component={RedirectToScout} />
             <Route path="/suppliers" component={SuppliersPage} />
             <Route
               path="/suppliers/:supplierId"
@@ -595,6 +639,14 @@ function Router() {
             <Route path="/contact" component={Contact} />
             <Route path="/install" component={InstallApp} />
             <Route path="/host-signup" component={HostSignup} />
+            <Route path="/for-restaurants" component={ForRestaurants} />
+            <Route path="/for-bars" component={ForBars} />
+            <Route path="/for-hosts" component={ForHosts} />
+            <Route path="/for-events" component={ForEvents} />
+            <Route
+              path="/host-location-partner"
+              component={HostLocationPartnerPage}
+            />
             <Route path="/events" component={EventsRouter} />
             <Route path="/events/public" component={EventsPage} />
             <Route path="/event/:slug" component={EventDetailPage} />
@@ -661,11 +713,13 @@ function Router() {
             <Route path="/menu-builder" component={MenuBuilderPage} />
             <Route path="/kitchen" component={KitchenDisplayPage} />
             <Route path="/scoutcoin" component={ScoutcoinPage} />
-            <Route path="/:businessSlug/:refTag" component={PublicProfilePage} />
-            <Route path="/:businessSlug" component={PublicProfilePage} />
+            <Route
+              path="/:businessSlug/:refTag"
+              component={CleanPublicProfileRoute}
+            />
+            <Route path="/:businessSlug" component={CleanPublicProfileRoute} />
           </>
         )}
-        <Route component={NotFound} />
       </Switch>
     </Suspense>
   );
@@ -674,12 +728,28 @@ function Router() {
 function App() {
   const [location] = useLocation();
   const currentPath = location.split("?")[0];
+  const isShellNotFound = shouldRenderShellNotFound(currentPath);
   const isPublicProfilePath =
     currentPath.startsWith("/p/") ||
     Boolean(parseCleanAffiliateBusinessRoute(currentPath)) ||
     /^\/(restaurant|truck|bar|location|supplier)\/[^/]+(?:\/[^/]+)?$/i.test(
       currentPath,
     );
+
+  if (isShellNotFound) {
+    return (
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <TimeOfDayBackground />
+          <div className="desktop-full-width app-background app-content min-h-screen md:pt-16 relative z-10">
+            <Toaster />
+            <NotFound />
+            <Navigation scope="global" />
+          </div>
+        </TooltipProvider>
+      </QueryClientProvider>
+    );
+  }
 
   if (isPublicProfilePath) {
     return (

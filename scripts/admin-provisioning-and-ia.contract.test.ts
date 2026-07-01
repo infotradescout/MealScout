@@ -1,14 +1,15 @@
 import { readFileSync } from "node:fs";
 
 const adminDashboard = readFileSync("client/src/pages/admin-dashboard.tsx", "utf8");
-const adminRoutes = readFileSync("server/adminRoutes.ts", "utf8");
+const adminRoutes = readFileSync("server/routes/adminManagementRoutes.ts", "utf8");
 
 const requiredDashboardSnippets = [
   "Provision User + Business Access",
   "Users are people accounts. Businesses are separate entities.",
   "Role/account type is separate from business category and discovery",
   "<option value=\"bar_owner\">Bar Owner</option>",
-  "<option value=\"brewery_taproom_owner\">Brewery / Taproom Owner</option>",
+  "<option value=\"brewery_taproom_owner\">",
+  "Brewery / Taproom Owner",
   "businessType: \"bar\"",
   "businessType: \"brewery_taproom\"",
   "businessType: \"caterer\"",
@@ -25,12 +26,15 @@ const requiredRouteSnippets = [
   "private_chef_owner: {",
   "businessType: \"private_chef\"",
   "event_coordinator: { userType: \"event_coordinator\", businessType: \"event_organizer\" }",
-  "shouldCreateBusinessShell =",
-  "const createdBusiness = await storage.createRestaurantForUser({",
-  "await storage.updateRestaurant(createdBusiness.id, {",
-  "isFoodTruck: String(resolvedBusinessType || \"\") === \"food_truck\"",
-  "staff: { userType: \"staff\", businessType: null }",
-  "customer: { userType: \"customer\", businessType: null }",
+  "const isRestaurantProvisionType =",
+  "const shouldCreateHostProfile =",
+  ".insert(restaurants)",
+  "ownerId: insertedUser.id",
+  "businessType: resolvedBusinessType",
+  "isFoodTruck:",
+  "resolvedBusinessType === \"food_truck\"",
+  "\"staff\"",
+  "\"customer\"",
 ];
 
 const forbiddenSnippets = [
@@ -38,6 +42,7 @@ const forbiddenSnippets = [
   "businessType: \"brewery\"",
   "businessType: \"caterer_private_chef\"",
   "businessType: \"venue\"",
+  "value: \"venue\"",
   "userType: \"event_organizer\"",
 ];
 

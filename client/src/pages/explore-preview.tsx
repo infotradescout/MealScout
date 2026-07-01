@@ -614,9 +614,9 @@ const DISCOVERY_LAYERS: Record<
     subtitle: "Search dishes, trucks, places, and events by what sounds good.",
   },
   trending: {
-    title: "Trending This Week",
+    title: "Local Activity",
     href: "/search",
-    subtitle: "Food and places getting real attention this week.",
+    subtitle: "Fresh local signals from recent saves, updates, and activity.",
   },
   menuItems: {
     title: "Popular Dishes",
@@ -4592,12 +4592,6 @@ function ScoutRecoveryActions({ className = "" }: { className?: string }) {
         Browse nearby
       </Link>
       <Link
-        href="/map"
-        className="rounded-full bg-white/[0.06] px-3 py-1.5 text-[11px] font-black text-white/90 ring-1 ring-white/16"
-      >
-        View map
-      </Link>
-      <Link
         href="/search"
         className="rounded-full bg-white/[0.06] px-3 py-1.5 text-[11px] font-black text-white/90 ring-1 ring-white/16"
       >
@@ -5114,7 +5108,7 @@ function ActiveSceneContent({
       })),
       ...trendingPlaceCards.map((restaurant) => ({
         sourceRowId: "trending_this_week" as const,
-        sectionLabel: "What's Hot",
+        sectionLabel: "Local Activity",
         summary: formatScoutCount(trendingPlaceCards.length, "hot local signal", "hot local signals"),
         cardType: "restaurant" as const,
         restaurant,
@@ -5361,8 +5355,8 @@ function ActiveSceneContent({
       },
       {
         id: "trending_this_week",
-        title: "What's Hot",
-        subtitle: "Places in your market with real trend, community, or update signals.",
+        title: "Local Activity",
+        subtitle: "Places in your market with recent community and update signals.",
         linkHref: DISCOVERY_LAYERS.trending.href,
         cards: restaurantRailCards(trendingPlaceCards),
         className: compactRailSectionClass,

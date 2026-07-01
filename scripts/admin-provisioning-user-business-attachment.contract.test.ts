@@ -13,7 +13,7 @@ const requiredSnippets = [
   "where lower(email)",
   "Unknown account type",
   "ownerId: insertedUser.id",
-  "source: \"admin_provisioning\"",
+  "\"admin_provisioning\"",
   "businessId",
   "businessType",
   "ownerAccessCreated",

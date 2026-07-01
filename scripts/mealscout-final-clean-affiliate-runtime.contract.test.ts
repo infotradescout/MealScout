@@ -49,6 +49,20 @@ assert.equal(
   "Non-business public routes must not be rewritten into fake clean business affiliate links.",
 );
 
+for (const publicRoute of [
+  "/for-restaurants",
+  "/for-bars",
+  "/for-hosts",
+  "/for-events",
+  "/host-location-partner",
+]) {
+  assert.equal(
+    parseCleanAffiliateBusinessRoute(publicRoute),
+    null,
+    `${publicRoute} must remain a public app route, not a clean business slug.`,
+  );
+}
+
 assert.deepEqual(
   parseCleanAffiliateBusinessRoute("/the-spot-tavern/thomas"),
   { businessSlug: "the-spot-tavern", affiliateTag: "thomas" },

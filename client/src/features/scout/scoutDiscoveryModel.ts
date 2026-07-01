@@ -107,7 +107,7 @@ export const SCOUT_HORIZONTAL_ROW_REGISTRY: ScoutHorizontalRowDefinition[] = [
   },
   {
     id: "trending_this_week",
-    title: "What's Hot",
+    title: "Local Activity",
     acceptedCardKinds: ["food_truck", "restaurant", "menu_item", "deal", "event"],
     priority: 8,
     maxCards: 10,

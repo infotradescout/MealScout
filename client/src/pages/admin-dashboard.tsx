@@ -228,7 +228,7 @@ const businessTypeOptions = [
   { value: "bar", label: "Bar" },
   { value: "brewery_taproom", label: "Brewery / Taproom" },
   { value: "caterer_private_chef", label: "Caterer / Private Chef" },
-  { value: "venue", label: "Host / Venue" },
+  { value: "host_venue", label: "Host / Venue" },
   { value: "supplier", label: "Supplier" },
 ];
 

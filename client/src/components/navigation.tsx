@@ -22,7 +22,6 @@ import {
   MoreHorizontal,
   X,
   Compass,
-  MapPin,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -256,7 +255,6 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
 
   const primarySlotsByLane: Record<typeof lane, NavItem[]> = {
     guest: [
-      { path: "/map", icon: MapPin, label: "Map" },
       {
         path: "/restaurant-signup?businessType=food_truck",
         icon: Store,
@@ -333,7 +331,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
       ? { path: "/claim-truck", icon: Truck, label: "Claim" }
       : { path: "/share-hub", icon: Share2, label: "Share" },
     { icon: MoreHorizontal, label: "More", onClick: () => setMoreOpen((v) => !v) },
-  ];
+  ].filter(Boolean) as NavItem[];
 
   const dedupeByPath = (items: NavItem[]) => {
     const seen = new Set<string>();
