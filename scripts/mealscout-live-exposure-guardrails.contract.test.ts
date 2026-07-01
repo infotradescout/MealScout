@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 const read = (path: string) => readFileSync(path, "utf8");
 
 const navigation = read("client/src/components/navigation.tsx");
-const scout = read("client/src/pages/scout-prototype.tsx");
+const scout = read("client/src/pages/explore-preview.tsx");
 const map = read("client/src/pages/map.tsx");
 const publicProfile = read("client/src/pages/public-profile.tsx");
 const app = read("client/src/App.tsx");
@@ -49,23 +49,7 @@ assert(
   "Guest nav must preserve the food-truck signup intake lane.",
 );
 
-const exploreTiles = sliceBetween(scout, "const EXPLORE_TILES = [", "];");
-for (const blockedScoutTile of [
-  'id: "restaurants"',
-  'id: "deals"',
-  'id: "events"',
-  'id: "new_menus"',
-]) {
-  assert(
-    !exploreTiles.includes(blockedScoutTile),
-    `Scout explore tiles must not promote ${blockedScoutTile} during containment.`,
-  );
-}
 for (const blockedScoutExit of [
-  "href: `/search?q=deals`",
-  "href: `/event/${e.id}`",
-  'href="/search"',
-  'href="/alerts"',
   "Local matches will include places, dishes, trucks, deals, and events.",
 ]) {
   assert(
@@ -74,16 +58,22 @@ for (const blockedScoutExit of [
   );
 }
 assert(
-  scout.includes("truck-safe surfaces") && scout.includes("Coverage is limited"),
+  scout.includes("/scout — The canonical MealScout food discovery page.") &&
+    scout.includes("Coverage is still thin here") &&
+    scout.includes("Browse nearby or open the map"),
   "Scout must keep honest limited-coverage copy visible.",
 );
 assert(
-  scout.includes('href={user ? "/profile" : "/login"}'),
-  "Scout header account action must send guests to login instead of off-scope routes.",
+  scout.includes('window.location.href = `/login?redirect=${encodeURIComponent("/scout")}`;'),
+  "Scout account action must send guests to login with a Scout redirect.",
 );
 
 const mapExploreLinks = sliceBetween(map, "const mapExploreLinks = [", "];");
-for (const blockedMapLink of ['href: "/search"', 'href: "/events"', "Search Food Deals", "Food Truck Events"]) {
+assert(
+  mapExploreLinks.includes('href: "/scout"') && mapExploreLinks.includes('href: "/search"'),
+  "Map explore links must preserve Scout and Browse nearby exits.",
+);
+for (const blockedMapLink of ['href: "/events"', "Search Food Deals", "Food Truck Events"]) {
   assert(
     !mapExploreLinks.includes(blockedMapLink),
     `Map explore links must not promote red destination: ${blockedMapLink}`,
