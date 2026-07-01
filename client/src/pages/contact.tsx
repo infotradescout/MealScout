@@ -22,7 +22,7 @@ export default function Contact() {
       "contactPoint": {
         "@type": "ContactPoint",
         "contactType": "customer service",
-        "email": "info.mealscout@gmail.com",
+        "email": "support@mealscout.us",
         "availableLanguage": "English"
       }
     }
@@ -33,7 +33,7 @@ export default function Contact() {
       title: "General Support",
       description: "Questions about using MealScout, technical issues, or account help",
       icon: HelpCircle,
-      contact: "info.mealscout@gmail.com",
+      contact: "support@mealscout.us",
       response: "Within 24 hours",
       color: "bg-[color:var(--accent-text)]/12 text-[color:var(--accent-text)]"
     },
@@ -41,7 +41,7 @@ export default function Contact() {
       title: "Restaurant Partnerships",
       description: "Interested in joining MealScout as a restaurant partner",
       icon: Building,
-      contact: "info.mealscout@gmail.com",
+      contact: "support@mealscout.us",
       response: "Within 24 hours",
       color: "bg-[color:var(--status-success)]/12 text-[color:var(--status-success)]"
     },
@@ -49,13 +49,13 @@ export default function Contact() {
       title: "Press & Media",
       description: "Media inquiries, press releases, and partnership opportunities",
       icon: Users,
-      contact: "info.mealscout@gmail.com", 
+      contact: "support@mealscout.us",
       response: "Within 24 hours",
       color: "bg-purple-100 text-purple-600"
     }
   ];
 
-  const supportEmail = "info.mealscout@gmail.com";
+  const supportEmail = "support@mealscout.us";
 
   const quickHelp = [
     "How do I get started?",
@@ -171,7 +171,7 @@ export default function Contact() {
                   <Mail className="w-5 h-5 text-[color:var(--text-muted)] mt-0.5" />
                   <div>
                     <div className="font-semibold text-[color:var(--text-primary)]">Email</div>
-                    <div className="text-[color:var(--text-secondary)]">info.mealscout@gmail.com</div>
+                    <div className="text-[color:var(--text-secondary)]">support@mealscout.us</div>
                   </div>
                 </div>
                 

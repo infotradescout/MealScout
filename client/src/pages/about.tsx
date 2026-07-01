@@ -27,7 +27,7 @@ export default function About() {
     "contactPoint": {
       "@type": "ContactPoint",
       "contactType": "customer service",
-      "email": "info.mealscout@gmail.com"
+      "email": "support@mealscout.us"
     }
   };
 

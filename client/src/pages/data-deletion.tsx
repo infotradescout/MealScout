@@ -89,13 +89,13 @@ export default function DataDeletion() {
               variant="outline"
               onClick={() =>
                 (window.location.href =
-                  "mailto:privacy@mealscout.com?subject=Data Deletion Request")
+                  "mailto:privacy@mealscout.us?subject=Data Deletion Request")
               }
               className="rounded-xl"
               data-testid="button-email-deletion"
             >
               <Mail className="mr-2 h-4 w-4" />
-              privacy@mealscout.com
+              privacy@mealscout.us
             </Button>
             <Button
               variant="outline"
@@ -162,8 +162,8 @@ export default function DataDeletion() {
             <ShieldCheck className="h-4 w-4 text-[color:var(--action-primary)]" />
             Need help?
           </p>
-          <p>Privacy: `privacy@mealscout.com`</p>
-          <p>Support: `support@mealscout.com`</p>
+          <p>Privacy: `privacy@mealscout.us`</p>
+          <p>Support: `support@mealscout.us`</p>
         </div>
       </div>
     </div>

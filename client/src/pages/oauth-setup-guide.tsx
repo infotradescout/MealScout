@@ -100,8 +100,8 @@ export default function OAuthSetupGuide() {
             <InfoCard title="2) OAuth Consent Screen" variant="neutral">
               <p>User Type: External</p>
               <p>App Name: MealScout</p>
-              <p>User Support Email: info.mealscout@gmail.com</p>
-              <p>Developer Contact: info.mealscout@gmail.com</p>
+              <p>User Support Email: support@mealscout.us</p>
+              <p>Developer Contact: support@mealscout.us</p>
             </InfoCard>
 
             <InfoCard title="3) App Domain" variant="neutral">
