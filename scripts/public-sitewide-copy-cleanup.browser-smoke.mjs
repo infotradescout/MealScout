@@ -51,7 +51,7 @@ async function stopServer(server) {
   if (!server || server.killed) return;
   if (process.platform === "win32") {
     spawn("taskkill", ["/PID", String(server.pid), "/T", "/F"], {
-      shell: true,
+      shell: false,
       stdio: "ignore",
     });
   } else {

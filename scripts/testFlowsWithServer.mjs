@@ -69,7 +69,7 @@ function killTree(child) {
       // /T kills child tree, /F forces termination
       spawn("taskkill", ["/PID", String(child.pid), "/T", "/F"], {
         stdio: "ignore",
-        shell: true,
+        shell: false,
       });
     } else {
       child.kill("SIGTERM");
