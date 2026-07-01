@@ -22,6 +22,11 @@ async function main() {
       env: { STRICT_STORE_METADATA: "true" },
     },
     {
+      name: "Native web asset build and sync",
+      cmd: "npm",
+      args: ["run", "cap:prepare"],
+    },
+    {
       name: "Mobile deep-link smoke (with server)",
       cmd: "npm",
       args: ["run", "smoke:mobile-deeplinks:with-server"],

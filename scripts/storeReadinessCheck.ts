@@ -24,6 +24,7 @@ const readFile = (relativePath: string): string => {
 
 const androidBuildGradle = readFile("android/app/build.gradle");
 const androidManifest = readFile("android/app/src/main/AndroidManifest.xml");
+const packageJson = readFile("package.json");
 const rootGitignore = readFile(".gitignore");
 const publicContactSourceFiles = [
   "client/src/pages/about.tsx",
@@ -84,6 +85,18 @@ const checks: CheckResult[] = [
       androidBuildGradle.includes("MEALSCOUT_ANDROID_UPLOAD_KEY_PASSWORD") &&
       androidBuildGradle.includes("Android release signing is not configured"),
     detail: "Expect release bundle tasks to require upload-key signing configuration",
+  },
+  {
+    name: "Capacitor scripts use pinned local CLI",
+    ok:
+      packageJson.includes('"cap:sync": "cap sync"') &&
+      packageJson.includes('"cap:prepare": "npm run build && npm run cap:sync"') &&
+      packageJson.includes('"@capacitor/cli": "8.3.0"') &&
+      packageJson.includes('"@capacitor/core": "8.3.0"') &&
+      packageJson.includes('"@capacitor/android": "8.3.0"') &&
+      packageJson.includes('"@capacitor/ios": "8.3.0"') &&
+      !packageJson.includes("npx --yes @capacitor/cli"),
+    detail: "Expect native scripts and Capacitor packages to use exact repo-pinned versions, not floating npx/range resolution",
   },
   {
     name: "Android native shell disables backup",
