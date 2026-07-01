@@ -104,9 +104,73 @@ logged-out auth check (harmless, present on every page by design).
   whole app; Phase 2 should grep for repeated long className strings on `<button>`/
   `<Link>` elements as a proxy for "should be the shared Button component."
 
-## Next steps
+## Next steps (Pass 1)
 
 Queued the two clear, low-risk cleanup candidates (dead files, junk artifact) to
-`docs/refactor/REFACTOR_BOARD.md`. The `/map`/`/trending` question needs an owner
-decision before it becomes a queued item. Findings #2–#4 are candidates for Phase 2
-surface-by-surface fixes in priority order per the approved plan.
+`docs/refactor/REFACTOR_BOARD.md`. The `/map`/`/trending` question was resolved by
+the owner (intentional redirect) — the stale smoke test was fixed to match.
+Findings #2–#4 are candidates for Phase 2 surface-by-surface fixes.
+
+---
+
+# Pass 2 — Logged-in consumer surfaces (2026-07-01)
+
+Method: created a fresh test diner account through the real signup form, verified
+its email directly in the local dev database (BREVO isn't configured locally, so
+the verification email couldn't send — this is a local-dev-only gap; the flow
+itself, including the hard "you must verify before logging in" gate, was confirmed
+working end to end), then logged in and crawled the logged-in-only consumer pages
+with a saved session.
+
+## Findings, ranked by user impact
+
+### 1. ScoutCoin is a fully-built feature that is completely non-functional server-side
+**Severity: high — a real, confusing broken feature shown to every logged-in user**
+
+`/scoutcoin` renders a complete wallet UI — balance, Buy, Send, Redeem, transaction
+history — but all four of its backend endpoints return `500 Internal Server Error`:
+`/api/scoutcoin/config`, `/api/scoutcoin/wallet`, `/api/scoutcoin/transactions`,
+`/api/business-access/me` (each called twice — a separate minor inefficiency).
+The page doesn't show an error or "coming soon" state; it just displays "Balance: 0
+atomic" and disabled-looking buttons, which reads as "this feature exists but isn't
+enabled for me" rather than "this is broken." Anyone who finds it (it's in the main
+nav under "More") gets a confusing, dead experience. Needs an owner decision: finish
+wiring the backend, or hide the nav entry and route until it's ready.
+
+### 2. `/share-hub` is essentially a blank page for logged-in users
+**Severity: high**
+
+Body content is 28 characters — just the bottom nav bar, nothing else. Even the
+basic `/api/auth/user` check (which succeeds everywhere else in the app) returns
+`500` specifically on this page. This looks like an incomplete or broken page
+reachable from the main nav.
+
+### 3. The dashboard router silently fails and falls back to Scout, masking a server error
+**Severity: medium**
+
+`/dashboard` (meant to route each logged-in user to their role-appropriate
+dashboard) calls `/api/public/resolve-business/dashboard`, which returns `500`
+twice, then silently falls back to showing `/scout`. For a diner account (no
+business to resolve) this fallback is probably reasonable — but it should be a
+clean "no business dashboard for this account" response, not a server error being
+swallowed. Worth a backend fix so real failures don't hide behind the same fallback.
+
+### 4. Parking Pass shows a `503` on subscription status
+**Severity: low-medium — may be intentional gating, needs confirmation**
+
+`/api/subscription/status` returns `503 Service Unavailable` when a diner visits
+`/parking-pass`. The page still renders correctly (explains only food trucks can
+book). Possibly an intentional "no active subscription" response using the wrong
+status code (503 usually means "service is down," not "you're not subscribed") —
+worth a quick check.
+
+### 5. Everything else in Pass 2 is solid
+`/scout`, `/favorites`, `/orders`, `/user-dashboard`, `/profile`,
+`/profile/settings`, `/profile/addresses`, `/profile/payment`, `/profile/help` all
+render real, correct, error-free content with sensible empty states ("No favorite
+restaurants yet," "No active claims," etc.) — this part of the app is in good shape.
+
+## Next steps (Pass 2)
+
+Pass 3 (not yet run): business operator dashboards (Restaurant, Truck, Host,
+Supplier) — requires creating and verifying a test business account the same way.
