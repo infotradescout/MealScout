@@ -203,7 +203,7 @@
     "tailwind-merge": "^2.6.0",
     "tailwindcss-animate": "^1.0.7",
     "topojson-client": "^3.1.0",
-    "tsx": "^4.19.1",
+    "tsx": "^4.22.4",
     "typescript": "5.6.3",
     "us-atlas": "^3.0.1",
     "vaul": "^1.1.2",
@@ -232,6 +232,14 @@
   },
   "optionalDependencies": {
     "bufferutil": "^4.0.8"
+  },
+  "overrides": {
+    "@esbuild-kit/core-utils": {
+      "esbuild": "^0.28.1"
+    },
+    "exceljs": {
+      "uuid": "^11.1.1"
+    }
   },
   "main": "dist/public/assets/mealscout-app.cjs.js",
   "module": "dist/public/assets/mealscout-app.es.js",
