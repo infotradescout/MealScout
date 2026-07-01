@@ -18,7 +18,8 @@ const requiredDashboardSnippets = [
   "if (!isBusinessBearingUserType(userType)) return \"not_required\";",
   "{isBusinessBearingUserType(user.userType) && (",
   "attachment:",
-  "email:{user.emailVerified ? \"verified\" : \"unverified\"}",
+  "email:",
+  "{user.emailVerified ? \"verified\" : \"unverified\"}",
   "{canSendMonthlySubscriptionLink(user.userType) && (",
   "Send Monthly Link",
   "<option value=\"customer\">Customer</option>",
@@ -64,8 +65,12 @@ if (monthlyGateIndex === -1 || monthlyButtonIndex === -1) {
   throw new Error("Send Monthly Link must be hidden behind a subscription-role gate");
 }
 
-const emailBadgeIndex = dashboard.indexOf("email:{user.emailVerified ? \"verified\" : \"unverified\"}");
-if (emailBadgeIndex === -1) {
+const emailBadgeLabelIndex = dashboard.indexOf("email:");
+const emailBadgeValueIndex = dashboard.indexOf(
+  "{user.emailVerified ? \"verified\" : \"unverified\"}",
+  emailBadgeLabelIndex,
+);
+if (emailBadgeLabelIndex === -1 || emailBadgeValueIndex === -1) {
   throw new Error("Email verification status must remain visible on admin user cards");
 }
 

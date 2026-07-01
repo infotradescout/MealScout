@@ -1,7 +1,10 @@
 import { readFileSync } from "node:fs";
 
 const adminDashboard = readFileSync("client/src/pages/admin-dashboard.tsx", "utf8");
-const adminRoutes = readFileSync("server/adminRoutes.ts", "utf8");
+const adminRoutes = readFileSync(
+  "server/routes/adminManagementRoutes.ts",
+  "utf8",
+);
 const signupPage = readFileSync("client/src/pages/restaurant-signup.tsx", "utf8");
 
 const requiredDashboardSnippets = [

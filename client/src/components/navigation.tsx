@@ -331,7 +331,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
       ? { path: "/claim-truck", icon: Truck, label: "Claim" }
       : { path: "/share-hub", icon: Share2, label: "Share" },
     { icon: MoreHorizontal, label: "More", onClick: () => setMoreOpen((v) => !v) },
-  ];
+  ].filter(Boolean) as NavItem[];
 
   const dedupeByPath = (items: NavItem[]) => {
     const seen = new Set<string>();
