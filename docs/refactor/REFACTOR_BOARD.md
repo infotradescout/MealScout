@@ -4,7 +4,14 @@ Use this board to track every refactor item from queue to verification.
 
 ## Queued
 
-_nothing queued_
+- [ ] [site-drift-sweep] Delete confirmed-dead files: `client/src/pages/home-north-star.tsx`, `client/src/pages/restaurant-detail.tsx` (unimported anywhere), `client/src/pages/EmptyCountyExperience.tsx` (imported but never routed) - see `docs/audits/site-drift-sweep-2026-07.md`
+- [ ] [site-drift-sweep] Delete stray artifact `client/src/components/Untitled-1.json` (accidental TS language-server cache dump, not code) - see `docs/audits/site-drift-sweep-2026-07.md`
+- [ ] [site-drift-sweep] Consolidate the two independent "start a restaurant/truck/bar business" signup UIs (`/restaurant-signup` vs `/customer-signup?role=business&businessType=...`) into one shared flow, with before/after feature-parity check - see `docs/audits/site-drift-sweep-2026-07.md`
+- [ ] [site-drift-sweep] Fix inconsistent business-role label generation in `client/src/pages/customer-signup.tsx` (~line 1093) - one shared label source instead of 3+ code paths - see `docs/audits/site-drift-sweep-2026-07.md`
+- [ ] [site-drift-sweep] Fix `/search` page React Query misconfiguration for `/api/deals/featured` (missing queryFn, masked as empty state) - see `docs/audits/site-drift-sweep-2026-07.md`
+- [ ] [site-drift-sweep] Redirect orphaned `/host-signup` direct route to the working `/customer-signup?role=host` flow - see `docs/audits/site-drift-sweep-2026-07.md`
+- [ ] [site-drift-sweep] Owner decision needed: `/map` and `/trending` are hard-redirected to `/scout` in `client/src/App.tsx`, but the existing smoke test `scripts/public-sitewide-copy-cleanup.browser-smoke.mjs` still expects dedicated Map/Trending pages and is currently failing on main. Decide: keep redirect + fix stale test, or restore dedicated pages - see `docs/audits/site-drift-sweep-2026-07.md`
+- [ ] [site-drift-sweep] Higher-risk: consolidate the two near-duplicate route blocks in `client/src/App.tsx` (guest vs logged-in, ~170 routes each) into one shared route table - needs its own dedicated PR with exact before/after route-list diff - see `docs/audits/site-drift-sweep-2026-07.md`
 
 ## In Progress
 
