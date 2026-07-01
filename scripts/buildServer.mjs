@@ -1,5 +1,5 @@
 import { existsSync, writeFileSync } from "node:fs";
-import { execSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -17,22 +17,33 @@ if (!existsSync(serverIndex) || !existsSync(serverVite)) {
   process.exit(0);
 }
 
-const command = [
-  "npm exec -- esbuild",
-  `"${serverIndex}"`,
-  `"${serverVite}"`,
+const esbuildBin = path.resolve(repoRoot, "node_modules", "esbuild", "bin", "esbuild");
+const args = [
+  esbuildBin,
+  serverIndex,
+  serverVite,
   "--platform=node",
   "--packages=external",
   "--bundle",
   "--format=esm",
-  `--outdir=\"${outDir}\"`,
-].join(" ");
+  `--outdir=${outDir}`,
+];
 
 try {
-  execSync(command, {
+  const result = spawnSync(process.execPath, args, {
     cwd: repoRoot,
     stdio: "inherit",
+    shell: false,
   });
+
+  if (result.error) {
+    throw result.error;
+  }
+
+  if (result.status !== 0) {
+    process.exit(result.status ?? 1);
+  }
+
   // Backward-compatible entrypoint for environments still starting `node dist/index.js`.
   const compatEntry = path.resolve(distRoot, "index.js");
   writeFileSync(compatEntry, 'import "./server/index.js";\n', "utf8");
