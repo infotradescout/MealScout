@@ -7,14 +7,19 @@ const IS_DEV = import.meta.env.DEV;
 const SHARED_API_FALLBACK = "https://www.mealscout.us";
 const MEALSCOUT_API_ORIGIN_FALLBACK = "https://mealscout.onrender.com";
 
+const isProtectedAccountPath = (path: string): boolean =>
+  path.startsWith("/api/affiliate/") ||
+  path.startsWith("/api/business-access/");
+
 function isMealScoutSameOriginPath(path: string): boolean {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  const isAuthPath = normalizedPath.startsWith("/api/auth/");
+  const isAdminPath = normalizedPath.startsWith("/api/admin/");
+  const shouldUseSameOrigin =
+    isAuthPath || isAdminPath || isProtectedAccountPath(normalizedPath);
 
   if (
-    normalizedPath.startsWith("/api/auth/") ||
-    normalizedPath.startsWith("/api/admin/") ||
-    normalizedPath.startsWith("/api/affiliate/") ||
-    normalizedPath.startsWith("/api/business-access/") ||
+    shouldUseSameOrigin ||
     normalizedPath.startsWith("/api/location/context")
   ) {
     return true;
