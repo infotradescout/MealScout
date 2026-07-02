@@ -4,7 +4,6 @@ Use this board to track every refactor item from queue to verification.
 
 ## Queued
 
-- [ ] [site-drift-sweep] **CRITICAL - verify against production immediately**: business profile creation is completely broken. `/customer-signup?role=business&businessType=...` has no terms checkbox but the server requires `acceptTerms===true` (client never sends it - 400 every time). `/restaurant-signup`'s own business-profile-creation step also omits `acceptTerms` from the `restaurantData` payload sent to `/api/restaurants/signup` in `createRestaurantMutation` (`client/src/pages/restaurant-signup.tsx` ~lines 565-582 and ~603-620), even though the user checks the box - server (`server/routes/restaurantSignupRoutes.ts:84`) always sees it missing and 400s. Net effect: no restaurant/food truck/bar/caterer/private chef owner can currently complete signup through any path. Fix: add `acceptTerms` into both `restaurantData` object literals; add a real terms checkbox to the `/customer-signup?role=business` flow - see `docs/audits/site-drift-sweep-2026-07.md`
 - [ ] [site-drift-sweep] Delete confirmed-dead files: `client/src/pages/home-north-star.tsx`, `client/src/pages/restaurant-detail.tsx` (unimported anywhere), `client/src/pages/EmptyCountyExperience.tsx` (imported but never routed) - see `docs/audits/site-drift-sweep-2026-07.md`
 - [ ] [site-drift-sweep] Delete stray artifact `client/src/components/Untitled-1.json` (accidental TS language-server cache dump, not code) - see `docs/audits/site-drift-sweep-2026-07.md`
 - [ ] [site-drift-sweep] Consolidate the two independent "start a restaurant/truck/bar business" signup UIs (`/restaurant-signup` vs `/customer-signup?role=business&businessType=...`) into one shared flow, with before/after feature-parity check - see `docs/audits/site-drift-sweep-2026-07.md`
@@ -12,21 +11,22 @@ Use this board to track every refactor item from queue to verification.
 - [ ] [site-drift-sweep] Fix `/search` page React Query misconfiguration for `/api/deals/featured` (missing queryFn, masked as empty state) - see `docs/audits/site-drift-sweep-2026-07.md`
 - [ ] [site-drift-sweep] Redirect orphaned `/host-signup` direct route to the working `/customer-signup?role=host` flow - see `docs/audits/site-drift-sweep-2026-07.md`
 - [ ] [site-drift-sweep] Higher-risk: consolidate the two near-duplicate route blocks in `client/src/App.tsx` (guest vs logged-in, ~170 routes each) into one shared route table - needs its own dedicated PR with exact before/after route-list diff - see `docs/audits/site-drift-sweep-2026-07.md`
-- [ ] [site-drift-sweep] Owner decision needed: `/scoutcoin` renders a full wallet UI (Buy/Send/Redeem/history) but all 4 backend endpoints 500 (`/api/scoutcoin/config`, `/wallet`, `/transactions`, `/api/business-access/me`) - finish wiring it or hide the nav entry/route until ready - see `docs/audits/site-drift-sweep-2026-07.md`
 - [ ] [site-drift-sweep] Fix `/share-hub` for logged-in users - renders nearly blank, `/api/auth/user` returns 500 specifically on this page - see `docs/audits/site-drift-sweep-2026-07.md`
-- [ ] [site-drift-sweep] **HIGH - fix once, fixes 4+ surfaces**: `/api/public/resolve-business/*` returns 500 for multiple account types and pages (confirmed on `/dashboard` for diners, `/host/dashboard` for hosts, `/supplier/dashboard` for suppliers, and `/hiring`) instead of a clean non-error response - see `docs/audits/site-drift-sweep-2026-07.md`
+- [ ] [site-drift-sweep] **Needs production verification, not a code fix**: confirm the `public_business_slug_ownerships` table exists on production (it's correctly defined in `shared/schema/legacy.ts`; only missing from this local dev DB - confirmed via server logs). If present in production, the `resolve-business` 500s and "PROFILE NOT FOUND" UI text seen across `/dashboard`, `/host/dashboard`, `/supplier/dashboard`, `/hiring` during this sweep were local-dev-only artifacts, not real bugs. If missing, run the pending migration - see `docs/audits/site-drift-sweep-2026-07.md`
 - [ ] [site-drift-sweep] Confirm intent of `503` from `/api/subscription/status` on `/parking-pass` for non-subscribed diners - likely wrong status code for "not subscribed" - see `docs/audits/site-drift-sweep-2026-07.md`
-- [ ] [site-drift-sweep] Fix visible "PROFILE NOT FOUND" error rendered directly on the host and supplier dashboards - tied to the resolve-business 500 above - see `docs/audits/site-drift-sweep-2026-07.md`
 - [ ] [site-drift-sweep] Fix `/api/supplier/stripe/status` 500 on `/supplier/dashboard` - page has a reasonable fallback but the endpoint itself is broken - see `docs/audits/site-drift-sweep-2026-07.md`
 - [ ] [site-drift-sweep] Fix React duplicate-key warnings on `/sitemap` (`client/src/pages/sitemap.tsx:27`) - same dynamic city/category links rendered with non-unique keys, may cause dropped/duplicated links - see `docs/audits/site-drift-sweep-2026-07.md`
 - [ ] [site-drift-sweep] Owner decision needed: `/video` shows almost nothing to logged-out visitors despite marketing itself as a public "Critic Feed" - confirm if browsing should be public with sign-in only required to post - see `docs/audits/site-drift-sweep-2026-07.md`
-- [ ] [site-drift-sweep] Once critical signup bug is fixed: verify whether the truck-claim profile-creation path (`createRestaurantMutation` food-truck-claim branch) is also affected, since it forwards raw form data differently than the two known-broken branches - see `docs/audits/site-drift-sweep-2026-07.md`
+- [ ] [site-drift-sweep] Verify whether the truck-claim profile-creation path (`createRestaurantMutation` food-truck-claim branch) needed the same `acceptTerms` fix as PR #181, or was already fine since it forwards raw form data differently - see `docs/audits/site-drift-sweep-2026-07.md`
 
 ## In Progress
 
 _nothing active_
 
 ## Merged
+
+- [x] [site-drift-sweep] **CRITICAL** business profile creation was completely broken (missing `acceptTerms` in both `/customer-signup?role=business` and `/restaurant-signup`'s `createRestaurantMutation`) - fixed and verified end to end with real test accounts - PR #181 - owner claude - 2026-07-01
+- [x] [site-drift-sweep] Removed `/scoutcoin` from public routes - confirmed future work, not ready; was showing a fully-built wallet UI with every backend call failing - PR #182 - owner claude - 2026-07-01
 
 - [x] [phase-5-oversized-route-splits] Extracted admin supplier-orders endpoint (`GET /api/admin/supplier-orders`) from `server/routes/supplierMarketplaceRoutes.ts` into `server/routes/suppliers/adminOrdersRoutes.ts` - PR-20 - owner codex - 2026-04-17
 - [x] [phase-5-oversized-route-splits] Extracted supplier product import endpoint (`POST /api/supplier/products/import`) from `server/routes/supplierMarketplaceRoutes.ts` into `server/routes/suppliers/profileRoutes.ts` - PR-19 - owner codex - 2026-04-17

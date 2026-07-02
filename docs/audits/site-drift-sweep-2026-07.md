@@ -1,5 +1,24 @@
 # Site Drift Sweep — Pass 1 (2026-07-01)
 
+**Correction (2026-07-01, post-sweep fix pass):** the `/api/public/resolve-business/*`
+500 errors called out repeatedly below (Pass 2 finding #3, Pass 3 host/supplier
+findings, Pass 4 finding #2 on `/hiring`) were investigated while fixing the
+critical signup bug. Root cause: the local dev database used for this entire
+sweep was missing the `public_business_slug_ownerships` table (confirmed via
+server logs: `relation "public_business_slug_ownerships" does not exist`). The
+table is correctly defined in `shared/schema/legacy.ts` and the resolver code
+(`server/publicProfiles/publicBusinessSlugResolver.ts`) handles "not found"
+slugs cleanly — this was a **local-dev migration gap, not a code defect**.
+`npm run db:push` was attempted to fix it locally but needs an interactive
+prompt (schema rename disambiguation) not available in this environment.
+**Action needed: confirm the `public_business_slug_ownerships` table exists on
+production** — if it does, all four "resolve-business 500" findings below are
+non-issues; if it doesn't, this is a real, higher-severity production bug
+(same fix: run the pending migration). The "PROFILE NOT FOUND" UI text and
+`/dashboard` fallback-to-Scout behavior tied to this are downgraded
+accordingly — likely non-issues once the table exists, not something to
+"fix" in application code.
+
 Owner-facing summary: an automated + manual walkthrough of the app's highest-traffic
 surfaces (first-time visitor, all 9 signup paths, login, search, deals, core marketing
 pages), looking for places where something *technically works* but doesn't match
