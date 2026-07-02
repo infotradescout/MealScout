@@ -257,10 +257,97 @@ Two issues:
   "Profile Not Found" text on an otherwise working dashboard is a real, jarring
   bug regardless of cause).
 
+### 3. Supplier signup and dashboard work well, with the same recurring resolve-business bug
+**Severity: medium**
+
+Supplier signup is a separate flow (`/api/auth/supplier/register`, no `acceptTerms`
+requirement server-side) and worked end to end: `/customer-signup?role=supplier` →
+email verification → login → `/supplier/dashboard`. The dashboard itself is rich
+and functional — onboarding checklist (Profile, Products, Delivery, Payments),
+product add form, delivery settings, online payment settings, bulk product
+import, and portals for delivery/requests/products/orders all render correctly.
+
+Same recurring issue: the **"PROFILE NOT FOUND" error renders at the top of the
+supplier dashboard too** — now confirmed on **three account types** (diner, host,
+supplier), tied to the same `/api/public/resolve-business/*` 500. A new related
+500 also appeared here: `/api/supplier/stripe/status` fails, though the page
+still shows a reasonable "Payouts setup: Not connected" fallback.
+
+### 4. Truck-claim search and request flow works; final profile-creation step untested
+**Severity: informational**
+
+Tested with a working diner account: `/claim-truck` search (`GET
+/api/truck-claims/public-search`) returns real, live results with working
+"Claim" / "Request setup" buttons. Clicking "Claim" correctly routes into
+`/restaurant-signup?businessType=food_truck&claim=1&q=...` to create the truck's
+business profile. Whether this specific path hits the same `acceptTerms`
+omission bug as finding #1 (Pass 3) was not conclusively verified — the code for
+this branch (`createRestaurantMutation`, food-truck-claim case) forwards the raw
+form data rather than the manually-reconstructed object used by the two broken
+paths, so it may not be affected, but this needs a real click-through test once
+the critical bug is otherwise fixed.
+
 ## Next steps (Pass 3)
 
-Restaurant/truck-claim/supplier dashboards remain untested — blocked by the
-critical signup bug above (for restaurant) or not yet attempted (supplier,
-truck-claim). Once the critical bug is fixed, resume: create a real restaurant
-account (should then work), a supplier account, and test the truck-claim flow,
-then crawl each dashboard the same way host's was tested.
+Restaurant dashboard remains untested — blocked by the critical signup bug
+above. Once fixed: create a real restaurant account and crawl its dashboard,
+and confirm whether the truck-claim profile-creation step is affected by the
+same bug or not.
+
+---
+
+# Pass 4 — Remaining marketing/legal/support pages (2026-07-01)
+
+Crawled the remaining logged-out pages not covered in Pass 1: Terms of Service,
+Privacy Policy, Data Deletion, Moderation Policy, all four "For X" business
+landing pages (Restaurants/Bars/Hosts/Events), Compare pages, Hiring, Install,
+Sitemap, Status, Video, Events (public), Parking Pass (logged-out), and Share
+Hub (logged-out).
+
+## Findings
+
+### 1. Sitemap page has a React key-duplication bug
+**Severity: low-medium — cosmetic/technical, but a real code defect**
+
+`/sitemap` throws 13 duplicate "two children with the same key" React warnings
+for the same set of dynamic city/category links (e.g.
+`/food-trucks/pensacola/cocktails`, `/food-trucks/milton/other`) — meaning the
+sitemap's list of dynamic local landing pages is being rendered with duplicate,
+non-unique keys, most likely from the same data appearing in more than one
+generated section. Traced to `client/src/pages/sitemap.tsx:27`. This can cause
+React to silently drop or duplicate list items, so the visible sitemap may not
+be fully accurate.
+
+### 2. `resolve-business` 500 confirmed on a 4th surface
+`/hiring` also calls the same broken `/api/public/resolve-business/hiring`
+endpoint and gets a 500 — now confirmed across diner, host, supplier, and
+`/hiring` (4 surfaces). Reinforces that this is a systemic bug in one shared
+endpoint/hook, not isolated to any single account type or page.
+
+### 3. `/video` may be showing less than intended for logged-out visitors
+**Severity: low — needs a product decision, not clearly a bug**
+
+The page markets itself as "CRITIC FEED — COMMUNITY POWERED" but a logged-out
+visitor sees almost nothing (102 characters: just a sign-in prompt), and
+`/api/stories/feed?page=0` is fetched twice, both returning 401. If the intent
+is "browse the critic feed publicly, sign in to post," this is broken/gated
+too aggressively; if video content is meant to be members-only, this is
+working as intended. Worth a quick confirmation.
+
+### 4. Everything else is clean
+Terms of Service, Privacy Policy, Data Deletion, Moderation Policy, all four
+"For X" business landing pages, both Compare pages, Install, Status, Events
+(public), and Parking Pass (logged-out) all rendered real content with no
+errors beyond the expected single 401 auth check. Share Hub logged-out
+correctly explains "Sign in to generate share links" — confirming the broken,
+near-blank version found in Pass 2 was specifically a logged-in-state bug.
+
+## Sweep status: complete for now
+
+All planned surfaces have been swept at least once: anonymous discovery, all
+signup entry points, logged-in consumer flows, host + supplier signup and
+dashboards, truck-claim search, and all remaining marketing/legal/support
+pages. Remaining known gaps: the restaurant dashboard (blocked by the critical
+bug), and deep interaction testing within business dashboards (e.g., actually
+creating a deal, menu item, or booking) rather than just confirming the page
+renders.
