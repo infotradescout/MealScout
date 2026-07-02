@@ -245,6 +245,30 @@ export default function RestaurantSignup() {
     }
   }, [isAuthenticated, user, setLocation]);
 
+  // A logged-out direct visit to /restaurant-signup used to show a second,
+  // separately-built account-creation form. Send it into the single shared
+  // signup entry point instead - preserve businessType, and skip this
+  // redirect for the truck-claim-with-specific-listing case (?q=...) or a
+  // post-verification bounce-back (?source=post-verification, which needs
+  // this page's own "Log in" toggle for a user who hasn't logged in yet).
+  useEffect(() => {
+    if (isLoading || isAuthenticated) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("q") || params.get("source")) return;
+    const businessType = params.get("businessType");
+    const target = new URLSearchParams({ role: "business" });
+    if (
+      businessType === "food_truck" ||
+      businessType === "restaurant" ||
+      businessType === "bar" ||
+      businessType === "caterer" ||
+      businessType === "private_chef"
+    ) {
+      target.set("businessType", businessType);
+    }
+    setLocation(`/customer-signup?${target.toString()}`);
+  }, [isLoading, isAuthenticated, setLocation]);
+
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [showLoginPassword, setShowLoginPassword] = useState(false);
