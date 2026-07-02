@@ -1,4 +1,5 @@
 import { Search, X } from "lucide-react";
+import { createPortal } from "react-dom";
 
 export type ScoutSearchFilterId =
   | "now"
@@ -55,7 +56,7 @@ export function ScoutSearchDock({
       ? undefined
       : { bottom: "calc(env(safe-area-inset-bottom, 0px) + 5.1rem)" };
 
-  return (
+  const dockContent = (
     <div
       className={shellClassName}
       style={shellStyle}
@@ -126,10 +127,15 @@ export function ScoutSearchDock({
           </div>
         ) : (
           <p className="border-t border-white/6 px-4 pb-2 text-[11px] font-semibold text-white/46">
-            {resultSummary || "Scout results update on the map and feed."}
+            {resultSummary || "Updates live on the map and feed."}
           </p>
         )}
       </form>
     </div>
   );
+
+  if (placement === "fixed" && typeof document !== "undefined") {
+    return createPortal(dockContent, document.body);
+  }
+  return dockContent;
 }
