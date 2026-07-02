@@ -143,6 +143,7 @@ const OnlineMenuPage = lazy(() => import("@/pages/online-menu"));
 const PickupCheckoutPage = lazy(() => import("@/pages/pickup-checkout"));
 const OrderConfirmationPage = lazy(() => import("@/pages/order-confirmation"));
 const ScoutPage = lazy(() => import("@/pages/explore-preview"));
+const ScoutPageV2 = lazy(() => import("@/pages/explore-preview-v2"));
 const ScoutPrototype = lazy(() => import("@/pages/scout-prototype"));
 const FoodTruckRush = lazy(() => import("@/pages/food-truck-rush"));
 const HiringPage = lazy(() => import("@/pages/hiring"));
@@ -307,6 +308,7 @@ function Router() {
             <Route path="/directory" component={ScoutPage} />
             <Route path="/directory/:refTag" component={ScoutPage} />
             <Route path="/scout-prototype" component={ScoutPrototype} />
+            <Route path="/scout-v2" component={ScoutPageV2} />
             <Route path="/food-truck-rush" component={FoodTruckRush} />
             <Route path="/login" component={Login} />
             <Route path="/customer-signup" component={CustomerSignup} />
@@ -475,6 +477,7 @@ function Router() {
             <Route path="/directory" component={ScoutPage} />
             <Route path="/directory/:refTag" component={ScoutPage} />
             <Route path="/scout-prototype" component={ScoutPrototype} />
+            <Route path="/scout-v2" component={ScoutPageV2} />
             <Route path="/food-truck-rush" component={FoodTruckRush} />
             <Route path="/login" component={Login} />
             <Route path="/customer-signup" component={CustomerSignup} />
