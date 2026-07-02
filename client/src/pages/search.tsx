@@ -346,15 +346,14 @@ export default function SearchPage() {
   const { data: nearbyDeals, isLoading: nearbyLoading } = useQuery({
     queryKey: userLocation
       ? ["/api/deals/nearby", userLocation.lat, userLocation.lng, discoveryRadiusKm]
-      : ["/api/deals/featured"],
-    queryFn: userLocation
-      ? async () => {
-          const response = await fetch(apiUrl(`/api/deals/nearby/${userLocation.lat}/${userLocation.lng}?radius=${discoveryRadiusKm}`),
-          );
-          if (!response.ok) throw new Error("Failed to fetch nearby deals");
-          return response.json();
-        }
-      : undefined,
+      : ["/api/deals/nearby", "no-location"],
+    queryFn: async () => {
+      if (!userLocation) return null;
+      const response = await fetch(apiUrl(`/api/deals/nearby/${userLocation.lat}/${userLocation.lng}?radius=${discoveryRadiusKm}`),
+      );
+      if (!response.ok) throw new Error("Failed to fetch nearby deals");
+      return response.json();
+    },
     enabled: !searchQuery && !!userLocation,
   });
 
