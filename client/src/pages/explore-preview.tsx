@@ -282,6 +282,8 @@ interface LocalMenuItemFeedItem extends MenuPreviewItem {
   restaurantName?: string | null;
   restaurantCity?: string | null;
   restaurantState?: string | null;
+  restaurantLogoUrl?: string | null;
+  restaurantCoverImageUrl?: string | null;
   cuisineType?: string | null;
   businessType?: string | null;
   isFoodTruck?: boolean | null;
@@ -318,6 +320,8 @@ interface TrendingDishSummary {
   restaurantName?: string | null;
   restaurantCity?: string | null;
   restaurantState?: string | null;
+  restaurantLogoUrl?: string | null;
+  restaurantCoverImageUrl?: string | null;
   cuisineType?: string | null;
   clicks?: number | null;
   impressions?: number | null;
@@ -4662,7 +4666,12 @@ function ScoutImmediateCompactCard({
     return (
       <CompactDecisionCardShell
         href={getMenuItemProfilePath(menuItem)}
-        imageUrl={menuItem.imageUrl || null}
+        imageUrl={
+          menuItem.imageUrl ||
+          menuItem.restaurantLogoUrl ||
+          menuItem.restaurantCoverImageUrl ||
+          null
+        }
         fallbackIcon={<Utensils className="h-4 w-4 text-white/90" aria-hidden="true" />}
         title={menuItem.name}
         meta={reason || "Popular nearby dish"}
@@ -5059,6 +5068,8 @@ function ActiveSceneContent({
             restaurantName: item.restaurantName ?? null,
             restaurantCity: item.restaurantCity ?? null,
             restaurantState: item.restaurantState ?? null,
+            restaurantLogoUrl: item.restaurantLogoUrl ?? null,
+            restaurantCoverImageUrl: item.restaurantCoverImageUrl ?? null,
             cuisineType: item.cuisineType ?? null,
             businessType: item.businessType ?? (knownTruckIds.has(String(item.restaurantId)) ? "food_truck" : null),
             isFoodTruck: item.isFoodTruck ?? knownTruckIds.has(String(item.restaurantId)),
@@ -6600,7 +6611,7 @@ function LocalMenuItemCard({
     >
       <div className="relative aspect-[4/3] w-full bg-[#120805]/60">
         <ScoutCardMedia
-          imageUrl={item.imageUrl || null}
+          imageUrl={item.imageUrl || item.restaurantLogoUrl || item.restaurantCoverImageUrl || null}
           fallbackIcon={<Utensils className="h-5 w-5 text-white/80" aria-hidden="true" />}
           fallbackTestId="scout-local-menu-item-card-image-fallback"
           imageClassName="absolute inset-0 h-full w-full object-cover"
