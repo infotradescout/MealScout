@@ -52,7 +52,9 @@ function HostSignup() {
 
   useEffect(() => {
     if (!isAuthenticated) {
-      setIsLoading(false);
+      // No account yet - send prospective hosts into the real signup flow
+      // instead of stranding them on a login-only screen.
+      setLocation("/customer-signup?role=host");
       return;
     }
 
@@ -85,7 +87,7 @@ function HostSignup() {
       // ignore parse/storage errors
     }
     setIsLoading(false);
-  }, [isAuthenticated]);
+  }, [isAuthenticated, setLocation]);
 
   // Persist host signup draft so hosts can resume later
   useEffect(() => {
@@ -202,30 +204,8 @@ function HostSignup() {
   }
 
   if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen bg-[var(--bg-layered)] relative overflow-hidden">
-        <div className="absolute inset-0 pointer-events-none">
-          <div className="absolute top-[-8rem] left-[-7rem] h-[24rem] w-[24rem] rounded-full bg-[color:var(--action-primary)]/15 blur-3xl" />
-          <div className="absolute bottom-[-9rem] right-[-6rem] h-[24rem] w-[24rem] rounded-full bg-[color:var(--accent)]/20 blur-3xl" />
-        </div>
-        <div className="relative z-10 min-h-screen px-4 py-8 flex items-center justify-center">
-          <div className="w-full max-w-lg rounded-3xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)]/95 backdrop-blur p-8 shadow-clean-lg text-center">
-            <span className="mx-auto mb-5 inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-[color:var(--action-primary)]/15 border border-[color:var(--action-primary)]/30">
-              <Building2 className="h-7 w-7 text-[color:var(--action-primary)]" />
-            </span>
-            <h1 className="text-3xl font-black tracking-tight text-[color:var(--text-primary)] mb-3">
-              Become a MealScout Host
-            </h1>
-            <p className="text-[color:var(--text-secondary)] mb-7">
-              Sign in to create your host profile, place your location on the map, and publish availability for trucks.
-            </p>
-            <Button asChild className="h-11 rounded-xl action-primary hover:bg-[color:var(--action-hover)]">
-              <a href="/login?redirect=/host-signup">Sign in to continue</a>
-            </Button>
-          </div>
-        </div>
-      </div>
-    );
+    // Redirect effect above sends this case to /customer-signup?role=host.
+    return null;
   }
 
   return (
