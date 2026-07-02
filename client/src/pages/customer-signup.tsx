@@ -95,6 +95,14 @@ type BusinessSubType =
   | "caterer"
   | "private_chef";
 
+const BUSINESS_SUBTYPE_LABELS: Record<BusinessSubType, string> = {
+  restaurant: "Restaurant owner",
+  bar: "Bar owner",
+  food_truck: "Food truck owner",
+  caterer: "Caterer",
+  private_chef: "Private chef",
+};
+
 type SignupFlowOption = {
   id: string;
   accountType: AccountType;
@@ -1098,11 +1106,7 @@ export default function CustomerSignup() {
                 <div>
                   <div className="text-sm font-black text-[color:var(--text-primary)]">
                     {accountType === "business"
-                      ? businessSubType === "food_truck"
-                        ? "Food truck owner"
-                        : businessSubType === "private_chef"
-                          ? "Private chef"
-                          : `${businessSubType.replace("_", " ")} owner`
+                      ? BUSINESS_SUBTYPE_LABELS[businessSubType]
                       : accountType === "host"
                         ? "Parking pass host"
                         : accountType === "event_organizer"
