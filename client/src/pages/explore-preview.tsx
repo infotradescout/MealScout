@@ -620,12 +620,12 @@ const DISCOVERY_LAYERS: Record<
   trending: {
     title: "Popular Nearby",
     href: "/search",
-    subtitle: "Fresh finds, active trucks, and places people are checking now.",
+    subtitle: "Fresh finds and active trucks near you right now.",
   },
   menuItems: {
     title: "Popular Dishes",
     href: "/search",
-    subtitle: "Menu items people are clicking, saving, and trying nearby.",
+    subtitle: "Dishes and menu items from restaurants and trucks near you.",
   },
   foodTrucks: {
     title: "Food Trucks Today",
@@ -1130,7 +1130,7 @@ function formatScoutCount(count: number, singular: string, plural: string): stri
 
 function formatScoutResultSummary(count: number): string {
   if (count <= 0) return "Try search, the map, or a wider area";
-  return `${count} nearby food ${count === 1 ? "result" : "results"}`;
+  return `${count} ${count === 1 ? "spot" : "spots"} nearby`;
 }
 
 function getRestaurantArea(restaurant: RestaurantSummary): string | null {
@@ -4164,13 +4164,13 @@ export default function ExplorePreview() {
               scoutSearchIntent={scoutSearchIntent}
               renderSearchDock={() => (
                 <ScoutSearchDock
-                  placement="inline"
+                  placement="fixed"
                   searchMode={scoutSearchMode}
                   query={scoutSearchQuery}
                   activeFilter={scoutSearchFilter}
                   resultSummary={
                     scoutSearchMode
-                      ? `${sceneFilteredMapMarkers.filter((marker) => marker.kind !== "user").length} matching map pins`
+                      ? `${sceneFilteredMapMarkers.filter((marker) => marker.kind !== "user").length} matches nearby`
                       : formatScoutResultSummary(localActivityCount)
                   }
                   onOpen={() => setScoutSearchMode(true)}
@@ -5375,7 +5375,7 @@ function ActiveSceneContent({
       {
         id: "trending_this_week",
         title: "Popular Nearby",
-        subtitle: "Fresh finds, active trucks, and places people are checking now.",
+        subtitle: "Fresh finds and active trucks near you right now.",
         linkHref: DISCOVERY_LAYERS.trending.href,
         cards: restaurantRailCards(trendingPlaceCards),
         className: compactRailSectionClass,
