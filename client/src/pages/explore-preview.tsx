@@ -2040,7 +2040,15 @@ export default function ExplorePreview() {
       source: isPensacolaDefault ? "super_admin_default" as const : "saved" as const,
     };
   }, [effectiveLocationContext]);
-  const fallbackLocation = null;
+  const fallbackLocation = useMemo(
+    () => ({
+      label: PENSACOLA_LAUNCH_MARKET.label,
+      lat: PENSACOLA_LAUNCH_MARKET.lat,
+      lng: PENSACOLA_LAUNCH_MARKET.lng,
+      source: "launch_market_default" as const,
+    }),
+    [],
+  );
   const resolvedScoutLocation = useMemo(
     () => {
       if (previewLocation) return previewLocation;
