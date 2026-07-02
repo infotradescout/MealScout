@@ -174,3 +174,62 @@ restaurants yet," "No active claims," etc.) — this part of the app is in good 
 
 Pass 3 (not yet run): business operator dashboards (Restaurant, Truck, Host,
 Supplier) — requires creating and verifying a test business account the same way.
+
+---
+
+# Pass 3 — Business signup + dashboards (2026-07-01, partial)
+
+Method: attempted to create a real restaurant business account through both
+business-signup entry points found in Pass 1, to reach the restaurant owner
+dashboard.
+
+## Findings, ranked by user impact
+
+### 1. CRITICAL: Business profile creation is completely broken — likely blocking all new restaurant/truck/bar/caterer/private-chef signups
+**Severity: critical — appears to affect production, not just local dev**
+
+Root cause fully confirmed, in `client/src/pages/restaurant-signup.tsx`:
+
+- The account-creation step (`/customer-signup?role=business&businessType=...`)
+  has **no terms-acceptance checkbox in the UI at all**, yet the server endpoint
+  it calls (`/api/auth/restaurant/register`) unconditionally rejects the request
+  with `400 "You must accept the terms"` unless `acceptTerms === true` is sent.
+  Confirmed via network trace: the client payload never includes `acceptTerms`.
+  **Nobody can create a business account through the primary "Sign up" → role
+  picker path that most new users take.**
+
+- The older, still-live `/restaurant-signup` direct route *does* have a working
+  terms checkbox for account creation, and that step succeeds. But the very next
+  step — actually creating the business profile itself (used by both brand-new
+  users and existing users adding a business) — is **also broken**, for a
+  different reason: in `createRestaurantMutation`'s `mutationFn` (lines ~556-583
+  for signed-in users, ~603-620 for new registrations), the `restaurantData`
+  object sent to `POST /api/restaurants/signup` is manually rebuilt field by
+  field (`name`, `address`, `city`, `state`, `phone`, `businessType`,
+  `cuisineType`, `description`, `websiteUrl`, `instagramUrl`, `facebookPageUrl`,
+  `amenities`) and **`acceptTerms` is never included**, even though the user
+  checks the box and the form state correctly shows it as checked. The server
+  (`server/routes/restaurantSignupRoutes.ts:84`, `if (restaurantData?.acceptTerms
+  !== true)`) expects it nested inside `restaurantData` and always sees it
+  missing, so it always 400s with `"You must accept the terms"` — confirmed via
+  direct request-payload capture, not just the response.
+
+Net effect: **every path to creating a business profile in the app is currently
+broken.** A real restaurant/food truck/bar/caterer/private chef owner cannot
+complete signup no matter which entry point they use. This was not testable
+against production directly, but the client code is the same bundle regardless
+of environment — this needs urgent verification against the live site.
+
+**Fix is small and precise**: add `acceptTerms: true`/`data.acceptTerms` into
+both `restaurantData` object literals in `createRestaurantMutation` (lines
+~565-582 and ~603-619), and add a real terms checkbox (or send
+`acceptTerms: true` outright, matching however the product intends consent to
+work) to the `/customer-signup?role=business` flow before it calls
+`/api/auth/restaurant/register`.
+
+## Next steps (Pass 3)
+
+Blocked from reaching the actual restaurant/host/supplier dashboards or testing
+the truck-claim flow with a real business account, because business profile
+creation itself doesn't work. Once the above is fixed, Pass 3 should resume:
+create a real restaurant, host, and supplier account and crawl each dashboard.
