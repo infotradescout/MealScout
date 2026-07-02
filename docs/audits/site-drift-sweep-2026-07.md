@@ -296,19 +296,19 @@ as the Parking Pass finding, an explicit fallback for Stripe not being configure
 locally. The page's "Payouts setup: Not connected" fallback is working exactly
 as designed.
 
-### 4. Truck-claim search and request flow works; final profile-creation step untested
-**Severity: informational**
+### 4. Truck-claim search and request flow — confirmed unaffected by the critical signup bug
+**Severity: informational, resolved**
 
 Tested with a working diner account: `/claim-truck` search (`GET
 /api/truck-claims/public-search`) returns real, live results with working
 "Claim" / "Request setup" buttons. Clicking "Claim" correctly routes into
 `/restaurant-signup?businessType=food_truck&claim=1&q=...` to create the truck's
-business profile. Whether this specific path hits the same `acceptTerms`
-omission bug as finding #1 (Pass 3) was not conclusively verified — the code for
-this branch (`createRestaurantMutation`, food-truck-claim case) forwards the raw
-form data rather than the manually-reconstructed object used by the two broken
-paths, so it may not be affected, but this needs a real click-through test once
-the critical bug is otherwise fixed.
+business profile via `POST /api/truck-claims`. Confirmed (grep of
+`server/routes/truckClaimRoutes.ts`) this endpoint has **no `acceptTerms` check
+at all**, and its client branch (`createRestaurantMutation`, food-truck-claim
+case) already forwards the full raw form data rather than the
+manually-reconstructed object used by the two branches fixed in PR #181. This
+path was never affected by the critical signup bug — no fix needed.
 
 ## Next steps (Pass 3)
 
