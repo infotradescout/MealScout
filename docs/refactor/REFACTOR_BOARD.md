@@ -7,11 +7,9 @@ Use this board to track every refactor item from queue to verification.
 - [ ] [site-drift-sweep] Higher-risk: consolidate the two near-duplicate route blocks in `client/src/App.tsx` (guest vs logged-in, ~170 routes each) into one shared route table - needs its own dedicated PR with exact before/after route-list diff - see `docs/audits/site-drift-sweep-2026-07.md`
 - [ ] [site-drift-sweep] **Needs production verification, not a code fix**: confirm the `public_business_slug_ownerships` table exists on production (it's correctly defined in `shared/schema/legacy.ts`; only missing from this local dev DB - confirmed via server logs). If present in production, the `resolve-business` 500s and "PROFILE NOT FOUND" UI text seen across `/dashboard`, `/host/dashboard`, `/supplier/dashboard`, `/hiring` during this sweep were local-dev-only artifacts, not real bugs. If missing, run the pending migration - see `docs/audits/site-drift-sweep-2026-07.md`
 - [ ] [site-drift-sweep] **RETRACTED, needs production verification only**: both the `503` on `/api/subscription/status` (parking-pass) and the `500` on `/api/supplier/stripe/status` (supplier dashboard) are intentional, correct fallbacks - both endpoints explicitly check `if (!stripe) return res.status(...)` when the Stripe secret key isn't configured, which is true in this local dev environment but is very likely configured in production (a live app taking real payments). 503 is even the semantically correct code for "payment service unavailable" - it was never guessing wrong about subscription state, that's a separate, correctly-handled 200 response. No code fix needed; just confirm STRIPE keys are set in production - see `docs/audits/site-drift-sweep-2026-07.md`
-- [ ] [site-drift-sweep] Owner decision needed: `/video` shows almost nothing to logged-out visitors despite marketing itself as a public "Critic Feed" - confirm if browsing should be public with sign-in only required to post - see `docs/audits/site-drift-sweep-2026-07.md`
-
 ## In Progress
 
-_nothing active_
+- [ ] [site-drift-sweep] Consolidate the two near-duplicate route blocks in `client/src/App.tsx` (guest vs logged-in, ~170 routes each) into one shared route table - mapping full route diff before implementing - see `docs/audits/site-drift-sweep-2026-07.md`
 
 ## Merged
 
@@ -23,6 +21,7 @@ _nothing active_
 - [x] [site-drift-sweep] Fixed `/search` page query key collision - the nearby-deals query collapsed to the same cache key as featured-deals with an explicit `queryFn: undefined`, corrupting both; gave it its own distinct key and a real queryFn - PR #186 - owner claude - 2026-07-02
 - [x] [site-drift-sweep] Fixed `/sitemap` React duplicate-key warnings - a city's cuisines array sometimes has repeated slugs, producing duplicate hrefs used as list keys; deduplicated client-side - PR #187 - owner claude - 2026-07-02
 - [x] [site-drift-sweep] Redirected orphaned `/host-signup` direct route to the working `/customer-signup?role=host` flow, matching the `/restaurant-signup` fix - PR #188 - owner claude - 2026-07-02
+- [x] [site-drift-sweep] Made `/video` feed browsable without an account (removed unnecessary `isAuthenticated` gate on `GET /api/stories/feed`, guarded per-story like-status lookup for guests) and corrected page copy from "Critic Feed" to "Video Feed" - PR #189 - owner claude - 2026-07-02
 
 - [x] [phase-5-oversized-route-splits] Extracted admin supplier-orders endpoint (`GET /api/admin/supplier-orders`) from `server/routes/supplierMarketplaceRoutes.ts` into `server/routes/suppliers/adminOrdersRoutes.ts` - PR-20 - owner codex - 2026-04-17
 - [x] [phase-5-oversized-route-splits] Extracted supplier product import endpoint (`POST /api/supplier/products/import`) from `server/routes/supplierMarketplaceRoutes.ts` into `server/routes/suppliers/profileRoutes.ts` - PR-19 - owner codex - 2026-04-17
