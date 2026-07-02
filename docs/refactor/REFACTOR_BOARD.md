@@ -4,12 +4,10 @@ Use this board to track every refactor item from queue to verification.
 
 ## Queued
 
-- [ ] [site-drift-sweep] Redirect orphaned `/host-signup` direct route to the working `/customer-signup?role=host` flow - see `docs/audits/site-drift-sweep-2026-07.md`
 - [ ] [site-drift-sweep] Higher-risk: consolidate the two near-duplicate route blocks in `client/src/App.tsx` (guest vs logged-in, ~170 routes each) into one shared route table - needs its own dedicated PR with exact before/after route-list diff - see `docs/audits/site-drift-sweep-2026-07.md`
 - [ ] [site-drift-sweep] **Needs production verification, not a code fix**: confirm the `public_business_slug_ownerships` table exists on production (it's correctly defined in `shared/schema/legacy.ts`; only missing from this local dev DB - confirmed via server logs). If present in production, the `resolve-business` 500s and "PROFILE NOT FOUND" UI text seen across `/dashboard`, `/host/dashboard`, `/supplier/dashboard`, `/hiring` during this sweep were local-dev-only artifacts, not real bugs. If missing, run the pending migration - see `docs/audits/site-drift-sweep-2026-07.md`
 - [ ] [site-drift-sweep] Confirm intent of `503` from `/api/subscription/status` on `/parking-pass` for non-subscribed diners - likely wrong status code for "not subscribed" - see `docs/audits/site-drift-sweep-2026-07.md`
 - [ ] [site-drift-sweep] Fix `/api/supplier/stripe/status` 500 on `/supplier/dashboard` - page has a reasonable fallback but the endpoint itself is broken - see `docs/audits/site-drift-sweep-2026-07.md`
-- [ ] [site-drift-sweep] Fix React duplicate-key warnings on `/sitemap` (`client/src/pages/sitemap.tsx:27`) - same dynamic city/category links rendered with non-unique keys, may cause dropped/duplicated links - see `docs/audits/site-drift-sweep-2026-07.md`
 - [ ] [site-drift-sweep] Owner decision needed: `/video` shows almost nothing to logged-out visitors despite marketing itself as a public "Critic Feed" - confirm if browsing should be public with sign-in only required to post - see `docs/audits/site-drift-sweep-2026-07.md`
 - [ ] [site-drift-sweep] Verify whether the truck-claim profile-creation path (`createRestaurantMutation` food-truck-claim branch) needed the same `acceptTerms` fix as PR #181, or was already fine since it forwards raw form data differently - see `docs/audits/site-drift-sweep-2026-07.md`
 
@@ -25,6 +23,8 @@ _nothing active_
 - [x] [site-drift-sweep] Deleted 3 dead files (unimported/unrouted) and 1 stray junk artifact (accidental TS language-server cache dump) - PR #184 - owner claude - 2026-07-02
 - [x] [site-drift-sweep] Fixed inconsistent business-role label generation - replaced 3 separate code paths with one `BUSINESS_SUBTYPE_LABELS` lookup table - PR #185 - owner claude - 2026-07-02
 - [x] [site-drift-sweep] Fixed `/search` page query key collision - the nearby-deals query collapsed to the same cache key as featured-deals with an explicit `queryFn: undefined`, corrupting both; gave it its own distinct key and a real queryFn - PR #186 - owner claude - 2026-07-02
+- [x] [site-drift-sweep] Fixed `/sitemap` React duplicate-key warnings - a city's cuisines array sometimes has repeated slugs, producing duplicate hrefs used as list keys; deduplicated client-side - PR #187 - owner claude - 2026-07-02
+- [x] [site-drift-sweep] Redirected orphaned `/host-signup` direct route to the working `/customer-signup?role=host` flow, matching the `/restaurant-signup` fix - PR #188 - owner claude - 2026-07-02
 
 - [x] [phase-5-oversized-route-splits] Extracted admin supplier-orders endpoint (`GET /api/admin/supplier-orders`) from `server/routes/supplierMarketplaceRoutes.ts` into `server/routes/suppliers/adminOrdersRoutes.ts` - PR-20 - owner codex - 2026-04-17
 - [x] [phase-5-oversized-route-splits] Extracted supplier product import endpoint (`POST /api/supplier/products/import`) from `server/routes/supplierMarketplaceRoutes.ts` into `server/routes/suppliers/profileRoutes.ts` - PR-19 - owner codex - 2026-04-17
