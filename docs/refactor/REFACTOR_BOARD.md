@@ -14,8 +14,9 @@ Use this board to track every refactor item from queue to verification.
 - [ ] [site-drift-sweep] Higher-risk: consolidate the two near-duplicate route blocks in `client/src/App.tsx` (guest vs logged-in, ~170 routes each) into one shared route table - needs its own dedicated PR with exact before/after route-list diff - see `docs/audits/site-drift-sweep-2026-07.md`
 - [ ] [site-drift-sweep] Owner decision needed: `/scoutcoin` renders a full wallet UI (Buy/Send/Redeem/history) but all 4 backend endpoints 500 (`/api/scoutcoin/config`, `/wallet`, `/transactions`, `/api/business-access/me`) - finish wiring it or hide the nav entry/route until ready - see `docs/audits/site-drift-sweep-2026-07.md`
 - [ ] [site-drift-sweep] Fix `/share-hub` for logged-in users - renders nearly blank, `/api/auth/user` returns 500 specifically on this page - see `docs/audits/site-drift-sweep-2026-07.md`
-- [ ] [site-drift-sweep] `/dashboard` router: `/api/public/resolve-business/dashboard` returns 500 for accounts with no business (falls back to Scout silently) - should be a clean non-error response, not a swallowed 500 - see `docs/audits/site-drift-sweep-2026-07.md`
+- [ ] [site-drift-sweep] `/api/public/resolve-business/*` returns 500 for multiple account types (confirmed on `/dashboard` for diners and `/host/dashboard` for hosts) instead of a clean non-error response - fix once, benefits both surfaces - see `docs/audits/site-drift-sweep-2026-07.md`
 - [ ] [site-drift-sweep] Confirm intent of `503` from `/api/subscription/status` on `/parking-pass` for non-subscribed diners - likely wrong status code for "not subscribed" - see `docs/audits/site-drift-sweep-2026-07.md`
+- [ ] [site-drift-sweep] Fix visible "PROFILE NOT FOUND" error rendered directly on the host dashboard (`/host/dashboard`) - likely tied to the resolve-business 500 or the 402 on `/api/events?hostId=...` - see `docs/audits/site-drift-sweep-2026-07.md`
 
 ## In Progress
 

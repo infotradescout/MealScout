@@ -227,9 +227,40 @@ both `restaurantData` object literals in `createRestaurantMutation` (lines
 work) to the `/customer-signup?role=business` flow before it calls
 `/api/auth/restaurant/register`.
 
+Restaurant/truck signup is blocked by the critical bug above, but the **host**
+signup path is a separate, independent flow (`/api/auth/customer/register` →
+`/api/hosts`, not `/api/auth/restaurant/register` / `/api/restaurants/signup`),
+so it was tested successfully.
+
+### 2. Host signup and dashboard work well overall, with one shared bug and one visible on-page error
+**Severity: medium**
+
+Created and verified a real host account end to end: `/customer-signup?role=host`
+→ email verification → `/host-signup` profile form (business name, address,
+city, state, location type, contact info) → `POST /api/hosts` succeeded (201) →
+redirected to `/host/dashboard`.
+
+The dashboard itself is rich and functional: a 3/4-complete onboarding checklist
+(Location done, Availability created, Bookings, Payouts), live Stripe payout
+setup tracking, host earnings, payout history, a demand queue, and a working
+availability-slot builder with a real parking pass already showing as
+"published." This part of the app is in solid shape.
+
+Two issues:
+- The same `/api/public/resolve-business/...` endpoint that 500s for diners on
+  `/dashboard` (Pass 2, finding #3) also 500s here (`/api/public/resolve-business/host`)
+  — confirms this is a general bug in that endpoint, not diner-specific.
+- A **"PROFILE NOT FOUND" error message renders directly on the host dashboard
+  page**, visible to the host user, likely tied to the same failing endpoint or
+  the `402 Payment Required` on `/api/events?hostId=...` (which may be
+  intentional — events could be gated behind an active plan — but the visible
+  "Profile Not Found" text on an otherwise working dashboard is a real, jarring
+  bug regardless of cause).
+
 ## Next steps (Pass 3)
 
-Blocked from reaching the actual restaurant/host/supplier dashboards or testing
-the truck-claim flow with a real business account, because business profile
-creation itself doesn't work. Once the above is fixed, Pass 3 should resume:
-create a real restaurant, host, and supplier account and crawl each dashboard.
+Restaurant/truck-claim/supplier dashboards remain untested — blocked by the
+critical signup bug above (for restaurant) or not yet attempted (supplier,
+truck-claim). Once the critical bug is fixed, resume: create a real restaurant
+account (should then work), a supplier account, and test the truck-claim flow,
+then crawl each dashboard the same way host's was tested.
