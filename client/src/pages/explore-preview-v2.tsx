@@ -4799,18 +4799,40 @@ function CompactDecisionCardShell({
   );
 }
 
+type DishCategoryPhoto = { image: string; label: string };
+
+const DISH_CATEGORY_PHOTO_RULES: Array<{ match: RegExp; image: string; label: string }> = [
+  { match: /burger|cheeseburger|hamburger|smash/i, image: "/atmospheric/craving-burgers.jpg", label: "Burgers" },
+  { match: /taco|burrito|quesadilla|nacho/i, image: "/atmospheric/craving-tacos.jpg", label: "Tacos" },
+  { match: /pizza|slice|calzone/i, image: "/atmospheric/craving-pizza.jpg", label: "Pizza" },
+  { match: /ramen|noodle|pho\b/i, image: "/atmospheric/craving-ramen.jpg", label: "Noodles" },
+  { match: /ice cream|dessert|cake|cookie|donut|pastry|sweet|churro/i, image: "/atmospheric/craving-dessert.jpg", label: "Desserts" },
+  { match: /coffee|latte|espresso|juice|smoothie|drink|tea\b|lemonade|boba/i, image: "/atmospheric/craving-drinks.jpg", label: "Drinks" },
+];
+
+function getDishCategoryPhoto(...textParts: Array<string | null | undefined>): DishCategoryPhoto | null {
+  const haystack = textParts.filter(Boolean).join(" ").toLowerCase();
+  if (!haystack.trim()) return null;
+  for (const rule of DISH_CATEGORY_PHOTO_RULES) {
+    if (rule.match.test(haystack)) return { image: rule.image, label: rule.label };
+  }
+  return null;
+}
+
 function ScoutCardMedia({
   imageUrl,
   fallbackIcon,
   fallbackTestId,
   imageClassName,
   fallbackClassName = "",
+  categoryPhoto = null,
 }: {
   imageUrl?: string | null;
   fallbackIcon: ReactNode;
   fallbackTestId: string;
   imageClassName: string;
   fallbackClassName?: string;
+  categoryPhoto?: DishCategoryPhoto | null;
 }) {
   const [imageFailed, setImageFailed] = useState(false);
   useEffect(() => {
@@ -4827,6 +4849,28 @@ function ScoutCardMedia({
         loading="lazy"
         onError={() => setImageFailed(true)}
       />
+    );
+  }
+
+  if (categoryPhoto) {
+    return (
+      <div className="absolute inset-0 overflow-hidden" data-testid={fallbackTestId}>
+        <img
+          src={categoryPhoto.image}
+          alt=""
+          className={imageClassName}
+          loading="lazy"
+          aria-hidden="true"
+        />
+        <div
+          className="absolute inset-0"
+          style={{ backgroundImage: "linear-gradient(180deg, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.55) 100%)" }}
+          aria-hidden="true"
+        />
+        <span className="absolute bottom-2 right-2 rounded-full bg-black/70 px-2 py-1 text-[9px] font-black uppercase tracking-[0.08em] text-white/85 ring-1 ring-white/25 backdrop-blur-sm">
+          {categoryPhoto.label} · photo coming soon
+        </span>
+      </div>
     );
   }
 
@@ -6395,6 +6439,7 @@ function LiveTruckCard({
           fallbackIcon={<Flame className="h-5 w-5 text-white/80" aria-hidden="true" />}
           fallbackTestId="scout-live-truck-card-image-fallback"
           imageClassName="absolute inset-0 h-full w-full object-cover"
+          categoryPhoto={getDishCategoryPhoto(truck.name, truck.cuisineType, truck.vibe)}
         />
         <div
           className="absolute inset-0"
@@ -6492,6 +6537,7 @@ function DealCard({
           fallbackTestId="scout-deal-card-image-fallback"
           imageClassName="absolute inset-0 h-full w-full object-cover"
           fallbackClassName="bg-[linear-gradient(150deg,#a3e635_0%,#65a30d_45%,#3f6212_100%)]"
+          categoryPhoto={getDishCategoryPhoto(deal.title, (deal as any).description)}
         />
         <div
           className="absolute inset-0"
@@ -6629,6 +6675,7 @@ function LocalMenuItemCard({
           fallbackTestId="scout-local-menu-item-card-image-fallback"
           imageClassName="absolute inset-0 h-full w-full object-cover"
           fallbackClassName="bg-[linear-gradient(150deg,#fb923c_0%,#ea580c_45%,#9a3412_100%)]"
+          categoryPhoto={getDishCategoryPhoto(item.name, item.description)}
         />
         <div
           className="absolute inset-0"
@@ -7012,6 +7059,7 @@ function NearbyRestaurantCard({
           fallbackIcon={<Utensils className="h-5 w-5 text-white/80" aria-hidden="true" />}
           fallbackTestId="scout-nearby-restaurant-card-image-fallback"
           imageClassName="absolute inset-0 h-full w-full object-cover"
+          categoryPhoto={getDishCategoryPhoto(name, restaurant.cuisineType)}
         />
         <div
           className="absolute inset-0"
@@ -7192,6 +7240,7 @@ function SavedRestaurantCard({ restaurant }: { restaurant: RestaurantSummary }) 
           fallbackIcon={<Heart className="h-5 w-5 text-white/80" aria-hidden="true" />}
           fallbackTestId="scout-saved-restaurant-card-image-fallback"
           imageClassName="absolute inset-0 h-full w-full object-cover"
+          categoryPhoto={getDishCategoryPhoto(name, cuisine)}
         />
         <div
           className="absolute inset-0"
@@ -7962,6 +8011,7 @@ function TruckCard({
           fallbackIcon={<Flame className="h-5 w-5 text-white/80" aria-hidden="true" />}
           fallbackTestId="scout-truck-card-image-fallback"
           imageClassName="h-full w-full object-cover"
+          categoryPhoto={getDishCategoryPhoto(truck.name, truck.cuisineType, truck.vibe)}
         />
         <div
           className="absolute inset-0"
