@@ -25,6 +25,9 @@ jobs:
       - name: Typecheck
         run: npm run check
 
+      - name: Build
+        run: npm run build
+
       - name: Mobile Readiness
         run: npm run check:mobile-readiness
 
