@@ -156,13 +156,13 @@ enabled for me" rather than "this is broken." Anyone who finds it (it's in the m
 nav under "More") gets a confusing, dead experience. Needs an owner decision: finish
 wiring the backend, or hide the nav entry and route until it's ready.
 
-### 2. `/share-hub` is essentially a blank page for logged-in users
-**Severity: high**
-
-Body content is 28 characters — just the bottom nav bar, nothing else. Even the
-basic `/api/auth/user` check (which succeeds everywhere else in the app) returns
-`500` specifically on this page. This looks like an incomplete or broken page
-reachable from the main nav.
+### 2. ~~`/share-hub` is essentially a blank page for logged-in users~~ — RETRACTED
+**Not reproducible.** Re-tested twice during the fix pass with a real logged-in
+account and full error capture: `/share-hub` renders completely and correctly
+("Tracked links are active", all 4 share cards, Signup/Host/Truck/Restaurant).
+The original "28 character blank page" read was almost certainly a timing
+artifact in the Pass 2 crawl script (only waited 1800ms before capturing body
+text, during a login→dashboard→share-hub redirect chain). No fix needed.
 
 ### 3. The dashboard router silently fails and falls back to Scout, masking a server error
 **Severity: medium**
