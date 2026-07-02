@@ -60,6 +60,7 @@ const signupSchema = z
         "Phone number must include at least 10 digits",
       ),
     phoneContactConsent: z.boolean().default(true),
+    acceptTerms: z.boolean().default(false),
     otpCode: z.string().optional(),
     password: z
       .string()
@@ -369,6 +370,7 @@ export default function CustomerSignup() {
       lastName: "",
       phone: "",
       phoneContactConsent: true,
+      acceptTerms: false,
       otpCode: "",
       password: "",
       confirmPassword: "",
@@ -733,6 +735,13 @@ export default function CustomerSignup() {
         form.setError("otpCode", {
           type: "manual",
           message: "Verification code is required",
+        });
+        return;
+      }
+      if (!data.acceptTerms) {
+        form.setError("acceptTerms", {
+          type: "manual",
+          message: "You must accept the Terms of Service and Privacy Policy",
         });
         return;
       }
@@ -1715,6 +1724,43 @@ export default function CustomerSignup() {
                     </FormItem>
                   )}
                 />
+
+                {accountType === "business" && (
+                  <FormField
+                    control={form.control}
+                    name="acceptTerms"
+                    render={({ field }) => (
+                      <FormItem className="rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)] p-3">
+                        <div className="flex items-start gap-2">
+                          <FormControl>
+                            <input
+                              type="checkbox"
+                              checked={field.value}
+                              onChange={(event) => field.onChange(event.target.checked)}
+                              className="mt-1 h-4 w-4"
+                              data-testid="checkbox-terms"
+                            />
+                          </FormControl>
+                          <FormLabel className="text-sm font-normal leading-5">
+                            I agree to the{" "}
+                            <Link href="/terms-of-service">
+                              <span className="text-[color:var(--accent-text)] underline cursor-pointer">
+                                Terms of Service
+                              </span>
+                            </Link>{" "}
+                            and{" "}
+                            <Link href="/privacy-policy">
+                              <span className="text-[color:var(--accent-text)] underline cursor-pointer">
+                                Privacy Policy
+                              </span>
+                            </Link>
+                          </FormLabel>
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
 
                 <Button
                   data-testid="button-create-account"
