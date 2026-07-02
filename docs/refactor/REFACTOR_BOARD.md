@@ -6,7 +6,6 @@ Use this board to track every refactor item from queue to verification.
 
 - [ ] [site-drift-sweep] Delete confirmed-dead files: `client/src/pages/home-north-star.tsx`, `client/src/pages/restaurant-detail.tsx` (unimported anywhere), `client/src/pages/EmptyCountyExperience.tsx` (imported but never routed) - see `docs/audits/site-drift-sweep-2026-07.md`
 - [ ] [site-drift-sweep] Delete stray artifact `client/src/components/Untitled-1.json` (accidental TS language-server cache dump, not code) - see `docs/audits/site-drift-sweep-2026-07.md`
-- [ ] [site-drift-sweep] Consolidate the two independent "start a restaurant/truck/bar business" signup UIs (`/restaurant-signup` vs `/customer-signup?role=business&businessType=...`) into one shared flow, with before/after feature-parity check - see `docs/audits/site-drift-sweep-2026-07.md`
 - [ ] [site-drift-sweep] Fix inconsistent business-role label generation in `client/src/pages/customer-signup.tsx` (~line 1093) - one shared label source instead of 3+ code paths - see `docs/audits/site-drift-sweep-2026-07.md`
 - [ ] [site-drift-sweep] Fix `/search` page React Query misconfiguration for `/api/deals/featured` (missing queryFn, masked as empty state) - see `docs/audits/site-drift-sweep-2026-07.md`
 - [ ] [site-drift-sweep] Redirect orphaned `/host-signup` direct route to the working `/customer-signup?role=host` flow - see `docs/audits/site-drift-sweep-2026-07.md`
@@ -26,6 +25,7 @@ _nothing active_
 
 - [x] [site-drift-sweep] **CRITICAL** business profile creation was completely broken (missing `acceptTerms` in both `/customer-signup?role=business` and `/restaurant-signup`'s `createRestaurantMutation`) - fixed and verified end to end with real test accounts - PR #181 - owner claude - 2026-07-01
 - [x] [site-drift-sweep] Removed `/scoutcoin` from public routes - confirmed future work, not ready; was showing a fully-built wallet UI with every backend call failing - PR #182 - owner claude - 2026-07-01
+- [x] [site-drift-sweep] Consolidated duplicate business signup entry point - `/restaurant-signup`'s standalone account-creation form now redirects a logged-out direct visit into the shared `/customer-signup?role=business` flow (the business-profile step was already shared, not duplicated); preserved post-verification and specific-truck-claim edge cases - PR #183 - owner claude - 2026-07-01
 
 - [x] [phase-5-oversized-route-splits] Extracted admin supplier-orders endpoint (`GET /api/admin/supplier-orders`) from `server/routes/supplierMarketplaceRoutes.ts` into `server/routes/suppliers/adminOrdersRoutes.ts` - PR-20 - owner codex - 2026-04-17
 - [x] [phase-5-oversized-route-splits] Extracted supplier product import endpoint (`POST /api/supplier/products/import`) from `server/routes/supplierMarketplaceRoutes.ts` into `server/routes/suppliers/profileRoutes.ts` - PR-19 - owner codex - 2026-04-17
