@@ -574,6 +574,7 @@ export default function RestaurantSignup() {
             websiteUrl: data.websiteUrl,
             instagramUrl: data.instagramUrl,
             facebookPageUrl: data.facebookPageUrl,
+            acceptTerms: data.acceptTerms,
             amenities: {
               parking: data.hasParking,
               wifi: data.hasWifi,
@@ -612,6 +613,7 @@ export default function RestaurantSignup() {
             websiteUrl: data.websiteUrl,
             instagramUrl: data.instagramUrl,
             facebookPageUrl: data.facebookPageUrl,
+            acceptTerms: data.acceptTerms,
             amenities: {
               parking: data.hasParking,
               wifi: data.hasWifi,
