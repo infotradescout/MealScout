@@ -174,14 +174,15 @@ business to resolve) this fallback is probably reasonable — but it should be a
 clean "no business dashboard for this account" response, not a server error being
 swallowed. Worth a backend fix so real failures don't hide behind the same fallback.
 
-### 4. Parking Pass shows a `503` on subscription status
-**Severity: low-medium — may be intentional gating, needs confirmation**
-
-`/api/subscription/status` returns `503 Service Unavailable` when a diner visits
-`/parking-pass`. The page still renders correctly (explains only food trucks can
-book). Possibly an intentional "no active subscription" response using the wrong
-status code (503 usually means "service is down," not "you're not subscribed") —
-worth a quick check.
+### 4. ~~Parking Pass shows a `503` on subscription status~~ — RETRACTED
+**Not a bug.** Traced to `server/routes/subscriptionRoutes.ts:684`:
+`if (!stripe) return res.status(503).json({...})` — an explicit, correct fallback
+for when the Stripe secret key isn't configured (true in this local dev
+environment, very likely not true in production). 503 is the semantically
+correct code for "payment service unavailable." The actual "no active
+subscription" case is a completely different, correctly-handled code path
+that returns `200 {status: "none", hasAccess: false}`. Needs a production
+check that Stripe keys are set, not a code fix.
 
 ### 5. Everything else in Pass 2 is solid
 `/scout`, `/favorites`, `/orders`, `/user-dashboard`, `/profile`,
@@ -288,9 +289,12 @@ import, and portals for delivery/requests/products/orders all render correctly.
 
 Same recurring issue: the **"PROFILE NOT FOUND" error renders at the top of the
 supplier dashboard too** — now confirmed on **three account types** (diner, host,
-supplier), tied to the same `/api/public/resolve-business/*` 500. A new related
-500 also appeared here: `/api/supplier/stripe/status` fails, though the page
-still shows a reasonable "Payouts setup: Not connected" fallback.
+supplier), tied to the same `/api/public/resolve-business/*` 500 (local-dev-only,
+see correction above). The `/api/supplier/stripe/status` 500 seen here is also
+**not a bug** — traced to the same `if (!stripe) return res.status(...)` pattern
+as the Parking Pass finding, an explicit fallback for Stripe not being configured
+locally. The page's "Payouts setup: Not connected" fallback is working exactly
+as designed.
 
 ### 4. Truck-claim search and request flow works; final profile-creation step untested
 **Severity: informational**
