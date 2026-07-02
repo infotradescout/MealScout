@@ -614,9 +614,9 @@ const DISCOVERY_LAYERS: Record<
     subtitle: "Search dishes, trucks, places, and events by what sounds good.",
   },
   trending: {
-    title: "Local Activity",
+    title: "Popular Nearby",
     href: "/search",
-    subtitle: "Fresh local signals from recent saves, updates, and activity.",
+    subtitle: "Fresh finds, active trucks, and places people are checking now.",
   },
   menuItems: {
     title: "Popular Dishes",
@@ -2211,7 +2211,7 @@ export default function ExplorePreview() {
     );
   }, [resolvedScoutLocation]);
   const scoutMarketEyebrow = isPensacolaOperatorMarket
-    ? "Pensacola launch market"
+    ? "Food around Pensacola"
     : resolvedScoutLocation?.source === "device"
       ? "Your live location"
       : hasResolvedLocation
@@ -3712,7 +3712,7 @@ export default function ExplorePreview() {
               ? "Fresh menu updates nearby"
               : activeSceneLaneId === "worth_discovering"
                 ? "New and under-scouted spots nearby"
-                : "Tap the map to explore nearby food";
+                : "Find trucks, bowls, pop-ups, and local favorites near you.";
   const compactMapMarketHint =
     trucksServingNow.length > 0
       ? `${scoutMarketEyebrow} • ${formatScoutCount(
@@ -4618,7 +4618,7 @@ function ScoutImmediateCompactCard({
       <CompactDecisionCardShell
         href={getTruckProfilePath(truck)}
         imageUrl={image}
-        fallbackIcon={<Flame className="h-4 w-4 text-orange-200/78" aria-hidden="true" />}
+        fallbackIcon={<Flame className="h-4 w-4 text-white/90" aria-hidden="true" />}
         title={title}
         meta={meta}
         primaryActionLabel="View truck"
@@ -4641,7 +4641,7 @@ function ScoutImmediateCompactCard({
       <CompactDecisionCardShell
         href={getRestaurantProfilePath(restaurant)}
         imageUrl={image}
-        fallbackIcon={<Utensils className="h-4 w-4 text-orange-200/78" aria-hidden="true" />}
+        fallbackIcon={<Utensils className="h-4 w-4 text-white/90" aria-hidden="true" />}
         title={getRestaurantName(restaurant)}
         meta={meta}
         primaryActionLabel="View profile"
@@ -4663,7 +4663,7 @@ function ScoutImmediateCompactCard({
       <CompactDecisionCardShell
         href={getMenuItemProfilePath(menuItem)}
         imageUrl={menuItem.imageUrl || null}
-        fallbackIcon={<Utensils className="h-4 w-4 text-orange-200/78" aria-hidden="true" />}
+        fallbackIcon={<Utensils className="h-4 w-4 text-white/90" aria-hidden="true" />}
         title={menuItem.name}
         meta={reason || "Popular nearby dish"}
         primaryActionLabel="View dish"
@@ -4677,7 +4677,7 @@ function ScoutImmediateCompactCard({
       <CompactDecisionCardShell
         href={`/deal/${encodeURIComponent(String(deal.id))}`}
         imageUrl={deal.imageUrl || null}
-        fallbackIcon={<Tag className="h-4 w-4 text-orange-200/78" aria-hidden="true" />}
+        fallbackIcon={<Tag className="h-4 w-4 text-white/90" aria-hidden="true" />}
         title={deal.title || "Local deal"}
         meta={[deal.restaurantName, deal.discountText || deal.description].filter(Boolean).join(" / ") || "Active nearby deal"}
         primaryActionLabel="View deal"
@@ -4695,7 +4695,7 @@ function ScoutImmediateCompactCard({
     <CompactDecisionCardShell
       href={`/events?eventId=${encodeURIComponent(String(event.id))}`}
       imageUrl={event.imageUrl || event.heroImageUrl || null}
-      fallbackIcon={<CalendarDays className="h-4 w-4 text-orange-200/78" aria-hidden="true" />}
+      fallbackIcon={<CalendarDays className="h-4 w-4 text-white/90" aria-hidden="true" />}
       title={title}
       meta={[event.venueName || event.locationName, startLabel].filter(Boolean).join(" / ") || "Upcoming nearby event"}
       primaryActionLabel="View event"
@@ -4741,10 +4741,11 @@ function CompactDecisionCardShell({
           />
         ) : (
           <div
-            className="flex h-full w-full items-center justify-center bg-[radial-gradient(circle_at_top,rgba(255,153,92,0.18),rgba(255,255,255,0.02))]"
+            className="relative flex h-full w-full items-center justify-center overflow-hidden bg-[linear-gradient(150deg,#ff8a4c_0%,#ff5a2f_45%,#c2410c_100%)]"
             data-testid="scout-compact-card-image-fallback"
           >
-            {fallbackIcon}
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.22),transparent_55%)]" />
+            <div className="relative text-white/90">{fallbackIcon}</div>
           </div>
         )}
       </div>
@@ -4811,15 +4812,14 @@ function ScoutCardMedia({
     <div
       className={[
         "absolute inset-0 flex items-center justify-center overflow-hidden",
-        "bg-[radial-gradient(circle_at_top,rgba(255,153,92,0.18),rgba(255,255,255,0.02))]",
+        "bg-[linear-gradient(150deg,#ff8a4c_0%,#ff5a2f_45%,#c2410c_100%)]",
         fallbackClassName,
       ].join(" ")}
       data-testid={fallbackTestId}
       aria-hidden="true"
     >
-      <div className="absolute inset-0 bg-[linear-gradient(160deg,rgba(255,90,47,0.18),rgba(0,0,0,0.6))]" />
-      <div className="absolute inset-x-0 bottom-0 h-1/2 bg-[linear-gradient(180deg,rgba(0,0,0,0),rgba(0,0,0,0.32))]" />
-      <div className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-white/[0.08] ring-1 ring-white/10 shadow-[0_10px_24px_rgba(0,0,0,0.28)]">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.22),transparent_55%)]" />
+      <div className="relative flex h-14 w-14 items-center justify-center rounded-2xl bg-white/15 ring-1 ring-white/25 shadow-[0_10px_24px_rgba(0,0,0,0.28)] backdrop-blur-sm">
         {fallbackIcon}
       </div>
     </div>
@@ -5108,8 +5108,8 @@ function ActiveSceneContent({
       })),
       ...trendingPlaceCards.map((restaurant) => ({
         sourceRowId: "trending_this_week" as const,
-        sectionLabel: "Local Activity",
-        summary: formatScoutCount(trendingPlaceCards.length, "hot local signal", "hot local signals"),
+        sectionLabel: "Best Now",
+        summary: formatScoutCount(trendingPlaceCards.length, "popular pick", "popular picks"),
         cardType: "restaurant" as const,
         restaurant,
         businessKey: getScoutBusinessCardKey(restaurant, getRestaurantProfilePath(restaurant)),
@@ -5355,8 +5355,8 @@ function ActiveSceneContent({
       },
       {
         id: "trending_this_week",
-        title: "Local Activity",
-        subtitle: "Places in your market with recent community and update signals.",
+        title: "Popular Nearby",
+        subtitle: "Fresh finds, active trucks, and places people are checking now.",
         linkHref: DISCOVERY_LAYERS.trending.href,
         cards: restaurantRailCards(trendingPlaceCards),
         className: compactRailSectionClass,
@@ -6467,7 +6467,7 @@ function DealCard({
           fallbackIcon={<Tag className="h-5 w-5 text-white/80" aria-hidden="true" />}
           fallbackTestId="scout-deal-card-image-fallback"
           imageClassName="absolute inset-0 h-full w-full object-cover"
-          fallbackClassName="bg-[radial-gradient(circle_at_top,rgba(132,204,22,0.18),rgba(255,255,255,0.02))]"
+          fallbackClassName="bg-[linear-gradient(150deg,#a3e635_0%,#65a30d_45%,#3f6212_100%)]"
         />
         <div
           className="absolute inset-0"
@@ -6604,7 +6604,7 @@ function LocalMenuItemCard({
           fallbackIcon={<Utensils className="h-5 w-5 text-white/80" aria-hidden="true" />}
           fallbackTestId="scout-local-menu-item-card-image-fallback"
           imageClassName="absolute inset-0 h-full w-full object-cover"
-          fallbackClassName="bg-[radial-gradient(circle_at_top,rgba(255,120,55,0.24),rgba(255,255,255,0.02))]"
+          fallbackClassName="bg-[linear-gradient(150deg,#fb923c_0%,#ea580c_45%,#9a3412_100%)]"
         />
         <div
           className="absolute inset-0"
@@ -6718,7 +6718,7 @@ function EventCard({
           fallbackIcon={<CalendarDays className="h-5 w-5 text-white/80" aria-hidden="true" />}
           fallbackTestId="scout-event-card-image-fallback"
           imageClassName="absolute inset-0 h-full w-full object-cover"
-          fallbackClassName="bg-[radial-gradient(circle_at_top,rgba(217,70,239,0.14),rgba(255,255,255,0.02))]"
+          fallbackClassName="bg-[linear-gradient(150deg,#e879f9_0%,#c026d3_45%,#86198f_100%)]"
         />
         <div
           className="absolute inset-0"
@@ -7168,7 +7168,6 @@ function SavedRestaurantCard({ restaurant }: { restaurant: RestaurantSummary }) 
           fallbackIcon={<Heart className="h-5 w-5 text-white/80" aria-hidden="true" />}
           fallbackTestId="scout-saved-restaurant-card-image-fallback"
           imageClassName="absolute inset-0 h-full w-full object-cover"
-          fallbackClassName="bg-[radial-gradient(circle_at_top,rgba(255,90,47,0.18),rgba(255,255,255,0.02))]"
         />
         <div
           className="absolute inset-0"
