@@ -310,7 +310,7 @@ export default function setupStoriesRoutes(app: Express) {
 
   // GET - Feed (infinite scroll)
   // Feed algorithm: 30% community (recent), 20% featured (sponsored), 20% trending, 20% nearby, 10% discovery
-  app.get('/api/stories/feed', isAuthenticated, async (req, res) => {
+  app.get('/api/stories/feed', async (req, res) => {
     try {
       const userId = (req as any).user?.id;
       const page = parseInt(req.query.page as string) || 0;
@@ -417,6 +417,10 @@ export default function setupStoriesRoutes(app: Express) {
         allStories.map(async (story: any) => {
           if (story.__type === 'ad') {
             return story;
+          }
+
+          if (!userId) {
+            return { ...story, userLiked: false };
           }
 
           const userLiked = await db

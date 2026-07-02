@@ -22,14 +22,14 @@ export default function VideoPage() {
   return (
     <div className="max-w-md mx-auto bg-background min-h-screen relative pb-24">
       <SEOHead
-        title="Critic Feed - MealScout"
-        description="Community-Powered food recommendations."
+        title="Video Feed - MealScout"
+        description="Community-powered video recommendations for local food."
         canonicalUrl="https://www.mealscout.us/video"
       />
 
       <header className="sticky top-0 z-50 bg-black/40 backdrop-blur-xl border-b border-white/5 px-6 py-4 flex items-center justify-between">
         <div className="flex flex-col">
-          <h1 className="text-xl font-serif font-bold text-white tracking-tight">Critic Feed</h1>
+          <h1 className="text-xl font-serif font-bold text-white tracking-tight">Video Feed</h1>
           <p className="text-primary text-[10px] font-bold uppercase tracking-[0.2em]">Community Powered</p>
         </div>
         {isAuthenticated && (
