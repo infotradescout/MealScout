@@ -33,13 +33,22 @@ export default function Sitemap() {
   });
 
   const cities = Array.isArray(cityData) ? cityData.slice(0, 24) : [];
-  const cityCuisinePages = cities.flatMap((city) =>
-    (city.cuisines || []).slice(0, 4).map((cuisine) => ({
-      href: `/food-trucks/${city.slug}/${cuisine.slug}`,
-      title: `${titleCase(cuisine.slug)} in ${city.name}${city.state ? `, ${city.state}` : ""}`,
-      description: `Local ${titleCase(cuisine.slug).toLowerCase()} truck and deal pages.`,
-    })),
-  );
+  const cityCuisinePagesByHref = new Map<
+    string,
+    { href: string; title: string; description: string }
+  >();
+  for (const city of cities) {
+    for (const cuisine of (city.cuisines || []).slice(0, 4)) {
+      const href = `/food-trucks/${city.slug}/${cuisine.slug}`;
+      if (cityCuisinePagesByHref.has(href)) continue;
+      cityCuisinePagesByHref.set(href, {
+        href,
+        title: `${titleCase(cuisine.slug)} in ${city.name}${city.state ? `, ${city.state}` : ""}`,
+        description: `Local ${titleCase(cuisine.slug).toLowerCase()} truck and deal pages.`,
+      });
+    }
+  }
+  const cityCuisinePages = Array.from(cityCuisinePagesByHref.values());
 
   const schemaData = {
     "@context": "https://schema.org",
