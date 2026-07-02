@@ -107,6 +107,8 @@ export function registerDiscoveryRoutes(app: Express) {
               r.city as "restaurantCity",
               r.state as "restaurantState",
               r.cuisine_type as "cuisineType",
+              r.logo_url as "restaurantLogoUrl",
+              r.cover_image_url as "restaurantCoverImageUrl",
               mi.clicks,
               mi.impressions,
               mi.last_seen_at as "lastSeenAt",
@@ -123,6 +125,7 @@ export function registerDiscoveryRoutes(app: Express) {
             where m.is_available = true
               and menu.is_active = true
               and r.is_active = true
+              and m.name !~* '^(extra|add[-\s]?on|side of|upgrade|substitut)'
             order by "trendScore" desc, mi.last_seen_at desc
             limit ${limit}
           `),

@@ -856,6 +856,8 @@ export function registerMenuRoutes(app: Express) {
           restaurantName: restaurants.name,
           restaurantCity: restaurants.city,
           restaurantState: restaurants.state,
+          restaurantLogoUrl: restaurants.logoUrl,
+          restaurantCoverImageUrl: restaurants.coverImageUrl,
           cuisineType: restaurants.cuisineType,
           restaurantLatitude: restaurants.latitude,
           restaurantLongitude: restaurants.longitude,
@@ -875,8 +877,16 @@ export function registerMenuRoutes(app: Express) {
           ),
         );
 
+      // Exclude add-ons/modifiers (e.g. "Extra toppings") from discovery -
+      // these aren't standalone dishes worth surfacing as a featured item.
+      const ADDON_NAME_PATTERN =
+        /^(extra|add[\s-]?on|side of|upgrade|substitut)/i;
+      const discoveryRows = rows.filter(
+        (row: any) => !ADDON_NAME_PATTERN.test(String(row.name || "").trim()),
+      );
+
       const matchedRows = queryTerms.length
-        ? rows.filter((row: any) => {
+        ? discoveryRows.filter((row: any) => {
             const haystack = [
               row.name,
               row.description,
@@ -891,7 +901,7 @@ export function registerMenuRoutes(app: Express) {
               .toLowerCase();
             return queryTerms.some((term) => haystack.includes(term));
           })
-        : rows;
+        : discoveryRows;
 
       const withDistance = matchedRows
         .map((row: any) => {
