@@ -945,14 +945,15 @@ function getOperationalBadges(entityOrMeta: FreshnessMeta): string[] {
 }
 
 function getFreshnessBadgeClass(meta: FreshnessMeta, label: string): string {
-  const base = "rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ring-1";
+  const base =
+    "rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ring-1 shadow-sm";
   if (getFreshnessState(meta) === "needs_update") {
-    return `${base} bg-amber-300/14 text-amber-100 ring-amber-200/20`;
+    return `${base} bg-amber-400/25 text-amber-100 ring-amber-300/45`;
   }
   if (getFreshnessState(meta) === "aging") {
-    return `${base} bg-white/8 text-orange-100/78 ring-white/10`;
+    return `${base} bg-white/12 text-white/85 ring-white/20`;
   }
-  return `${base} bg-emerald-300/12 text-emerald-100 ring-emerald-200/18`;
+  return `${base} bg-emerald-400/25 text-emerald-100 ring-emerald-300/45`;
 }
 
 function getRestaurantUpdateHref(restaurantId: string, setup: "status" | "location" | "menu" | "deal"): string {
@@ -4210,22 +4211,26 @@ function SectionHeader({
   const showLink = itemCount === undefined || itemCount > 1;
 
   return (
-    <div className="mb-4 pr-5">
+    <div className="mb-5 pr-5">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between sm:gap-3">
-        <div className="min-w-0">
-          <h2 className="text-xl font-black tracking-tight text-white sm:text-2xl">{title}</h2>
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span
+            className="h-6 w-1.5 shrink-0 rounded-full bg-gradient-to-b from-orange-400 to-red-500"
+            aria-hidden="true"
+          />
+          <h2 className="text-2xl font-black tracking-tight text-white sm:text-[1.75rem]">{title}</h2>
         </div>
         {showLink ? (
           <Link
             href={linkHref}
-            className="inline-flex w-fit shrink-0 items-center gap-1.5 rounded-full bg-orange-500/10 px-3 py-1.5 text-xs font-black uppercase tracking-[0.08em] text-orange-100 ring-1 ring-orange-200/20 transition-colors hover:bg-orange-500/16 sm:text-sm sm:normal-case sm:tracking-normal"
+            className="inline-flex w-fit shrink-0 items-center gap-1.5 rounded-full bg-orange-500/12 px-3 py-1.5 text-xs font-black uppercase tracking-[0.08em] text-orange-100 ring-1 ring-orange-300/25 transition-colors hover:bg-orange-500/20 hover:ring-orange-300/40 sm:text-sm sm:normal-case sm:tracking-normal"
           >
             See All <ChevronRight className="h-4 w-4" aria-hidden="true" />
           </Link>
         ) : null}
       </div>
       {subtitle ? (
-        <p className="mt-1.5 text-xs leading-relaxed text-white/58 sm:text-sm">{subtitle}</p>
+        <p className="mt-1.5 pl-4 text-xs leading-relaxed text-white/58 sm:text-sm">{subtitle}</p>
       ) : null}
     </div>
   );
@@ -6380,7 +6385,7 @@ function LiveTruckCard({
   return (
     <Link
       href={getTruckProfilePath(truck)}
-      className="group block overflow-hidden rounded-[1.35rem] bg-[#120b08]/75 ring-1 ring-white/10 transition duration-200 hover:-translate-y-0.5 hover:ring-orange-300/28 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
+      className="group block overflow-hidden rounded-[1.6rem] bg-gradient-to-b from-[#1d140d] to-[#0e0805] ring-1 ring-white/14 shadow-[0_10px_30px_rgba(0,0,0,0.4)] transition duration-200 hover:-translate-y-1 hover:shadow-[0_18px_40px_rgba(0,0,0,0.5)] hover:ring-orange-300/45 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
       aria-label={`Open ${truck.name}`}
       style={{ boxShadow: "0 18px 54px rgba(0,0,0,0.56)" }}
     >
@@ -6476,7 +6481,7 @@ function DealCard({
   return (
     <Link
       href={`/deal/${deal.id}`}
-      className="block overflow-hidden rounded-[1.35rem] bg-[#120b08]/75 ring-1 ring-white/10 transition duration-200 hover:-translate-y-0.5 hover:ring-orange-300/28 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
+      className="block overflow-hidden rounded-[1.6rem] bg-gradient-to-b from-[#1d140d] to-[#0e0805] ring-1 ring-white/14 shadow-[0_10px_30px_rgba(0,0,0,0.4)] transition duration-200 hover:-translate-y-1 hover:shadow-[0_18px_40px_rgba(0,0,0,0.5)] hover:ring-orange-300/45 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
       style={{ boxShadow: "0 18px 54px rgba(0,0,0,0.56)" }}
       aria-label={`Open deal ${deal.title || ""}`}
     >
@@ -6612,7 +6617,7 @@ function LocalMenuItemCard({
           discoveryReasons: item.discoveryReasons,
         })
       }
-      className="block overflow-hidden rounded-[1.35rem] bg-[#120b08]/75 ring-1 ring-white/10 transition duration-200 hover:-translate-y-0.5 hover:ring-orange-300/28 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
+      className="block overflow-hidden rounded-[1.6rem] bg-gradient-to-b from-[#1d140d] to-[#0e0805] ring-1 ring-white/14 shadow-[0_10px_30px_rgba(0,0,0,0.4)] transition duration-200 hover:-translate-y-1 hover:shadow-[0_18px_40px_rgba(0,0,0,0.5)] hover:ring-orange-300/45 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
       style={{ boxShadow: "0 18px 54px rgba(0,0,0,0.56)" }}
       aria-label={`Open ${item.name} from ${item.restaurantName || "local menu"}`}
       data-testid="scout-local-menu-item-card"
@@ -6727,7 +6732,7 @@ function EventCard({
   return (
     <Link
       href={`/event/${event.id}`}
-      className="block overflow-hidden rounded-[1.35rem] bg-[#120b08]/75 ring-1 ring-white/10 transition duration-200 hover:-translate-y-0.5 hover:ring-orange-300/28 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
+      className="block overflow-hidden rounded-[1.6rem] bg-gradient-to-b from-[#1d140d] to-[#0e0805] ring-1 ring-white/14 shadow-[0_10px_30px_rgba(0,0,0,0.4)] transition duration-200 hover:-translate-y-1 hover:shadow-[0_18px_40px_rgba(0,0,0,0.5)] hover:ring-orange-300/45 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
       style={{ boxShadow: "0 18px 54px rgba(0,0,0,0.56)" }}
       aria-label={`Open event ${title}`}
     >
@@ -6995,7 +7000,7 @@ function NearbyRestaurantCard({
   return (
     <Link
       href={profileHref}
-      className="group block overflow-hidden rounded-[1.35rem] bg-[#120b08]/75 ring-1 ring-white/10 transition duration-200 hover:-translate-y-0.5 hover:ring-orange-300/28 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
+      className="group block overflow-hidden rounded-[1.6rem] bg-gradient-to-b from-[#1d140d] to-[#0e0805] ring-1 ring-white/14 shadow-[0_10px_30px_rgba(0,0,0,0.4)] transition duration-200 hover:-translate-y-1 hover:shadow-[0_18px_40px_rgba(0,0,0,0.5)] hover:ring-orange-300/45 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
       aria-label={`Open ${name}`}
       style={{ boxShadow: "0 18px 54px rgba(0,0,0,0.5)" }}
       data-testid="scout-restaurant-card"
@@ -7948,7 +7953,7 @@ function TruckCard({
         event.preventDefault();
         onSelect(truck);
       }}
-      className="block overflow-hidden rounded-[1.35rem] bg-[#120b08]/75 ring-1 ring-white/10 transition duration-200 hover:-translate-y-0.5 hover:ring-orange-300/28 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
+      className="block overflow-hidden rounded-[1.6rem] bg-gradient-to-b from-[#1d140d] to-[#0e0805] ring-1 ring-white/14 shadow-[0_10px_30px_rgba(0,0,0,0.4)] transition duration-200 hover:-translate-y-1 hover:shadow-[0_18px_40px_rgba(0,0,0,0.5)] hover:ring-orange-300/45 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
     >
       {/* Hero image */}
       <div className="relative aspect-[4/3] w-full bg-[#120805]/40 overflow-hidden">

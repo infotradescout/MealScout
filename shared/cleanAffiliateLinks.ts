@@ -67,6 +67,7 @@ const RESERVED_PUBLIC_BUSINESS_SLUGS = new Set([
   "restaurant-signup",
   "scout",
   "scout-prototype",
+  "scout-v2",
   "scoutcoin",
   "search",
   "settings",
