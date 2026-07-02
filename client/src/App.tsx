@@ -149,7 +149,6 @@ const ScoutPage = lazy(() => import("@/pages/explore-preview"));
 const ScoutPrototype = lazy(() => import("@/pages/scout-prototype"));
 const FoodTruckRush = lazy(() => import("@/pages/food-truck-rush"));
 const HiringPage = lazy(() => import("@/pages/hiring"));
-const ScoutcoinPage = lazy(() => import("@/pages/scoutcoin"));
 const ForRestaurants = lazy(() => import("@/pages/for-restaurants"));
 const ForBars = lazy(() => import("@/pages/for-bars"));
 const ForHosts = lazy(() => import("@/pages/for-hosts"));
@@ -247,7 +246,6 @@ const publicRoutePrefixes = [
   "/menu/",
   "/checkout/",
   "/order-confirmation/",
-  "/scoutcoin",
 ];
 
 const isPublicPath = (path: string) =>
@@ -457,7 +455,6 @@ function Router() {
             <Route path="/admin" component={AdminLogin} />
             <Route path="/admin/login" component={AdminLogin} />
             <Route path="/admin/dashboard" component={AdminLogin} />
-            <Route path="/scoutcoin" component={ScoutcoinPage} />
             <Route path="/menu/:restaurantId" component={OnlineMenuPage} />
             <Route
               path="/checkout/:restaurantId"
@@ -712,7 +709,6 @@ function Router() {
             />
             <Route path="/menu-builder" component={MenuBuilderPage} />
             <Route path="/kitchen" component={KitchenDisplayPage} />
-            <Route path="/scoutcoin" component={ScoutcoinPage} />
             <Route
               path="/:businessSlug/:refTag"
               component={CleanPublicProfileRoute}
