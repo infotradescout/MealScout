@@ -6,7 +6,6 @@ const read = (p) => fs.readFileSync(path.join(root, p), "utf8");
 
 const targets = [
   "client/src/pages/public-profile.tsx",
-  "client/src/pages/restaurant-detail.tsx",
   "client/src/pages/location-detail.tsx",
 ];
 

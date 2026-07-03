@@ -3079,6 +3079,7 @@ export default function ExplorePreview() {
   const [selectedLiveTruck, setSelectedLiveTruck] = useState<LiveTruckSummary | null>(null);
   const [selectedMapMarker, setSelectedMapMarker] = useState<MapAdapterMarker | null>(null);
   const [mapBounds, setMapBounds] = useState<MapBoundsLike | null>(null);
+  const [collapsedMapCardDismissed, setCollapsedMapCardDismissed] = useState(false);
   // Once the full map has been opened once, keep GoogleMapSurface mounted
   // (just hidden) so it doesn't re-initialize on every collapse/expand.
   // Using state (not ref) so React re-renders when the map should first mount.
@@ -3757,6 +3758,9 @@ export default function ExplorePreview() {
       ) ?? null,
     [sceneFilteredMapMarkers],
   );
+  useEffect(() => {
+    setCollapsedMapCardDismissed(false);
+  }, [collapsedMapSelectedMarker?.id]);
   return (
     <>
       <SEOHead
@@ -4097,11 +4101,21 @@ export default function ExplorePreview() {
                     {compactMapSceneHint}
                   </p>
                 </div>
+                <button
+                  type="button"
+                  onClick={openScoutMap}
+                  aria-label="Open full map"
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-[#100c0a]/80 px-3 py-2 text-xs font-black text-white ring-1 ring-orange-200/35 backdrop-blur-xl shadow-[0_10px_24px_rgba(0,0,0,0.42)]"
+                >
+                  <Maximize2 className="h-3.5 w-3.5" aria-hidden="true" />
+                  Open map
+                </button>
               </div>
-              {collapsedMapSelectedMarker ? (
+              {collapsedMapSelectedMarker && !collapsedMapCardDismissed ? (
                 <CollapsedMapPinCard
                   marker={collapsedMapSelectedMarker}
                   userLocation={resolvedScoutCoords}
+                  onClose={() => setCollapsedMapCardDismissed(true)}
                 />
               ) : null}
               </>
@@ -6034,9 +6048,11 @@ function QuietNearbyNotice() {
 function CollapsedMapPinCard({
   marker,
   userLocation,
+  onClose,
 }: {
   marker: MapAdapterMarker;
   userLocation?: { lat: number; lng: number } | null;
+  onClose: () => void;
 }) {
   const destination =
     marker.kind === "truck"
@@ -6097,6 +6113,14 @@ function CollapsedMapPinCard({
           >
             Route
           </a>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Dismiss"
+            className="rounded-xl px-2 py-1.5 text-xs font-bold text-white/50"
+          >
+            ✕
+          </button>
         </div>
       </div>
     </div>

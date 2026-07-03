@@ -2227,8 +2227,8 @@ export default function ExplorePreview() {
     : resolvedScoutLocation?.source === "device"
       ? "Your live location"
       : hasResolvedLocation
-        ? "Active market"
-        : "Nearby market";
+        ? "Open near you"
+        : "Nearby food";
 
   /* --------- trucks --------- */
 
@@ -3078,6 +3078,7 @@ export default function ExplorePreview() {
   const [selectedLiveTruck, setSelectedLiveTruck] = useState<LiveTruckSummary | null>(null);
   const [selectedMapMarker, setSelectedMapMarker] = useState<MapAdapterMarker | null>(null);
   const [mapBounds, setMapBounds] = useState<MapBoundsLike | null>(null);
+  const [collapsedMapCardDismissed, setCollapsedMapCardDismissed] = useState(false);
   // Once the full map has been opened once, keep GoogleMapSurface mounted
   // (just hidden) so it doesn't re-initialize on every collapse/expand.
   // Using state (not ref) so React re-renders when the map should first mount.
@@ -3665,8 +3666,8 @@ export default function ExplorePreview() {
     ? "clamp(208px, 24dvh, 238px)"
     : "clamp(250px, 32dvh, 310px)";
   const collapsedMapClass = isHighActivity
-    ? "mx-0 mt-0 rounded-b-[2rem] ring-1 ring-orange-200/14 bg-[#070707]"
-    : "mx-0 mt-0 rounded-b-[1.8rem] ring-1 ring-white/12 bg-[#0b0908]";
+    ? "mx-0 mt-0 rounded-b-[2rem] ring-1 ring-orange-200/25 bg-[#1f140c]"
+    : "mx-0 mt-0 rounded-b-[1.8rem] ring-1 ring-orange-100/20 bg-[#211610]";
   const railSectionClass = isHighActivity
     ? "pl-4 pr-0 pt-1 pb-7"
     : "pl-4 pr-0 pt-2 pb-9 sm:pl-5";
@@ -3756,6 +3757,9 @@ export default function ExplorePreview() {
       ) ?? null,
     [sceneFilteredMapMarkers],
   );
+  useEffect(() => {
+    setCollapsedMapCardDismissed(false);
+  }, [collapsedMapSelectedMarker?.id]);
   return (
     <>
       <SEOHead
@@ -3763,23 +3767,15 @@ export default function ExplorePreview() {
         description="Discover food trucks, restaurants, and deals near you. MealScout puts the local food scene right in your hands."
       />
 
-      {/* Quiet page base. The food park photo was fighting the actual app
-          content, so keep the brand atmosphere subtle and let the controls
-          carry the experience. */}
+      {/* Quiet page base. Warm espresso/roasted-brown wash instead of
+          crushing to near-black, so the food photography underneath still
+          reads instead of getting stacked into a flat dark panel. */}
       <div
         aria-hidden="true"
-        className="pointer-events-none fixed inset-0 -z-20 bg-[#08060a]"
+        className="pointer-events-none fixed inset-0 -z-20 bg-[#1c130c]"
         style={{
           backgroundImage:
-            "radial-gradient(90% 50% at 50% -8%, rgba(255,138,60,0.20) 0%, rgba(8,6,10,0) 58%), linear-gradient(180deg, #100906 0%, #070609 62%, #050507 100%)",
-        }}
-      />
-      <div
-        aria-hidden="true"
-        className="pointer-events-none fixed inset-0 -z-10"
-        style={{
-          backgroundImage:
-            "linear-gradient(180deg, rgba(8,6,10,0.08) 0%, rgba(8,6,10,0.42) 100%)",
+            "radial-gradient(90% 50% at 50% -8%, rgba(255,150,72,0.24) 0%, rgba(28,19,12,0) 58%), linear-gradient(180deg, #241708 0%, #1b1109 62%, #170f0a 100%)",
         }}
       />
 
@@ -3807,7 +3803,7 @@ export default function ExplorePreview() {
           data-scout-mobile-thirds-map="true"
           className={`relative overflow-hidden ${
             sheetState === "fullMap"
-              ? "w-full bg-[#06070b]"
+              ? "w-full bg-[#1a1108]"
               : collapsedMapClass
           }`}
           style={{
@@ -4096,11 +4092,21 @@ export default function ExplorePreview() {
                     {compactMapSceneHint}
                   </p>
                 </div>
+                <button
+                  type="button"
+                  onClick={openScoutMap}
+                  aria-label="Open full map"
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-[#100c0a]/80 px-3 py-2 text-xs font-black text-white ring-1 ring-orange-200/35 backdrop-blur-xl shadow-[0_10px_24px_rgba(0,0,0,0.42)]"
+                >
+                  <Maximize2 className="h-3.5 w-3.5" aria-hidden="true" />
+                  Open map
+                </button>
               </div>
-              {collapsedMapSelectedMarker ? (
+              {collapsedMapSelectedMarker && !collapsedMapCardDismissed ? (
                 <CollapsedMapPinCard
                   marker={collapsedMapSelectedMarker}
                   userLocation={resolvedScoutCoords}
+                  onClose={() => setCollapsedMapCardDismissed(true)}
                 />
               ) : null}
               </>
@@ -4543,7 +4549,7 @@ function ScoutFirstScreenDecisionStack({
       >
         <div className="rounded-[1.1rem] bg-[#120805]/72 px-4 py-3 text-white ring-1 ring-white/10">
           <p className="text-[11px] font-black uppercase tracking-[0.12em] text-orange-200/75">
-            No nearby food signals yet
+            No nearby food yet
           </p>
           <p className="mt-1 text-sm font-semibold text-white/70">
             Try search or move the map
@@ -4635,6 +4641,7 @@ function ScoutImmediateCompactCard({
         meta={meta}
         primaryActionLabel="View truck"
         directionsUrl={directionsUrl}
+        categoryPhoto={getDishCategoryPhoto(truck.name, truck.cuisineType, truck.vibe)}
       />
     );
   }
@@ -4658,6 +4665,7 @@ function ScoutImmediateCompactCard({
         meta={meta}
         primaryActionLabel="View profile"
         directionsUrl={directionsUrl}
+        categoryPhoto={getDishCategoryPhoto(getRestaurantName(restaurant), restaurant.cuisineType)}
       />
     );
   }
@@ -4684,6 +4692,7 @@ function ScoutImmediateCompactCard({
         title={menuItem.name}
         meta={reason || "Popular nearby dish"}
         primaryActionLabel="View dish"
+        categoryPhoto={getDishCategoryPhoto(menuItem.name, menuItem.cuisineType)}
       />
     );
   }
@@ -4698,6 +4707,7 @@ function ScoutImmediateCompactCard({
         title={deal.title || "Local deal"}
         meta={[deal.restaurantName, deal.discountText || deal.description].filter(Boolean).join(" / ") || "Active nearby deal"}
         primaryActionLabel="View deal"
+        categoryPhoto={getDishCategoryPhoto(deal.title, (deal as any).description)}
       />
     );
   }
@@ -4728,6 +4738,7 @@ function CompactDecisionCardShell({
   meta,
   primaryActionLabel,
   directionsUrl,
+  categoryPhoto = null,
 }: {
   href: string;
   imageUrl?: string | null;
@@ -4736,6 +4747,7 @@ function CompactDecisionCardShell({
   meta: string;
   primaryActionLabel: string;
   directionsUrl?: string | null;
+  categoryPhoto?: DishCategoryPhoto | null;
 }) {
   const [imageFailed, setImageFailed] = useState(false);
   useEffect(() => {
@@ -4755,6 +4767,15 @@ function CompactDecisionCardShell({
             className="h-full w-full object-cover"
             loading="lazy"
             onError={() => setImageFailed(true)}
+          />
+        ) : categoryPhoto ? (
+          <img
+            src={categoryPhoto.image}
+            alt=""
+            className="h-full w-full object-cover"
+            loading="lazy"
+            aria-hidden="true"
+            data-testid="scout-compact-card-image-fallback"
           />
         ) : (
           <div
@@ -4794,18 +4815,40 @@ function CompactDecisionCardShell({
   );
 }
 
+type DishCategoryPhoto = { image: string; label: string };
+
+const DISH_CATEGORY_PHOTO_RULES: Array<{ match: RegExp; image: string; label: string }> = [
+  { match: /burger|cheeseburger|hamburger|smash/i, image: "/atmospheric/craving-burgers.jpg", label: "Burgers" },
+  { match: /taco|burrito|quesadilla|nacho/i, image: "/atmospheric/craving-tacos.jpg", label: "Tacos" },
+  { match: /pizza|slice|calzone/i, image: "/atmospheric/craving-pizza.jpg", label: "Pizza" },
+  { match: /ramen|noodle|pho\b/i, image: "/atmospheric/craving-ramen.jpg", label: "Noodles" },
+  { match: /ice cream|dessert|cake|cookie|donut|pastry|sweet|churro/i, image: "/atmospheric/craving-dessert.jpg", label: "Desserts" },
+  { match: /coffee|latte|espresso|juice|smoothie|drink|tea\b|lemonade|boba/i, image: "/atmospheric/craving-drinks.jpg", label: "Drinks" },
+];
+
+function getDishCategoryPhoto(...textParts: Array<string | null | undefined>): DishCategoryPhoto | null {
+  const haystack = textParts.filter(Boolean).join(" ").toLowerCase();
+  if (!haystack.trim()) return null;
+  for (const rule of DISH_CATEGORY_PHOTO_RULES) {
+    if (rule.match.test(haystack)) return { image: rule.image, label: rule.label };
+  }
+  return null;
+}
+
 function ScoutCardMedia({
   imageUrl,
   fallbackIcon,
   fallbackTestId,
   imageClassName,
   fallbackClassName = "",
+  categoryPhoto = null,
 }: {
   imageUrl?: string | null;
   fallbackIcon: ReactNode;
   fallbackTestId: string;
   imageClassName: string;
   fallbackClassName?: string;
+  categoryPhoto?: DishCategoryPhoto | null;
 }) {
   const [imageFailed, setImageFailed] = useState(false);
   useEffect(() => {
@@ -4822,6 +4865,28 @@ function ScoutCardMedia({
         loading="lazy"
         onError={() => setImageFailed(true)}
       />
+    );
+  }
+
+  if (categoryPhoto) {
+    return (
+      <div className="absolute inset-0 overflow-hidden" data-testid={fallbackTestId}>
+        <img
+          src={categoryPhoto.image}
+          alt=""
+          className={imageClassName}
+          loading="lazy"
+          aria-hidden="true"
+        />
+        <div
+          className="absolute inset-0"
+          style={{ backgroundImage: "linear-gradient(180deg, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.55) 100%)" }}
+          aria-hidden="true"
+        />
+        <span className="absolute bottom-2 right-2 rounded-full bg-black/70 px-2 py-1 text-[9px] font-black uppercase tracking-[0.08em] text-white/85 ring-1 ring-white/25 backdrop-blur-sm">
+          {categoryPhoto.label} · photo coming soon
+        </span>
+      </div>
     );
   }
 
@@ -5144,7 +5209,7 @@ function ActiveSceneContent({
       ...popularDishCards.map((item) => ({
         sourceRowId: "popular_dishes" as const,
         sectionLabel: "Popular Dishes",
-        summary: formatScoutCount(popularDishCards.length, "dish signal", "dish signals"),
+        summary: formatScoutCount(popularDishCards.length, "popular dish", "popular dishes"),
         cardType: "menu_item" as const,
         item,
       })),
@@ -5985,9 +6050,11 @@ function QuietNearbyNotice() {
 function CollapsedMapPinCard({
   marker,
   userLocation,
+  onClose,
 }: {
   marker: MapAdapterMarker;
   userLocation?: { lat: number; lng: number } | null;
+  onClose: () => void;
 }) {
   const destination =
     marker.kind === "truck"
@@ -6048,6 +6115,14 @@ function CollapsedMapPinCard({
           >
             Route
           </a>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Dismiss"
+            className="rounded-xl px-2 py-1.5 text-xs font-bold text-white/50"
+          >
+            ✕
+          </button>
         </div>
       </div>
     </div>
@@ -6390,6 +6465,7 @@ function LiveTruckCard({
           fallbackIcon={<Flame className="h-5 w-5 text-white/80" aria-hidden="true" />}
           fallbackTestId="scout-live-truck-card-image-fallback"
           imageClassName="absolute inset-0 h-full w-full object-cover"
+          categoryPhoto={getDishCategoryPhoto(truck.name, truck.cuisineType, truck.vibe)}
         />
         <div
           className="absolute inset-0"
@@ -6487,6 +6563,7 @@ function DealCard({
           fallbackTestId="scout-deal-card-image-fallback"
           imageClassName="absolute inset-0 h-full w-full object-cover"
           fallbackClassName="bg-[linear-gradient(150deg,#a3e635_0%,#65a30d_45%,#3f6212_100%)]"
+          categoryPhoto={getDishCategoryPhoto(deal.title, (deal as any).description)}
         />
         <div
           className="absolute inset-0"
@@ -6624,6 +6701,7 @@ function LocalMenuItemCard({
           fallbackTestId="scout-local-menu-item-card-image-fallback"
           imageClassName="absolute inset-0 h-full w-full object-cover"
           fallbackClassName="bg-[linear-gradient(150deg,#fb923c_0%,#ea580c_45%,#9a3412_100%)]"
+          categoryPhoto={getDishCategoryPhoto(item.name, item.description)}
         />
         <div
           className="absolute inset-0"
@@ -7007,6 +7085,7 @@ function NearbyRestaurantCard({
           fallbackIcon={<Utensils className="h-5 w-5 text-white/80" aria-hidden="true" />}
           fallbackTestId="scout-nearby-restaurant-card-image-fallback"
           imageClassName="absolute inset-0 h-full w-full object-cover"
+          categoryPhoto={getDishCategoryPhoto(name, cuisine)}
         />
         <div
           className="absolute inset-0"
@@ -7187,6 +7266,7 @@ function SavedRestaurantCard({ restaurant }: { restaurant: RestaurantSummary }) 
           fallbackIcon={<Heart className="h-5 w-5 text-white/80" aria-hidden="true" />}
           fallbackTestId="scout-saved-restaurant-card-image-fallback"
           imageClassName="absolute inset-0 h-full w-full object-cover"
+          categoryPhoto={getDishCategoryPhoto(name, cuisine)}
         />
         <div
           className="absolute inset-0"
@@ -7957,6 +8037,7 @@ function TruckCard({
           fallbackIcon={<Flame className="h-5 w-5 text-white/80" aria-hidden="true" />}
           fallbackTestId="scout-truck-card-image-fallback"
           imageClassName="h-full w-full object-cover"
+          categoryPhoto={getDishCategoryPhoto(truck.name, truck.cuisineType, truck.vibe)}
         />
         <div
           className="absolute inset-0"
