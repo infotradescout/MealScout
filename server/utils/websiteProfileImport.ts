@@ -190,6 +190,14 @@ function stripTitleSuffix(value: string | undefined): string | undefined {
   return (first || value).trim();
 }
 
+// Page titles frequently fall back to router/CMS placeholders that are not a
+// real business name. Skip these so a better candidate (og:site_name, etc.) wins.
+function isGenericName(value: string): boolean {
+  return /^(home|homepage|welcome|untitled|not available|no title|index|menu|loading|page not found|404)$/i.test(
+    value.trim(),
+  );
+}
+
 export async function fetchWebsiteProfilePreview(
   url: string,
 ): Promise<WebsiteProfileImportResult> {
@@ -216,17 +224,25 @@ export async function fetchWebsiteProfilePreview(
     : [];
 
   const ogTitle = $('meta[property="og:title"]').attr("content");
+  const ogSiteName = $('meta[property="og:site_name"]').attr("content");
   const ogDescription = $('meta[property="og:description"]').attr("content");
   const ogImage = $('meta[property="og:image"]').attr("content");
   const metaDescription = $('meta[name="description"]').attr("content");
   const pageTitle = $("title").first().text();
 
-  result.name = truncate(
-    businessNode?.name
-      ? String(businessNode.name)
-      : stripTitleSuffix(ogTitle || pageTitle),
-    120,
-  );
+  // Prefer the authoritative JSON-LD name, then the owner-set og:site_name
+  // (usually the clean brand on site builders), then the cleaned og:title or
+  // page title. Skip placeholder titles like "Home" / "Not available".
+  const nameCandidates = [
+    businessNode?.name ? String(businessNode.name) : undefined,
+    stripTitleSuffix(ogSiteName),
+    stripTitleSuffix(ogTitle),
+    stripTitleSuffix(pageTitle),
+  ];
+  const preferredName =
+    nameCandidates.find((c) => c && !isGenericName(c)) ||
+    nameCandidates.find((c) => !!c);
+  result.name = truncate(preferredName, 120);
   result.description = truncate(
     businessNode?.description || ogDescription || metaDescription,
     500,
