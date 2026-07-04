@@ -5508,7 +5508,7 @@ function ActiveSceneContent({
     const renderScoutRailCard = (card: ScoutRailRenderCard) => {
       if (card.cardType === "truck") {
         return card.cardKind === "food_truck" && card.truck.mobileOnline ? (
-          <LiveTruckCard truck={card.truck} currentUserId={currentUserId} />
+          <LiveTruckCard truck={card.truck} currentUserId={currentUserId} relationshipSnapshot={restaurantRelationships} />
         ) : (
           <TruckCard truck={card.truck} currentUserId={currentUserId} />
         );
@@ -6421,10 +6421,48 @@ function LiveTruckSkeletonCard() {
 function LiveTruckCard({
   truck,
   currentUserId,
+  relationshipSnapshot,
 }: {
   truck: LiveTruckSummary;
   currentUserId?: string | null;
+  relationshipSnapshot: RestaurantRelationshipSnapshot;
 }) {
+  const truckId = String(truck.id);
+  const [isFavorite, setIsFavorite] = useState(false);
+  const [pendingFavorite, setPendingFavorite] = useState(false);
+
+  useEffect(() => {
+    setIsFavorite(relationshipSnapshot.favoriteIds.has(truckId));
+  }, [relationshipSnapshot, truckId]);
+
+  const toggleFavorite = async (event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!currentUserId) {
+      window.location.href = `/login?redirect=${encodeURIComponent("/scout")}`;
+      return;
+    }
+    const nextState = !isFavorite;
+    setIsFavorite(nextState);
+    setPendingFavorite(true);
+    try {
+      const response = await fetch(
+        `/api/restaurants/${encodeURIComponent(truckId)}/favorite`,
+        {
+          method: nextState ? "POST" : "DELETE",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: nextState ? "{}" : undefined,
+        },
+      );
+      if (!response.ok) throw new Error("Favorite action failed");
+    } catch {
+      setIsFavorite(!nextState);
+    } finally {
+      setPendingFavorite(false);
+    }
+  };
+
   const distance = formatDistance(truck);
   const wait = formatWait(truck);
   const vibe = getCrowdVibe(truck);
@@ -6501,13 +6539,18 @@ function LiveTruckCard({
 
         <button
           type="button"
-          aria-label="Save"
-          onClick={(e) => {
-            e.preventDefault();
-          }}
-          className="absolute top-2.5 right-2.5 h-9 w-9 rounded-full flex items-center justify-center bg-[#120805]/30 backdrop-blur-sm hover:bg-[#120805]/50 transition-colors"
+          aria-label={isFavorite ? "Saved" : "Save"}
+          aria-pressed={isFavorite}
+          onClick={toggleFavorite}
+          disabled={pendingFavorite}
+          className={`absolute top-2.5 right-2.5 h-9 w-9 rounded-full flex items-center justify-center backdrop-blur-sm transition-colors ${
+            isFavorite ? "bg-orange-400/90 hover:bg-orange-400" : "bg-[#120805]/30 hover:bg-[#120805]/50"
+          }`}
         >
-          <Heart className="h-5 w-5 text-white" aria-hidden="true" />
+          <Heart
+            className={`h-5 w-5 ${isFavorite ? "text-[#1a0d08] fill-current" : "text-white"}`}
+            aria-hidden="true"
+          />
         </button>
 
         <div className="absolute bottom-3 left-3 right-3">
@@ -7547,7 +7590,7 @@ function OpenNowSection({
           >
             {liveTrucks.slice(0, 8).map((truck) => (
               <li key={`truck-${truck.id}`} className="shrink-0 w-[230px] sm:w-[260px]">
-                <LiveTruckCard truck={truck} currentUserId={currentUserId} />
+                <LiveTruckCard truck={truck} currentUserId={currentUserId} relationshipSnapshot={relationshipSnapshot} />
               </li>
             ))}
             {restaurants.slice(0, 8).map((restaurant) => (
