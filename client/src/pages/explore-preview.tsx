@@ -37,6 +37,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import ShareButton from "@/components/share-button";
 import { useAuth } from "@/hooks/useAuth";
 import {
   useEffectiveLocationContext,
@@ -7323,6 +7324,9 @@ function NearbyRestaurantCard({
     // Recommending implies following, same as favoriting above.
     setIsFollowed(true);
     try {
+      // The tap itself is the shallow like/follow/recommend - it's already
+      // saved by the time the popup opens. The popup just offers to add more
+      // (or Share/Favorite); closing it without doing anything is fine.
       await sendRestaurantAction("recommend", true);
       setIsRecommendDialogOpen(true);
     } catch {
@@ -7474,50 +7478,26 @@ function NearbyRestaurantCard({
             )}
           </div>
           <div className="flex items-center gap-1.5" aria-label={`${name} quick actions`}>
-            <button
-              type="button"
-              onClick={toggleFavorite}
-              disabled={pendingAction === "favorite"}
-              className={`inline-flex h-7 w-7 items-center justify-center rounded-full transition ${
-                isFavorite
-                  ? "bg-orange-300 text-[#1a0d08]"
-                  : "bg-white/8 text-white/70 hover:bg-white/12"
-              }`}
-              aria-pressed={isFavorite}
-              aria-label="Save"
-              title="Save"
-            >
-              <Bookmark className="h-3 w-3" aria-hidden="true" />
-            </button>
-            {isFollowed && (
-              // Following is now a side effect of favoriting/recommending, not
-              // a separate manual action - this only ever removes a follow.
-              <button
-                type="button"
-                onClick={toggleFollow}
-                disabled={pendingAction === "follow"}
-                className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white text-[#1a0d08] transition hover:bg-white/85"
-                aria-pressed={true}
-                aria-label="Following - tap to unfollow"
-                title="Following - tap to unfollow"
-              >
-                <Heart className="h-3 w-3 fill-current" aria-hidden="true" />
-              </button>
-            )}
+            {/* Single entry point: a bare tap is the shallow like/follow/recommend
+                bundle (no popup). Tapping again (already recommended) opens the
+                popup, where Share, Favorite, and enrichment live. */}
             <button
               type="button"
               onClick={recommend}
-              disabled={pendingAction === "recommend" || isRecommended}
+              disabled={pendingAction === "recommend"}
               className={`inline-flex h-7 w-7 items-center justify-center rounded-full transition ${
                 isRecommended
-                  ? "bg-emerald-300 text-[#1a0d08]"
+                  ? "bg-orange-300 text-[#1a0d08]"
                   : "bg-white/8 text-white/70 hover:bg-white/12"
               }`}
               aria-pressed={isRecommended}
-              aria-label={isRecommended ? "Supported" : "Support"}
-              title={isRecommended ? "Supported" : "Support"}
+              aria-label={isRecommended ? "Recommended - tap for more" : "Recommend"}
+              title={isRecommended ? "Recommended - tap for more" : "Recommend"}
             >
-              <Star className="h-3 w-3" aria-hidden="true" />
+              <Heart
+                className={`h-3 w-3 ${isRecommended ? "fill-current" : ""}`}
+                aria-hidden="true"
+              />
             </button>
           </div>
         </div>
@@ -7533,6 +7513,34 @@ function NearbyRestaurantCard({
               Tell us why you recommend it, or just close this - your recommendation is already saved.
             </DialogDescription>
           </DialogHeader>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={toggleFavorite}
+              disabled={pendingAction === "favorite"}
+              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition ${
+                isFavorite
+                  ? "bg-orange-300 text-[#1a0d08]"
+                  : "bg-white/8 text-white/80 hover:bg-white/12"
+              }`}
+            >
+              <Bookmark
+                className={`h-3.5 w-3.5 ${isFavorite ? "fill-current" : ""}`}
+                aria-hidden="true"
+              />
+              {isFavorite ? "Favorited" : "Favorite"}
+            </button>
+            <ShareButton url={profileHref} title={name} variant="outline" size="sm" />
+          </div>
+          {isFollowed && (
+            <button
+              type="button"
+              onClick={toggleFollow}
+              className="self-start text-[11px] text-[color:var(--text-muted)] underline underline-offset-2"
+            >
+              Following · Unfollow
+            </button>
+          )}
           <textarea
             value={restaurantRecommendComment}
             onChange={(event) => setRestaurantRecommendComment(event.target.value)}
