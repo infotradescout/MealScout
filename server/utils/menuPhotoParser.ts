@@ -1,14 +1,16 @@
 /**
  * menuPhotoParser.ts
  * Extracts menu items from photos (a printed menu / menu board, and/or photos
- * of individual dishes) using Anthropic Claude vision. Mirrors menuPdfParser.
+ * of individual dishes) using Gemini Flash vision. Mirrors menuPdfParser, but
+ * uses a cheap vision model instead of Claude since photo imports can involve
+ * several images per request.
  *
  * When an item is clearly the main subject of one of the uploaded photos (a
  * dish photo), the model returns that photo's 0-based `image_index`, letting the
  * caller attach the uploaded photo as the item's image — so photo imports can
  * produce a menu WITH images, not just text.
  *
- * Falls back gracefully when ANTHROPIC_API_KEY is not configured.
+ * Falls back gracefully when GEMINI_API_KEY is not configured.
  */
 
 export type ParsedPhotoMenuItem = {
@@ -35,15 +37,19 @@ type ParseResult = {
 
 export type MenuPhotoInput = { buffer: Buffer; mediaType: string };
 
-const CLAUDE_IMAGE_TYPES = new Set([
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+
+// Image formats Gemini's vision input accepts.
+const SUPPORTED_IMAGE_TYPES = new Set([
   "image/jpeg",
   "image/png",
-  "image/gif",
   "image/webp",
+  "image/heic",
+  "image/heif",
 ]);
 
-export function isClaudeSupportedImage(mediaType: string): boolean {
-  return CLAUDE_IMAGE_TYPES.has((mediaType || "").toLowerCase());
+export function isSupportedMenuPhotoImage(mediaType: string): boolean {
+  return SUPPORTED_IMAGE_TYPES.has((mediaType || "").toLowerCase());
 }
 
 const EXTRACTION_PROMPT = `
@@ -76,7 +82,7 @@ export async function parseImageMenuWithAi(
   menuId: string,
   restaurantId: string,
 ): Promise<ParseResult> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     return {
       imported: [],
@@ -85,7 +91,7 @@ export async function parseImageMenuWithAi(
         {
           row: 0,
           reason:
-            "Photo menu extraction is not configured (ANTHROPIC_API_KEY missing). " +
+            "Photo menu extraction is not configured (GEMINI_API_KEY missing). " +
             "Please use CSV import or manual entry instead.",
         },
       ],
@@ -93,7 +99,7 @@ export async function parseImageMenuWithAi(
   }
 
   const usableImages = images.filter((img) =>
-    CLAUDE_IMAGE_TYPES.has(img.mediaType),
+    SUPPORTED_IMAGE_TYPES.has(img.mediaType.toLowerCase()),
   );
   if (usableImages.length === 0) {
     return {
@@ -103,7 +109,7 @@ export async function parseImageMenuWithAi(
         {
           row: 0,
           reason:
-            "No supported images provided. Use JPEG, PNG, GIF, or WebP photos.",
+            "No supported images provided. Use JPEG, PNG, WebP, or HEIC photos.",
         },
       ],
     };
@@ -111,37 +117,20 @@ export async function parseImageMenuWithAi(
 
   let rawJson: string;
   try {
-    const { default: Anthropic } = await import("@anthropic-ai/sdk");
-    const client = new Anthropic({ apiKey });
+    const { GoogleGenAI, createUserContent, createPartFromBase64 } =
+      await import("@google/genai");
+    const ai = new GoogleGenAI({ apiKey });
 
-    const imageBlocks = usableImages.map((img) => ({
-      type: "image",
-      source: {
-        type: "base64",
-        media_type: img.mediaType,
-        data: img.buffer.toString("base64"),
-      },
-    }));
+    const imageParts = usableImages.map((img) =>
+      createPartFromBase64(img.buffer.toString("base64"), img.mediaType),
+    );
 
-    const message = await client.messages.create({
-      model: "claude-opus-4-5",
-      max_tokens: 4096,
-      messages: [
-        {
-          role: "user",
-          content: [
-            ...(imageBlocks as any[]),
-            { type: "text", text: EXTRACTION_PROMPT },
-          ],
-        },
-      ],
+    const response = await ai.models.generateContent({
+      model: GEMINI_MODEL,
+      contents: createUserContent([...imageParts, EXTRACTION_PROMPT]),
     });
 
-    const textBlock = message.content.find((b: any) => b.type === "text");
-    rawJson =
-      textBlock && "text" in textBlock && typeof textBlock.text === "string"
-        ? textBlock.text.trim()
-        : "";
+    rawJson = (response.text || "").trim();
   } catch (err: any) {
     return {
       imported: [],

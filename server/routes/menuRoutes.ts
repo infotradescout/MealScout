@@ -60,7 +60,7 @@ import {
 } from "../utils/menuImageIngest";
 import {
   parseImageMenuWithAi,
-  isClaudeSupportedImage,
+  isSupportedMenuPhotoImage,
 } from "../utils/menuPhotoParser";
 import { isCloudinaryConfigured, upload as imageUpload, uploadToCloudinary } from "../imageUpload";
 
@@ -1790,10 +1790,10 @@ export function registerMenuRoutes(app: Express) {
       const menu = await assertOwnsMenu(req.user, menuId);
 
       const files = (req.files as any[]) || [];
-      const usable = files.filter((f) => isClaudeSupportedImage(f.mimetype));
+      const usable = files.filter((f) => isSupportedMenuPhotoImage(f.mimetype));
       if (usable.length === 0) {
         return res.status(400).json({
-          message: "Upload at least one JPEG, PNG, GIF, or WebP photo.",
+          message: "Upload at least one JPEG, PNG, WebP, or HEIC photo.",
         });
       }
 

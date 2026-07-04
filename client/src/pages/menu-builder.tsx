@@ -221,7 +221,8 @@ export default function MenuBuilderPage() {
   const [newMenuName, setNewMenuName] = useState("");
   const [newMenuServiceType, setNewMenuServiceType] = useState("all_day");
   const [importFile, setImportFile] = useState<File | null>(null);
-  const [importType, setImportType] = useState<"csv" | "pdf" | "pos_json">("csv");
+  const [importFiles, setImportFiles] = useState<File[]>([]);
+  const [importType, setImportType] = useState<"csv" | "pdf" | "pos_json" | "photo">("csv");
   const [isImporting, setIsImporting] = useState(false);
   const [menuSourceUrl, setMenuSourceUrl] = useState(getInitialMenuSourceUrl);
   const [posSource, setPosSource] = useState("toast");
@@ -342,6 +343,30 @@ export default function MenuBuilderPage() {
         toast({
           title: "Import complete",
           description: `${data.imported ?? 0} items imported from ${posSource}.`,
+        });
+        return;
+      }
+
+      if (importType === "photo") {
+        if (importFiles.length === 0) return;
+        const form = new FormData();
+        importFiles.forEach((file) => form.append("files", file));
+        const res = await fetch(
+          `/api/owner/menus/${encodeURIComponent(selectedMenuId)}/import/photo`,
+          { method: "POST", body: form, credentials: "include" },
+        );
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || "Import failed");
+        queryClient.invalidateQueries({
+          queryKey: ["/api/menus", selectedMenuId],
+        });
+        setShowImportDialog(false);
+        setImportFiles([]);
+        toast({
+          title: "Import complete",
+          description: data.imported
+            ? `${data.imported} items imported. Review prices and details before publishing.`
+            : "No items found in those photos. Try clearer, well-lit shots of the menu text.",
         });
         return;
       }
@@ -754,14 +779,14 @@ export default function MenuBuilderPage() {
             <div>
               <Label>Import Format</Label>
               <div className="flex gap-2 mt-2">
-                {(["csv", "pdf", "pos_json"] as const).map((t) => (
+                {(["csv", "pdf", "photo", "pos_json"] as const).map((t) => (
                   <Button
                     key={t}
                     variant={importType === t ? "default" : "outline"}
                     size="sm"
                     onClick={() => setImportType(t)}
                   >
-                    {t === "pos_json" ? "POS JSON" : t.toUpperCase()}
+                    {t === "pos_json" ? "POS JSON" : t === "photo" ? "Photos" : t.toUpperCase()}
                   </Button>
                 ))}
               </div>
@@ -770,10 +795,37 @@ export default function MenuBuilderPage() {
                   ? "CSV with columns: Name, Description, Price, Category, Calories, etc."
                   : importType === "pdf"
                     ? "Upload a PDF menu — AI will extract items automatically."
-                    : "Paste exported item JSON from Toast, Square, Clover, DoorDash, Uber Eats, or Google."}
+                    : importType === "photo"
+                      ? "Upload up to 8 photos of your menu board, printed menu, or individual dishes — AI will read them and fill in a draft menu for you to review."
+                      : "Paste exported item JSON from Toast, Square, Clover, DoorDash, Uber Eats, or Google."}
               </p>
             </div>
-            {importType === "pos_json" ? (
+            {importType === "photo" ? (
+              <div>
+                <Label htmlFor="import-photos">Photos</Label>
+                <Input
+                  id="import-photos"
+                  type="file"
+                  multiple
+                  accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+                  onChange={(e) => {
+                    const files = Array.from(e.target.files ?? []);
+                    if (files.length > 8) {
+                      toast({
+                        title: "8 photo limit",
+                        description: "Only the first 8 photos will be used.",
+                      });
+                    }
+                    setImportFiles(files.slice(0, 8));
+                  }}
+                />
+                {importFiles.length > 0 && (
+                  <p className="text-xs text-muted-foreground mt-2">
+                    {importFiles.length} photo{importFiles.length === 1 ? "" : "s"} selected.
+                  </p>
+                )}
+              </div>
+            ) : importType === "pos_json" ? (
               <div className="space-y-3">
                 <div>
                   <Label>Source</Label>
@@ -825,7 +877,11 @@ export default function MenuBuilderPage() {
               onClick={handleImport}
               disabled={
                 isImporting ||
-                (importType === "pos_json" ? !externalJson.trim() : !importFile)
+                (importType === "pos_json"
+                  ? !externalJson.trim()
+                  : importType === "photo"
+                    ? importFiles.length === 0
+                    : !importFile)
               }
             >
               {isImporting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}

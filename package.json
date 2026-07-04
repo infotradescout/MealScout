@@ -106,6 +106,7 @@
     "@capacitor/core": "8.3.0",
     "@capacitor/ios": "8.3.0",
     "@getbrevo/brevo": "^3.0.1",
+    "@google/genai": "^2.10.0",
     "@hookform/resolvers": "^3.10.0",
     "@neondatabase/serverless": "^0.10.4",
     "@radix-ui/react-accordion": "^1.2.4",
