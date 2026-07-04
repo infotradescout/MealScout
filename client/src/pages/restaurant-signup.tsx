@@ -282,6 +282,7 @@ export default function RestaurantSignup() {
   );
   const [claimAutoSearch, setClaimAutoSearch] = useState(false);
   const [licenseNumber, setLicenseNumber] = useState("");
+  const [websiteImportLoading, setWebsiteImportLoading] = useState(false);
   const [onboardingState, dispatchOnboarding] = useReducer(
     hostOnboardingTransition,
     {
@@ -922,6 +923,61 @@ export default function RestaurantSignup() {
     form.setValue("city", listing.city || "");
     form.setValue("state", listing.state || "");
     form.setValue("phone", listing.phone || "");
+  };
+
+  const handleWebsiteImport = async () => {
+    const url = form.getValues("websiteUrl")?.trim();
+    if (!url) {
+      toast({
+        title: "Add your website first",
+        description: "Paste your website link into the Website field, then try again.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setWebsiteImportLoading(true);
+    try {
+      const res = await apiRequest("POST", "/api/restaurants/import-from-url", {
+        url,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.message || "Couldn't read that website.");
+      }
+
+      const filled: string[] = [];
+      const fillIfEmpty = (field: keyof RestaurantFormData, value?: string) => {
+        if (!value) return;
+        if (form.getValues(field)) return;
+        form.setValue(field, value);
+        filled.push(field);
+      };
+
+      fillIfEmpty("name", data.name);
+      fillIfEmpty("description", data.description);
+      fillIfEmpty("address", data.address);
+      fillIfEmpty("city", data.city);
+      fillIfEmpty("state", data.state);
+      fillIfEmpty("instagramUrl", data.instagramUrl);
+      fillIfEmpty("facebookPageUrl", data.facebookPageUrl);
+
+      toast({
+        title: filled.length ? "Filled in from your website" : "Nothing new to fill in",
+        description: filled.length
+          ? "Review what we found below and adjust anything before submitting."
+          : "We couldn't find extra details on that page, or every field is already filled in.",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Couldn't read that website",
+        description:
+          error.message || "You can still fill in the details manually.",
+        variant: "destructive",
+      });
+    } finally {
+      setWebsiteImportLoading(false);
+    }
   };
 
   const onSignup = (data: SignupFormData) => {
@@ -1926,6 +1982,22 @@ export default function RestaurantSignup() {
                           </FormItem>
                         )}
                       />
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={websiteImportLoading}
+                        onClick={handleWebsiteImport}
+                      >
+                        {websiteImportLoading
+                          ? COPY.forms.restaurant.websiteImportButtonPending
+                          : COPY.forms.restaurant.websiteImportButton}
+                      </Button>
+                      <span className="text-xs text-[color:var(--text-secondary)]">
+                        {COPY.forms.restaurant.websiteImportHelp}
+                      </span>
                     </div>
                     {selectedBusinessType !== "food_truck" && (
                       <div className="grid gap-2 sm:grid-cols-3">

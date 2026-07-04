@@ -155,6 +155,7 @@
     "autoprefixer": "^10.4.23",
     "axios": "^1.13.2",
     "bcryptjs": "^3.0.2",
+    "cheerio": "^1.2.0",
     "class-variance-authority": "^0.7.1",
     "cloudinary": "^2.8.0",
     "clsx": "^2.1.1",

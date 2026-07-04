@@ -10,6 +10,11 @@ import { storage } from "../storage";
 import { isPasswordStrong, PASSWORD_REQUIREMENTS } from "../utils/passwordPolicy";
 import { vacEvaluateRestaurantSignup } from "../vacLite";
 import { promoteBusinessSetupToProfile } from "../services/businessOnboardingPromotion";
+import { distributedRateLimit } from "../middleware/distributedRateLimit";
+import {
+  fetchWebsiteProfilePreview,
+  WebsiteImportError,
+} from "../utils/websiteProfileImport";
 import { users, insertRestaurantSchema, type User } from "@shared/schema";
 
 type RestaurantSignupRouteDependencies = {
@@ -74,10 +79,43 @@ function getFriendlySignupValidationMessage(error: z.ZodError): string {
   return formErrors[0] || "Please complete the required fields.";
 }
 
+const importFromUrlLimiter = distributedRateLimit({
+  scope: "restaurants:import-from-url",
+  limit: 8,
+  windowMs: 10 * 60 * 1000,
+});
+
 export function registerRestaurantSignupRoutes(
   app: Express,
   { ensureTrialForUser, queueSocialPost }: RestaurantSignupRouteDependencies,
 ) {
+  app.post(
+    "/api/restaurants/import-from-url",
+    importFromUrlLimiter,
+    async (req: any, res) => {
+      const parseResult = z
+        .object({ url: z.string().url("Enter a valid website link.") })
+        .safeParse(req.body);
+      if (!parseResult.success) {
+        return res.status(400).json({
+          message: parseResult.error.issues[0]?.message || "Enter a valid website link.",
+        });
+      }
+      try {
+        const preview = await fetchWebsiteProfilePreview(parseResult.data.url);
+        res.json(preview);
+      } catch (error: any) {
+        if (error instanceof WebsiteImportError) {
+          return res.status(422).json({ message: error.message });
+        }
+        console.error("Error importing website profile:", error);
+        res.status(422).json({
+          message: "Couldn't read that website. You can still fill in the details manually.",
+        });
+      }
+    },
+  );
+
   app.post("/api/restaurants/signup", async (req: any, res) => {
     try {
       const { userData, restaurantData } = req.body;

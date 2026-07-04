@@ -342,6 +342,10 @@ export const HOST_ONBOARDING_COPY = {
       cuisinePlaceholder: "Select cuisine type...",
       promoLabel: "Promo Code",
       promoOptionalSuffix: "(Optional)",
+      websiteImportButton: "Fill in from website",
+      websiteImportButtonPending: "Reading site...",
+      websiteImportHelp:
+        "We'll pull in your name, description, and social links so you don't have to retype them.",
     },
   },
 
