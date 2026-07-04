@@ -1,5 +1,5 @@
 import type { Express } from "express";
-import { and, desc, eq, gte, ilike, isNull, lte, or } from "drizzle-orm";
+import { and, desc, eq, gte, ilike, isNull, lte, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "../db";
@@ -10,6 +10,7 @@ import {
   deals,
   insertReviewSchema,
   restaurants,
+  users,
 } from "@shared/schema";
 
 type DealDiscoveryRouteDependencies = {
@@ -374,6 +375,19 @@ export function registerDealDiscoveryRoutes(
       });
 
       const review = await storage.createReview(reviewData);
+
+      // This is the detail step that adds weight on top of a bare recommend
+      // (see /api/restaurants/:restaurantId/recommend) - a written rating +
+      // comment carries more than the initial tap.
+      await db
+        .update(users)
+        .set({
+          reviewCount: sql`${users.reviewCount} + 1`,
+          influenceScore: sql`${users.influenceScore} + 2`,
+          updatedAt: new Date(),
+        } as any)
+        .where(eq(users.id, req.user.id));
+
       res.json(review);
     } catch (error: any) {
       console.error("Error creating review:", error);

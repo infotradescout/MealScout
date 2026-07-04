@@ -6,9 +6,16 @@ import {
   awardHistory,
   videoStories,
   restaurantUserRecommendations,
+  menuItemRecommendations,
 } from '@shared/schema';
 import { eq, and, or, like, sql, isNotNull, isNull } from 'drizzle-orm';
 import { AWARD_RANKING_WEIGHTS } from '@shared/rankingPolicy';
+
+// A dish recommendation is a lighter endorsement than recommending the
+// whole restaurant, so it counts for less in the weighted score below.
+// (Whether that specific pick carries added detail is already captured
+// separately by reviewCount in the influence-score formula.)
+const DISH_RECOMMENDATION_WEIGHT = 0.5;
 
 // Golden Fork Award Criteria
 const GOLDEN_FORK_CRITERIA = {
@@ -97,6 +104,13 @@ export async function getUserWeightedRecommendationScore(
     weighted += videoSet.has(restaurantId) ? 0 : 1;
   }
   weighted += videoSet.size * 3;
+
+  const dishRecommendations = await db
+    .select({ restaurantId: menuItemRecommendations.restaurantId })
+    .from(menuItemRecommendations)
+    .where(eq(menuItemRecommendations.userId, userId))
+    .groupBy(menuItemRecommendations.restaurantId);
+  weighted += dishRecommendations.length * DISH_RECOMMENDATION_WEIGHT;
 
   return weighted;
 }
@@ -318,9 +332,17 @@ export async function calculateRestaurantRankingScore(restaurantId: string): Pro
     Number(activityRow?.share_count || 0) +
     Number(activityRow?.video_engagement || 0);
 
+  // Dish-level picks at this restaurant - distinct signal from a full
+  // restaurant recommendation, weighted lower (see AWARD_RANKING_WEIGHTS).
+  const dishRecommendations = await db.query.menuItemRecommendations.findMany({
+    where: (rec: any) => eq(rec.restaurantId, restaurantId),
+  });
+  const dishRecommendationCount = dishRecommendations.length;
+
   const rankingScore =
     manualRecommendationCount * AWARD_RANKING_WEIGHTS.manualRecommendation +
     videoRecommendationCount * AWARD_RANKING_WEIGHTS.videoRecommendation +
+    dishRecommendationCount * AWARD_RANKING_WEIGHTS.dishRecommendation +
     favoritesCount * AWARD_RANKING_WEIGHTS.favorites +
     followCount * AWARD_RANKING_WEIGHTS.follows +
     Math.round(avgRating * AWARD_RANKING_WEIGHTS.avgRating) +

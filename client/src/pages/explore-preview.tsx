@@ -1728,40 +1728,6 @@ function isWithinScoutRadius(
   return false;
 }
 
-function extractMenuPreviewItems(data: any): MenuPreviewItem[] {
-  const menus = Array.isArray(data?.menus) ? data.menus : [];
-  const items: MenuPreviewItem[] = [];
-  const seen = new Set<string>();
-  for (const menu of menus) {
-    const categoryItems = Array.isArray(menu?.categories)
-      ? menu.categories.flatMap((category: any) =>
-          Array.isArray(category?.items) ? category.items : [],
-        )
-      : [];
-    const uncategorized = Array.isArray(menu?.uncategorizedItems)
-      ? menu.uncategorizedItems
-      : [];
-    for (const item of [...categoryItems, ...uncategorized]) {
-      const id = String(item?.id || "").trim();
-      const name = String(item?.name || "").trim();
-      if (!id || !name || seen.has(id) || item?.isAvailable === false) continue;
-      seen.add(id);
-      items.push({
-        id,
-        name,
-        description: item?.description ?? null,
-        imageUrl: item?.imageUrl ?? null,
-        priceCents:
-          typeof item?.priceCents === "number" && Number.isFinite(item.priceCents)
-            ? item.priceCents
-            : null,
-      });
-      if (items.length >= 3) return items;
-    }
-  }
-  return items;
-}
-
 type ScoutSearchIntent =
   | "all"
   | "now"
@@ -2477,15 +2443,15 @@ export default function ExplorePreview() {
 
   const restaurantMenuPreviewQueries = useQueries({
     queries: nearbyRestaurants.slice(0, 8).map((restaurant) => ({
-      queryKey: ["/api/menus", restaurant.id, "scout-preview"],
-      queryFn: async () => {
+      queryKey: ["/api/restaurants", restaurant.id, "featured-item"],
+      queryFn: async (): Promise<MenuPreviewItem[]> => {
         const response = await fetch(
-          `/api/menus/${encodeURIComponent(String(restaurant.id))}`,
+          `/api/restaurants/${encodeURIComponent(String(restaurant.id))}/featured-item`,
           { credentials: "include" },
         );
         if (!response.ok) return [];
         const data = await response.json();
-        return extractMenuPreviewItems(data);
+        return data?.item ? [data.item] : [];
       },
       staleTime: 120_000,
       retry: false,

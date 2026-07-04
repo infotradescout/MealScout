@@ -18,6 +18,9 @@ export const AWARD_RANKING_WEIGHTS = {
   totalDealClaims: 10,
   totalDealViews: 1,
   communityActivity: 8,
+  // A dish-level pick is a lighter endorsement than recommending the whole
+  // restaurant, so it's weighted well below manualRecommendation.
+  dishRecommendation: 20,
 } as const;
 
 export type HomeRankingInput = {

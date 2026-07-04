@@ -1925,11 +1925,12 @@ export function registerMenuRoutes(app: Express) {
           );
         }
 
+        const insertComment = String(payload.comment || "").trim() || null;
         const toInsert = insertMenuItemRecommendationSchema.parse({
           restaurantId: item.restaurantId,
           menuItemId,
           userId: req.user.id,
-          comment: String(payload.comment || "").trim() || null,
+          comment: insertComment,
           rating: payload.rating ?? null,
         });
         const [inserted] = await db
@@ -1938,15 +1939,22 @@ export function registerMenuRoutes(app: Express) {
           .returning();
         recommendation = inserted;
 
+        // Bare = 1 point. If detail is already attached on this first tap
+        // (comment present), it carries the same extra weight a later edit
+        // would - see the enrichment branch below for the same rule.
         await db
           .update(users)
           .set({
             recommendationCount: sql`${users.recommendationCount} + 1`,
-            influenceScore: sql`${users.influenceScore} + 1`,
+            influenceScore: sql`${users.influenceScore} + ${insertComment ? 3 : 1}`,
+            reviewCount: insertComment
+              ? sql`${users.reviewCount} + 1`
+              : users.reviewCount,
             updatedAt: new Date(),
           } as any)
           .where(eq(users.id, req.user.id));
       } else {
+        const hadComment = Boolean(recommendation.comment);
         const nextComment = String(payload.comment || "").trim() || null;
         const nextRating = payload.rating ?? null;
         const [updated] = await db
@@ -1959,6 +1967,19 @@ export function registerMenuRoutes(app: Express) {
           .where(eq(menuItemRecommendations.id, recommendation.id))
           .returning();
         recommendation = updated || recommendation;
+
+        // Only counts once - the moment it transitions from bare to carrying
+        // detail. Editing an already-detailed pick again doesn't re-count.
+        if (!hadComment && nextComment) {
+          await db
+            .update(users)
+            .set({
+              reviewCount: sql`${users.reviewCount} + 1`,
+              influenceScore: sql`${users.influenceScore} + 2`,
+              updatedAt: new Date(),
+            } as any)
+            .where(eq(users.id, req.user.id));
+        }
       }
 
       let photo: any = null;
@@ -2054,11 +2075,15 @@ export function registerMenuRoutes(app: Express) {
         .delete(menuItemRecommendations)
         .where(eq(menuItemRecommendations.id, existing.id));
 
+      const hadComment = Boolean(existing.comment);
       await db
         .update(users)
         .set({
           recommendationCount: sql`GREATEST(${users.recommendationCount} - 1, 0)`,
-          influenceScore: sql`GREATEST(${users.influenceScore} - 1, 0)`,
+          influenceScore: sql`GREATEST(${users.influenceScore} - ${hadComment ? 3 : 1}, 0)`,
+          reviewCount: hadComment
+            ? sql`GREATEST(${users.reviewCount} - 1, 0)`
+            : users.reviewCount,
           updatedAt: new Date(),
         } as any)
         .where(eq(users.id, req.user.id));
@@ -2103,6 +2128,103 @@ export function registerMenuRoutes(app: Express) {
           createdAt: photo.createdAt,
         })),
       });
+    }),
+  );
+
+  /**
+   * GET /api/restaurants/:restaurantId/featured-item
+   * Three-tier resolution for the one dish spotlighted on discovery cards:
+   *   1. Owner's manual pick (restaurants.featuredMenuItemId), if set.
+   *   2. The dish with the most community recommendations at this restaurant.
+   *   3. The first available menu item, as a last resort.
+   * Returns { item: {...} | null, source: "owner" | "community" | "fallback" | null }.
+   */
+  app.get(
+    "/api/restaurants/:restaurantId/featured-item",
+    wrap(async (req, res) => {
+      const restaurantId = String(req.params.restaurantId || "").trim();
+      if (!restaurantId) {
+        throw Object.assign(new Error("restaurantId is required"), { statusCode: 400 });
+      }
+
+      const selectItemFields = {
+        id: menuItems.id,
+        name: menuItems.name,
+        description: menuItems.description,
+        priceCents: menuItems.priceCents,
+        imageUrl: menuItems.imageUrl,
+      };
+
+      const [restaurant] = await db
+        .select({ featuredMenuItemId: restaurants.featuredMenuItemId })
+        .from(restaurants)
+        .where(eq(restaurants.id, restaurantId))
+        .limit(1);
+
+      if (restaurant?.featuredMenuItemId) {
+        const [ownerPick] = await db
+          .select(selectItemFields)
+          .from(menuItems)
+          .where(
+            and(
+              eq(menuItems.id, restaurant.featuredMenuItemId),
+              eq(menuItems.restaurantId, restaurantId),
+              eq(menuItems.isAvailable, true),
+            ),
+          )
+          .limit(1);
+        if (ownerPick) {
+          return res.json({ item: ownerPick, source: "owner" });
+        }
+        // Owner's pick no longer exists/available - fall through below
+        // rather than erroring, since there's no FK enforcing this stays valid.
+      }
+
+      const [topRecommended] = await db
+        .select({
+          ...selectItemFields,
+          recommendationCount: sql<number>`count(${menuItemRecommendations.id})`.as(
+            "recommendation_count",
+          ),
+        })
+        .from(menuItemRecommendations)
+        .innerJoin(menuItems, eq(menuItems.id, menuItemRecommendations.menuItemId))
+        .where(
+          and(
+            eq(menuItemRecommendations.restaurantId, restaurantId),
+            eq(menuItems.isAvailable, true),
+          ),
+        )
+        .groupBy(
+          menuItems.id,
+          menuItems.name,
+          menuItems.description,
+          menuItems.priceCents,
+          menuItems.imageUrl,
+        )
+        .orderBy(desc(sql`count(${menuItemRecommendations.id})`))
+        .limit(1);
+
+      if (topRecommended) {
+        const { recommendationCount, ...item } = topRecommended;
+        return res.json({ item, source: "community" });
+      }
+
+      const [fallbackItem] = await db
+        .select(selectItemFields)
+        .from(menuItems)
+        .innerJoin(menus, eq(menus.id, menuItems.menuId))
+        .where(
+          and(
+            eq(menuItems.restaurantId, restaurantId),
+            eq(menuItems.isAvailable, true),
+            eq(menus.isActive, true),
+          ),
+        )
+        .orderBy(asc(menuItems.sortOrder))
+        .limit(1);
+
+      res.json({ item: fallbackItem || null, source: fallbackItem ? "fallback" : null });
     }),
   );
 
