@@ -27,6 +27,8 @@ import {
   users,
   telemetryEvents,
   truckImportListings,
+  menuItems,
+  restaurants,
 } from "@shared/schema";
 import {
   computeHomeRankingScore,
@@ -1090,6 +1092,19 @@ export function registerRestaurantCoreRoutes(
 
         const recommendation =
           await storage.createRestaurantUserRecommendation(recommendationData);
+
+        // Bare recommend = 1 point, matching dish-level recommend. Adding
+        // detail via POST /api/reviews (the pre-existing endpoint this
+        // reuses) carries additional weight on top of this - see that route.
+        await db
+          .update(users)
+          .set({
+            recommendationCount: sql`${users.recommendationCount} + 1`,
+            influenceScore: sql`${users.influenceScore} + 1`,
+            updatedAt: new Date(),
+          } as any)
+          .where(eq(users.id, userId));
+
         void trackEngagement(
           "restaurant_recommend_added",
           userId,
@@ -1112,6 +1127,64 @@ export function registerRestaurantCoreRoutes(
         }
         res.status(400).json({
           message: error.message || "Failed to recommend restaurant",
+        });
+      }
+    },
+  );
+
+  /**
+   * PATCH /api/restaurants/:restaurantId/featured-item
+   * Owner's manual pick for the one dish spotlighted on discovery cards.
+   * Body: { menuItemId: string | null } - null clears the pick, falling
+   * back to the automatic top-recommended-dish ranking.
+   */
+  app.patch(
+    "/api/restaurants/:restaurantId/featured-item",
+    isAuthenticated,
+    async (req: any, res) => {
+      try {
+        const { restaurantId } = req.params;
+        const userId = req.user.id;
+
+        const isAuthorized = await storage.verifyRestaurantOwnership(
+          restaurantId,
+          userId,
+          "manageProfile",
+        );
+        if (!isAuthorized) {
+          return res.status(403).json({
+            message: "Unauthorized: you can only set this for restaurants you own",
+          });
+        }
+
+        const menuItemId =
+          req.body?.menuItemId === null || req.body?.menuItemId === undefined
+            ? null
+            : String(req.body.menuItemId).trim() || null;
+
+        if (menuItemId) {
+          const [item] = await db
+            .select({ id: menuItems.id, restaurantId: menuItems.restaurantId })
+            .from(menuItems)
+            .where(eq(menuItems.id, menuItemId))
+            .limit(1);
+          if (!item || item.restaurantId !== restaurantId) {
+            return res.status(400).json({
+              message: "That item doesn't belong to this restaurant.",
+            });
+          }
+        }
+
+        await db
+          .update(restaurants)
+          .set({ featuredMenuItemId: menuItemId, updatedAt: new Date() } as any)
+          .where(eq(restaurants.id, restaurantId));
+
+        res.json({ success: true, featuredMenuItemId: menuItemId });
+      } catch (error: any) {
+        console.error("Error setting featured item:", error);
+        res.status(400).json({
+          message: error.message || "Failed to set the featured item",
         });
       }
     },

@@ -232,6 +232,10 @@ export const restaurants = pgTable("restaurants", {
   lockedPriceCents: integer("locked_price_cents"), // Price is stored, never recalculated
   priceLockDate: timestamp("price_lock_date"), // When the price lock was applied
   priceLockReason: varchar("price_lock_reason"), // 'early_rollout' or other reason
+  // Owner's manual pick for the one dish spotlighted on discovery cards.
+  // Overrides the automatic top-recommended-dish ranking when set; null
+  // falls through to that ranking, then to the first available menu item.
+  featuredMenuItemId: varchar("featured_menu_item_id"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
