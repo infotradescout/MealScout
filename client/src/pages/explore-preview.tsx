@@ -48,6 +48,7 @@ import {
 import { MapErrorBoundary } from "@/components/maps/map-error-boundary";
 import { GOOGLE_MAPS_WEB_API_KEY } from "@/lib/mapProvider";
 import { apiUrl } from "@/lib/api";
+import { toast } from "@/hooks/use-toast";
 import { buildPublicProfilePath } from "@/lib/public-profile-path";
 import type {
   MapAdapterMarker,
@@ -6455,9 +6456,19 @@ function LiveTruckCard({
           body: nextState ? "{}" : undefined,
         },
       );
-      if (!response.ok) throw new Error("Favorite action failed");
-    } catch {
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(String(data?.message || "").trim() || "Favorite action failed");
+      }
+    } catch (error) {
       setIsFavorite(!nextState);
+      if (nextState) {
+        toast({
+          variant: "destructive",
+          description:
+            error instanceof Error ? error.message : "Couldn't save this truck.",
+        });
+      }
     } finally {
       setPendingFavorite(false);
     }
@@ -6718,49 +6729,111 @@ function LocalMenuItemCard({
       ]
     : [];
 
-  const [isRecommending, setIsRecommending] = useState(false);
+  const [isEnrichingRecommend, setIsEnrichingRecommend] = useState(false);
   const [recommendComment, setRecommendComment] = useState("");
   const [recommendRating, setRecommendRating] = useState("5");
   const [recommendPhoto, setRecommendPhoto] = useState<File | null>(null);
-  const [isSubmittingRecommend, setIsSubmittingRecommend] = useState(false);
+  const [isSubmittingEnrich, setIsSubmittingEnrich] = useState(false);
+  const [isTogglingRecommend, setIsTogglingRecommend] = useState(false);
   const [hasRecommended, setHasRecommended] = useState(false);
-  const [recommendStatus, setRecommendStatus] = useState<string | null>(null);
 
-  const submitMenuItemRecommendation = async () => {
-    setIsSubmittingRecommend(true);
-    try {
-      const formData = new FormData();
-      formData.append("comment", recommendComment);
-      formData.append("rating", recommendRating);
-      if (recommendPhoto) formData.append("image", recommendPhoto);
+  const { data: myRecommendationData } = useQuery({
+    queryKey: ["/api/menu-items", item.id, "my-recommendation", currentUserId],
+    queryFn: async () => {
       const res = await fetch(
-        apiUrl(`/api/menu-items/${encodeURIComponent(item.id)}/recommend`),
-        { method: "POST", credentials: "include", body: formData },
+        apiUrl(`/api/menu-items/${encodeURIComponent(item.id)}/my-recommendation`),
+        { credentials: "include" },
       );
+      if (!res.ok) return null;
+      return res.json();
+    },
+    enabled: Boolean(currentUserId),
+    staleTime: 60_000,
+  });
+
+  useEffect(() => {
+    setHasRecommended(Boolean((myRecommendationData as any)?.recommendation));
+  }, [myRecommendationData]);
+
+  const postMenuItemRecommendation = async (opts: {
+    comment?: string;
+    rating?: string;
+    photo?: File | null;
+  }) => {
+    const formData = new FormData();
+    formData.append("comment", opts.comment ?? "");
+    formData.append("rating", opts.rating ?? "5");
+    if (opts.photo) formData.append("image", opts.photo);
+    return fetch(
+      apiUrl(`/api/menu-items/${encodeURIComponent(item.id)}/recommend`),
+      { method: "POST", credentials: "include", body: formData },
+    );
+  };
+
+  const toggleRecommend = async (event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!currentUserId) {
+      window.location.href = `/login?redirect=${encodeURIComponent("/scout")}`;
+      return;
+    }
+    setIsTogglingRecommend(true);
+    try {
+      if (hasRecommended) {
+        const res = await fetch(
+          apiUrl(`/api/menu-items/${encodeURIComponent(item.id)}/recommend`),
+          { method: "DELETE", credentials: "include" },
+        );
+        if (res.ok) {
+          setHasRecommended(false);
+          setIsEnrichingRecommend(false);
+        }
+        return;
+      }
+      const res = await postMenuItemRecommendation({});
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        if (res.status === 401) {
-          window.location.href = `/login?redirect=${encodeURIComponent("/scout")}`;
-          return;
-        }
-        setRecommendStatus(
-          String(data?.message || "").trim() || "Unable to submit right now.",
-        );
+        toast({
+          variant: "destructive",
+          description:
+            String(data?.message || "").trim() || "Couldn't recommend this dish.",
+        });
         return;
       }
       setHasRecommended(true);
-      setRecommendStatus(
-        data?.photoStatus?.status === "pending"
-          ? "Recommended. Photo is pending review."
-          : "Recommended.",
-      );
+    } finally {
+      setIsTogglingRecommend(false);
+    }
+  };
+
+  const submitEnrichedRecommendation = async () => {
+    setIsSubmittingEnrich(true);
+    try {
+      const res = await postMenuItemRecommendation({
+        comment: recommendComment,
+        rating: recommendRating,
+        photo: recommendPhoto,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast({
+          variant: "destructive",
+          description:
+            String(data?.message || "").trim() || "Couldn't submit your review.",
+        });
+        return;
+      }
+      toast({
+        description:
+          data?.photoStatus?.status === "pending"
+            ? "Review saved. Photo is pending review."
+            : "Review saved.",
+      });
       setRecommendComment("");
       setRecommendPhoto(null);
-      setIsRecommending(false);
-    } catch {
-      setRecommendStatus("Unable to submit right now.");
+      setIsEnrichingRecommend(false);
     } finally {
-      setIsSubmittingRecommend(false);
+      setIsSubmittingEnrich(false);
     }
   };
 
@@ -6871,28 +6944,33 @@ function LocalMenuItemCard({
           <div className="flex items-center justify-between gap-2">
             <button
               type="button"
-              onClick={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                if (!currentUserId) {
-                  window.location.href = `/login?redirect=${encodeURIComponent("/scout")}`;
-                  return;
-                }
-                setIsRecommending((value) => !value);
-              }}
-              disabled={hasRecommended}
-              className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide ${
+              onClick={toggleRecommend}
+              disabled={isTogglingRecommend}
+              className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide disabled:opacity-60 ${
                 hasRecommended ? "text-emerald-300" : "text-orange-300 hover:text-orange-200"
               }`}
             >
-              <Star className="h-3 w-3" aria-hidden="true" />
+              <Star
+                className={`h-3 w-3 ${hasRecommended ? "fill-current" : ""}`}
+                aria-hidden="true"
+              />
               {hasRecommended ? "Recommended" : "Recommend"}
             </button>
-            {recommendStatus && !isRecommending && (
-              <span className="text-[10px] text-white/50">{recommendStatus}</span>
+            {hasRecommended && !isEnrichingRecommend && (
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setIsEnrichingRecommend(true);
+                }}
+                className="text-[10px] text-white/50 underline decoration-white/25 hover:text-white/70"
+              >
+                Add a review
+              </button>
             )}
           </div>
-          {isRecommending && (
+          {isEnrichingRecommend && (
             <div
               className="mt-2 space-y-1.5 rounded-lg border border-white/10 bg-black/30 p-2"
               onClick={(event) => {
@@ -6935,19 +7013,19 @@ function LocalMenuItemCard({
                   onClick={(event) => {
                     event.preventDefault();
                     event.stopPropagation();
-                    submitMenuItemRecommendation();
+                    submitEnrichedRecommendation();
                   }}
-                  disabled={isSubmittingRecommend}
+                  disabled={isSubmittingEnrich}
                   className="rounded-full bg-orange-400 px-2.5 py-1 text-[10px] font-black text-[#1a0d08] disabled:opacity-60"
                 >
-                  {isSubmittingRecommend ? "Submitting…" : "Submit"}
+                  {isSubmittingEnrich ? "Submitting…" : "Submit"}
                 </button>
                 <button
                   type="button"
                   onClick={(event) => {
                     event.preventDefault();
                     event.stopPropagation();
-                    setIsRecommending(false);
+                    setIsEnrichingRecommend(false);
                   }}
                   className="text-[10px] text-white/55 hover:text-white/75"
                 >
@@ -7218,7 +7296,10 @@ function NearbyRestaurantCard({
           body: method === "POST" ? "{}" : undefined,
         },
       );
-      if (!response.ok) throw new Error("Restaurant action failed");
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(String(data?.message || "").trim() || "Restaurant action failed");
+      }
     } finally {
       setPendingAction(null);
     }
@@ -7231,8 +7312,15 @@ function NearbyRestaurantCard({
     setIsFavorite(nextState);
     try {
       await sendRestaurantAction("favorite", nextState);
-    } catch {
+    } catch (error) {
       setIsFavorite(!nextState);
+      if (nextState) {
+        toast({
+          variant: "destructive",
+          description:
+            error instanceof Error ? error.message : "Couldn't save this restaurant.",
+        });
+      }
     }
   };
 
