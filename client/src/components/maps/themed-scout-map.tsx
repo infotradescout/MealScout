@@ -8,7 +8,7 @@
  * full Google map for real pan/zoom/tap exploration.
  */
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import maplibregl, {
   type Map as MaplibreMap,
   type StyleSpecification,
@@ -64,6 +64,23 @@ const MINI_MAP_STYLE: StyleSpecification = {
   ],
 };
 
+// MapLibre GL requires WebGL and has no fallback rendering path - if the
+// browser has WebGL disabled or blocked (privacy hardening, some webviews,
+// GPU/driver issues), it can silently fail to paint anything at all,
+// including its own background color. Detect that case up front instead of
+// leaving the canvas blank with no explanation.
+function isWebglAvailable(): boolean {
+  try {
+    const canvas = document.createElement("canvas");
+    return !!(
+      window.WebGLRenderingContext &&
+      (canvas.getContext("webgl") || canvas.getContext("experimental-webgl"))
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function ThemedScoutMap({
   userLocation,
   markers,
@@ -77,6 +94,12 @@ export function ThemedScoutMap({
   const markerRefs = useRef<maplibregl.Marker[]>([]);
   const driftRafRef = useRef<number | null>(null);
   const driftStartRef = useRef<number | null>(null);
+  // Tracks either "no WebGL" (checked up front) or "tiles never loaded"
+  // (network/ad-blocker interference with the CDN) so we can show a plain
+  // warm placeholder instead of a mysteriously blank card.
+  const [tilesUnavailable, setTilesUnavailable] = useState(
+    () => !isWebglAvailable(),
+  );
 
   const centerMapOnUser = (duration = 0) => {
     const map = mapRef.current;
@@ -91,7 +114,7 @@ export function ThemedScoutMap({
   };
 
   useEffect(() => {
-    if (!containerRef.current || mapRef.current) return;
+    if (!containerRef.current || mapRef.current || tilesUnavailable) return;
 
     const map = new maplibregl.Map({
       container: containerRef.current,
@@ -170,10 +193,27 @@ export function ThemedScoutMap({
     });
     ro.observe(containerRef.current);
 
+    // Tiles can fail to load even with WebGL working fine (ad-blockers and
+    // some privacy tools block third-party CDN image hosts like CARTO's).
+    // If nothing has loaded after a grace period, fall back to the plain
+    // placeholder rather than leaving a blank map on screen.
+    let sawTileLoad = false;
+    const handleSourceData = (e: any) => {
+      if (e?.sourceId === "carto-light" && e.isSourceLoaded) {
+        sawTileLoad = true;
+      }
+    };
+    map.on("sourcedata", handleSourceData);
+    const tileWatchdog = window.setTimeout(() => {
+      if (!sawTileLoad) setTilesUnavailable(true);
+    }, 6000);
+
     return () => {
       ro.disconnect();
       cancelAnimationFrame(initialResizeFrame);
       window.clearTimeout(initialResizeTimeout);
+      window.clearTimeout(tileWatchdog);
+      map.off("sourcedata", handleSourceData);
       if (driftRafRef.current != null) {
         cancelAnimationFrame(driftRafRef.current);
         driftRafRef.current = null;
@@ -186,7 +226,7 @@ export function ThemedScoutMap({
       mapRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [interactive]);
+  }, [interactive, tilesUnavailable]);
 
   const markerKey = useMemo(
     () =>
@@ -252,11 +292,21 @@ export function ThemedScoutMap({
       className={`absolute inset-0 h-full w-full min-h-full ${interactive ? "msm-mode-interactive" : "msm-mode-preview"}`}
     >
       <div className="absolute inset-0">
-        <div
-          ref={containerRef}
-          className="msm-map-canvas absolute inset-0 h-full w-full min-h-full"
-          style={{ height: "100%", width: "100%", minHeight: "100%" }}
-        />
+        {tilesUnavailable ? (
+          // No WebGL, or tiles never loaded (ad-blocker/CDN interference) -
+          // show the same warm background the map style would have used
+          // instead of leaving a blank/void-looking canvas.
+          <div
+            className="absolute inset-0 h-full w-full min-h-full"
+            style={{ backgroundColor: "#fff7df" }}
+          />
+        ) : (
+          <div
+            ref={containerRef}
+            className="msm-map-canvas absolute inset-0 h-full w-full min-h-full"
+            style={{ height: "100%", width: "100%", minHeight: "100%" }}
+          />
+        )}
       </div>
       <svg
         className="msm-map-illustration absolute inset-0 h-full w-full pointer-events-none"
