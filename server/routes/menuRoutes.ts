@@ -1903,6 +1903,28 @@ export function registerMenuRoutes(app: Express) {
 
       let recommendation = existing[0] || null;
       if (!recommendation) {
+        // One recommended dish per restaurant per user, for accuracy/fairness -
+        // a user picking a new favorite dish at a restaurant they've already
+        // picked one at must remove that pick first (DELETE this same route).
+        const existingAtRestaurant = await db
+          .select({ id: menuItemRecommendations.id })
+          .from(menuItemRecommendations)
+          .where(
+            and(
+              eq(menuItemRecommendations.restaurantId, item.restaurantId),
+              eq(menuItemRecommendations.userId, req.user.id),
+            ),
+          )
+          .limit(1);
+        if (existingAtRestaurant.length > 0) {
+          throw Object.assign(
+            new Error(
+              "You can recommend one dish per restaurant. Remove your current pick to choose a different one.",
+            ),
+            { statusCode: 400 },
+          );
+        }
+
         const toInsert = insertMenuItemRecommendationSchema.parse({
           restaurantId: item.restaurantId,
           menuItemId,
@@ -1996,6 +2018,52 @@ export function registerMenuRoutes(app: Express) {
             }
           : null,
       });
+    }),
+  );
+
+  /**
+   * DELETE /api/menu-items/:menuItemId/recommend
+   * Remove the caller's own recommendation for this dish - the escape hatch
+   * for the one-dish-per-restaurant cap enforced above.
+   */
+  app.delete(
+    "/api/menu-items/:menuItemId/recommend",
+    isAuthenticated,
+    wrap(async (req, res) => {
+      const menuItemId = String(req.params.menuItemId || "").trim();
+      if (!menuItemId) {
+        throw Object.assign(new Error("menuItemId is required"), { statusCode: 400 });
+      }
+
+      const [existing] = await db
+        .select()
+        .from(menuItemRecommendations)
+        .where(
+          and(
+            eq(menuItemRecommendations.menuItemId, menuItemId),
+            eq(menuItemRecommendations.userId, req.user.id),
+          ),
+        )
+        .limit(1);
+
+      if (!existing) {
+        return res.json({ success: true });
+      }
+
+      await db
+        .delete(menuItemRecommendations)
+        .where(eq(menuItemRecommendations.id, existing.id));
+
+      await db
+        .update(users)
+        .set({
+          recommendationCount: sql`GREATEST(${users.recommendationCount} - 1, 0)`,
+          influenceScore: sql`GREATEST(${users.influenceScore} - 1, 0)`,
+          updatedAt: new Date(),
+        } as any)
+        .where(eq(users.id, req.user.id));
+
+      res.json({ success: true });
     }),
   );
 
