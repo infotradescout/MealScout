@@ -51,6 +51,7 @@ import {
 } from "@shared/schema";
 import { eq, and, asc, desc, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { isAuthenticated, isStaffOrAdmin } from "../unifiedAuth";
+import { distributedRateLimit } from "../middleware/distributedRateLimit";
 import { storage } from "../storage";
 import { parseMenuCsv } from "../utils/menuCsvParser";
 import { parsePdfMenuWithAi } from "../utils/menuPdfParser";
@@ -322,6 +323,17 @@ async function buildOrderingReadiness(restaurantId: string) {
     },
   };
 }
+
+// PDF and photo import both call a paid AI model per request (and photo
+// import can send up to 8 images in one call), so they share one budget per
+// menu rather than each getting their own - a full page turns into a run of
+// short abusive imports at $0 marginal cost to the caller otherwise.
+const aiMenuImportLimiter = distributedRateLimit({
+  scope: "menu:ai-import",
+  limit: 6,
+  windowMs: 60 * 60 * 1000,
+  key: (req: any) => `${req.user?.id || req.ip}:${req.params?.menuId}`,
+});
 
 export function registerMenuRoutes(app: Express) {
   // ── ─────────────────────────────────────────────────────────────────────────
@@ -1660,6 +1672,7 @@ export function registerMenuRoutes(app: Express) {
     "/api/owner/menus/:menuId/import/pdf",
     isAuthenticated,
     canManageMenu,
+    aiMenuImportLimiter,
     upload.single("file"),
     wrap(async (req, res) => {
       const { menuId } = req.params;
@@ -1784,6 +1797,7 @@ export function registerMenuRoutes(app: Express) {
     "/api/owner/menus/:menuId/import/photo",
     isAuthenticated,
     canManageMenu,
+    aiMenuImportLimiter,
     imageUpload.array("files", 8),
     wrap(async (req, res) => {
       const { menuId } = req.params;
