@@ -667,6 +667,12 @@ export default function RestaurantSignup() {
       });
 
       setStoredSignupTermsAccepted(false);
+      try {
+        // The imported/entered business details have now been saved to the
+        // restaurant profile, so drop the local draft to avoid stale prefill
+        // on a future signup.
+        window.localStorage.removeItem(RESTAURANT_DRAFT_KEY);
+      } catch {}
       setCreatedRestaurant(restaurant);
       dispatchOnboarding({ type: "GO_TO_VERIFICATION" });
       toast({

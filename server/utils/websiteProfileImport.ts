@@ -180,6 +180,16 @@ function truncate(value: string | undefined, max: number): string | undefined {
   return trimmed.length > max ? trimmed.slice(0, max).trim() : trimmed;
 }
 
+// A site's <title>/og:title often appends a tagline or location after a
+// separator (e.g. "Joe's Diner | Best BBQ in Austin"). Keep the first segment
+// as the business name. Separators require surrounding whitespace so hyphenated
+// names like "Chick-fil-A" are preserved.
+function stripTitleSuffix(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  const [first] = value.split(/\s+[|•·–—]\s+|\s+-\s+/);
+  return (first || value).trim();
+}
+
 export async function fetchWebsiteProfilePreview(
   url: string,
 ): Promise<WebsiteProfileImportResult> {
@@ -212,7 +222,9 @@ export async function fetchWebsiteProfilePreview(
   const pageTitle = $("title").first().text();
 
   result.name = truncate(
-    businessNode?.name || ogTitle || pageTitle,
+    businessNode?.name
+      ? String(businessNode.name)
+      : stripTitleSuffix(ogTitle || pageTitle),
     120,
   );
   result.description = truncate(
