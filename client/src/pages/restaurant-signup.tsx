@@ -956,6 +956,7 @@ export default function RestaurantSignup() {
 
       fillIfEmpty("name", data.name);
       fillIfEmpty("description", data.description);
+      fillIfEmpty("phone", data.phone);
       fillIfEmpty("address", data.address);
       fillIfEmpty("city", data.city);
       fillIfEmpty("state", data.state);
