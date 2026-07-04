@@ -6714,8 +6714,12 @@ function LocalMenuItemCard({
   const { data: myRecommendationData } = useQuery({
     queryKey: ["/api/menu-items", item.id, "my-recommendation", currentUserId],
     queryFn: async () => {
+      // Deliberately same-origin (not apiUrl's cross-origin API host): this
+      // check depends on the session cookie, which mobile/Safari privacy
+      // rules strip from cross-site requests. www.mealscout.us proxies
+      // /api/* to the backend, so a relative path keeps the cookie first-party.
       const res = await fetch(
-        apiUrl(`/api/menu-items/${encodeURIComponent(item.id)}/my-recommendation`),
+        `/api/menu-items/${encodeURIComponent(item.id)}/my-recommendation`,
         { credentials: "include" },
       );
       if (!res.ok) return null;
@@ -6738,8 +6742,9 @@ function LocalMenuItemCard({
     formData.append("comment", opts.comment ?? "");
     formData.append("rating", opts.rating ?? "5");
     if (opts.photo) formData.append("image", opts.photo);
+    // Same-origin for the same reason as the my-recommendation check above.
     return fetch(
-      apiUrl(`/api/menu-items/${encodeURIComponent(item.id)}/recommend`),
+      `/api/menu-items/${encodeURIComponent(item.id)}/recommend`,
       { method: "POST", credentials: "include", body: formData },
     );
   };
@@ -6810,7 +6815,7 @@ function LocalMenuItemCard({
     setIsRemovingRecommend(true);
     try {
       const res = await fetch(
-        apiUrl(`/api/menu-items/${encodeURIComponent(item.id)}/recommend`),
+        `/api/menu-items/${encodeURIComponent(item.id)}/recommend`,
         { method: "DELETE", credentials: "include" },
       );
       if (res.ok) {
