@@ -30,6 +30,13 @@ import {
   User as UserIcon,
 } from "lucide-react";
 
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { useAuth } from "@/hooks/useAuth";
 import {
   useEffectiveLocationContext,
@@ -6729,11 +6736,12 @@ function LocalMenuItemCard({
       ]
     : [];
 
-  const [isEnrichingRecommend, setIsEnrichingRecommend] = useState(false);
+  const [isRecommendDialogOpen, setIsRecommendDialogOpen] = useState(false);
   const [recommendComment, setRecommendComment] = useState("");
   const [recommendRating, setRecommendRating] = useState("5");
   const [recommendPhoto, setRecommendPhoto] = useState<File | null>(null);
   const [isSubmittingEnrich, setIsSubmittingEnrich] = useState(false);
+  const [isRemovingRecommend, setIsRemovingRecommend] = useState(false);
   const [isTogglingRecommend, setIsTogglingRecommend] = useState(false);
   const [hasRecommended, setHasRecommended] = useState(false);
 
@@ -6770,26 +6778,20 @@ function LocalMenuItemCard({
     );
   };
 
-  const toggleRecommend = async (event: React.MouseEvent) => {
+  const handleRecommendClick = async (event: React.MouseEvent) => {
     event.preventDefault();
     event.stopPropagation();
     if (!currentUserId) {
       window.location.href = `/login?redirect=${encodeURIComponent("/scout")}`;
       return;
     }
+    if (hasRecommended) {
+      // Already recommended - reopen the popup so they can edit or remove it.
+      setIsRecommendDialogOpen(true);
+      return;
+    }
     setIsTogglingRecommend(true);
     try {
-      if (hasRecommended) {
-        const res = await fetch(
-          apiUrl(`/api/menu-items/${encodeURIComponent(item.id)}/recommend`),
-          { method: "DELETE", credentials: "include" },
-        );
-        if (res.ok) {
-          setHasRecommended(false);
-          setIsEnrichingRecommend(false);
-        }
-        return;
-      }
       const res = await postMenuItemRecommendation({});
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -6801,6 +6803,7 @@ function LocalMenuItemCard({
         return;
       }
       setHasRecommended(true);
+      setIsRecommendDialogOpen(true);
     } finally {
       setIsTogglingRecommend(false);
     }
@@ -6819,21 +6822,39 @@ function LocalMenuItemCard({
         toast({
           variant: "destructive",
           description:
-            String(data?.message || "").trim() || "Couldn't submit your review.",
+            String(data?.message || "").trim() || "Couldn't save your recommendation.",
         });
         return;
       }
       toast({
         description:
           data?.photoStatus?.status === "pending"
-            ? "Review saved. Photo is pending review."
-            : "Review saved.",
+            ? "Recommendation saved. Photo is pending approval."
+            : "Recommendation saved.",
       });
       setRecommendComment("");
       setRecommendPhoto(null);
-      setIsEnrichingRecommend(false);
+      setIsRecommendDialogOpen(false);
     } finally {
       setIsSubmittingEnrich(false);
+    }
+  };
+
+  const removeRecommendation = async () => {
+    setIsRemovingRecommend(true);
+    try {
+      const res = await fetch(
+        apiUrl(`/api/menu-items/${encodeURIComponent(item.id)}/recommend`),
+        { method: "DELETE", credentials: "include" },
+      );
+      if (res.ok) {
+        setHasRecommended(false);
+        setIsRecommendDialogOpen(false);
+        setRecommendComment("");
+        setRecommendPhoto(null);
+      }
+    } finally {
+      setIsRemovingRecommend(false);
     }
   };
 
@@ -6937,105 +6958,83 @@ function LocalMenuItemCard({
             ))}
         </div>
         <OwnerOperationalActions actions={actions} />
-        <div
-          className="mt-2 border-t border-white/8 pt-2"
-          onClick={(event) => event.preventDefault()}
+        <div className="mt-2 border-t border-white/8 pt-2">
+          <button
+            type="button"
+            onClick={handleRecommendClick}
+            disabled={isTogglingRecommend}
+            className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide disabled:opacity-60 ${
+              hasRecommended ? "text-emerald-300" : "text-orange-300 hover:text-orange-200"
+            }`}
+          >
+            <Star
+              className={`h-3 w-3 ${hasRecommended ? "fill-current" : ""}`}
+              aria-hidden="true"
+            />
+            {hasRecommended ? "Recommended" : "Recommend"}
+          </button>
+        </div>
+      </div>
+      <Dialog open={isRecommendDialogOpen} onOpenChange={setIsRecommendDialogOpen}>
+        <DialogContent
+          className="max-w-sm"
+          onClick={(event) => event.stopPropagation()}
         >
+          <DialogHeader>
+            <DialogTitle>{item.name}</DialogTitle>
+            <DialogDescription>
+              Tell us why you recommend it, or just close this - your recommendation is already saved.
+            </DialogDescription>
+          </DialogHeader>
+          <textarea
+            value={recommendComment}
+            onChange={(event) => setRecommendComment(event.target.value)}
+            placeholder="What makes this dish worth it? (optional)"
+            className="min-h-[72px] w-full rounded border border-[color:var(--border-subtle)] bg-black/20 px-2 py-1.5 text-sm"
+          />
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-[color:var(--text-muted)]" htmlFor={`rating-${item.id}`}>
+              Rating
+            </label>
+            <select
+              id={`rating-${item.id}`}
+              value={recommendRating}
+              onChange={(event) => setRecommendRating(event.target.value)}
+              className="rounded border border-[color:var(--border-subtle)] bg-black/20 px-1.5 py-1 text-sm"
+            >
+              <option value="5">5</option>
+              <option value="4">4</option>
+              <option value="3">3</option>
+              <option value="2">2</option>
+              <option value="1">1</option>
+            </select>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(event) => setRecommendPhoto(event.target.files?.[0] || null)}
+              className="flex-1 text-xs"
+            />
+          </div>
           <div className="flex items-center justify-between gap-2">
             <button
               type="button"
-              onClick={toggleRecommend}
-              disabled={isTogglingRecommend}
-              className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide disabled:opacity-60 ${
-                hasRecommended ? "text-emerald-300" : "text-orange-300 hover:text-orange-200"
-              }`}
+              onClick={removeRecommendation}
+              disabled={isRemovingRecommend}
+              className="text-xs text-[color:var(--text-muted)] underline hover:text-[color:var(--text-primary)] disabled:opacity-60"
             >
-              <Star
-                className={`h-3 w-3 ${hasRecommended ? "fill-current" : ""}`}
-                aria-hidden="true"
-              />
-              {hasRecommended ? "Recommended" : "Recommend"}
+              Remove recommendation
             </button>
-            {hasRecommended && !isEnrichingRecommend && (
-              <button
-                type="button"
-                onClick={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  setIsEnrichingRecommend(true);
-                }}
-                className="text-[10px] text-white/50 underline decoration-white/25 hover:text-white/70"
-              >
-                Add a review
-              </button>
-            )}
-          </div>
-          {isEnrichingRecommend && (
-            <div
-              className="mt-2 space-y-1.5 rounded-lg border border-white/10 bg-black/30 p-2"
-              onClick={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-              }}
+            <button
+              type="button"
+              onClick={submitEnrichedRecommendation}
+              disabled={isSubmittingEnrich}
+              className="rounded-full bg-orange-400 px-3 py-1.5 text-xs font-black text-[#1a0d08] disabled:opacity-60"
             >
-              <textarea
-                value={recommendComment}
-                onChange={(event) => setRecommendComment(event.target.value)}
-                placeholder="Why do you recommend this dish? (optional)"
-                className="min-h-[52px] w-full rounded border border-white/20 bg-black/40 px-2 py-1 text-[11px] text-white placeholder:text-white/40"
-              />
-              <div className="flex items-center gap-1.5">
-                <label className="text-[10px] text-white/60" htmlFor={`rating-${item.id}`}>
-                  Rating
-                </label>
-                <select
-                  id={`rating-${item.id}`}
-                  value={recommendRating}
-                  onChange={(event) => setRecommendRating(event.target.value)}
-                  className="rounded border border-white/20 bg-black/40 px-1.5 py-0.5 text-[11px] text-white"
-                >
-                  <option value="5">5</option>
-                  <option value="4">4</option>
-                  <option value="3">3</option>
-                  <option value="2">2</option>
-                  <option value="1">1</option>
-                </select>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(event) => setRecommendPhoto(event.target.files?.[0] || null)}
-                  className="flex-1 text-[9px] text-white/70"
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    submitEnrichedRecommendation();
-                  }}
-                  disabled={isSubmittingEnrich}
-                  className="rounded-full bg-orange-400 px-2.5 py-1 text-[10px] font-black text-[#1a0d08] disabled:opacity-60"
-                >
-                  {isSubmittingEnrich ? "Submitting…" : "Submit"}
-                </button>
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    setIsEnrichingRecommend(false);
-                  }}
-                  className="text-[10px] text-white/55 hover:text-white/75"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
+              {isSubmittingEnrich ? "Saving…" : "Save"}
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Link>
   );
 }
@@ -7339,12 +7338,53 @@ function NearbyRestaurantCard({
   const recommend = async (event: React.MouseEvent) => {
     event.preventDefault();
     event.stopPropagation();
-    if (isRecommended) return;
+    if (isRecommended) {
+      setIsRecommendDialogOpen(true);
+      return;
+    }
     setIsRecommended(true);
     try {
       await sendRestaurantAction("recommend", true);
+      setIsRecommendDialogOpen(true);
     } catch {
       setIsRecommended(false);
+    }
+  };
+
+  const [isRecommendDialogOpen, setIsRecommendDialogOpen] = useState(false);
+  const [restaurantRecommendComment, setRestaurantRecommendComment] = useState("");
+  const [restaurantRecommendRating, setRestaurantRecommendRating] = useState("5");
+  const [isSubmittingRestaurantRecommend, setIsSubmittingRestaurantRecommend] = useState(false);
+
+  const submitRestaurantRecommendationDetails = async () => {
+    setIsSubmittingRestaurantRecommend(true);
+    try {
+      const response = await fetch("/api/reviews", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          restaurantId,
+          rating: Number(restaurantRecommendRating),
+          comment: restaurantRecommendComment.trim() || null,
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        toast({
+          variant: "destructive",
+          description:
+            String(data?.message || "").trim() || "Couldn't save your recommendation.",
+        });
+        return;
+      }
+      toast({ description: "Recommendation saved." });
+      setRestaurantRecommendComment("");
+      setIsRecommendDialogOpen(false);
+    } catch {
+      toast({ variant: "destructive", description: "Couldn't save your recommendation." });
+    } finally {
+      setIsSubmittingRestaurantRecommend(false);
     }
   };
 
@@ -7502,6 +7542,52 @@ function NearbyRestaurantCard({
           </div>
         </div>
       </div>
+      <Dialog open={isRecommendDialogOpen} onOpenChange={setIsRecommendDialogOpen}>
+        <DialogContent
+          className="max-w-sm"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <DialogHeader>
+            <DialogTitle>{name}</DialogTitle>
+            <DialogDescription>
+              Tell us why you recommend it, or just close this - your recommendation is already saved.
+            </DialogDescription>
+          </DialogHeader>
+          <textarea
+            value={restaurantRecommendComment}
+            onChange={(event) => setRestaurantRecommendComment(event.target.value)}
+            placeholder="What makes this place worth it? (optional)"
+            className="min-h-[72px] w-full rounded border border-[color:var(--border-subtle)] bg-black/20 px-2 py-1.5 text-sm"
+          />
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-[color:var(--text-muted)]" htmlFor={`restaurant-rating-${restaurantId}`}>
+              Rating
+            </label>
+            <select
+              id={`restaurant-rating-${restaurantId}`}
+              value={restaurantRecommendRating}
+              onChange={(event) => setRestaurantRecommendRating(event.target.value)}
+              className="rounded border border-[color:var(--border-subtle)] bg-black/20 px-1.5 py-1 text-sm"
+            >
+              <option value="5">5</option>
+              <option value="4">4</option>
+              <option value="3">3</option>
+              <option value="2">2</option>
+              <option value="1">1</option>
+            </select>
+          </div>
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={submitRestaurantRecommendationDetails}
+              disabled={isSubmittingRestaurantRecommend}
+              className="rounded-full bg-orange-400 px-3 py-1.5 text-xs font-black text-[#1a0d08] disabled:opacity-60"
+            >
+              {isSubmittingRestaurantRecommend ? "Saving…" : "Save"}
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Link>
   );
 }
