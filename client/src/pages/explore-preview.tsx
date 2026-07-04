@@ -22,6 +22,7 @@ import {
   MessageCircle,
   Minimize2,
   Navigation2,
+  Star,
   Tag,
   TrendingUp,
   Users,
@@ -6674,6 +6675,52 @@ function LocalMenuItemCard({
       ]
     : [];
 
+  const [isRecommending, setIsRecommending] = useState(false);
+  const [recommendComment, setRecommendComment] = useState("");
+  const [recommendRating, setRecommendRating] = useState("5");
+  const [recommendPhoto, setRecommendPhoto] = useState<File | null>(null);
+  const [isSubmittingRecommend, setIsSubmittingRecommend] = useState(false);
+  const [hasRecommended, setHasRecommended] = useState(false);
+  const [recommendStatus, setRecommendStatus] = useState<string | null>(null);
+
+  const submitMenuItemRecommendation = async () => {
+    setIsSubmittingRecommend(true);
+    try {
+      const formData = new FormData();
+      formData.append("comment", recommendComment);
+      formData.append("rating", recommendRating);
+      if (recommendPhoto) formData.append("image", recommendPhoto);
+      const res = await fetch(
+        apiUrl(`/api/menu-items/${encodeURIComponent(item.id)}/recommend`),
+        { method: "POST", credentials: "include", body: formData },
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        if (res.status === 401) {
+          window.location.href = `/login?redirect=${encodeURIComponent("/scout")}`;
+          return;
+        }
+        setRecommendStatus(
+          String(data?.message || "").trim() || "Unable to submit right now.",
+        );
+        return;
+      }
+      setHasRecommended(true);
+      setRecommendStatus(
+        data?.photoStatus?.status === "pending"
+          ? "Recommended. Photo is pending review."
+          : "Recommended.",
+      );
+      setRecommendComment("");
+      setRecommendPhoto(null);
+      setIsRecommending(false);
+    } catch {
+      setRecommendStatus("Unable to submit right now.");
+    } finally {
+      setIsSubmittingRecommend(false);
+    }
+  };
+
   useEffect(() => {
     trackLocalMenuItemEngagement({
       eventName: "menu_item_impression",
@@ -6774,6 +6821,99 @@ function LocalMenuItemCard({
             ))}
         </div>
         <OwnerOperationalActions actions={actions} />
+        <div
+          className="mt-2 border-t border-white/8 pt-2"
+          onClick={(event) => event.preventDefault()}
+        >
+          <div className="flex items-center justify-between gap-2">
+            <button
+              type="button"
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                if (!currentUserId) {
+                  window.location.href = `/login?redirect=${encodeURIComponent("/scout")}`;
+                  return;
+                }
+                setIsRecommending((value) => !value);
+              }}
+              disabled={hasRecommended}
+              className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide ${
+                hasRecommended ? "text-emerald-300" : "text-orange-300 hover:text-orange-200"
+              }`}
+            >
+              <Star className="h-3 w-3" aria-hidden="true" />
+              {hasRecommended ? "Recommended" : "Recommend"}
+            </button>
+            {recommendStatus && !isRecommending && (
+              <span className="text-[10px] text-white/50">{recommendStatus}</span>
+            )}
+          </div>
+          {isRecommending && (
+            <div
+              className="mt-2 space-y-1.5 rounded-lg border border-white/10 bg-black/30 p-2"
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+              }}
+            >
+              <textarea
+                value={recommendComment}
+                onChange={(event) => setRecommendComment(event.target.value)}
+                placeholder="Why do you recommend this dish? (optional)"
+                className="min-h-[52px] w-full rounded border border-white/20 bg-black/40 px-2 py-1 text-[11px] text-white placeholder:text-white/40"
+              />
+              <div className="flex items-center gap-1.5">
+                <label className="text-[10px] text-white/60" htmlFor={`rating-${item.id}`}>
+                  Rating
+                </label>
+                <select
+                  id={`rating-${item.id}`}
+                  value={recommendRating}
+                  onChange={(event) => setRecommendRating(event.target.value)}
+                  className="rounded border border-white/20 bg-black/40 px-1.5 py-0.5 text-[11px] text-white"
+                >
+                  <option value="5">5</option>
+                  <option value="4">4</option>
+                  <option value="3">3</option>
+                  <option value="2">2</option>
+                  <option value="1">1</option>
+                </select>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(event) => setRecommendPhoto(event.target.files?.[0] || null)}
+                  className="flex-1 text-[9px] text-white/70"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    submitMenuItemRecommendation();
+                  }}
+                  disabled={isSubmittingRecommend}
+                  className="rounded-full bg-orange-400 px-2.5 py-1 text-[10px] font-black text-[#1a0d08] disabled:opacity-60"
+                >
+                  {isSubmittingRecommend ? "Submitting…" : "Submit"}
+                </button>
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setIsRecommending(false);
+                  }}
+                  className="text-[10px] text-white/55 hover:text-white/75"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </Link>
   );
@@ -7012,12 +7152,6 @@ function NearbyRestaurantCard({
       isOpen: true,
     }),
   ];
-  const rankingReason =
-    communityUpdates.length > 0
-      ? `Community activity: ${communityUpdates.slice(0, 2).join(" + ")}`
-      : distLabel
-        ? "Nearby now"
-        : "Open near you";
 
   const sendRestaurantAction = async (
     action: "favorite" | "follow" | "recommend",
@@ -7117,7 +7251,19 @@ function NearbyRestaurantCard({
       </div>
       {/* Info */}
       <div className="px-3 py-2.5">
-        <p className="text-white font-semibold text-sm leading-snug truncate">{name}</p>
+        <div className="flex items-baseline justify-between gap-2">
+          <p className="min-w-0 truncate text-white font-semibold text-sm leading-snug">{name}</p>
+          {statusLabels.length > 0 && (
+            <span className="inline-flex shrink-0 items-center gap-1 text-[9px] font-bold uppercase tracking-wide text-orange-200/85">
+              <span
+                className="h-1.5 w-1.5 rounded-full bg-orange-400"
+                style={{ boxShadow: "0 0 6px rgba(251,146,60,0.8)" }}
+                aria-hidden="true"
+              />
+              {statusLabels[0]}
+            </span>
+          )}
+        </div>
         <div className="mt-0.5 flex items-center gap-1.5 flex-wrap">
           {cuisine && (
             <span className="text-orange-300/80 text-[11px]">{cuisine}</span>
@@ -7137,112 +7283,92 @@ function NearbyRestaurantCard({
         </div>
         {menuPreview.length > 0 && (
           <div
-            className="mt-2 rounded-xl bg-orange-300/10 ring-1 ring-orange-300/20 px-2.5 py-2"
+            className="mt-2 flex items-center gap-2 border-t border-white/8 pt-2"
             data-testid="scout-menu-preview"
           >
-            <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-orange-200">
-              <Utensils className="h-3 w-3" aria-hidden="true" />
-              Menu preview
+            <div className="h-9 w-9 shrink-0 overflow-hidden rounded-lg relative">
+              <ScoutCardMedia
+                imageUrl={menuPreview[0].imageUrl || null}
+                fallbackIcon={<Utensils className="h-3 w-3 text-white/70" aria-hidden="true" />}
+                fallbackTestId="scout-restaurant-featured-item-fallback"
+                imageClassName="absolute inset-0 h-full w-full object-cover"
+                categoryPhoto={getDishCategoryPhoto(menuPreview[0].name, menuPreview[0].description)}
+              />
             </div>
-            <div className="mt-1.5 space-y-1">
-              {menuPreview.slice(0, 2).map((item) => {
-                const price = formatPrice(item.priceCents);
-                return (
-                  <div
-                    key={item.id}
-                    className="flex items-baseline justify-between gap-2 text-[11px]"
-                  >
-                    <span className="min-w-0 truncate text-white/82">
-                      {item.name}
-                    </span>
-                    {price && (
-                      <span className="shrink-0 text-orange-200/85">
-                        {price}
-                      </span>
-                    )}
-                  </div>
-                );
-              })}
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[11px] font-semibold text-white/85">{menuPreview[0].name}</p>
+              <p className="text-[9px] font-bold uppercase tracking-wide text-orange-200/70">Featured item</p>
             </div>
+            {formatPrice(menuPreview[0].priceCents) && (
+              <span className="shrink-0 text-[11px] font-semibold text-orange-200/85">
+                {formatPrice(menuPreview[0].priceCents)}
+              </span>
+            )}
           </div>
         )}
-        <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] font-bold uppercase tracking-wide">
-          {statusLabels.slice(0, 3).map((label) => (
-            <span
-              key={label}
-              className={getFreshnessBadgeClass(
-                {
-                  kind: isFoodTruckEntity ? "truck" : "restaurant",
-                  updatedAt: readStringField(restaurant, ["updatedAt", "lastUpdatedAt"]),
-                  confirmedAt: readStringField(restaurant, ["confirmedAt", "lastConfirmedAt"]),
-                  hasDeal: dealCount > 0,
-                  hasMenu: menuPreview.length > 0,
-                  hasCommunityUpdate: communityUpdates.length > 0,
-                  hasDistance: Boolean(distLabel),
-                  isOpen: true,
-                },
-                label,
-              )}
-            >
-              {label}
-            </span>
-          ))}
-          {statusLabels.length === 0 ? (
-            <span className="rounded-full bg-white/8 px-2 py-1 text-white/65">
-              Open near you
-            </span>
-          ) : null}
-        </div>
-        <p className="mt-2 text-[10px] font-semibold text-white/45">
-          {rankingReason}
-        </p>
         <OwnerOperationalActions actions={ownerActions} />
-        <div
-          className="mt-2 grid grid-cols-3 gap-1.5 text-[10px] font-bold"
-          aria-label={`${name} quick actions`}
-        >
-          <button
-            type="button"
-            onClick={toggleFavorite}
-            disabled={pendingAction === "favorite"}
-            className={`inline-flex items-center justify-center gap-1 rounded-full px-2 py-1.5 transition ${
-              isFavorite
-                ? "bg-orange-300 text-[#1a0d08]"
-                : "bg-white/8 text-white/70 hover:bg-white/12"
-            }`}
-            aria-pressed={isFavorite}
-          >
-            <Bookmark className="h-3 w-3" aria-hidden="true" />
-            Save
-          </button>
-          <button
-            type="button"
-            onClick={toggleFollow}
-            disabled={pendingAction === "follow"}
-            className={`inline-flex items-center justify-center gap-1 rounded-full px-2 py-1.5 transition ${
-              isFollowed
-                ? "bg-white text-[#1a0d08]"
-                : "bg-white/8 text-white/70 hover:bg-white/12"
-            }`}
-            aria-pressed={isFollowed}
-          >
-            <Heart className="h-3 w-3" aria-hidden="true" />
-            Follow
-          </button>
-          <button
-            type="button"
-            onClick={recommend}
-            disabled={pendingAction === "recommend" || isRecommended}
-            className={`inline-flex items-center justify-center gap-1 rounded-full px-2 py-1.5 transition ${
-              isRecommended
-                ? "bg-emerald-300 text-[#1a0d08]"
-                : "bg-white/8 text-white/70 hover:bg-white/12"
-            }`}
-            aria-pressed={isRecommended}
-          >
-            <Heart className="h-3 w-3" aria-hidden="true" />
-            {isRecommended ? "Supported" : "Support"}
-          </button>
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5" aria-hidden={communityUpdates.length === 0}>
+            {favoriteCount > 0 && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-mono text-white/45">
+                <Bookmark className="h-2.5 w-2.5" aria-hidden="true" />
+                {favoriteCount}
+              </span>
+            )}
+            {followCount > 0 && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-mono text-white/45">
+                <Heart className="h-2.5 w-2.5" aria-hidden="true" />
+                {followCount}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-1.5" aria-label={`${name} quick actions`}>
+            <button
+              type="button"
+              onClick={toggleFavorite}
+              disabled={pendingAction === "favorite"}
+              className={`inline-flex h-7 w-7 items-center justify-center rounded-full transition ${
+                isFavorite
+                  ? "bg-orange-300 text-[#1a0d08]"
+                  : "bg-white/8 text-white/70 hover:bg-white/12"
+              }`}
+              aria-pressed={isFavorite}
+              aria-label="Save"
+              title="Save"
+            >
+              <Bookmark className="h-3 w-3" aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              onClick={toggleFollow}
+              disabled={pendingAction === "follow"}
+              className={`inline-flex h-7 w-7 items-center justify-center rounded-full transition ${
+                isFollowed
+                  ? "bg-white text-[#1a0d08]"
+                  : "bg-white/8 text-white/70 hover:bg-white/12"
+              }`}
+              aria-pressed={isFollowed}
+              aria-label="Follow"
+              title="Follow"
+            >
+              <Heart className="h-3 w-3" aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              onClick={recommend}
+              disabled={pendingAction === "recommend" || isRecommended}
+              className={`inline-flex h-7 w-7 items-center justify-center rounded-full transition ${
+                isRecommended
+                  ? "bg-emerald-300 text-[#1a0d08]"
+                  : "bg-white/8 text-white/70 hover:bg-white/12"
+              }`}
+              aria-pressed={isRecommended}
+              aria-label={isRecommended ? "Supported" : "Support"}
+              title={isRecommended ? "Supported" : "Support"}
+            >
+              <Star className="h-3 w-3" aria-hidden="true" />
+            </button>
+          </div>
         </div>
       </div>
     </Link>
