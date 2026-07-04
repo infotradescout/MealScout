@@ -54,7 +54,14 @@ import { isAuthenticated, isStaffOrAdmin } from "../unifiedAuth";
 import { storage } from "../storage";
 import { parseMenuCsv } from "../utils/menuCsvParser";
 import { parsePdfMenuWithAi } from "../utils/menuPdfParser";
-import { rehostImportedImages } from "../utils/menuImageIngest";
+import {
+  rehostImportedImages,
+  rehostImageBuffers,
+} from "../utils/menuImageIngest";
+import {
+  parseImageMenuWithAi,
+  isClaudeSupportedImage,
+} from "../utils/menuPhotoParser";
 import { isCloudinaryConfigured, upload as imageUpload, uploadToCloudinary } from "../imageUpload";
 
 // ── Multer config (memory storage – files processed in-process) ───────────────
@@ -1764,6 +1771,81 @@ export function registerMenuRoutes(app: Express) {
         .where(eq(menus.id, menuId));
 
       res.json({ imported: imported.length, skipped, errors });
+    }),
+  );
+
+  /**
+   * POST /api/owner/menus/:menuId/import/photo
+   * Extract menu items from photos of a menu board / printed menu and/or dish
+   * photos via AI vision. Dish photos are re-hosted and attached as item images
+   * so the imported menu can include photos, not just text.
+   */
+  app.post(
+    "/api/owner/menus/:menuId/import/photo",
+    isAuthenticated,
+    canManageMenu,
+    imageUpload.array("files", 8),
+    wrap(async (req, res) => {
+      const { menuId } = req.params;
+      const menu = await assertOwnsMenu(req.user, menuId);
+
+      const files = (req.files as any[]) || [];
+      const usable = files.filter((f) => isClaudeSupportedImage(f.mimetype));
+      if (usable.length === 0) {
+        return res.status(400).json({
+          message: "Upload at least one JPEG, PNG, GIF, or WebP photo.",
+        });
+      }
+
+      const { imported, skipped, errors } = await parseImageMenuWithAi(
+        usable.map((f) => ({ buffer: f.buffer, mediaType: f.mimetype })),
+        menuId,
+        menu.restaurantId,
+      );
+
+      // Re-host uploaded photos so a dish photo can back its menu item. The
+      // hostedUrls array is aligned to `usable`, matching the parser's
+      // image_index values.
+      const hostedUrls = await rehostImageBuffers(
+        usable.map((f) => f.buffer),
+        "menu-items",
+      );
+      for (const item of imported) {
+        if (item.imageIndex != null && hostedUrls[item.imageIndex]) {
+          item.imageUrl = hostedUrls[item.imageIndex];
+        }
+      }
+
+      // Drop the transient imageIndex before inserting.
+      const rows = imported.map(({ imageIndex, ...rest }) => rest);
+      if (rows.length > 0) {
+        await db.insert(menuItems).values(rows);
+      }
+
+      await db.insert(menuImportLogs).values({
+        restaurantId: menu.restaurantId,
+        importedByUserId: req.user.id,
+        source: "photo",
+        fileName: usable
+          .map((f) => f.originalname)
+          .join(", ")
+          .slice(0, 500),
+        itemsImported: rows.length,
+        itemsSkipped: skipped,
+        errors: errors as any,
+        status: errors.length > 0 && rows.length === 0 ? "failed" : "complete",
+      });
+
+      await db
+        .update(menus)
+        .set({
+          importSource: "photo",
+          importedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(menus.id, menuId));
+
+      res.json({ imported: rows.length, skipped, errors });
     }),
   );
 

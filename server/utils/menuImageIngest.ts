@@ -125,3 +125,25 @@ export async function rehostImportedImages<
     Array.from({ length: Math.min(concurrency, targets.length) }, worker),
   );
 }
+
+/**
+ * Re-host a batch of already-in-memory image buffers (e.g. uploaded menu/dish
+ * photos) to Cloudinary, preserving order. Returns null for each entry when
+ * Cloudinary is unconfigured or an upload fails, so callers can fall back.
+ */
+export async function rehostImageBuffers(
+  buffers: Buffer[],
+  folder = "menu-items",
+): Promise<(string | null)[]> {
+  if (!isCloudinaryConfigured()) return buffers.map(() => null);
+  return Promise.all(
+    buffers.map(async (buffer) => {
+      try {
+        const result = await uploadToCloudinary(buffer, folder);
+        return result.secureUrl;
+      } catch {
+        return null;
+      }
+    }),
+  );
+}
