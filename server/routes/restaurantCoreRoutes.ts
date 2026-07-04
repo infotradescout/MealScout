@@ -859,6 +859,25 @@ export function registerRestaurantCoreRoutes(
     }
   });
 
+  // Follow is no longer a separate manual action on restaurant cards -
+  // favoriting or recommending a restaurant implies wanting updates from it.
+  // Best-effort: a follow failure should never block the favorite/recommend
+  // response, and an existing follow (23505) is not an error here.
+  async function autoFollowRestaurant(userId: string, restaurantId: string) {
+    try {
+      const followData = insertRestaurantFollowSchema.parse({
+        restaurantId,
+        userId,
+      });
+      await storage.createRestaurantFollow(followData);
+      void trackEngagement("restaurant_follow_added", userId, restaurantId);
+    } catch (error: any) {
+      if (error?.code !== "23505") {
+        console.error("Error auto-following restaurant:", error);
+      }
+    }
+  }
+
   app.post(
     "/api/restaurants/:restaurantId/favorite",
     isAuthenticated,
@@ -901,6 +920,7 @@ export function registerRestaurantCoreRoutes(
           userId,
           restaurantId,
         );
+        await autoFollowRestaurant(userId, restaurantId);
         res.json(favorite);
       } catch (error: any) {
         console.error("Error adding restaurant favorite:", error);
@@ -1092,6 +1112,7 @@ export function registerRestaurantCoreRoutes(
 
         const recommendation =
           await storage.createRestaurantUserRecommendation(recommendationData);
+        await autoFollowRestaurant(userId, restaurantId);
 
         // Bare recommend = 1 point, matching dish-level recommend. Adding
         // detail via POST /api/reviews (the pre-existing endpoint this

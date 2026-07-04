@@ -7279,11 +7279,16 @@ function NearbyRestaurantCard({
     event.preventDefault();
     event.stopPropagation();
     const nextState = !isFavorite;
+    const wasFollowed = isFollowed;
     setIsFavorite(nextState);
+    // Favoriting implies following; the server does this too, so mirror it
+    // optimistically. Un-favoriting does not auto-unfollow.
+    if (nextState) setIsFollowed(true);
     try {
       await sendRestaurantAction("favorite", nextState);
     } catch (error) {
       setIsFavorite(!nextState);
+      if (nextState) setIsFollowed(wasFollowed);
       if (nextState) {
         toast({
           variant: "destructive",
@@ -7313,12 +7318,16 @@ function NearbyRestaurantCard({
       setIsRecommendDialogOpen(true);
       return;
     }
+    const wasFollowed = isFollowed;
     setIsRecommended(true);
+    // Recommending implies following, same as favoriting above.
+    setIsFollowed(true);
     try {
       await sendRestaurantAction("recommend", true);
       setIsRecommendDialogOpen(true);
     } catch {
       setIsRecommended(false);
+      setIsFollowed(wasFollowed);
     }
   };
 
@@ -7480,21 +7489,21 @@ function NearbyRestaurantCard({
             >
               <Bookmark className="h-3 w-3" aria-hidden="true" />
             </button>
-            <button
-              type="button"
-              onClick={toggleFollow}
-              disabled={pendingAction === "follow"}
-              className={`inline-flex h-7 w-7 items-center justify-center rounded-full transition ${
-                isFollowed
-                  ? "bg-white text-[#1a0d08]"
-                  : "bg-white/8 text-white/70 hover:bg-white/12"
-              }`}
-              aria-pressed={isFollowed}
-              aria-label="Follow"
-              title="Follow"
-            >
-              <Heart className="h-3 w-3" aria-hidden="true" />
-            </button>
+            {isFollowed && (
+              // Following is now a side effect of favoriting/recommending, not
+              // a separate manual action - this only ever removes a follow.
+              <button
+                type="button"
+                onClick={toggleFollow}
+                disabled={pendingAction === "follow"}
+                className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white text-[#1a0d08] transition hover:bg-white/85"
+                aria-pressed={true}
+                aria-label="Following - tap to unfollow"
+                title="Following - tap to unfollow"
+              >
+                <Heart className="h-3 w-3 fill-current" aria-hidden="true" />
+              </button>
+            )}
             <button
               type="button"
               onClick={recommend}
