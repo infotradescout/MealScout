@@ -7348,6 +7348,43 @@ function NearbyRestaurantCard({
     }
   };
 
+  const [isEnrichingRestaurantReview, setIsEnrichingRestaurantReview] = useState(false);
+  const [restaurantReviewComment, setRestaurantReviewComment] = useState("");
+  const [restaurantReviewRating, setRestaurantReviewRating] = useState("5");
+  const [isSubmittingRestaurantReview, setIsSubmittingRestaurantReview] = useState(false);
+
+  const submitRestaurantReview = async () => {
+    setIsSubmittingRestaurantReview(true);
+    try {
+      const response = await fetch("/api/reviews", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          restaurantId,
+          rating: Number(restaurantReviewRating),
+          comment: restaurantReviewComment.trim() || null,
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        toast({
+          variant: "destructive",
+          description:
+            String(data?.message || "").trim() || "Couldn't submit your review.",
+        });
+        return;
+      }
+      toast({ description: "Review saved." });
+      setRestaurantReviewComment("");
+      setIsEnrichingRestaurantReview(false);
+    } catch {
+      toast({ variant: "destructive", description: "Couldn't submit your review." });
+    } finally {
+      setIsSubmittingRestaurantReview(false);
+    }
+  };
+
   return (
     <Link
       href={profileHref}
@@ -7501,6 +7538,83 @@ function NearbyRestaurantCard({
             </button>
           </div>
         </div>
+        {isRecommended && (
+          <div
+            className="mt-2 border-t border-white/8 pt-2"
+            onClick={(event) => event.preventDefault()}
+          >
+            {!isEnrichingRestaurantReview ? (
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setIsEnrichingRestaurantReview(true);
+                }}
+                className="text-[10px] text-white/50 underline decoration-white/25 hover:text-white/70"
+              >
+                Add a review
+              </button>
+            ) : (
+              <div
+                className="space-y-1.5 rounded-lg border border-white/10 bg-black/30 p-2"
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                }}
+              >
+                <textarea
+                  value={restaurantReviewComment}
+                  onChange={(event) => setRestaurantReviewComment(event.target.value)}
+                  placeholder="Why do you recommend this place? (optional)"
+                  className="min-h-[52px] w-full rounded border border-white/20 bg-black/40 px-2 py-1 text-[11px] text-white placeholder:text-white/40"
+                />
+                <div className="flex items-center gap-1.5">
+                  <label className="text-[10px] text-white/60" htmlFor={`restaurant-rating-${restaurantId}`}>
+                    Rating
+                  </label>
+                  <select
+                    id={`restaurant-rating-${restaurantId}`}
+                    value={restaurantReviewRating}
+                    onChange={(event) => setRestaurantReviewRating(event.target.value)}
+                    className="rounded border border-white/20 bg-black/40 px-1.5 py-0.5 text-[11px] text-white"
+                  >
+                    <option value="5">5</option>
+                    <option value="4">4</option>
+                    <option value="3">3</option>
+                    <option value="2">2</option>
+                    <option value="1">1</option>
+                  </select>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      submitRestaurantReview();
+                    }}
+                    disabled={isSubmittingRestaurantReview}
+                    className="rounded-full bg-orange-400 px-2.5 py-1 text-[10px] font-black text-[#1a0d08] disabled:opacity-60"
+                  >
+                    {isSubmittingRestaurantReview ? "Submitting…" : "Submit"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      setIsEnrichingRestaurantReview(false);
+                    }}
+                    className="text-[10px] text-white/55 hover:text-white/75"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </Link>
   );
