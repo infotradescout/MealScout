@@ -6,7 +6,7 @@
  * Expected columns (case-insensitive header matching):
  *   name (required), price (required), description, category,
  *   sku, calories, protein, carbs, fat, dietary_tags, allergens,
- *   available_from, available_to
+ *   available_from, available_to, image (image URL)
  */
 
 import { parseTabularFile } from "./tabularImport";
@@ -18,6 +18,7 @@ type ParsedMenuItem = {
   description: string | null;
   priceCents: number;
   sku: string | null;
+  imageUrl: string | null;
   calories: number | null;
   proteinG: string | null;
   carbsG: string | null;
@@ -121,6 +122,16 @@ export async function parseMenuCsv(
     const description =
       col(row, "description", "desc", "details", "notes") || null;
     const sku = col(row, "sku", "item_sku", "product_code") || null;
+    const imageUrl =
+      col(
+        row,
+        "image",
+        "image_url",
+        "imageurl",
+        "photo",
+        "photo_url",
+        "image_link",
+      ) || null;
     const calories = parseIntOrNull(col(row, "calories", "cals"));
     const proteinG = parseDecimal(col(row, "protein", "protein_g"));
     const carbsG = parseDecimal(col(row, "carbs", "carbs_g", "carbohydrates"));
@@ -139,6 +150,7 @@ export async function parseMenuCsv(
       description,
       priceCents,
       sku,
+      imageUrl,
       calories,
       proteinG,
       carbsG,

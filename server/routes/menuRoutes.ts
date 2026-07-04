@@ -54,6 +54,7 @@ import { isAuthenticated, isStaffOrAdmin } from "../unifiedAuth";
 import { storage } from "../storage";
 import { parseMenuCsv } from "../utils/menuCsvParser";
 import { parsePdfMenuWithAi } from "../utils/menuPdfParser";
+import { rehostImportedImages } from "../utils/menuImageIngest";
 import { isCloudinaryConfigured, upload as imageUpload, uploadToCloudinary } from "../imageUpload";
 
 // ── Multer config (memory storage – files processed in-process) ───────────────
@@ -1606,6 +1607,9 @@ export function registerMenuRoutes(app: Express) {
         menu.restaurantId,
       );
 
+      // Download + re-host any item images so they persist on MealScout.
+      await rehostImportedImages(imported);
+
       // Insert imported items in a transaction
       if (imported.length > 0) {
         await db.insert(menuItems).values(imported);
@@ -1731,6 +1735,9 @@ export function registerMenuRoutes(app: Express) {
         menuId,
         menu.restaurantId,
       );
+
+      // Download + re-host any item images so they persist on MealScout.
+      await rehostImportedImages(imported);
 
       if (imported.length > 0) {
         await db.insert(menuItems).values(imported);
@@ -2372,6 +2379,7 @@ type NormalizedImportResult = {
     description: string | null;
     priceCents: number;
     itemType: "food" | "merchandise";
+    imageUrl: string | null;
     dietaryTags: string[];
     allergens: string[];
     isAvailable: boolean;
@@ -2439,6 +2447,29 @@ function normalizeExternalMenuData(
         ? row.allergens
         : [];
 
+      // Delivery/POS exports carry item photos under many field names, and
+      // sometimes as an array of strings or {url} objects.
+      const rawImages = Array.isArray(row.images)
+        ? row.images
+        : Array.isArray(row.photos)
+          ? row.photos
+          : [];
+      const firstImage = rawImages[0];
+      const imageUrl =
+        String(
+          row.imageUrl ||
+            row.image_url ||
+            row.imageURL ||
+            row.image ||
+            row.photo ||
+            row.photoUrl ||
+            row.photo_url ||
+            (firstImage && typeof firstImage === "object"
+              ? firstImage.url || firstImage.src
+              : firstImage) ||
+            "",
+        ).trim() || null;
+
       imported.push({
         menuId,
         restaurantId,
@@ -2454,6 +2485,7 @@ function normalizeExternalMenuData(
             .toLowerCase() === "merch"
             ? "merchandise"
             : "food",
+        imageUrl,
         dietaryTags,
         allergens,
         isAvailable: true,

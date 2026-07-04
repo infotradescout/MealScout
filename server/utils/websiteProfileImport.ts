@@ -36,7 +36,7 @@ function isBlockedIp(ip: string): boolean {
   return true; // unrecognized format, refuse rather than guess
 }
 
-async function assertPublicHostname(hostname: string): Promise<void> {
+export async function assertPublicHostname(hostname: string): Promise<void> {
   const lower = hostname.toLowerCase();
   if (lower === "localhost" || lower.endsWith(".local")) {
     throw new WebsiteImportError("That link isn't reachable.");
