@@ -346,6 +346,12 @@ export const HOST_ONBOARDING_COPY = {
       websiteImportButtonPending: "Reading site...",
       websiteImportHelp:
         "We'll pull in your name, description, and social links so you don't have to retype them.",
+      websiteImportLeadTitle: "Have a website? Autofill your business details",
+      websiteImportLeadHelp:
+        "Paste your website link and we'll pull in your name, address, phone, and social links. We'll add them to your profile right after you create your account.",
+      websiteImportCapturedPrefix: "Captured from your site:",
+      websiteImportCapturedSuffix:
+        "We'll fill these into your profile after you sign up.",
     },
   },
 

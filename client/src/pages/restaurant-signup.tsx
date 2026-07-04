@@ -245,29 +245,13 @@ export default function RestaurantSignup() {
     }
   }, [isAuthenticated, user, setLocation]);
 
-  // A logged-out direct visit to /restaurant-signup used to show a second,
-  // separately-built account-creation form. Send it into the single shared
-  // signup entry point instead - preserve businessType, and skip this
-  // redirect for the truck-claim-with-specific-listing case (?q=...) or a
-  // post-verification bounce-back (?source=post-verification, which needs
-  // this page's own "Log in" toggle for a user who hasn't logged in yet).
-  useEffect(() => {
-    if (isLoading || isAuthenticated) return;
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("q") || params.get("source")) return;
-    const businessType = params.get("businessType");
-    const target = new URLSearchParams({ role: "business" });
-    if (
-      businessType === "food_truck" ||
-      businessType === "restaurant" ||
-      businessType === "bar" ||
-      businessType === "caterer" ||
-      businessType === "private_chef"
-    ) {
-      target.set("businessType", businessType);
-    }
-    setLocation(`/customer-signup?${target.toString()}`);
-  }, [isLoading, isAuthenticated, setLocation]);
+  // Logged-out visitors stay on this page so they can lead with the
+  // "import from your website" step, which prefills the business profile
+  // draft before they create an account. Account creation still happens here
+  // via the signup form; the imported details persist in the restaurant draft
+  // (RESTAURANT_DRAFT_KEY) and are applied once the owner returns authenticated
+  // and verified. The restaurant itself is created on that authenticated
+  // submit (the server ignores restaurant data for unauthenticated signups).
 
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -283,6 +267,7 @@ export default function RestaurantSignup() {
   const [claimAutoSearch, setClaimAutoSearch] = useState(false);
   const [licenseNumber, setLicenseNumber] = useState("");
   const [websiteImportLoading, setWebsiteImportLoading] = useState(false);
+  const [importedFields, setImportedFields] = useState<string[]>([]);
   const [onboardingState, dispatchOnboarding] = useReducer(
     hostOnboardingTransition,
     {
@@ -947,21 +932,26 @@ export default function RestaurantSignup() {
       }
 
       const filled: string[] = [];
-      const fillIfEmpty = (field: keyof RestaurantFormData, value?: string) => {
+      const fillIfEmpty = (
+        field: keyof RestaurantFormData,
+        value: string | undefined,
+        label: string,
+      ) => {
         if (!value) return;
         if (form.getValues(field)) return;
         form.setValue(field, value);
-        filled.push(field);
+        filled.push(label);
       };
 
-      fillIfEmpty("name", data.name);
-      fillIfEmpty("description", data.description);
-      fillIfEmpty("phone", data.phone);
-      fillIfEmpty("address", data.address);
-      fillIfEmpty("city", data.city);
-      fillIfEmpty("state", data.state);
-      fillIfEmpty("instagramUrl", data.instagramUrl);
-      fillIfEmpty("facebookPageUrl", data.facebookPageUrl);
+      fillIfEmpty("name", data.name, "business name");
+      fillIfEmpty("description", data.description, "description");
+      fillIfEmpty("phone", data.phone, "phone");
+      fillIfEmpty("address", data.address, "address");
+      fillIfEmpty("city", data.city, "city");
+      fillIfEmpty("state", data.state, "state");
+      fillIfEmpty("instagramUrl", data.instagramUrl, "Instagram");
+      fillIfEmpty("facebookPageUrl", data.facebookPageUrl, "Facebook");
+      setImportedFields(filled);
 
       toast({
         title: filled.length ? "Filled in from your website" : "Nothing new to fill in",
@@ -1120,6 +1110,48 @@ export default function RestaurantSignup() {
                     {COPY.unauth.divider.or}
                   </span>
                 </div>
+
+                {authMode === "signup" && (
+                  <div className="mb-4 rounded-xl border border-[color:var(--action-primary)] bg-[var(--bg-surface-muted)] p-4">
+                    <p className="text-sm font-semibold text-[color:var(--text-primary)]">
+                      {COPY.forms.restaurant.websiteImportLeadTitle}
+                    </p>
+                    <p className="mt-1 text-xs text-[color:var(--text-secondary)]">
+                      {COPY.forms.restaurant.websiteImportLeadHelp}
+                    </p>
+                    <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                      <Input
+                        type="url"
+                        inputMode="url"
+                        placeholder="https://your-business.com"
+                        value={form.watch("websiteUrl") || ""}
+                        onChange={(event) =>
+                          form.setValue("websiteUrl", event.target.value)
+                        }
+                        data-testid="input-import-website"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="shrink-0 border-[color:var(--border-subtle)]"
+                        disabled={websiteImportLoading}
+                        onClick={handleWebsiteImport}
+                        data-testid="button-import-website"
+                      >
+                        {websiteImportLoading
+                          ? COPY.forms.restaurant.websiteImportButtonPending
+                          : COPY.forms.restaurant.websiteImportButton}
+                      </Button>
+                    </div>
+                    {importedFields.length > 0 && (
+                      <p className="mt-2 text-xs font-medium text-[color:var(--text-primary)]">
+                        {COPY.forms.restaurant.websiteImportCapturedPrefix}{" "}
+                        {importedFields.join(", ")}.{" "}
+                        {COPY.forms.restaurant.websiteImportCapturedSuffix}
+                      </p>
+                    )}
+                  </div>
+                )}
 
                 {authMode === "signup" && (
                   <div className="mb-4 rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-4">
