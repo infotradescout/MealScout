@@ -56,8 +56,7 @@ export const HOST_ONBOARDING_COPY = {
     backHeaderTitle: "Business Registration",
     authenticatedBanner: {
       title: "Signed in: add a business profile to this account",
-      body:
-        "You are creating an additional business profile on your existing account. No new account is created.",
+      body: "You are creating an additional business profile on your existing account. No new account is created.",
       freeLine:
         "Free profile: parking pass + search visibility stay available.",
       paidLine:
@@ -158,10 +157,8 @@ export const HOST_ONBOARDING_COPY = {
       badge: "No payment required to create your profile.",
       freeProfileLine:
         "Profiles stay active for parking pass access and search visibility.",
-      trialLine:
-        "30-day full-feature trial starts from account creation.",
-      paidLine:
-        "After trial: $25/month to appear in feed/maps and post deals.",
+      trialLine: "30-day full-feature trial starts from account creation.",
+      paidLine: "After trial: $25/month to appear in feed/maps and post deals.",
       originalPrice: "$50",
       monthlyPrice: "$25",
       monthlySuffix: "/month",

@@ -184,11 +184,7 @@ export async function parseImageMenuWithAi(
 
     let imageIndex: number | null = null;
     const idx = Number(item.image_index);
-    if (
-      Number.isInteger(idx) &&
-      idx >= 0 &&
-      idx < usableImages.length
-    ) {
+    if (Number.isInteger(idx) && idx >= 0 && idx < usableImages.length) {
       imageIndex = idx;
     }
 

@@ -52,10 +52,12 @@ const restaurantSchema = z
     address: z.string().min(1, COPY.validation.restaurant.addressRequired),
     city: z.string().min(1, "City is required"),
     state: z.string().min(2, "State is required"),
-    phone: z.string().refine(
-      (value) => value.replace(/\D/g, "").length >= 10,
-      COPY.validation.restaurant.phoneInvalid,
-    ),
+    phone: z
+      .string()
+      .refine(
+        (value) => value.replace(/\D/g, "").length >= 10,
+        COPY.validation.restaurant.phoneInvalid,
+      ),
     businessType: z.enum(
       ["restaurant", "bar", "food_truck", "caterer", "private_chef"],
       {
@@ -111,10 +113,12 @@ const signupSchema = z
     email: z.string().email(COPY.validation.signup.emailInvalid),
     firstName: z.string().min(1, COPY.validation.signup.firstNameRequired),
     lastName: z.string().min(1, COPY.validation.signup.lastNameRequired),
-    phone: z.string().refine(
-      (value) => value.replace(/\D/g, "").length >= 10,
-      COPY.validation.signup.phoneInvalid,
-    ),
+    phone: z
+      .string()
+      .refine(
+        (value) => value.replace(/\D/g, "").length >= 10,
+        COPY.validation.signup.phoneInvalid,
+      ),
     phoneContactConsent: z.boolean().default(true),
     password: z
       .string()
@@ -206,7 +210,9 @@ const SIGNUP_TERMS_ACCEPTANCE_KEY =
 function getStoredSignupTermsAccepted() {
   if (typeof window === "undefined") return false;
   try {
-    return window.sessionStorage.getItem(SIGNUP_TERMS_ACCEPTANCE_KEY) === "true";
+    return (
+      window.sessionStorage.getItem(SIGNUP_TERMS_ACCEPTANCE_KEY) === "true"
+    );
   } catch {
     return false;
   }
@@ -921,7 +927,8 @@ export default function RestaurantSignup() {
     if (!url) {
       toast({
         title: "Add your website first",
-        description: "Paste your website link into the Website field, then try again.",
+        description:
+          "Paste your website link into the Website field, then try again.",
         variant: "destructive",
       });
       return;
@@ -960,7 +967,9 @@ export default function RestaurantSignup() {
       setImportedFields(filled);
 
       toast({
-        title: filled.length ? "Filled in from your website" : "Nothing new to fill in",
+        title: filled.length
+          ? "Filled in from your website"
+          : "Nothing new to fill in",
         description: filled.length
           ? "Review what we found below and adjust anything before submitting."
           : "We couldn't find extra details on that page, or every field is already filled in.",
@@ -1295,7 +1304,9 @@ export default function RestaurantSignup() {
                           <FormItem>
                             <FormLabel>
                               {COPY.forms.signup.phoneLabel}{" "}
-                              <span className="text-[color:var(--status-error)]">*</span>
+                              <span className="text-[color:var(--status-error)]">
+                                *
+                              </span>
                             </FormLabel>
                             <FormControl>
                               <Input
@@ -1876,7 +1887,9 @@ export default function RestaurantSignup() {
                         <FormItem>
                           <FormLabel data-testid="label-phone">
                             {COPY.forms.restaurant.phoneLabel}{" "}
-                            <span className="text-[color:var(--status-error)]">*</span>
+                            <span className="text-[color:var(--status-error)]">
+                              *
+                            </span>
                           </FormLabel>
                           <FormControl>
                             <Input

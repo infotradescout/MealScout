@@ -49,7 +49,16 @@ import {
   type MenuItemVariant,
   type MenuItemModifier,
 } from "@shared/schema";
-import { eq, and, asc, desc, inArray, isNotNull, isNull, sql } from "drizzle-orm";
+import {
+  eq,
+  and,
+  asc,
+  desc,
+  inArray,
+  isNotNull,
+  isNull,
+  sql,
+} from "drizzle-orm";
 import { isAuthenticated, isStaffOrAdmin } from "../unifiedAuth";
 import { distributedRateLimit } from "../middleware/distributedRateLimit";
 import { storage } from "../storage";
@@ -63,7 +72,11 @@ import {
   parseImageMenuWithAi,
   isSupportedMenuPhotoImage,
 } from "../utils/menuPhotoParser";
-import { isCloudinaryConfigured, upload as imageUpload, uploadToCloudinary } from "../imageUpload";
+import {
+  isCloudinaryConfigured,
+  upload as imageUpload,
+  uploadToCloudinary,
+} from "../imageUpload";
 
 // ── Multer config (memory storage – files processed in-process) ───────────────
 const upload = multer({
@@ -143,7 +156,10 @@ function toDateOrNull(value: unknown): Date | null {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
-function dollarsToCents(value: unknown, fallbackLabel?: unknown): number | null {
+function dollarsToCents(
+  value: unknown,
+  fallbackLabel?: unknown,
+): number | null {
   const direct = Number(value);
   if (Number.isFinite(direct)) return Math.round(direct * 100);
   const fromLabel = Number(String(fallbackLabel || "").replace(/[^0-9.]/g, ""));
@@ -180,7 +196,10 @@ function isRestaurantOpenNow(operatingHours: unknown): boolean | null {
   });
 }
 
-async function getOrderingSubscriptionReady(ownerId: string, restaurantId: string) {
+async function getOrderingSubscriptionReady(
+  ownerId: string,
+  restaurantId: string,
+) {
   const [activeSub] = await db
     .select({ id: restaurantSubscriptions.id })
     .from(restaurantSubscriptions)
@@ -235,7 +254,12 @@ async function buildOrderingReadiness(restaurantId: string) {
     ? await db
         .select({ id: menuItems.id })
         .from(menuItems)
-        .where(and(inArray(menuItems.menuId, menuIds), eq(menuItems.isAvailable, true)))
+        .where(
+          and(
+            inArray(menuItems.menuId, menuIds),
+            eq(menuItems.isAvailable, true),
+          ),
+        )
     : [];
 
   const acceptsCash = restaurantMenus.some((menu: any) => menu.acceptsCash);
@@ -285,7 +309,10 @@ async function buildOrderingReadiness(restaurantId: string) {
     },
     {
       id: "hours",
-      label: openNow === null ? "Operating hours are not set" : "Business is open now",
+      label:
+        openNow === null
+          ? "Operating hours are not set"
+          : "Business is open now",
       ok: openNow === true,
       blocking: openNow === false,
       action:
@@ -438,7 +465,10 @@ export function registerMenuRoutes(app: Express) {
     wrap(async (req, res) => {
       const limit = Math.max(
         1,
-        Math.min(100, Number.parseInt(String(req.query.limit || "50"), 10) || 50),
+        Math.min(
+          100,
+          Number.parseInt(String(req.query.limit || "50"), 10) || 50,
+        ),
       );
       const includeItems = String(req.query.includeItems || "") === "1";
       const status = String(req.query.status || "").trim();
@@ -484,7 +514,9 @@ export function registerMenuRoutes(app: Express) {
     isAuthenticated,
     isStaffOrAdmin,
     wrap(async (req, res) => {
-      const artifact = menuDraftArtifactSchema.parse(req.body?.artifact || req.body || {});
+      const artifact = menuDraftArtifactSchema.parse(
+        req.body?.artifact || req.body || {},
+      );
       const artifactPath =
         String(req.body?.artifactPath || artifact.artifactPath || "").trim() ||
         null;
@@ -496,7 +528,8 @@ export function registerMenuRoutes(app: Express) {
       }
 
       const unsafeEntry = artifact.entries.find(
-        (entry: any) => entry.productionApplied === true || entry.ownerApproved === true,
+        (entry: any) =>
+          entry.productionApplied === true || entry.ownerApproved === true,
       );
       if (unsafeEntry) {
         return res.status(400).json({
@@ -513,11 +546,15 @@ export function registerMenuRoutes(app: Express) {
         for (const entry of artifact.entries) {
           const sectionOrderByName = new Map<string, number>();
           entry.importedSections.forEach((section: any, index: number) => {
-            const name = String(section?.category || section?.name || "").trim();
+            const name = String(
+              section?.category || section?.name || "",
+            ).trim();
             if (name) {
               sectionOrderByName.set(
                 name,
-                Number(section?.displayOrder || section?.sortOrder || index + 1),
+                Number(
+                  section?.displayOrder || section?.sortOrder || index + 1,
+                ),
               );
             }
           });
@@ -559,32 +596,34 @@ export function registerMenuRoutes(app: Express) {
 
           if (entry.importedItems.length === 0) continue;
 
-          const draftItems = entry.importedItems.map((item: any, index: number) => {
-            const category = String(item.category || "Menu").trim() || "Menu";
-            return {
-              draftReviewId: review.id,
-              restaurantId: entry.truckId,
-              sectionName: category,
-              sectionOrder: sectionOrderByName.get(category) || 0,
-              itemName: item.itemName,
-              baseItemName: item.baseItemName || item.itemName,
-              variantLabel: item.variantLabel || null,
-              description: item.description || null,
-              priceCents: dollarsToCents(item.price, item.priceLabel),
-              priceLabel: item.priceLabel || null,
-              category,
-              options: item.options || [],
-              sourceConfidence: item.sourceConfidence || entry.confidence,
-              sourceRef: item.sourceRef || entry.sourceUrl,
-              ownerApprovalNeeded: true,
-              ownerApproved: false,
-              sortOrder: index,
-              metadata: {
-                sourceType: entry.sourceType,
-                currentness: entry.currentness,
-              },
-            };
-          });
+          const draftItems = entry.importedItems.map(
+            (item: any, index: number) => {
+              const category = String(item.category || "Menu").trim() || "Menu";
+              return {
+                draftReviewId: review.id,
+                restaurantId: entry.truckId,
+                sectionName: category,
+                sectionOrder: sectionOrderByName.get(category) || 0,
+                itemName: item.itemName,
+                baseItemName: item.baseItemName || item.itemName,
+                variantLabel: item.variantLabel || null,
+                description: item.description || null,
+                priceCents: dollarsToCents(item.price, item.priceLabel),
+                priceLabel: item.priceLabel || null,
+                category,
+                options: item.options || [],
+                sourceConfidence: item.sourceConfidence || entry.confidence,
+                sourceRef: item.sourceRef || entry.sourceUrl,
+                ownerApprovalNeeded: true,
+                ownerApproved: false,
+                sortOrder: index,
+                metadata: {
+                  sourceType: entry.sourceType,
+                  currentness: entry.currentness,
+                },
+              };
+            },
+          );
 
           await tx.insert(menuDraftReviewItems).values(draftItems as any);
           importedItems += draftItems.length;
@@ -620,7 +659,12 @@ export function registerMenuRoutes(app: Express) {
           currentness: z
             .enum(["confirmed_current", "likely_current", "unknown", "stale"])
             .optional(),
-          ownerApprovalEvidenceUrl: z.string().url().optional().nullable().or(z.literal("")),
+          ownerApprovalEvidenceUrl: z
+            .string()
+            .url()
+            .optional()
+            .nullable()
+            .or(z.literal("")),
           reviewNote: z.string().max(2000).optional().nullable(),
         })
         .parse(req.body || {});
@@ -628,7 +672,10 @@ export function registerMenuRoutes(app: Express) {
       if (!reviewId) {
         return res.status(400).json({ message: "reviewId is required" });
       }
-      if (body.reviewStatus === "approved_for_apply" && body.ownerApproved !== true) {
+      if (
+        body.reviewStatus === "approved_for_apply" &&
+        body.ownerApproved !== true
+      ) {
         return res.status(400).json({
           message: "approved_for_apply requires ownerApproved=true",
         });
@@ -705,7 +752,10 @@ export function registerMenuRoutes(app: Express) {
       if (!review) {
         return res.status(404).json({ message: "Draft review not found" });
       }
-      if (!review.ownerApproved || review.reviewStatus !== "approved_for_apply") {
+      if (
+        !review.ownerApproved ||
+        review.reviewStatus !== "approved_for_apply"
+      ) {
         return res.status(409).json({
           message:
             "Draft review must be owner-approved and approved_for_apply before an apply plan can be generated",
@@ -717,7 +767,10 @@ export function registerMenuRoutes(app: Express) {
         .select({ id: menus.id })
         .from(menus)
         .where(
-          and(eq(menus.restaurantId, review.restaurantId), eq(menus.isActive, true)),
+          and(
+            eq(menus.restaurantId, review.restaurantId),
+            eq(menus.isActive, true),
+          ),
         );
       const activeMenuIds = activeMenus.map((menu: any) => menu.id);
       const activeItems =
@@ -764,11 +817,17 @@ export function registerMenuRoutes(app: Express) {
       const lng = Number.parseFloat(String(req.query.lng || ""));
       const radiusKm = Math.max(
         1,
-        Math.min(50, Number.parseFloat(String(req.query.radiusKm || "12")) || 12),
+        Math.min(
+          50,
+          Number.parseFloat(String(req.query.radiusKm || "12")) || 12,
+        ),
       );
       const limit = Math.max(
         1,
-        Math.min(60, Number.parseInt(String(req.query.limit || "24"), 10) || 24),
+        Math.min(
+          60,
+          Number.parseInt(String(req.query.limit || "24"), 10) || 24,
+        ),
       );
       const hasLocation = Number.isFinite(lat) && Number.isFinite(lng);
       const q = String(req.query.q || req.query.category || "")
@@ -829,7 +888,9 @@ export function registerMenuRoutes(app: Express) {
               .from(restaurantFollows)
               .where(eq(restaurantFollows.userId, viewerId)),
             db
-              .select({ restaurantId: restaurantUserRecommendations.restaurantId })
+              .select({
+                restaurantId: restaurantUserRecommendations.restaurantId,
+              })
               .from(restaurantUserRecommendations)
               .where(eq(restaurantUserRecommendations.userId, viewerId)),
             db
@@ -857,7 +918,9 @@ export function registerMenuRoutes(app: Express) {
         );
         videoRows.forEach((row: any) => {
           if (row.restaurantId) {
-            viewerVideoRecommendationRestaurantIds.add(String(row.restaurantId));
+            viewerVideoRecommendationRestaurantIds.add(
+              String(row.restaurantId),
+            );
           }
         });
       }
@@ -1066,7 +1129,9 @@ export function registerMenuRoutes(app: Express) {
 
           const tags = Array.isArray(row.dietaryTags) ? row.dietaryTags : [];
           const preferenceMatches = preferenceTerms.filter((term) =>
-            tags.some((tag: string) => String(tag).toLowerCase().includes(term)),
+            tags.some((tag: string) =>
+              String(tag).toLowerCase().includes(term),
+            ),
           );
           if (preferenceMatches.length > 0) {
             const preferenceScore = preferenceMatches.length * 20;
@@ -1118,7 +1183,8 @@ export function registerMenuRoutes(app: Express) {
           }
 
           const dishAggregate = dishAggregateByItemId.get(String(row.id));
-          const dishRecommendationCount = dishAggregate?.recommendationCount || 0;
+          const dishRecommendationCount =
+            dishAggregate?.recommendationCount || 0;
           const dishAvgRating = dishAggregate?.avgRating || 0;
           // Hidden until a dish has at least one recommendation - never show
           // a fabricated/placeholder score for dishes with no real signal.
@@ -1268,7 +1334,13 @@ export function registerMenuRoutes(app: Express) {
       });
 
       const [restaurantRow] = await db
-        .select({ ownerId: restaurants.ownerId, name: restaurants.name, city: restaurants.city, isFoodTruck: restaurants.isFoodTruck, cuisineType: restaurants.cuisineType })
+        .select({
+          ownerId: restaurants.ownerId,
+          name: restaurants.name,
+          city: restaurants.city,
+          isFoodTruck: restaurants.isFoodTruck,
+          cuisineType: restaurants.cuisineType,
+        })
         .from(restaurants)
         .where(eq(restaurants.id, restaurantId))
         .limit(1);
@@ -1347,16 +1419,18 @@ export function registerMenuRoutes(app: Express) {
       const [menu] = await db.insert(menus).values(body).returning();
 
       // Emit LISA claim for menu published
-      db.insert(lisaClaims).values({
-        app: "mealscout",
-        claimType: LISA_CLAIM_TYPES.MENU_PUBLISHED,
-        source: LISA_CLAIM_SOURCES.MENU,
-        subjectType: "menu",
-        subjectId: menu.id,
-        actorType: "user",
-        actorId: req.user.id,
-        payload: { restaurantId: body.restaurantId, menuName: menu.name },
-      }).catch(() => {});
+      db.insert(lisaClaims)
+        .values({
+          app: "mealscout",
+          claimType: LISA_CLAIM_TYPES.MENU_PUBLISHED,
+          source: LISA_CLAIM_SOURCES.MENU,
+          subjectType: "menu",
+          subjectId: menu.id,
+          actorType: "user",
+          actorId: req.user.id,
+          payload: { restaurantId: body.restaurantId, menuName: menu.name },
+        })
+        .catch(() => {});
 
       res.status(201).json({ menu });
     }),
@@ -2008,7 +2082,9 @@ export function registerMenuRoutes(app: Express) {
     wrap(async (req, res) => {
       const menuItemId = String(req.params.menuItemId || "").trim();
       if (!menuItemId) {
-        throw Object.assign(new Error("menuItemId is required"), { statusCode: 400 });
+        throw Object.assign(new Error("menuItemId is required"), {
+          statusCode: 400,
+        });
       }
 
       const [item] = await db
@@ -2017,7 +2093,9 @@ export function registerMenuRoutes(app: Express) {
         .where(eq(menuItems.id, menuItemId))
         .limit(1);
       if (!item) {
-        throw Object.assign(new Error("Menu item not found"), { statusCode: 404 });
+        throw Object.assign(new Error("Menu item not found"), {
+          statusCode: 404,
+        });
       }
 
       const payload = z
@@ -2131,9 +2209,12 @@ export function registerMenuRoutes(app: Express) {
       let photo: any = null;
       if (req.file) {
         if (!isCloudinaryConfigured()) {
-          throw Object.assign(new Error("Image upload service not configured"), {
-            statusCode: 503,
-          });
+          throw Object.assign(
+            new Error("Image upload service not configured"),
+            {
+              statusCode: 503,
+            },
+          );
         }
         const uploadResult = await uploadToCloudinary(
           req.file.buffer,
@@ -2199,7 +2280,9 @@ export function registerMenuRoutes(app: Express) {
     wrap(async (req, res) => {
       const menuItemId = String(req.params.menuItemId || "").trim();
       if (!menuItemId) {
-        throw Object.assign(new Error("menuItemId is required"), { statusCode: 400 });
+        throw Object.assign(new Error("menuItemId is required"), {
+          statusCode: 400,
+        });
       }
 
       const [existing] = await db
@@ -2290,7 +2373,9 @@ export function registerMenuRoutes(app: Express) {
     wrap(async (req, res) => {
       const restaurantId = String(req.params.restaurantId || "").trim();
       if (!restaurantId) {
-        throw Object.assign(new Error("restaurantId is required"), { statusCode: 400 });
+        throw Object.assign(new Error("restaurantId is required"), {
+          statusCode: 400,
+        });
       }
 
       const selectItemFields = {
@@ -2329,12 +2414,16 @@ export function registerMenuRoutes(app: Express) {
       const [topRecommended] = await db
         .select({
           ...selectItemFields,
-          recommendationCount: sql<number>`count(${menuItemRecommendations.id})`.as(
-            "recommendation_count",
-          ),
+          recommendationCount:
+            sql<number>`count(${menuItemRecommendations.id})`.as(
+              "recommendation_count",
+            ),
         })
         .from(menuItemRecommendations)
-        .innerJoin(menuItems, eq(menuItems.id, menuItemRecommendations.menuItemId))
+        .innerJoin(
+          menuItems,
+          eq(menuItems.id, menuItemRecommendations.menuItemId),
+        )
         .where(
           and(
             eq(menuItemRecommendations.restaurantId, restaurantId),
@@ -2370,7 +2459,10 @@ export function registerMenuRoutes(app: Express) {
         .orderBy(asc(menuItems.sortOrder))
         .limit(1);
 
-      res.json({ item: fallbackItem || null, source: fallbackItem ? "fallback" : null });
+      res.json({
+        item: fallbackItem || null,
+        source: fallbackItem ? "fallback" : null,
+      });
     }),
   );
 
@@ -2439,7 +2531,9 @@ export function registerMenuRoutes(app: Express) {
           status: nextStatus,
           moderationStatus: nextStatus,
           featuredByBusiness: isFeature,
-          rejectedReason: isReject ? String(payload.reason || "").trim() || null : null,
+          rejectedReason: isReject
+            ? String(payload.reason || "").trim() || null
+            : null,
           reviewedByUserId: req.user.id,
           reviewedAt: new Date(),
           updatedAt: new Date(),
@@ -2637,4 +2731,3 @@ function normalizeExternalMenuData(
 
   return { imported, skipped, errors };
 }
-

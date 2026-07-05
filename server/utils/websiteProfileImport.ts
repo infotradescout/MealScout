@@ -101,7 +101,9 @@ async function fetchHtml(startUrl: string): Promise<string> {
 
     const contentType = response.headers.get("content-type") || "";
     if (!contentType.includes("html")) {
-      throw new WebsiteImportError("That link doesn't look like a website page.");
+      throw new WebsiteImportError(
+        "That link doesn't look like a website page.",
+      );
     }
 
     const contentLength = Number(response.headers.get("content-length") || 0);
@@ -169,7 +171,8 @@ function matchesRestaurantType(node: any): boolean {
   const type = node?.["@type"];
   const types = Array.isArray(type) ? type : [type];
   return types.some(
-    (t) => typeof t === "string" && RESTAURANT_JSONLD_TYPES.has(t.toLowerCase()),
+    (t) =>
+      typeof t === "string" && RESTAURANT_JSONLD_TYPES.has(t.toLowerCase()),
   );
 }
 

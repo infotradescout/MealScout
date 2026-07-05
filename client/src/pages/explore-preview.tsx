@@ -2530,11 +2530,15 @@ export default function ExplorePreview() {
     retry: false,
   });
 
-  const visibleHosts = useMemo<ScoutHostLocation[]>(() => {
+  const allScoutHostLocations = useMemo<ScoutHostLocation[]>(() => {
     const rows = Array.isArray(mapLocationsData?.hostLocations)
       ? mapLocationsData.hostLocations
       : [];
-    return rows.filter((host) =>
+    return rows;
+  }, [mapLocationsData]);
+
+  const visibleHosts = useMemo<ScoutHostLocation[]>(() => {
+    return allScoutHostLocations.filter((host) =>
       isWithinScoutRadius(
         resolvedScoutCoords,
         readNumberField(host, ["latitude", "lat"]),
@@ -2542,21 +2546,34 @@ export default function ExplorePreview() {
         discoveryRadiusKm,
       ),
     );
-  }, [discoveryRadiusKm, mapLocationsData, resolvedScoutCoords]);
+  }, [allScoutHostLocations, discoveryRadiusKm, resolvedScoutCoords]);
+
+  const mapHostLocations = useMemo<ScoutHostLocation[]>(() => {
+    const rows = allScoutHostLocations.filter(
+      (host) =>
+        readNumberField(host, ["latitude", "lat"]) !== null &&
+        readNumberField(host, ["longitude", "lng"]) !== null,
+    );
+    const nearbyHosts = rows.filter((host) =>
+      isWithinScoutRadius(
+        resolvedScoutCoords,
+        readNumberField(host, ["latitude", "lat"]),
+        readNumberField(host, ["longitude", "lng"]),
+        discoveryRadiusKm,
+      ),
+    );
+    return nearbyHosts.length > 0 ? nearbyHosts : rows;
+  }, [allScoutHostLocations, discoveryRadiusKm, resolvedScoutCoords]);
 
   const visibleMapEventLocations = useMemo<ScoutMapEventLocation[]>(() => {
     const rows = Array.isArray(mapLocationsData?.eventLocations)
       ? mapLocationsData.eventLocations
       : [];
-    return rows.filter((event) =>
-      isWithinScoutRadius(
-        resolvedScoutCoords,
-        readNumberField(event, ["hostLatitude", "latitude", "lat"]),
-        readNumberField(event, ["hostLongitude", "longitude", "lng"]),
-        discoveryRadiusKm,
-      ),
+    return rows.filter((host) =>
+      readNumberField(host, ["hostLatitude", "latitude", "lat"]) !== null &&
+      readNumberField(host, ["hostLongitude", "longitude", "lng"]) !== null,
     );
-  }, [discoveryRadiusKm, mapLocationsData, resolvedScoutCoords]);
+  }, [mapLocationsData]);
 
   const { data: parkingPassData } = useQuery<ScoutParkingPassListing[]>({
     queryKey: ["/api/parking-pass", "scout-map"],
@@ -2579,14 +2596,9 @@ export default function ExplorePreview() {
       const host = listing.host;
       if (!host) return false;
       if (!isScoutMapWindowActiveNow(listing)) return false;
-      return isWithinScoutRadius(
-        resolvedScoutCoords,
-        readNumberField(host, ["latitude", "lat"]),
-        readNumberField(host, ["longitude", "lng"]),
-        discoveryRadiusKm,
-      );
+      return true;
     });
-  }, [discoveryRadiusKm, parkingPassData, resolvedScoutCoords]);
+  }, [parkingPassData]);
 
   const parkedTrucksByHostKey = useMemo(() => {
     const byHost = new Map<string, NonNullable<MapAdapterMarker["parkedTrucks"]>>();
@@ -2629,7 +2641,7 @@ export default function ExplorePreview() {
       const eventAddress = normalizeScoutLocationAddress(event.hostAddress, event.hostCity, event.hostState);
       const eventLat = readNumberField(event, ["hostLatitude", "latitude", "lat"]);
       const eventLng = readNumberField(event, ["hostLongitude", "longitude", "lng"]);
-      for (const host of visibleHosts) {
+      for (const host of mapHostLocations) {
         const hostIds = [host.hostId, host.id].map((value) => String(value || "").trim()).filter(Boolean);
         const idMatches = Boolean(eventHostId && hostIds.includes(eventHostId));
         const addressMatches = Boolean(
@@ -2656,7 +2668,7 @@ export default function ExplorePreview() {
     }
 
     return byHost;
-  }, [visibleHosts, visibleMapEventLocations, visibleParkingPassListings]);
+  }, [mapHostLocations, visibleMapEventLocations, visibleParkingPassListings]);
 
 
   /* --------- nearby restaurants --------- */
@@ -3117,7 +3129,7 @@ export default function ExplorePreview() {
   }, [visibleEvents]);
 
   const hostMarkers = useMemo<MapAdapterMarker[]>(() => {
-    return visibleHosts
+    return mapHostLocations
       .map((host) => {
         const lat = readNumberField(host, ["latitude", "lat"]);
         const lng = readNumberField(host, ["longitude", "lng"]);
@@ -3149,7 +3161,7 @@ export default function ExplorePreview() {
         } as MapAdapterMarker;
       })
       .filter((m): m is MapAdapterMarker => Boolean(m && m.sourceId));
-  }, [parkedTrucksByHostKey, visibleHosts]);
+  }, [mapHostLocations, parkedTrucksByHostKey]);
 
   const dealMarkers = useMemo<MapAdapterMarker[]>(() => {
     return nearbyDeals
@@ -3220,7 +3232,7 @@ export default function ExplorePreview() {
       restaurantsMissingCoords: rawRestaurantRows.filter((row) => !hasCoords(row)).length,
       hostsReturned: rawHostRows.length,
       hostsMissingCoords: rawHostRows.filter((row) => !hasCoords(row)).length,
-      hostsShown: visibleHosts.length,
+      hostsShown: mapHostLocations.length,
       eventsReturned: rawEventRows.length,
       eventsMissingCoords: rawEventRows.filter((row) => !hasCoords(row)).length,
       dealsReturned: rawDealRows.length,
@@ -3236,7 +3248,7 @@ export default function ExplorePreview() {
     nearbyDeals,
     nearbyRestaurantsData,
     scoutTruckInventory.length,
-    visibleHosts.length,
+    mapHostLocations.length,
   ]);
 
   const [activeMapLayers, setActiveMapLayers] = useState<MapLayerState>({
@@ -4677,8 +4689,7 @@ type ScoutRailRenderCard =
   | { cardType: "restaurant"; cardKind: "restaurant" | "community_pick"; restaurant: RestaurantSummary }
   | { cardType: "menu_item"; cardKind: "menu_item"; item: LocalMenuItemFeedItem; position: number }
   | { cardType: "deal"; cardKind: "deal" | "happy_hour"; deal: DealSummary }
-  | { cardType: "event"; cardKind: "event"; event: EventSummary }
-  | { cardType: "host"; cardKind: "map_place"; host: ScoutHostLocation };
+  | { cardType: "event"; cardKind: "event"; event: EventSummary };
 
 type ScoutImmediateDecisionItem =
   | {
@@ -4746,7 +4757,7 @@ function getScoutRailCardKey(card: ScoutRailRenderCard): string {
   if (card.cardType === "menu_item") return String(card.item.id);
   if (card.cardType === "deal") return String(card.deal.id);
   if (card.cardType === "event") return String(card.event.id);
-  return String(card.host.hostId || card.host.id);
+  return "card";
 }
 
 function ScoutHorizontalCategoryRail({
@@ -5698,8 +5709,6 @@ function ActiveSceneContent({
       deals.map((deal) => ({ cardType: "deal", cardKind, deal }));
     const eventRailCards = (events: EventSummary[]): ScoutRailRenderCard[] =>
       events.map((event) => ({ cardType: "event", cardKind: "event", event }));
-    const hostRailCards = (hosts: ScoutHostLocation[]): ScoutRailRenderCard[] =>
-      hosts.map((host) => ({ cardType: "host", cardKind: "map_place", host }));
     const businessSectionRailCards = (
       cards: ScoutBusinessSectionCard[],
     ): ScoutRailRenderCard[] =>
@@ -5894,17 +5903,7 @@ function ActiveSceneContent({
       if (card.cardType === "event") {
         return <EventCard event={card.event} currentUserId={currentUserId} />;
       }
-      return <HostLocationCard host={card.host} />;
-    };
-
-    const hostLocationRow: ScoutHorizontalRailDefinition = {
-      id: "host_locations",
-      title: "Host Locations Nearby",
-      subtitle: "Parking-friendly host spots and event locations near this Scout area.",
-      linkHref: "/events",
-      cards: hostRailCards(visibleHosts),
-      className: compactRailSectionClass,
-      cardWidth: standardCardWidth,
+      return null;
     };
 
     return (
@@ -5914,12 +5913,6 @@ function ActiveSceneContent({
           thinMarket={isLowActivityLane && firstScreenDecisionItems.length <= 1}
         />
         {renderSearchDock?.()}
-        {visibleHosts.length > 0 ? (
-          <ScoutHorizontalCategoryRail
-            row={hostLocationRow}
-            renderCard={renderScoutRailCard}
-          />
-        ) : null}
         {scoutRows.map((row) => (
           <ScoutHorizontalCategoryRail
             key={row.id}
@@ -6050,26 +6043,6 @@ function ActiveSceneContent({
               {visibleSceneEvents.slice(0, 8).map((e) => (
                 <li key={e.id} className={`shrink-0 ${featureCardWidth}`}>
                   <EventCard event={e} currentUserId={currentUserId} />
-                </li>
-              ))}
-            </ul>
-          </div>
-        </section>
-      ) : null}
-
-      {(laneId === "nearby_now" || laneId === "events") && visibleHosts.length > 0 ? (
-        <section className={compactRailSectionClass}>
-          <SectionHeader
-            title="Event Hosts Nearby"
-            linkHref="/events"
-            subtitle="Host and event locations with real map coordinates."
-            itemCount={visibleHosts.length}
-          />
-          <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
-            <ul className="flex gap-4 pr-5" role="list" aria-label="Event hosts nearby">
-              {visibleHosts.slice(0, 10).map((host) => (
-                <li key={`host-${host.hostId || host.id}`} className={`shrink-0 ${standardCardWidth}`}>
-                  <HostLocationCard host={host} />
                 </li>
               ))}
             </ul>
@@ -6274,57 +6247,6 @@ function SceneMixedFeedCard({ item }: { item: CravingBoardItem }) {
         View
       </span>
     </Link>
-  );
-}
-
-function HostLocationCard({ host }: { host: ScoutHostLocation }) {
-  const hostName = host.businessName || host.name || "Host location";
-  const area =
-    [host.city, host.state].filter(Boolean).join(", ") ||
-    host.address ||
-    "Nearby location";
-  const lat = readNumberField(host, ["latitude", "lat"]);
-  const lng = readNumberField(host, ["longitude", "lng"]);
-  const routeUrl =
-    typeof lat === "number" && typeof lng === "number"
-      ? `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`
-      : null;
-  const hostId = String(host.hostId || host.id || "").trim();
-  const hostHref = hostId ? `/events?hostId=${encodeURIComponent(hostId)}` : "/events";
-  return (
-    <div
-      className="overflow-hidden rounded-[1rem] bg-[#201407]/80 p-3 text-white ring-1 ring-amber-200/30 shadow-[0_14px_32px_rgba(0,0,0,0.28)]"
-      data-scout-card-kind="host"
-    >
-      <div className="flex items-start gap-3">
-        <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-300/20 text-amber-100 ring-1 ring-amber-200/30">
-          <MapPin className="h-4 w-4" aria-hidden="true" />
-        </span>
-        <div className="min-w-0">
-          <p className="text-[10px] font-black uppercase tracking-[0.12em] text-amber-200/80">Host spot</p>
-          <p className="mt-1 truncate text-sm font-black text-white">{hostName}</p>
-          <p className="mt-0.5 truncate text-xs font-semibold text-amber-50/70">{area}</p>
-        </div>
-      </div>
-      <div className="mt-2 flex items-center gap-2">
-        <Link
-          href={hostHref}
-          className="rounded-full bg-amber-300 px-2.5 py-1 text-[10px] font-black text-[#1f1204]"
-        >
-          View Host
-        </Link>
-        {routeUrl ? (
-          <a
-            href={routeUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="rounded-full bg-white/10 px-2.5 py-1 text-[10px] font-bold text-white ring-1 ring-amber-100/20"
-          >
-            Route
-          </a>
-        ) : null}
-      </div>
-    </div>
   );
 }
 

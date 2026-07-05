@@ -83,6 +83,24 @@ function isWebglAvailable(): boolean {
   }
 }
 
+const PREVIEW_FRAME_MARKER_MILES = 18;
+
+function getMarkerDistanceMiles(
+  a: { lat: number; lng: number },
+  b: { lat: number; lng: number },
+): number {
+  const toRad = (value: number) => (value * Math.PI) / 180;
+  const earthRadiusMiles = 3958.8;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const lat1 = toRad(a.lat);
+  const lat2 = toRad(b.lat);
+  const hav =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  return 2 * earthRadiusMiles * Math.asin(Math.min(1, Math.sqrt(hav)));
+}
+
 export function ThemedScoutMapV2({
   userLocation,
   markers,
@@ -103,9 +121,41 @@ export function ThemedScoutMapV2({
     () => !isWebglAvailable(),
   );
 
-  const centerMapOnUser = (duration = 0) => {
+  const frameMap = (duration = 0) => {
     const map = mapRef.current;
     if (!map) return;
+    const localMarkers = markers
+      .filter(
+        (marker) =>
+          Number.isFinite(marker.lat) &&
+          Number.isFinite(marker.lng) &&
+          getMarkerDistanceMiles(userLocation, marker) <= PREVIEW_FRAME_MARKER_MILES,
+      )
+      .slice(0, 8);
+    if (localMarkers.length > 0) {
+      const latValues = [userLocation.lat, ...localMarkers.map((marker) => marker.lat)];
+      const lngValues = [userLocation.lng, ...localMarkers.map((marker) => marker.lng)];
+      const farthestMiles = Math.max(
+        ...localMarkers.map((marker) => getMarkerDistanceMiles(userLocation, marker)),
+      );
+      const frameZoom =
+        farthestMiles > 12 ? 10.6 :
+        farthestMiles > 6 ? 11.2 :
+        farthestMiles > 2.5 ? 12 :
+        farthestMiles > 0.9 ? 12.55 :
+        zoom;
+      map.easeTo({
+        center: [
+          (Math.min(...lngValues) + Math.max(...lngValues)) / 2,
+          (Math.min(...latValues) + Math.max(...latValues)) / 2,
+        ],
+        zoom: Math.min(zoom, frameZoom),
+        pitch: 34,
+        bearing: 9,
+        duration,
+      });
+      return;
+    }
     map.easeTo({
       center: [userLocation.lng, userLocation.lat],
       zoom,
@@ -145,13 +195,13 @@ export function ThemedScoutMapV2({
       const current = mapRef.current;
       if (!current) return;
       current.resize();
-      centerMapOnUser(0);
+      frameMap(0);
     };
     const initialResizeFrame = requestAnimationFrame(resizeMap);
     const initialResizeTimeout = window.setTimeout(resizeMap, 250);
 
     map.on("load", () => {
-      centerMapOnUser(0);
+      frameMap(0);
 
       const userEl = document.createElement("div");
       userEl.className = "msm-user-pin";
@@ -190,7 +240,7 @@ export function ThemedScoutMapV2({
       if (!current) return;
       current.resize();
       if (!interactive) {
-        centerMapOnUser(160);
+        frameMap(160);
       }
     });
     ro.observe(containerRef.current);
@@ -241,11 +291,11 @@ export function ThemedScoutMapV2({
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    if (!interactive) {
-      centerMapOnUser(500);
-    }
     userMarkerRef.current?.setLngLat([userLocation.lng, userLocation.lat]);
-  }, [interactive, userLocation.lat, userLocation.lng]);
+    if (!interactive) {
+      frameMap(500);
+    }
+  }, [interactive, markerKey, userLocation.lat, userLocation.lng, zoom]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -322,7 +372,10 @@ export function ThemedScoutMapV2({
           .addTo(map),
       );
     });
-  }, [markerKey, markers, onMarkerTap]);
+    if (!interactive) {
+      window.requestAnimationFrame(() => frameMap(420));
+    }
+  }, [interactive, markerKey, markers, onMarkerTap, zoom]);
 
   return (
     <div
