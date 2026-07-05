@@ -3817,35 +3817,21 @@ export default function ExplorePreview() {
               }}
             >
               {resolvedScoutCoords ? (
-                hasMapKey && !googleMapFailed && mapCenter ? (
-                  <MapErrorBoundary>
-                    <GoogleMapSurface
-                      apiKey={effectiveGoogleMapsApiKey}
-                      mapId={effectiveGoogleMapsMapId || undefined}
-                      center={mapCenter}
-                      zoom={13}
-                      markers={sceneFilteredMapMarkers}
-                      showRoadTrafficLayer={false}
-                      userLocation={resolvedScoutCoords}
-                      isNightTheme={true}
-                      interactive={true}
-                      onBoundsChanged={handleMapBoundsChanged}
-                      onZoomChanged={handleMapZoomChanged}
-                      onCenterChanged={handleMapCenterChanged}
-                      onMarkerTap={handleMarkerTap}
-                      onFatalError={() => setGoogleMapFailed(true)}
-                    />
-                  </MapErrorBoundary>
-                ) : (
-                  <Suspense fallback={<HeroMapFallback reason="loading" />}>
-                    <ThemedScoutMap
-                      userLocation={resolvedScoutCoords}
-                      markers={sceneFilteredMapMarkers}
-                      zoom={13}
-                      onMarkerTap={handlePreviewMarkerTap}
-                    />
-                  </Suspense>
-                )
+                // The collapsed/compact preview is always the stylized dark
+                // map with photo pins, regardless of Google Maps
+                // availability - it's a decorative teaser, not the
+                // functional map (that's the "fullMap" surface below, which
+                // still uses real Google Maps when available). Production
+                // having a working Maps key meant this preview almost never
+                // showed the intended redesigned look before this change.
+                <Suspense fallback={<HeroMapFallback reason="loading" />}>
+                  <ThemedScoutMap
+                    userLocation={resolvedScoutCoords}
+                    markers={sceneFilteredMapMarkers}
+                    zoom={13}
+                    onMarkerTap={handlePreviewMarkerTap}
+                  />
+                </Suspense>
               ) : (
                 <HeroMapFallback
                   reason={
