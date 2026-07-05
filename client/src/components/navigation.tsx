@@ -22,6 +22,7 @@ import {
   MoreHorizontal,
   X,
   Compass,
+  Heart,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -265,7 +266,10 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     customer: [
       { path: "/video", icon: Clapperboard, label: "Video" },
       { path: "/events", icon: Calendar, label: "Events" },
-      { path: dashboardPath, icon: LayoutDashboard, label: "Dashboard" },
+      // Not "Dashboard": for a plain customer, /dashboard's role router
+      // falls through to /scout itself (no dedicated customer dashboard
+      // exists), so that slot was a dead loop back to the tab it's on.
+      { path: "/favorites", icon: Heart, label: "Saved" },
     ],
     food_truck: [
       businessOnboardingRequired

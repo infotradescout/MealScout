@@ -971,17 +971,18 @@ function getOperationalBadges(entityOrMeta: FreshnessMeta): string[] {
   if (entityOrMeta.closesSoon) labels.add("Closes soon");
   if (entityOrMeta.kind === "Truck" || entityOrMeta.kind === "truck") labels.add("Food truck");
   if (entityOrMeta.hasDeal || entityOrMeta.kind === "Deal" || entityOrMeta.kind === "deal") labels.add("Deal today");
-  if (entityOrMeta.hasMenu || entityOrMeta.kind === "Menu" || entityOrMeta.kind === "menu") labels.add("Menu updated");
   if (entityOrMeta.isOpen) labels.add(entityOrMeta.kind === "Truck" || entityOrMeta.kind === "truck" ? "Live now" : "Open now");
   if (entityOrMeta.hasDistance) labels.add("Nearby");
   if (isTodayDate(entityOrMeta.startsAt || entityOrMeta.startTime)) labels.add("Happening today");
+  // "Menu updated" is deliberately excluded here - it's metadata about when
+  // an owner last edited the menu, not something a diner cares about, and it
+  // was making cards feel like database records rather than food.
   const allowedLabels = new Set([
     "Open now",
     "Live now",
     "Updated today",
     "Confirmed today",
     "Deal today",
-    "Menu updated",
     "Food truck",
   ]);
   return [...labels].filter((label) => allowedLabels.has(label));
@@ -7028,10 +7029,6 @@ function LocalMenuItemCard({
             />
           </div>
         </div>
-        <span className="absolute left-2.5 top-2.5 inline-flex items-center gap-1 rounded-md bg-orange-300 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-[#1a0d08]">
-          <Utensils className="h-3 w-3" aria-hidden="true" />
-          Dish
-        </span>
         {price && (
           <span className="absolute right-2.5 top-2.5 rounded-md bg-[#120805]/86 px-2 py-1 text-[11px] font-black text-orange-100 ring-1 ring-orange-300/32">
             {price}
