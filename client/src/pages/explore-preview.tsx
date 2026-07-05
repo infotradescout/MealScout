@@ -25,6 +25,7 @@ import {
   Star,
   Tag,
   TrendingUp,
+  Truck as TruckIcon,
   Users,
   Utensils,
   User as UserIcon,
@@ -184,6 +185,14 @@ interface LiveTruckSummary {
   vibe?: string | null;
   crowdLevel?: string | null;
   mobileOnline?: boolean;
+  lastBroadcastAt?: string | null;
+  liveUntilAt?: string | null;
+  liveBroadcasting?: boolean | null;
+  location_state?: "green" | "amber" | "hidden" | null;
+  locationState?: "green" | "amber" | "hidden" | null;
+  serviceStatus?: string | null;
+  status?: string | null;
+  operatingStatus?: string | null;
   activeDealCount?: number | null;
 }
 
@@ -722,6 +731,12 @@ function readBooleanField(source: unknown, fields: string[]): boolean | null {
   return null;
 }
 
+function parseTimestampMs(value: string | null): number | null {
+  if (!value) return null;
+  const ms = Date.parse(value);
+  return Number.isFinite(ms) ? ms : null;
+}
+
 function getRestaurantEntityType(
   source: Pick<
     RestaurantSummary,
@@ -827,9 +842,27 @@ function isOwnedByCurrentUser(entity: unknown, currentUserId?: string | null): b
 }
 
 function isTruckServingNow(truck: LiveTruckSummary): boolean {
-  const explicit = readBooleanField(truck, ["isOpen", "openNow", "currentlyOpen", "isServing", "servingNow", "availableNow"]);
+  const explicit = readBooleanField(truck, ["isServing", "servingNow", "availableNow", "liveNow"]);
   if (explicit !== null) return explicit;
-  return truck.mobileOnline !== false;
+
+  const locationState = readStringField(truck, ["location_state", "locationState"]);
+  if (locationState) {
+    const normalized = locationState.toLowerCase();
+    if (normalized === "green") return true;
+    return false;
+  }
+
+  if (truck.mobileOnline !== true) return false;
+
+  const liveUntilMs = parseTimestampMs(readStringField(truck, ["liveUntilAt", "live_until_at"]));
+  if (liveUntilMs !== null) return liveUntilMs > Date.now();
+
+  const lastBroadcastMs = parseTimestampMs(readStringField(truck, ["lastBroadcastAt", "last_broadcast_at"]));
+  if (lastBroadcastMs !== null) {
+    return Date.now() - lastBroadcastMs < 4 * 60 * 60 * 1000;
+  }
+
+  return truck.liveBroadcasting === true;
 }
 
 function getRestaurantOpenState(restaurant: RestaurantSummary): "open" | "closed" | "unknown" {
@@ -915,7 +948,7 @@ function getFreshnessLabel(entityOrMeta: FreshnessMeta): string {
 
   if (entityOrMeta.hasMenu || entityOrMeta.kind === "Menu" || entityOrMeta.kind === "menu") return "Menu updated";
   if (entityOrMeta.hasDeal || entityOrMeta.kind === "Deal" || entityOrMeta.kind === "deal") return "Deal today";
-  if (entityOrMeta.kind === "Truck" || entityOrMeta.kind === "truck") return "Serving now";
+  if ((entityOrMeta.kind === "Truck" || entityOrMeta.kind === "truck") && entityOrMeta.isOpen) return "Live now";
   if (isTodayDate(entityOrMeta.startsAt || entityOrMeta.startTime)) return "Happening today";
   if (entityOrMeta.isOpen) return "Open now";
   if (entityOrMeta.hasDistance) return "Nearby now";
@@ -939,12 +972,12 @@ function getOperationalBadges(entityOrMeta: FreshnessMeta): string[] {
   if (entityOrMeta.kind === "Truck" || entityOrMeta.kind === "truck") labels.add("Food truck");
   if (entityOrMeta.hasDeal || entityOrMeta.kind === "Deal" || entityOrMeta.kind === "deal") labels.add("Deal today");
   if (entityOrMeta.hasMenu || entityOrMeta.kind === "Menu" || entityOrMeta.kind === "menu") labels.add("Menu updated");
-  if (entityOrMeta.isOpen) labels.add(entityOrMeta.kind === "Truck" || entityOrMeta.kind === "truck" ? "Serving now" : "Open now");
+  if (entityOrMeta.isOpen) labels.add(entityOrMeta.kind === "Truck" || entityOrMeta.kind === "truck" ? "Live now" : "Open now");
   if (entityOrMeta.hasDistance) labels.add("Nearby");
   if (isTodayDate(entityOrMeta.startsAt || entityOrMeta.startTime)) labels.add("Happening today");
   const allowedLabels = new Set([
     "Open now",
-    "Serving now",
+    "Live now",
     "Updated today",
     "Confirmed today",
     "Deal today",
@@ -1390,8 +1423,8 @@ function buildCravingBoardItems({
       href: getTruckProfilePath(truck),
       truckId: String(truck.id),
       imageUrl: getTruckImage(truck),
-      meta: [formatDistance(truck), formatWait(truck)].filter(Boolean).join(" / ") || "Serving now",
-      reason: "Serving now",
+      meta: [formatDistance(truck), formatWait(truck)].filter(Boolean).join(" / ") || "Live now",
+      reason: "Live now",
       freshnessMeta: {
         kind: "truck",
         updatedAt: readStringField(truck, ["updatedAt", "lastUpdatedAt"]),
@@ -1542,7 +1575,7 @@ function buildLocalActivityItems({
     items.push({
       id: `truck-${truck.id}`,
       type: "truck",
-      title: "Serving now",
+      title: "Live now",
       subtitle: [truck.name, truck.cuisineType, distance].filter(Boolean).join(" · "),
       href: getTruckProfilePath(truck),
       entityId: String(truck.id),
@@ -1632,7 +1665,35 @@ function getCrowdVibe(truck: LiveTruckSummary): { label: string } {
   const raw = (truck.crowdLevel || truck.vibe || "").toLowerCase();
   if (raw.includes("hot") || raw.includes("packed")) return { label: "Crowd is Hot" };
   if (raw.includes("busy")) return { label: "Busy Right Now" };
-  return { label: "Open & Serving" };
+  return { label: "Live nearby" };
+}
+
+type TruckCardTone = "live" | "scheduled" | "claimed" | "neutral";
+
+function getTruckCardTone(truck: LiveTruckSummary): { label: string; tone: TruckCardTone } {
+  if (isTruckServingNow(truck)) return { label: "Live now", tone: "live" };
+
+  const status = readStringField(truck, ["serviceStatus", "status", "operatingStatus"]);
+  if (status) {
+    const normalized = status.toLowerCase();
+    if (normalized.includes("scheduled")) return { label: "Scheduled", tone: "scheduled" };
+    if (normalized.includes("claim")) return { label: "Claimed", tone: "claimed" };
+  }
+
+  return { label: "Food truck", tone: "neutral" };
+}
+
+function getTruckToneClass(tone: TruckCardTone): string {
+  if (tone === "live") return "bg-emerald-500/95 text-white ring-emerald-200/35";
+  if (tone === "scheduled") return "bg-amber-400/92 text-[#1a0d08] ring-amber-100/35";
+  if (tone === "claimed") return "bg-white/14 text-white ring-white/18";
+  return "bg-[#120805]/72 text-white/86 ring-white/14";
+}
+
+function getTruckToneDotClass(tone: TruckCardTone): string {
+  if (tone === "live") return "bg-white animate-pulse";
+  if (tone === "scheduled") return "bg-[#1a0d08]/80";
+  return "bg-white/70";
 }
 
 function getTruckCoords(truck: LiveTruckSummary): { lat: number; lng: number } | null {
@@ -4604,7 +4665,7 @@ function ScoutImmediateCompactCard({
     const truck = item.truck;
     const title = truck.name || "Food truck";
     const area = getTruckArea(truck);
-    const status = isTruckServingNow(truck) ? "Serving now" : "Scheduled";
+    const status = isTruckServingNow(truck) ? "Live now" : "Scheduled";
     const meta = ["Food truck", status, area].filter(Boolean).join(" / ");
     const image = truck.logoUrl || truck.imageUrl || truck.coverImageUrl || truck.heroImageUrl;
     const directionsUrl = buildDirectionsUrl(truck);
@@ -4612,12 +4673,13 @@ function ScoutImmediateCompactCard({
       <CompactDecisionCardShell
         href={getTruckProfilePath(truck)}
         imageUrl={image}
-        fallbackIcon={<Flame className="h-4 w-4 text-white/90" aria-hidden="true" />}
+        fallbackIcon={<TruckIcon className="h-4 w-4 text-white/90" aria-hidden="true" />}
         title={title}
         meta={meta}
         primaryActionLabel="View truck"
         directionsUrl={directionsUrl}
         categoryPhoto={getDishCategoryPhoto(truck.name, truck.cuisineType, truck.vibe)}
+        variant="truck"
       />
     );
   }
@@ -4636,12 +4698,17 @@ function ScoutImmediateCompactCard({
       <CompactDecisionCardShell
         href={getRestaurantProfilePath(restaurant)}
         imageUrl={image}
-        fallbackIcon={<Utensils className="h-4 w-4 text-white/90" aria-hidden="true" />}
+        fallbackIcon={
+          normalizedKind === "food_truck"
+            ? <TruckIcon className="h-4 w-4 text-white/90" aria-hidden="true" />
+            : <MapPin className="h-4 w-4 text-white/90" aria-hidden="true" />
+        }
         title={getRestaurantName(restaurant)}
         meta={meta}
         primaryActionLabel="View profile"
         directionsUrl={directionsUrl}
         categoryPhoto={getDishCategoryPhoto(getRestaurantName(restaurant), restaurant.cuisineType)}
+        variant={normalizedKind === "food_truck" ? "truck" : "place"}
       />
     );
   }
@@ -4669,6 +4736,7 @@ function ScoutImmediateCompactCard({
         meta={reason || "Popular nearby dish"}
         primaryActionLabel="View dish"
         categoryPhoto={getDishCategoryPhoto(menuItem.name, menuItem.cuisineType)}
+        variant="dish"
       />
     );
   }
@@ -4684,6 +4752,7 @@ function ScoutImmediateCompactCard({
         meta={[deal.restaurantName, deal.discountText || deal.description].filter(Boolean).join(" / ") || "Active nearby deal"}
         primaryActionLabel="View deal"
         categoryPhoto={getDishCategoryPhoto(deal.title, (deal as any).description)}
+        variant="deal"
       />
     );
   }
@@ -4702,9 +4771,12 @@ function ScoutImmediateCompactCard({
       title={title}
       meta={[event.venueName || event.locationName, startLabel].filter(Boolean).join(" / ") || "Upcoming nearby event"}
       primaryActionLabel="View event"
+      variant="event"
     />
   );
 }
+
+type CompactDecisionCardVariant = "truck" | "place" | "dish" | "deal" | "event";
 
 function CompactDecisionCardShell({
   href,
@@ -4715,6 +4787,7 @@ function CompactDecisionCardShell({
   primaryActionLabel,
   directionsUrl,
   categoryPhoto = null,
+  variant = "place",
 }: {
   href: string;
   imageUrl?: string | null;
@@ -4724,18 +4797,54 @@ function CompactDecisionCardShell({
   primaryActionLabel: string;
   directionsUrl?: string | null;
   categoryPhoto?: DishCategoryPhoto | null;
+  variant?: CompactDecisionCardVariant;
 }) {
   const [imageFailed, setImageFailed] = useState(false);
   useEffect(() => {
     setImageFailed(false);
   }, [imageUrl]);
   const showImage = Boolean(imageUrl) && !imageFailed;
+  const shellClass =
+    variant === "dish"
+      ? "rounded-[0.85rem] bg-[#2c1609]/82 ring-orange-200/26"
+      : variant === "truck"
+        ? "rounded-[1.3rem] bg-[#100806]/84 ring-orange-300/30"
+        : variant === "deal"
+          ? "rounded-[0.95rem] bg-[#12200f]/72 ring-lime-200/18"
+          : variant === "event"
+            ? "rounded-[1rem] bg-[#0d1724]/72 ring-sky-200/18"
+            : "rounded-[0.95rem] bg-[#0c1714]/78 ring-emerald-200/16";
+  const thumbClass =
+    variant === "dish"
+      ? "rounded-full bg-orange-200/10 ring-orange-100/24"
+      : variant === "truck"
+        ? "rounded-2xl bg-orange-200/8 ring-orange-300/26"
+        : variant === "deal"
+          ? "rounded-lg bg-lime-200/8 ring-lime-200/18"
+          : variant === "event"
+            ? "rounded-lg bg-sky-200/8 ring-sky-200/18"
+            : "rounded-lg bg-emerald-200/8 ring-emerald-200/16";
+  const actionClass =
+    variant === "deal"
+      ? "bg-lime-300 text-[#102006]"
+      : variant === "event"
+        ? "bg-sky-300 text-[#071322]"
+        : "bg-orange-400 text-[#1a0d08]";
   return (
     <div
-      className="flex min-h-[82px] items-center gap-3 rounded-[0.9rem] bg-white/[0.055] p-2.5 ring-1 ring-white/10"
+      className={`relative flex min-h-[82px] items-center gap-3 overflow-hidden p-2.5 ring-1 ${variant === "truck" ? "pl-4" : ""} ${shellClass}`}
       data-scout-immediate-compact-card="true"
     >
-      <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white/[0.07] ring-1 ring-white/10">
+      {variant === "truck" ? (
+        <span
+          className="absolute inset-y-0 left-0 w-1.5 bg-[repeating-linear-gradient(180deg,rgba(251,146,60,0.95)_0_8px,rgba(88,39,12,0.95)_8px_14px)]"
+          aria-hidden="true"
+        />
+      ) : null}
+      {variant === "dish" ? (
+        <span className="absolute inset-x-3 bottom-0 border-t border-dashed border-orange-100/20" aria-hidden="true" />
+      ) : null}
+      <div className={`flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden ring-1 ${thumbClass}`}>
         {showImage ? (
           <img
             src={imageUrl || undefined}
@@ -4771,7 +4880,7 @@ function CompactDecisionCardShell({
         <div className="mt-2 flex items-center gap-2">
           <Link
             href={href}
-            className="rounded-full bg-orange-400 px-3 py-1.5 text-[11px] font-black text-[#1a0d08]"
+            className={`rounded-full px-3 py-1.5 text-[11px] font-black ${actionClass}`}
           >
             {primaryActionLabel}
           </Link>
@@ -5142,7 +5251,7 @@ function ActiveSceneContent({
       ...liveTruckCards.map((truck) => ({
         sourceRowId: "live_trucks_now" as const,
         sectionLabel: "Now Serving Trucks",
-        summary: formatScoutCount(liveTruckCards.length, "truck serving now", "trucks serving now"),
+        summary: formatScoutCount(liveTruckCards.length, "truck live now", "trucks live now"),
         cardType: "truck" as const,
         truck,
         businessKey: getScoutBusinessCardKey(truck, getTruckProfilePath(truck)),
@@ -5482,7 +5591,7 @@ function ActiveSceneContent({
 
     const renderScoutRailCard = (card: ScoutRailRenderCard) => {
       if (card.cardType === "truck") {
-        return card.cardKind === "food_truck" && card.truck.mobileOnline ? (
+        return card.cardKind === "food_truck" && isTruckServingNow(card.truck) ? (
           <LiveTruckCard truck={card.truck} currentUserId={currentUserId} relationshipSnapshot={restaurantRelationships} />
         ) : (
           <TruckCard truck={card.truck} currentUserId={currentUserId} />
@@ -5775,9 +5884,9 @@ function SceneMixedFeed({ items }: { items: CravingBoardItem[] }) {
 function SceneMixedFeedCard({ item }: { item: CravingBoardItem }) {
   const kindColor =
     item.kind === "Truck"
-      ? "text-purple-300"
+      ? "text-orange-200"
       : item.kind === "Menu"
-        ? "text-amber-300"
+        ? "text-orange-300"
       : item.kind === "Deal"
           ? "text-lime-300"
           : item.kind === "Event"
@@ -5798,18 +5907,57 @@ function SceneMixedFeedCard({ item }: { item: CravingBoardItem }) {
     .filter((label): label is string => Boolean(label))
     .filter((label, index, all) => all.indexOf(label) === index)
     .slice(0, 1);
+  const shellClass =
+    item.kind === "Menu"
+      ? "rounded-[0.85rem] bg-[#2c1609]/82 ring-orange-200/26 hover:bg-[#351a0a]/92 hover:ring-orange-200/46"
+      : item.kind === "Truck"
+        ? "rounded-[1.35rem] bg-[#100806]/84 ring-orange-300/30 hover:bg-[#1a0d07]/92 hover:ring-orange-200/44"
+        : item.kind === "Deal"
+          ? "rounded-xl bg-[#12200f]/72 ring-lime-200/18 hover:bg-[#172913]/86 hover:ring-lime-200/32"
+          : item.kind === "Event"
+            ? "rounded-xl bg-[#0d1724]/72 ring-sky-200/18 hover:bg-[#111e2f]/86 hover:ring-sky-200/32"
+            : "rounded-xl bg-[#0c1714]/78 ring-emerald-200/16 hover:bg-[#121f1b]/88 hover:ring-emerald-200/30";
+  const thumbClass =
+    item.kind === "Menu"
+      ? "rounded-full bg-orange-200/10 ring-orange-100/24"
+      : item.kind === "Truck"
+        ? "rounded-2xl bg-orange-200/8 ring-orange-300/26"
+        : item.kind === "Deal"
+          ? "rounded-lg bg-lime-200/8 ring-lime-200/18"
+          : item.kind === "Event"
+            ? "rounded-lg bg-sky-200/8 ring-sky-200/18"
+            : "rounded-lg bg-emerald-200/8 ring-emerald-200/16";
 
   return (
     <Link
       href={item.href}
-      className="flex items-center gap-3 rounded-2xl bg-[#120805]/56 px-3 py-2.5 text-white ring-1 ring-white/10 transition-colors hover:bg-[#1a0d08]/78 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
+      className={`relative flex items-center gap-3 overflow-hidden px-3 py-2.5 text-white ring-1 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70 ${item.kind === "Truck" ? "pl-5" : ""} ${shellClass}`}
     >
-      <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-white/6 ring-1 ring-white/10">
+      {item.kind === "Truck" ? (
+        <span
+          className="absolute inset-y-0 left-0 w-1.5 bg-[repeating-linear-gradient(180deg,rgba(251,146,60,0.95)_0_8px,rgba(88,39,12,0.95)_8px_14px)]"
+          aria-hidden="true"
+        />
+      ) : null}
+      {item.kind === "Menu" ? (
+        <span className="absolute inset-x-3 bottom-0 border-t border-dashed border-orange-100/20" aria-hidden="true" />
+      ) : null}
+      <div className={`h-16 w-16 shrink-0 overflow-hidden ring-1 ${thumbClass}`}>
         {item.imageUrl ? (
           <img src={item.imageUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
         ) : (
           <div className="flex h-full w-full items-center justify-center">
-            <Utensils className="h-5 w-5 text-orange-200/70" aria-hidden="true" />
+            {item.kind === "Truck" ? (
+              <TruckIcon className="h-5 w-5 text-orange-200/70" aria-hidden="true" />
+            ) : item.kind === "Deal" ? (
+              <Tag className="h-5 w-5 text-lime-200/70" aria-hidden="true" />
+            ) : item.kind === "Event" ? (
+              <CalendarDays className="h-5 w-5 text-sky-200/70" aria-hidden="true" />
+            ) : item.kind === "Place" ? (
+              <MapPin className="h-5 w-5 text-emerald-200/70" aria-hidden="true" />
+            ) : (
+              <Utensils className="h-5 w-5 text-orange-200/70" aria-hidden="true" />
+            )}
           </div>
         )}
       </div>
@@ -6452,6 +6600,7 @@ function LiveTruckCard({
   const wait = formatWait(truck);
   const vibe = getCrowdVibe(truck);
   const heroImage = truck.heroImageUrl || truck.imageUrl || truck.logoUrl;
+  const truckTone = getTruckCardTone(truck);
   const freshnessMeta: FreshnessMeta = {
     kind: "truck",
     updatedAt: readStringField(truck, ["updatedAt", "lastUpdatedAt"]),
@@ -6462,18 +6611,6 @@ function LiveTruckCard({
   };
   const badges = getOperationalBadges(freshnessMeta).slice(0, 3);
   const canEdit = isOwnedByCurrentUser(truck, currentUserId);
-  const truckStatusLabel = (() => {
-    if (isTruckServingNow(truck)) return "Posted up now";
-    const status = readStringField(truck, ["serviceStatus", "status", "operatingStatus"]);
-    if (status) {
-      const normalized = status.toLowerCase();
-      if (normalized.includes("scheduled")) return "Scheduled";
-      if (normalized.includes("claim")) return "Claimed truck";
-      if (normalized.includes("serving area")) return "Serving area";
-    }
-    return "Serving area";
-  })();
-  const truckStatusClass = isTruckServingNow(truck) ? "bg-red-500/90" : "bg-amber-500/90";
   const actions = canEdit
     ? [
         {
@@ -6492,14 +6629,21 @@ function LiveTruckCard({
   return (
     <Link
       href={getTruckProfilePath(truck)}
-      className="group block overflow-hidden rounded-[1.35rem] bg-[#120b08]/75 ring-1 ring-white/10 transition duration-200 hover:-translate-y-0.5 hover:ring-orange-300/28 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
+      className="group relative block overflow-hidden rounded-[1.7rem] bg-[#100806]/90 ring-1 ring-orange-300/36 transition duration-200 hover:-translate-y-0.5 hover:ring-emerald-200/36 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70"
       aria-label={`Open ${truck.name}`}
-      style={{ boxShadow: "0 18px 54px rgba(0,0,0,0.56)" }}
+      style={{ boxShadow: "0 18px 54px rgba(0,0,0,0.56), inset 0 0 0 1px rgba(251,146,60,0.08)" }}
     >
-      <div className="relative aspect-[4/5] w-full bg-[#120805]/60">
+      <span
+        className="absolute inset-y-0 left-0 z-20 w-2 bg-[repeating-linear-gradient(180deg,rgba(251,146,60,0.95)_0_10px,rgba(88,39,12,0.95)_10px_18px)]"
+        aria-hidden="true"
+      />
+      <span className="absolute left-5 top-5 bottom-5 z-20 w-px bg-orange-200/20" aria-hidden="true" />
+      <span className="absolute left-[1.05rem] top-5 z-20 h-2 w-2 rounded-full bg-orange-300 shadow-[0_0_12px_rgba(251,146,60,0.8)]" aria-hidden="true" />
+      <span className="absolute left-[1.05rem] bottom-5 z-20 h-2 w-2 rounded-full bg-emerald-300 shadow-[0_0_12px_rgba(52,211,153,0.75)]" aria-hidden="true" />
+      <div className="relative aspect-[16/11] w-full bg-[#120805]/60 pl-2">
         <ScoutCardMedia
           imageUrl={heroImage || null}
-          fallbackIcon={<Flame className="h-5 w-5 text-white/80" aria-hidden="true" />}
+          fallbackIcon={<TruckIcon className="h-5 w-5 text-white/80" aria-hidden="true" />}
           fallbackTestId="scout-live-truck-card-image-fallback"
           imageClassName="absolute inset-0 h-full w-full object-cover"
           categoryPhoto={getDishCategoryPhoto(truck.name, truck.cuisineType, truck.vibe)}
@@ -6513,11 +6657,14 @@ function LiveTruckCard({
           aria-hidden="true"
         />
 
-        <span className="absolute top-3 left-3 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wide text-white bg-orange-600 shadow-md">
+        <span className={`absolute top-3 left-3 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide shadow-md ring-1 ${getTruckToneClass(truckTone.tone)}`}>
+          <TruckIcon className="h-3 w-3" aria-hidden="true" />
           <span
-            className="h-1.5 w-1.5 rounded-full bg-white atmo-pulse-amber"
+            className={`h-1.5 w-1.5 rounded-full ${getTruckToneDotClass(truckTone.tone)}`}
             aria-hidden="true"
-          />Serving now</span>
+          />
+          {truckTone.label}
+        </span>
         <span className="absolute bottom-3 left-3 inline-flex items-center rounded-full bg-black/62 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-white/86 ring-1 ring-white/12">
           Food truck
         </span>
@@ -6538,29 +6685,35 @@ function LiveTruckCard({
           />
         </button>
 
-        <div className="absolute bottom-3 left-3 right-3">
-          <p className="text-white font-bold text-lg leading-tight truncate">
-            {truck.name}
-          </p>
-          <p className="mt-1 inline-flex items-center gap-1.5 text-orange-200 text-sm font-semibold">
-            <Flame className="h-4 w-4" aria-hidden="true" />
-            <span>{vibe.label}</span>
-          </p>
-          <p className="mt-1 text-white/75 text-xs">
-            {[wait, distance].filter(Boolean).join(" • ") || "Serving now"}
-          </p>
-          <div className="mt-2 flex flex-wrap gap-1">
-            {badges.map((badge) => (
-              <span
-                key={badge}
-                className={getFreshnessBadgeClass(freshnessMeta, badge)}
-              >
-                {badge}
-              </span>
-            ))}
+      </div>
+      <div className="relative border-t border-orange-200/12 bg-[#190b06]/94 px-4 py-3 pl-7">
+        <div className="flex items-start gap-2.5">
+          <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-orange-300/14 text-orange-200 ring-1 ring-orange-200/24">
+            <TruckIcon className="h-4 w-4" aria-hidden="true" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-base font-black leading-tight text-white">{truck.name}</p>
+            <p className="mt-1 inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-orange-200/86">
+              <Navigation2 className="h-3.5 w-3.5" aria-hidden="true" />
+              <span>{[wait, distance].filter(Boolean).join(" / ") || "Live location active"}</span>
+            </p>
           </div>
-          <OwnerOperationalActions actions={actions} />
         </div>
+        <p className="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-white/72">
+          <Flame className="h-4 w-4 text-orange-300" aria-hidden="true" />
+          <span>{vibe.label}</span>
+        </p>
+        <div className="mt-2 flex flex-wrap gap-1">
+          {badges.map((badge) => (
+            <span
+              key={badge}
+              className={getFreshnessBadgeClass(freshnessMeta, badge)}
+            >
+              {badge}
+            </span>
+          ))}
+        </div>
+        <OwnerOperationalActions actions={actions} />
       </div>
     </Link>
   );
@@ -6594,8 +6747,8 @@ function DealCard({
   return (
     <Link
       href={`/deal/${deal.id}`}
-      className="block overflow-hidden rounded-[1.35rem] bg-[#120b08]/75 ring-1 ring-white/10 transition duration-200 hover:-translate-y-0.5 hover:ring-orange-300/28 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
-      style={{ boxShadow: "0 18px 54px rgba(0,0,0,0.56)" }}
+      className="block overflow-hidden rounded-[1.05rem] bg-[#12200f]/82 ring-1 ring-lime-200/22 transition duration-200 hover:-translate-y-0.5 hover:ring-lime-200/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-lime-300/70"
+      style={{ boxShadow: "0 14px 36px rgba(0,0,0,0.5)" }}
       aria-label={`Open deal ${deal.title || ""}`}
     >
       <div className="relative aspect-[4/5] w-full bg-[#120805]/60">
@@ -6615,11 +6768,10 @@ function DealCard({
           }}
           aria-hidden="true"
         />
-        {deal.discountText && (
-          <span className="absolute top-3 left-3 inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wide text-[#1a0d08] bg-orange-300 shadow-md">
-            {deal.discountText}
-          </span>
-        )}
+        <span className="absolute top-3 left-3 inline-flex items-center gap-1 rounded-full bg-lime-300 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-[#102006] shadow-md">
+          <Tag className="h-3 w-3" aria-hidden="true" />
+          {deal.discountText || "Deal"}
+        </span>
         <div className="absolute bottom-3 left-3 right-3">
           <p className="text-white font-bold text-lg leading-tight line-clamp-2">
             {deal.title || "Featured Deal"}
@@ -6858,39 +7010,35 @@ function LocalMenuItemCard({
           discoveryReasons: item.discoveryReasons,
         })
       }
-      className="block overflow-hidden rounded-[1.35rem] bg-[#120b08]/75 ring-1 ring-white/10 transition duration-200 hover:-translate-y-0.5 hover:ring-orange-300/28 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
-      style={{ boxShadow: "0 18px 54px rgba(0,0,0,0.56)" }}
+      className="block overflow-hidden rounded-[0.85rem] bg-[#2c1609]/92 p-2 ring-1 ring-orange-200/30 transition duration-200 hover:-translate-y-0.5 hover:ring-orange-200/52 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
+      style={{ boxShadow: "0 14px 34px rgba(0,0,0,0.48)" }}
       aria-label={`Open ${item.name} from ${item.restaurantName || "local menu"}`}
       data-testid="scout-local-menu-item-card"
     >
-      <div className="relative aspect-[4/3] w-full bg-[#120805]/60">
-        <ScoutCardMedia
-          imageUrl={item.imageUrl || item.restaurantLogoUrl || item.restaurantCoverImageUrl || null}
-          fallbackIcon={<Utensils className="h-5 w-5 text-white/80" aria-hidden="true" />}
-          fallbackTestId="scout-local-menu-item-card-image-fallback"
-          imageClassName="absolute inset-0 h-full w-full object-cover"
-          fallbackClassName="bg-[linear-gradient(150deg,#fb923c_0%,#ea580c_45%,#9a3412_100%)]"
-          categoryPhoto={getDishCategoryPhoto(item.name, item.description)}
-        />
-        <div
-          className="absolute inset-0"
-          style={{
-            backgroundImage:
-              "linear-gradient(180deg, rgba(0,0,0,0) 34%, rgba(0,0,0,0.9) 100%)",
-          }}
-          aria-hidden="true"
-        />
-        <span className="absolute top-3 left-3 inline-flex items-center gap-1 rounded-full bg-orange-300 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-[#1a0d08]">
+      <div className="relative rounded-[0.7rem] bg-[#180b05]/76 p-3 ring-1 ring-orange-200/14">
+        <div className="relative mx-auto aspect-square w-[82%] rounded-full bg-orange-200/10 p-2 ring-1 ring-orange-100/22">
+          <div className="relative h-full w-full overflow-hidden rounded-full bg-[#120805]/60 ring-1 ring-black/30">
+            <ScoutCardMedia
+              imageUrl={item.imageUrl || item.restaurantLogoUrl || item.restaurantCoverImageUrl || null}
+              fallbackIcon={<Utensils className="h-5 w-5 text-white/80" aria-hidden="true" />}
+              fallbackTestId="scout-local-menu-item-card-image-fallback"
+              imageClassName="absolute inset-0 h-full w-full object-cover"
+              fallbackClassName="bg-[linear-gradient(150deg,#fb923c_0%,#ea580c_45%,#9a3412_100%)]"
+              categoryPhoto={getDishCategoryPhoto(item.name, item.description)}
+            />
+          </div>
+        </div>
+        <span className="absolute left-2.5 top-2.5 inline-flex items-center gap-1 rounded-md bg-orange-300 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-[#1a0d08]">
           <Utensils className="h-3 w-3" aria-hidden="true" />
-          Menu
+          Dish
         </span>
         {price && (
-          <span className="absolute top-3 right-3 rounded-full bg-[#120805]/75 px-2.5 py-1 text-[11px] font-bold text-orange-100 ring-1 ring-orange-300/30">
+          <span className="absolute right-2.5 top-2.5 rounded-md bg-[#120805]/86 px-2 py-1 text-[11px] font-black text-orange-100 ring-1 ring-orange-300/32">
             {price}
           </span>
         )}
       </div>
-      <div className="px-3 py-3">
+      <div className="border-t border-dashed border-orange-100/20 px-2.5 pb-1 pt-3">
         <p className="line-clamp-2 text-sm font-bold leading-snug text-white">
           {item.name}
         </p>
@@ -7050,8 +7198,8 @@ function EventCard({
   return (
     <Link
       href={`/event/${event.id}`}
-      className="block overflow-hidden rounded-[1.35rem] bg-[#120b08]/75 ring-1 ring-white/10 transition duration-200 hover:-translate-y-0.5 hover:ring-orange-300/28 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
-      style={{ boxShadow: "0 18px 54px rgba(0,0,0,0.56)" }}
+      className="block overflow-hidden rounded-[1.2rem] bg-[#0d1724]/82 ring-1 ring-sky-200/22 transition duration-200 hover:-translate-y-0.5 hover:ring-sky-200/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-300/70"
+      style={{ boxShadow: "0 16px 42px rgba(0,0,0,0.5)" }}
       aria-label={`Open event ${title}`}
     >
       <div className="relative aspect-[4/5] w-full bg-[#120805]/60">
@@ -7060,7 +7208,7 @@ function EventCard({
           fallbackIcon={<CalendarDays className="h-5 w-5 text-white/80" aria-hidden="true" />}
           fallbackTestId="scout-event-card-image-fallback"
           imageClassName="absolute inset-0 h-full w-full object-cover"
-          fallbackClassName="bg-[linear-gradient(150deg,#e879f9_0%,#c026d3_45%,#86198f_100%)]"
+          fallbackClassName="bg-[linear-gradient(150deg,#38bdf8_0%,#2563eb_48%,#1e1b4b_100%)]"
         />
         <div
           className="absolute inset-0"
@@ -7070,6 +7218,10 @@ function EventCard({
           }}
           aria-hidden="true"
         />
+        <span className="absolute top-3 left-3 inline-flex items-center gap-1 rounded-full bg-sky-300 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-[#071322] shadow-md">
+          <CalendarDays className="h-3 w-3" aria-hidden="true" />
+          Event
+        </span>
         <div className="absolute bottom-3 left-3 right-3">
           <p className="text-white font-bold text-lg leading-tight line-clamp-2">
             {title}
@@ -7078,7 +7230,7 @@ function EventCard({
             <p className="mt-1 text-white/80 text-xs truncate">{venue}</p>
           )}
           {startLabel && (
-            <p className="mt-1 inline-flex items-center gap-1.5 text-orange-200 text-xs font-semibold">
+            <p className="mt-1 inline-flex items-center gap-1.5 text-sky-200 text-xs font-semibold">
               <CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />
               {startLabel}
             </p>
@@ -7241,9 +7393,22 @@ function NearbyRestaurantCard({
       hasMenu: menuPreview.length > 0,
       hasCommunityUpdate: communityUpdates.length > 0,
       hasDistance: Boolean(distLabel),
-      isOpen: true,
+      isOpen: isFoodTruckEntity
+        ? isTruckServingNow(restaurant as unknown as LiveTruckSummary)
+        : true,
     }),
   ];
+  const cardShellClass = isFoodTruckEntity
+    ? "group relative block overflow-hidden rounded-[1.65rem] bg-[#100806]/88 ring-1 ring-orange-300/32 transition duration-200 hover:-translate-y-0.5 hover:ring-orange-200/44 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
+    : "group block overflow-hidden rounded-[1rem] bg-[#0c1714]/84 ring-1 ring-emerald-200/18 transition duration-200 hover:-translate-y-0.5 hover:ring-emerald-200/34 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70";
+  const labelPillClass = isFoodTruckEntity
+    ? "bg-[#120805]/72 text-orange-100 ring-orange-200/22"
+    : "bg-[#071411]/72 text-emerald-100 ring-emerald-200/18";
+  const statusDotClass = isFoodTruckEntity ? "bg-orange-400" : "bg-emerald-400";
+  const statusTextClass = isFoodTruckEntity ? "text-orange-200/85" : "text-emerald-200/85";
+  const placeIcon = isFoodTruckEntity
+    ? <TruckIcon className="h-5 w-5 text-white/80" aria-hidden="true" />
+    : <MapPin className="h-5 w-5 text-white/80" aria-hidden="true" />;
 
   const sendRestaurantAction = async (
     action: "favorite" | "follow" | "recommend",
@@ -7375,16 +7540,27 @@ function NearbyRestaurantCard({
   return (
     <Link
       href={profileHref}
-      className="group block overflow-hidden rounded-[1.35rem] bg-[#120b08]/75 ring-1 ring-white/10 transition duration-200 hover:-translate-y-0.5 hover:ring-orange-300/28 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
+      className={cardShellClass}
       aria-label={`Open ${name}`}
-      style={{ boxShadow: "0 18px 54px rgba(0,0,0,0.5)" }}
+      style={{ boxShadow: "0 16px 42px rgba(0,0,0,0.48)" }}
       data-testid="scout-restaurant-card"
     >
+      {isFoodTruckEntity ? (
+        <>
+          <span
+            className="absolute inset-y-0 left-0 z-20 w-2 bg-[repeating-linear-gradient(180deg,rgba(251,146,60,0.95)_0_10px,rgba(88,39,12,0.95)_10px_18px)]"
+            aria-hidden="true"
+          />
+          <span className="absolute left-5 top-5 bottom-5 z-20 w-px bg-orange-200/20" aria-hidden="true" />
+          <span className="absolute left-[1.05rem] top-5 z-20 h-2 w-2 rounded-full bg-orange-300 shadow-[0_0_12px_rgba(251,146,60,0.8)]" aria-hidden="true" />
+          <span className="absolute left-[1.05rem] bottom-5 z-20 h-2 w-2 rounded-full bg-emerald-300 shadow-[0_0_12px_rgba(52,211,153,0.75)]" aria-hidden="true" />
+        </>
+      ) : null}
       {/* Image */}
-      <div className="relative aspect-[4/3] w-full bg-[#120805]/60">
+      <div className={`relative w-full bg-[#120805]/60 ${isFoodTruckEntity ? "aspect-[16/9] pl-2" : "aspect-[4/3]"}`}>
         <ScoutCardMedia
           imageUrl={img || null}
-          fallbackIcon={<Utensils className="h-5 w-5 text-white/80" aria-hidden="true" />}
+          fallbackIcon={placeIcon}
           fallbackTestId="scout-nearby-restaurant-card-image-fallback"
           imageClassName="absolute inset-0 h-full w-full object-cover"
           categoryPhoto={getDishCategoryPhoto(name, cuisine)}
@@ -7395,24 +7571,25 @@ function NearbyRestaurantCard({
           aria-hidden="true"
         />
         {dealCount > 0 && (
-          <span className="absolute top-2.5 left-2.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide text-white bg-orange-600 shadow">
+          <span className={`absolute top-2.5 inline-flex items-center gap-1 rounded-full bg-orange-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white shadow ${isFoodTruckEntity ? "left-4" : "left-2.5"}`}>
             <Tag className="h-2.5 w-2.5" aria-hidden="true" />
             {dealCount} deal{dealCount > 1 ? "s" : ""}
           </span>
         )}
-        <span className="absolute top-2.5 right-2.5 inline-flex items-center rounded-full bg-black/62 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white/86 ring-1 ring-white/12">
+        <span className={`absolute top-2.5 right-2.5 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ring-1 ${labelPillClass}`}>
+          {isFoodTruckEntity ? <TruckIcon className="h-3 w-3" aria-hidden="true" /> : <MapPin className="h-3 w-3" aria-hidden="true" />}
           {canonicalLabel}
         </span>
       </div>
       {/* Info */}
-      <div className="px-3 py-2.5">
+      <div className={isFoodTruckEntity ? "border-t border-orange-200/12 bg-[#190b06]/92 px-3 py-3 pl-7" : "border-t border-emerald-200/10 bg-[#0f1b17]/82 px-3 py-2.5"}>
         <div className="flex items-baseline justify-between gap-2">
           <p className="min-w-0 truncate text-white font-semibold text-sm leading-snug">{name}</p>
           {statusLabels.length > 0 && (
-            <span className="inline-flex shrink-0 items-center gap-1 text-[9px] font-bold uppercase tracking-wide text-orange-200/85">
+            <span className={`inline-flex shrink-0 items-center gap-1 text-[9px] font-bold uppercase tracking-wide ${statusTextClass}`}>
               <span
-                className="h-1.5 w-1.5 rounded-full bg-orange-400"
-                style={{ boxShadow: "0 0 6px rgba(251,146,60,0.8)" }}
+                className={`h-1.5 w-1.5 rounded-full ${statusDotClass}`}
+                style={{ boxShadow: isFoodTruckEntity ? "0 0 6px rgba(251,146,60,0.8)" : "0 0 6px rgba(52,211,153,0.7)" }}
                 aria-hidden="true"
               />
               {statusLabels[0]}
@@ -7421,7 +7598,7 @@ function NearbyRestaurantCard({
         </div>
         <div className="mt-0.5 flex items-center gap-1.5 flex-wrap">
           {cuisine && (
-            <span className="text-orange-300/80 text-[11px]">{cuisine}</span>
+            <span className={`${isFoodTruckEntity ? "text-orange-300/80" : "text-emerald-200/76"} text-[11px]`}>{cuisine}</span>
           )}
           {cuisine && (location || distLabel) && (
             <span className="text-white/30 text-[11px]">·</span>
@@ -7597,17 +7774,29 @@ function SavedRestaurantCard({ restaurant }: { restaurant: RestaurantSummary }) 
     restaurant.logoUrl;
   const location = restaurant.neighborhood || restaurant.city || restaurant.address;
   const cuisine = restaurant.cuisineType;
+  const cardShellClass = isFoodTruckEntity
+    ? "relative block overflow-hidden rounded-[1.55rem] bg-[#100806]/86 ring-1 ring-orange-300/28 transition hover:bg-[#1a0d07]/92 hover:ring-orange-200/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
+    : "block overflow-hidden rounded-xl bg-[#0c1714]/82 ring-1 ring-emerald-200/16 transition hover:bg-[#121f1b]/88 hover:ring-emerald-200/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70";
+  const labelPillClass = isFoodTruckEntity
+    ? "bg-[#120805]/72 text-orange-100 ring-orange-200/22"
+    : "bg-[#071411]/72 text-emerald-100 ring-emerald-200/18";
 
   return (
     <Link
       href={profileHref}
-      className="block overflow-hidden rounded-3xl bg-white/5 ring-1 ring-white/10 transition hover:bg-white/8 hover:ring-orange-300/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
+      className={cardShellClass}
       aria-label={`Open saved ${canonicalLabel.toLowerCase()} ${name}`}
     >
-      <div className="relative h-24 bg-[#120805]/50">
+      {isFoodTruckEntity ? (
+        <span
+          className="absolute inset-y-0 left-0 z-20 w-2 bg-[repeating-linear-gradient(180deg,rgba(251,146,60,0.95)_0_10px,rgba(88,39,12,0.95)_10px_18px)]"
+          aria-hidden="true"
+        />
+      ) : null}
+      <div className={`relative h-24 bg-[#120805]/50 ${isFoodTruckEntity ? "pl-2" : ""}`}>
         <ScoutCardMedia
           imageUrl={img || null}
-          fallbackIcon={<Heart className="h-5 w-5 text-white/80" aria-hidden="true" />}
+          fallbackIcon={isFoodTruckEntity ? <TruckIcon className="h-5 w-5 text-white/80" aria-hidden="true" /> : <MapPin className="h-5 w-5 text-white/80" aria-hidden="true" />}
           fallbackTestId="scout-saved-restaurant-card-image-fallback"
           imageClassName="absolute inset-0 h-full w-full object-cover"
           categoryPhoto={getDishCategoryPhoto(name, cuisine)}
@@ -7620,14 +7809,15 @@ function SavedRestaurantCard({ restaurant }: { restaurant: RestaurantSummary }) 
           }}
           aria-hidden="true"
         />
-        <span className="absolute left-2.5 top-2.5 inline-flex items-center rounded-full bg-black/62 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white/86 ring-1 ring-white/12">
+        <span className={`absolute top-2.5 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ring-1 ${isFoodTruckEntity ? "left-4" : "left-2.5"} ${labelPillClass}`}>
+          {isFoodTruckEntity ? <TruckIcon className="h-3 w-3" aria-hidden="true" /> : <MapPin className="h-3 w-3" aria-hidden="true" />}
           {canonicalLabel}
         </span>
       </div>
-      <div className="px-3 py-3">
+      <div className={isFoodTruckEntity ? "border-t border-orange-200/12 bg-[#190b06]/90 px-3 py-3 pl-6" : "border-t border-emerald-200/10 bg-[#0f1b17]/80 px-3 py-3"}>
         <p className="truncate text-sm font-semibold text-white">{name}</p>
         <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px]">
-          {cuisine && <span className="text-orange-200/80">{cuisine}</span>}
+          {cuisine && <span className={isFoodTruckEntity ? "text-orange-200/80" : "text-emerald-200/74"}>{cuisine}</span>}
           {cuisine && location && <span className="text-white/25">·</span>}
           {location && <span className="truncate text-white/55">{location}</span>}
         </div>
@@ -8101,7 +8291,7 @@ function ScoutMapHud({
               </p>
             </div>
           </div>
-          <span className="rounded-full bg-orange-500/16 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-orange-100 ring-1 ring-orange-200/25">Serving now</span>
+          <span className="rounded-full bg-orange-500/16 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-orange-100 ring-1 ring-orange-200/25">Live map</span>
         </div>
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0">
@@ -8327,28 +8517,18 @@ function TruckCard({
     typeof wait === "number" && Number.isFinite(wait) && wait > 0
       ? `~${Math.round(wait)} min`
       : null;
+  const isServing = isTruckServingNow(truck);
+  const truckTone = getTruckCardTone(truck);
   const freshnessMeta: FreshnessMeta = {
     kind: "truck",
     updatedAt: readStringField(truck, ["updatedAt", "lastUpdatedAt"]),
     confirmedAt: readStringField(truck, ["confirmedAt", "lastConfirmedAt"]),
     hasDeal: Boolean(truck.activeDealCount && truck.activeDealCount > 0),
     hasDistance: Boolean(distLabel),
-    isOpen: true,
+    isOpen: isServing,
   };
   const badges = getOperationalBadges(freshnessMeta).slice(0, 3);
   const canEdit = isOwnedByCurrentUser(truck, currentUserId);
-  const truckStatusLabel = (() => {
-    if (isTruckServingNow(truck)) return "Posted up now";
-    const status = readStringField(truck, ["serviceStatus", "status", "operatingStatus"]);
-    if (status) {
-      const normalized = status.toLowerCase();
-      if (normalized.includes("scheduled")) return "Scheduled";
-      if (normalized.includes("claim")) return "Claimed truck";
-      if (normalized.includes("serving area")) return "Serving area";
-    }
-    return "Serving area";
-  })();
-  const truckStatusClass = isTruckServingNow(truck) ? "bg-red-500/90" : "bg-amber-500/90";
   const actions = canEdit
     ? [
         {
@@ -8372,13 +8552,21 @@ function TruckCard({
         event.preventDefault();
         onSelect(truck);
       }}
-      className="block overflow-hidden rounded-[1.35rem] bg-[#120b08]/75 ring-1 ring-white/10 transition duration-200 hover:-translate-y-0.5 hover:ring-orange-300/28 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
+      className="relative block overflow-hidden rounded-[1.65rem] bg-[#100806]/88 ring-1 ring-orange-300/32 transition duration-200 hover:-translate-y-0.5 hover:ring-orange-200/44 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
+      style={{ boxShadow: "0 16px 42px rgba(0,0,0,0.5), inset 0 0 0 1px rgba(251,146,60,0.08)" }}
     >
+      <span
+        className="absolute inset-y-0 left-0 z-20 w-2 bg-[repeating-linear-gradient(180deg,rgba(251,146,60,0.95)_0_10px,rgba(88,39,12,0.95)_10px_18px)]"
+        aria-hidden="true"
+      />
+      <span className="absolute left-5 top-5 bottom-5 z-20 w-px bg-orange-200/20" aria-hidden="true" />
+      <span className="absolute left-[1.05rem] top-5 z-20 h-2 w-2 rounded-full bg-orange-300 shadow-[0_0_12px_rgba(251,146,60,0.8)]" aria-hidden="true" />
+      <span className="absolute left-[1.05rem] bottom-5 z-20 h-2 w-2 rounded-full bg-emerald-300 shadow-[0_0_12px_rgba(52,211,153,0.75)]" aria-hidden="true" />
       {/* Hero image */}
-      <div className="relative aspect-[4/3] w-full bg-[#120805]/40 overflow-hidden">
+      <div className="relative aspect-[16/9] w-full overflow-hidden bg-[#120805]/40 pl-2">
         <ScoutCardMedia
           imageUrl={img || null}
-          fallbackIcon={<Flame className="h-5 w-5 text-white/80" aria-hidden="true" />}
+          fallbackIcon={<TruckIcon className="h-5 w-5 text-white/80" aria-hidden="true" />}
           fallbackTestId="scout-truck-card-image-fallback"
           imageClassName="h-full w-full object-cover"
           categoryPhoto={getDishCategoryPhoto(truck.name, truck.cuisineType, truck.vibe)}
@@ -8388,10 +8576,10 @@ function TruckCard({
           style={{ backgroundImage: "linear-gradient(180deg, rgba(0,0,0,0) 40%, rgba(0,0,0,0.75) 100%)" }}
           aria-hidden="true"
         />
-        {/* Serving badge */}
-        <span className={`absolute top-2.5 left-2.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide text-white shadow ${truckStatusClass}`}>
-          <span className={`h-1.5 w-1.5 rounded-full bg-white ${isTruckServingNow(truck) ? "animate-pulse" : ""}`} aria-hidden="true" />
-          {truckStatusLabel}
+        <span className={`absolute top-2.5 left-3 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide shadow ring-1 ${getTruckToneClass(truckTone.tone)}`}>
+          <TruckIcon className="h-3 w-3" aria-hidden="true" />
+          <span className={`h-1.5 w-1.5 rounded-full ${getTruckToneDotClass(truckTone.tone)}`} aria-hidden="true" />
+          {truckTone.label}
         </span>
         {truck.activeDealCount && truck.activeDealCount > 0 ? (
           <span className="absolute top-2.5 right-2.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide text-white bg-orange-600 shadow">
@@ -8399,19 +8587,26 @@ function TruckCard({
             Deal
           </span>
         ) : null}
-        <span className="absolute bottom-2.5 left-2.5 inline-flex items-center rounded-full bg-black/62 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white/86 ring-1 ring-white/12">
+        <span className="absolute bottom-2.5 left-4 inline-flex items-center rounded-full bg-black/62 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white/86 ring-1 ring-white/12">
           Food truck
         </span>
       </div>
       {/* Info */}
-      <div className="px-3 py-2.5">
-        <p className="text-white font-semibold text-sm leading-snug truncate">{name}</p>
-        <div className="mt-0.5 flex items-center gap-1.5 flex-wrap">
-          {cuisine && <span className="text-orange-300/80 text-[11px]">{cuisine}</span>}
-          {cuisine && (distLabel || waitLabel) && <span className="text-white/30 text-[11px]">·</span>}
-          {distLabel && <span className="text-white/60 text-[11px]">{distLabel}</span>}
-          {distLabel && waitLabel && <span className="text-white/30 text-[11px]">·</span>}
-          {waitLabel && <span className="text-white/50 text-[11px]">{waitLabel} wait</span>}
+      <div className="border-t border-orange-200/12 bg-[#190b06]/92 px-3 py-3 pl-7">
+        <div className="flex items-start gap-2.5">
+          <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-orange-300/14 text-orange-200 ring-1 ring-orange-200/24">
+            <TruckIcon className="h-4 w-4" aria-hidden="true" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-black leading-snug text-white">{name}</p>
+            <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+              {cuisine && <span className="text-orange-300/80 text-[11px]">{cuisine}</span>}
+              {cuisine && (distLabel || waitLabel) && <span className="text-white/30 text-[11px]">/</span>}
+              {distLabel && <span className="text-white/60 text-[11px]">{distLabel}</span>}
+              {distLabel && waitLabel && <span className="text-white/30 text-[11px]">/</span>}
+              {waitLabel && <span className="text-white/50 text-[11px]">{waitLabel} wait</span>}
+            </div>
+          </div>
         </div>
         <div className="mt-2 flex flex-wrap gap-1">
           {badges.map((badge) => (
