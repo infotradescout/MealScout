@@ -57,9 +57,9 @@ const MINI_MAP_STYLE: StyleSpecification = {
       source: "carto-dark",
       paint: {
         "raster-opacity": 1,
-        "raster-brightness-min": 0,
-        "raster-brightness-max": 0.82,
-        "raster-saturation": 0.1,
+        "raster-brightness-min": 0.12,
+        "raster-brightness-max": 1,
+        "raster-saturation": 0.18,
         "raster-contrast": 0.12,
       },
     },
@@ -389,10 +389,10 @@ export function ThemedScoutMapV2({
 
       <style>{`
         .msm-map-canvas .maplibregl-canvas {
-          filter: saturate(1.05) contrast(1.05) brightness(0.96) sepia(0.04);
+          filter: saturate(1.1) contrast(1.05) brightness(1.15) sepia(0.04);
         }
         .msm-mode-interactive .msm-map-canvas .maplibregl-canvas {
-          filter: saturate(1.02) contrast(1.03) brightness(0.97) sepia(0.03);
+          filter: saturate(1.05) contrast(1.03) brightness(1.1) sepia(0.03);
         }
 
         .msm-map-illustration {
@@ -438,11 +438,11 @@ export function ThemedScoutMapV2({
           content: "";
           position: absolute;
           inset: 0;
-          background: radial-gradient(ellipse at center, transparent 42%, rgba(0, 0, 0, 0.55) 100%);
+          background: radial-gradient(ellipse at center, transparent 55%, rgba(0, 0, 0, 0.32) 100%);
           pointer-events: none;
         }
         .msm-mode-interactive .msm-map-grade::after {
-          background: radial-gradient(ellipse at center, transparent 48%, rgba(0, 0, 0, 0.4) 100%);
+          background: radial-gradient(ellipse at center, transparent 58%, rgba(0, 0, 0, 0.22) 100%);
         }
 
         .msm-food-glow { z-index: 3; overflow: hidden; }
