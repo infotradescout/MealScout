@@ -256,17 +256,21 @@ export function ThemedScoutMapV2({
 
     const KIND_ICONS: Record<string, string> = {
       truck: "T", restaurant: "R",
-      event: "E", deal: "$", geo_ad: "◆", supplier: "S",
+      parking: "H", event: "E", deal: "$", geo_ad: "◆", supplier: "S",
     };
 
     const renderIconPin = (el: HTMLButtonElement, marker: MapAdapterMarker) => {
       el.classList.remove("msm-map-pin--photo");
       const icon = KIND_ICONS[marker.kind || "truck"] ?? "·";
+      const truckBadge = (marker.parkedTrucks?.length || 0) > 0
+        ? `<span class="msm-map-pin__truck-badge" aria-hidden="true">T</span>`
+        : "";
       el.innerHTML = `
         <span class="msm-map-pin__drop" aria-hidden="true">
           <span class="msm-map-pin__icon">${icon}</span>
           <span class="msm-map-pin__glow"></span>
         </span>
+        ${truckBadge}
       `;
     };
 
@@ -341,33 +345,6 @@ export function ThemedScoutMapV2({
           />
         )}
       </div>
-      <svg
-        className="msm-map-illustration absolute inset-0 h-full w-full pointer-events-none"
-        viewBox="0 0 800 520"
-        preserveAspectRatio="none"
-        aria-hidden="true"
-      >
-        <defs>
-          <filter id="msm-soft-shadow" x="-20%" y="-40%" width="140%" height="180%">
-            <feDropShadow dx="0" dy="5" stdDeviation="5" floodColor="#9a4812" floodOpacity="0.16" />
-          </filter>
-        </defs>
-        <g fill="none" strokeLinecap="round" strokeLinejoin="round" filter="url(#msm-soft-shadow)">
-          <path className="msm-road msm-road--major" d="M-40 365 C120 312 196 244 322 250 C456 256 548 338 840 278" />
-          <path className="msm-road msm-road--major msm-road--alt" d="M96 -28 C120 90 182 170 280 214 C410 274 458 344 506 548" />
-          <path className="msm-road" d="M-10 174 C126 186 210 164 306 112 C392 66 510 76 812 128" />
-          <path className="msm-road" d="M56 512 C100 440 182 386 294 354 C436 314 570 326 828 390" />
-          <path className="msm-road msm-road--thin" d="M164 18 C198 112 242 168 300 210 C370 260 424 276 560 286" />
-          <path className="msm-road msm-road--thin" d="M14 268 C114 242 224 244 346 284 C430 312 508 374 620 514" />
-          <path className="msm-road msm-road--thin" d="M594 -20 C562 92 560 176 596 244 C636 322 650 410 628 548" />
-        </g>
-        <g className="msm-food-dots">
-          <circle cx="166" cy="168" r="8" />
-          <circle cx="300" cy="250" r="7" />
-          <circle cx="512" cy="286" r="8" />
-          <circle cx="620" cy="390" r="7" />
-        </g>
-      </svg>
       {/* ── Warm daylight grade ── */}
       <div aria-hidden="true" className="msm-map-grade absolute inset-0" />
 
@@ -393,33 +370,6 @@ export function ThemedScoutMapV2({
         }
         .msm-mode-interactive .msm-map-canvas .maplibregl-canvas {
           filter: saturate(1.05) contrast(1.03) brightness(1.1) sepia(0.03);
-        }
-
-        .msm-map-illustration {
-          z-index: 1;
-          opacity: 0.85;
-          mix-blend-mode: screen;
-        }
-        .msm-road {
-          stroke: rgba(255, 178, 80, 0.5);
-          stroke-width: 18;
-        }
-        .msm-road--major {
-          stroke: rgba(249, 115, 22, 0.42);
-          stroke-width: 28;
-        }
-        .msm-road--alt {
-          stroke: rgba(34, 197, 94, 0.2);
-        }
-        .msm-road--thin {
-          stroke: rgba(255, 214, 128, 0.4);
-          stroke-width: 10;
-        }
-        .msm-food-dots circle {
-          fill: #fff7ed;
-          stroke: #f97316;
-          stroke-width: 4;
-          filter: drop-shadow(0 5px 10px rgba(154,72,18,0.18));
         }
 
         .msm-map-grade {
@@ -617,6 +567,29 @@ export function ThemedScoutMapV2({
           box-shadow: 0 2px 0 rgba(255,255,255,0.60) inset, 0 8px 18px rgba(192,38,211,0.24), 0 0 0 3px rgba(250,232,255,0.86);
         }
         .msm-map-pin--event .msm-map-pin__glow { background: rgba(232,121,249,0.24); }
+        /* Host location */
+        .msm-map-pin--parking .msm-map-pin__drop {
+          background: #f59e0b;
+          box-shadow: 0 2px 0 rgba(255,255,255,0.62) inset, 0 8px 18px rgba(180,83,9,0.26), 0 0 0 3px rgba(254,243,199,0.88);
+        }
+        .msm-map-pin--parking .msm-map-pin__glow { background: rgba(245,158,11,0.26); }
+        .msm-map-pin__truck-badge {
+          position: absolute;
+          right: -5px;
+          top: -5px;
+          z-index: 3;
+          width: 16px;
+          height: 16px;
+          border-radius: 999px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: #fb923c;
+          color: #1b0b02;
+          border: 2px solid #fff7ed;
+          box-shadow: 0 5px 12px rgba(0,0,0,0.36);
+          font: 900 9px/1 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
         /* Geo ad — teal */
         .msm-map-pin--geo_ad .msm-map-pin__drop {
           background: #34d399;

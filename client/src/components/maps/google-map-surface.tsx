@@ -209,7 +209,7 @@ const markerColor = (marker: MapAdapterMarker): string => {
     case "user":       return "#3b82f6"; // blue
     case "truck":      return "#f97316"; // amber-orange
     case "restaurant": return "#fbbf24"; // amber-yellow (distinct from truck)
-    case "parking":    return "#0ea5e9"; // sky
+    case "parking":    return "#f59e0b"; // host amber
     case "event":      return "#d946ef"; // fuchsia
     case "deal":       return "#22c55e"; // green
     case "geo_ad":     return "#eab308"; // yellow
@@ -221,7 +221,7 @@ const markerGlyph = (marker: MapAdapterMarker): string => {
   switch (marker.kind) {
     case "truck": return "T";
     case "restaurant": return "F";
-    case "parking": return "P";
+    case "parking": return "H";
     case "event": return "E";
     case "deal": return "$";
     case "user": return "";
@@ -235,13 +235,37 @@ const svgDataUrl = (svg: string) =>
 /* ─── Glowing SVG dot marker (AdvancedMarker content) ───────────────────── */
 const buildGlowDotElement = (marker: MapAdapterMarker): HTMLElement => {
   if (marker.kind === "parking") {
+    const wrapper = document.createElement("div");
+    wrapper.style.cssText = "position:relative;width:38px;height:38px;display:flex;align-items:center;justify-content:center;cursor:pointer;";
     const img = document.createElement("img");
     img.src = mealScoutIcon;
-    img.alt = marker.title || "Parking";
+    img.alt = marker.title || "Host location";
     img.width = 34;
     img.height = 34;
-    img.style.cssText = "width:34px;height:34px;display:block;";
-    return img;
+    img.style.cssText = "width:34px;height:34px;display:block;filter:drop-shadow(0 8px 16px rgba(0,0,0,0.38));";
+    wrapper.appendChild(img);
+    if ((marker.parkedTrucks?.length || 0) > 0) {
+      const badge = document.createElement("span");
+      badge.textContent = "T";
+      badge.style.cssText = [
+        "position:absolute",
+        "right:-2px",
+        "top:-2px",
+        "width:17px",
+        "height:17px",
+        "border-radius:999px",
+        "display:flex",
+        "align-items:center",
+        "justify-content:center",
+        "background:#fb923c",
+        "color:#1b0b02",
+        "font:900 10px/1 Arial,sans-serif",
+        "border:2px solid #fff7ed",
+        "box-shadow:0 4px 12px rgba(0,0,0,0.35)",
+      ].join(";");
+      wrapper.appendChild(badge);
+    }
+    return wrapper;
   }
 
   const color = markerColor(marker);
@@ -322,6 +346,11 @@ const buildLegacyIcon = (googleMaps: any, marker: MapAdapterMarker) => {
   const color = markerColor(marker);
   if (marker.kind !== "user") {
     const glyph = markerGlyph(marker);
+    const parkedTruckCount = marker.parkedTrucks?.length || 0;
+    const parkedTruckBadge = parkedTruckCount > 0
+      ? `<circle cx="40" cy="14" r="9" fill="#fb923c" stroke="#fff7ed" stroke-width="2"/>
+         <text x="40" y="18" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="900" fill="#1b0b02">T</text>`
+      : "";
     const svg = `
       <svg width="54" height="66" viewBox="0 0 54 66" xmlns="http://www.w3.org/2000/svg">
         <defs>
@@ -335,6 +364,7 @@ const buildLegacyIcon = (googleMaps: any, marker: MapAdapterMarker) => {
         <path filter="url(#glow)" d="M27 3C15.4 3 6 12.4 6 24c0 15.8 21 38 21 38s21-22.2 21-38C48 12.4 38.6 3 27 3z" fill="${color}" stroke="#ffd08a" stroke-width="2"/>
         <circle cx="27" cy="24" r="13" fill="#1b0d05" opacity="0.9" stroke="#fff3d6" stroke-width="1.5"/>
         <text x="27" y="29" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="900" fill="#fff3d6">${glyph}</text>
+        ${parkedTruckBadge}
       </svg>
     `;
     return {
@@ -742,6 +772,8 @@ export function GoogleMapSurface({
         marker.color || "",
         marker.title || "",
         marker.subtitle || "",
+        marker.parkingStatus || "",
+        (marker.parkedTrucks || []).map((truck) => `${truck.id || ""}:${truck.name}`).join(","),
       ].join("|");
 
       if (existing) {

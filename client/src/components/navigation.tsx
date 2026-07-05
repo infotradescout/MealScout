@@ -253,6 +253,12 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
                   ? "host"
                   : "customer";
   const isRestaurantHostCapable = lane === "restaurant" && isHost;
+  // A restaurant/food_truck-laned user who also has a real host row (verified
+  // owning both, e.g. a bar operator who's also a venue host) needs a path to
+  // their host management surface too - /host/dashboard, not /parking-pass
+  // (that's the public discovery/booking page, already handled above).
+  const hasSecondaryHostLink =
+    isHost && (lane === "restaurant" || lane === "food_truck");
 
   const primarySlotsByLane: Record<typeof lane, NavItem[]> = {
     guest: [
@@ -368,6 +374,9 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
         { path: "/suppliers", icon: Truck, label: "Suppliers" },
         { path: "/subscribe", icon: BarChart3, label: "Subscription" },
         { path: "/restaurant-owner-dashboard", icon: BarChart3, label: "Reports" },
+        ...(hasSecondaryHostLink
+          ? [{ path: "/host/dashboard", icon: ParkingSquare, label: "Host Venue" } as NavItem]
+          : []),
         { path: "/profile", icon: User, label: "Profile" },
       );
     } else if (lane === "restaurant") {
@@ -379,6 +388,9 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
         { path: "/suppliers", icon: Truck, label: "Suppliers" },
         { path: "/subscribe", icon: BarChart3, label: "Subscription" },
         { path: "/restaurant-owner-dashboard", icon: BarChart3, label: "Reports" },
+        ...(hasSecondaryHostLink
+          ? [{ path: "/host/dashboard", icon: ParkingSquare, label: "Host Venue" } as NavItem]
+          : []),
         { path: "/profile", icon: User, label: "Profile" },
       );
     } else if (lane === "host") {

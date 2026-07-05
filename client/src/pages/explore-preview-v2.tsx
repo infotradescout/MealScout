@@ -240,13 +240,55 @@ interface ScoutHostLocation {
   address?: string | null;
   city?: string | null;
   state?: string | null;
+  spotImageUrl?: string | null;
+  locationType?: string | null;
+  updatedAt?: string | null;
+  lastUpdatedAt?: string | null;
+  confirmedAt?: string | null;
+  lastConfirmedAt?: string | null;
   latitude?: number | string | null;
   longitude?: number | string | null;
 }
 
+interface ScoutMapEventLocation {
+  id?: string | null;
+  type?: "event" | "truck_manual_schedule" | string | null;
+  name?: string | null;
+  date?: string | null;
+  startTime?: string | null;
+  endTime?: string | null;
+  hostId?: string | null;
+  hostName?: string | null;
+  hostAddress?: string | null;
+  hostCity?: string | null;
+  hostState?: string | null;
+  hostLatitude?: number | string | null;
+  hostLongitude?: number | string | null;
+  truckId?: string | null;
+  bookedRestaurantId?: string | null;
+  truckName?: string | null;
+  manualScheduleId?: string | null;
+  lastConfirmedAt?: string | null;
+}
+
+interface ScoutParkingPassListing {
+  id?: string | null;
+  date?: string | null;
+  startTime?: string | null;
+  endTime?: string | null;
+  status?: string | null;
+  host?: ScoutHostLocation | null;
+  bookings?: Array<{
+    truckId?: string | null;
+    truckName?: string | null;
+    slotType?: string | null;
+    spotNumber?: number | null;
+  }> | null;
+}
+
 type MapLocationsResponse = {
   hostLocations?: ScoutHostLocation[];
-  eventLocations?: unknown[];
+  eventLocations?: ScoutMapEventLocation[];
   supplierLocations?: unknown[];
 } | null;
 
@@ -592,7 +634,7 @@ type CravingBoardItem = {
 
 type LocalActivityItem = {
   id: string;
-  type: "menu_update" | "deal" | "truck" | "event" | "open" | "update";
+  type: "menu_update" | "deal" | "truck" | "event" | "host" | "open" | "update";
   title: string;
   subtitle: string;
   href: string;
@@ -680,7 +722,7 @@ function getMetaDistance(meta: string): string | null {
 type FreshnessState = "fresh" | "aging" | "needs_update" | "unknown";
 
 type FreshnessMeta = {
-  kind?: CravingBoardItem["kind"] | "event" | "restaurant" | "truck" | "deal" | "menu";
+  kind?: CravingBoardItem["kind"] | "event" | "host" | "restaurant" | "truck" | "deal" | "menu";
   meta?: string | null;
   reason?: string | null;
   startsAt?: string | null;
@@ -997,7 +1039,7 @@ function getFreshnessBadgeClass(meta: FreshnessMeta, label: string): string {
   if (getFreshnessState(meta) === "aging") {
     return `${base} bg-white/8 text-orange-100/78 ring-white/10`;
   }
-  return `${base} bg-emerald-300/12 text-emerald-100 ring-emerald-200/18`;
+  return `${base} bg-emerald-300/12 text-emerald-100 ring-emerald-200/20`;
 }
 
 function getRestaurantUpdateHref(restaurantId: string, setup: "status" | "location" | "menu" | "deal"): string {
@@ -1153,6 +1195,54 @@ function getDistanceMiles(
     Math.sin(dLat / 2) ** 2 +
     Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
   return 2 * earthRadiusMiles * Math.asin(Math.min(1, Math.sqrt(hav)));
+}
+
+function getScoutHostMarkerKey(host: ScoutHostLocation): string {
+  const id = String(host.hostId || host.id || "").trim();
+  if (id) return id;
+  const lat = readNumberField(host, ["latitude", "lat"]);
+  const lng = readNumberField(host, ["longitude", "lng"]);
+  if (lat !== null && lng !== null) return `${lat.toFixed(5)}:${lng.toFixed(5)}`;
+  return normalizeScoutLocationAddress(host.address, host.city, host.state) || "host-location";
+}
+
+function normalizeScoutLocationAddress(
+  address?: string | null,
+  city?: string | null,
+  state?: string | null,
+): string {
+  return [address, city, state]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\b(usa|united states)\b/g, "")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+function timeStringToMinutes(value?: string | null): number | null {
+  const match = String(value || "").match(/^(\d{1,2}):(\d{2})/);
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null;
+  return hours * 60 + minutes;
+}
+
+function isScoutMapWindowActiveNow(row: {
+  date?: string | null;
+  startTime?: string | null;
+  endTime?: string | null;
+}): boolean {
+  if (row.date && !isTodayDate(row.date)) return false;
+  const start = timeStringToMinutes(row.startTime);
+  const end = timeStringToMinutes(row.endTime);
+  if (start === null || end === null) return true;
+  const now = new Date();
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  if (end < start) return nowMinutes >= start || nowMinutes <= end;
+  return nowMinutes >= start && nowMinutes <= end;
 }
 
 function getRestaurantName(restaurant: RestaurantSummary): string {
@@ -1512,12 +1602,14 @@ function buildLocalActivityItems({
   deals,
   liveTrucks,
   events,
+  hosts,
   restaurants,
 }: {
   menuItems: LocalMenuItemFeedItem[];
   deals: DealSummary[];
   liveTrucks: LiveTruckSummary[];
   events: EventSummary[];
+  hosts: ScoutHostLocation[];
   restaurants: RestaurantSummary[];
 }): LocalActivityItem[] {
   const items: LocalActivityItem[] = [];
@@ -1610,6 +1702,31 @@ function buildLocalActivityItems({
     });
   }
 
+  for (const host of hosts.slice(0, 4)) {
+    const hostName = host.businessName || host.name || "Host location";
+    const area =
+      [host.city, host.state].filter(Boolean).join(", ") ||
+      host.address ||
+      "Nearby location";
+    const hostId = String(host.hostId || host.id || "").trim();
+    const freshnessMeta: FreshnessMeta = {
+      kind: "host",
+      updatedAt: readStringField(host, ["updatedAt", "lastUpdatedAt"]),
+      confirmedAt: readStringField(host, ["confirmedAt", "lastConfirmedAt"]),
+    };
+    items.push({
+      id: `host-${hostId || hostName}`,
+      type: "host",
+      title: "Host location",
+      subtitle: [hostName, area].filter(Boolean).join(" · "),
+      href: hostId ? `/events?hostId=${encodeURIComponent(hostId)}` : "/events",
+      entityId: hostId || hostName,
+      timeLabel: getFreshnessTimeLabel(freshnessMeta),
+      sourceLabel: getSourceLabel(freshnessMeta),
+      freshnessMeta,
+    });
+  }
+
   for (const restaurant of restaurants.slice(0, 4)) {
     const distance = getRestaurantDistance(restaurant);
     const freshnessMeta: FreshnessMeta = {
@@ -1647,6 +1764,7 @@ function buildLocalActivityItems({
         open: 5,
         deal: 4,
         event: 3,
+        host: 3,
         menu_update: 2,
         update: 1,
       };
@@ -1686,10 +1804,10 @@ function getTruckCardTone(truck: LiveTruckSummary): { label: string; tone: Truck
 }
 
 function getTruckToneClass(tone: TruckCardTone): string {
-  if (tone === "live") return "bg-emerald-500/95 text-white ring-emerald-200/35";
-  if (tone === "scheduled") return "bg-amber-400/92 text-[#1a0d08] ring-amber-100/35";
-  if (tone === "claimed") return "bg-white/14 text-white ring-white/18";
-  return "bg-[#120805]/72 text-white/86 ring-white/14";
+  if (tone === "live") return "bg-emerald-500/95 text-white ring-emerald-200/40";
+  if (tone === "scheduled") return "bg-amber-400/92 text-[#1a0d08] ring-amber-100/40";
+  if (tone === "claimed") return "bg-white/14 text-white ring-white/20";
+  return "bg-[#120805]/72 text-white/86 ring-white/10";
 }
 
 function getTruckToneDotClass(tone: TruckCardTone): string {
@@ -2427,6 +2545,120 @@ export default function ExplorePreview() {
     );
   }, [discoveryRadiusKm, mapLocationsData, resolvedScoutCoords]);
 
+  const visibleMapEventLocations = useMemo<ScoutMapEventLocation[]>(() => {
+    const rows = Array.isArray(mapLocationsData?.eventLocations)
+      ? mapLocationsData.eventLocations
+      : [];
+    return rows.filter((event) =>
+      isWithinScoutRadius(
+        resolvedScoutCoords,
+        readNumberField(event, ["hostLatitude", "latitude", "lat"]),
+        readNumberField(event, ["hostLongitude", "longitude", "lng"]),
+        discoveryRadiusKm,
+      ),
+    );
+  }, [discoveryRadiusKm, mapLocationsData, resolvedScoutCoords]);
+
+  const { data: parkingPassData } = useQuery<ScoutParkingPassListing[]>({
+    queryKey: ["/api/parking-pass", "scout-map"],
+    enabled: !!resolvedScoutLocation,
+    queryFn: async () => {
+      const response = await fetch(apiUrl("/api/parking-pass"), {
+        credentials: "include",
+      });
+      if (!response.ok) return [];
+      const data = await response.json();
+      return Array.isArray(data) ? data : [];
+    },
+    staleTime: 60_000,
+    retry: false,
+  });
+
+  const visibleParkingPassListings = useMemo<ScoutParkingPassListing[]>(() => {
+    const rows = Array.isArray(parkingPassData) ? parkingPassData : [];
+    return rows.filter((listing) => {
+      const host = listing.host;
+      if (!host) return false;
+      if (!isScoutMapWindowActiveNow(listing)) return false;
+      return isWithinScoutRadius(
+        resolvedScoutCoords,
+        readNumberField(host, ["latitude", "lat"]),
+        readNumberField(host, ["longitude", "lng"]),
+        discoveryRadiusKm,
+      );
+    });
+  }, [discoveryRadiusKm, parkingPassData, resolvedScoutCoords]);
+
+  const parkedTrucksByHostKey = useMemo(() => {
+    const byHost = new Map<string, NonNullable<MapAdapterMarker["parkedTrucks"]>>();
+    const addTruck = (
+      host: ScoutHostLocation,
+      truck: NonNullable<MapAdapterMarker["parkedTrucks"]>[number],
+    ) => {
+      const key = getScoutHostMarkerKey(host);
+      const existing = byHost.get(key) || [];
+      const truckKey = String(truck.id || truck.name).toLowerCase();
+      if (!existing.some((item) => String(item.id || item.name).toLowerCase() === truckKey)) {
+        existing.push(truck);
+      }
+      byHost.set(key, existing);
+    };
+
+    for (const listing of visibleParkingPassListings) {
+      const host = listing.host;
+      if (!host || !Array.isArray(listing.bookings)) continue;
+      for (const booking of listing.bookings) {
+        const truckName = String(booking.truckName || "").trim();
+        if (!truckName) continue;
+        const truckId = String(booking.truckId || "").trim();
+        addTruck(host, {
+          id: truckId || null,
+          name: truckName,
+          href: truckId ? `/truck/${encodeURIComponent(truckId)}` : null,
+          source: "parking_pass",
+          slotLabel: booking.slotType || null,
+        });
+      }
+    }
+
+    for (const event of visibleMapEventLocations) {
+      if (!isScoutMapWindowActiveNow(event)) continue;
+      const truckName = String(event.truckName || "").trim();
+      if (!truckName) continue;
+      const truckId = String(event.truckId || event.bookedRestaurantId || "").trim();
+      const eventHostId = String(event.hostId || "").trim();
+      const eventAddress = normalizeScoutLocationAddress(event.hostAddress, event.hostCity, event.hostState);
+      const eventLat = readNumberField(event, ["hostLatitude", "latitude", "lat"]);
+      const eventLng = readNumberField(event, ["hostLongitude", "longitude", "lng"]);
+      for (const host of visibleHosts) {
+        const hostIds = [host.hostId, host.id].map((value) => String(value || "").trim()).filter(Boolean);
+        const idMatches = Boolean(eventHostId && hostIds.includes(eventHostId));
+        const addressMatches = Boolean(
+          eventAddress &&
+            eventAddress === normalizeScoutLocationAddress(host.address, host.city, host.state),
+        );
+        const hostLat = readNumberField(host, ["latitude", "lat"]);
+        const hostLng = readNumberField(host, ["longitude", "lng"]);
+        const coordinateMatches =
+          eventLat !== null &&
+          eventLng !== null &&
+          hostLat !== null &&
+          hostLng !== null &&
+          getDistanceMiles({ lat: eventLat, lng: eventLng }, { lat: hostLat, lng: hostLng }) <= 0.08;
+        if (!idMatches && !addressMatches && !coordinateMatches) continue;
+        addTruck(host, {
+          id: truckId || null,
+          name: truckName,
+          href: truckId ? `/truck/${encodeURIComponent(truckId)}` : null,
+          source: event.type === "truck_manual_schedule" ? "manual_schedule" : "event",
+          slotLabel: event.startTime && event.endTime ? `${event.startTime} - ${event.endTime}` : null,
+        });
+      }
+    }
+
+    return byHost;
+  }, [visibleHosts, visibleMapEventLocations, visibleParkingPassListings]);
+
 
   /* --------- nearby restaurants --------- */
 
@@ -2894,23 +3126,34 @@ export default function ExplorePreview() {
         const lat = readNumberField(host, ["latitude", "lat"]);
         const lng = readNumberField(host, ["longitude", "lng"]);
         if (lat === null || lng === null) return null;
+        const hostKey = getScoutHostMarkerKey(host);
+        const parkedTrucks = parkedTrucksByHostKey.get(hostKey) || [];
+        const address = [host.address, host.city, host.state].filter(Boolean).join(", ");
+        const title = host.businessName || host.name || "Host location";
         return {
-          id: `host-${host.hostId || host.id}`,
-          sourceId: String(host.hostId || host.id || ""),
+          id: `host-${hostKey}`,
+          sourceId: hostKey,
           kind: "parking" as const,
           lat,
           lng,
-          title: host.businessName || host.name || "Host location",
-          subtitle: getMapMarkerSubtitle("Host", {
-            kind: "event",
-            updatedAt: readStringField(host, ["updatedAt", "lastUpdatedAt"]),
-            confirmedAt: readStringField(host, ["confirmedAt", "lastConfirmedAt"]),
-          }),
-          color: "#f59e0b",
+          title,
+          subtitle:
+            parkedTrucks.length > 0
+              ? formatScoutCount(parkedTrucks.length, "truck parked here", "trucks parked here")
+              : getMapMarkerSubtitle(address || "Host location", {
+                  kind: "host",
+                  updatedAt: readStringField(host, ["updatedAt", "lastUpdatedAt"]),
+                  confirmedAt: readStringField(host, ["confirmedAt", "lastConfirmedAt"]),
+                }),
+          color: parkedTrucks.length > 0 ? "#fb923c" : "#f59e0b",
+          address,
+          spotImageUrl: host.spotImageUrl || null,
+          parkedTrucks,
+          parkingStatus: parkedTrucks.length > 0 ? "occupied" : "available",
         } as MapAdapterMarker;
       })
       .filter((m): m is MapAdapterMarker => Boolean(m && m.sourceId));
-  }, [visibleHosts]);
+  }, [parkedTrucksByHostKey, visibleHosts]);
 
   const dealMarkers = useMemo<MapAdapterMarker[]>(() => {
     return nearbyDeals
@@ -3013,7 +3256,10 @@ export default function ExplorePreview() {
       let layerAllowed = true;
       if (marker.kind === "truck") layerAllowed = activeMapLayers.foodTrucks && activeMapLayers.openNow;
       if (marker.kind === "event") layerAllowed = activeMapLayers.happeningToday;
-      if (marker.kind === "parking") layerAllowed = activeMapLayers.happeningToday;
+      if (marker.kind === "parking") {
+        const hasParkedTruck = Boolean(marker.parkedTrucks?.length);
+        layerAllowed = activeMapLayers.happeningToday || (hasParkedTruck && activeMapLayers.foodTrucks);
+      }
       if (marker.kind === "deal") layerAllowed = activeMapLayers.deals;
       if (marker.kind === "restaurant") {
         const restaurant = nearbyRestaurants.find((item) => String(item.id) === String(marker.sourceId));
@@ -3120,7 +3366,6 @@ export default function ExplorePreview() {
   const [selectedLiveTruck, setSelectedLiveTruck] = useState<LiveTruckSummary | null>(null);
   const [selectedMapMarker, setSelectedMapMarker] = useState<MapAdapterMarker | null>(null);
   const [mapBounds, setMapBounds] = useState<MapBoundsLike | null>(null);
-  const [collapsedMapCardDismissed, setCollapsedMapCardDismissed] = useState(false);
   // Once the full map has been opened once, keep GoogleMapSurface mounted
   // (just hidden) so it doesn't re-initialize on every collapse/expand.
   // Using state (not ref) so React re-renders when the map should first mount.
@@ -3571,9 +3816,10 @@ export default function ExplorePreview() {
         deals: allDealsForFeed,
         liveTrucks: trucksServingNow,
         events: visibleEventsForFeed,
+        hosts: visibleHosts,
         restaurants: restaurantsOpenNow,
       }),
-    [allDealsForFeed, localMenuItemsForFeed, restaurantsOpenNow, trucksServingNow, visibleEventsForFeed],
+    [allDealsForFeed, localMenuItemsForFeed, restaurantsOpenNow, trucksServingNow, visibleEventsForFeed, visibleHosts],
   );
   const scoutActivityMode = useMemo(
     () =>
@@ -3581,7 +3827,7 @@ export default function ExplorePreview() {
         servingTruckCount: trucksServingNow.length,
         openRestaurantCount: restaurantsOpenNow.length,
         dealCount: allDealsForFeed.length,
-        eventCount: visibleEventsForFeed.length,
+        eventCount: visibleEventsForFeed.length + visibleHosts.length,
         menuUpdateCount: localMenuItemsForFeed.length,
         activityItemCount: localActivityItems.length,
         mapMarkerCount: sceneFilteredMapMarkers.filter((marker) => marker.kind !== "user").length,
@@ -3594,6 +3840,7 @@ export default function ExplorePreview() {
       restaurantsOpenNow.length,
       trucksServingNow.length,
       visibleEventsForFeed.length,
+      visibleHosts.length,
     ],
   );
   useEffect(() => {
@@ -3781,7 +4028,7 @@ export default function ExplorePreview() {
     (sceneWantsFoodTrucks && visibleTrucksServingNow.length > 0) ||
     (sceneWantsRestaurants && visibleOpenRestaurants.length > 0) ||
     (sceneWantsDeals && visibleDeals.length > 0) ||
-    (sceneWantsEvents && visibleSceneEvents.length > 0) ||
+    (sceneWantsEvents && (visibleSceneEvents.length > 0 || visibleHosts.length > 0)) ||
     (sceneWantsNewMenus && localMenuItems.length > 0) ||
     (sceneWantsWorthDiscovering && visibleMoreFoodRestaurants.length > 0) ||
     (sceneWantsCommunity && topLocalFavoriteRestaurants.length > 0);
@@ -3789,19 +4036,6 @@ export default function ExplorePreview() {
     activeSceneLaneId === "for_you" &&
     sceneMixedFeedItems.length === 0 &&
     visibleMoreFoodRestaurants.length > 0;
-  const collapsedMapSelectedMarker = useMemo(
-    () =>
-      sceneFilteredMapMarkers.find(
-        (marker) =>
-          marker.kind !== "user" &&
-          Number.isFinite(marker.lat) &&
-          Number.isFinite(marker.lng),
-      ) ?? null,
-    [sceneFilteredMapMarkers],
-  );
-  useEffect(() => {
-    setCollapsedMapCardDismissed(false);
-  }, [collapsedMapSelectedMarker?.id]);
   return (
     <>
       <SEOHead
@@ -4015,7 +4249,7 @@ export default function ExplorePreview() {
               marketEyebrow={scoutMarketEyebrow}
               liveTruckCount={liveTrucks.length}
               restaurantCount={nearbyRestaurants.length}
-              eventCount={visibleEvents.length}
+              eventCount={visibleEvents.length + visibleHosts.length}
               dealCount={allDeals.length}
               localActivityCount={localActivityCount}
               discoveryRadiusKm={discoveryRadiusKm}
@@ -4069,7 +4303,7 @@ export default function ExplorePreview() {
           {sheetState === "default" && (
             <>
               <div className="absolute left-3 top-3 z-20">
-                <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-[#100c0a]/80 ring-1 ring-orange-200/35 backdrop-blur-xl shadow-[0_10px_24px_rgba(0,0,0,0.42)]">
+                <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-[#100c0a]/80 ring-1 ring-orange-200/40 backdrop-blur-xl shadow-[0_10px_24px_rgba(0,0,0,0.42)]">
                   <img src={mealScoutIcon} alt="MealScout" className="h-6 w-6 object-contain" />
                 </span>
               </div>
@@ -4078,7 +4312,7 @@ export default function ExplorePreview() {
                 truckCount={trucksServingNow.length}
                 restaurantCount={restaurantsOpenNow.length}
                 dealCount={allDeals.length}
-                eventCount={visibleEvents.length}
+                eventCount={visibleEvents.length + visibleHosts.length}
               />
               <div
                 aria-hidden="true"
@@ -4091,7 +4325,7 @@ export default function ExplorePreview() {
               <div className="absolute bottom-3 left-3 right-3 z-20 flex items-end justify-between gap-3">
                 <div className="min-w-0">
                   {isPensacolaScoutPreview ? (
-                    <p className="mb-1 inline-flex rounded-full bg-orange-500/18 px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.12em] text-orange-100 ring-1 ring-orange-200/28">
+                    <p className="mb-1 inline-flex rounded-full bg-orange-500/18 px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.12em] text-orange-100 ring-1 ring-orange-200/30">
                       Admin preview
                     </p>
                   ) : null}
@@ -4124,19 +4358,12 @@ export default function ExplorePreview() {
                   type="button"
                   onClick={openScoutMap}
                   aria-label="Open full map"
-                  className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-[#100c0a]/80 px-3 py-2 text-xs font-black text-white ring-1 ring-orange-200/35 backdrop-blur-xl shadow-[0_10px_24px_rgba(0,0,0,0.42)]"
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-[#100c0a]/80 px-3 py-2 text-xs font-black text-white ring-1 ring-orange-200/40 backdrop-blur-xl shadow-[0_10px_24px_rgba(0,0,0,0.42)]"
                 >
                   <Maximize2 className="h-3.5 w-3.5" aria-hidden="true" />
                   Open map
                 </button>
               </div>
-              {collapsedMapSelectedMarker && !collapsedMapCardDismissed ? (
-                <CollapsedMapPinCard
-                  marker={collapsedMapSelectedMarker}
-                  userLocation={resolvedScoutCoords}
-                  onClose={() => setCollapsedMapCardDismissed(true)}
-                />
-              ) : null}
               </>
             )}
         </section>
@@ -4198,7 +4425,7 @@ export default function ExplorePreview() {
               scoutSearchIntent={scoutSearchIntent}
               renderSearchDock={() => (
                 <ScoutSearchDock
-                  placement="fixed"
+                  placement="inline"
                   searchMode={scoutSearchMode}
                   query={scoutSearchQuery}
                   activeFilter={scoutSearchFilter}
@@ -4366,7 +4593,7 @@ function SceneOptionsBar({
                   "inline-flex min-h-11 min-w-[76px] shrink-0 items-center justify-center gap-1 rounded-2xl px-2 py-2 text-[11px] font-bold ring-1 transition-colors active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/60",
                   isActive
                     ? "bg-[#ff7945] text-white ring-white/20 shadow-[0_10px_22px_rgba(255,121,69,0.28)]"
-                    : "bg-[#11131a]/82 text-white/78 ring-white/12 hover:bg-[#171a23] hover:text-white",
+                    : "bg-[#11131a]/82 text-white/78 ring-white/10 hover:bg-[#171a23] hover:text-white",
                 ].join(" ")}
                 aria-pressed={isActive}
               >
@@ -4480,6 +4707,13 @@ type ScoutImmediateDecisionItem =
       summary: string;
       cardType: "event";
       event: EventSummary;
+    }
+  | {
+      sourceRowId: ScoutHorizontalRowId;
+      sectionLabel: string;
+      summary: string;
+      cardType: "host";
+      host: ScoutHostLocation;
     };
 
 type ScoutHorizontalRailDefinition = {
@@ -4594,7 +4828,7 @@ function ScoutFirstScreenDecisionStack({
       data-scout-first-screen-decision-stack="true"
       data-scout-decision-source-row={primary.sourceRowId}
     >
-      <div className="rounded-[1.1rem] bg-[#120805]/78 p-3 text-white ring-1 ring-orange-200/16 shadow-[0_16px_40px_rgba(0,0,0,0.36)]">
+      <div className="rounded-[1.1rem] bg-[#120805]/78 p-3 text-white ring-1 ring-orange-200/20 shadow-[0_16px_40px_rgba(0,0,0,0.36)]">
         <div className="mb-2 flex items-center justify-between gap-3">
           <div className="min-w-0">
             <p className="text-[11px] font-black uppercase tracking-[0.12em] text-orange-200/78">
@@ -4604,7 +4838,7 @@ function ScoutFirstScreenDecisionStack({
               {primary.summary}
             </p>
           </div>
-          <span className="shrink-0 rounded-full bg-orange-400/14 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-orange-100 ring-1 ring-orange-200/18">
+          <span className="shrink-0 rounded-full bg-orange-400/14 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-orange-100 ring-1 ring-orange-200/20">
             Best now
           </span>
         </div>
@@ -4639,7 +4873,7 @@ function ScoutRecoveryActions({ className = "" }: { className?: string }) {
       </Link>
       <Link
         href="/search"
-        className="rounded-full bg-white/[0.06] px-3 py-1.5 text-[11px] font-black text-white/90 ring-1 ring-white/16"
+        className="rounded-full bg-white/[0.06] px-3 py-1.5 text-[11px] font-black text-white/90 ring-1 ring-white/20"
       >
         Search nearby
       </Link>
@@ -4748,6 +4982,32 @@ function ScoutImmediateCompactCard({
     );
   }
 
+  if (item.cardType === "host") {
+    const host = item.host;
+    const hostName = host.businessName || host.name || "Host location";
+    const hostId = String(host.hostId || host.id || "").trim();
+    const area =
+      [host.city, host.state].filter(Boolean).join(", ") ||
+      host.address ||
+      "Nearby location";
+    const directionsUrl = buildDirectionsUrl({
+      lat: readNumberField(host, ["latitude", "lat"]),
+      lng: readNumberField(host, ["longitude", "lng"]),
+    });
+    return (
+      <CompactDecisionCardShell
+        href={hostId ? `/events?hostId=${encodeURIComponent(hostId)}` : "/events"}
+        imageUrl={host.spotImageUrl || null}
+        fallbackIcon={<MapPin className="h-4 w-4 text-white/90" aria-hidden="true" />}
+        title={hostName}
+        meta={["Host location", area].filter(Boolean).join(" / ")}
+        primaryActionLabel="View host"
+        directionsUrl={directionsUrl}
+        variant="host"
+      />
+    );
+  }
+
   const event = item.event;
   const title = event.title || event.name || "Food event";
   const start = event.startsAt || event.startTime;
@@ -4767,7 +5027,7 @@ function ScoutImmediateCompactCard({
   );
 }
 
-type CompactDecisionCardVariant = "truck" | "place" | "dish" | "deal" | "event";
+type CompactDecisionCardVariant = "truck" | "place" | "dish" | "deal" | "event" | "host";
 
 function CompactDecisionCardShell({
   href,
@@ -4797,29 +5057,35 @@ function CompactDecisionCardShell({
   const showImage = Boolean(imageUrl) && !imageFailed;
   const shellClass =
     variant === "dish"
-      ? "rounded-[0.85rem] bg-[#2c1609]/82 ring-orange-200/26"
+      ? "rounded-[0.85rem] bg-[#2c1609]/82 ring-orange-200/25"
       : variant === "truck"
         ? "rounded-[1.3rem] bg-[#100806]/84 ring-orange-300/30"
         : variant === "deal"
-          ? "rounded-[0.95rem] bg-[#12200f]/72 ring-lime-200/18"
+          ? "rounded-[0.95rem] bg-[#12200f]/72 ring-lime-200/20"
           : variant === "event"
-            ? "rounded-[1rem] bg-[#0d1724]/72 ring-sky-200/18"
-            : "rounded-[0.95rem] bg-[#0c1714]/78 ring-emerald-200/16";
+            ? "rounded-[1rem] bg-[#0d1724]/72 ring-sky-200/20"
+            : variant === "host"
+              ? "rounded-[1rem] bg-[#201407]/78 ring-amber-200/30"
+            : "rounded-[0.95rem] bg-[#0c1714]/78 ring-emerald-200/20";
   const thumbClass =
     variant === "dish"
-      ? "rounded-full bg-orange-200/10 ring-orange-100/24"
+      ? "rounded-full bg-orange-200/10 ring-orange-100/25"
       : variant === "truck"
-        ? "rounded-2xl bg-orange-200/8 ring-orange-300/26"
+        ? "rounded-2xl bg-orange-200/8 ring-orange-300/25"
         : variant === "deal"
-          ? "rounded-lg bg-lime-200/8 ring-lime-200/18"
+          ? "rounded-lg bg-lime-200/8 ring-lime-200/20"
           : variant === "event"
-            ? "rounded-lg bg-sky-200/8 ring-sky-200/18"
-            : "rounded-lg bg-emerald-200/8 ring-emerald-200/16";
+            ? "rounded-lg bg-sky-200/8 ring-sky-200/20"
+            : variant === "host"
+              ? "rounded-xl bg-amber-200/10 ring-amber-200/25"
+            : "rounded-lg bg-emerald-200/8 ring-emerald-200/20";
   const actionClass =
     variant === "deal"
       ? "bg-lime-300 text-[#102006]"
       : variant === "event"
         ? "bg-sky-300 text-[#071322]"
+        : variant === "host"
+          ? "bg-amber-300 text-[#1f1204]"
         : "bg-orange-400 text-[#1a0d08]";
   return (
     <div
@@ -4880,7 +5146,7 @@ function CompactDecisionCardShell({
               href={directionsUrl}
               target="_blank"
               rel="noreferrer"
-              className="rounded-full bg-white/[0.08] px-3 py-1.5 text-[11px] font-black text-white/82 ring-1 ring-white/12"
+              className="rounded-full bg-white/[0.08] px-3 py-1.5 text-[11px] font-black text-white/82 ring-1 ring-white/10"
             >
               Directions
             </a>
@@ -5271,6 +5537,13 @@ function ActiveSceneContent({
         restaurant,
         businessKey: getScoutBusinessCardKey(restaurant, getRestaurantProfilePath(restaurant)),
       })),
+      ...visibleHosts.map((host) => ({
+        sourceRowId: "host_locations" as const,
+        sectionLabel: "Host Locations",
+        summary: formatScoutCount(visibleHosts.length, "host nearby", "hosts nearby"),
+        cardType: "host" as const,
+        host,
+      })),
       ...communityPickCards.map((restaurant) => ({
         sourceRowId: "community_picks" as const,
         sectionLabel: "Community Picks",
@@ -5382,6 +5655,7 @@ function ActiveSceneContent({
       hotDealCandidates.length > 0 ||
       happyHourDeals.length > 0 ||
       visibleSceneEvents.length > 0 ||
+      visibleHosts.length > 0 ||
       communityPickCards.length > 0 ||
       worthDiscoveringCards.length > 0;
 
@@ -5414,6 +5688,8 @@ function ActiveSceneContent({
       deals.map((deal) => ({ cardType: "deal", cardKind, deal }));
     const eventRailCards = (events: EventSummary[]): ScoutRailRenderCard[] =>
       events.map((event) => ({ cardType: "event", cardKind: "event", event }));
+    const hostRailCards = (hosts: ScoutHostLocation[]): ScoutRailRenderCard[] =>
+      hosts.map((host) => ({ cardType: "host", cardKind: "map_place", host }));
     const businessSectionRailCards = (
       cards: ScoutBusinessSectionCard[],
     ): ScoutRailRenderCard[] =>
@@ -5611,6 +5887,16 @@ function ActiveSceneContent({
       return <HostLocationCard host={card.host} />;
     };
 
+    const hostLocationRow: ScoutHorizontalRailDefinition = {
+      id: "host_locations",
+      title: "Host Locations Nearby",
+      subtitle: "Parking-friendly host spots and event locations near this Scout area.",
+      linkHref: "/events",
+      cards: hostRailCards(visibleHosts),
+      className: compactRailSectionClass,
+      cardWidth: standardCardWidth,
+    };
+
     return (
       <>
         <ScoutFirstScreenDecisionStack
@@ -5618,6 +5904,12 @@ function ActiveSceneContent({
           thinMarket={isLowActivityLane && firstScreenDecisionItems.length <= 1}
         />
         {renderSearchDock?.()}
+        {visibleHosts.length > 0 ? (
+          <ScoutHorizontalCategoryRail
+            row={hostLocationRow}
+            renderCard={renderScoutRailCard}
+          />
+        ) : null}
         {(() => {
           // Prefer items with a real photo or a substantial price - a $2
           // side/add-on isn't really a "pick," and is also more likely to
@@ -5930,24 +6222,24 @@ function SceneMixedFeedCard({ item }: { item: CravingBoardItem }) {
     .slice(0, 1);
   const shellClass =
     item.kind === "Menu"
-      ? "rounded-[0.85rem] bg-[#2c1609]/82 ring-orange-200/26 hover:bg-[#351a0a]/92 hover:ring-orange-200/46"
+      ? "rounded-[0.85rem] bg-[#2c1609]/82 ring-orange-200/25 hover:bg-[#351a0a]/92 hover:ring-orange-200/50"
       : item.kind === "Truck"
-        ? "rounded-[1.35rem] bg-[#100806]/84 ring-orange-300/30 hover:bg-[#1a0d07]/92 hover:ring-orange-200/44"
+        ? "rounded-[1.35rem] bg-[#100806]/84 ring-orange-300/30 hover:bg-[#1a0d07]/92 hover:ring-orange-200/40"
         : item.kind === "Deal"
-          ? "rounded-xl bg-[#12200f]/72 ring-lime-200/18 hover:bg-[#172913]/86 hover:ring-lime-200/32"
+          ? "rounded-xl bg-[#12200f]/72 ring-lime-200/20 hover:bg-[#172913]/86 hover:ring-lime-200/30"
           : item.kind === "Event"
-            ? "rounded-xl bg-[#0d1724]/72 ring-sky-200/18 hover:bg-[#111e2f]/86 hover:ring-sky-200/32"
-            : "rounded-xl bg-[#0c1714]/78 ring-emerald-200/16 hover:bg-[#121f1b]/88 hover:ring-emerald-200/30";
+            ? "rounded-xl bg-[#0d1724]/72 ring-sky-200/20 hover:bg-[#111e2f]/86 hover:ring-sky-200/30"
+            : "rounded-xl bg-[#0c1714]/78 ring-emerald-200/20 hover:bg-[#121f1b]/88 hover:ring-emerald-200/30";
   const thumbClass =
     item.kind === "Menu"
-      ? "rounded-full bg-orange-200/10 ring-orange-100/24"
+      ? "rounded-full bg-orange-200/10 ring-orange-100/25"
       : item.kind === "Truck"
-        ? "rounded-2xl bg-orange-200/8 ring-orange-300/26"
+        ? "rounded-2xl bg-orange-200/8 ring-orange-300/25"
         : item.kind === "Deal"
-          ? "rounded-lg bg-lime-200/8 ring-lime-200/18"
+          ? "rounded-lg bg-lime-200/8 ring-lime-200/20"
           : item.kind === "Event"
-            ? "rounded-lg bg-sky-200/8 ring-sky-200/18"
-            : "rounded-lg bg-emerald-200/8 ring-emerald-200/16";
+            ? "rounded-lg bg-sky-200/8 ring-sky-200/20"
+            : "rounded-lg bg-emerald-200/8 ring-emerald-200/20";
 
   return (
     <Link
@@ -5998,7 +6290,7 @@ function SceneMixedFeedCard({ item }: { item: CravingBoardItem }) {
           ))}
         </div>
       </div>
-      <span className="rounded-full bg-[#fff4e1]/10 px-3 py-1 text-xs font-black text-orange-100 ring-1 ring-orange-200/24">
+      <span className="rounded-full bg-[#fff4e1]/10 px-3 py-1 text-xs font-black text-orange-100 ring-1 ring-orange-200/25">
         View
       </span>
     </Link>
@@ -6007,7 +6299,10 @@ function SceneMixedFeedCard({ item }: { item: CravingBoardItem }) {
 
 function HostLocationCard({ host }: { host: ScoutHostLocation }) {
   const hostName = host.businessName || host.name || "Host location";
-  const area = [host.city, host.state].filter(Boolean).join(", ");
+  const area =
+    [host.city, host.state].filter(Boolean).join(", ") ||
+    host.address ||
+    "Nearby location";
   const lat = readNumberField(host, ["latitude", "lat"]);
   const lng = readNumberField(host, ["longitude", "lng"]);
   const routeUrl =
@@ -6017,14 +6312,24 @@ function HostLocationCard({ host }: { host: ScoutHostLocation }) {
   const hostId = String(host.hostId || host.id || "").trim();
   const hostHref = hostId ? `/events?hostId=${encodeURIComponent(hostId)}` : "/events";
   return (
-    <div className="rounded-2xl overflow-hidden bg-white/5 ring-1 ring-white/10 p-3">
-      <p className="text-[10px] font-black uppercase tracking-[0.12em] text-orange-200/75">Host</p>
-      <p className="mt-1 truncate text-sm font-semibold text-white">{hostName}</p>
-      <p className="mt-0.5 truncate text-xs text-white/65">{area || "Nearby location"}</p>
+    <div
+      className="overflow-hidden rounded-[1rem] bg-[#201407]/80 p-3 text-white ring-1 ring-amber-200/30 shadow-[0_14px_32px_rgba(0,0,0,0.28)]"
+      data-scout-card-kind="host"
+    >
+      <div className="flex items-start gap-3">
+        <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-300/20 text-amber-100 ring-1 ring-amber-200/30">
+          <MapPin className="h-4 w-4" aria-hidden="true" />
+        </span>
+        <div className="min-w-0">
+          <p className="text-[10px] font-black uppercase tracking-[0.12em] text-amber-200/80">Host spot</p>
+          <p className="mt-1 truncate text-sm font-black text-white">{hostName}</p>
+          <p className="mt-0.5 truncate text-xs font-semibold text-amber-50/70">{area}</p>
+        </div>
+      </div>
       <div className="mt-2 flex items-center gap-2">
         <Link
           href={hostHref}
-          className="rounded-full bg-orange-500 px-2.5 py-1 text-[10px] font-bold text-[#160904]"
+          className="rounded-full bg-amber-300 px-2.5 py-1 text-[10px] font-black text-[#1f1204]"
         >
           View Host
         </Link>
@@ -6033,7 +6338,7 @@ function HostLocationCard({ host }: { host: ScoutHostLocation }) {
             href={routeUrl}
             target="_blank"
             rel="noreferrer"
-            className="rounded-full bg-white/10 px-2.5 py-1 text-[10px] font-bold text-white ring-1 ring-white/20"
+            className="rounded-full bg-white/10 px-2.5 py-1 text-[10px] font-bold text-white ring-1 ring-amber-100/20"
           >
             Route
           </a>
@@ -6087,13 +6392,13 @@ function ActiveSceneEmptyState({ laneId }: { laneId: ScoutSceneLaneId }) {
             </Link>
             <Link
               href="/search?q=worth%20discovering"
-              className="rounded-full bg-white/[0.06] px-3 py-1.5 text-[11px] font-black text-white/90 ring-1 ring-white/16"
+              className="rounded-full bg-white/[0.06] px-3 py-1.5 text-[11px] font-black text-white/90 ring-1 ring-white/20"
             >
               Worth Discovering
             </Link>
             <Link
               href="/search?q=new%20menus"
-              className="rounded-full bg-white/[0.06] px-3 py-1.5 text-[11px] font-black text-white/90 ring-1 ring-white/16"
+              className="rounded-full bg-white/[0.06] px-3 py-1.5 text-[11px] font-black text-white/90 ring-1 ring-white/20"
             >
               New Menus
             </Link>
@@ -6245,7 +6550,7 @@ function CollapsedMapPinCard({
 
   return (
     <div
-      className="absolute left-3 right-3 bottom-16 z-20 rounded-2xl bg-[#0f1017]/88 px-3 py-3 text-white ring-1 ring-white/14 backdrop-blur-xl"
+      className="absolute left-3 right-3 bottom-16 z-20 rounded-2xl bg-[#0f1017]/88 px-3 py-3 text-white ring-1 ring-white/10 backdrop-blur-xl"
       style={{ boxShadow: "0 16px 36px rgba(0,0,0,0.48)" }}
     >
       <div className="flex items-start justify-between gap-3">
@@ -6257,6 +6562,11 @@ function CollapsedMapPinCard({
           <p className="truncate text-xs text-white/70">
             {computedDistance ? `${computedDistance} away` : "Nearby"}
           </p>
+          {marker.kind === "parking" && (marker.parkedTrucks?.length || 0) > 0 ? (
+            <p className="mt-0.5 truncate text-xs font-black text-orange-200/90">
+              🚚 {marker.parkedTrucks!.map((t) => t.name).join(", ")}
+            </p>
+          ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <Link
@@ -6269,7 +6579,7 @@ function CollapsedMapPinCard({
             href={directionsUrl}
             target="_blank"
             rel="noreferrer"
-            className="rounded-xl bg-white/10 px-3 py-1.5 text-xs font-black text-white ring-1 ring-white/14"
+            className="rounded-xl bg-white/10 px-3 py-1.5 text-xs font-black text-white ring-1 ring-white/10"
           >
             Route
           </a>
@@ -6330,7 +6640,7 @@ function QuickUpdateBar() {
 
   return (
     <section className="px-4 pb-4 -mt-1" aria-label="Quick updates">
-      <div className="rounded-2xl bg-[#120805]/42 px-3 py-2.5 ring-1 ring-orange-200/14">
+      <div className="rounded-2xl bg-[#120805]/42 px-3 py-2.5 ring-1 ring-orange-200/10">
         <div className="mb-2 flex items-center justify-between gap-3">
           <p className="text-[10px] font-black uppercase tracking-[0.14em] text-orange-100/72">
             Quick updates
@@ -6345,7 +6655,7 @@ function QuickUpdateBar() {
             <Link
               key={action.label}
               href={action.href}
-              className="inline-flex min-h-8 items-center gap-1.5 rounded-full bg-[#fff4e1]/10 px-2.5 py-1.5 text-[10px] font-black text-orange-50 ring-1 ring-orange-200/24 transition-colors hover:bg-[#fff4e1]/14 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
+              className="inline-flex min-h-8 items-center gap-1.5 rounded-full bg-[#fff4e1]/10 px-2.5 py-1.5 text-[10px] font-black text-orange-50 ring-1 ring-orange-200/25 transition-colors hover:bg-[#fff4e1]/14 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
             >
               {action.icon}
               <span>{action.label}</span>
@@ -6372,7 +6682,7 @@ function OwnerOperationalActions({
           <Link
             key={`${action.label}-${action.href}`}
             href={action.href}
-            className="inline-flex min-h-7 shrink-0 items-center gap-1 rounded-full bg-orange-300/14 px-2 py-1 text-[10px] font-black text-orange-100 ring-1 ring-orange-200/24 transition-colors hover:bg-orange-300/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
+            className="inline-flex min-h-7 shrink-0 items-center gap-1 rounded-full bg-orange-300/14 px-2 py-1 text-[10px] font-black text-orange-100 ring-1 ring-orange-200/25 transition-colors hover:bg-orange-300/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
           >
             {action.icon}
             <span>{action.label}</span>
@@ -6650,7 +6960,7 @@ function LiveTruckCard({
   return (
     <Link
       href={getTruckProfilePath(truck)}
-      className="group relative block overflow-hidden rounded-[1.7rem] bg-[#100806]/90 ring-1 ring-orange-300/36 transition duration-200 hover:-translate-y-0.5 hover:ring-emerald-200/36 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70"
+      className="group relative block overflow-hidden rounded-[1.7rem] bg-[#100806]/90 ring-1 ring-orange-300/40 transition duration-200 hover:-translate-y-0.5 hover:ring-emerald-200/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70"
       aria-label={`Open ${truck.name}`}
       style={{ boxShadow: "0 18px 54px rgba(0,0,0,0.56), inset 0 0 0 1px rgba(251,146,60,0.08)" }}
     >
@@ -6686,7 +6996,7 @@ function LiveTruckCard({
           />
           {truckTone.label}
         </span>
-        <span className="absolute bottom-3 left-3 inline-flex items-center rounded-full bg-black/62 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-white/86 ring-1 ring-white/12">
+        <span className="absolute bottom-3 left-3 inline-flex items-center rounded-full bg-black/62 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-white/86 ring-1 ring-white/10">
           Food truck
         </span>
 
@@ -6709,7 +7019,7 @@ function LiveTruckCard({
       </div>
       <div className="relative border-t border-orange-200/12 bg-[#190b06]/94 px-4 py-3 pl-7">
         <div className="flex items-start gap-2.5">
-          <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-orange-300/14 text-orange-200 ring-1 ring-orange-200/24">
+          <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-orange-300/14 text-orange-200 ring-1 ring-orange-200/25">
             <TruckIcon className="h-4 w-4" aria-hidden="true" />
           </span>
           <div className="min-w-0 flex-1">
@@ -6768,7 +7078,7 @@ function DealCard({
   return (
     <Link
       href={`/deal/${deal.id}`}
-      className="block overflow-hidden rounded-[1.05rem] bg-[#12200f]/82 ring-1 ring-lime-200/22 transition duration-200 hover:-translate-y-0.5 hover:ring-lime-200/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-lime-300/70"
+      className="block overflow-hidden rounded-[1.05rem] bg-[#12200f]/82 ring-1 ring-lime-200/20 transition duration-200 hover:-translate-y-0.5 hover:ring-lime-200/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-lime-300/70"
       style={{ boxShadow: "0 14px 36px rgba(0,0,0,0.5)" }}
       aria-label={`Open deal ${deal.title || ""}`}
     >
@@ -7031,13 +7341,13 @@ function LocalMenuItemCard({
           discoveryReasons: item.discoveryReasons,
         })
       }
-      className="block overflow-hidden rounded-[0.85rem] bg-[#2c1609]/92 p-2 ring-1 ring-orange-200/30 transition duration-200 hover:-translate-y-0.5 hover:ring-orange-200/52 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
+      className="block overflow-hidden rounded-[0.85rem] bg-[#2c1609]/92 p-2 ring-1 ring-orange-200/30 transition duration-200 hover:-translate-y-0.5 hover:ring-orange-200/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
       style={{ boxShadow: "0 14px 34px rgba(0,0,0,0.48)" }}
       aria-label={`Open ${item.name} from ${item.restaurantName || "local menu"}`}
       data-testid="scout-local-menu-item-card"
     >
-      <div className="relative rounded-[0.7rem] bg-[#180b05]/76 p-3 ring-1 ring-orange-200/14">
-        <div className="relative mx-auto aspect-square w-[82%] rounded-full bg-orange-200/10 p-2 ring-1 ring-orange-100/22">
+      <div className="relative rounded-[0.7rem] bg-[#180b05]/76 p-3 ring-1 ring-orange-200/10">
+        <div className="relative mx-auto aspect-square w-[82%] rounded-full bg-orange-200/10 p-2 ring-1 ring-orange-100/20">
           <div className="relative h-full w-full overflow-hidden rounded-full bg-[#120805]/60 ring-1 ring-black/30">
             <ScoutCardMedia
               imageUrl={item.imageUrl || item.restaurantLogoUrl || item.restaurantCoverImageUrl || null}
@@ -7054,7 +7364,7 @@ function LocalMenuItemCard({
           Dish
         </span>
         {price && (
-          <span className="absolute right-2.5 top-2.5 rounded-md bg-[#120805]/86 px-2 py-1 text-[11px] font-black text-orange-100 ring-1 ring-orange-300/32">
+          <span className="absolute right-2.5 top-2.5 rounded-md bg-[#120805]/86 px-2 py-1 text-[11px] font-black text-orange-100 ring-1 ring-orange-300/30">
             {price}
           </span>
         )}
@@ -7354,12 +7664,12 @@ function NearbyPickCard({
           discoveryReasons: item.discoveryReasons,
         })
       }
-      className="block overflow-hidden rounded-[0.85rem] bg-[#2c1609]/92 p-2 ring-1 ring-orange-200/30 transition duration-200 hover:-translate-y-0.5 hover:ring-orange-200/52 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
+      className="block overflow-hidden rounded-[0.85rem] bg-[#2c1609]/92 p-2 ring-1 ring-orange-200/30 transition duration-200 hover:-translate-y-0.5 hover:ring-orange-200/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
       aria-label={`Open ${item.name} from ${item.restaurantName || "local menu"}`}
       data-testid="scout-v2-nearby-pick-card"
     >
-      <div className="relative rounded-[0.7rem] bg-[#180b05]/76 p-3 ring-1 ring-orange-200/14">
-        <div className="relative mx-auto aspect-square w-[82%] rounded-full bg-orange-200/10 p-2 ring-1 ring-orange-100/22">
+      <div className="relative rounded-[0.7rem] bg-[#180b05]/76 p-3 ring-1 ring-orange-200/10">
+        <div className="relative mx-auto aspect-square w-[82%] rounded-full bg-orange-200/10 p-2 ring-1 ring-orange-100/20">
           <div className="relative h-full w-full overflow-hidden rounded-full bg-[#120805]/60 ring-1 ring-black/30">
             <ScoutCardMedia
               imageUrl={item.imageUrl || item.restaurantLogoUrl || item.restaurantCoverImageUrl || null}
@@ -7376,7 +7686,7 @@ function NearbyPickCard({
           Dish
         </span>
         {price && (
-          <span className="absolute right-2.5 top-2.5 rounded-md bg-[#120805]/86 px-2 py-1 text-[11px] font-black text-orange-100 ring-1 ring-orange-300/32">
+          <span className="absolute right-2.5 top-2.5 rounded-md bg-[#120805]/86 px-2 py-1 text-[11px] font-black text-orange-100 ring-1 ring-orange-300/30">
             {price}
           </span>
         )}
@@ -7528,7 +7838,7 @@ function EventCard({
   return (
     <Link
       href={`/event/${event.id}`}
-      className="block overflow-hidden rounded-[1.2rem] bg-[#0d1724]/82 ring-1 ring-sky-200/22 transition duration-200 hover:-translate-y-0.5 hover:ring-sky-200/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-300/70"
+      className="block overflow-hidden rounded-[1.2rem] bg-[#0d1724]/82 ring-1 ring-sky-200/20 transition duration-200 hover:-translate-y-0.5 hover:ring-sky-200/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-300/70"
       style={{ boxShadow: "0 16px 42px rgba(0,0,0,0.5)" }}
       aria-label={`Open event ${title}`}
     >
@@ -7729,11 +8039,11 @@ function NearbyRestaurantCard({
     }),
   ];
   const cardShellClass = isFoodTruckEntity
-    ? "group relative block overflow-hidden rounded-[1.65rem] bg-[#100806]/88 ring-1 ring-orange-300/32 transition duration-200 hover:-translate-y-0.5 hover:ring-orange-200/44 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
-    : "group block overflow-hidden rounded-[1rem] bg-[#0c1714]/84 ring-1 ring-emerald-200/18 transition duration-200 hover:-translate-y-0.5 hover:ring-emerald-200/34 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70";
+    ? "group relative block overflow-hidden rounded-[1.65rem] bg-[#100806]/88 ring-1 ring-orange-300/30 transition duration-200 hover:-translate-y-0.5 hover:ring-orange-200/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
+    : "group block overflow-hidden rounded-[1rem] bg-[#0c1714]/84 ring-1 ring-emerald-200/20 transition duration-200 hover:-translate-y-0.5 hover:ring-emerald-200/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70";
   const labelPillClass = isFoodTruckEntity
-    ? "bg-[#120805]/72 text-orange-100 ring-orange-200/22"
-    : "bg-[#071411]/72 text-emerald-100 ring-emerald-200/18";
+    ? "bg-[#120805]/72 text-orange-100 ring-orange-200/20"
+    : "bg-[#071411]/72 text-emerald-100 ring-emerald-200/20";
   const statusDotClass = isFoodTruckEntity ? "bg-orange-400" : "bg-emerald-400";
   const statusTextClass = isFoodTruckEntity ? "text-orange-200/85" : "text-emerald-200/85";
   const placeIcon = isFoodTruckEntity
@@ -8105,11 +8415,11 @@ function SavedRestaurantCard({ restaurant }: { restaurant: RestaurantSummary }) 
   const location = restaurant.neighborhood || restaurant.city || restaurant.address;
   const cuisine = restaurant.cuisineType;
   const cardShellClass = isFoodTruckEntity
-    ? "relative block overflow-hidden rounded-[1.55rem] bg-[#100806]/86 ring-1 ring-orange-300/28 transition hover:bg-[#1a0d07]/92 hover:ring-orange-200/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
-    : "block overflow-hidden rounded-xl bg-[#0c1714]/82 ring-1 ring-emerald-200/16 transition hover:bg-[#121f1b]/88 hover:ring-emerald-200/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70";
+    ? "relative block overflow-hidden rounded-[1.55rem] bg-[#100806]/86 ring-1 ring-orange-300/30 transition hover:bg-[#1a0d07]/92 hover:ring-orange-200/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
+    : "block overflow-hidden rounded-xl bg-[#0c1714]/82 ring-1 ring-emerald-200/20 transition hover:bg-[#121f1b]/88 hover:ring-emerald-200/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70";
   const labelPillClass = isFoodTruckEntity
-    ? "bg-[#120805]/72 text-orange-100 ring-orange-200/22"
-    : "bg-[#071411]/72 text-emerald-100 ring-emerald-200/18";
+    ? "bg-[#120805]/72 text-orange-100 ring-orange-200/20"
+    : "bg-[#071411]/72 text-emerald-100 ring-emerald-200/20";
 
   return (
     <Link
@@ -8332,7 +8642,7 @@ function LiveTruckMapCard({
 
   return (
     <div
-      className="absolute left-4 right-4 bottom-[calc(env(safe-area-inset-bottom)+7.25rem)] z-30 rounded-3xl bg-[#120805]/88 p-4 text-white ring-1 ring-orange-300/35 backdrop-blur-xl"
+      className="absolute left-4 right-4 bottom-[calc(env(safe-area-inset-bottom)+7.25rem)] z-30 rounded-3xl bg-[#120805]/88 p-4 text-white ring-1 ring-orange-300/40 backdrop-blur-xl"
       style={{ boxShadow: "0 22px 70px rgba(0,0,0,0.62), 0 0 24px rgba(255,90,47,0.18)" }}
     >
       <div className="flex items-start justify-between gap-3">
@@ -8424,9 +8734,116 @@ function MapPlaceCard({
   const originParam = userLocation ? `&origin=${userLocation.lat},${userLocation.lng}` : "";
   const directionsUrl = `https://www.google.com/maps/dir/?api=1${originParam}&destination=${marker.lat},${marker.lng}&travelmode=driving`;
 
+  if (marker.kind === "parking") {
+    const parkedTrucks = marker.parkedTrucks || [];
+    const hasParkedTrucks = parkedTrucks.length > 0;
+    const hostDestination = `/events?hostId=${encodeURIComponent(String(marker.sourceId))}`;
+
+    return (
+      <div
+        data-scout-map-card-kind="host"
+        className="absolute left-3 right-3 bottom-[calc(env(safe-area-inset-bottom)+7.25rem)] z-30 rounded-2xl bg-[#1b1008]/94 p-3 text-white ring-1 ring-amber-300/45 backdrop-blur-xl"
+        style={{ boxShadow: "0 18px 54px rgba(0,0,0,0.58), 0 0 22px rgba(245,158,11,0.2)" }}
+      >
+        <div className="flex items-start gap-3">
+          {marker.spotImageUrl ? (
+            <img
+              src={marker.spotImageUrl}
+              alt=""
+              className="h-12 w-12 shrink-0 rounded-xl object-cover ring-1 ring-amber-200/25"
+            />
+          ) : (
+            <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-amber-500/18 text-amber-100 ring-1 ring-amber-300/35">
+              {hasParkedTrucks ? (
+                <TruckIcon className="h-5 w-5" aria-hidden="true" />
+              ) : (
+                <MapPin className="h-5 w-5" aria-hidden="true" />
+              )}
+            </span>
+          )}
+          <div className="min-w-0 flex-1">
+            <div className="inline-flex items-center gap-1.5 rounded-full bg-amber-400/20 px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.12em] text-amber-100 ring-1 ring-amber-300/25">
+              {hasParkedTrucks ? "Truck parked" : "Host location"}
+            </div>
+            <h3 className="mt-1.5 truncate text-base font-black">{marker.title || "Host location"}</h3>
+            <p className="mt-0.5 truncate text-xs font-bold text-amber-100/70">
+              {marker.address || marker.subtitle || "Parking Pass host spot"}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="shrink-0 rounded-full px-2.5 py-1 text-xs font-bold text-white/60 ring-1 ring-white/10"
+          >
+            Close
+          </button>
+        </div>
+
+        {hasParkedTrucks ? (
+          <div className="mt-3 space-y-1.5">
+            {parkedTrucks.slice(0, 3).map((truck, index) => {
+              const key = `${truck.id || truck.name}-${index}`;
+              const content = (
+                <>
+                  <TruckIcon className="h-3.5 w-3.5 shrink-0 text-orange-200" aria-hidden="true" />
+                  <span className="min-w-0 flex-1 truncate">{truck.name}</span>
+                  {truck.slotLabel ? (
+                    <span className="shrink-0 truncate text-[10px] uppercase tracking-wide text-amber-100/60">
+                      {truck.slotLabel}
+                    </span>
+                  ) : null}
+                </>
+              );
+              return truck.href ? (
+                <Link
+                  key={key}
+                  href={truck.href}
+                  className="flex h-9 items-center gap-2 rounded-xl bg-orange-500/10 px-3 text-xs font-black text-orange-50 ring-1 ring-orange-300/20"
+                >
+                  {content}
+                  <ChevronRight className="h-3.5 w-3.5 shrink-0 text-orange-200/70" aria-hidden="true" />
+                </Link>
+              ) : (
+                <div
+                  key={key}
+                  className="flex h-9 items-center gap-2 rounded-xl bg-orange-500/10 px-3 text-xs font-black text-orange-50 ring-1 ring-orange-300/20"
+                >
+                  {content}
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="mt-3 rounded-xl bg-white/5 px-3 py-2 text-xs font-bold text-amber-50/70 ring-1 ring-white/10">
+            Host spot available for Parking Pass visits.
+          </p>
+        )}
+
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <Link
+            href={hostDestination}
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-amber-400 px-3 text-center text-xs font-black text-[#1a0d03]"
+          >
+            View host
+            <ChevronRight className="h-4 w-4" aria-hidden="true" />
+          </Link>
+          <a
+            href={directionsUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-white/8 px-3 text-center text-xs font-black text-white ring-1 ring-white/10"
+          >
+            Route
+            <Navigation2 className="h-4 w-4 text-amber-200" aria-hidden="true" />
+          </a>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
-      className="absolute left-4 right-4 bottom-[calc(env(safe-area-inset-bottom)+7.25rem)] z-30 rounded-3xl bg-[#120805]/88 p-4 text-white ring-1 ring-orange-300/35 backdrop-blur-xl"
+      className="absolute left-4 right-4 bottom-[calc(env(safe-area-inset-bottom)+7.25rem)] z-30 rounded-3xl bg-[#120805]/88 p-4 text-white ring-1 ring-orange-300/40 backdrop-blur-xl"
       style={{ boxShadow: "0 22px 70px rgba(0,0,0,0.62), 0 0 24px rgba(255,90,47,0.18)" }}
     >
       <div className="flex items-start justify-between gap-3">
@@ -8508,8 +8925,8 @@ function MapActivityPips({
           className={[
             "inline-flex items-center gap-1 rounded-full font-black uppercase tracking-[0.08em] text-white ring-1 backdrop-blur-md",
             mode === "high_activity"
-              ? "bg-[#120805]/78 px-2.5 py-1.5 text-[10px] ring-white/16 shadow-[0_10px_24px_rgba(0,0,0,0.34)]"
-              : "bg-[#120805]/68 px-2 py-1 text-[10px] ring-white/12",
+              ? "bg-[#120805]/78 px-2.5 py-1.5 text-[10px] ring-white/20 shadow-[0_10px_24px_rgba(0,0,0,0.34)]"
+              : "bg-[#120805]/68 px-2 py-1 text-[10px] ring-white/10",
           ].join(" ")}
         >
           <span className={`h-1.5 w-1.5 rounded-full ${pip.className}`} aria-hidden="true" />
@@ -8538,7 +8955,7 @@ function MapLayerToggles({
     <div
       className="absolute left-3 right-3 top-[calc(env(safe-area-inset-top)+4.7rem)] z-20 overflow-x-auto atmo-hide-scrollbar sm:left-4 sm:right-auto sm:w-[360px]"
     >
-      <div className="flex w-max gap-1 rounded-full bg-[#120805]/66 p-1 text-[10px] font-black uppercase tracking-wide text-white/70 ring-1 ring-white/12 backdrop-blur-xl">
+      <div className="flex w-max gap-1 rounded-full bg-[#120805]/66 p-1 text-[10px] font-black uppercase tracking-wide text-white/70 ring-1 ring-white/10 backdrop-blur-xl">
         {options.map((option) => {
           const isActive = layers[option.id];
           return (
@@ -8549,7 +8966,7 @@ function MapLayerToggles({
               className={[
                 "inline-flex h-7 items-center gap-1 rounded-full px-2 transition-colors",
                 isActive
-                  ? "bg-white/14 text-white ring-1 ring-white/18"
+                  ? "bg-white/14 text-white ring-1 ring-white/20"
                   : "bg-transparent text-white/48 hover:bg-white/8 hover:text-white/76",
               ].join(" ")}
               aria-pressed={isActive}
@@ -8599,7 +9016,7 @@ function ScoutMapHud({
   return (
     <div className="pointer-events-none absolute left-3 right-3 top-[calc(env(safe-area-inset-top)+4.25rem)] z-20 sm:left-4 sm:right-auto sm:w-[360px]">
       <div
-        className="pointer-events-auto rounded-2xl bg-[#120805]/88 p-3 text-white ring-1 ring-orange-200/35 backdrop-blur-xl"
+        className="pointer-events-auto rounded-2xl bg-[#120805]/88 p-3 text-white ring-1 ring-orange-200/40 backdrop-blur-xl"
         style={{ boxShadow: "0 18px 54px rgba(0,0,0,0.52), 0 0 26px rgba(255,90,47,0.2)" }}
       >
         <div className="mb-3 flex items-center justify-between gap-3 border-b border-white/10 pb-3">
@@ -8673,7 +9090,7 @@ function ScoutMapHud({
           </div>
         )}
 
-        <div className="mt-3 flex items-center justify-between gap-2 rounded-2xl bg-white/7 px-3 py-2 ring-1 ring-orange-200/12">
+        <div className="mt-3 flex items-center justify-between gap-2 rounded-2xl bg-white/7 px-3 py-2 ring-1 ring-orange-200/10">
           <span className="text-xs font-bold text-white/72">
             Radius
           </span>
@@ -8793,7 +9210,7 @@ function MapEdgeIndicators({
               key={marker.id}
               type="button"
               onClick={() => onSelect(marker)}
-              className="pointer-events-auto inline-flex items-center gap-1.5 rounded-full bg-[#1b0d05]/88 px-3 py-2 text-xs font-black text-orange-100 ring-1 ring-orange-300/35 backdrop-blur-xl"
+              className="pointer-events-auto inline-flex items-center gap-1.5 rounded-full bg-[#1b0d05]/88 px-3 py-2 text-xs font-black text-orange-100 ring-1 ring-orange-300/40 backdrop-blur-xl"
               style={{ boxShadow: "0 12px 36px rgba(0,0,0,0.42), 0 0 18px rgba(255,90,47,0.16)" }}
               aria-label={`Show ${marker.title || marker.kind} on map`}
             >
@@ -8882,7 +9299,7 @@ function TruckCard({
         event.preventDefault();
         onSelect(truck);
       }}
-      className="relative block overflow-hidden rounded-[1.65rem] bg-[#100806]/88 ring-1 ring-orange-300/32 transition duration-200 hover:-translate-y-0.5 hover:ring-orange-200/44 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
+      className="relative block overflow-hidden rounded-[1.65rem] bg-[#100806]/88 ring-1 ring-orange-300/30 transition duration-200 hover:-translate-y-0.5 hover:ring-orange-200/40 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
       style={{ boxShadow: "0 16px 42px rgba(0,0,0,0.5), inset 0 0 0 1px rgba(251,146,60,0.08)" }}
     >
       <span
@@ -8917,14 +9334,14 @@ function TruckCard({
             Deal
           </span>
         ) : null}
-        <span className="absolute bottom-2.5 left-4 inline-flex items-center rounded-full bg-black/62 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white/86 ring-1 ring-white/12">
+        <span className="absolute bottom-2.5 left-4 inline-flex items-center rounded-full bg-black/62 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white/86 ring-1 ring-white/10">
           Food truck
         </span>
       </div>
       {/* Info */}
       <div className="border-t border-orange-200/12 bg-[#190b06]/92 px-3 py-3 pl-7">
         <div className="flex items-start gap-2.5">
-          <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-orange-300/14 text-orange-200 ring-1 ring-orange-200/24">
+          <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-orange-300/14 text-orange-200 ring-1 ring-orange-200/25">
             <TruckIcon className="h-4 w-4" aria-hidden="true" />
           </span>
           <div className="min-w-0 flex-1">

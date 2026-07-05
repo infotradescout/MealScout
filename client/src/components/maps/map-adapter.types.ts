@@ -20,6 +20,16 @@ export interface MapAdapterMarker {
   subtitle?: string;
   color?: string;
   imageUrl?: string | null;
+  address?: string | null;
+  spotImageUrl?: string | null;
+  parkingStatus?: "available" | "occupied" | "scheduled" | null;
+  parkedTrucks?: Array<{
+    id?: string | null;
+    name: string;
+    href?: string | null;
+    source?: "parking_pass" | "event" | "manual_schedule";
+    slotLabel?: string | null;
+  }>;
 }
 
 export interface MapBoundsLike {

@@ -70,7 +70,7 @@ export function ScoutSearchDock({
           onOpen();
         }}
         className={`overflow-hidden rounded-[1.4rem] bg-[#0f0a07]/94 text-white ring-1 backdrop-blur-xl shadow-[0_18px_44px_rgba(0,0,0,0.52)] ${
-          searchMode ? "ring-orange-300/40" : "ring-orange-400/35"
+          searchMode ? "ring-orange-300/40" : "ring-orange-400/40"
         }`}
       >
         <div className="flex min-h-12 w-full items-center gap-2 px-3">
