@@ -128,7 +128,7 @@ export function ThemedScoutMapV2({
     if (!map) return;
     const frameState = frameStateRef.current;
     const frameLocation = frameState.userLocation;
-    const frameZoom = frameState.zoom;
+    const baseZoom = frameState.zoom;
     const localMarkers = frameState.markers
       .filter(
         (marker) =>
@@ -143,18 +143,18 @@ export function ThemedScoutMapV2({
       const farthestMiles = Math.max(
         ...localMarkers.map((marker) => getMarkerDistanceMiles(frameLocation, marker)),
       );
-      const frameZoom =
+      const targetZoom =
         farthestMiles > 12 ? 10.6 :
         farthestMiles > 6 ? 11.2 :
         farthestMiles > 2.5 ? 12 :
         farthestMiles > 0.9 ? 12.55 :
-        frameZoom;
+        baseZoom;
       map.easeTo({
         center: [
           (Math.min(...lngValues) + Math.max(...lngValues)) / 2,
           (Math.min(...latValues) + Math.max(...latValues)) / 2,
         ],
-        zoom: Math.min(frameZoom, frameZoom),
+        zoom: Math.min(baseZoom, targetZoom),
         pitch: 34,
         bearing: 9,
         duration,
@@ -163,7 +163,7 @@ export function ThemedScoutMapV2({
     }
     map.easeTo({
       center: [frameLocation.lng, frameLocation.lat],
-      zoom: frameZoom,
+      zoom: baseZoom,
       pitch: 34,
       bearing: 9,
       duration,
@@ -378,7 +378,19 @@ export function ThemedScoutMapV2({
       );
     });
     if (!interactive) {
-      window.requestAnimationFrame(() => frameMap(420));
+      const runFrame = () => {
+        window.requestAnimationFrame(() => frameMap(420));
+        window.setTimeout(() => frameMap(420), 280);
+        window.setTimeout(() => frameMap(420), 900);
+      };
+      if (map.loaded()) {
+        runFrame();
+      } else {
+        map.once("load", runFrame);
+      }
+      return () => {
+        map.off("load", runFrame);
+      };
     }
   }, [interactive, markerKey, markers, onMarkerTap, zoom]);
 
