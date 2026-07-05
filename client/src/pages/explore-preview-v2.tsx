@@ -5523,21 +5523,36 @@ function ActiveSceneContent({
           thinMarket={isLowActivityLane && firstScreenDecisionItems.length <= 1}
         />
         {renderSearchDock?.()}
-        {localMenuItems.length > 0 && (
-          <section className="px-5 pt-2">
-            <SectionHeader title="Nearby picks" linkHref={DISCOVERY_LAYERS.menuItems.href} />
-            <div className="grid grid-cols-2 gap-3">
-              {localMenuItems.slice(0, 2).map((item, index) => (
-                <NearbyPickCard
-                  key={item.id}
-                  item={item}
-                  position={index}
-                  currentUserId={currentUserId}
-                />
-              ))}
-            </div>
-          </section>
-        )}
+        {(() => {
+          // Prefer items with a real photo or a substantial price - a $2
+          // side/add-on isn't really a "pick," and is also more likely to
+          // hit the generic no-photo fallback, which looks bad blown up
+          // to this section's large card size. Fall back to the unfiltered
+          // list in thin markets rather than hiding the section entirely.
+          const strongCandidates = localMenuItems.filter(
+            (item) =>
+              Boolean(item.imageUrl) ||
+              (typeof item.priceCents === "number" && item.priceCents >= 500),
+          );
+          const nearbyPicks = (
+            strongCandidates.length > 0 ? strongCandidates : localMenuItems
+          ).slice(0, 2);
+          return nearbyPicks.length > 0 ? (
+            <section className="px-5 pt-2">
+              <SectionHeader title="Nearby picks" linkHref={DISCOVERY_LAYERS.menuItems.href} />
+              <div className="grid grid-cols-2 gap-3">
+                {nearbyPicks.map((item, index) => (
+                  <NearbyPickCard
+                    key={item.id}
+                    item={item}
+                    position={index}
+                    currentUserId={currentUserId}
+                  />
+                ))}
+              </div>
+            </section>
+          ) : null;
+        })()}
         {scoutRows.map((row) => (
           <ScoutHorizontalCategoryRail
             key={row.id}
@@ -7212,10 +7227,10 @@ function NearbyPickCard({
       <div className="relative aspect-square w-full bg-[#120805]/60">
         <ScoutCardMedia
           imageUrl={item.imageUrl || item.restaurantLogoUrl || item.restaurantCoverImageUrl || null}
-          fallbackIcon={<Utensils className="h-5 w-5 text-white/80" aria-hidden="true" />}
+          fallbackIcon={<Utensils className="h-6 w-6 text-orange-200/80" aria-hidden="true" />}
           fallbackTestId="scout-v2-nearby-pick-card-image-fallback"
           imageClassName="absolute inset-0 h-full w-full object-cover"
-          fallbackClassName="bg-[linear-gradient(150deg,#fb923c_0%,#ea580c_45%,#9a3412_100%)]"
+          fallbackClassName="!bg-[linear-gradient(150deg,#3a2013_0%,#241209_60%,#1a0f0a_100%)]"
           categoryPhoto={getDishCategoryPhoto(item.name, item.description)}
         />
         <div
