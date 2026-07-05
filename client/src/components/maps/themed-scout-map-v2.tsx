@@ -114,6 +114,8 @@ export function ThemedScoutMapV2({
   const markerRefs = useRef<maplibregl.Marker[]>([]);
   const driftRafRef = useRef<number | null>(null);
   const driftStartRef = useRef<number | null>(null);
+  const frameStateRef = useRef({ userLocation, markers, zoom });
+  frameStateRef.current = { userLocation, markers, zoom };
   // Tracks either "no WebGL" (checked up front) or "tiles never loaded"
   // (network/ad-blocker interference with the CDN) so we can show a plain
   // warm placeholder instead of a mysteriously blank card.
@@ -124,32 +126,35 @@ export function ThemedScoutMapV2({
   const frameMap = (duration = 0) => {
     const map = mapRef.current;
     if (!map) return;
-    const localMarkers = markers
+    const frameState = frameStateRef.current;
+    const frameLocation = frameState.userLocation;
+    const frameZoom = frameState.zoom;
+    const localMarkers = frameState.markers
       .filter(
         (marker) =>
           Number.isFinite(marker.lat) &&
           Number.isFinite(marker.lng) &&
-          getMarkerDistanceMiles(userLocation, marker) <= PREVIEW_FRAME_MARKER_MILES,
+          getMarkerDistanceMiles(frameLocation, marker) <= PREVIEW_FRAME_MARKER_MILES,
       )
       .slice(0, 8);
     if (localMarkers.length > 0) {
-      const latValues = [userLocation.lat, ...localMarkers.map((marker) => marker.lat)];
-      const lngValues = [userLocation.lng, ...localMarkers.map((marker) => marker.lng)];
+      const latValues = [frameLocation.lat, ...localMarkers.map((marker) => marker.lat)];
+      const lngValues = [frameLocation.lng, ...localMarkers.map((marker) => marker.lng)];
       const farthestMiles = Math.max(
-        ...localMarkers.map((marker) => getMarkerDistanceMiles(userLocation, marker)),
+        ...localMarkers.map((marker) => getMarkerDistanceMiles(frameLocation, marker)),
       );
       const frameZoom =
         farthestMiles > 12 ? 10.6 :
         farthestMiles > 6 ? 11.2 :
         farthestMiles > 2.5 ? 12 :
         farthestMiles > 0.9 ? 12.55 :
-        zoom;
+        frameZoom;
       map.easeTo({
         center: [
           (Math.min(...lngValues) + Math.max(...lngValues)) / 2,
           (Math.min(...latValues) + Math.max(...latValues)) / 2,
         ],
-        zoom: Math.min(zoom, frameZoom),
+        zoom: Math.min(frameZoom, frameZoom),
         pitch: 34,
         bearing: 9,
         duration,
@@ -157,8 +162,8 @@ export function ThemedScoutMapV2({
       return;
     }
     map.easeTo({
-      center: [userLocation.lng, userLocation.lat],
-      zoom,
+      center: [frameLocation.lng, frameLocation.lat],
+      zoom: frameZoom,
       pitch: 34,
       bearing: 9,
       duration,
@@ -171,8 +176,8 @@ export function ThemedScoutMapV2({
     const map = new maplibregl.Map({
       container: containerRef.current,
       style: MINI_MAP_STYLE,
-      center: [userLocation.lng, userLocation.lat],
-      zoom,
+      center: [frameStateRef.current.userLocation.lng, frameStateRef.current.userLocation.lat],
+      zoom: frameStateRef.current.zoom,
       pitch: 34,
       bearing: 9,
       interactive,
