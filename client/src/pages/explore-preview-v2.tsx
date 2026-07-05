@@ -22,6 +22,7 @@ import {
   MessageCircle,
   Minimize2,
   Navigation2,
+  Star,
   Tag,
   TrendingUp,
   Users,
@@ -29,6 +30,14 @@ import {
   User as UserIcon,
 } from "lucide-react";
 
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import ShareButton from "@/components/share-button";
 import { useAuth } from "@/hooks/useAuth";
 import {
   useEffectiveLocationContext,
@@ -47,6 +56,7 @@ import {
 import { MapErrorBoundary } from "@/components/maps/map-error-boundary";
 import { GOOGLE_MAPS_WEB_API_KEY } from "@/lib/mapProvider";
 import { apiUrl } from "@/lib/api";
+import { toast } from "@/hooks/use-toast";
 import { buildPublicProfilePath } from "@/lib/public-profile-path";
 import type {
   MapAdapterMarker,
@@ -945,15 +955,14 @@ function getOperationalBadges(entityOrMeta: FreshnessMeta): string[] {
 }
 
 function getFreshnessBadgeClass(meta: FreshnessMeta, label: string): string {
-  const base =
-    "rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ring-1 shadow-sm";
+  const base = "rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ring-1";
   if (getFreshnessState(meta) === "needs_update") {
-    return `${base} bg-amber-400/25 text-amber-100 ring-amber-300/45`;
+    return `${base} bg-amber-300/14 text-amber-100 ring-amber-200/20`;
   }
   if (getFreshnessState(meta) === "aging") {
-    return `${base} bg-white/12 text-white/85 ring-white/20`;
+    return `${base} bg-white/8 text-orange-100/78 ring-white/10`;
   }
-  return `${base} bg-emerald-400/25 text-emerald-100 ring-emerald-300/45`;
+  return `${base} bg-emerald-300/12 text-emerald-100 ring-emerald-200/18`;
 }
 
 function getRestaurantUpdateHref(restaurantId: string, setup: "status" | "location" | "menu" | "deal"): string {
@@ -1720,40 +1729,6 @@ function isWithinScoutRadius(
   return false;
 }
 
-function extractMenuPreviewItems(data: any): MenuPreviewItem[] {
-  const menus = Array.isArray(data?.menus) ? data.menus : [];
-  const items: MenuPreviewItem[] = [];
-  const seen = new Set<string>();
-  for (const menu of menus) {
-    const categoryItems = Array.isArray(menu?.categories)
-      ? menu.categories.flatMap((category: any) =>
-          Array.isArray(category?.items) ? category.items : [],
-        )
-      : [];
-    const uncategorized = Array.isArray(menu?.uncategorizedItems)
-      ? menu.uncategorizedItems
-      : [];
-    for (const item of [...categoryItems, ...uncategorized]) {
-      const id = String(item?.id || "").trim();
-      const name = String(item?.name || "").trim();
-      if (!id || !name || seen.has(id) || item?.isAvailable === false) continue;
-      seen.add(id);
-      items.push({
-        id,
-        name,
-        description: item?.description ?? null,
-        imageUrl: item?.imageUrl ?? null,
-        priceCents:
-          typeof item?.priceCents === "number" && Number.isFinite(item.priceCents)
-            ? item.priceCents
-            : null,
-      });
-      if (items.length >= 3) return items;
-    }
-  }
-  return items;
-}
-
 type ScoutSearchIntent =
   | "all"
   | "now"
@@ -2228,8 +2203,8 @@ export default function ExplorePreview() {
     : resolvedScoutLocation?.source === "device"
       ? "Your live location"
       : hasResolvedLocation
-        ? "Active market"
-        : "Nearby market";
+        ? "Open near you"
+        : "Nearby food";
 
   /* --------- trucks --------- */
 
@@ -2469,15 +2444,15 @@ export default function ExplorePreview() {
 
   const restaurantMenuPreviewQueries = useQueries({
     queries: nearbyRestaurants.slice(0, 8).map((restaurant) => ({
-      queryKey: ["/api/menus", restaurant.id, "scout-preview"],
-      queryFn: async () => {
+      queryKey: ["/api/restaurants", restaurant.id, "featured-item"],
+      queryFn: async (): Promise<MenuPreviewItem[]> => {
         const response = await fetch(
-          `/api/menus/${encodeURIComponent(String(restaurant.id))}`,
+          `/api/restaurants/${encodeURIComponent(String(restaurant.id))}/featured-item`,
           { credentials: "include" },
         );
         if (!response.ok) return [];
         const data = await response.json();
-        return extractMenuPreviewItems(data);
+        return data?.item ? [data.item] : [];
       },
       staleTime: 120_000,
       retry: false,
@@ -3667,8 +3642,8 @@ export default function ExplorePreview() {
     ? "clamp(208px, 24dvh, 238px)"
     : "clamp(250px, 32dvh, 310px)";
   const collapsedMapClass = isHighActivity
-    ? "mx-0 mt-0 rounded-b-[2rem] ring-1 ring-orange-200/14 bg-[#070707]"
-    : "mx-0 mt-0 rounded-b-[1.8rem] ring-1 ring-white/12 bg-[#0b0908]";
+    ? "mx-0 mt-0 rounded-b-[2rem] ring-1 ring-orange-200/25 bg-[#1f140c]"
+    : "mx-0 mt-0 rounded-b-[1.8rem] ring-1 ring-orange-100/20 bg-[#211610]";
   const railSectionClass = isHighActivity
     ? "pl-4 pr-0 pt-1 pb-7"
     : "pl-4 pr-0 pt-2 pb-9 sm:pl-5";
@@ -3768,23 +3743,15 @@ export default function ExplorePreview() {
         description="Discover food trucks, restaurants, and deals near you. MealScout puts the local food scene right in your hands."
       />
 
-      {/* Quiet page base. The food park photo was fighting the actual app
-          content, so keep the brand atmosphere subtle and let the controls
-          carry the experience. */}
+      {/* Quiet page base. Warm espresso/roasted-brown wash instead of
+          crushing to near-black, so the food photography underneath still
+          reads instead of getting stacked into a flat dark panel. */}
       <div
         aria-hidden="true"
-        className="pointer-events-none fixed inset-0 -z-20 bg-[#08060a]"
+        className="pointer-events-none fixed inset-0 -z-20 bg-[#1c130c]"
         style={{
           backgroundImage:
-            "radial-gradient(90% 50% at 50% -8%, rgba(255,138,60,0.20) 0%, rgba(8,6,10,0) 58%), linear-gradient(180deg, #100906 0%, #070609 62%, #050507 100%)",
-        }}
-      />
-      <div
-        aria-hidden="true"
-        className="pointer-events-none fixed inset-0 -z-10"
-        style={{
-          backgroundImage:
-            "linear-gradient(180deg, rgba(8,6,10,0.08) 0%, rgba(8,6,10,0.42) 100%)",
+            "radial-gradient(90% 50% at 50% -8%, rgba(255,150,72,0.24) 0%, rgba(28,19,12,0) 58%), linear-gradient(180deg, #241708 0%, #1b1109 62%, #170f0a 100%)",
         }}
       />
 
@@ -3812,7 +3779,7 @@ export default function ExplorePreview() {
           data-scout-mobile-thirds-map="true"
           className={`relative overflow-hidden ${
             sheetState === "fullMap"
-              ? "w-full bg-[#06070b]"
+              ? "w-full bg-[#1a1108]"
               : collapsedMapClass
           }`}
           style={{
@@ -4225,26 +4192,22 @@ function SectionHeader({
   const showLink = itemCount === undefined || itemCount > 1;
 
   return (
-    <div className="mb-5 pr-5">
+    <div className="mb-4 pr-5">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between sm:gap-3">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <span
-            className="h-6 w-1.5 shrink-0 rounded-full bg-gradient-to-b from-orange-400 to-red-500"
-            aria-hidden="true"
-          />
-          <h2 className="text-2xl font-black tracking-tight text-white sm:text-[1.75rem]">{title}</h2>
+        <div className="min-w-0">
+          <h2 className="text-xl font-black tracking-tight text-white sm:text-2xl">{title}</h2>
         </div>
         {showLink ? (
           <Link
             href={linkHref}
-            className="inline-flex w-fit shrink-0 items-center gap-1.5 rounded-full bg-orange-500/12 px-3 py-1.5 text-xs font-black uppercase tracking-[0.08em] text-orange-100 ring-1 ring-orange-300/25 transition-colors hover:bg-orange-500/20 hover:ring-orange-300/40 sm:text-sm sm:normal-case sm:tracking-normal"
+            className="inline-flex w-fit shrink-0 items-center gap-1.5 rounded-full bg-orange-500/10 px-3 py-1.5 text-xs font-black uppercase tracking-[0.08em] text-orange-100 ring-1 ring-orange-200/20 transition-colors hover:bg-orange-500/16 sm:text-sm sm:normal-case sm:tracking-normal"
           >
             See All <ChevronRight className="h-4 w-4" aria-hidden="true" />
           </Link>
         ) : null}
       </div>
       {subtitle ? (
-        <p className="mt-1.5 pl-4 text-xs leading-relaxed text-white/58 sm:text-sm">{subtitle}</p>
+        <p className="mt-1.5 text-xs leading-relaxed text-white/58 sm:text-sm">{subtitle}</p>
       ) : null}
     </div>
   );
@@ -4562,7 +4525,7 @@ function ScoutFirstScreenDecisionStack({
       >
         <div className="rounded-[1.1rem] bg-[#120805]/72 px-4 py-3 text-white ring-1 ring-white/10">
           <p className="text-[11px] font-black uppercase tracking-[0.12em] text-orange-200/75">
-            No nearby food signals yet
+            No nearby food yet
           </p>
           <p className="mt-1 text-sm font-semibold text-white/70">
             Try search or move the map
@@ -4654,6 +4617,7 @@ function ScoutImmediateCompactCard({
         meta={meta}
         primaryActionLabel="View truck"
         directionsUrl={directionsUrl}
+        categoryPhoto={getDishCategoryPhoto(truck.name, truck.cuisineType, truck.vibe)}
       />
     );
   }
@@ -4677,6 +4641,7 @@ function ScoutImmediateCompactCard({
         meta={meta}
         primaryActionLabel="View profile"
         directionsUrl={directionsUrl}
+        categoryPhoto={getDishCategoryPhoto(getRestaurantName(restaurant), restaurant.cuisineType)}
       />
     );
   }
@@ -4703,6 +4668,7 @@ function ScoutImmediateCompactCard({
         title={menuItem.name}
         meta={reason || "Popular nearby dish"}
         primaryActionLabel="View dish"
+        categoryPhoto={getDishCategoryPhoto(menuItem.name, menuItem.cuisineType)}
       />
     );
   }
@@ -4717,6 +4683,7 @@ function ScoutImmediateCompactCard({
         title={deal.title || "Local deal"}
         meta={[deal.restaurantName, deal.discountText || deal.description].filter(Boolean).join(" / ") || "Active nearby deal"}
         primaryActionLabel="View deal"
+        categoryPhoto={getDishCategoryPhoto(deal.title, (deal as any).description)}
       />
     );
   }
@@ -4747,6 +4714,7 @@ function CompactDecisionCardShell({
   meta,
   primaryActionLabel,
   directionsUrl,
+  categoryPhoto = null,
 }: {
   href: string;
   imageUrl?: string | null;
@@ -4755,6 +4723,7 @@ function CompactDecisionCardShell({
   meta: string;
   primaryActionLabel: string;
   directionsUrl?: string | null;
+  categoryPhoto?: DishCategoryPhoto | null;
 }) {
   const [imageFailed, setImageFailed] = useState(false);
   useEffect(() => {
@@ -4774,6 +4743,15 @@ function CompactDecisionCardShell({
             className="h-full w-full object-cover"
             loading="lazy"
             onError={() => setImageFailed(true)}
+          />
+        ) : categoryPhoto ? (
+          <img
+            src={categoryPhoto.image}
+            alt=""
+            className="h-full w-full object-cover"
+            loading="lazy"
+            aria-hidden="true"
+            data-testid="scout-compact-card-image-fallback"
           />
         ) : (
           <div
@@ -4816,12 +4794,25 @@ function CompactDecisionCardShell({
 type DishCategoryPhoto = { image: string; label: string };
 
 const DISH_CATEGORY_PHOTO_RULES: Array<{ match: RegExp; image: string; label: string }> = [
+  // Ordered most-specific-first: several real menu items hit more than one
+  // keyword group (e.g. "Authentic Cuban Sandwich" contains "pulled pork"),
+  // and the first matching rule wins, so the more specific dish category
+  // goes ahead of the broader one it could otherwise get misread as.
+  { match: /sandwich|\bsub\b|hoagie|\bcuban\b|panini|\bwrap\b|\bmelt\b|po.?boy/i, image: "/atmospheric/craving-sandwich.jpg", label: "Sandwiches" },
+  { match: /\bbbq\b|barbecue|brisket|\bribs\b|pulled pork|smoked|smokehouse/i, image: "/atmospheric/craving-bbq.jpg", label: "BBQ" },
+  { match: /\bwings?\b|buffalo|hot wings|\bflats\b|\bdrums\b/i, image: "/atmospheric/craving-wings.jpg", label: "Wings" },
+  { match: /\bpoke\b|sushi|ahi tuna|nigiri|sashimi|\bmaki\b|poke bowl/i, image: "/atmospheric/craving-poke.jpg", label: "Poke & Sushi" },
+  { match: /seafood|shrimp|\bcrab\b|\bfish\b|grouper|snapper|oyster|scallop|lobster/i, image: "/atmospheric/craving-seafood.jpg", label: "Seafood" },
+  { match: /salad|greens|caesar|garden salad|greek salad|chopped salad/i, image: "/atmospheric/craving-salad.jpg", label: "Salads" },
+  { match: /\bcoffee\b|\blatte\b|espresso|cappuccino|cold brew|\bmocha\b/i, image: "/atmospheric/craving-coffee.jpg", label: "Coffee" },
+  { match: /smoothie bowl|acai|açaí|berry bowl|granola bowl|pitaya|\bgranola\b|\bblended\b/i, image: "/atmospheric/craving-smoothie-bowl.jpg", label: "Smoothie Bowls" },
+  { match: /breakfast|\beggs\b|\bbacon\b|biscuit|pancakes?|\bwaffles?\b|hash browns?|omelet|brunch/i, image: "/atmospheric/craving-breakfast.jpg", label: "Breakfast" },
   { match: /burger|cheeseburger|hamburger|smash/i, image: "/atmospheric/craving-burgers.jpg", label: "Burgers" },
   { match: /taco|burrito|quesadilla|nacho/i, image: "/atmospheric/craving-tacos.jpg", label: "Tacos" },
   { match: /pizza|slice|calzone/i, image: "/atmospheric/craving-pizza.jpg", label: "Pizza" },
   { match: /ramen|noodle|pho\b/i, image: "/atmospheric/craving-ramen.jpg", label: "Noodles" },
   { match: /ice cream|dessert|cake|cookie|donut|pastry|sweet|churro/i, image: "/atmospheric/craving-dessert.jpg", label: "Desserts" },
-  { match: /coffee|latte|espresso|juice|smoothie|drink|tea\b|lemonade|boba/i, image: "/atmospheric/craving-drinks.jpg", label: "Drinks" },
+  { match: /juice|drink|tea\b|lemonade|boba/i, image: "/atmospheric/craving-drinks.jpg", label: "Drinks" },
 ];
 
 function getDishCategoryPhoto(...textParts: Array<string | null | undefined>): DishCategoryPhoto | null {
@@ -5207,7 +5198,7 @@ function ActiveSceneContent({
       ...popularDishCards.map((item) => ({
         sourceRowId: "popular_dishes" as const,
         sectionLabel: "Popular Dishes",
-        summary: formatScoutCount(popularDishCards.length, "dish signal", "dish signals"),
+        summary: formatScoutCount(popularDishCards.length, "popular dish", "popular dishes"),
         cardType: "menu_item" as const,
         item,
       })),
@@ -5492,7 +5483,7 @@ function ActiveSceneContent({
     const renderScoutRailCard = (card: ScoutRailRenderCard) => {
       if (card.cardType === "truck") {
         return card.cardKind === "food_truck" && card.truck.mobileOnline ? (
-          <LiveTruckCard truck={card.truck} currentUserId={currentUserId} />
+          <LiveTruckCard truck={card.truck} currentUserId={currentUserId} relationshipSnapshot={restaurantRelationships} />
         ) : (
           <TruckCard truck={card.truck} currentUserId={currentUserId} />
         );
@@ -6405,10 +6396,58 @@ function LiveTruckSkeletonCard() {
 function LiveTruckCard({
   truck,
   currentUserId,
+  relationshipSnapshot,
 }: {
   truck: LiveTruckSummary;
   currentUserId?: string | null;
+  relationshipSnapshot: RestaurantRelationshipSnapshot;
 }) {
+  const truckId = String(truck.id);
+  const [isFavorite, setIsFavorite] = useState(false);
+  const [pendingFavorite, setPendingFavorite] = useState(false);
+
+  useEffect(() => {
+    setIsFavorite(relationshipSnapshot.favoriteIds.has(truckId));
+  }, [relationshipSnapshot, truckId]);
+
+  const toggleFavorite = async (event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!currentUserId) {
+      window.location.href = `/login?redirect=${encodeURIComponent("/scout")}`;
+      return;
+    }
+    const nextState = !isFavorite;
+    setIsFavorite(nextState);
+    setPendingFavorite(true);
+    try {
+      const response = await fetch(
+        `/api/restaurants/${encodeURIComponent(truckId)}/favorite`,
+        {
+          method: nextState ? "POST" : "DELETE",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: nextState ? "{}" : undefined,
+        },
+      );
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(String(data?.message || "").trim() || "Favorite action failed");
+      }
+    } catch (error) {
+      setIsFavorite(!nextState);
+      if (nextState) {
+        toast({
+          variant: "destructive",
+          description:
+            error instanceof Error ? error.message : "Couldn't save this truck.",
+        });
+      }
+    } finally {
+      setPendingFavorite(false);
+    }
+  };
+
   const distance = formatDistance(truck);
   const wait = formatWait(truck);
   const vibe = getCrowdVibe(truck);
@@ -6453,7 +6492,7 @@ function LiveTruckCard({
   return (
     <Link
       href={getTruckProfilePath(truck)}
-      className="group block overflow-hidden rounded-[1.6rem] bg-gradient-to-b from-[#1d140d] to-[#0e0805] ring-1 ring-white/14 shadow-[0_10px_30px_rgba(0,0,0,0.4)] transition duration-200 hover:-translate-y-1 hover:shadow-[0_18px_40px_rgba(0,0,0,0.5)] hover:ring-orange-300/45 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
+      className="group block overflow-hidden rounded-[1.35rem] bg-[#120b08]/75 ring-1 ring-white/10 transition duration-200 hover:-translate-y-0.5 hover:ring-orange-300/28 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
       aria-label={`Open ${truck.name}`}
       style={{ boxShadow: "0 18px 54px rgba(0,0,0,0.56)" }}
     >
@@ -6485,13 +6524,18 @@ function LiveTruckCard({
 
         <button
           type="button"
-          aria-label="Save"
-          onClick={(e) => {
-            e.preventDefault();
-          }}
-          className="absolute top-2.5 right-2.5 h-9 w-9 rounded-full flex items-center justify-center bg-[#120805]/30 backdrop-blur-sm hover:bg-[#120805]/50 transition-colors"
+          aria-label={isFavorite ? "Saved" : "Save"}
+          aria-pressed={isFavorite}
+          onClick={toggleFavorite}
+          disabled={pendingFavorite}
+          className={`absolute top-2.5 right-2.5 h-9 w-9 rounded-full flex items-center justify-center backdrop-blur-sm transition-colors ${
+            isFavorite ? "bg-orange-400/90 hover:bg-orange-400" : "bg-[#120805]/30 hover:bg-[#120805]/50"
+          }`}
         >
-          <Heart className="h-5 w-5 text-white" aria-hidden="true" />
+          <Heart
+            className={`h-5 w-5 ${isFavorite ? "text-[#1a0d08] fill-current" : "text-white"}`}
+            aria-hidden="true"
+          />
         </button>
 
         <div className="absolute bottom-3 left-3 right-3">
@@ -6550,7 +6594,7 @@ function DealCard({
   return (
     <Link
       href={`/deal/${deal.id}`}
-      className="block overflow-hidden rounded-[1.6rem] bg-gradient-to-b from-[#1d140d] to-[#0e0805] ring-1 ring-white/14 shadow-[0_10px_30px_rgba(0,0,0,0.4)] transition duration-200 hover:-translate-y-1 hover:shadow-[0_18px_40px_rgba(0,0,0,0.5)] hover:ring-orange-300/45 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
+      className="block overflow-hidden rounded-[1.35rem] bg-[#120b08]/75 ring-1 ring-white/10 transition duration-200 hover:-translate-y-0.5 hover:ring-orange-300/28 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
       style={{ boxShadow: "0 18px 54px rgba(0,0,0,0.56)" }}
       aria-label={`Open deal ${deal.title || ""}`}
     >
@@ -6659,6 +6703,133 @@ function LocalMenuItemCard({
       ]
     : [];
 
+  const [isRecommendDialogOpen, setIsRecommendDialogOpen] = useState(false);
+  const [recommendComment, setRecommendComment] = useState("");
+  const [recommendRating, setRecommendRating] = useState("5");
+  const [recommendPhoto, setRecommendPhoto] = useState<File | null>(null);
+  const [isSubmittingEnrich, setIsSubmittingEnrich] = useState(false);
+  const [isRemovingRecommend, setIsRemovingRecommend] = useState(false);
+  const [isTogglingRecommend, setIsTogglingRecommend] = useState(false);
+  const [hasRecommended, setHasRecommended] = useState(false);
+
+  const { data: myRecommendationData } = useQuery({
+    queryKey: ["/api/menu-items", item.id, "my-recommendation", currentUserId],
+    queryFn: async () => {
+      // Deliberately same-origin (not apiUrl's cross-origin API host): this
+      // check depends on the session cookie, which mobile/Safari privacy
+      // rules strip from cross-site requests. www.mealscout.us proxies
+      // /api/* to the backend, so a relative path keeps the cookie first-party.
+      const res = await fetch(
+        `/api/menu-items/${encodeURIComponent(item.id)}/my-recommendation`,
+        { credentials: "include" },
+      );
+      if (!res.ok) return null;
+      return res.json();
+    },
+    enabled: Boolean(currentUserId),
+    staleTime: 60_000,
+  });
+
+  useEffect(() => {
+    setHasRecommended(Boolean((myRecommendationData as any)?.recommendation));
+  }, [myRecommendationData]);
+
+  const postMenuItemRecommendation = async (opts: {
+    comment?: string;
+    rating?: string;
+    photo?: File | null;
+  }) => {
+    const formData = new FormData();
+    formData.append("comment", opts.comment ?? "");
+    formData.append("rating", opts.rating ?? "5");
+    if (opts.photo) formData.append("image", opts.photo);
+    // Same-origin for the same reason as the my-recommendation check above.
+    return fetch(
+      `/api/menu-items/${encodeURIComponent(item.id)}/recommend`,
+      { method: "POST", credentials: "include", body: formData },
+    );
+  };
+
+  const handleRecommendClick = async (event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!currentUserId) {
+      window.location.href = `/login?redirect=${encodeURIComponent("/scout")}`;
+      return;
+    }
+    if (hasRecommended) {
+      // Already recommended - reopen the popup so they can edit or remove it.
+      setIsRecommendDialogOpen(true);
+      return;
+    }
+    setIsTogglingRecommend(true);
+    try {
+      const res = await postMenuItemRecommendation({});
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast({
+          variant: "destructive",
+          description:
+            String(data?.message || "").trim() || "Couldn't recommend this dish.",
+        });
+        return;
+      }
+      setHasRecommended(true);
+      setIsRecommendDialogOpen(true);
+    } finally {
+      setIsTogglingRecommend(false);
+    }
+  };
+
+  const submitEnrichedRecommendation = async () => {
+    setIsSubmittingEnrich(true);
+    try {
+      const res = await postMenuItemRecommendation({
+        comment: recommendComment,
+        rating: recommendRating,
+        photo: recommendPhoto,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast({
+          variant: "destructive",
+          description:
+            String(data?.message || "").trim() || "Couldn't save your recommendation.",
+        });
+        return;
+      }
+      toast({
+        description:
+          data?.photoStatus?.status === "pending"
+            ? "Recommendation saved. Photo is pending approval."
+            : "Recommendation saved.",
+      });
+      setRecommendComment("");
+      setRecommendPhoto(null);
+      setIsRecommendDialogOpen(false);
+    } finally {
+      setIsSubmittingEnrich(false);
+    }
+  };
+
+  const removeRecommendation = async () => {
+    setIsRemovingRecommend(true);
+    try {
+      const res = await fetch(
+        `/api/menu-items/${encodeURIComponent(item.id)}/recommend`,
+        { method: "DELETE", credentials: "include" },
+      );
+      if (res.ok) {
+        setHasRecommended(false);
+        setIsRecommendDialogOpen(false);
+        setRecommendComment("");
+        setRecommendPhoto(null);
+      }
+    } finally {
+      setIsRemovingRecommend(false);
+    }
+  };
+
   useEffect(() => {
     trackLocalMenuItemEngagement({
       eventName: "menu_item_impression",
@@ -6687,7 +6858,7 @@ function LocalMenuItemCard({
           discoveryReasons: item.discoveryReasons,
         })
       }
-      className="block overflow-hidden rounded-[1.6rem] bg-gradient-to-b from-[#1d140d] to-[#0e0805] ring-1 ring-white/14 shadow-[0_10px_30px_rgba(0,0,0,0.4)] transition duration-200 hover:-translate-y-1 hover:shadow-[0_18px_40px_rgba(0,0,0,0.5)] hover:ring-orange-300/45 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
+      className="block overflow-hidden rounded-[1.35rem] bg-[#120b08]/75 ring-1 ring-white/10 transition duration-200 hover:-translate-y-0.5 hover:ring-orange-300/28 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
       style={{ boxShadow: "0 18px 54px rgba(0,0,0,0.56)" }}
       aria-label={`Open ${item.name} from ${item.restaurantName || "local menu"}`}
       data-testid="scout-local-menu-item-card"
@@ -6759,7 +6930,83 @@ function LocalMenuItemCard({
             ))}
         </div>
         <OwnerOperationalActions actions={actions} />
+        <div className="mt-2 border-t border-white/8 pt-2">
+          <button
+            type="button"
+            onClick={handleRecommendClick}
+            disabled={isTogglingRecommend}
+            className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide disabled:opacity-60 ${
+              hasRecommended ? "text-emerald-300" : "text-orange-300 hover:text-orange-200"
+            }`}
+          >
+            <Star
+              className={`h-3 w-3 ${hasRecommended ? "fill-current" : ""}`}
+              aria-hidden="true"
+            />
+            {hasRecommended ? "Recommended" : "Recommend"}
+          </button>
+        </div>
       </div>
+      <Dialog open={isRecommendDialogOpen} onOpenChange={setIsRecommendDialogOpen}>
+        <DialogContent
+          className="max-w-sm"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <DialogHeader>
+            <DialogTitle>{item.name}</DialogTitle>
+            <DialogDescription>
+              Tell us why you recommend it, or just close this - your recommendation is already saved.
+            </DialogDescription>
+          </DialogHeader>
+          <textarea
+            value={recommendComment}
+            onChange={(event) => setRecommendComment(event.target.value)}
+            placeholder="What makes this dish worth it? (optional)"
+            className="min-h-[72px] w-full rounded border border-[color:var(--border-subtle)] bg-black/20 px-2 py-1.5 text-sm"
+          />
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-[color:var(--text-muted)]" htmlFor={`rating-${item.id}`}>
+              Rating
+            </label>
+            <select
+              id={`rating-${item.id}`}
+              value={recommendRating}
+              onChange={(event) => setRecommendRating(event.target.value)}
+              className="rounded border border-[color:var(--border-subtle)] bg-black/20 px-1.5 py-1 text-sm"
+            >
+              <option value="5">5</option>
+              <option value="4">4</option>
+              <option value="3">3</option>
+              <option value="2">2</option>
+              <option value="1">1</option>
+            </select>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(event) => setRecommendPhoto(event.target.files?.[0] || null)}
+              className="flex-1 text-xs"
+            />
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <button
+              type="button"
+              onClick={removeRecommendation}
+              disabled={isRemovingRecommend}
+              className="text-xs text-[color:var(--text-muted)] underline hover:text-[color:var(--text-primary)] disabled:opacity-60"
+            >
+              Remove recommendation
+            </button>
+            <button
+              type="button"
+              onClick={submitEnrichedRecommendation}
+              disabled={isSubmittingEnrich}
+              className="rounded-full bg-orange-400 px-3 py-1.5 text-xs font-black text-[#1a0d08] disabled:opacity-60"
+            >
+              {isSubmittingEnrich ? "Saving…" : "Save"}
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Link>
   );
 }
@@ -6803,7 +7050,7 @@ function EventCard({
   return (
     <Link
       href={`/event/${event.id}`}
-      className="block overflow-hidden rounded-[1.6rem] bg-gradient-to-b from-[#1d140d] to-[#0e0805] ring-1 ring-white/14 shadow-[0_10px_30px_rgba(0,0,0,0.4)] transition duration-200 hover:-translate-y-1 hover:shadow-[0_18px_40px_rgba(0,0,0,0.5)] hover:ring-orange-300/45 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
+      className="block overflow-hidden rounded-[1.35rem] bg-[#120b08]/75 ring-1 ring-white/10 transition duration-200 hover:-translate-y-0.5 hover:ring-orange-300/28 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
       style={{ boxShadow: "0 18px 54px rgba(0,0,0,0.56)" }}
       aria-label={`Open event ${title}`}
     >
@@ -6997,12 +7244,6 @@ function NearbyRestaurantCard({
       isOpen: true,
     }),
   ];
-  const rankingReason =
-    communityUpdates.length > 0
-      ? `Community activity: ${communityUpdates.slice(0, 2).join(" + ")}`
-      : distLabel
-        ? "Nearby now"
-        : "Open near you";
 
   const sendRestaurantAction = async (
     action: "favorite" | "follow" | "recommend",
@@ -7026,7 +7267,10 @@ function NearbyRestaurantCard({
           body: method === "POST" ? "{}" : undefined,
         },
       );
-      if (!response.ok) throw new Error("Restaurant action failed");
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(String(data?.message || "").trim() || "Restaurant action failed");
+      }
     } finally {
       setPendingAction(null);
     }
@@ -7036,11 +7280,23 @@ function NearbyRestaurantCard({
     event.preventDefault();
     event.stopPropagation();
     const nextState = !isFavorite;
+    const wasFollowed = isFollowed;
     setIsFavorite(nextState);
+    // Favoriting implies following; the server does this too, so mirror it
+    // optimistically. Un-favoriting does not auto-unfollow.
+    if (nextState) setIsFollowed(true);
     try {
       await sendRestaurantAction("favorite", nextState);
-    } catch {
+    } catch (error) {
       setIsFavorite(!nextState);
+      if (nextState) setIsFollowed(wasFollowed);
+      if (nextState) {
+        toast({
+          variant: "destructive",
+          description:
+            error instanceof Error ? error.message : "Couldn't save this restaurant.",
+        });
+      }
     }
   };
 
@@ -7059,19 +7315,67 @@ function NearbyRestaurantCard({
   const recommend = async (event: React.MouseEvent) => {
     event.preventDefault();
     event.stopPropagation();
-    if (isRecommended) return;
+    if (isRecommended) {
+      setIsRecommendDialogOpen(true);
+      return;
+    }
+    const wasFollowed = isFollowed;
     setIsRecommended(true);
+    // Recommending implies following, same as favoriting above.
+    setIsFollowed(true);
     try {
+      // The tap itself is the shallow like/follow/recommend - it's already
+      // saved by the time the popup opens. The popup just offers to add more
+      // (or Share/Favorite); closing it without doing anything is fine.
       await sendRestaurantAction("recommend", true);
+      setIsRecommendDialogOpen(true);
     } catch {
       setIsRecommended(false);
+      setIsFollowed(wasFollowed);
+    }
+  };
+
+  const [isRecommendDialogOpen, setIsRecommendDialogOpen] = useState(false);
+  const [restaurantRecommendComment, setRestaurantRecommendComment] = useState("");
+  const [restaurantRecommendRating, setRestaurantRecommendRating] = useState("5");
+  const [isSubmittingRestaurantRecommend, setIsSubmittingRestaurantRecommend] = useState(false);
+
+  const submitRestaurantRecommendationDetails = async () => {
+    setIsSubmittingRestaurantRecommend(true);
+    try {
+      const response = await fetch("/api/reviews", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          restaurantId,
+          rating: Number(restaurantRecommendRating),
+          comment: restaurantRecommendComment.trim() || null,
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        toast({
+          variant: "destructive",
+          description:
+            String(data?.message || "").trim() || "Couldn't save your recommendation.",
+        });
+        return;
+      }
+      toast({ description: "Recommendation saved." });
+      setRestaurantRecommendComment("");
+      setIsRecommendDialogOpen(false);
+    } catch {
+      toast({ variant: "destructive", description: "Couldn't save your recommendation." });
+    } finally {
+      setIsSubmittingRestaurantRecommend(false);
     }
   };
 
   return (
     <Link
       href={profileHref}
-      className="group block overflow-hidden rounded-[1.6rem] bg-gradient-to-b from-[#1d140d] to-[#0e0805] ring-1 ring-white/14 shadow-[0_10px_30px_rgba(0,0,0,0.4)] transition duration-200 hover:-translate-y-1 hover:shadow-[0_18px_40px_rgba(0,0,0,0.5)] hover:ring-orange-300/45 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
+      className="group block overflow-hidden rounded-[1.35rem] bg-[#120b08]/75 ring-1 ring-white/10 transition duration-200 hover:-translate-y-0.5 hover:ring-orange-300/28 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
       aria-label={`Open ${name}`}
       style={{ boxShadow: "0 18px 54px rgba(0,0,0,0.5)" }}
       data-testid="scout-restaurant-card"
@@ -7083,7 +7387,7 @@ function NearbyRestaurantCard({
           fallbackIcon={<Utensils className="h-5 w-5 text-white/80" aria-hidden="true" />}
           fallbackTestId="scout-nearby-restaurant-card-image-fallback"
           imageClassName="absolute inset-0 h-full w-full object-cover"
-          categoryPhoto={getDishCategoryPhoto(name, restaurant.cuisineType)}
+          categoryPhoto={getDishCategoryPhoto(name, cuisine)}
         />
         <div
           className="absolute inset-0"
@@ -7102,7 +7406,19 @@ function NearbyRestaurantCard({
       </div>
       {/* Info */}
       <div className="px-3 py-2.5">
-        <p className="text-white font-semibold text-sm leading-snug truncate">{name}</p>
+        <div className="flex items-baseline justify-between gap-2">
+          <p className="min-w-0 truncate text-white font-semibold text-sm leading-snug">{name}</p>
+          {statusLabels.length > 0 && (
+            <span className="inline-flex shrink-0 items-center gap-1 text-[9px] font-bold uppercase tracking-wide text-orange-200/85">
+              <span
+                className="h-1.5 w-1.5 rounded-full bg-orange-400"
+                style={{ boxShadow: "0 0 6px rgba(251,146,60,0.8)" }}
+                aria-hidden="true"
+              />
+              {statusLabels[0]}
+            </span>
+          )}
+        </div>
         <div className="mt-0.5 flex items-center gap-1.5 flex-wrap">
           {cuisine && (
             <span className="text-orange-300/80 text-[11px]">{cuisine}</span>
@@ -7122,114 +7438,144 @@ function NearbyRestaurantCard({
         </div>
         {menuPreview.length > 0 && (
           <div
-            className="mt-2 rounded-xl bg-orange-300/10 ring-1 ring-orange-300/20 px-2.5 py-2"
+            className="mt-2 flex items-center gap-2 border-t border-white/8 pt-2"
             data-testid="scout-menu-preview"
           >
-            <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-orange-200">
-              <Utensils className="h-3 w-3" aria-hidden="true" />
-              Menu preview
+            <div className="h-9 w-9 shrink-0 overflow-hidden rounded-lg relative">
+              <ScoutCardMedia
+                imageUrl={menuPreview[0].imageUrl || null}
+                fallbackIcon={<Utensils className="h-3 w-3 text-white/70" aria-hidden="true" />}
+                fallbackTestId="scout-restaurant-featured-item-fallback"
+                imageClassName="absolute inset-0 h-full w-full object-cover"
+                categoryPhoto={getDishCategoryPhoto(menuPreview[0].name, menuPreview[0].description)}
+              />
             </div>
-            <div className="mt-1.5 space-y-1">
-              {menuPreview.slice(0, 2).map((item) => {
-                const price = formatPrice(item.priceCents);
-                return (
-                  <div
-                    key={item.id}
-                    className="flex items-baseline justify-between gap-2 text-[11px]"
-                  >
-                    <span className="min-w-0 truncate text-white/82">
-                      {item.name}
-                    </span>
-                    {price && (
-                      <span className="shrink-0 text-orange-200/85">
-                        {price}
-                      </span>
-                    )}
-                  </div>
-                );
-              })}
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[11px] font-semibold text-white/85">{menuPreview[0].name}</p>
+              <p className="text-[9px] font-bold uppercase tracking-wide text-orange-200/70">Featured item</p>
             </div>
+            {formatPrice(menuPreview[0].priceCents) && (
+              <span className="shrink-0 text-[11px] font-semibold text-orange-200/85">
+                {formatPrice(menuPreview[0].priceCents)}
+              </span>
+            )}
           </div>
         )}
-        <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] font-bold uppercase tracking-wide">
-          {statusLabels.slice(0, 3).map((label) => (
-            <span
-              key={label}
-              className={getFreshnessBadgeClass(
-                {
-                  kind: isFoodTruckEntity ? "truck" : "restaurant",
-                  updatedAt: readStringField(restaurant, ["updatedAt", "lastUpdatedAt"]),
-                  confirmedAt: readStringField(restaurant, ["confirmedAt", "lastConfirmedAt"]),
-                  hasDeal: dealCount > 0,
-                  hasMenu: menuPreview.length > 0,
-                  hasCommunityUpdate: communityUpdates.length > 0,
-                  hasDistance: Boolean(distLabel),
-                  isOpen: true,
-                },
-                label,
-              )}
-            >
-              {label}
-            </span>
-          ))}
-          {statusLabels.length === 0 ? (
-            <span className="rounded-full bg-white/8 px-2 py-1 text-white/65">
-              Open near you
-            </span>
-          ) : null}
-        </div>
-        <p className="mt-2 text-[10px] font-semibold text-white/45">
-          {rankingReason}
-        </p>
         <OwnerOperationalActions actions={ownerActions} />
-        <div
-          className="mt-2 grid grid-cols-3 gap-1.5 text-[10px] font-bold"
-          aria-label={`${name} quick actions`}
-        >
-          <button
-            type="button"
-            onClick={toggleFavorite}
-            disabled={pendingAction === "favorite"}
-            className={`inline-flex items-center justify-center gap-1 rounded-full px-2 py-1.5 transition ${
-              isFavorite
-                ? "bg-orange-300 text-[#1a0d08]"
-                : "bg-white/8 text-white/70 hover:bg-white/12"
-            }`}
-            aria-pressed={isFavorite}
-          >
-            <Bookmark className="h-3 w-3" aria-hidden="true" />
-            Save
-          </button>
-          <button
-            type="button"
-            onClick={toggleFollow}
-            disabled={pendingAction === "follow"}
-            className={`inline-flex items-center justify-center gap-1 rounded-full px-2 py-1.5 transition ${
-              isFollowed
-                ? "bg-white text-[#1a0d08]"
-                : "bg-white/8 text-white/70 hover:bg-white/12"
-            }`}
-            aria-pressed={isFollowed}
-          >
-            <Heart className="h-3 w-3" aria-hidden="true" />
-            Follow
-          </button>
-          <button
-            type="button"
-            onClick={recommend}
-            disabled={pendingAction === "recommend" || isRecommended}
-            className={`inline-flex items-center justify-center gap-1 rounded-full px-2 py-1.5 transition ${
-              isRecommended
-                ? "bg-emerald-300 text-[#1a0d08]"
-                : "bg-white/8 text-white/70 hover:bg-white/12"
-            }`}
-            aria-pressed={isRecommended}
-          >
-            <Heart className="h-3 w-3" aria-hidden="true" />
-            {isRecommended ? "Supported" : "Support"}
-          </button>
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5" aria-hidden={communityUpdates.length === 0}>
+            {favoriteCount > 0 && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-mono text-white/45">
+                <Bookmark className="h-2.5 w-2.5" aria-hidden="true" />
+                {favoriteCount}
+              </span>
+            )}
+            {followCount > 0 && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-mono text-white/45">
+                <Heart className="h-2.5 w-2.5" aria-hidden="true" />
+                {followCount}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-1.5" aria-label={`${name} quick actions`}>
+            {/* Single entry point: a bare tap is the shallow like/follow/recommend
+                bundle (no popup). Tapping again (already recommended) opens the
+                popup, where Share, Favorite, and enrichment live. */}
+            <button
+              type="button"
+              onClick={recommend}
+              disabled={pendingAction === "recommend"}
+              className={`inline-flex h-7 w-7 items-center justify-center rounded-full transition ${
+                isRecommended
+                  ? "bg-orange-300 text-[#1a0d08]"
+                  : "bg-white/8 text-white/70 hover:bg-white/12"
+              }`}
+              aria-pressed={isRecommended}
+              aria-label={isRecommended ? "Recommended - tap for more" : "Recommend"}
+              title={isRecommended ? "Recommended - tap for more" : "Recommend"}
+            >
+              <Heart
+                className={`h-3 w-3 ${isRecommended ? "fill-current" : ""}`}
+                aria-hidden="true"
+              />
+            </button>
+          </div>
         </div>
       </div>
+      <Dialog open={isRecommendDialogOpen} onOpenChange={setIsRecommendDialogOpen}>
+        <DialogContent
+          className="max-w-sm"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <DialogHeader>
+            <DialogTitle>{name}</DialogTitle>
+            <DialogDescription>
+              Tell us why you recommend it, or just close this - your recommendation is already saved.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={toggleFavorite}
+              disabled={pendingAction === "favorite"}
+              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition ${
+                isFavorite
+                  ? "bg-orange-300 text-[#1a0d08]"
+                  : "bg-white/8 text-white/80 hover:bg-white/12"
+              }`}
+            >
+              <Bookmark
+                className={`h-3.5 w-3.5 ${isFavorite ? "fill-current" : ""}`}
+                aria-hidden="true"
+              />
+              {isFavorite ? "Favorited" : "Favorite"}
+            </button>
+            <ShareButton url={profileHref} title={name} variant="outline" size="sm" />
+          </div>
+          {isFollowed && (
+            <button
+              type="button"
+              onClick={toggleFollow}
+              className="self-start text-[11px] text-[color:var(--text-muted)] underline underline-offset-2"
+            >
+              Following · Unfollow
+            </button>
+          )}
+          <textarea
+            value={restaurantRecommendComment}
+            onChange={(event) => setRestaurantRecommendComment(event.target.value)}
+            placeholder="What makes this place worth it? (optional)"
+            className="min-h-[72px] w-full rounded border border-[color:var(--border-subtle)] bg-black/20 px-2 py-1.5 text-sm"
+          />
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-[color:var(--text-muted)]" htmlFor={`restaurant-rating-${restaurantId}`}>
+              Rating
+            </label>
+            <select
+              id={`restaurant-rating-${restaurantId}`}
+              value={restaurantRecommendRating}
+              onChange={(event) => setRestaurantRecommendRating(event.target.value)}
+              className="rounded border border-[color:var(--border-subtle)] bg-black/20 px-1.5 py-1 text-sm"
+            >
+              <option value="5">5</option>
+              <option value="4">4</option>
+              <option value="3">3</option>
+              <option value="2">2</option>
+              <option value="1">1</option>
+            </select>
+          </div>
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={submitRestaurantRecommendationDetails}
+              disabled={isSubmittingRestaurantRecommend}
+              className="rounded-full bg-orange-400 px-3 py-1.5 text-xs font-black text-[#1a0d08] disabled:opacity-60"
+            >
+              {isSubmittingRestaurantRecommend ? "Saving…" : "Save"}
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Link>
   );
 }
@@ -7406,7 +7752,7 @@ function OpenNowSection({
           >
             {liveTrucks.slice(0, 8).map((truck) => (
               <li key={`truck-${truck.id}`} className="shrink-0 w-[230px] sm:w-[260px]">
-                <LiveTruckCard truck={truck} currentUserId={currentUserId} />
+                <LiveTruckCard truck={truck} currentUserId={currentUserId} relationshipSnapshot={relationshipSnapshot} />
               </li>
             ))}
             {restaurants.slice(0, 8).map((restaurant) => (
@@ -8026,7 +8372,7 @@ function TruckCard({
         event.preventDefault();
         onSelect(truck);
       }}
-      className="block overflow-hidden rounded-[1.6rem] bg-gradient-to-b from-[#1d140d] to-[#0e0805] ring-1 ring-white/14 shadow-[0_10px_30px_rgba(0,0,0,0.4)] transition duration-200 hover:-translate-y-1 hover:shadow-[0_18px_40px_rgba(0,0,0,0.5)] hover:ring-orange-300/45 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
+      className="block overflow-hidden rounded-[1.35rem] bg-[#120b08]/75 ring-1 ring-white/10 transition duration-200 hover:-translate-y-0.5 hover:ring-orange-300/28 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
     >
       {/* Hero image */}
       <div className="relative aspect-[4/3] w-full bg-[#120805]/40 overflow-hidden">
