@@ -5007,18 +5007,43 @@ export default function ExplorePreview() {
               />
             )}
 
-            {/* Compact map footer. Keep the collapsed map mostly clear. */}
+            {/* Compact map overlay — matches visual mockup */}
             {sheetState === "default" && (
               <>
-                <div className="absolute left-3 top-3 z-20">
-                  <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-[#100c0a]/80 ring-1 ring-orange-200/40 backdrop-blur-xl shadow-[0_10px_24px_rgba(0,0,0,0.42)]">
+                {/* Top-left: wordmark + pts */}
+                <div className="absolute left-3 top-3 z-20 flex items-center gap-2">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-[#100c0a]/80 px-2.5 py-1.5 ring-1 ring-orange-200/30 backdrop-blur-xl shadow-[0_8px_20px_rgba(0,0,0,0.38)]">
                     <img
                       src={mealScoutIcon}
-                      alt="MealScout"
-                      className="h-6 w-6 object-contain"
+                      alt=""
+                      className="h-5 w-5 object-contain"
+                      aria-hidden="true"
                     />
+                    <span className="text-[13px] font-black tracking-tight text-white">
+                      Meal<span className="text-orange-400">Scout</span>
+                    </span>
                   </span>
+                  {user && <ScoutPointsBadge userId={String(user.id)} />}
                 </div>
+
+                {/* Top-right: recenter */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (resolvedScoutCoords) {
+                      setMapCenter(resolvedScoutCoords);
+                      setMapZoom(14);
+                    }
+                  }}
+                  aria-label="Recenter map"
+                  className="absolute right-3 top-3 z-20 inline-flex h-9 w-9 items-center justify-center rounded-full bg-[#100c0a]/80 ring-1 ring-orange-200/30 backdrop-blur-xl shadow-[0_8px_20px_rgba(0,0,0,0.38)]"
+                >
+                  <Navigation2
+                    className="h-4 w-4 text-white"
+                    aria-hidden="true"
+                  />
+                </button>
+
                 <MapActivityPips
                   mode={scoutActivityMode}
                   truckCount={trucksServingNow.length}
@@ -5026,77 +5051,46 @@ export default function ExplorePreview() {
                   dealCount={allDeals.length}
                   eventCount={visibleEvents.length + visibleHosts.length}
                 />
+
+                {/* Bottom gradient */}
                 <div
                   aria-hidden="true"
-                  className="pointer-events-none absolute inset-x-0 bottom-0 h-[58%]"
+                  className="pointer-events-none absolute inset-x-0 bottom-0 h-[52%]"
                   style={{
                     background:
-                      "linear-gradient(180deg, rgba(8,5,2,0) 0%, rgba(8,5,2,0.35) 48%, rgba(8,5,2,0.78) 88%, rgba(8,5,2,0.88) 100%)",
+                      "linear-gradient(180deg, rgba(8,5,2,0) 0%, rgba(8,5,2,0.55) 60%, rgba(8,5,2,0.82) 100%)",
                   }}
                 />
-                <div className="absolute bottom-3 left-3 right-3 z-20 flex items-end justify-between gap-3">
-                  <div className="min-w-0">
-                    {isPensacolaScoutPreview ? (
-                      <p className="mb-1 inline-flex rounded-full bg-orange-500/18 px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.12em] text-orange-100 ring-1 ring-orange-200/30">
-                        Admin preview
-                      </p>
-                    ) : null}
-                    {showScoutPreviewDebug ? (
-                      <p className="mb-1 text-[10px] font-bold text-white/75">
-                        preview eligible:{String(isScoutPreviewEligible)} city:
-                        {scoutPreviewCity || "none"} active:
-                        {String(isPensacolaScoutPreview)} source:
-                        {resolvedScoutLocation?.source || "none"} loc:
-                        {resolvedScoutLocation
-                          ? `${resolvedScoutLocation.label} ${resolvedScoutLocation.lat.toFixed(4)},${resolvedScoutLocation.lng.toFixed(4)}`
-                          : "none"}{" "}
-                        status[t:{scoutSourceStatuses.trucks ?? "-"} r:
-                        {scoutSourceStatuses.restaurants ?? "-"} h:
-                        {scoutSourceStatuses.mapLocations ?? "-"} d:
-                        {scoutSourceStatuses.deals ?? "-"} e:
-                        {scoutSourceStatuses.events ?? "-"}] counts[t:
-                        {scoutDebugCounts.trucksReturned} h:
-                        {scoutDebugCounts.hostsReturned} e:
-                        {scoutDebugCounts.eventsReturned} r:
-                        {scoutDebugCounts.restaurantsReturned} pins:
-                        {scoutDebugCounts.mapPinsBuilt}]
-                      </p>
-                    ) : null}
-                    {showScoutPreviewDebug &&
-                    (scoutDebugCounts.trucksMissingCoords > 0 ||
-                      scoutDebugCounts.hostsMissingCoords > 0 ||
-                      scoutDebugCounts.restaurantsMissingCoords > 0 ||
-                      scoutDebugCounts.eventsMissingCoords > 0 ||
-                      scoutDebugCounts.dealsMissingCoords > 0) ? (
-                      <p className="mb-1 text-[10px] font-semibold text-amber-200/85">
-                        dropped missing coords - trucks:
-                        {scoutDebugCounts.trucksMissingCoords} hosts:
-                        {scoutDebugCounts.hostsMissingCoords} restaurants:
-                        {scoutDebugCounts.restaurantsMissingCoords} events:
-                        {scoutDebugCounts.eventsMissingCoords} deals:
-                        {scoutDebugCounts.dealsMissingCoords}
-                      </p>
-                    ) : null}
-                    <p className="truncate text-sm font-extrabold text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.7)]">
-                      {hasResolvedLocation ? shortLocation : "Nearby now"}
-                    </p>
-                    <p className="truncate text-[11px] font-semibold text-white/65 drop-shadow-[0_2px_10px_rgba(0,0,0,0.7)]">
-                      {compactMapMarketHint}
-                    </p>
-                    <p className="truncate text-[11px] font-semibold text-white/50 drop-shadow-[0_2px_10px_rgba(0,0,0,0.7)]">
-                      {compactMapSceneHint}
+
+                {/* Bottom center: pull-down cue */}
+                <button
+                  type="button"
+                  onClick={openScoutMap}
+                  aria-label="Open full map"
+                  className="absolute bottom-3 left-1/2 z-20 -translate-x-1/2 inline-flex items-center gap-1.5 rounded-full bg-[#100c0a]/72 px-4 py-2 text-[11px] font-black text-white/80 ring-1 ring-white/14 backdrop-blur-xl"
+                >
+                  Pull down for full map
+                  <ChevronDown
+                    className="h-3.5 w-3.5 text-white/60"
+                    aria-hidden="true"
+                  />
+                </button>
+
+                {/* Debug overlay (admin only) */}
+                {showScoutPreviewDebug && (
+                  <div className="absolute bottom-12 left-3 right-3 z-20">
+                    <p className="text-[9px] font-bold text-white/60">
+                      {String(isScoutPreviewEligible)} city:
+                      {scoutPreviewCity || "none"} active:
+                      {String(isPensacolaScoutPreview)} source:
+                      {resolvedScoutLocation?.source || "none"} t:
+                      {scoutSourceStatuses.trucks ?? "-"} r:
+                      {scoutSourceStatuses.restaurants ?? "-"} h:
+                      {scoutSourceStatuses.mapLocations ?? "-"} pins:
+                      {scoutDebugCounts.mapPinsBuilt}
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={openScoutMap}
-                    aria-label="Open full map"
-                    className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-[#100c0a]/80 px-3 py-2 text-xs font-black text-white ring-1 ring-orange-200/40 backdrop-blur-xl shadow-[0_10px_24px_rgba(0,0,0,0.42)]"
-                  >
-                    <Maximize2 className="h-3.5 w-3.5" aria-hidden="true" />
-                    Open map
-                  </button>
-                </div>
+                )}
               </>
             )}
           </section>
@@ -7616,6 +7610,39 @@ function QuietNearbyNotice() {
         </p>
       </div>
     </section>
+  );
+}
+
+function ScoutPointsBadge({ userId }: { userId: string }) {
+  const { data } = useQuery<{
+    level: number;
+    totalFavorites: number;
+    totalStories: number;
+  } | null>({
+    queryKey: ["/api/stories/reviewer-level", userId],
+    queryFn: async () => {
+      const res = await fetch(
+        `/api/stories/reviewer-level/${encodeURIComponent(userId)}`,
+        {
+          credentials: "include",
+        },
+      );
+      if (!res.ok) return null;
+      return res.json();
+    },
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+  if (!data) return null;
+  const pts = (data.totalFavorites ?? 0) * 10 + (data.totalStories ?? 0) * 5;
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full bg-[#100c0a]/80 px-2.5 py-1.5 text-[11px] font-black text-amber-300 ring-1 ring-orange-200/30 backdrop-blur-xl shadow-[0_8px_20px_rgba(0,0,0,0.38)]">
+      <Star
+        className="h-3 w-3 fill-amber-400 text-amber-400"
+        aria-hidden="true"
+      />
+      {pts} pts
+    </span>
   );
 }
 
