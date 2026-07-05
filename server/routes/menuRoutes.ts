@@ -897,6 +897,31 @@ export function registerMenuRoutes(app: Express) {
           ),
         );
 
+      // Dish-level "CVS score" (0-100): same rank-by-recommendations-and-
+      // activity philosophy as HOME_RANKING_WEIGHTS/AWARD_RANKING_WEIGHTS,
+      // applied per dish instead of per restaurant. Volume (recommendation
+      // count) counts for more than the raw rating average, same ratio as
+      // the restaurant-level formula.
+      const dishAggregateRows = await db
+        .select({
+          menuItemId: menuItemRecommendations.menuItemId,
+          recommendationCount: sql<number>`count(*)::int`,
+          avgRating: sql<number | null>`avg(${menuItemRecommendations.rating})`,
+        })
+        .from(menuItemRecommendations)
+        .groupBy(menuItemRecommendations.menuItemId);
+
+      const dishAggregateByItemId = new Map<
+        string,
+        { recommendationCount: number; avgRating: number }
+      >();
+      for (const row of dishAggregateRows) {
+        dishAggregateByItemId.set(String(row.menuItemId), {
+          recommendationCount: Number(row.recommendationCount || 0),
+          avgRating: row.avgRating != null ? Number(row.avgRating) : 0,
+        });
+      }
+
       // Exclude add-ons/modifiers (e.g. "Extra toppings") from discovery -
       // these aren't standalone dishes worth surfacing as a featured item.
       const ADDON_NAME_PATTERN =
@@ -1092,6 +1117,22 @@ export function registerMenuRoutes(app: Express) {
             reasons.push("trusted local signal");
           }
 
+          const dishAggregate = dishAggregateByItemId.get(String(row.id));
+          const dishRecommendationCount = dishAggregate?.recommendationCount || 0;
+          const dishAvgRating = dishAggregate?.avgRating || 0;
+          // Hidden until a dish has at least one recommendation - never show
+          // a fabricated/placeholder score for dishes with no real signal.
+          const cvsScore =
+            dishRecommendationCount > 0
+              ? Math.min(
+                  100,
+                  Math.round(
+                    Math.min(70, dishRecommendationCount * 7) +
+                      (dishAvgRating > 0 ? (dishAvgRating / 5) * 30 : 0),
+                  ),
+                )
+              : null;
+
           return {
             ...row,
             distanceMiles:
@@ -1099,6 +1140,8 @@ export function registerMenuRoutes(app: Express) {
             discoveryScore: score,
             discoverySignals: signals,
             discoveryReasons: reasons.slice(0, 4),
+            dishRecommendationCount,
+            cvsScore,
           };
         })
         .filter(Boolean)

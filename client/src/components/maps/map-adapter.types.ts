@@ -19,6 +19,7 @@ export interface MapAdapterMarker {
   title?: string;
   subtitle?: string;
   color?: string;
+  imageUrl?: string | null;
 }
 
 export interface MapBoundsLike {
