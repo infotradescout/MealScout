@@ -1,0 +1,394 @@
+{
+  "lane": "3D Eats & Tea review-gated menu/logo intake dry run",
+  "targetTruck": "3D Eats & Tea",
+  "profileId": "95c4e656-f3cc-46ab-ae18-53f549cecfd1",
+  "sourceEvidenceFiles": [
+    "docs/evidence/3d-eats-tea-append-only-profile-read-2026-06-07.json",
+    "docs/evidence/live-scout-truck-content-completion-2026-06-13.json",
+    "docs/evidence/live-scout-truck-review-gated-menu-import-2026-06-14.json"
+  ],
+  "currentPublicStateSummary": {
+    "evidenceOnlySimulation": true,
+    "noLiveEndpointCallPerformed": true,
+    "publicProfilePath": "/truck/3d-eats-tea--95c4e656-f3cc-46ab-ae18-53f549cecfd1",
+    "baselineEvidenceObservedAt": "2026-06-13",
+    "coverStatus": "applied",
+    "coverAssetPath": "/business-assets/3d-eats-and-tea/cover-photo.png",
+    "logoStatus": "missing",
+    "websiteUrl": "https://3deats.us/",
+    "socialUrls": {
+      "instagramUrl": "https://www.instagram.com/3deats",
+      "facebookPageUrl": "https://www.facebook.com/3deatsandtea"
+    },
+    "menuBaseline": {
+      "status": "one_live_structured_item",
+      "observedItemCount": 1,
+      "observedItems": [
+        {
+          "itemName": "Classic Burger",
+          "priceLabel": "$5.00",
+          "sourceRef": "docs/evidence/live-scout-truck-evidence-batch-2-2026-06-13.json"
+        }
+      ]
+    },
+    "reviewGatedMenuDraft": {
+      "importStatus": "structured_draft_prepared",
+      "parsedItemCount": 75,
+      "sectionCount": 12,
+      "confidence": "medium",
+      "productionApplied": false
+    },
+    "scheduleBaseline": {
+      "status": "needs_owner_confirmation",
+      "publicLocationEligible": false,
+      "liveFeedEligible": false,
+      "currentStopInferred": false
+    },
+    "addressHandling": {
+      "serviceArea": {
+        "city": "Pensacola",
+        "state": "FL"
+      },
+      "staticBusinessAddressCandidate": {
+        "street": "6881 US 98 E",
+        "city": "Pensacola",
+        "state": "FL",
+        "zip": "32506",
+        "note": "Treat as business/admin/static listed address only unless confirmed as active operating location."
+      },
+      "priorLocationText": {
+        "text": "Pensacola, FL, United States, 32505",
+        "note": "Do not use as live truck location without schedule/stop confirmation."
+      },
+      "publicAddressAllowed": false
+    },
+    "confidence": "medium"
+  },
+  "parsedMenuRows": [
+    {
+      "rowType": "baseline_live_observation",
+      "category": "Live MealScout structured menu observation",
+      "itemName": "Classic Burger",
+      "priceLabel": "$5.00",
+      "sourceRef": "docs/evidence/live-scout-truck-evidence-batch-2-2026-06-13.json",
+      "ownerApprovalNeeded": true,
+      "currentness": "unverified",
+      "note": "Observed in live public profile API evidence. Included for review comparison only; this artifact does not overwrite canonical active menu rows."
+    },
+    {
+      "rowType": "section_summary",
+      "category": "Hot Dogs",
+      "displayOrder": 1,
+      "importedItemCount": 10,
+      "sectionNote": "Featuring Vienna Beef Hot Dogs. Comes with choice of one side or regular drink.",
+      "sampleItems": [
+        "Classic (1 Dog)",
+        "Classic (2 Dogs)",
+        "Pulled Pork (1 Dog)"
+      ],
+      "sourceConfidence": "medium",
+      "ownerApprovalNeeded": true,
+      "ownerApproved": false,
+      "currentness": "unverified",
+      "sourceRef": "docs/evidence/3d-eats-tea-append-only-profile-read-2026-06-07.json"
+    },
+    {
+      "rowType": "section_summary",
+      "category": "3-D's Taste of Chicago",
+      "displayOrder": 2,
+      "importedItemCount": 8,
+      "sectionNote": "Comes with choice of one side or regular drink.",
+      "sampleItems": [
+        "Chicago Style Dog",
+        "Jumbo Beef Polish",
+        "Maxwell Street Polish"
+      ],
+      "sourceConfidence": "medium",
+      "ownerApprovalNeeded": true,
+      "ownerApproved": false,
+      "currentness": "unverified",
+      "sourceRef": "docs/evidence/3d-eats-tea-append-only-profile-read-2026-06-07.json"
+    },
+    {
+      "rowType": "section_summary",
+      "category": "Sides",
+      "displayOrder": 3,
+      "importedItemCount": 7,
+      "sectionNote": null,
+      "sampleItems": [
+        "French Fries",
+        "Side Salad",
+        "Baked Beans"
+      ],
+      "sourceConfidence": "medium",
+      "ownerApprovalNeeded": true,
+      "ownerApproved": false,
+      "currentness": "unverified",
+      "sourceRef": "docs/evidence/3d-eats-tea-append-only-profile-read-2026-06-07.json"
+    },
+    {
+      "rowType": "section_summary",
+      "category": "Beverages",
+      "displayOrder": 4,
+      "importedItemCount": 9,
+      "sectionNote": "Refillable Mason Jar $10. Refills available for $1. Starred drinks show No Refills.",
+      "sampleItems": [
+        "3D Tea (16oz)",
+        "3D Tea (32oz)",
+        "Lemonade (16oz)"
+      ],
+      "sourceConfidence": "medium",
+      "ownerApprovalNeeded": true,
+      "ownerApproved": false,
+      "currentness": "unverified",
+      "sourceRef": "docs/evidence/3d-eats-tea-append-only-profile-read-2026-06-07.json"
+    },
+    {
+      "rowType": "section_summary",
+      "category": "Kid's Meals",
+      "displayOrder": 5,
+      "importedItemCount": 4,
+      "sectionNote": "Comes with kid fry, drink, & treat.",
+      "sampleItems": [
+        "Small Burger",
+        "Hot Dog",
+        "Grilled Cheese"
+      ],
+      "sourceConfidence": "medium",
+      "ownerApprovalNeeded": true,
+      "ownerApproved": false,
+      "currentness": "unverified",
+      "sourceRef": "docs/evidence/3d-eats-tea-append-only-profile-read-2026-06-07.json"
+    },
+    {
+      "rowType": "section_summary",
+      "category": "Desserts",
+      "displayOrder": 6,
+      "importedItemCount": 2,
+      "sectionNote": null,
+      "sampleItems": [
+        "Deep Fried Oreos (4)",
+        "Banana Pudding"
+      ],
+      "sourceConfidence": "medium",
+      "ownerApprovalNeeded": true,
+      "ownerApproved": false,
+      "currentness": "unverified",
+      "sourceRef": "docs/evidence/3d-eats-tea-append-only-profile-read-2026-06-07.json"
+    },
+    {
+      "rowType": "section_summary",
+      "category": "Starters",
+      "displayOrder": 7,
+      "importedItemCount": 5,
+      "sectionNote": null,
+      "sampleItems": [
+        "Mozzarella Sticks",
+        "Jalapeno Cheddar Bites",
+        "Fried Pickles"
+      ],
+      "sourceConfidence": "medium",
+      "ownerApprovalNeeded": true,
+      "ownerApproved": false,
+      "currentness": "unverified",
+      "sourceRef": "docs/evidence/3d-eats-tea-append-only-profile-read-2026-06-07.json"
+    },
+    {
+      "rowType": "section_summary",
+      "category": "Signature Fries",
+      "displayOrder": 8,
+      "importedItemCount": 3,
+      "sectionNote": "All fries come with cheese sauce, shredded cheese, & your choice of toppings.",
+      "sampleItems": [
+        "Chicken Fries",
+        "Cheesesteak Fries",
+        "Pulled Pork Fries"
+      ],
+      "sourceConfidence": "medium",
+      "ownerApprovalNeeded": true,
+      "ownerApproved": false,
+      "currentness": "unverified",
+      "sourceRef": "docs/evidence/3d-eats-tea-append-only-profile-read-2026-06-07.json"
+    },
+    {
+      "rowType": "section_summary",
+      "category": "3-D Melts",
+      "displayOrder": 9,
+      "importedItemCount": 4,
+      "sectionNote": "On crispy sourdough. Comes with choice of one side or regular drink.",
+      "sampleItems": [
+        "Grilled Cheese",
+        "Pulled Pork Melt",
+        "Cheesesteak Melt"
+      ],
+      "sourceConfidence": "medium",
+      "ownerApprovalNeeded": true,
+      "ownerApproved": false,
+      "currentness": "unverified",
+      "sourceRef": "docs/evidence/3d-eats-tea-append-only-profile-read-2026-06-07.json"
+    },
+    {
+      "rowType": "section_summary",
+      "category": "Cheesesteaks",
+      "displayOrder": 10,
+      "importedItemCount": 4,
+      "sectionNote": "Premium steak, Amoroso roll, Cooper Sharp cheese. Comes with choice of one side or regular drink.",
+      "sampleItems": [
+        "Classic",
+        "Club",
+        "Southwest"
+      ],
+      "sourceConfidence": "medium",
+      "ownerApprovalNeeded": true,
+      "ownerApproved": false,
+      "currentness": "unverified",
+      "sourceRef": "docs/evidence/3d-eats-tea-append-only-profile-read-2026-06-07.json"
+    },
+    {
+      "rowType": "section_summary",
+      "category": "Crafted Burgers",
+      "displayOrder": 11,
+      "importedItemCount": 15,
+      "sectionNote": "Comes with choice of one side or regular drink.",
+      "sampleItems": [
+        "Classic (Single)",
+        "Classic (Double)",
+        "Bacon It Rain (Single)"
+      ],
+      "sourceConfidence": "medium",
+      "ownerApprovalNeeded": true,
+      "ownerApproved": false,
+      "currentness": "unverified",
+      "sourceRef": "docs/evidence/3d-eats-tea-append-only-profile-read-2026-06-07.json"
+    },
+    {
+      "rowType": "section_summary",
+      "category": "Sandwiches",
+      "displayOrder": 12,
+      "importedItemCount": 3,
+      "sectionNote": "Comes with choice of one side or regular drink.",
+      "sampleItems": [
+        "B.L.T.",
+        "Pulled Pork",
+        "B.F.C."
+      ],
+      "sourceConfidence": "medium",
+      "ownerApprovalNeeded": true,
+      "ownerApproved": false,
+      "currentness": "unverified",
+      "sourceRef": "docs/evidence/3d-eats-tea-append-only-profile-read-2026-06-07.json"
+    }
+  ],
+  "logoCandidateStatus": {
+    "status": "unverified_candidate_text_only",
+    "currentProductionLogoStatus": "missing",
+    "sourceEvidence": {
+      "logoText": "3-D Eats",
+      "brandName": "3-D Eats",
+      "establishedText": "EST. 01"
+    },
+    "explicitPermissionPresent": false,
+    "ownerApprovalNeeded": true,
+    "applyBlocked": true,
+    "reason": "Source evidence includes brand/logo text but explicitly lists owner approval for logo usage as missing."
+  },
+  "blockedFields": [
+    {
+      "field": "addressPublicLabel",
+      "reason": "Static/admin address candidate and prior location text are admin-only until active operating location is confirmed."
+    },
+    {
+      "field": "latitude_longitude",
+      "reason": "No public-location eligibility; coordinates must not be inferred from admin/static evidence."
+    },
+    {
+      "field": "map_pin",
+      "reason": "No scheduled stop or owner-confirmed live location evidence."
+    },
+    {
+      "field": "live_feed_stop",
+      "reason": "No current stop evidence and no live-location confirmation."
+    },
+    {
+      "field": "schedule_rows",
+      "reason": "General hours are not a truck stop schedule and current scheduled stops are missing."
+    },
+    {
+      "field": "logo_apply",
+      "reason": "Owner approval for logo usage is explicitly missing."
+    },
+    {
+      "field": "menu_currentness",
+      "reason": "Owner approval that the menu is current is explicitly missing."
+    },
+    {
+      "field": "website_overwrite",
+      "reason": "Website is listed in review-required-before-overwrite safeguards."
+    },
+    {
+      "field": "phone_overwrite",
+      "reason": "Phone is listed in review-required-before-overwrite safeguards."
+    },
+    {
+      "field": "youtube_contact_field",
+      "reason": "Source evidence contains conflicting YouTube values that require review before replacement."
+    }
+  ],
+  "ownerApprovalRequired": [
+    "owner approval that this menu is current",
+    "owner approval for logo usage",
+    "owner confirmation of live operating location",
+    "owner confirmation of current scheduled stops",
+    "owner review before any phone or website overwrite",
+    "owner review before resolving conflicting YouTube/contact evidence"
+  ],
+  "currentnessRisks": [
+    "Review-gated menu artifact marks currentness as unknown.",
+    "Append-only evidence explicitly lists owner approval that this menu is current as missing.",
+    "Hours candidate appears to be general business hours, not public truck stop evidence.",
+    "Current scheduled stops are explicitly missing in source evidence.",
+    "No current stop may be inferred from service-area, menu, or admin/static address evidence."
+  ],
+  "mapLiveFeedRules": {
+    "publicLocationEligible": false,
+    "liveFeedEligible": false,
+    "currentStopInferenceAllowed": false,
+    "allowedCustomerFacingSources": [
+      "active scheduled stop",
+      "event location",
+      "owner-confirmed live location",
+      "verified current location"
+    ],
+    "failedBecause": [
+      "Only admin/static address evidence is present.",
+      "Prior location text is not confirmed as a live stop.",
+      "No current scheduled stops are present in source evidence.",
+      "No owner-confirmed live operating location is present."
+    ]
+  },
+  "adminAddressSafeguards": {
+    "is_admin_only": true,
+    "staticBusinessAddressCandidate": {
+      "street": "6881 US 98 E",
+      "city": "Pensacola",
+      "state": "FL",
+      "zip": "32506",
+      "note": "Treat as business/admin/static listed address only unless confirmed as active operating location."
+    },
+    "priorLocationText": {
+      "text": "Pensacola, FL, United States, 32505",
+      "note": "Do not use as live truck location without schedule/stop confirmation."
+    },
+    "public_location_eligibility": false,
+    "publicAddressPromotionAllowed": false,
+    "coordinatePromotionAllowed": false,
+    "mapPinPromotionAllowed": false,
+    "liveFeedStopPromotionAllowed": false,
+    "safeguardReason": "Admin/static address evidence must stay internal/admin-only until explicit live-location evidence exists."
+  },
+  "productionApplied": false,
+  "mutationPerformed": false,
+  "simulationModeUsed": true,
+  "simulationCommand": "",
+  "recommendedNextStep": "Keep this packet review-only. If explicit approval is later granted, use a local-only non-production admin dry run with overwrite approvals disabled and no address promotion."
+}
