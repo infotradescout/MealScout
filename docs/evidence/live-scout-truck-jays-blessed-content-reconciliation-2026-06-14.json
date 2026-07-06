@@ -1,0 +1,176 @@
+{
+  "artifactName": "Jays Southern Cuisine and Blessed Berry Bowls content reconciliation",
+  "repo": "MealScout",
+  "generatedAt": "2026-06-14T13:02:41.4226094-05:00",
+  "baselineSha": "0df669cd57681c74b114fd3f9ddd97a9599f74e4",
+  "workflowMode": "review_only",
+  "productionMutationAllowed": false,
+  "productionApplied": false,
+  "parentTracker": "docs/evidence/live-scout-truck-content-completion-2026-06-13.json",
+  "acceptedBaseline": {
+    "artifact": "docs/evidence/live-scout-truck-blessed-berry-schedule-current-week-apply-2026-06-14.json",
+    "decision": "PASS",
+    "notes": [
+      "Treat the Blessed Berry current-week schedule apply as production baseline.",
+      "Closed schedule rows remain schedule data, but must not create directions, coordinates, map pins, live-now status, or upcoming open-stop cards.",
+      "Open rows remain eligible for upcoming/live/map behavior only within the schedule-update doctrine."
+    ]
+  },
+  "rules": [
+    "Evidence only; do not mutate production records from this artifact.",
+    "Do not invent logos, covers, menus, schedules, social links, or descriptions.",
+    "Do not apply social URL cleanup without owner/operator review or the existing cleanup gate.",
+    "Do not treat search-result snippets as owner-approved schedule/menu data.",
+    "Run manual truck intake dry-run before any future apply operation.",
+    "Keep ownerApprovalNeeded true unless the evidence is operator-submitted equivalent."
+  ],
+  "preserve": [
+    "/truck/{slug}--{uuid} compatibility paths",
+    "invalid UUID safe 404",
+    "missing logo/menu/schedule no-500 behavior",
+    "clean affiliate / clean URL doctrine",
+    "food-truck location privacy rules",
+    "Blessed Berry closedStops are not map/live/upcoming eligible",
+    "Jays Southern Cuisine trimmed display name"
+  ],
+  "sourceObservations": {
+    "observedAt": "2026-06-14",
+    "publicProfileApi": "https://mealscout.onrender.com/api/public/profiles/truck/{uuid}",
+    "webSearchNotes": [
+      "Search results for Big Jay's Southern Cuisine surfaced a Facebook page snippet referencing a work week schedule image, but the page itself remains review-gated/throttled and is not direct owner approval.",
+      "Search results for Blessed Berry Bowls surfaced fresh June 2026 weekly schedule/menu snippets, consistent with the accepted current-week schedule lane, but future weeks still require fresh owner/operator evidence."
+    ]
+  },
+  "entries": [
+    {
+      "truckName": "Jays Southern Cuisine",
+      "truckId": "96cc9541-c39a-47e9-ba9f-2e15e0d0a6f2",
+      "profileId": "96cc9541-c39a-47e9-ba9f-2e15e0d0a6f2",
+      "publicProfilePath": "/truck/jays-southern-cuisine--96cc9541-c39a-47e9-ba9f-2e15e0d0a6f2",
+      "currentApiStatus": 200,
+      "currentProductionDisplayName": "Jays Southern Cuisine",
+      "displayNameCorrectionStatus": "applied",
+      "currentProductionPhonePublic": "8503823080",
+      "currentProductionWebsiteUrl": null,
+      "currentProductionSocialUrls": {
+        "instagramUrl": null,
+        "facebookPageUrl": null,
+        "xUrl": null
+      },
+      "currentLogoStatus": "missing",
+      "currentCoverStatus": "missing",
+      "currentMenuStatus": "missing",
+      "currentScheduleStatus": "missing",
+      "currentScheduleStatusLabel": "No schedule posted",
+      "contentStatuses": {
+        "logoStatus": "missing",
+        "coverStatus": "missing",
+        "menuStatus": "missing",
+        "scheduleStatus": "needs_owner_confirmation",
+        "identityStatus": "needs_owner_confirmation"
+      },
+      "sourceUrls": [
+        "https://mealscout.onrender.com/api/public/profiles/truck/96cc9541-c39a-47e9-ba9f-2e15e0d0a6f2",
+        "https://www.facebook.com/p/Big-Jays-Southern-Cuisine-100095382883103/"
+      ],
+      "externalEvidenceCandidates": [
+        {
+          "url": "https://www.facebook.com/p/Big-Jays-Southern-Cuisine-100095382883103/",
+          "evidenceType": "possible_identity_social_schedule_candidate",
+          "confidence": "low",
+          "ownerApprovalNeeded": true,
+          "ownerApproved": false,
+          "notes": "Search result references Big Jay's Southern Cuisine and a work week schedule image. Do not apply social, logo, menu, or schedule data until owner/operator confirms this is the same MealScout profile and supplies direct evidence."
+        }
+      ],
+      "ownerApprovalNeeded": true,
+      "productionApplied": false,
+      "confidence": "low",
+      "recommendedNextAction": "Collect owner/operator confirmation for whether Big Jay's Southern Cuisine is the same business as Jays Southern Cuisine, then request direct menu/logo/schedule evidence before any dry-run apply."
+    },
+    {
+      "truckName": "Blessed Berry Bowls",
+      "truckId": "e77ac77a-c432-42d0-ac0f-22c48b6306c9",
+      "profileId": "e77ac77a-c432-42d0-ac0f-22c48b6306c9",
+      "publicProfilePath": "/truck/blessed-berry-bowls--e77ac77a-c432-42d0-ac0f-22c48b6306c9",
+      "currentApiStatus": 200,
+      "currentProductionDisplayName": "Blessed Berry Bowls",
+      "currentProductionPhonePublic": "2564796490",
+      "currentProductionWebsiteUrl": null,
+      "currentProductionSocialUrls": {
+        "instagramUrl": "https://@blessed.berrybowls",
+        "facebookPageUrl": "https://facebook.com/Blessed Berry Bowls",
+        "xUrl": null
+      },
+      "currentLogoStatus": "missing",
+      "currentCoverStatus": "applied",
+      "currentMenuStatus": "one_live_structured_item",
+      "currentStructuredMenuSummary": {
+        "menuSectionsCount": 1,
+        "featuredMenuItemsCount": 0,
+        "observedItems": [
+          {
+            "name": "Extra toppings",
+            "priceLabel": "$0.50",
+            "ownerApprovalNeeded": true
+          }
+        ]
+      },
+      "currentScheduleStatus": "scheduled",
+      "currentScheduleLastUpdatedAt": "2026-06-14T17:43:27.616Z",
+      "currentScheduleCounts": {
+        "upcomingCount": 6,
+        "closedCount": 2
+      },
+      "closedScheduleVerification": {
+        "closedRowsPreserved": true,
+        "closedRowsHaveDirections": false,
+        "closedRowsHaveCoordinates": false,
+        "sundayClosedNote": "Happy Father's Day"
+      },
+      "contentStatuses": {
+        "logoStatus": "sourced",
+        "coverStatus": "applied",
+        "menuStatus": "needs_owner_confirmation",
+        "scheduleStatus": "current_week_only",
+        "socialStatus": "sourced_cleanup_gated"
+      },
+      "sourceUrls": [
+        "https://mealscout.onrender.com/api/public/profiles/truck/e77ac77a-c432-42d0-ac0f-22c48b6306c9",
+        "https://www.instagram.com/blessedberrybowls/",
+        "https://www.facebook.com/p/Blessed-Berry-Bowls-61561713173410/",
+        "https://www.toasttab.com/local/order/blessed-berry-bowls-1922-creighton-road"
+      ],
+      "externalEvidenceCandidates": [
+        {
+          "url": "https://www.instagram.com/blessedberrybowls/",
+          "evidenceType": "social_url_menu_schedule_candidate",
+          "confidence": "medium",
+          "ownerApprovalNeeded": true,
+          "ownerApproved": false,
+          "notes": "Search results expose fresh June 2026 posts for the Blessed Berry account, including weekly schedule/menu language. Treat as candidate-only until owner/operator review or direct source capture."
+        },
+        {
+          "url": "https://www.facebook.com/p/Blessed-Berry-Bowls-61561713173410/",
+          "evidenceType": "social_url_schedule_candidate",
+          "confidence": "medium",
+          "ownerApprovalNeeded": true,
+          "ownerApproved": false,
+          "notes": "Search result identifies Blessed Berry Bowls and weekly location language. Keep malformed production social URLs behind the existing cleanup gate."
+        },
+        {
+          "url": "https://www.toasttab.com/local/order/blessed-berry-bowls-1922-creighton-road",
+          "evidenceType": "external_menu_ordering_candidate",
+          "confidence": "medium",
+          "ownerApprovalNeeded": true,
+          "ownerApproved": false,
+          "notes": "Previously identified candidate menu/order source. Do not turn into active structured menu rows without review-gated extraction and owner/operator approval."
+        }
+      ],
+      "ownerApprovalNeeded": true,
+      "productionApplied": false,
+      "confidence": "medium",
+      "recommendedNextAction": "Prepare a review-gated social cleanup and menu/logo intake dry run using owner/operator evidence; do not reuse the current-week schedule after 2026-06-21 without fresh evidence."
+    }
+  ]
+}

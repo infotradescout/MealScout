@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 
-const source = readFileSync("client/src/pages/public-profile.tsx", "utf8");
+const source = readFileSync("client/src/pages/public-profile.tsx", "utf8").replace(/\r\n/g, "\n");
 
 const requireIncludes = (snippet: string, message: string) => {
   if (!source.includes(snippet)) {
