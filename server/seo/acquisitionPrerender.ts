@@ -28,7 +28,10 @@ const escapeHtml = (value: string) =>
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
 
-const buildPageHtml = (canonicalBaseUrl: string, page: AcquisitionPageConfig) => {
+const buildPageHtml = (
+  canonicalBaseUrl: string,
+  page: AcquisitionPageConfig,
+) => {
   const canonical = `${canonicalBaseUrl}${page.path}`;
   const schema = {
     "@context": "https://schema.org",
@@ -162,4 +165,3 @@ export function registerAcquisitionPrerenderRoutes(
     });
   }
 }
-

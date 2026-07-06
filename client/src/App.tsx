@@ -293,13 +293,19 @@ function SharedPublicRoutes() {
       <Route path="/deals" component={FeaturedDealsPage} />
       <Route path="/deals/featured" component={FeaturedDealsPage} />
       <Route path="/deals/:city" component={DealsCityPage} />
-      <Route path="/restaurant/:id/:profileSlug" component={PublicProfilePage} />
+      <Route
+        path="/restaurant/:id/:profileSlug"
+        component={PublicProfilePage}
+      />
       <Route path="/restaurant/:id" component={PublicProfilePage} />
       <Route path="/truck/:slug/:refTag" component={PublicProfilePage} />
       <Route path="/truck/:slug" component={PublicProfilePage} />
       <Route path="/bar/:slug/:refTag" component={PublicProfilePage} />
       <Route path="/bar/:slug" component={PublicProfilePage} />
-      <Route path="/location/:slug/food-trucks" component={LocationDetailPage} />
+      <Route
+        path="/location/:slug/food-trucks"
+        component={LocationDetailPage}
+      />
       <Route
         path="/location/:slug/food-trucks-now"
         component={LocationDiscoveryPage}
@@ -351,14 +357,20 @@ function SharedPublicRoutes() {
       <Route path="/for-bars" component={ForBars} />
       <Route path="/for-hosts" component={ForHosts} />
       <Route path="/for-events" component={ForEvents} />
-      <Route path="/host-location-partner" component={HostLocationPartnerPage} />
+      <Route
+        path="/host-location-partner"
+        component={HostLocationPartnerPage}
+      />
       <Route path="/events" component={EventsRouter} />
       <Route path="/events/public" component={EventsPage} />
       <Route path="/event/:slug" component={EventDetailPage} />
       <Route path="/dashboard" component={DashboardRouter} />
       <Route path="/user-dashboard" component={UserDashboard} />
       <Route path="/food-trucks/:citySlug" component={CityLanding} />
-      <Route path="/food-trucks/:citySlug/:cuisineSlug" component={CityLanding} />
+      <Route
+        path="/food-trucks/:citySlug/:cuisineSlug"
+        component={CityLanding}
+      />
       <Route path="/sitemap" component={Sitemap} />
       <Route path="/status" component={StatusPage} />
       <Route path="/golden-plate-winners" component={GoldenPlateWinners} />

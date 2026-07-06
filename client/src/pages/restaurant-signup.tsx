@@ -426,7 +426,9 @@ export default function RestaurantSignup() {
         }
 
         const prefillName = String(params.get("prefillName") || "").trim();
-        const prefillAddress = String(params.get("prefillAddress") || "").trim();
+        const prefillAddress = String(
+          params.get("prefillAddress") || "",
+        ).trim();
         const prefillCity = String(params.get("prefillCity") || "").trim();
         const prefillState = String(params.get("prefillState") || "").trim();
 

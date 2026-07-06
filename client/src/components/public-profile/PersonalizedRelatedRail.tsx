@@ -86,7 +86,8 @@ export function PersonalizedRelatedRail({
           {sorted.slice(0, 8).map((biz) => {
             const href = biz.profilePath || `/truck/${biz.id}`;
             const isFav = userFavoriteIds.has(biz.id);
-            const imgSrc = biz.logoUrl || biz.coverImageUrl || biz.imageUrl || null;
+            const imgSrc =
+              biz.logoUrl || biz.coverImageUrl || biz.imageUrl || null;
 
             return (
               <a
@@ -122,7 +123,9 @@ export function PersonalizedRelatedRail({
                     {biz.name}
                   </p>
                   {biz.profileType ? (
-                    <p className="text-[10px] text-white/40">{typeLabel(biz.profileType)}</p>
+                    <p className="text-[10px] text-white/40">
+                      {typeLabel(biz.profileType)}
+                    </p>
                   ) : null}
                 </div>
               </a>

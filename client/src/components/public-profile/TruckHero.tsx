@@ -1,8 +1,18 @@
-import type { PublicCta, PublicRestaurantProfile, PublicTruckScheduleStop } from "@shared/publicProfiles";
-import { assessPublicMenuCompleteness, normalizeBusinessTypeLabel } from "@/lib/publicMenuCompleteness";
+import type {
+  PublicCta,
+  PublicRestaurantProfile,
+  PublicTruckScheduleStop,
+} from "@shared/publicProfiles";
+import {
+  assessPublicMenuCompleteness,
+  normalizeBusinessTypeLabel,
+} from "@/lib/publicMenuCompleteness";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ProfileHeroMedia, buildPublicProfileHeroAssets } from "@/components/public-profile/ProfileHeroMedia";
+import {
+  ProfileHeroMedia,
+  buildPublicProfileHeroAssets,
+} from "@/components/public-profile/ProfileHeroMedia";
 import {
   getTruckScheduleAvailabilityLabel,
   getTruckSchedulePrimaryStop,
@@ -41,7 +51,9 @@ const menuTrustLabel = (profile: PublicRestaurantProfile) => {
     menuImageUrl: profile.menuImageUrl,
     menuPdfUrl: profile.menuPdfUrl,
   });
-  const pricedItemCount = (Array.isArray(profile.menuSections) ? profile.menuSections : []).reduce(
+  const pricedItemCount = (
+    Array.isArray(profile.menuSections) ? profile.menuSections : []
+  ).reduce(
     (count, section) =>
       count +
       (Array.isArray(section?.items)
@@ -52,7 +64,10 @@ const menuTrustLabel = (profile: PublicRestaurantProfile) => {
   const isThinPartialMenu =
     menuCompleteness.state === "partial" &&
     pricedItemCount <= 2 &&
-    !(Array.isArray(profile.featuredMenuItems) && profile.featuredMenuItems.length > 0) &&
+    !(
+      Array.isArray(profile.featuredMenuItems) &&
+      profile.featuredMenuItems.length > 0
+    ) &&
     !hasText(profile.menuUrl) &&
     !hasText(profile.menuImageUrl) &&
     !hasText(profile.menuPdfUrl);
@@ -78,22 +93,29 @@ export function TruckHero({ profile, safeCtas }: TruckHeroProps) {
   const primaryStopTime = stopTimeLabel(primaryStop.stop);
   const directionsHref = primaryStop.stop?.directionsUrl || null;
   const menuLabel = menuTrustLabel(profile);
-  const serviceLabel = normalizeBusinessTypeLabel(profile.serviceType || "") || "Food Truck";
+  const serviceLabel =
+    normalizeBusinessTypeLabel(profile.serviceType || "") || "Food Truck";
   const foodSummary = [...(profile.cuisineTags || []).slice(0, 2), serviceLabel]
     .map((value) => String(value || "").trim())
     .filter(Boolean)
     .join(" · ");
   const hasSchedule = hasTruckScheduleCta(schedule);
-  const scheduleLabel = hasSchedule ? getTruckScheduleAvailabilityLabel(schedule) : null;
+  const scheduleLabel = hasSchedule
+    ? getTruckScheduleAvailabilityLabel(schedule)
+    : null;
   const actionCtas = uniqueByHref(
     safeCtas.filter(
       (cta) =>
-        cta.type === "external" || cta.type === "social" || cta.type === "phone",
+        cta.type === "external" ||
+        cta.type === "social" ||
+        cta.type === "phone",
     ),
   );
   const primaryLinkCta = actionCtas[0] || null;
   const secondaryLinkCta = actionCtas[1] || null;
-  const locationSummary = [profile.city, profile.state].filter(Boolean).join(", ");
+  const locationSummary = [profile.city, profile.state]
+    .filter(Boolean)
+    .join(", ");
   const phoneLabel = String(profile.phonePublic || "").trim();
   const primaryHeroCta = hasSchedule
     ? directionsHref
@@ -124,7 +146,10 @@ export function TruckHero({ profile, safeCtas }: TruckHeroProps) {
                 : "website_click",
           analyticsTargetType: primaryLinkCta.type || "unknown",
           target: "_blank" as const,
-          rel: primaryLinkCta.type === "phone" ? undefined : ("noopener noreferrer" as const),
+          rel:
+            primaryLinkCta.type === "phone"
+              ? undefined
+              : ("noopener noreferrer" as const),
         }
       : null;
   const secondaryHeroCta =
@@ -152,7 +177,7 @@ export function TruckHero({ profile, safeCtas }: TruckHeroProps) {
                   : "website_click",
             analyticsTargetType: secondaryLinkCta.type || "unknown",
           }
-      : null;
+        : null;
 
   return (
     <section
@@ -180,18 +205,29 @@ export function TruckHero({ profile, safeCtas }: TruckHeroProps) {
           <div className="space-y-3">
             <div className="flex flex-wrap gap-2">
               {profile.verifiedProfile ? (
-                <Badge variant="outline" className="border-white/20 text-white/75">
+                <Badge
+                  variant="outline"
+                  className="border-white/20 text-white/75"
+                >
                   Verified profile
                 </Badge>
               ) : null}
               {menuLabel ? (
-                <Badge variant="outline" className="border-white/20 text-white/75">
+                <Badge
+                  variant="outline"
+                  className="border-white/20 text-white/75"
+                >
                   {menuLabel}
                 </Badge>
               ) : null}
-              {scheduleLabel ? <Badge variant="secondary">{scheduleLabel}</Badge> : null}
+              {scheduleLabel ? (
+                <Badge variant="secondary">{scheduleLabel}</Badge>
+              ) : null}
               {profile.locallyOwned ? (
-                <Badge variant="outline" className="border-emerald-300/35 text-emerald-200/85">
+                <Badge
+                  variant="outline"
+                  className="border-emerald-300/35 text-emerald-200/85"
+                >
                   Locally owned
                 </Badge>
               ) : null}
@@ -201,7 +237,9 @@ export function TruckHero({ profile, safeCtas }: TruckHeroProps) {
                 {profile.displayName}
               </h1>
               {foodSummary ? (
-                <p className="mt-2 text-sm font-medium text-orange-100/85">{foodSummary}</p>
+                <p className="mt-2 text-sm font-medium text-orange-100/85">
+                  {foodSummary}
+                </p>
               ) : null}
               {profile.description ? (
                 <p className="mt-3 max-w-2xl text-sm leading-6 text-white/72">
@@ -243,7 +281,9 @@ export function TruckHero({ profile, safeCtas }: TruckHeroProps) {
                     <p className="text-[11px] font-semibold uppercase tracking-wide text-white/55">
                       Based in
                     </p>
-                    <p className="mt-1 text-sm font-semibold text-white">{locationSummary}</p>
+                    <p className="mt-1 text-sm font-semibold text-white">
+                      {locationSummary}
+                    </p>
                   </div>
                 ) : null}
                 {phoneLabel ? (
@@ -251,7 +291,9 @@ export function TruckHero({ profile, safeCtas }: TruckHeroProps) {
                     <p className="text-[11px] font-semibold uppercase tracking-wide text-white/55">
                       Call
                     </p>
-                    <p className="mt-1 text-sm font-semibold text-white">{phoneLabel}</p>
+                    <p className="mt-1 text-sm font-semibold text-white">
+                      {phoneLabel}
+                    </p>
                   </div>
                 ) : null}
                 {!phoneLabel && foodSummary ? (
@@ -259,7 +301,9 @@ export function TruckHero({ profile, safeCtas }: TruckHeroProps) {
                     <p className="text-[11px] font-semibold uppercase tracking-wide text-white/55">
                       Food style
                     </p>
-                    <p className="mt-1 text-sm font-semibold text-white">{foodSummary}</p>
+                    <p className="mt-1 text-sm font-semibold text-white">
+                      {foodSummary}
+                    </p>
                   </div>
                 ) : null}
               </div>
@@ -268,27 +312,48 @@ export function TruckHero({ profile, safeCtas }: TruckHeroProps) {
 
           <div className="flex flex-col gap-2 sm:flex-row">
             {primaryHeroCta ? (
-              <Button asChild className="bg-orange-500 font-bold text-black hover:bg-orange-400">
+              <Button
+                asChild
+                className="bg-orange-500 font-bold text-black hover:bg-orange-400"
+              >
                 <a
                   href={primaryHeroCta.href}
                   data-analytics-action={primaryHeroCta.analyticsAction}
-                  data-analytics-target-type={primaryHeroCta.analyticsTargetType}
+                  data-analytics-target-type={
+                    primaryHeroCta.analyticsTargetType
+                  }
                   target={primaryHeroCta.target}
                   rel={primaryHeroCta.rel}
                 >
-                  {primaryHeroCta.icon ? <primaryHeroCta.icon className="mr-2 h-4 w-4" /> : null}
+                  {primaryHeroCta.icon ? (
+                    <primaryHeroCta.icon className="mr-2 h-4 w-4" />
+                  ) : null}
                   {primaryHeroCta.label}
                 </a>
               </Button>
             ) : null}
             {secondaryHeroCta ? (
-              <Button asChild variant="outline" className="border-white/20 text-white hover:bg-white/10">
+              <Button
+                asChild
+                variant="outline"
+                className="border-white/20 text-white hover:bg-white/10"
+              >
                 <a
                   href={secondaryHeroCta.href}
                   data-analytics-action={secondaryHeroCta.analyticsAction}
-                  data-analytics-target-type={secondaryHeroCta.analyticsTargetType}
-                  target={secondaryHeroCta.href.startsWith("tel:") ? undefined : "_blank"}
-                  rel={secondaryHeroCta.href.startsWith("tel:") ? undefined : "noopener noreferrer"}
+                  data-analytics-target-type={
+                    secondaryHeroCta.analyticsTargetType
+                  }
+                  target={
+                    secondaryHeroCta.href.startsWith("tel:")
+                      ? undefined
+                      : "_blank"
+                  }
+                  rel={
+                    secondaryHeroCta.href.startsWith("tel:")
+                      ? undefined
+                      : "noopener noreferrer"
+                  }
                 >
                   {secondaryHeroCta.label}
                 </a>
@@ -300,7 +365,10 @@ export function TruckHero({ profile, safeCtas }: TruckHeroProps) {
             <p className="font-semibold text-white/88">
               Own this truck? Add menu, schedule, logo, or hours.
             </p>
-            <a href="/claim-business" className="mt-1 inline-flex font-semibold text-orange-200 hover:text-orange-100">
+            <a
+              href="/claim-business"
+              className="mt-1 inline-flex font-semibold text-orange-200 hover:text-orange-100"
+            >
               Claim or update this profile
             </a>
           </div>

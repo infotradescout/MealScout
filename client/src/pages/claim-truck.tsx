@@ -4,7 +4,13 @@ import { useAuth } from "@/hooks/useAuth";
 import { apiRequest } from "@/lib/queryClient";
 import { BackHeader } from "@/components/back-header";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
@@ -53,8 +59,7 @@ export default function ClaimTruckPage() {
   const [loading, setLoading] = useState(false);
   const [requestingId, setRequestingId] = useState<string | null>(null);
   const [missingBusinessQuery, setMissingBusinessQuery] = useState("");
-  const [missingBusinessLoading, setMissingBusinessLoading] =
-    useState(false);
+  const [missingBusinessLoading, setMissingBusinessLoading] = useState(false);
   const [error, setError] = useState<string>("");
   const [rows, setRows] = useState<ClaimRow[]>([]);
 
@@ -79,7 +84,9 @@ export default function ClaimTruckPage() {
       const next = Array.isArray(data) ? data : [];
       setRows(next);
       if (next.length === 0) {
-        setError("No matching trucks found. Try a shorter name or the license/external ID.");
+        setError(
+          "No matching trucks found. Try a shorter name or the license/external ID.",
+        );
       }
     } catch (err: any) {
       setError(err?.message || "Search failed. Try again.");
@@ -92,7 +99,9 @@ export default function ClaimTruckPage() {
     setRequestingId(listingId);
     setError("");
     try {
-      const res = await apiRequest("POST", "/api/truck-claims/request", { listingId });
+      const res = await apiRequest("POST", "/api/truck-claims/request", {
+        listingId,
+      });
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
@@ -118,7 +127,9 @@ export default function ClaimTruckPage() {
       }
 
       toast({
-        title: data?.emailSent ? "Email sent to owner" : "Email could not be sent",
+        title: data?.emailSent
+          ? "Email sent to owner"
+          : "Email could not be sent",
         description: data?.emailSent
           ? "We sent them a link to finish setting up their account."
           : "An admin should check Email Delivery in the dashboard.",
@@ -214,7 +225,9 @@ export default function ClaimTruckPage() {
           <CardHeader>
             <CardTitle>Find your business</CardTitle>
             <CardDescription>
-              Search by name, license/external ID, city, or state. If your profile is unclaimed, you can claim it or request a setup reminder.
+              Search by name, license/external ID, city, or state. If your
+              profile is unclaimed, you can claim it or request a setup
+              reminder.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -227,12 +240,18 @@ export default function ClaimTruckPage() {
                   if (e.key === "Enter") void handleSearch();
                 }}
               />
-              <Button variant="outline" onClick={handleSearch} disabled={loading}>
+              <Button
+                variant="outline"
+                onClick={handleSearch}
+                disabled={loading}
+              >
                 {loading ? "Searching..." : "Search"}
               </Button>
             </div>
 
-            {error ? <div className="text-sm text-destructive">{error}</div> : null}
+            {error ? (
+              <div className="text-sm text-destructive">{error}</div>
+            ) : null}
 
             {rows.length > 0 ? (
               <div className="space-y-2">
@@ -267,7 +286,8 @@ export default function ClaimTruckPage() {
                           </div>
                           {cooldown > 0 ? (
                             <div className="text-xs text-muted-foreground">
-                              Reminder recently sent. Try again in about {cooldown} minutes.
+                              Reminder recently sent. Try again in about{" "}
+                              {cooldown} minutes.
                             </div>
                           ) : null}
                         </div>
@@ -285,13 +305,16 @@ export default function ClaimTruckPage() {
                             onClick={() => handleRequest(row.id)}
                             disabled={!canRequest || requestingId === row.id}
                           >
-                            {requestingId === row.id ? "Requesting..." : "Request setup"}
+                            {requestingId === row.id
+                              ? "Requesting..."
+                              : "Request setup"}
                           </Button>
                         </div>
                       </div>
                       {!canClaim && row.invited ? (
                         <div className="text-xs text-muted-foreground">
-                          This truck already has an invited owner. Use “Request setup” to remind them.
+                          This truck already has an invited owner. Use “Request
+                          setup” to remind them.
                         </div>
                       ) : null}
                     </div>
@@ -310,13 +333,17 @@ export default function ClaimTruckPage() {
                 value={missingBusinessQuery}
                 onChange={setMissingBusinessQuery}
                 onSelect={(suggestion) => {
-                  void handleMissingBusinessSelect(suggestion as PlaceSuggestion);
+                  void handleMissingBusinessSelect(
+                    suggestion as PlaceSuggestion,
+                  );
                 }}
                 placeholder="Search business name or address"
                 disabled={missingBusinessLoading}
               />
               {missingBusinessLoading ? (
-                <div className="text-xs text-muted-foreground">Loading business details...</div>
+                <div className="text-xs text-muted-foreground">
+                  Loading business details...
+                </div>
               ) : null}
             </div>
           </CardContent>

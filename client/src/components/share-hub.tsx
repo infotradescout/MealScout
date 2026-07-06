@@ -157,7 +157,9 @@ export default function ShareHub({
   const { toast } = useToast();
   const { user, isAuthenticated, isLoading } = useAuth();
   const [shareAuthError, setShareAuthError] = useState<string | null>(null);
-  const [publicProfilePath, setPublicProfilePath] = useState<string | null>(null);
+  const [publicProfilePath, setPublicProfilePath] = useState<string | null>(
+    null,
+  );
 
   const canonicalMealScoutOrigin = (
     import.meta.env.VITE_PUBLIC_BASE_URL ||
@@ -197,7 +199,10 @@ export default function ShareHub({
     const hostId = String(hostProfile?.id || "").trim();
     if (hostId) {
       const slug = toSeoSlug(
-        hostProfile?.businessName || hostProfile?.name || user?.businessName || hostId,
+        hostProfile?.businessName ||
+          hostProfile?.name ||
+          user?.businessName ||
+          hostId,
       );
       return buildPublicProfilePath({
         entityType: "location",

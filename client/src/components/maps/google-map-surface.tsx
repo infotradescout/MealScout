@@ -116,116 +116,374 @@ const mapStyleNeon = [
   { elementType: "geometry", stylers: [{ color: "#202225" }] },
   { elementType: "labels.icon", stylers: [{ visibility: "off" }] },
   { elementType: "labels.text.fill", stylers: [{ color: "#c5a07c" }] },
-  { elementType: "labels.text.stroke", stylers: [{ color: "#151719" }, { weight: 3 }] },
+  {
+    elementType: "labels.text.stroke",
+    stylers: [{ color: "#151719" }, { weight: 3 }],
+  },
 
-  { featureType: "administrative", elementType: "geometry.stroke", stylers: [{ color: "#49392f" }, { weight: 0.45 }] },
-  { featureType: "administrative", elementType: "labels.text.fill", stylers: [{ color: "#a98466" }] },
-  { featureType: "administrative.country", elementType: "labels", stylers: [{ visibility: "off" }] },
-  { featureType: "administrative.province", elementType: "labels", stylers: [{ visibility: "off" }] },
-  { featureType: "administrative.neighborhood", elementType: "labels", stylers: [{ visibility: "off" }] },
-  { featureType: "administrative.land_parcel", stylers: [{ visibility: "off" }] },
+  {
+    featureType: "administrative",
+    elementType: "geometry.stroke",
+    stylers: [{ color: "#49392f" }, { weight: 0.45 }],
+  },
+  {
+    featureType: "administrative",
+    elementType: "labels.text.fill",
+    stylers: [{ color: "#a98466" }],
+  },
+  {
+    featureType: "administrative.country",
+    elementType: "labels",
+    stylers: [{ visibility: "off" }],
+  },
+  {
+    featureType: "administrative.province",
+    elementType: "labels",
+    stylers: [{ visibility: "off" }],
+  },
+  {
+    featureType: "administrative.neighborhood",
+    elementType: "labels",
+    stylers: [{ visibility: "off" }],
+  },
+  {
+    featureType: "administrative.land_parcel",
+    stylers: [{ visibility: "off" }],
+  },
 
-  { featureType: "landscape", elementType: "geometry", stylers: [{ color: "#202326" }] },
-  { featureType: "landscape.man_made", elementType: "geometry", stylers: [{ color: "#232427" }] },
-  { featureType: "landscape.natural", elementType: "geometry", stylers: [{ color: "#1d2522" }] },
+  {
+    featureType: "landscape",
+    elementType: "geometry",
+    stylers: [{ color: "#202326" }],
+  },
+  {
+    featureType: "landscape.man_made",
+    elementType: "geometry",
+    stylers: [{ color: "#232427" }],
+  },
+  {
+    featureType: "landscape.natural",
+    elementType: "geometry",
+    stylers: [{ color: "#1d2522" }],
+  },
 
-  { featureType: "poi", elementType: "geometry", stylers: [{ color: "#222421" }] },
-  { featureType: "poi", elementType: "labels", stylers: [{ visibility: "off" }] },
-  { featureType: "poi.park", elementType: "geometry", stylers: [{ color: "#1f2b24" }] },
-  { featureType: "poi.park", elementType: "labels", stylers: [{ visibility: "off" }] },
+  {
+    featureType: "poi",
+    elementType: "geometry",
+    stylers: [{ color: "#222421" }],
+  },
+  {
+    featureType: "poi",
+    elementType: "labels",
+    stylers: [{ visibility: "off" }],
+  },
+  {
+    featureType: "poi.park",
+    elementType: "geometry",
+    stylers: [{ color: "#1f2b24" }],
+  },
+  {
+    featureType: "poi.park",
+    elementType: "labels",
+    stylers: [{ visibility: "off" }],
+  },
 
-  { featureType: "road", elementType: "geometry", stylers: [{ visibility: "simplified" }] },
-  { featureType: "road", elementType: "labels.icon", stylers: [{ visibility: "off" }] },
-  { featureType: "road", elementType: "labels.text.fill", stylers: [{ color: "#bd8c67" }] },
-  { featureType: "road", elementType: "labels.text.stroke", stylers: [{ color: "#151719" }, { weight: 2.6 }] },
+  {
+    featureType: "road",
+    elementType: "geometry",
+    stylers: [{ visibility: "simplified" }],
+  },
+  {
+    featureType: "road",
+    elementType: "labels.icon",
+    stylers: [{ visibility: "off" }],
+  },
+  {
+    featureType: "road",
+    elementType: "labels.text.fill",
+    stylers: [{ color: "#bd8c67" }],
+  },
+  {
+    featureType: "road",
+    elementType: "labels.text.stroke",
+    stylers: [{ color: "#151719" }, { weight: 2.6 }],
+  },
 
-  { featureType: "road.highway", elementType: "geometry.fill", stylers: [{ color: "#3d332e" }] },
-  { featureType: "road.highway", elementType: "geometry.stroke", stylers: [{ color: "#e57842" }, { weight: 1.75 }] },
-  { featureType: "road.highway.controlled_access", elementType: "geometry.fill", stylers: [{ color: "#44342d" }] },
-  { featureType: "road.highway.controlled_access", elementType: "geometry.stroke", stylers: [{ color: "#f08a48" }, { weight: 1.95 }] },
-  { featureType: "road.highway", elementType: "labels.text.fill", stylers: [{ color: "#dfa06f" }] },
+  {
+    featureType: "road.highway",
+    elementType: "geometry.fill",
+    stylers: [{ color: "#3d332e" }],
+  },
+  {
+    featureType: "road.highway",
+    elementType: "geometry.stroke",
+    stylers: [{ color: "#e57842" }, { weight: 1.75 }],
+  },
+  {
+    featureType: "road.highway.controlled_access",
+    elementType: "geometry.fill",
+    stylers: [{ color: "#44342d" }],
+  },
+  {
+    featureType: "road.highway.controlled_access",
+    elementType: "geometry.stroke",
+    stylers: [{ color: "#f08a48" }, { weight: 1.95 }],
+  },
+  {
+    featureType: "road.highway",
+    elementType: "labels.text.fill",
+    stylers: [{ color: "#dfa06f" }],
+  },
 
-  { featureType: "road.arterial", elementType: "geometry.fill", stylers: [{ color: "#302b27" }] },
-  { featureType: "road.arterial", elementType: "geometry.stroke", stylers: [{ color: "#9d5638" }, { weight: 0.9 }] },
-  { featureType: "road.arterial", elementType: "labels.text.fill", stylers: [{ color: "#b47c58" }] },
+  {
+    featureType: "road.arterial",
+    elementType: "geometry.fill",
+    stylers: [{ color: "#302b27" }],
+  },
+  {
+    featureType: "road.arterial",
+    elementType: "geometry.stroke",
+    stylers: [{ color: "#9d5638" }, { weight: 0.9 }],
+  },
+  {
+    featureType: "road.arterial",
+    elementType: "labels.text.fill",
+    stylers: [{ color: "#b47c58" }],
+  },
 
-  { featureType: "road.local", elementType: "geometry.fill", stylers: [{ color: "#282827" }] },
-  { featureType: "road.local", elementType: "geometry.stroke", stylers: [{ color: "#4a3d35" }, { weight: 0.35 }] },
-  { featureType: "road.local", elementType: "labels", stylers: [{ visibility: "off" }] },
+  {
+    featureType: "road.local",
+    elementType: "geometry.fill",
+    stylers: [{ color: "#282827" }],
+  },
+  {
+    featureType: "road.local",
+    elementType: "geometry.stroke",
+    stylers: [{ color: "#4a3d35" }, { weight: 0.35 }],
+  },
+  {
+    featureType: "road.local",
+    elementType: "labels",
+    stylers: [{ visibility: "off" }],
+  },
 
   { featureType: "transit", stylers: [{ visibility: "off" }] },
-  { featureType: "water", elementType: "geometry", stylers: [{ color: "#163039" }] },
-  { featureType: "water", elementType: "labels.text.fill", stylers: [{ color: "#6992a0" }] },
+  {
+    featureType: "water",
+    elementType: "geometry",
+    stylers: [{ color: "#163039" }],
+  },
+  {
+    featureType: "water",
+    elementType: "labels.text.fill",
+    stylers: [{ color: "#6992a0" }],
+  },
 ];
 
 const mapStyleFoodDay = [
   { elementType: "geometry", stylers: [{ color: "#fff4d6" }] },
-  { elementType: "labels.icon", stylers: [{ saturation: -15 }, { lightness: 18 }] },
+  {
+    elementType: "labels.icon",
+    stylers: [{ saturation: -15 }, { lightness: 18 }],
+  },
   { elementType: "labels.text.fill", stylers: [{ color: "#6f3b18" }] },
-  { elementType: "labels.text.stroke", stylers: [{ color: "#fff8e8" }, { weight: 3 }] },
+  {
+    elementType: "labels.text.stroke",
+    stylers: [{ color: "#fff8e8" }, { weight: 3 }],
+  },
 
-  { featureType: "administrative", elementType: "geometry.stroke", stylers: [{ color: "#e5b779" }, { weight: 0.55 }] },
-  { featureType: "administrative", elementType: "labels.text.fill", stylers: [{ color: "#8a5a28" }] },
-  { featureType: "administrative.country", elementType: "labels", stylers: [{ visibility: "off" }] },
-  { featureType: "administrative.province", elementType: "labels", stylers: [{ visibility: "off" }] },
-  { featureType: "administrative.land_parcel", stylers: [{ visibility: "off" }] },
+  {
+    featureType: "administrative",
+    elementType: "geometry.stroke",
+    stylers: [{ color: "#e5b779" }, { weight: 0.55 }],
+  },
+  {
+    featureType: "administrative",
+    elementType: "labels.text.fill",
+    stylers: [{ color: "#8a5a28" }],
+  },
+  {
+    featureType: "administrative.country",
+    elementType: "labels",
+    stylers: [{ visibility: "off" }],
+  },
+  {
+    featureType: "administrative.province",
+    elementType: "labels",
+    stylers: [{ visibility: "off" }],
+  },
+  {
+    featureType: "administrative.land_parcel",
+    stylers: [{ visibility: "off" }],
+  },
 
-  { featureType: "landscape", elementType: "geometry", stylers: [{ color: "#fff2cf" }] },
-  { featureType: "landscape.man_made", elementType: "geometry", stylers: [{ color: "#ffefd0" }] },
-  { featureType: "landscape.natural", elementType: "geometry", stylers: [{ color: "#f4f2c7" }] },
+  {
+    featureType: "landscape",
+    elementType: "geometry",
+    stylers: [{ color: "#fff2cf" }],
+  },
+  {
+    featureType: "landscape.man_made",
+    elementType: "geometry",
+    stylers: [{ color: "#ffefd0" }],
+  },
+  {
+    featureType: "landscape.natural",
+    elementType: "geometry",
+    stylers: [{ color: "#f4f2c7" }],
+  },
 
-  { featureType: "poi", elementType: "geometry", stylers: [{ color: "#ffe8bf" }] },
-  { featureType: "poi", elementType: "labels.text.fill", stylers: [{ color: "#9a5a1f" }] },
-  { featureType: "poi.business", elementType: "labels.icon", stylers: [{ visibility: "on" }, { saturation: -20 }, { lightness: 22 }] },
-  { featureType: "poi.park", elementType: "geometry", stylers: [{ color: "#dff0b5" }] },
-  { featureType: "poi.park", elementType: "labels.text.fill", stylers: [{ color: "#5f7a2d" }] },
+  {
+    featureType: "poi",
+    elementType: "geometry",
+    stylers: [{ color: "#ffe8bf" }],
+  },
+  {
+    featureType: "poi",
+    elementType: "labels.text.fill",
+    stylers: [{ color: "#9a5a1f" }],
+  },
+  {
+    featureType: "poi.business",
+    elementType: "labels.icon",
+    stylers: [{ visibility: "on" }, { saturation: -20 }, { lightness: 22 }],
+  },
+  {
+    featureType: "poi.park",
+    elementType: "geometry",
+    stylers: [{ color: "#dff0b5" }],
+  },
+  {
+    featureType: "poi.park",
+    elementType: "labels.text.fill",
+    stylers: [{ color: "#5f7a2d" }],
+  },
 
-  { featureType: "road", elementType: "geometry", stylers: [{ visibility: "simplified" }] },
-  { featureType: "road", elementType: "labels.icon", stylers: [{ visibility: "off" }] },
-  { featureType: "road", elementType: "labels.text.fill", stylers: [{ color: "#8a5a28" }] },
-  { featureType: "road", elementType: "labels.text.stroke", stylers: [{ color: "#fff8e8" }, { weight: 2.8 }] },
+  {
+    featureType: "road",
+    elementType: "geometry",
+    stylers: [{ visibility: "simplified" }],
+  },
+  {
+    featureType: "road",
+    elementType: "labels.icon",
+    stylers: [{ visibility: "off" }],
+  },
+  {
+    featureType: "road",
+    elementType: "labels.text.fill",
+    stylers: [{ color: "#8a5a28" }],
+  },
+  {
+    featureType: "road",
+    elementType: "labels.text.stroke",
+    stylers: [{ color: "#fff8e8" }, { weight: 2.8 }],
+  },
 
-  { featureType: "road.highway", elementType: "geometry.fill", stylers: [{ color: "#ffc66d" }] },
-  { featureType: "road.highway", elementType: "geometry.stroke", stylers: [{ color: "#f97316" }, { weight: 1.15 }] },
-  { featureType: "road.highway.controlled_access", elementType: "geometry.fill", stylers: [{ color: "#ffb85a" }] },
-  { featureType: "road.highway.controlled_access", elementType: "geometry.stroke", stylers: [{ color: "#ea580c" }, { weight: 1.35 }] },
-  { featureType: "road.highway", elementType: "labels.text.fill", stylers: [{ color: "#7c3b12" }] },
+  {
+    featureType: "road.highway",
+    elementType: "geometry.fill",
+    stylers: [{ color: "#ffc66d" }],
+  },
+  {
+    featureType: "road.highway",
+    elementType: "geometry.stroke",
+    stylers: [{ color: "#f97316" }, { weight: 1.15 }],
+  },
+  {
+    featureType: "road.highway.controlled_access",
+    elementType: "geometry.fill",
+    stylers: [{ color: "#ffb85a" }],
+  },
+  {
+    featureType: "road.highway.controlled_access",
+    elementType: "geometry.stroke",
+    stylers: [{ color: "#ea580c" }, { weight: 1.35 }],
+  },
+  {
+    featureType: "road.highway",
+    elementType: "labels.text.fill",
+    stylers: [{ color: "#7c3b12" }],
+  },
 
-  { featureType: "road.arterial", elementType: "geometry.fill", stylers: [{ color: "#ffd98f" }] },
-  { featureType: "road.arterial", elementType: "geometry.stroke", stylers: [{ color: "#f59e0b" }, { weight: 0.55 }] },
-  { featureType: "road.local", elementType: "geometry.fill", stylers: [{ color: "#fffaf0" }] },
-  { featureType: "road.local", elementType: "geometry.stroke", stylers: [{ color: "#efd59d" }, { weight: 0.35 }] },
-  { featureType: "road.local", elementType: "labels", stylers: [{ visibility: "off" }] },
+  {
+    featureType: "road.arterial",
+    elementType: "geometry.fill",
+    stylers: [{ color: "#ffd98f" }],
+  },
+  {
+    featureType: "road.arterial",
+    elementType: "geometry.stroke",
+    stylers: [{ color: "#f59e0b" }, { weight: 0.55 }],
+  },
+  {
+    featureType: "road.local",
+    elementType: "geometry.fill",
+    stylers: [{ color: "#fffaf0" }],
+  },
+  {
+    featureType: "road.local",
+    elementType: "geometry.stroke",
+    stylers: [{ color: "#efd59d" }, { weight: 0.35 }],
+  },
+  {
+    featureType: "road.local",
+    elementType: "labels",
+    stylers: [{ visibility: "off" }],
+  },
 
   { featureType: "transit", stylers: [{ visibility: "off" }] },
-  { featureType: "water", elementType: "geometry", stylers: [{ color: "#a7e8f0" }] },
-  { featureType: "water", elementType: "labels.text.fill", stylers: [{ color: "#2f7484" }] },
+  {
+    featureType: "water",
+    elementType: "geometry",
+    stylers: [{ color: "#a7e8f0" }],
+  },
+  {
+    featureType: "water",
+    elementType: "labels.text.fill",
+    stylers: [{ color: "#2f7484" }],
+  },
 ];
 
 /* ─── Marker colors ─────────────────────────────────────────────────────── */
 const markerColor = (marker: MapAdapterMarker): string => {
   if (marker.color) return marker.color;
   switch (marker.kind) {
-    case "user":       return "#3b82f6"; // blue
-    case "truck":      return "#f97316"; // amber-orange
-    case "restaurant": return "#fbbf24"; // amber-yellow (distinct from truck)
-    case "parking":    return "#f59e0b"; // host amber
-    case "event":      return "#d946ef"; // fuchsia
-    case "deal":       return "#22c55e"; // green
-    case "geo_ad":     return "#eab308"; // yellow
-    default:           return "#f97316";
+    case "user":
+      return "#3b82f6"; // blue
+    case "truck":
+      return "#f97316"; // amber-orange
+    case "restaurant":
+      return "#fbbf24"; // amber-yellow (distinct from truck)
+    case "parking":
+      return "#f59e0b"; // host amber
+    case "event":
+      return "#d946ef"; // fuchsia
+    case "deal":
+      return "#22c55e"; // green
+    case "geo_ad":
+      return "#eab308"; // yellow
+    default:
+      return "#f97316";
   }
 };
 
 const markerGlyph = (marker: MapAdapterMarker): string => {
   switch (marker.kind) {
-    case "truck": return "T";
-    case "restaurant": return "F";
-    case "parking": return "H";
-    case "event": return "E";
-    case "deal": return "$";
-    case "user": return "";
-    default: return "•";
+    case "truck":
+      return "T";
+    case "restaurant":
+      return "F";
+    case "parking":
+      return "H";
+    case "event":
+      return "E";
+    case "deal":
+      return "$";
+    case "user":
+      return "";
+    default:
+      return "•";
   }
 };
 
@@ -236,13 +494,15 @@ const svgDataUrl = (svg: string) =>
 const buildGlowDotElement = (marker: MapAdapterMarker): HTMLElement => {
   if (marker.kind === "parking") {
     const wrapper = document.createElement("div");
-    wrapper.style.cssText = "position:relative;width:38px;height:38px;display:flex;align-items:center;justify-content:center;cursor:pointer;";
+    wrapper.style.cssText =
+      "position:relative;width:38px;height:38px;display:flex;align-items:center;justify-content:center;cursor:pointer;";
     const img = document.createElement("img");
     img.src = mealScoutIcon;
     img.alt = marker.title || "Host location";
     img.width = 34;
     img.height = 34;
-    img.style.cssText = "width:34px;height:34px;display:block;filter:drop-shadow(0 8px 16px rgba(0,0,0,0.38));";
+    img.style.cssText =
+      "width:34px;height:34px;display:block;filter:drop-shadow(0 8px 16px rgba(0,0,0,0.38));";
     wrapper.appendChild(img);
     if ((marker.parkedTrucks?.length || 0) > 0) {
       const badge = document.createElement("span");
@@ -347,10 +607,11 @@ const buildLegacyIcon = (googleMaps: any, marker: MapAdapterMarker) => {
   if (marker.kind !== "user") {
     const glyph = markerGlyph(marker);
     const parkedTruckCount = marker.parkedTrucks?.length || 0;
-    const parkedTruckBadge = parkedTruckCount > 0
-      ? `<circle cx="40" cy="14" r="9" fill="#fb923c" stroke="#fff7ed" stroke-width="2"/>
+    const parkedTruckBadge =
+      parkedTruckCount > 0
+        ? `<circle cx="40" cy="14" r="9" fill="#fb923c" stroke="#fff7ed" stroke-width="2"/>
          <text x="40" y="18" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="900" fill="#1b0b02">T</text>`
-      : "";
+        : "";
     const svg = `
       <svg width="54" height="66" viewBox="0 0 54 66" xmlns="http://www.w3.org/2000/svg">
         <defs>
@@ -385,8 +646,13 @@ const buildLegacyIcon = (googleMaps: any, marker: MapAdapterMarker) => {
 
 const removeMarkerFromMap = (instance: any) => {
   if (!instance) return;
-  if (typeof instance.setMap === "function") { instance.setMap(null); return; }
-  if ("map" in instance) { instance.map = null; }
+  if (typeof instance.setMap === "function") {
+    instance.setMap(null);
+    return;
+  }
+  if ("map" in instance) {
+    instance.map = null;
+  }
 };
 
 /* ─── Script loader ─────────────────────────────────────────────────────── */
@@ -408,9 +674,19 @@ export const loadGoogleMaps = async (apiKey: string) => {
       'script[data-mealscout-google-maps="1"]',
     );
     if (existing) {
-      if ((window as GoogleMapsWindow).google?.maps) { resolve(); return; }
+      if ((window as GoogleMapsWindow).google?.maps) {
+        resolve();
+        return;
+      }
       existing.addEventListener("load", () => resolve(), { once: true });
-      existing.addEventListener("error", () => { existing.remove(); reject(new Error("Failed to load Google Maps script")); }, { once: true });
+      existing.addEventListener(
+        "error",
+        () => {
+          existing.remove();
+          reject(new Error("Failed to load Google Maps script"));
+        },
+        { once: true },
+      );
       return;
     }
     const script = document.createElement("script");
@@ -419,10 +695,17 @@ export const loadGoogleMaps = async (apiKey: string) => {
     script.defer = true;
     script.dataset.mealscoutGoogleMaps = "1";
     script.onload = () => {
-      if ((window as GoogleMapsWindow).google?.maps) { resolve(); }
-      else { script.remove(); reject(new Error("Google Maps API unavailable after script load")); }
+      if ((window as GoogleMapsWindow).google?.maps) {
+        resolve();
+      } else {
+        script.remove();
+        reject(new Error("Google Maps API unavailable after script load"));
+      }
     };
-    script.onerror = () => { script.remove(); reject(new Error("Failed to load Google Maps script")); };
+    script.onerror = () => {
+      script.remove();
+      reject(new Error("Failed to load Google Maps script"));
+    };
     document.head.appendChild(script);
   });
 
@@ -530,15 +813,22 @@ export function GoogleMapSurface({
     zoom,
   ]);
 
-  useEffect(() => { hasReportedFatalErrorRef.current = false; }, [apiKey]);
+  useEffect(() => {
+    hasReportedFatalErrorRef.current = false;
+  }, [apiKey]);
 
   // Auth failure handler
   useEffect(() => {
     const w = window as GoogleMapsWindow;
     const prev = w.gm_authFailure;
     const handler = () => {
-      if (typeof prev === "function") { try { prev(); } catch {} }
-      const msg = "Google Maps authorization failed for this domain. Falling back to legacy map.";
+      if (typeof prev === "function") {
+        try {
+          prev();
+        } catch {}
+      }
+      const msg =
+        "Google Maps authorization failed for this domain. Falling back to legacy map.";
       setLoadError(msg);
       if (!hasReportedFatalErrorRef.current) {
         hasReportedFatalErrorRef.current = true;
@@ -546,7 +836,9 @@ export function GoogleMapSurface({
       }
     };
     w.gm_authFailure = handler;
-    return () => { if (w.gm_authFailure === handler) w.gm_authFailure = prev; };
+    return () => {
+      if (w.gm_authFailure === handler) w.gm_authFailure = prev;
+    };
   }, []);
 
   // Map init
@@ -558,7 +850,8 @@ export function GoogleMapSurface({
         if (!mounted || !mapContainerRef.current) return;
         const googleMaps = (window as GoogleMapsWindow).google?.maps;
         if (!googleMaps) throw new Error("Google Maps not available");
-        const GoogleMapConstructor = await ensureGoogleMapConstructor(googleMaps);
+        const GoogleMapConstructor =
+          await ensureGoogleMapConstructor(googleMaps);
 
         if (!mapRef.current) {
           const prefersFinePointer =
@@ -592,7 +885,10 @@ export function GoogleMapSurface({
             mapOptions.styles = mapStyleFoodDay;
           }
 
-          mapRef.current = new GoogleMapConstructor(mapContainerRef.current, mapOptions);
+          mapRef.current = new GoogleMapConstructor(
+            mapContainerRef.current,
+            mapOptions,
+          );
 
           const emitViewportState = () => {
             const map = mapRef.current;
@@ -662,7 +958,8 @@ export function GoogleMapSurface({
           setMapReadyVersion((v) => v + 1);
           [0, 80, 240, 520].forEach((delay) => {
             window.setTimeout(() => {
-              if (mapRef.current) refreshGoogleMapLayout(googleMaps, mapRef.current);
+              if (mapRef.current)
+                refreshGoogleMapLayout(googleMaps, mapRef.current);
             }, delay);
           });
         } else {
@@ -702,7 +999,9 @@ export function GoogleMapSurface({
         setLoadError(null);
       } catch (error: any) {
         if (!mounted) return;
-        const msg = error?.message || "Unable to load Google Maps. Falling back to legacy map.";
+        const msg =
+          error?.message ||
+          "Unable to load Google Maps. Falling back to legacy map.";
         setLoadError(msg);
         if (!hasReportedFatalErrorRef.current) {
           hasReportedFatalErrorRef.current = true;
@@ -729,7 +1028,9 @@ export function GoogleMapSurface({
       mapRef.current.setCenter(center);
       return;
     }
-    if (hasMeaningfulCenterDelta({ lat: currentLat, lng: currentLng }, center)) {
+    if (
+      hasMeaningfulCenterDelta({ lat: currentLat, lng: currentLng }, center)
+    ) {
       mapRef.current.setCenter(center);
     }
   }, [center.lat, center.lng]);
@@ -742,7 +1043,12 @@ export function GoogleMapSurface({
 
   useEffect(() => {
     const googleMaps = (window as GoogleMapsWindow).google?.maps;
-    if (!googleMaps || !mapRef.current || !popupAnchor || !onPopupAnchorPositionRef.current) {
+    if (
+      !googleMaps ||
+      !mapRef.current ||
+      !popupAnchor ||
+      !onPopupAnchorPositionRef.current
+    ) {
       if (!popupAnchor) onPopupAnchorPositionRef.current?.(null);
       return;
     }
@@ -773,7 +1079,9 @@ export function GoogleMapSurface({
         marker.title || "",
         marker.subtitle || "",
         marker.parkingStatus || "",
-        (marker.parkedTrucks || []).map((truck) => `${truck.id || ""}:${truck.name}`).join(","),
+        (marker.parkedTrucks || [])
+          .map((truck) => `${truck.id || ""}:${truck.name}`)
+          .join(","),
       ].join("|");
 
       if (existing) {
@@ -859,9 +1167,11 @@ export function GoogleMapSurface({
     if (!googleMaps || !mapRef.current || mapReadyVersion === 0) return;
 
     const trafficCellColor = (source: MapTrafficCell["source"]) =>
-      source === "google_places" ? "#60a5fa"
-      : source === "supply_signal" ? "#ef4444"
-      : "#f97316";
+      source === "google_places"
+        ? "#60a5fa"
+        : source === "supply_signal"
+          ? "#ef4444"
+          : "#f97316";
 
     const usedIds = new Set<string>();
     trafficCells.forEach((cell) => {
@@ -873,7 +1183,12 @@ export function GoogleMapSurface({
         strokeOpacity: 0,
         strokeWeight: 0,
         fillColor: trafficCellColor(cell.source),
-        fillOpacity: cell.source === "google_places" ? 0.14 : cell.source === "supply_signal" ? 0.22 : 0.18,
+        fillOpacity:
+          cell.source === "google_places"
+            ? 0.14
+            : cell.source === "supply_signal"
+              ? 0.22
+              : 0.18,
       };
       if (existing) {
         existing.setCenter({ lat: cell.lat, lng: cell.lng });
@@ -881,15 +1196,22 @@ export function GoogleMapSurface({
         existing.setOptions(style);
         return;
       }
-      const circle = new googleMaps.Circle({ map: mapRef.current, center: { lat: cell.lat, lng: cell.lng }, radius, ...style });
+      const circle = new googleMaps.Circle({
+        map: mapRef.current,
+        center: { lat: cell.lat, lng: cell.lng },
+        radius,
+        ...style,
+      });
       trafficCircleRefs.current.set(cell.id, circle);
     });
 
-    Array.from(trafficCircleRefs.current.entries()).forEach(([id, instance]) => {
-      if (usedIds.has(id)) return;
-      instance.setMap(null);
-      trafficCircleRefs.current.delete(id);
-    });
+    Array.from(trafficCircleRefs.current.entries()).forEach(
+      ([id, instance]) => {
+        if (usedIds.has(id)) return;
+        instance.setMap(null);
+        trafficCircleRefs.current.delete(id);
+      },
+    );
   }, [trafficCells, mapReadyVersion]);
 
   // Road traffic layer
@@ -897,10 +1219,14 @@ export function GoogleMapSurface({
     const googleMaps = (window as GoogleMapsWindow).google?.maps;
     if (!googleMaps || !mapRef.current || mapReadyVersion === 0) return;
     if (!showRoadTrafficLayer) {
-      if (roadTrafficLayerRef.current) { roadTrafficLayerRef.current.setMap(null); roadTrafficLayerRef.current = null; }
+      if (roadTrafficLayerRef.current) {
+        roadTrafficLayerRef.current.setMap(null);
+        roadTrafficLayerRef.current = null;
+      }
       return;
     }
-    if (!roadTrafficLayerRef.current) roadTrafficLayerRef.current = new googleMaps.TrafficLayer();
+    if (!roadTrafficLayerRef.current)
+      roadTrafficLayerRef.current = new googleMaps.TrafficLayer();
     roadTrafficLayerRef.current.setMap(mapRef.current);
   }, [showRoadTrafficLayer, mapReadyVersion]);
 
@@ -911,12 +1237,17 @@ export function GoogleMapSurface({
         removeMarkerFromMap(instance),
       );
       markerRefs.current.clear();
-      Array.from(trafficCircleRefs.current.values()).forEach((i) => i.setMap(null));
+      Array.from(trafficCircleRefs.current.values()).forEach((i) =>
+        i.setMap(null),
+      );
       trafficCircleRefs.current.clear();
       markerSignatureRefs.current.clear();
       onMarkerHoverRef.current?.(null, null);
       onPopupAnchorPositionRef.current?.(null);
-      if (roadTrafficLayerRef.current) { roadTrafficLayerRef.current.setMap(null); roadTrafficLayerRef.current = null; }
+      if (roadTrafficLayerRef.current) {
+        roadTrafficLayerRef.current.setMap(null);
+        roadTrafficLayerRef.current = null;
+      }
       if (resizeObserverRef.current) {
         resizeObserverRef.current.disconnect();
         resizeObserverRef.current = null;
@@ -972,10 +1303,7 @@ export function GoogleMapSurface({
       {/* Cinematic grade over the live map; no bitmap overlay, map stays interactive. */}
       {isNightTheme && (
         <>
-          <div
-            aria-hidden="true"
-            className="ms-google-map-grade"
-          />
+          <div aria-hidden="true" className="ms-google-map-grade" />
           <style>{`
             .ms-google-map-canvas .gm-style > div:first-child {
               filter: saturate(1.04) contrast(1.04) brightness(1.08) sepia(0.04) hue-rotate(-3deg);

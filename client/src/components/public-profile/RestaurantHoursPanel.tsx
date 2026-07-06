@@ -23,7 +23,11 @@ function parseOpenStatus(openStatus: string | null): {
   return { isOpen: null, label: openStatus };
 }
 
-export function RestaurantHoursPanel({ profile }: { profile: PublicRestaurantProfile }) {
+export function RestaurantHoursPanel({
+  profile,
+}: {
+  profile: PublicRestaurantProfile;
+}) {
   if (profile.profileType === "truck") return null;
 
   const { isOpen, label: statusLabel } = parseOpenStatus(profile.openStatus);

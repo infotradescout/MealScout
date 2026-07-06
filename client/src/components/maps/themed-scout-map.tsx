@@ -176,21 +176,34 @@ export function ThemedScoutMap({
         (marker) =>
           Number.isFinite(marker.lat) &&
           Number.isFinite(marker.lng) &&
-          getMarkerDistanceMiles(frameLocation, marker) <= PREVIEW_FRAME_MARKER_MILES,
+          getMarkerDistanceMiles(frameLocation, marker) <=
+            PREVIEW_FRAME_MARKER_MILES,
       )
       .slice(0, 8);
     if (localMarkers.length > 0) {
-      const latValues = [frameLocation.lat, ...localMarkers.map((marker) => marker.lat)];
-      const lngValues = [frameLocation.lng, ...localMarkers.map((marker) => marker.lng)];
+      const latValues = [
+        frameLocation.lat,
+        ...localMarkers.map((marker) => marker.lat),
+      ];
+      const lngValues = [
+        frameLocation.lng,
+        ...localMarkers.map((marker) => marker.lng),
+      ];
       const farthestMiles = Math.max(
-        ...localMarkers.map((marker) => getMarkerDistanceMiles(frameLocation, marker)),
+        ...localMarkers.map((marker) =>
+          getMarkerDistanceMiles(frameLocation, marker),
+        ),
       );
       const targetZoom =
-        farthestMiles > 12 ? 10.6 :
-        farthestMiles > 6 ? 11.2 :
-        farthestMiles > 2.5 ? 12 :
-        farthestMiles > 0.9 ? 12.55 :
-        baseZoom;
+        farthestMiles > 12
+          ? 10.6
+          : farthestMiles > 6
+            ? 11.2
+            : farthestMiles > 2.5
+              ? 12
+              : farthestMiles > 0.9
+                ? 12.55
+                : baseZoom;
       map.easeTo({
         center: [
           (Math.min(...lngValues) + Math.max(...lngValues)) / 2,
@@ -218,7 +231,10 @@ export function ThemedScoutMap({
     const map = new maplibregl.Map({
       container: containerRef.current,
       style: mapStyle,
-      center: [frameStateRef.current.userLocation.lng, frameStateRef.current.userLocation.lat],
+      center: [
+        frameStateRef.current.userLocation.lng,
+        frameStateRef.current.userLocation.lat,
+      ],
       zoom: frameStateRef.current.zoom,
       pitch: 34,
       bearing: 9,
@@ -330,7 +346,10 @@ export function ThemedScoutMap({
   const markerKey = useMemo(
     () =>
       markers
-        .map((marker) => `${marker.id}:${marker.lat.toFixed(5)},${marker.lng.toFixed(5)}`)
+        .map(
+          (marker) =>
+            `${marker.id}:${marker.lat.toFixed(5)},${marker.lng.toFixed(5)}`,
+        )
         .join("|"),
     [markers],
   );
@@ -352,8 +371,13 @@ export function ThemedScoutMap({
     markerRefs.current = [];
 
     const KIND_ICONS: Record<string, string> = {
-      truck: "T", restaurant: "R",
-      parking: "H", event: "E", deal: "$", geo_ad: "◆", supplier: "S",
+      truck: "T",
+      restaurant: "R",
+      parking: "H",
+      event: "E",
+      deal: "$",
+      geo_ad: "◆",
+      supplier: "S",
     };
 
     markers.forEach((marker) => {
@@ -367,9 +391,10 @@ export function ThemedScoutMap({
         marker.title ? `${marker.title} pin` : "MealScout map pin",
       );
       const icon = KIND_ICONS[marker.kind || "truck"] ?? "·";
-      const truckBadge = (marker.parkedTrucks?.length || 0) > 0
-        ? `<span class="msm-map-pin__truck-badge" aria-hidden="true">T</span>`
-        : "";
+      const truckBadge =
+        (marker.parkedTrucks?.length || 0) > 0
+          ? `<span class="msm-map-pin__truck-badge" aria-hidden="true">T</span>`
+          : "";
       el.innerHTML = `
         <span class="msm-map-pin__drop" aria-hidden="true">
           <span class="msm-map-pin__icon">${icon}</span>
@@ -431,7 +456,10 @@ export function ThemedScoutMap({
 
       {!interactive && (
         <>
-          <div aria-hidden="true" className="msm-food-glow absolute inset-0 pointer-events-none">
+          <div
+            aria-hidden="true"
+            className="msm-food-glow absolute inset-0 pointer-events-none"
+          >
             <span className="msm-food-glow__spot msm-food-glow__spot--1" />
             <span className="msm-food-glow__spot msm-food-glow__spot--2" />
             <span className="msm-food-glow__spot msm-food-glow__spot--3" />

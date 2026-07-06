@@ -40,8 +40,10 @@ const buildPublicProfilePath = (input: {
   name: string;
 }) => {
   const slug = `${toSlug(input.name) || input.id}--${input.id}`;
-  if (input.profileType === "location") return `/location/${encodeURIComponent(slug)}`;
-  if (input.profileType === "supplier") return `/supplier/${encodeURIComponent(slug)}`;
+  if (input.profileType === "location")
+    return `/location/${encodeURIComponent(slug)}`;
+  if (input.profileType === "supplier")
+    return `/supplier/${encodeURIComponent(slug)}`;
   return `/restaurant/${encodeURIComponent(slug)}`;
 };
 
@@ -258,18 +260,28 @@ export function registerSeoRoutes(app: Express) {
 
       const anyRestaurantCity = new Set(
         restaurantRows
-          .map((row: any) => String(row.city || "").trim().toLowerCase())
+          .map((row: any) =>
+            String(row.city || "")
+              .trim()
+              .toLowerCase(),
+          )
           .filter(Boolean),
       );
       const truckRestaurantCity = new Set(
         restaurantRows
           .filter((row: any) => Boolean(row.isFoodTruck))
-          .map((row: any) => String(row.city || "").trim().toLowerCase())
+          .map((row: any) =>
+            String(row.city || "")
+              .trim()
+              .toLowerCase(),
+          )
           .filter(Boolean),
       );
 
       uniqueCityRows.forEach((city: any) => {
-        const cityName = String(city?.name || "").trim().toLowerCase();
+        const cityName = String(city?.name || "")
+          .trim()
+          .toLowerCase();
         if (!cityName) return;
         if (truckRestaurantCity.has(cityName)) {
           mergeUrl(
@@ -1054,10 +1066,7 @@ export function registerSeoRoutes(app: Express) {
   app.get("/ai.txt", async (_req, res) => {
     try {
       const baseUrl = resolveSitemapSiteUrl();
-      const lines = [
-        "MealScout",
-        `${baseUrl}/llms.txt`,
-      ].join("\n");
+      const lines = ["MealScout", `${baseUrl}/llms.txt`].join("\n");
       res.setHeader("Content-Type", "text/plain; charset=utf-8");
       res.setHeader("Cache-Control", "public, max-age=300, s-maxage=1800");
       res.send(lines);
