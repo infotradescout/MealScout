@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { Link, useLocation as useWouterLocation } from "wouter";
+import { createPortal } from "react-dom";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import {
   Bookmark,
@@ -30,6 +31,7 @@ import {
   Users,
   Utensils,
   User as UserIcon,
+  X,
 } from "lucide-react";
 
 import {
@@ -2450,6 +2452,8 @@ export default function ExplorePreview() {
   const [scoutSearchQuery, setScoutSearchQuery] = useState("");
   const [scoutSearchFilter, setScoutSearchFilter] =
     useState<ScoutSearchFilterId | null>(null);
+  const [resultsSheet, setResultsSheet] =
+    useState<ScoutResultsSheetData | null>(null);
   const [scoutSourceStatuses, setScoutSourceStatuses] = useState<
     Record<ScoutSourceStatusKey, number | null>
   >({
@@ -5171,9 +5175,16 @@ export default function ExplorePreview() {
                   }}
                 />
               )}
+              onOpenResultsSheet={setResultsSheet}
             />
           </ActiveScenePanel>
         )}
+        {resultsSheet ? (
+          <ScoutResultsSheet
+            data={resultsSheet}
+            onClose={() => setResultsSheet(null)}
+          />
+        ) : null}
       </main>
     </>
   );
@@ -5188,13 +5199,17 @@ function SectionHeader({
   linkHref,
   subtitle,
   itemCount,
+  onSeeAll,
 }: {
   title: string;
   linkHref: string;
   subtitle?: string;
   itemCount?: number;
+  onSeeAll?: () => void;
 }) {
   const showLink = itemCount === undefined || itemCount > 1;
+  const seeAllClassName =
+    "inline-flex w-fit shrink-0 items-center gap-1.5 rounded-full bg-orange-500/10 px-3 py-1.5 text-xs font-black uppercase tracking-[0.08em] text-orange-100 ring-1 ring-orange-200/20 transition-colors hover:bg-orange-500/16 sm:text-sm sm:normal-case sm:tracking-normal";
 
   return (
     <div className="mb-4 pr-5">
@@ -5205,12 +5220,19 @@ function SectionHeader({
           </h2>
         </div>
         {showLink ? (
-          <Link
-            href={linkHref}
-            className="inline-flex w-fit shrink-0 items-center gap-1.5 rounded-full bg-orange-500/10 px-3 py-1.5 text-xs font-black uppercase tracking-[0.08em] text-orange-100 ring-1 ring-orange-200/20 transition-colors hover:bg-orange-500/16 sm:text-sm sm:normal-case sm:tracking-normal"
-          >
-            See All <ChevronRight className="h-4 w-4" aria-hidden="true" />
-          </Link>
+          onSeeAll ? (
+            <button
+              type="button"
+              onClick={onSeeAll}
+              className={seeAllClassName}
+            >
+              See All <ChevronRight className="h-4 w-4" aria-hidden="true" />
+            </button>
+          ) : (
+            <Link href={linkHref} className={seeAllClassName}>
+              See All <ChevronRight className="h-4 w-4" aria-hidden="true" />
+            </Link>
+          )
         ) : null}
       </div>
       {subtitle ? (
@@ -5497,12 +5519,18 @@ function getScoutRailCardKey(card: ScoutRailRenderCard): string {
   return "card";
 }
 
+function isScoutSearchHref(href: string): boolean {
+  return href === "/search" || href.startsWith("/search?");
+}
+
 function ScoutHorizontalCategoryRail({
   row,
   renderCard,
+  onOpenAll,
 }: {
   row: ScoutHorizontalRailDefinition;
   renderCard: (card: ScoutRailRenderCard) => ReactNode;
+  onOpenAll?: (row: ScoutHorizontalRailDefinition) => void;
 }) {
   const rowMeta = scoutHorizontalRowMeta.get(row.id);
   if (!row.cards.length || !rowMeta?.hideWhenEmpty) return null;
@@ -5519,6 +5547,11 @@ function ScoutHorizontalCategoryRail({
         linkHref={row.linkHref}
         subtitle={row.subtitle}
         itemCount={row.cards.length}
+        onSeeAll={
+          onOpenAll && isScoutSearchHref(row.linkHref)
+            ? () => onOpenAll(row)
+            : undefined
+        }
       />
       <div
         className="w-full max-w-full overflow-x-auto overscroll-x-contain atmo-hide-scrollbar -mr-1"
@@ -5548,6 +5581,80 @@ function ScoutHorizontalCategoryRail({
         </div>
       ) : null}
     </section>
+  );
+}
+
+/* ============================================================
+   SCOUT RESULTS SHEET — full-screen "See All" overlay.
+   Stays inside Scout instead of navigating to a separate page;
+   reuses whatever data + card renderer the caller already has,
+   just without the horizontal-rail's item cap.
+   ============================================================ */
+
+export type ScoutResultsSheetData = {
+  title: string;
+  subtitle?: string;
+  items: unknown[];
+  renderItem: (item: any, index: number) => ReactNode;
+  getKey?: (item: any, index: number) => string;
+};
+
+function ScoutResultsSheet({
+  data,
+  onClose,
+}: {
+  data: ScoutResultsSheetData;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, []);
+
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
+    <div className="fixed inset-0 z-[60] flex flex-col bg-[#0b0704]">
+      <div className="flex items-center gap-3 border-b border-white/10 px-4 py-3 pt-[calc(env(safe-area-inset-top,0px)+0.75rem)]">
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/8 text-white ring-1 ring-white/10 active:bg-white/12"
+        >
+          <X className="h-4 w-4" aria-hidden="true" />
+        </button>
+        <div className="min-w-0">
+          <h2 className="truncate text-lg font-black text-white">
+            {data.title}
+          </h2>
+          {data.subtitle ? (
+            <p className="truncate text-xs font-semibold text-white/58">
+              {data.subtitle}
+            </p>
+          ) : null}
+        </div>
+      </div>
+      <div className="flex-1 overflow-y-auto px-4 pb-[calc(env(safe-area-inset-bottom,0px)+1rem)] pt-4">
+        {data.items.length === 0 ? (
+          <p className="mt-10 text-center text-sm text-white/50">
+            Nothing here yet.
+          </p>
+        ) : (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {data.items.map((item, index) => (
+              <div key={data.getKey ? data.getKey(item, index) : index}>
+                {data.renderItem(item, index)}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -6219,6 +6326,7 @@ function ActiveSceneContent({
   scoutSearchMode,
   scoutSearchIntent,
   renderSearchDock,
+  onOpenResultsSheet,
 }: {
   laneId: ScoutSceneLaneId;
   sceneMixedFeedItems: CravingBoardItem[];
@@ -6268,6 +6376,7 @@ function ActiveSceneContent({
   scoutSearchMode: boolean;
   scoutSearchIntent: ScoutSearchIntent;
   renderSearchDock?: () => ReactNode;
+  onOpenResultsSheet?: (data: ScoutResultsSheetData) => void;
 }) {
   const isLowActivityLane = scoutActivityMode === "low_activity";
   if (laneId === "for_you") {
@@ -6998,14 +7107,32 @@ function ActiveSceneContent({
               Boolean(item.imageUrl) ||
               (typeof item.priceCents === "number" && item.priceCents >= 500),
           );
-          const nearbyPicks = (
-            strongCandidates.length > 0 ? strongCandidates : localMenuItems
-          ).slice(0, 2);
+          const nearbyPicksAll =
+            strongCandidates.length > 0 ? strongCandidates : localMenuItems;
+          const nearbyPicks = nearbyPicksAll.slice(0, 2);
           return nearbyPicks.length > 0 ? (
             <section className="px-5 pt-2">
               <SectionHeader
                 title="Nearby picks"
                 linkHref={DISCOVERY_LAYERS.menuItems.href}
+                itemCount={nearbyPicksAll.length}
+                onSeeAll={
+                  onOpenResultsSheet
+                    ? () =>
+                        onOpenResultsSheet({
+                          title: "Nearby picks",
+                          items: nearbyPicksAll,
+                          renderItem: (item, index) => (
+                            <NearbyPickCard
+                              item={item}
+                              position={index}
+                              currentUserId={currentUserId}
+                            />
+                          ),
+                          getKey: (item) => String(item.id),
+                        })
+                    : undefined
+                }
               />
               <div className="grid grid-cols-2 gap-3">
                 {nearbyPicks.map((item, index) => (
@@ -7025,6 +7152,20 @@ function ActiveSceneContent({
             key={row.id}
             row={row}
             renderCard={renderScoutRailCard}
+            onOpenAll={
+              onOpenResultsSheet
+                ? (openedRow) =>
+                    onOpenResultsSheet({
+                      title: openedRow.title,
+                      subtitle: openedRow.subtitle,
+                      items: openedRow.cards,
+                      renderItem: (card: ScoutRailRenderCard) =>
+                        renderScoutRailCard(card),
+                      getKey: (card: ScoutRailRenderCard, index: number) =>
+                        `${card.cardType}-${getScoutRailCardKey(card)}-${index}`,
+                    })
+                : undefined
+            }
           />
         ))}
       </>
@@ -7069,6 +7210,7 @@ function ActiveSceneContent({
         <LocalActivityRail
           mode={scoutActivityMode}
           items={visibleLocalActivityItems}
+          onOpenResultsSheet={onOpenResultsSheet}
         />
       ) : null}
 
@@ -7079,6 +7221,24 @@ function ActiveSceneContent({
             linkHref={DISCOVERY_LAYERS.foodTrucks.href}
             subtitle={DISCOVERY_LAYERS.foodTrucks.subtitle}
             itemCount={visibleTrucksServingNow.length}
+            onSeeAll={
+              onOpenResultsSheet
+                ? () =>
+                    onOpenResultsSheet({
+                      title: laneFoodTrucksTitle,
+                      subtitle: DISCOVERY_LAYERS.foodTrucks.subtitle,
+                      items: visibleTrucksServingNow,
+                      renderItem: (t) => (
+                        <TruckCard
+                          truck={t}
+                          onSelect={selectLiveTruck}
+                          currentUserId={currentUserId}
+                        />
+                      ),
+                      getKey: (t) => String(t.id),
+                    })
+                : undefined
+            }
           />
           {liveTrucksLoading && visibleTrucksServingNow.length === 0 ? (
             <HorizontalSkeletonRow count={3} width={200} />
@@ -7113,6 +7273,28 @@ function ActiveSceneContent({
             linkHref={DISCOVERY_LAYERS.restaurants.href}
             subtitle={restaurantsRailSubtitle}
             itemCount={visibleOpenRestaurants.length}
+            onSeeAll={
+              onOpenResultsSheet
+                ? () =>
+                    onOpenResultsSheet({
+                      title: laneRestaurantsTitle,
+                      subtitle: restaurantsRailSubtitle,
+                      items: visibleOpenRestaurants,
+                      renderItem: (r) => (
+                        <NearbyRestaurantCard
+                          restaurant={r}
+                          menuPreview={
+                            menuPreviewByRestaurantId.get(String(r.id)) ?? []
+                          }
+                          isSignedIn={isSignedIn}
+                          currentUserId={currentUserId}
+                          relationshipSnapshot={restaurantRelationships}
+                        />
+                      ),
+                      getKey: (r) => String(r.id),
+                    })
+                : undefined
+            }
           />
           {nearbyRestaurantsLoading && visibleOpenRestaurants.length === 0 ? (
             <HorizontalSkeletonRow count={3} width={200} />
@@ -7191,6 +7373,24 @@ function ActiveSceneContent({
             linkHref={DISCOVERY_LAYERS.menuItems.href}
             subtitle="Fresh menu items and recent local updates."
             itemCount={localMenuItems.length}
+            onSeeAll={
+              onOpenResultsSheet
+                ? () =>
+                    onOpenResultsSheet({
+                      title: "New Menus",
+                      subtitle: "Fresh menu items and recent local updates.",
+                      items: localMenuItems,
+                      renderItem: (item, index) => (
+                        <LocalMenuItemCard
+                          item={item}
+                          position={index}
+                          currentUserId={currentUserId}
+                        />
+                      ),
+                      getKey: (item) => String(item.id),
+                    })
+                : undefined
+            }
           />
           <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
             <ul className="flex gap-4 pr-5" role="list" aria-label="New menus">
@@ -7219,6 +7419,18 @@ function ActiveSceneContent({
             linkHref={DISCOVERY_LAYERS.restaurants.href}
             subtitle={moreRailSubtitle}
             itemCount={visibleMoreFoodRestaurants.length}
+            onSeeAll={
+              onOpenResultsSheet
+                ? () =>
+                    onOpenResultsSheet({
+                      title: laneMoreTitle,
+                      subtitle: moreRailSubtitle,
+                      items: visibleMoreFoodRestaurants,
+                      renderItem: (r) => <SavedRestaurantCard restaurant={r} />,
+                      getKey: (r) => String(r.id),
+                    })
+                : undefined
+            }
           />
           <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
             <ul
@@ -7246,6 +7458,19 @@ function ActiveSceneContent({
             linkHref={DISCOVERY_LAYERS.restaurants.href}
             subtitle="Places nearby that are closed right now but worth checking soon."
             itemCount={openingLaterRestaurants.length}
+            onSeeAll={
+              onOpenResultsSheet
+                ? () =>
+                    onOpenResultsSheet({
+                      title: "Opening Later",
+                      subtitle:
+                        "Places nearby that are closed right now but worth checking soon.",
+                      items: openingLaterRestaurants,
+                      renderItem: (r) => <SavedRestaurantCard restaurant={r} />,
+                      getKey: (r) => String(r.id),
+                    })
+                : undefined
+            }
           />
           <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
             <ul
@@ -7742,9 +7967,11 @@ function CollapsedMapPinCard({
 function LocalActivityRail({
   mode,
   items,
+  onOpenResultsSheet,
 }: {
   mode: ScoutActivityMode;
   items: LocalActivityItem[];
+  onOpenResultsSheet?: (data: ScoutResultsSheetData) => void;
 }) {
   if (items.length === 0) return null;
   const isCompact = mode === "high_activity";
@@ -7758,6 +7985,20 @@ function LocalActivityRail({
         linkHref="/search"
         subtitle={getActivityRailSubtitle(mode)}
         itemCount={items.length}
+        onSeeAll={
+          onOpenResultsSheet
+            ? () =>
+                onOpenResultsSheet({
+                  title: getActivityRailTitle(mode),
+                  subtitle: getActivityRailSubtitle(mode),
+                  items,
+                  renderItem: (item: LocalActivityItem) => (
+                    <LocalActivityCard item={item} />
+                  ),
+                  getKey: (item: LocalActivityItem) => String(item.id),
+                })
+            : undefined
+        }
       />
       <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
         <ul
