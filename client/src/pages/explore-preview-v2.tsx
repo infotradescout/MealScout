@@ -6764,6 +6764,14 @@ function ActiveSceneContent({
       primaryFirstScreenDecision?.sourceRowId === "popular_dishes"
         ? "More Dishes Nearby"
         : DISCOVERY_LAYERS.menuItems.title;
+    const foodTrucksTodayRailTitle =
+      primaryFirstScreenDecision?.sourceRowId === "food_trucks_today"
+        ? "More Trucks Nearby"
+        : "Food Trucks Today";
+    const foodTrucksTodayRailSubtitle =
+      primaryFirstScreenDecision?.sourceRowId === "food_trucks_today"
+        ? "Other scheduled trucks and open-now options from real local data."
+        : "Scheduled trucks and open-now options from real local data.";
     const firstScreenSuppressedBusinessKey =
       primaryFirstScreenDecision?.cardType === "truck" ||
       primaryFirstScreenDecision?.cardType === "restaurant"
@@ -6883,9 +6891,8 @@ function ActiveSceneContent({
         },
         {
           id: "food_trucks_today",
-          title: "Food Trucks Today",
-          subtitle:
-            "Scheduled trucks and open-now options from real local data.",
+          title: foodTrucksTodayRailTitle,
+          subtitle: foodTrucksTodayRailSubtitle,
           linkHref: DISCOVERY_LAYERS.foodTrucks.href,
           cards: truckRailCards(forYouTruckItems),
           className: railSectionClass,
