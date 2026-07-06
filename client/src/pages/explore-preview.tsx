@@ -4225,6 +4225,17 @@ export default function ExplorePreview() {
             ) : null}
           </div>
 
+          {sheetState === "fullMap" && (
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0 z-[2]"
+              style={{
+                background:
+                  "linear-gradient(180deg, rgba(18,8,5,0.42) 0%, rgba(18,8,5,0.14) 30%, rgba(18,8,5,0.18) 68%, rgba(18,8,5,0.56) 100%), radial-gradient(72% 48% at 24% 26%, rgba(18,8,5,0.46), rgba(18,8,5,0.08) 62%, transparent 100%)",
+              }}
+            />
+          )}
+
           {/* Premium overlay frame:
               - Soft top vignette so the controls read cleanly without
                 covering important map labels.
@@ -8226,7 +8237,7 @@ function LiveTruckMapCard({
 
   return (
     <div
-      className="absolute left-4 right-4 bottom-[calc(env(safe-area-inset-bottom)+7.25rem)] z-30 rounded-3xl bg-[#120805]/88 p-4 text-white ring-1 ring-orange-300/40 backdrop-blur-xl"
+      className="absolute left-4 right-4 bottom-[calc(env(safe-area-inset-bottom)+7.25rem)] z-30 rounded-3xl bg-[rgba(18,8,5,0.94)] p-4 text-white ring-1 ring-orange-300/40 backdrop-blur-xl"
       style={{ boxShadow: "0 22px 70px rgba(0,0,0,0.62), 0 0 24px rgba(255,90,47,0.18)" }}
     >
       <div className="flex items-start justify-between gap-3">
@@ -8265,14 +8276,14 @@ function LiveTruckMapCard({
         </a>
         <Link
           href={getTruckProfilePath(truck)}
-          className="inline-flex flex-col items-center justify-center gap-1 rounded-2xl bg-white/8 px-2 py-3 text-center text-xs font-black text-white ring-1 ring-white/10"
+          className="inline-flex flex-col items-center justify-center gap-1 rounded-2xl bg-white/10 px-2 py-3 text-center text-xs font-black text-white ring-1 ring-white/10"
         >
           <Flame className="h-4 w-4 text-orange-300" aria-hidden="true" />
           Profile
         </Link>
         <Link
           href={`${getTruckProfilePath(truck)}?message=1`}
-          className="inline-flex flex-col items-center justify-center gap-1 rounded-2xl bg-white/8 px-2 py-3 text-center text-xs font-black text-white ring-1 ring-white/10"
+          className="inline-flex flex-col items-center justify-center gap-1 rounded-2xl bg-white/10 px-2 py-3 text-center text-xs font-black text-white ring-1 ring-white/10"
         >
           <MessageCircle className="h-4 w-4 text-orange-300" aria-hidden="true" />
           Message
@@ -8326,7 +8337,7 @@ function MapPlaceCard({
     return (
       <div
         data-scout-map-card-kind="host"
-        className="absolute left-3 right-3 bottom-[calc(env(safe-area-inset-bottom)+7.25rem)] z-30 rounded-2xl bg-[#1b1008]/94 p-3 text-white ring-1 ring-amber-300/45 backdrop-blur-xl"
+        className="absolute left-3 right-3 bottom-[calc(env(safe-area-inset-bottom)+7.25rem)] z-30 rounded-2xl bg-[rgba(27,16,8,0.96)] p-3 text-white ring-1 ring-amber-300/45 backdrop-blur-xl"
         style={{ boxShadow: "0 18px 54px rgba(0,0,0,0.58), 0 0 22px rgba(245,158,11,0.2)" }}
       >
         <div className="flex items-start gap-3">
@@ -8415,7 +8426,7 @@ function MapPlaceCard({
             href={directionsUrl}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-white/8 px-3 text-center text-xs font-black text-white ring-1 ring-white/10"
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-white/10 px-3 text-center text-xs font-black text-white ring-1 ring-white/10"
           >
             Route
             <Navigation2 className="h-4 w-4 text-amber-200" aria-hidden="true" />
@@ -8427,7 +8438,7 @@ function MapPlaceCard({
 
   return (
     <div
-      className="absolute left-4 right-4 bottom-[calc(env(safe-area-inset-bottom)+7.25rem)] z-30 rounded-3xl bg-[#120805]/88 p-4 text-white ring-1 ring-orange-300/40 backdrop-blur-xl"
+      className="absolute left-4 right-4 bottom-[calc(env(safe-area-inset-bottom)+7.25rem)] z-30 rounded-3xl bg-[rgba(18,8,5,0.94)] p-4 text-white ring-1 ring-orange-300/40 backdrop-blur-xl"
       style={{ boxShadow: "0 22px 70px rgba(0,0,0,0.62), 0 0 24px rgba(255,90,47,0.18)" }}
     >
       <div className="flex items-start justify-between gap-3">
@@ -8462,7 +8473,7 @@ function MapPlaceCard({
           href={directionsUrl}
           target="_blank"
           rel="noreferrer"
-          className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white/8 px-3 py-3 text-center text-xs font-black text-white ring-1 ring-white/10"
+          className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white/10 px-3 py-3 text-center text-xs font-black text-white ring-1 ring-white/10"
         >
           Directions
           <Navigation2 className="h-4 w-4 text-orange-300" aria-hidden="true" />
@@ -8600,7 +8611,7 @@ function ScoutMapHud({
   return (
     <div className="pointer-events-none absolute left-3 right-3 top-[calc(env(safe-area-inset-top)+4.25rem)] z-20 sm:left-4 sm:right-auto sm:w-[360px]">
       <div
-        className="pointer-events-auto rounded-2xl bg-[#120805]/88 p-3 text-white ring-1 ring-orange-200/40 backdrop-blur-xl"
+        className="pointer-events-auto rounded-2xl bg-[rgba(18,8,5,0.94)] p-3 text-white ring-1 ring-orange-200/40 backdrop-blur-xl"
         style={{ boxShadow: "0 18px 54px rgba(0,0,0,0.52), 0 0 26px rgba(255,90,47,0.2)" }}
       >
         <div className="mb-3 flex items-center justify-between gap-3 border-b border-white/10 pb-3">
@@ -8640,7 +8651,7 @@ function ScoutMapHud({
             <button
               type="button"
               onClick={() => setIsExpanded((value) => !value)}
-              className="rounded-full bg-white/8 px-3 py-2 text-xs font-black text-orange-100 ring-1 ring-orange-200/20 transition-colors hover:bg-white/12"
+              className="rounded-full bg-white/10 px-3 py-2 text-xs font-black text-orange-100 ring-1 ring-orange-200/20 transition-colors hover:bg-white/15"
               aria-expanded={isExpanded}
             >
               {isExpanded ? "Less" : "Details"}
@@ -8674,7 +8685,7 @@ function ScoutMapHud({
           </div>
         )}
 
-        <div className="mt-3 flex items-center justify-between gap-2 rounded-2xl bg-white/7 px-3 py-2 ring-1 ring-orange-200/10">
+        <div className="mt-3 flex items-center justify-between gap-2 rounded-2xl bg-white/10 px-3 py-2 ring-1 ring-orange-200/10">
           <span className="text-xs font-bold text-white/72">
             Radius
           </span>
@@ -8702,7 +8713,7 @@ function ScoutMapHud({
         </div>
 
         {isExpanded && localActivityCount === 0 ? (
-          <div className="mt-3 rounded-2xl bg-white/7 px-3 py-2 text-xs text-white/72 ring-1 ring-white/10">
+          <div className="mt-3 rounded-2xl bg-white/10 px-3 py-2 text-xs text-white/72 ring-1 ring-white/10">
             No nearby pins right here yet. Pan the map or widen discovery from the feed below.
           </div>
         ) : null}
@@ -8713,7 +8724,7 @@ function ScoutMapHud({
 
 function MapHudCount({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-xl bg-white/7 px-2 py-2 ring-1 ring-white/10">
+    <div className="rounded-xl bg-white/10 px-2 py-2 ring-1 ring-white/10">
       <p className="text-base font-black text-orange-200">{value}</p>
       <p className="text-[9px] font-bold uppercase tracking-wide text-white/48">{label}</p>
     </div>
