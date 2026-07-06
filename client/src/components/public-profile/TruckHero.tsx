@@ -300,7 +300,7 @@ export function TruckHero({ profile, safeCtas }: TruckHeroProps) {
             <p className="font-semibold text-white/88">
               Own this truck? Add menu, schedule, logo, or hours.
             </p>
-            <a href="/claim-truck" className="mt-1 inline-flex font-semibold text-orange-200 hover:text-orange-100">
+            <a href="/claim-business" className="mt-1 inline-flex font-semibold text-orange-200 hover:text-orange-100">
               Claim or update this profile
             </a>
           </div>

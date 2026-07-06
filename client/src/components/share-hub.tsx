@@ -47,7 +47,7 @@ const BASE_ITEMS: ShareHubItem[] = [
     key: "truck",
     title: "Truck",
     description: "For food truck owners to claim and launch their profile.",
-    href: "/claim-truck",
+    href: "/claim-business",
     audience: "Food Truck Owners",
     priority: 3,
     outreachText: "Claim your food truck profile: ",

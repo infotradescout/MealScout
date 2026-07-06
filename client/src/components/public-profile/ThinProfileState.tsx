@@ -56,7 +56,7 @@ export function ThinProfileState({
     .find(Boolean);
 
   const claimHref =
-    profile.profileType === "truck" ? "/claim-truck" : "/claim-truck";
+    profile.profileType === "truck" ? "/claim-business" : "/claim-business";
 
   return (
     <div className="flex flex-col items-center gap-6 py-8 px-4 text-center">

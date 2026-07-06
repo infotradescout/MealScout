@@ -147,10 +147,10 @@ export function PersonalizedRelatedRail({
             </a>
           ) : null}
           <a
-            href="/claim-truck"
+            href="/claim-business"
             className="rounded-xl border border-white/10 bg-[#0f0d0b] px-3 py-2.5 text-sm text-white/80 hover:bg-white/5"
           >
-            Claim a truck
+            Claim a business
           </a>
           <a
             href="/restaurant-signup?businessType=food_truck"

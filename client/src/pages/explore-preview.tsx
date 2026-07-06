@@ -4227,7 +4227,7 @@ export default function ExplorePreview() {
               className="pointer-events-none absolute inset-0 z-[2]"
               style={{
                 background:
-                  "linear-gradient(90deg, rgba(18,8,5,0.44) 0%, rgba(18,8,5,0.16) 30%, rgba(18,8,5,0.02) 64%, rgba(18,8,5,0.12) 100%), linear-gradient(180deg, rgba(18,8,5,0.12) 0%, transparent 34%, rgba(18,8,5,0.32) 100%)",
+                  "linear-gradient(90deg, rgba(18,8,5,0.1) 0%, rgba(18,8,5,0.04) 28%, rgba(18,8,5,0) 62%, rgba(18,8,5,0.03) 100%), linear-gradient(180deg, rgba(18,8,5,0.03) 0%, transparent 38%, rgba(18,8,5,0.08) 100%)",
               }}
             />
           )}
@@ -4262,7 +4262,7 @@ export default function ExplorePreview() {
               type="button"
               onClick={collapseScoutMap}
               aria-label="Collapse map and return to discover"
-              className="absolute z-30 right-4 top-[calc(env(safe-area-inset-top)+0.75rem)] inline-flex h-12 items-center gap-2 rounded-full bg-[rgba(18,8,5,0.9)] px-4 font-black text-orange-50 ring-1 ring-orange-300/45 backdrop-blur-md transition-colors hover:bg-[rgba(27,16,8,0.96)]"
+              className="absolute z-30 right-4 top-[calc(env(safe-area-inset-top)+0.75rem)] inline-flex h-12 items-center gap-2 rounded-full bg-[rgba(52,33,20,0.84)] px-4 font-black text-orange-50 ring-1 ring-orange-200/55 backdrop-blur-md transition-colors hover:bg-[rgba(62,40,24,0.9)]"
               style={{
                 boxShadow: "0 14px 36px rgba(0,0,0,0.48), 0 0 18px rgba(255,90,47,0.16)",
               }}
@@ -8233,7 +8233,7 @@ function LiveTruckMapCard({
 
   return (
     <div
-      className="absolute left-4 right-4 bottom-[calc(env(safe-area-inset-bottom)+7.25rem)] z-30 rounded-3xl bg-[rgba(18,8,5,0.94)] p-4 text-white ring-1 ring-orange-300/40 backdrop-blur-xl"
+      className="absolute left-4 right-4 bottom-[calc(env(safe-area-inset-bottom)+7.25rem)] z-30 rounded-3xl bg-[rgba(46,30,18,0.84)] p-4 text-white ring-1 ring-orange-200/50 backdrop-blur-xl"
       style={{ boxShadow: "0 22px 70px rgba(0,0,0,0.62), 0 0 24px rgba(255,90,47,0.18)" }}
     >
       <div className="flex items-start justify-between gap-3">
@@ -8434,7 +8434,7 @@ function MapPlaceCard({
 
   return (
     <div
-      className="absolute left-4 right-4 bottom-[calc(env(safe-area-inset-bottom)+7.25rem)] z-30 rounded-3xl bg-[rgba(18,8,5,0.94)] p-4 text-white ring-1 ring-orange-300/40 backdrop-blur-xl"
+      className="absolute left-4 right-4 bottom-[calc(env(safe-area-inset-bottom)+7.25rem)] z-30 rounded-3xl bg-[rgba(46,30,18,0.84)] p-4 text-white ring-1 ring-orange-200/50 backdrop-blur-xl"
       style={{ boxShadow: "0 22px 70px rgba(0,0,0,0.62), 0 0 24px rgba(255,90,47,0.18)" }}
     >
       <div className="flex items-start justify-between gap-3">
@@ -8607,10 +8607,10 @@ function ScoutMapHud({
   return (
     <div className="pointer-events-none absolute left-3 right-3 top-[calc(env(safe-area-inset-top)+4.25rem)] z-20 sm:left-4 sm:right-auto sm:w-[360px]">
       <div
-        className="pointer-events-auto rounded-2xl bg-[rgba(18,8,5,0.94)] p-3 text-white ring-1 ring-orange-200/40 backdrop-blur-xl"
+        className="pointer-events-auto rounded-2xl bg-[rgba(46,30,18,0.84)] p-3 text-white ring-1 ring-orange-200/52 backdrop-blur-xl"
         style={{ boxShadow: "0 18px 54px rgba(0,0,0,0.52), 0 0 26px rgba(255,90,47,0.2)" }}
       >
-        <div className="mb-3 flex items-center justify-between gap-3 border-b border-white/10 pb-3">
+        <div className="mb-3 flex items-center justify-between gap-3 border-b border-white/18 pb-3">
           <div className="flex min-w-0 items-center gap-2">
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-orange-500/15 ring-1 ring-orange-200/30">
               <img
@@ -8639,7 +8639,7 @@ function ScoutMapHud({
             <h2 className="truncate text-base font-black text-orange-50">
               {locationLabel}
             </h2>
-            <p className="text-[11px] font-semibold text-white/58">
+            <p className="text-[11px] font-semibold text-white/78">
               {sceneLine}
             </p>
           </div>
@@ -8647,7 +8647,7 @@ function ScoutMapHud({
             <button
               type="button"
               onClick={() => setIsExpanded((value) => !value)}
-              className="rounded-full bg-white/10 px-3 py-2 text-xs font-black text-orange-100 ring-1 ring-orange-200/20 transition-colors hover:bg-white/15"
+              className="rounded-full bg-white/18 px-3 py-2 text-xs font-black text-orange-50 ring-1 ring-orange-200/28 transition-colors hover:bg-white/24"
               aria-expanded={isExpanded}
             >
               {isExpanded ? "Less" : "Details"}
@@ -8665,7 +8665,7 @@ function ScoutMapHud({
 
         {isExpanded && (
           <div className="mt-3">
-            <p className="text-xs text-white/62">
+            <p className="text-xs text-white/76">
               Tap the glowing pins to jump into what's cooking near you right now.
             </p>
             <div className="mt-3 grid grid-cols-4 gap-2 text-center">
@@ -8681,7 +8681,7 @@ function ScoutMapHud({
           </div>
         )}
 
-        <div className="mt-3 flex items-center justify-between gap-2 rounded-2xl bg-white/10 px-3 py-2 ring-1 ring-orange-200/10">
+        <div className="mt-3 flex items-center justify-between gap-2 rounded-2xl bg-white/16 px-3 py-2 ring-1 ring-orange-200/18">
           <span className="text-xs font-bold text-white/72">
             Radius
           </span>

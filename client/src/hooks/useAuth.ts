@@ -31,7 +31,7 @@ function clearOAuthCompletionParams() {
 
 function extractPathAffiliateRef(pathname: string): string | null {
   const match = pathname.match(
-    /^\/(customer-signup|claim-truck|directory|scout)\/([^/?#\/]+)\/?$/i,
+    /^\/(customer-signup|claim-business|claim-truck|directory|scout)\/([^/?#\/]+)\/?$/i,
   );
   if (!match) return null;
   try {

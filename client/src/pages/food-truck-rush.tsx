@@ -822,7 +822,7 @@ function FoodTruckRush() {
                     </Link>
                   </Button>
                   <Button asChild variant="outline">
-                    <Link href="/claim-truck">
+                    <Link href="/claim-business">
                       <Truck aria-hidden="true" />
                       Claim My Food Truck
                     </Link>

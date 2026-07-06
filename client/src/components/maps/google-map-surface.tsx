@@ -978,7 +978,7 @@ export function GoogleMapSurface({
           />
           <style>{`
             .ms-google-map-canvas .gm-style > div:first-child {
-              filter: saturate(1.05) contrast(1.08) brightness(0.98) sepia(0.08) hue-rotate(-6deg);
+              filter: saturate(1.04) contrast(1.04) brightness(1.08) sepia(0.04) hue-rotate(-3deg);
             }
             .ms-google-map-canvas .gm-style-cc,
             .ms-google-map-canvas a[href^="https://maps.google.com/maps"] {
@@ -991,24 +991,24 @@ export function GoogleMapSurface({
               z-index: 1;
               mix-blend-mode: normal;
               background:
-                linear-gradient(90deg, rgba(26, 9, 3, 0.16), rgba(3, 9, 8, 0.02) 38%, rgba(26, 9, 3, 0.12)),
-                radial-gradient(circle at 58% 47%, rgba(255, 112, 58, 0.08), transparent 25%),
-                radial-gradient(circle at 76% 18%, rgba(255, 168, 86, 0.045), transparent 27%),
-                radial-gradient(circle at 12% 72%, rgba(255, 132, 64, 0.045), transparent 26%);
+                linear-gradient(90deg, rgba(26, 9, 3, 0.08), rgba(3, 9, 8, 0.01) 38%, rgba(26, 9, 3, 0.06)),
+                radial-gradient(circle at 58% 47%, rgba(255, 112, 58, 0.04), transparent 25%),
+                radial-gradient(circle at 76% 18%, rgba(255, 168, 86, 0.025), transparent 27%),
+                radial-gradient(circle at 12% 72%, rgba(255, 132, 64, 0.025), transparent 26%);
               background-size:
                 100% 100%,
                 100% 100%,
                 100% 100%,
                 100% 100%;
-              opacity: 0.42;
+              opacity: 0.2;
             }
             .ms-google-map-grade::after {
               content: "";
               position: absolute;
               inset: 0;
               background:
-                radial-gradient(ellipse at 50% 46%, transparent 0%, rgba(0, 0, 0, 0) 58%, rgba(0, 0, 0, 0.34) 100%),
-                linear-gradient(180deg, rgba(9, 4, 2, 0.06) 0%, rgba(3, 4, 5, 0) 44%, rgba(3, 4, 5, 0.16) 100%);
+                radial-gradient(ellipse at 50% 46%, transparent 0%, rgba(0, 0, 0, 0) 62%, rgba(0, 0, 0, 0.14) 100%),
+                linear-gradient(180deg, rgba(9, 4, 2, 0.03) 0%, rgba(3, 4, 5, 0) 44%, rgba(3, 4, 5, 0.08) 100%);
               mix-blend-mode: normal;
             }
           `}</style>

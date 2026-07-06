@@ -1889,7 +1889,7 @@ function RelatedLocalDiscovery({
           Food trucks today
         </a>
         <a
-          href="/claim-truck"
+          href="/claim-business"
           className="rounded-md border border-white/10 px-3 py-2 text-white/85 hover:bg-white/10"
         >
           Claim or update a truck
@@ -2229,7 +2229,7 @@ export default function PublicProfilePage() {
             <Link href="/scout" className="text-white/75 hover:text-white">
               Scout trucks
             </Link>
-            <Link href="/claim-truck" className="text-orange-200 hover:text-orange-100">
+            <Link href="/claim-business" className="text-orange-200 hover:text-orange-100">
               Claim or update
             </Link>
           </div>
@@ -2485,7 +2485,7 @@ export default function PublicProfilePage() {
             <Link href="/scout" className="hover:text-white">
               Scout trucks
             </Link>
-            <Link href="/claim-truck" className="hover:text-white">
+            <Link href="/claim-business" className="hover:text-white">
               Business owner?
             </Link>
           </div>

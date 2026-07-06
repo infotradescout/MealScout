@@ -1010,7 +1010,7 @@ export function registerSeoRoutes(app: Express) {
         `${baseUrl}/for-events`,
         `${baseUrl}/scout`,
         `${baseUrl}/restaurant-signup`,
-        `${baseUrl}/claim-truck`,
+        `${baseUrl}/claim-business`,
         `${baseUrl}/for-hosts`,
         `${baseUrl}/host-location-partner`,
         `${baseUrl}/map`,

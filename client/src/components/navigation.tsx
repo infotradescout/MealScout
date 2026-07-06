@@ -338,7 +338,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     basePrimary[1],
     basePrimary[2],
     lane === "guest"
-      ? { path: "/claim-truck", icon: Truck, label: "Claim" }
+      ? { path: "/claim-business", icon: Truck, label: "Claim" }
       : { path: "/share-hub", icon: Share2, label: "Share" },
     { icon: MoreHorizontal, label: "More", onClick: () => setMoreOpen((v) => !v) },
   ].filter(Boolean) as NavItem[];
@@ -360,7 +360,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
       items.push(
         { path: "/login", icon: User, label: "Login" },
         { path: "/restaurant-signup?businessType=food_truck", icon: Store, label: "Truck" },
-        { path: "/claim-truck", icon: Truck, label: "Claim" },
+        { path: "/claim-business", icon: Truck, label: "Claim" },
       );
     } else if (lane === "customer") {
       items.push(

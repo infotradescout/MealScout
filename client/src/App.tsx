@@ -188,6 +188,7 @@ const publicRoutePrefixes = [
   "/login",
   "/customer-signup",
   "/restaurant-signup",
+  "/claim-business",
   "/claim-truck",
   "/deal-creation",
   "/deal/",
@@ -419,10 +420,10 @@ function Router() {
         {shouldUseGuestRoutes ? (
           <>
             <Route path="/" component={Welcome} />
-            <Route path="/scout" component={ScoutPage} />
-            <Route path="/scout/:refTag" component={ScoutPage} />
-            <Route path="/directory" component={ScoutPage} />
-            <Route path="/directory/:refTag" component={ScoutPage} />
+            <Route path="/scout" component={ScoutPageV2} />
+            <Route path="/scout/:refTag" component={ScoutPageV2} />
+            <Route path="/directory" component={ScoutPageV2} />
+            <Route path="/directory/:refTag" component={ScoutPageV2} />
             <Route path="/scout-prototype" component={ScoutPrototype} />
             <Route path="/scout-v2" component={ScoutPageV2} />
             <Route path="/food-truck-rush" component={FoodTruckRush} />
@@ -430,6 +431,8 @@ function Router() {
             <Route path="/customer-signup" component={CustomerSignup} />
             <Route path="/customer-signup/:refTag" component={CustomerSignup} />
             <Route path="/restaurant-signup" component={RestaurantSignup} />
+            <Route path="/claim-business" component={ClaimTruckPage} />
+            <Route path="/claim-business/:refTag" component={ClaimTruckPage} />
             <Route path="/claim-truck" component={ClaimTruckPage} />
             <Route path="/claim-truck/:refTag" component={ClaimTruckPage} />
             <Route path="/deal-creation" component={DealCreation} />
@@ -447,10 +450,10 @@ function Router() {
         ) : (
           <>
             <Route path="/" component={RedirectToScout} />
-            <Route path="/scout" component={ScoutPage} />
-            <Route path="/scout/:refTag" component={ScoutPage} />
-            <Route path="/directory" component={ScoutPage} />
-            <Route path="/directory/:refTag" component={ScoutPage} />
+            <Route path="/scout" component={ScoutPageV2} />
+            <Route path="/scout/:refTag" component={ScoutPageV2} />
+            <Route path="/directory" component={ScoutPageV2} />
+            <Route path="/directory/:refTag" component={ScoutPageV2} />
             <Route path="/scout-prototype" component={ScoutPrototype} />
             <Route path="/scout-v2" component={ScoutPageV2} />
             <Route path="/food-truck-rush" component={FoodTruckRush} />
@@ -458,6 +461,8 @@ function Router() {
             <Route path="/customer-signup" component={CustomerSignup} />
             <Route path="/customer-signup/:refTag" component={CustomerSignup} />
             <Route path="/restaurant-signup" component={RestaurantSignup} />
+            <Route path="/claim-business" component={ClaimTruckPage} />
+            <Route path="/claim-business/:refTag" component={ClaimTruckPage} />
             <Route path="/claim-truck" component={ClaimTruckPage} />
             <Route path="/claim-truck/:refTag" component={ClaimTruckPage} />
             <Route path="/deal-creation" component={DealCreation} />

@@ -453,7 +453,7 @@ export function ThemedScoutMap({
           filter: saturate(1.08) contrast(1.02) brightness(1.03) sepia(0.04);
         }
         .msm-tone-night .msm-map-canvas .maplibregl-canvas {
-          filter: saturate(1.12) contrast(1.14) brightness(1.04) sepia(0.08);
+          filter: saturate(1.08) contrast(1.08) brightness(1.16) sepia(0.04);
         }
 
         .msm-map-grade {
@@ -472,11 +472,14 @@ export function ThemedScoutMap({
         }
         .msm-tone-night .msm-map-grade {
           background:
-            radial-gradient(ellipse at 24% 18%, rgba(255, 111, 46, 0.18), transparent 34%),
-            radial-gradient(ellipse at 78% 22%, rgba(52, 211, 153, 0.08), transparent 30%),
-            linear-gradient(180deg, rgba(18,8,5,0.18) 0%, transparent 42%, rgba(18,8,5,0.46) 100%);
+            radial-gradient(ellipse at 24% 18%, rgba(255, 111, 46, 0.1), transparent 34%),
+            radial-gradient(ellipse at 78% 22%, rgba(52, 211, 153, 0.05), transparent 30%),
+            linear-gradient(180deg, rgba(18,8,5,0.06) 0%, transparent 42%, rgba(18,8,5,0.16) 100%);
           mix-blend-mode: normal;
-          opacity: 0.82;
+          opacity: 0.34;
+        }
+        .msm-mode-interactive.msm-tone-night .msm-map-grade {
+          opacity: 0.14;
         }
         .msm-map-grade::after {
           content: "";
@@ -493,9 +496,13 @@ export function ThemedScoutMap({
         }
         .msm-tone-night .msm-map-grade::after {
           background:
-            radial-gradient(ellipse at center, transparent 44%, rgba(18, 8, 5, 0.42) 100%),
-            linear-gradient(180deg, rgba(0,0,0,0.18), transparent 34%, rgba(0,0,0,0.38) 100%);
+            radial-gradient(ellipse at center, transparent 44%, rgba(18, 8, 5, 0.2) 100%),
+            linear-gradient(180deg, rgba(0,0,0,0.06), transparent 36%, rgba(0,0,0,0.14) 100%);
           mix-blend-mode: normal;
+        }
+        .msm-mode-interactive.msm-tone-night .msm-map-grade::after {
+          background:
+            radial-gradient(ellipse at center, transparent 52%, rgba(18, 8, 5, 0.1) 100%);
         }
 
         .msm-food-glow { z-index: 3; overflow: hidden; }

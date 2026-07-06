@@ -170,7 +170,7 @@ export function TruckSchedulePanel({ profile }: { profile: PublicRestaurantProfi
             {getTruckScheduleEmptyStateLabel()}
           </p>
           <a
-            href="/claim-truck"
+            href="/claim-business"
             className="inline-block text-xs font-semibold text-orange-300 hover:text-orange-200"
           >
             Own this truck? Add your schedule →
