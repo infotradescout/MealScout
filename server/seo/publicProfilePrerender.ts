@@ -10,6 +10,7 @@ import {
   menuItems,
   restaurants,
   suppliers,
+  users,
 } from "@shared/schema";
 import { shouldServePrerender } from "./botDetection";
 import { buildOfficialSocialEntityMetaTags } from "./officialSocialEntity";
@@ -46,6 +47,24 @@ const escapeHtml = (value: string | null | undefined) =>
     .replace(/'/g, "&#39;");
 
 const defaultSocialImagePath = "/og-default.jpg?v=20260506";
+
+const IMPORT_SYSTEM_EMAIL = (
+  process.env.IMPORT_SYSTEM_EMAIL || "system-import@mealscout.us"
+).toLowerCase();
+
+// Unclaimed, import-seeded listings should stay out of Google's index until a
+// real owner claims them - indexing thousands of thin, identical-template
+// pages en masse dilutes crawl budget and search quality for the pages that
+// matter (claimed, real businesses).
+async function isImportSystemOwner(ownerId: string | null): Promise<boolean> {
+  if (!ownerId) return false;
+  const [owner] = await db
+    .select({ email: users.email })
+    .from(users)
+    .where(eq(users.id, ownerId))
+    .limit(1);
+  return Boolean(owner?.email && owner.email.toLowerCase() === IMPORT_SYSTEM_EMAIL);
+}
 
 const toSlug = (value: string | null | undefined) =>
   String(value || "")
@@ -323,6 +342,7 @@ async function restaurantPage(baseUrl: string, restaurantId: string) {
     .where(eq(restaurants.id, restaurantId))
     .limit(1);
   if (!row || !row.isActive) return null;
+  const isUnclaimed = await isImportSystemOwner(row.ownerId);
 
   const name = cleanText(row.name, "MealScout business");
   const cityState = [row.city, row.state]
@@ -447,6 +467,9 @@ async function restaurantPage(baseUrl: string, restaurantId: string) {
     description,
     canonicalPath,
     imageUrl: image,
+    robots: isUnclaimed
+      ? "noindex,follow"
+      : "index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1",
     schema: [localBusiness, ...videoSchemas(baseUrl, videos, name)],
     links: [
       { label: "Open profile", href: canonicalPath },
