@@ -23,6 +23,7 @@
 import type { PublicRestaurantProfile } from "@shared/publicProfiles";
 import { ProfileHeroMedia, buildPublicProfileHeroAssets } from "./ProfileHeroMedia";
 import { ProfileFavoriteButton } from "./ProfileFavoriteButton";
+import { ProfileRecommendButton } from "./ProfileRecommendButton";
 import {
   getTruckSchedulePrimaryStop,
   hasTruckScheduleSignal,
@@ -195,6 +196,13 @@ export function ElevatedTruckHero({
             <p className="mt-1 text-sm font-semibold text-white/80">{locationSummary}</p>
           </div>
         ) : null}
+
+        {/* Recommend — always available, independent of any specific dish */}
+        <ProfileRecommendButton
+          restaurantId={profile.id}
+          isAuthenticated={isAuthenticated}
+          profilePath={profile.profilePath}
+        />
       </div>
     </section>
   );

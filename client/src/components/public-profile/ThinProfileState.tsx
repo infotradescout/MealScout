@@ -20,12 +20,14 @@ import type {
 } from "@shared/publicProfiles";
 import { normalizeBusinessTypeLabel } from "@/lib/publicMenuCompleteness";
 import { MapPin, MenuSquare, CalendarDays, Globe } from "lucide-react";
+import { ProfileRecommendButton } from "./ProfileRecommendButton";
 
 type ThinProfileStateProps = {
   profile: PublicRestaurantProfile;
   safeCtas: PublicCta[];
   logoImageUrl?: string | null;
   initials: string;
+  isAuthenticated?: boolean;
 };
 
 function isThinProfile(profile: PublicRestaurantProfile): boolean {
@@ -45,6 +47,7 @@ export function ThinProfileState({
   safeCtas,
   logoImageUrl,
   initials,
+  isAuthenticated = false,
 }: ThinProfileStateProps) {
   const typeLabel = normalizeBusinessTypeLabel(
     profile.profileType === "truck" ? "food_truck" : profile.profileType,
@@ -117,6 +120,13 @@ export function ThinProfileState({
           {bestCta.label}
         </a>
       ) : null}
+
+      {/* Recommend — thin profiles have no menu items to recommend a dish
+          from, so this gives them a restaurant-level recommend action too */}
+      <ProfileRecommendButton
+        restaurantId={profile.id}
+        isAuthenticated={isAuthenticated}
+      />
 
       {/* Compact unavailable states */}
       <div className="w-full max-w-xs space-y-2 text-left">

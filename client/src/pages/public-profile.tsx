@@ -2656,6 +2656,7 @@ export default function PublicProfilePage() {
                     .join("")
                     .slice(0, 2)
                     .toUpperCase()}
+                  isAuthenticated={isAuthenticated}
                 />
               ) : (
                 <>
@@ -2742,6 +2743,7 @@ export default function PublicProfilePage() {
                     .join("")
                     .slice(0, 2)
                     .toUpperCase()}
+                  isAuthenticated={isAuthenticated}
                 />
               ) : (
                 <>

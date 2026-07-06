@@ -23,6 +23,7 @@
 import type { PublicRestaurantProfile } from "@shared/publicProfiles";
 import { ProfileHeroMedia, buildPublicProfileHeroAssets } from "./ProfileHeroMedia";
 import { ProfileFavoriteButton } from "./ProfileFavoriteButton";
+import { ProfileRecommendButton } from "./ProfileRecommendButton";
 import { normalizeBusinessTypeLabel } from "@/lib/publicMenuCompleteness";
 import { MapPin, Clock3 } from "lucide-react";
 
@@ -161,6 +162,13 @@ export function ElevatedProfileHero({
             {profile.description}
           </p>
         ) : null}
+
+        {/* Recommend — always available, independent of any specific dish */}
+        <ProfileRecommendButton
+          restaurantId={profile.id}
+          isAuthenticated={isAuthenticated}
+          profilePath={profile.profilePath}
+        />
       </div>
     </section>
   );
