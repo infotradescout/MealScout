@@ -9,6 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 import { buildPublicProfilePath } from "@/lib/public-profile-path";
 
 type ShareHubMode = "admin" | "staff" | "user";
@@ -154,7 +155,7 @@ export default function ShareHub({
   description: string;
 }) {
   const { toast } = useToast();
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const { user, isAuthenticated, isLoading } = useAuth();
   const [shareAuthError, setShareAuthError] = useState<string | null>(null);
   const [publicProfilePath, setPublicProfilePath] = useState<string | null>(null);
 
@@ -211,45 +212,43 @@ export default function ShareHub({
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/auth/user", { credentials: "include" })
-      .then((res) => (res.ok ? res.json() : null))
-      .then(async (data) => {
-        if (cancelled) return;
-        const authenticated = Boolean(String(data?.id || "").trim());
-        setIsAuthenticated(authenticated);
-        setShareAuthError(
-          authenticated ? null : "Sign in to generate share links.",
-        );
+    if (isLoading) return;
 
-        if (!authenticated) {
-          setPublicProfilePath(null);
-          return;
-        }
+    if (!isAuthenticated || !user) {
+      setShareAuthError("Sign in to generate share links.");
+      setPublicProfilePath(null);
+      return;
+    }
 
-        let hostProfile: any | null = null;
-        try {
-          const hostResponse = await fetch("/api/hosts/me", {
-            credentials: "include",
-          });
-          hostProfile = hostResponse.ok
-            ? await hostResponse.json().catch(() => null)
-            : null;
-        } catch {
-          hostProfile = null;
-        }
+    setShareAuthError(null);
 
-        setPublicProfilePath(deriveSelfPublicProfilePath(data, hostProfile));
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setIsAuthenticated(false);
-        setShareAuthError("Sign in to generate share links.");
-        setPublicProfilePath(null);
-      });
+    const loadPublicProfilePath = async () => {
+      let hostProfile: any | null = null;
+      try {
+        const hostResponse = await fetch("/api/hosts/me", {
+          credentials: "include",
+        });
+        hostProfile = hostResponse.ok
+          ? await hostResponse.json().catch(() => null)
+          : null;
+      } catch {
+        hostProfile = null;
+      }
+
+      if (cancelled) return;
+      setPublicProfilePath(deriveSelfPublicProfilePath(user, hostProfile));
+    };
+
+    void loadPublicProfilePath().catch(() => {
+      if (cancelled) return;
+      setShareAuthError("Sign in to generate share links.");
+      setPublicProfilePath(null);
+    });
+
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [isAuthenticated, isLoading, user]);
 
   const items = useMemo(() => {
     const base = mode === "user" ? BASE_ITEMS : STAFF_ADMIN_ITEMS;

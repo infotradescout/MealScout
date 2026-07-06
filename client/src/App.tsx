@@ -272,6 +272,122 @@ function DashboardSwitcherPage() {
   return <DashboardSwitcher defaultView={view || "admin"} />;
 }
 
+function SharedPublicRoutes() {
+  return (
+    <>
+      <Route path="/hiring" component={HiringPage} />
+      <Route path="/jobs" component={HiringPage} />
+      <Route path="/private-chefs" component={HiringPage} />
+      <Route path="/search" component={Search} />
+      <Route path="/trending" component={RedirectToScout} />
+      <Route path="/map" component={RedirectToScout} />
+      <Route path="/suppliers" component={SuppliersPage} />
+      <Route path="/suppliers/:supplierId" component={SupplierDetailPage} />
+      <Route path="/supplier/:slug/:refTag" component={PublicProfilePage} />
+      <Route path="/supplier/:slug" component={PublicProfilePage} />
+      <Route path="/video" component={VideoPage} />
+      <Route path="/video/:id" component={VideoDetailPage} />
+      <Route path="/category/:category" component={CategoryPage} />
+      <Route path="/cuisine/:type" component={PublicSeoLandingPage} />
+      <Route path="/deals" component={FeaturedDealsPage} />
+      <Route path="/deals/featured" component={FeaturedDealsPage} />
+      <Route path="/deals/:city" component={DealsCityPage} />
+      <Route path="/restaurant/:id/:profileSlug" component={PublicProfilePage} />
+      <Route path="/restaurant/:id" component={PublicProfilePage} />
+      <Route path="/truck/:slug/:refTag" component={PublicProfilePage} />
+      <Route path="/truck/:slug" component={PublicProfilePage} />
+      <Route path="/bar/:slug/:refTag" component={PublicProfilePage} />
+      <Route path="/bar/:slug" component={PublicProfilePage} />
+      <Route path="/location/:slug/food-trucks" component={LocationDetailPage} />
+      <Route
+        path="/location/:slug/food-trucks-now"
+        component={LocationDiscoveryPage}
+      />
+      <Route
+        path="/location/:slug/food-trucks-tonight"
+        component={LocationDiscoveryPage}
+      />
+      <Route path="/location/:slug/:refTag" component={PublicProfilePage} />
+      <Route path="/location/:slug" component={PublicProfilePage} />
+      <Route path="/city/:city" component={CityLanding} />
+      <Route path="/city/:city/:mode" component={CityDiscoveryPage} />
+      <Route path="/city/:city/food" component={PublicSeoLandingPage} />
+      <Route path="/food-trucks-today/:city" component={PublicSeoLandingPage} />
+      <Route path="/deals-today/:city" component={PublicSeoLandingPage} />
+      <Route path="/events-today/:city" component={PublicSeoLandingPage} />
+      <Route path="/cuisine/:cuisine/:city" component={PublicSeoLandingPage} />
+      <Route
+        path="/locations-with-trucks/:city"
+        component={PublicSeoLandingPage}
+      />
+      <Route path="/terms-of-service" component={TermsOfService} />
+      <Route path="/moderation-policy" component={ModerationPolicy} />
+      <Route path="/privacy-policy" component={PrivacyPolicy} />
+      <Route path="/data-deletion" component={DataDeletion} />
+      <Route path="/about" component={About} />
+      <Route path="/compare" component={ComparePage} />
+      <Route path="/compare/doordash" component={CompareDoorDashPage} />
+      <Route path="/compare/uber-eats" component={CompareUberEatsPage} />
+      <Route path="/compare/grubhub" component={CompareGrubhubPage} />
+      <Route
+        path="/compare/:service/local/:city/:cuisine"
+        component={ServiceCompareLandingPage}
+      />
+      <Route
+        path="/delivery-app-alternatives"
+        component={DeliveryAppAlternativesPage}
+      />
+      <Route
+        path="/online-ordering-platforms"
+        component={OnlineOrderingPlatformsPage}
+      />
+      <Route path="/faq" component={FAQ} />
+      <Route path="/how-it-works" component={HowItWorks} />
+      <Route path="/contact" component={Contact} />
+      <Route path="/install" component={InstallApp} />
+      <Route path="/host-signup" component={HostSignup} />
+      <Route path="/for-restaurants" component={ForRestaurants} />
+      <Route path="/for-bars" component={ForBars} />
+      <Route path="/for-hosts" component={ForHosts} />
+      <Route path="/for-events" component={ForEvents} />
+      <Route path="/host-location-partner" component={HostLocationPartnerPage} />
+      <Route path="/events" component={EventsRouter} />
+      <Route path="/events/public" component={EventsPage} />
+      <Route path="/event/:slug" component={EventDetailPage} />
+      <Route path="/dashboard" component={DashboardRouter} />
+      <Route path="/user-dashboard" component={UserDashboard} />
+      <Route path="/food-trucks/:citySlug" component={CityLanding} />
+      <Route path="/food-trucks/:citySlug/:cuisineSlug" component={CityLanding} />
+      <Route path="/sitemap" component={Sitemap} />
+      <Route path="/status" component={StatusPage} />
+      <Route path="/golden-plate-winners" component={GoldenPlateWinners} />
+      <Route path="/p/:profileType/:profileId" component={PublicProfilePage} />
+      <Route
+        path="/p/:profileType/:profileId/:profileSlug"
+        component={PublicProfilePage}
+      />
+      <Route path="/pensacola/spots" component={PensacolaSpots} />
+      <Route path="/pensacola/report" component={PensacolaReport} />
+      <Route path="/parking-pass" component={ParkingPassPage} />
+      <Route path="/share-hub" component={ShareHubPage} />
+      <Route path="/business-team/accept" component={BusinessTeamAcceptPage} />
+      <Route path="/forgot-password" component={ForgotPassword} />
+      <Route path="/reset-password" component={ResetPassword} />
+      <Route path="/ref/:tag" component={ReferralRedirect} />
+      <Route path="/change-password" component={ChangePassword} />
+      <Route path="/account-setup" component={AccountSetup} />
+      <Route path="/owner/verify" component={AccountSetup} />
+      <Route path="/post-verification" component={PostVerification} />
+      <Route path="/menu/:restaurantId" component={OnlineMenuPage} />
+      <Route path="/checkout/:restaurantId" component={PickupCheckoutPage} />
+      <Route
+        path="/order-confirmation/:orderId"
+        component={OrderConfirmationPage}
+      />
+    </>
+  );
+}
+
 function Router() {
   const { authState, isAuthenticated, user } = useAuth();
   const { toast } = useToast();
@@ -318,151 +434,10 @@ function Router() {
             <Route path="/claim-truck/:refTag" component={ClaimTruckPage} />
             <Route path="/deal-creation" component={DealCreation} />
             <Route path="/deal/:id" component={DealDetail} />
-            <Route path="/search" component={Search} />
-            <Route path="/trending" component={RedirectToScout} />
-            <Route path="/map" component={RedirectToScout} />
-            <Route path="/suppliers" component={SuppliersPage} />
-            <Route
-              path="/suppliers/:supplierId"
-              component={SupplierDetailPage}
-            />
-            <Route path="/supplier/:slug/:refTag" component={PublicProfilePage} />
-            <Route path="/supplier/:slug" component={PublicProfilePage} />
-            <Route path="/video" component={VideoPage} />
-            <Route path="/video/:id" component={VideoDetailPage} />
-            <Route path="/category/:category" component={CategoryPage} />
-            <Route path="/cuisine/:type" component={PublicSeoLandingPage} />
-            <Route path="/deals" component={FeaturedDealsPage} />
-            <Route path="/deals/featured" component={FeaturedDealsPage} />
-            <Route path="/deals/:city" component={DealsCityPage} />
-            <Route path="/restaurant/:id/:profileSlug" component={PublicProfilePage} />
-            <Route path="/restaurant/:id" component={PublicProfilePage} />
-            <Route path="/truck/:slug/:refTag" component={PublicProfilePage} />
-            <Route path="/truck/:slug" component={PublicProfilePage} />
-            <Route path="/bar/:slug/:refTag" component={PublicProfilePage} />
-            <Route path="/bar/:slug" component={PublicProfilePage} />
-            <Route
-              path="/location/:slug/food-trucks"
-              component={LocationDetailPage}
-            />
-            <Route
-              path="/location/:slug/food-trucks-now"
-              component={LocationDiscoveryPage}
-            />
-            <Route
-              path="/location/:slug/food-trucks-tonight"
-              component={LocationDiscoveryPage}
-            />
-            <Route path="/location/:slug/:refTag" component={PublicProfilePage} />
-            <Route path="/location/:slug" component={PublicProfilePage} />
-            <Route path="/city/:city" component={CityLanding} />
-            <Route path="/city/:city/:mode" component={CityDiscoveryPage} />
-            <Route path="/city/:city/food" component={PublicSeoLandingPage} />
-            <Route
-              path="/food-trucks-today/:city"
-              component={PublicSeoLandingPage}
-            />
-            <Route path="/deals-today/:city" component={PublicSeoLandingPage} />
-            <Route
-              path="/events-today/:city"
-              component={PublicSeoLandingPage}
-            />
-            <Route
-              path="/cuisine/:cuisine/:city"
-              component={PublicSeoLandingPage}
-            />
-            <Route
-              path="/locations-with-trucks/:city"
-              component={PublicSeoLandingPage}
-            />
-            <Route path="/terms-of-service" component={TermsOfService} />
-            <Route path="/moderation-policy" component={ModerationPolicy} />
-            <Route path="/privacy-policy" component={PrivacyPolicy} />
-            <Route path="/data-deletion" component={DataDeletion} />
-            <Route path="/about" component={About} />
-            <Route path="/compare" component={ComparePage} />
-            <Route path="/compare/doordash" component={CompareDoorDashPage} />
-            <Route path="/compare/uber-eats" component={CompareUberEatsPage} />
-            <Route path="/compare/grubhub" component={CompareGrubhubPage} />
-            <Route
-              path="/compare/:service/local/:city/:cuisine"
-              component={ServiceCompareLandingPage}
-            />
-            <Route
-              path="/delivery-app-alternatives"
-              component={DeliveryAppAlternativesPage}
-            />
-            <Route
-              path="/online-ordering-platforms"
-              component={OnlineOrderingPlatformsPage}
-            />
-            <Route path="/faq" component={FAQ} />
-            <Route path="/how-it-works" component={HowItWorks} />
-            <Route path="/contact" component={Contact} />
-            <Route path="/install" component={InstallApp} />
-            <Route path="/host-signup" component={HostSignup} />
-            <Route path="/for-restaurants" component={ForRestaurants} />
-            <Route path="/for-bars" component={ForBars} />
-            <Route path="/for-hosts" component={ForHosts} />
-            <Route path="/for-events" component={ForEvents} />
-            <Route
-              path="/host-location-partner"
-              component={HostLocationPartnerPage}
-            />
-            <Route path="/hiring" component={HiringPage} />
-            <Route path="/jobs" component={HiringPage} />
-            <Route path="/private-chefs" component={HiringPage} />
-            <Route path="/events" component={EventsRouter} />
-            <Route path="/events/public" component={EventsPage} />
-            <Route path="/event/:slug" component={EventDetailPage} />
-            <Route path="/dashboard" component={DashboardRouter} />
-            <Route path="/user-dashboard" component={UserDashboard} />
-            <Route path="/food-trucks/:citySlug" component={CityLanding} />
-            <Route
-              path="/food-trucks/:citySlug/:cuisineSlug"
-              component={CityLanding}
-            />
-            <Route path="/sitemap" component={Sitemap} />
-            <Route path="/status" component={StatusPage} />
-            <Route
-              path="/golden-plate-winners"
-              component={GoldenPlateWinners}
-            />
-            <Route
-              path="/p/:profileType/:profileId"
-              component={PublicProfilePage}
-            />
-            <Route
-              path="/p/:profileType/:profileId/:profileSlug"
-              component={PublicProfilePage}
-            />
-            <Route path="/pensacola/spots" component={PensacolaSpots} />
-            <Route path="/pensacola/report" component={PensacolaReport} />
-            <Route path="/parking-pass" component={ParkingPassPage} />
-            <Route path="/share-hub" component={ShareHubPage} />
-            <Route
-              path="/business-team/accept"
-              component={BusinessTeamAcceptPage}
-            />
-            <Route path="/forgot-password" component={ForgotPassword} />
-            <Route path="/reset-password" component={ResetPassword} />
-            <Route path="/ref/:tag" component={ReferralRedirect} />
-            <Route path="/change-password" component={ChangePassword} />
-            <Route path="/account-setup" component={AccountSetup} />
-            <Route path="/owner/verify" component={AccountSetup} />
-            <Route path="/post-verification" component={PostVerification} />
+            <SharedPublicRoutes />
             <Route path="/admin" component={AdminLogin} />
             <Route path="/admin/login" component={AdminLogin} />
             <Route path="/admin/dashboard" component={AdminLogin} />
-            <Route path="/menu/:restaurantId" component={OnlineMenuPage} />
-            <Route
-              path="/checkout/:restaurantId"
-              component={PickupCheckoutPage}
-            />
-            <Route
-              path="/order-confirmation/:orderId"
-              component={OrderConfirmationPage}
-            />
             <Route
               path="/:businessSlug/:refTag"
               component={CleanPublicProfileRoute}
@@ -505,21 +480,7 @@ function Router() {
               component={EventCoordinatorDashboard}
             />
             <Route path="/truck-discovery" component={TruckDiscovery} />
-            <Route path="/hiring" component={HiringPage} />
-            <Route path="/jobs" component={HiringPage} />
-            <Route path="/private-chefs" component={HiringPage} />
-            <Route path="/search" component={Search} />
-            <Route path="/trending" component={RedirectToScout} />
-            <Route path="/map" component={RedirectToScout} />
-            <Route path="/suppliers" component={SuppliersPage} />
-            <Route
-              path="/suppliers/:supplierId"
-              component={SupplierDetailPage}
-            />
-            <Route path="/supplier/:slug/:refTag" component={PublicProfilePage} />
-            <Route path="/supplier/:slug" component={PublicProfilePage} />
             <Route path="/supply/orders" component={SupplyOrdersPage} />
-            <Route path="/video" component={VideoPage} />
             <Route path="/favorites" component={Favorites} />
             <Route path="/orders" component={Orders} />
             <Route path="/profile" component={Profile} />
@@ -565,113 +526,6 @@ function Router() {
               component={AdminAffiliateManagement}
             />
             <Route path="/admin/switcher" component={DashboardSwitcherPage} />
-            <Route path="/category/:category" component={CategoryPage} />
-            <Route path="/cuisine/:type" component={PublicSeoLandingPage} />
-            <Route path="/deals" component={FeaturedDealsPage} />
-            <Route path="/deals/featured" component={FeaturedDealsPage} />
-            <Route path="/deals/:city" component={DealsCityPage} />
-            <Route path="/restaurant/:id/:profileSlug" component={PublicProfilePage} />
-            <Route path="/restaurant/:id" component={PublicProfilePage} />
-            <Route path="/truck/:slug/:refTag" component={PublicProfilePage} />
-            <Route path="/truck/:slug" component={PublicProfilePage} />
-            <Route path="/bar/:slug/:refTag" component={PublicProfilePage} />
-            <Route path="/bar/:slug" component={PublicProfilePage} />
-            <Route
-              path="/location/:slug/food-trucks"
-              component={LocationDetailPage}
-            />
-            <Route
-              path="/location/:slug/food-trucks-now"
-              component={LocationDiscoveryPage}
-            />
-            <Route
-              path="/location/:slug/food-trucks-tonight"
-              component={LocationDiscoveryPage}
-            />
-            <Route path="/location/:slug/:refTag" component={PublicProfilePage} />
-            <Route path="/location/:slug" component={PublicProfilePage} />
-            <Route path="/city/:city" component={CityLanding} />
-            <Route path="/city/:city/:mode" component={CityDiscoveryPage} />
-            <Route path="/city/:city/food" component={PublicSeoLandingPage} />
-            <Route
-              path="/food-trucks-today/:city"
-              component={PublicSeoLandingPage}
-            />
-            <Route path="/deals-today/:city" component={PublicSeoLandingPage} />
-            <Route
-              path="/events-today/:city"
-              component={PublicSeoLandingPage}
-            />
-            <Route
-              path="/cuisine/:cuisine/:city"
-              component={PublicSeoLandingPage}
-            />
-            <Route
-              path="/locations-with-trucks/:city"
-              component={PublicSeoLandingPage}
-            />
-            <Route path="/terms-of-service" component={TermsOfService} />
-            <Route path="/moderation-policy" component={ModerationPolicy} />
-            <Route path="/privacy-policy" component={PrivacyPolicy} />
-            <Route path="/data-deletion" component={DataDeletion} />
-            <Route path="/about" component={About} />
-            <Route path="/compare" component={ComparePage} />
-            <Route path="/compare/doordash" component={CompareDoorDashPage} />
-            <Route path="/compare/uber-eats" component={CompareUberEatsPage} />
-            <Route path="/compare/grubhub" component={CompareGrubhubPage} />
-            <Route
-              path="/compare/:service/local/:city/:cuisine"
-              component={ServiceCompareLandingPage}
-            />
-            <Route
-              path="/delivery-app-alternatives"
-              component={DeliveryAppAlternativesPage}
-            />
-            <Route
-              path="/online-ordering-platforms"
-              component={OnlineOrderingPlatformsPage}
-            />
-            <Route path="/faq" component={FAQ} />
-            <Route path="/how-it-works" component={HowItWorks} />
-            <Route path="/contact" component={Contact} />
-            <Route path="/install" component={InstallApp} />
-            <Route path="/host-signup" component={HostSignup} />
-            <Route path="/for-restaurants" component={ForRestaurants} />
-            <Route path="/for-bars" component={ForBars} />
-            <Route path="/for-hosts" component={ForHosts} />
-            <Route path="/for-events" component={ForEvents} />
-            <Route
-              path="/host-location-partner"
-              component={HostLocationPartnerPage}
-            />
-            <Route path="/events" component={EventsRouter} />
-            <Route path="/events/public" component={EventsPage} />
-            <Route path="/event/:slug" component={EventDetailPage} />
-            <Route path="/pensacola/spots" component={PensacolaSpots} />
-            <Route path="/pensacola/report" component={PensacolaReport} />
-            <Route path="/food-trucks/:citySlug" component={CityLanding} />
-            <Route
-              path="/food-trucks/:citySlug/:cuisineSlug"
-              component={CityLanding}
-            />
-            <Route path="/sitemap" component={Sitemap} />
-            <Route path="/status" component={StatusPage} />
-            <Route
-              path="/p/:profileType/:profileId"
-              component={PublicProfilePage}
-            />
-            <Route
-              path="/p/:profileType/:profileId/:profileSlug"
-              component={PublicProfilePage}
-            />
-            <Route path="/forgot-password" component={ForgotPassword} />
-            <Route path="/reset-password" component={ResetPassword} />
-            <Route path="/ref/:tag" component={ReferralRedirect} />
-            <Route path="/change-password" component={ChangePassword} />
-            <Route path="/account-setup" component={AccountSetup} />
-            <Route path="/owner/verify" component={AccountSetup} />
-            <Route path="/post-verification" component={PostVerification} />
-            <Route path="/admin/login" component={AdminLogin} />
             <Route path="/admin/oauth-setup" component={OAuthSetupGuide} />
             <Route
               path="/profile/notifications"
@@ -690,23 +544,10 @@ function Router() {
               path="/restaurant/:restaurantId/reviews"
               component={ReviewsPage}
             />
-            <Route path="/parking-pass" component={ParkingPassPage} />
+            <SharedPublicRoutes />
+            <Route path="/admin/login" component={AdminLogin} />
             <Route path="/parking-pass-manage" component={ParkingPassManage} />
-            <Route path="/share-hub" component={ShareHubPage} />
             <Route path="/business-team" component={BusinessTeamPage} />
-            <Route
-              path="/business-team/accept"
-              component={BusinessTeamAcceptPage}
-            />
-            <Route path="/menu/:restaurantId" component={OnlineMenuPage} />
-            <Route
-              path="/checkout/:restaurantId"
-              component={PickupCheckoutPage}
-            />
-            <Route
-              path="/order-confirmation/:orderId"
-              component={OrderConfirmationPage}
-            />
             <Route path="/menu-builder" component={MenuBuilderPage} />
             <Route path="/kitchen" component={KitchenDisplayPage} />
             <Route

@@ -17,5 +17,11 @@ export default function DashboardRouter() {
     setLocation(getRoleDashboardPath(user));
   }, [isLoading, setLocation, user]);
 
-  return null;
+  return (
+    <main className="flex min-h-screen items-center justify-center px-4 text-center">
+      <p className="text-sm text-muted-foreground">
+        {isLoading ? "Loading your dashboard..." : "Opening your dashboard..."}
+      </p>
+    </main>
+  );
 }

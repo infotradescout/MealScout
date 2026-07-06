@@ -13,6 +13,7 @@ import { useQueries, useQuery } from "@tanstack/react-query";
 import {
   Bookmark,
   CalendarDays,
+  ChevronDown,
   ChevronRight,
   Compass,
   Flame,
