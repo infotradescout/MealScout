@@ -5,6 +5,7 @@ import { z } from "zod";
 import { db } from "../db";
 import { emailService } from "../emailService";
 import { storage } from "../storage";
+import { enrichClaimedRestaurant } from "../services/claimEnrichment";
 import { isAuthenticated } from "../unifiedAuth";
 import { sendAccountSetupInvite } from "../utils/accountSetup";
 import { sendEmailVerificationIfNeeded } from "../utils/emailVerification";
@@ -416,6 +417,10 @@ export function registerTruckClaimRoutes(app: Express) {
             isVerified: false,
             claimedFromImportId: listing.id,
           });
+
+      // Claim-time Google enrichment (fill missing map coordinates). Fire-and-forget:
+      // paid Google usage now scales with real claims, and it never blocks the response.
+      void enrichClaimedRestaurant(restaurant.id);
 
       if (req.user?.userType === "customer") {
         await storage.updateUserType(req.user.id, "food_truck");
