@@ -23,6 +23,7 @@ interface ThemedScoutMapProps {
   onMarkerTap?: (marker: MapAdapterMarker) => void;
   zoom?: number;
   interactive?: boolean;
+  tone?: "day" | "night";
 }
 
 const MINI_MAP_STYLE: StyleSpecification = {
@@ -59,6 +60,45 @@ const MINI_MAP_STYLE: StyleSpecification = {
         "raster-brightness-max": 1,
         "raster-saturation": 0.14,
         "raster-contrast": 0.08,
+      },
+    },
+  ],
+};
+
+const NIGHT_MAP_STYLE: StyleSpecification = {
+  version: 8,
+  sources: {
+    "carto-dark": {
+      type: "raster",
+      tiles: [
+        "https://a.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}@2x.png",
+        "https://b.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}@2x.png",
+        "https://c.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}@2x.png",
+        "https://d.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}@2x.png",
+      ],
+      tileSize: 256,
+      attribution:
+        'Map tiles © <a href="https://carto.com/attributions" target="_blank" rel="noopener noreferrer">CARTO</a>, data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a>',
+    },
+  },
+  layers: [
+    {
+      id: "background",
+      type: "background",
+      paint: {
+        "background-color": "#120805",
+      },
+    },
+    {
+      id: "carto-dark-tiles",
+      type: "raster",
+      source: "carto-dark",
+      paint: {
+        "raster-opacity": 1,
+        "raster-brightness-min": 0.1,
+        "raster-brightness-max": 0.98,
+        "raster-saturation": 0.22,
+        "raster-contrast": 0.16,
       },
     },
   ],
@@ -105,6 +145,7 @@ export function ThemedScoutMap({
   onMarkerTap,
   zoom = 13,
   interactive = false,
+  tone = "day",
 }: ThemedScoutMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MaplibreMap | null>(null);
@@ -120,6 +161,9 @@ export function ThemedScoutMap({
   const [tilesUnavailable, setTilesUnavailable] = useState(
     () => !isWebglAvailable(),
   );
+  const isNightTone = tone === "night";
+  const mapStyle = isNightTone ? NIGHT_MAP_STYLE : MINI_MAP_STYLE;
+  const mapSourceId = isNightTone ? "carto-dark" : "carto-light";
 
   const frameMap = (duration = 0) => {
     const map = mapRef.current;
@@ -173,7 +217,7 @@ export function ThemedScoutMap({
 
     const map = new maplibregl.Map({
       container: containerRef.current,
-      style: MINI_MAP_STYLE,
+      style: mapStyle,
       center: [frameStateRef.current.userLocation.lng, frameStateRef.current.userLocation.lat],
       zoom: frameStateRef.current.zoom,
       pitch: 34,
@@ -254,7 +298,7 @@ export function ThemedScoutMap({
     // placeholder rather than leaving a blank map on screen.
     let sawTileLoad = false;
     const handleSourceData = (e: any) => {
-      if (e?.sourceId === "carto-light" && e.isSourceLoaded) {
+      if (e?.sourceId === mapSourceId && e.isSourceLoaded) {
         sawTileLoad = true;
       }
     };
@@ -281,7 +325,7 @@ export function ThemedScoutMap({
       mapRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [interactive, tilesUnavailable]);
+  }, [interactive, mapSourceId, mapStyle, tilesUnavailable]);
 
   const markerKey = useMemo(
     () =>
@@ -363,7 +407,7 @@ export function ThemedScoutMap({
 
   return (
     <div
-      className={`absolute inset-0 h-full w-full min-h-full ${interactive ? "msm-mode-interactive" : "msm-mode-preview"}`}
+      className={`absolute inset-0 h-full w-full min-h-full ${interactive ? "msm-mode-interactive" : "msm-mode-preview"} ${isNightTone ? "msm-tone-night" : "msm-tone-day"}`}
     >
       <div className="absolute inset-0">
         {tilesUnavailable ? (
@@ -372,7 +416,7 @@ export function ThemedScoutMap({
           // instead of leaving a blank/void-looking canvas.
           <div
             className="absolute inset-0 h-full w-full min-h-full"
-            style={{ backgroundColor: "#fff7df" }}
+            style={{ backgroundColor: isNightTone ? "#120805" : "#fff7df" }}
           />
         ) : (
           <div
@@ -408,6 +452,9 @@ export function ThemedScoutMap({
         .msm-mode-interactive .msm-map-canvas .maplibregl-canvas {
           filter: saturate(1.08) contrast(1.02) brightness(1.03) sepia(0.04);
         }
+        .msm-tone-night .msm-map-canvas .maplibregl-canvas {
+          filter: saturate(1.12) contrast(1.14) brightness(1.04) sepia(0.08);
+        }
 
         .msm-map-grade {
           pointer-events: none;
@@ -423,6 +470,14 @@ export function ThemedScoutMap({
           opacity: 0.45;
           mix-blend-mode: soft-light;
         }
+        .msm-tone-night .msm-map-grade {
+          background:
+            radial-gradient(ellipse at 24% 18%, rgba(255, 111, 46, 0.18), transparent 34%),
+            radial-gradient(ellipse at 78% 22%, rgba(52, 211, 153, 0.08), transparent 30%),
+            linear-gradient(180deg, rgba(18,8,5,0.18) 0%, transparent 42%, rgba(18,8,5,0.46) 100%);
+          mix-blend-mode: normal;
+          opacity: 0.82;
+        }
         .msm-map-grade::after {
           content: "";
           position: absolute;
@@ -435,6 +490,12 @@ export function ThemedScoutMap({
         }
         .msm-mode-interactive .msm-map-grade::after {
           background: radial-gradient(ellipse at center, transparent 42%, rgba(255, 236, 184, 0.22) 100%);
+        }
+        .msm-tone-night .msm-map-grade::after {
+          background:
+            radial-gradient(ellipse at center, transparent 44%, rgba(18, 8, 5, 0.42) 100%),
+            linear-gradient(180deg, rgba(0,0,0,0.18), transparent 34%, rgba(0,0,0,0.38) 100%);
+          mix-blend-mode: normal;
         }
 
         .msm-food-glow { z-index: 3; overflow: hidden; }
@@ -498,8 +559,13 @@ export function ThemedScoutMap({
           box-shadow: 0 10px 28px rgba(154, 72, 18, 0.18);
         }
         .msm-mode-interactive .msm-live-badge {
-          background: rgba(255, 253, 244, 0.78);
-          border-color: rgba(255, 142, 70, 0.30);
+          display: none;
+        }
+        .msm-tone-night .msm-live-badge {
+          background: rgba(18, 8, 5, 0.82);
+          border-color: rgba(251, 146, 60, 0.28);
+          color: #fed7aa;
+          box-shadow: 0 12px 30px rgba(0,0,0,0.42);
         }
         .msm-live-badge__dot {
           width: 6px;

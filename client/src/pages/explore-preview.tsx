@@ -4207,14 +4207,10 @@ export default function ExplorePreview() {
                         markers={sceneFilteredMapMarkers}
                         zoom={13}
                         interactive={true}
+                        tone="night"
                         onMarkerTap={handlePreviewMarkerTap}
                       />
                     </Suspense>
-                    {(!hasMapKey || googleMapFailed) && (
-                      <div className="pointer-events-none absolute left-1/2 top-1/2 z-10 max-w-[18rem] -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-white/88 px-5 py-4 text-center text-sm font-bold text-orange-900 ring-1 ring-orange-200/60 backdrop-blur-xl">
-                        Full pan and zoom are warming up. The MealScout map is still available.
-                      </div>
-                    )}
                   </>
                 ) : (
                   <HeroMapFallback
@@ -4231,7 +4227,7 @@ export default function ExplorePreview() {
               className="pointer-events-none absolute inset-0 z-[2]"
               style={{
                 background:
-                  "linear-gradient(180deg, rgba(18,8,5,0.42) 0%, rgba(18,8,5,0.14) 30%, rgba(18,8,5,0.18) 68%, rgba(18,8,5,0.56) 100%), radial-gradient(72% 48% at 24% 26%, rgba(18,8,5,0.46), rgba(18,8,5,0.08) 62%, transparent 100%)",
+                  "linear-gradient(90deg, rgba(18,8,5,0.44) 0%, rgba(18,8,5,0.16) 30%, rgba(18,8,5,0.02) 64%, rgba(18,8,5,0.12) 100%), linear-gradient(180deg, rgba(18,8,5,0.12) 0%, transparent 34%, rgba(18,8,5,0.32) 100%)",
               }}
             />
           )}
@@ -4266,9 +4262,9 @@ export default function ExplorePreview() {
               type="button"
               onClick={collapseScoutMap}
               aria-label="Collapse map and return to discover"
-              className="absolute z-30 right-4 top-[calc(env(safe-area-inset-top)+0.75rem)] inline-flex h-12 items-center gap-2 rounded-full bg-white/90 px-4 font-black text-orange-800 ring-1 ring-orange-200/70 backdrop-blur-md transition-colors hover:bg-orange-50"
+              className="absolute z-30 right-4 top-[calc(env(safe-area-inset-top)+0.75rem)] inline-flex h-12 items-center gap-2 rounded-full bg-[rgba(18,8,5,0.9)] px-4 font-black text-orange-50 ring-1 ring-orange-300/45 backdrop-blur-md transition-colors hover:bg-[rgba(27,16,8,0.96)]"
               style={{
-                boxShadow: "0 12px 30px rgba(154,72,18,0.18)",
+                boxShadow: "0 14px 36px rgba(0,0,0,0.48), 0 0 18px rgba(255,90,47,0.16)",
               }}
             >
               <Minimize2 className="h-4 w-4" aria-hidden="true" />
@@ -8561,8 +8557,8 @@ function MapLayerToggles({
               className={[
                 "inline-flex h-7 items-center gap-1 rounded-full px-2 transition-colors",
                 isActive
-                  ? "bg-white/14 text-white ring-1 ring-white/20"
-                  : "bg-transparent text-white/48 hover:bg-white/8 hover:text-white/76",
+                  ? "bg-white/15 text-white ring-1 ring-white/20"
+                  : "bg-transparent text-white/50 hover:bg-white/10 hover:text-white/75",
               ].join(" ")}
               aria-pressed={isActive}
             >
