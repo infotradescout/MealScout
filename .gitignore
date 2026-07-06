@@ -6,6 +6,7 @@ client/dist
 .tmp-server/
 .DS_Store
 logs/
+backups/
 server/public
 tmp_*.txt
 ts-out.txt
