@@ -2288,65 +2288,103 @@ export function registerEventRoutes(
           ? host.stripeConnectAccountId
           : null;
 
-        // Idempotency: check for existing booking
-        const [existing] = await db
-          .select({ id: eventBookings.id, status: eventBookings.status })
-          .from(eventBookings)
-          .where(
-            and(
-              eq(eventBookings.eventId, eventId),
-              eq(eventBookings.truckId, truckId),
-            ),
-          )
-          .limit(1);
-
-        if (existing?.status === "confirmed") {
-          logBookingFailure("already_confirmed", { bookingId: existing.id });
-          return res
-            .status(409)
-            .json({ message: "This spot is already booked" });
-        }
-        if (existing?.status === "pending") {
-          logBookingFailure("pending_booking_exists", { bookingId: existing.id });
-          return res
-            .status(409)
-            .json({ message: "A pending booking already exists" });
-        }
-
-        // Capacity check
-        const [countRow] = await db
-          .select({ count: sql<number>`count(*)` })
-          .from(eventBookings)
-          .where(
-            and(
-              eq(eventBookings.eventId, eventId),
-              inArray(eventBookings.status, ["confirmed"]),
-            ),
+        // Serialize booking creation per event so capacity and insert checks are atomic.
+        const booking = await db.transaction(async (tx: any) => {
+          await tx.execute(
+            sql`SELECT pg_advisory_xact_lock(hashtext(${`parking_pass_event:${eventId}`}))`,
           );
-        const confirmedCount = Number(countRow?.count ?? 0);
-        if (confirmedCount >= event.maxTrucks) {
-          logBookingFailure("event_full", {
-            confirmedCount,
-            maxTrucks: event.maxTrucks,
-          });
-          return res.status(409).json({ message: "Event is fully booked" });
-        }
 
-        // Insert pending booking record first (so we have the ID for metadata)
-        const [booking] = await db
-          .insert(eventBookings)
-          .values({
-            eventId,
-            truckId,
-            hostId: event.hostId,
-            hostPriceCents,
-            platformFeeCents: PLATFORM_FEE,
-            totalCents,
-            status: "pending",
-            stripeApplicationFeeAmount: hostStripeAccountId ? PLATFORM_FEE : null,
-            stripeTransferDestination: hostStripeAccountId,
-          })
-          .returning();
+          const [lockedEvent] = await tx
+            .select({ maxTrucks: events.maxTrucks, status: events.status })
+            .from(events)
+            .where(eq(events.id, eventId))
+            .limit(1);
+
+          if (!lockedEvent || lockedEvent.status !== "open") {
+            logBookingFailure("event_not_open", { status: lockedEvent?.status });
+            throw Object.assign(new Error("Event is not available for booking"), {
+              statusCode: 409,
+            });
+          }
+
+          const [existing] = await tx
+            .select({ id: eventBookings.id, status: eventBookings.status })
+            .from(eventBookings)
+            .where(
+              and(
+                eq(eventBookings.eventId, eventId),
+                eq(eventBookings.truckId, truckId),
+              ),
+            )
+            .limit(1);
+
+          if (existing?.status === "confirmed") {
+            logBookingFailure("already_confirmed", { bookingId: existing.id });
+            throw Object.assign(new Error("This spot is already booked"), {
+              statusCode: 409,
+            });
+          }
+
+          if (existing?.status === "pending") {
+            logBookingFailure("pending_booking_exists", { bookingId: existing.id });
+            throw Object.assign(new Error("A pending booking already exists"), {
+              statusCode: 409,
+            });
+          }
+
+          if (existing?.status === "cancelled" || existing?.status === "refunded") {
+            logBookingFailure("closed_booking_exists", {
+              bookingId: existing.id,
+              status: existing.status,
+            });
+            throw Object.assign(
+              new Error(
+                "This booking was previously closed. Refresh the listing and try again.",
+              ),
+              {
+                statusCode: 409,
+              },
+            );
+          }
+
+          const [countRow] = await tx
+            .select({ count: sql<number>`count(*)` })
+            .from(eventBookings)
+            .where(
+              and(
+                eq(eventBookings.eventId, eventId),
+                inArray(eventBookings.status, ["pending", "confirmed"]),
+              ),
+            );
+
+          const reservedCount = Number(countRow?.count ?? 0);
+          if (reservedCount >= lockedEvent.maxTrucks) {
+            logBookingFailure("event_full", {
+              reservedCount,
+              maxTrucks: lockedEvent.maxTrucks,
+            });
+            throw Object.assign(new Error("Event is fully booked"), {
+              statusCode: 409,
+            });
+          }
+
+          const [insertedBooking] = await tx
+            .insert(eventBookings)
+            .values({
+              eventId,
+              truckId,
+              hostId: event.hostId,
+              hostPriceCents,
+              platformFeeCents: PLATFORM_FEE,
+              totalCents,
+              status: "pending",
+              stripeApplicationFeeAmount: hostStripeAccountId ? PLATFORM_FEE : null,
+              stripeTransferDestination: hostStripeAccountId,
+            })
+            .returning();
+
+          return insertedBooking;
+        });
 
         // Create a platform PaymentIntent so the platform Payment Element can confirm it.
         // If host payouts are ready, use a destination charge. If not, MealScout holds
@@ -2433,6 +2471,17 @@ export function registerEventRoutes(
           hostPaymentsEnabled,
         });
       } catch (error: any) {
+        if (Number(error?.statusCode) >= 400 && Number(error?.statusCode) < 500) {
+          return res.status(Number(error.statusCode)).json({
+            message: String(error?.message || "Could not create booking"),
+          });
+        }
+        const errorCode = String(error?.code || error?.cause?.code || "");
+        if (errorCode === "23505") {
+          return res.status(409).json({
+            message: "A booking already exists for this truck and event",
+          });
+        }
         console.error("[event-booking] Error creating event booking:", error);
         res.status(500).json({ message: "Failed to create booking" });
       }

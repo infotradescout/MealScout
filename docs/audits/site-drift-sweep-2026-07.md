@@ -155,14 +155,17 @@ business to resolve) this fallback is probably reasonable — but it should be a
 clean "no business dashboard for this account" response, not a server error being
 swallowed. Worth a backend fix so real failures don't hide behind the same fallback.
 
-### 4. Parking Pass shows a `503` on subscription status
-**Severity: low-medium — may be intentional gating, needs confirmation**
-
-`/api/subscription/status` returns `503 Service Unavailable` when a diner visits
-`/parking-pass`. The page still renders correctly (explains only food trucks can
-book). Possibly an intentional "no active subscription" response using the wrong
-status code (503 usually means "service is down," not "you're not subscribed") —
-worth a quick check.
+### 4. ~~Parking Pass shows a `503` on subscription status~~ — RETRACTED, confirmed 2026-07-05
+**Not a bug.** Traced to `server/routes/subscriptionRoutes.ts:684`:
+`if (!stripe) return res.status(503).json({...})` — an explicit, correct fallback
+for when the Stripe secret key isn't configured. Confirmed live against production
+(`mealscout.onrender.com`) on 2026-07-05: logging in as the smoke customer account
+and calling `GET /api/subscription/status` returned `200 {"status":"none","hasAccess":false}`,
+which only happens past the `!stripe` gate — proving `STRIPE_SECRET_KEY` is set in
+production. Since every route file derives its own `stripe` constant from the same
+env var (e.g. `server/routes/suppliers/onboardingRoutes.ts`), this also confirms any
+other `if (!stripe)` fallback in the same process — such as `/api/supplier/stripe/status` —
+is correctly configured in production too. No code fix needed anywhere in this family.
 
 ### 5. Everything else in Pass 2 is solid
 `/scout`, `/favorites`, `/orders`, `/user-dashboard`, `/profile`,

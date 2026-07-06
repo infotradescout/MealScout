@@ -900,6 +900,7 @@ export function registerStripeWebhookRoutes(
                   id: hold.id,
                   eventId: row.id,
                   hostId: row.hostId,
+                  maxTrucks: row.maxTrucks,
                   hostCents,
                   feeCents,
                   spotNumber,
@@ -917,28 +918,60 @@ export function registerStripeWebhookRoutes(
               }
 
               for (const update of filtered) {
-                await db
-                  .update(eventBookings)
-                  .set({
-                    eventId: update.eventId,
-                    truckId,
-                    hostId: eventRow.hostId,
-                    hostPriceCents: update.hostCents,
-                    platformFeeCents: update.feeCents,
-                    totalCents: update.hostCents + update.feeCents,
-                    status: "confirmed",
-                    stripePaymentIntentId: paymentIntent.id,
-                    stripePaymentStatus: "succeeded",
-                    stripeApplicationFeeAmount: update.feeCents,
-                    stripeTransferDestination:
-                      host?.stripeConnectAccountId || null,
-                    slotType: normalizedSlotTypes.join(","),
-                    paidAt: now,
-                    bookingConfirmedAt: now,
-                    spotNumber: update.spotNumber,
-                    updatedAt: now,
-                  })
-                  .where(eq(eventBookings.id, update.id));
+                await db.transaction(async (tx: any) => {
+                  await tx.execute(
+                    sql`SELECT pg_advisory_xact_lock(hashtext(${`parking_pass_spot:${update.eventId}`}))`,
+                  );
+
+                  const confirmedRows = await tx
+                    .select({ spotNumber: eventBookings.spotNumber })
+                    .from(eventBookings)
+                    .where(
+                      and(
+                        eq(eventBookings.eventId, update.eventId),
+                        eq(eventBookings.status, "confirmed"),
+                      ),
+                    );
+
+                  const usedSpotNumbers = new Set<number>();
+                  for (const confirmed of confirmedRows) {
+                    if (confirmed.spotNumber && confirmed.spotNumber > 0) {
+                      usedSpotNumbers.add(confirmed.spotNumber);
+                    }
+                  }
+
+                  let nextSpotNumber = 1;
+                  while (usedSpotNumbers.has(nextSpotNumber)) {
+                    nextSpotNumber += 1;
+                  }
+
+                  if (nextSpotNumber > update.maxTrucks) {
+                    throw new Error("parking_pass_overbook");
+                  }
+
+                  await tx
+                    .update(eventBookings)
+                    .set({
+                      eventId: update.eventId,
+                      truckId,
+                      hostId: eventRow.hostId,
+                      hostPriceCents: update.hostCents,
+                      platformFeeCents: update.feeCents,
+                      totalCents: update.hostCents + update.feeCents,
+                      status: "confirmed",
+                      stripePaymentIntentId: paymentIntent.id,
+                      stripePaymentStatus: "succeeded",
+                      stripeApplicationFeeAmount: update.feeCents,
+                      stripeTransferDestination:
+                        host?.stripeConnectAccountId || null,
+                      slotType: normalizedSlotTypes.join(","),
+                      paidAt: now,
+                      bookingConfirmedAt: now,
+                      spotNumber: nextSpotNumber,
+                      updatedAt: now,
+                    })
+                    .where(eq(eventBookings.id, update.id));
+                });
 
                 incrementNewlyConfirmed(update.eventId);
 
@@ -956,26 +989,12 @@ export function registerStripeWebhookRoutes(
                 const row = eventsByDate.get(dateKey);
                 if (!row) return null;
 
-                const bookedRows = bookingsByEvent.get(row.id) ?? [];
-                const usedSpotNumbers = new Set<number>();
-                for (const booked of bookedRows) {
-                  if (booked.spotNumber && booked.spotNumber > 0) {
-                    usedSpotNumbers.add(booked.spotNumber);
-                  }
-                }
-                let spotNumber = 1;
-                while (usedSpotNumbers.has(spotNumber)) {
-                  spotNumber += 1;
-                }
-                if (spotNumber > row.maxTrucks) {
-                  return null;
-                }
-
                 const hostCents = hostSplit[index] ?? 0;
                 const feeCents = platformSplit[index] ?? 0;
 
                 return {
                   eventId: row.id,
+                  maxTrucks: row.maxTrucks,
                   truckId,
                   hostId: row.hostId,
                   hostPriceCents: hostCents,
@@ -990,7 +1009,6 @@ export function registerStripeWebhookRoutes(
                   slotType: normalizedSlotTypes.join(","),
                   paidAt: now,
                   bookingConfirmedAt: now,
-                  spotNumber,
                 };
               });
 
@@ -1004,50 +1022,126 @@ export function registerStripeWebhookRoutes(
                 break;
               }
 
-              const insertedRows = await db
-                .insert(eventBookings)
-                .values(filteredRows)
-                .onConflictDoNothing()
-                .returning({
-                  id: eventBookings.id,
-                  hostId: eventBookings.hostId,
-                  hostPriceCents: eventBookings.hostPriceCents,
-                });
+              const upsertedRows: Array<{
+                id: string;
+                eventId: string;
+                hostId: string;
+                hostPriceCents: number;
+              }> = [];
 
-              if (insertedRows.length === 0) {
-                const existingRows = await db
-                  .select({
-                    id: eventBookings.id,
-                    eventId: eventBookings.eventId,
-                    hostId: eventBookings.hostId,
-                    hostPriceCents: eventBookings.hostPriceCents,
-                  })
-                  .from(eventBookings)
-                  .where(inArray(eventBookings.eventId, eventIds))
-                  .where(eq(eventBookings.truckId, truckId))
-                  .where(
-                    eq(eventBookings.stripePaymentIntentId, paymentIntent.id),
-                  )
-                  .where(eq(eventBookings.status, "confirmed"));
+              let hasUpsertFailure = false;
+              for (const row of filteredRows) {
+                try {
+                  const result = await db.transaction(async (tx: any) => {
+                    await tx.execute(
+                      sql`SELECT pg_advisory_xact_lock(hashtext(${`parking_pass_spot:${row.eventId}`}))`,
+                    );
 
-                if (existingRows.length === expectedDateKeys.length) {
-                  bookingConfirmed = true;
-                  for (const row of existingRows) {
-                    incrementNewlyConfirmed(row.eventId);
-                  }
-                } else {
-                  await cancelWithCredit("parking_pass_duplicate");
+                    const confirmedRows = await tx
+                      .select({ spotNumber: eventBookings.spotNumber })
+                      .from(eventBookings)
+                      .where(
+                        and(
+                          eq(eventBookings.eventId, row.eventId),
+                          eq(eventBookings.status, "confirmed"),
+                        ),
+                      );
+
+                    const usedSpotNumbers = new Set<number>();
+                    for (const confirmed of confirmedRows) {
+                      if (confirmed.spotNumber && confirmed.spotNumber > 0) {
+                        usedSpotNumbers.add(confirmed.spotNumber);
+                      }
+                    }
+
+                    let nextSpotNumber = 1;
+                    while (usedSpotNumbers.has(nextSpotNumber)) {
+                      nextSpotNumber += 1;
+                    }
+
+                    if (nextSpotNumber > row.maxTrucks) {
+                      throw new Error("parking_pass_overbook");
+                    }
+
+                    const [inserted] = await tx
+                      .insert(eventBookings)
+                      .values({
+                        eventId: row.eventId,
+                        truckId: row.truckId,
+                        hostId: row.hostId,
+                        hostPriceCents: row.hostPriceCents,
+                        platformFeeCents: row.platformFeeCents,
+                        totalCents: row.totalCents,
+                        status: row.status,
+                        stripePaymentIntentId: row.stripePaymentIntentId,
+                        stripePaymentStatus: row.stripePaymentStatus,
+                        stripeApplicationFeeAmount: row.stripeApplicationFeeAmount,
+                        stripeTransferDestination: row.stripeTransferDestination,
+                        slotType: row.slotType,
+                        paidAt: row.paidAt,
+                        bookingConfirmedAt: row.bookingConfirmedAt,
+                        spotNumber: nextSpotNumber,
+                      })
+                      .onConflictDoNothing()
+                      .returning({
+                        id: eventBookings.id,
+                        eventId: eventBookings.eventId,
+                        hostId: eventBookings.hostId,
+                        hostPriceCents: eventBookings.hostPriceCents,
+                      });
+
+                    if (inserted) {
+                      return inserted;
+                    }
+
+                    const [existing] = await tx
+                      .select({
+                        id: eventBookings.id,
+                        eventId: eventBookings.eventId,
+                        hostId: eventBookings.hostId,
+                        hostPriceCents: eventBookings.hostPriceCents,
+                      })
+                      .from(eventBookings)
+                      .where(
+                        and(
+                          eq(eventBookings.eventId, row.eventId),
+                          eq(eventBookings.truckId, truckId),
+                          eq(
+                            eventBookings.stripePaymentIntentId,
+                            paymentIntent.id,
+                          ),
+                          eq(eventBookings.status, "confirmed"),
+                        ),
+                      )
+                      .limit(1);
+
+                    if (!existing) {
+                      throw new Error("parking_pass_duplicate");
+                    }
+
+                    return existing;
+                  });
+
+                  upsertedRows.push(result);
+                } catch (upsertError: any) {
+                  const reason = String(upsertError?.message || "parking_pass_duplicate");
+                  await cancelWithCredit(
+                    reason === "parking_pass_overbook"
+                      ? "parking_pass_overbook"
+                      : "parking_pass_duplicate",
+                  );
+                  hasUpsertFailure = true;
                   break;
                 }
               }
 
-              if (insertedRows.length > 0) {
-                for (const row of filteredRows) {
-                  incrementNewlyConfirmed(row.eventId);
-                }
+              if (hasUpsertFailure) {
+                break;
               }
 
-              for (const row of insertedRows) {
+              bookingConfirmed = upsertedRows.length === expectedDateKeys.length;
+              for (const row of upsertedRows) {
+                incrementNewlyConfirmed(row.eventId);
                 if (Number(row.hostPriceCents || 0) > 0) {
                   earnedEntries.push({
                     hostId: row.hostId,
@@ -1056,8 +1150,6 @@ export function registerStripeWebhookRoutes(
                   });
                 }
               }
-
-              bookingConfirmed = true;
             }
 
             if (bookingConfirmed) {

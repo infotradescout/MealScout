@@ -2171,7 +2171,7 @@ export function registerTruckImportAdminRoutes(
         const businessName =
           String(listing.name || "").trim() || "Unnamed truck";
         const city = String(listing.city || "").trim() || null;
-        const claimUrl = `${resolvePublicBaseUrl()}/claim-truck?q=${encodeURIComponent(
+        const claimUrl = `${resolvePublicBaseUrl()}/claim-business?q=${encodeURIComponent(
           String(listing.externalId || businessName),
         )}`;
         const pitchCreatedAt = new Date().toISOString();

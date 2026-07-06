@@ -13,7 +13,10 @@
  *
  * Thin state: renders a tasteful "No schedule posted yet" with a claim CTA.
  */
-import type { PublicRestaurantProfile, PublicTruckScheduleStop } from "@shared/publicProfiles";
+import type {
+  PublicRestaurantProfile,
+  PublicTruckScheduleStop,
+} from "@shared/publicProfiles";
 import {
   getTruckScheduleRows,
   getTruckScheduleEmptyStateLabel,
@@ -30,11 +33,11 @@ type StopRowProps = {
 function StopRow({ label, stop, isLive = false }: StopRowProps) {
   const locationName = stop.locationName || stop.addressPublicLabel || null;
   const timeLabel = stop.timeWindowLabel || null;
-  const directionsHref = stop.directionsUrl || (
-    stop.latitude && stop.longitude
+  const directionsHref =
+    stop.directionsUrl ||
+    (stop.latitude && stop.longitude
       ? `https://maps.google.com/?q=${stop.latitude},${stop.longitude}`
-      : null
-  );
+      : null);
 
   return (
     <div
@@ -53,7 +56,9 @@ function StopRow({ label, stop, isLive = false }: StopRowProps) {
       </p>
 
       {locationName ? (
-        <p className={`text-base font-bold leading-snug ${isLive ? "text-white" : "text-white/90"}`}>
+        <p
+          className={`text-base font-bold leading-snug ${isLive ? "text-white" : "text-white/90"}`}
+        >
           {locationName}
         </p>
       ) : null}
@@ -93,7 +98,11 @@ function StopRow({ label, stop, isLive = false }: StopRowProps) {
   );
 }
 
-export function TruckSchedulePanel({ profile }: { profile: PublicRestaurantProfile }) {
+export function TruckSchedulePanel({
+  profile,
+}: {
+  profile: PublicRestaurantProfile;
+}) {
   if (profile.profileType !== "truck") return null;
 
   const schedule = profile.truckSchedule;
@@ -146,10 +155,14 @@ export function TruckSchedulePanel({ profile }: { profile: PublicRestaurantProfi
                   <CalendarDays className="mt-0.5 h-4 w-4 flex-none text-white/40" />
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-white/85 truncate">
-                      {stop.locationName || stop.addressPublicLabel || "Scheduled stop"}
+                      {stop.locationName ||
+                        stop.addressPublicLabel ||
+                        "Scheduled stop"}
                     </p>
                     <p className="text-xs text-white/50">
-                      {[stop.date, stop.timeWindowLabel].filter(Boolean).join(" · ")}
+                      {[stop.date, stop.timeWindowLabel]
+                        .filter(Boolean)
+                        .join(" · ")}
                     </p>
                   </div>
                 </div>
@@ -170,7 +183,7 @@ export function TruckSchedulePanel({ profile }: { profile: PublicRestaurantProfi
             {getTruckScheduleEmptyStateLabel()}
           </p>
           <a
-            href="/claim-truck"
+            href="/claim-business"
             className="inline-block text-xs font-semibold text-orange-300 hover:text-orange-200"
           >
             Own this truck? Add your schedule →

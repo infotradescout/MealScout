@@ -4,11 +4,18 @@ import { useAuth } from "@/hooks/useAuth";
 import { apiRequest } from "@/lib/queryClient";
 import { BackHeader } from "@/components/back-header";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { Truck } from "lucide-react";
+import { PlaceAutocompleteInput } from "@/components/maps/place-autocomplete-input";
 
 type ClaimRow = {
   id: string;
@@ -26,6 +33,23 @@ type ClaimRow = {
   requestCooldownMinutes?: number;
 };
 
+type PlaceSuggestion = {
+  placeId: string;
+  text: string;
+  mainText: string;
+  secondaryText: string;
+  _sessionToken?: string;
+};
+
+type PlaceDetailsResult = {
+  placeId: string;
+  formattedAddress: string;
+  city: string;
+  state: string;
+  latitude: number | null;
+  longitude: number | null;
+};
+
 export default function ClaimTruckPage() {
   const { isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
@@ -34,6 +58,8 @@ export default function ClaimTruckPage() {
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [requestingId, setRequestingId] = useState<string | null>(null);
+  const [missingBusinessQuery, setMissingBusinessQuery] = useState("");
+  const [missingBusinessLoading, setMissingBusinessLoading] = useState(false);
   const [error, setError] = useState<string>("");
   const [rows, setRows] = useState<ClaimRow[]>([]);
 
@@ -58,7 +84,9 @@ export default function ClaimTruckPage() {
       const next = Array.isArray(data) ? data : [];
       setRows(next);
       if (next.length === 0) {
-        setError("No matching trucks found. Try a shorter name or the license/external ID.");
+        setError(
+          "No matching trucks found. Try a shorter name or the license/external ID.",
+        );
       }
     } catch (err: any) {
       setError(err?.message || "Search failed. Try again.");
@@ -71,7 +99,9 @@ export default function ClaimTruckPage() {
     setRequestingId(listingId);
     setError("");
     try {
-      const res = await apiRequest("POST", "/api/truck-claims/request", { listingId });
+      const res = await apiRequest("POST", "/api/truck-claims/request", {
+        listingId,
+      });
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
@@ -97,7 +127,9 @@ export default function ClaimTruckPage() {
       }
 
       toast({
-        title: data?.emailSent ? "Email sent to owner" : "Email could not be sent",
+        title: data?.emailSent
+          ? "Email sent to owner"
+          : "Email could not be sent",
         description: data?.emailSent
           ? "We sent them a link to finish setting up their account."
           : "An admin should check Email Delivery in the dashboard.",
@@ -119,10 +151,70 @@ export default function ClaimTruckPage() {
     setLocation(next);
   };
 
+  const goToMissingBusinessFlow = (
+    suggestion: PlaceSuggestion,
+    place: PlaceDetailsResult,
+  ) => {
+    const params = new URLSearchParams({
+      businessType: "food_truck",
+      claim: "1",
+      claimMode: "missing",
+      q: suggestion.mainText || suggestion.text,
+      prefillName: suggestion.mainText || suggestion.text,
+      prefillAddress: place.formattedAddress || suggestion.text,
+      prefillCity: place.city || "",
+      prefillState: place.state || "",
+      prefillPlaceId: place.placeId || suggestion.placeId,
+    });
+
+    if (typeof place.latitude === "number") {
+      params.set("prefillLat", String(place.latitude));
+    }
+    if (typeof place.longitude === "number") {
+      params.set("prefillLng", String(place.longitude));
+    }
+
+    setLocation(`/restaurant-signup?${params.toString()}`);
+  };
+
+  const handleMissingBusinessSelect = async (suggestion: PlaceSuggestion) => {
+    setMissingBusinessLoading(true);
+    setError("");
+    try {
+      const detailUrl = new URL(
+        `/api/map/place-details/${encodeURIComponent(suggestion.placeId)}`,
+        window.location.origin,
+      );
+      if (suggestion._sessionToken) {
+        detailUrl.searchParams.set("sessionToken", suggestion._sessionToken);
+      }
+
+      const res = await fetch(detailUrl.toString(), { credentials: "include" });
+      if (!res.ok) {
+        throw new Error("Could not load place details");
+      }
+
+      const data = await res.json().catch(() => ({}));
+      const place = (data?.place || {}) as PlaceDetailsResult;
+      goToMissingBusinessFlow(suggestion, {
+        placeId: place.placeId || suggestion.placeId,
+        formattedAddress: place.formattedAddress || suggestion.text,
+        city: place.city || "",
+        state: place.state || "",
+        latitude: typeof place.latitude === "number" ? place.latitude : null,
+        longitude: typeof place.longitude === "number" ? place.longitude : null,
+      });
+    } catch (err: any) {
+      setError(err?.message || "Could not use selected business. Try again.");
+    } finally {
+      setMissingBusinessLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[var(--bg-layered)]">
       <BackHeader
-        title="Claim a Truck"
+        title="Claim a Business"
         fallbackHref="/"
         icon={Truck}
         className="bg-[hsl(var(--background))/0.94] border-b border-[color:var(--border-subtle)] shadow-clean"
@@ -131,9 +223,11 @@ export default function ClaimTruckPage() {
       <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6 space-y-6">
         <Card className="border-[color:var(--border-subtle)] bg-[var(--bg-card)] shadow-clean-lg">
           <CardHeader>
-            <CardTitle>Find your truck</CardTitle>
+            <CardTitle>Find your business</CardTitle>
             <CardDescription>
-              Search by name, license/external ID, city, or state. If your truck is unclaimed, you can claim it or request a setup reminder.
+              Search by name, license/external ID, city, or state. If your
+              profile is unclaimed, you can claim it or request a setup
+              reminder.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -146,12 +240,18 @@ export default function ClaimTruckPage() {
                   if (e.key === "Enter") void handleSearch();
                 }}
               />
-              <Button variant="outline" onClick={handleSearch} disabled={loading}>
+              <Button
+                variant="outline"
+                onClick={handleSearch}
+                disabled={loading}
+              >
                 {loading ? "Searching..." : "Search"}
               </Button>
             </div>
 
-            {error ? <div className="text-sm text-destructive">{error}</div> : null}
+            {error ? (
+              <div className="text-sm text-destructive">{error}</div>
+            ) : null}
 
             {rows.length > 0 ? (
               <div className="space-y-2">
@@ -186,7 +286,8 @@ export default function ClaimTruckPage() {
                           </div>
                           {cooldown > 0 ? (
                             <div className="text-xs text-muted-foreground">
-                              Reminder recently sent. Try again in about {cooldown} minutes.
+                              Reminder recently sent. Try again in about{" "}
+                              {cooldown} minutes.
                             </div>
                           ) : null}
                         </div>
@@ -204,13 +305,16 @@ export default function ClaimTruckPage() {
                             onClick={() => handleRequest(row.id)}
                             disabled={!canRequest || requestingId === row.id}
                           >
-                            {requestingId === row.id ? "Requesting..." : "Request setup"}
+                            {requestingId === row.id
+                              ? "Requesting..."
+                              : "Request setup"}
                           </Button>
                         </div>
                       </div>
                       {!canClaim && row.invited ? (
                         <div className="text-xs text-muted-foreground">
-                          This truck already has an invited owner. Use “Request setup” to remind them.
+                          This truck already has an invited owner. Use “Request
+                          setup” to remind them.
                         </div>
                       ) : null}
                     </div>
@@ -218,6 +322,30 @@ export default function ClaimTruckPage() {
                 })}
               </div>
             ) : null}
+
+            <div className="rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-3 space-y-2">
+              <div className="text-sm font-semibold">Can&apos;t find it?</div>
+              <p className="text-xs text-muted-foreground">
+                Use Google autofill to claim a missing business profile.
+              </p>
+              <PlaceAutocompleteInput
+                id="claim-missing-business"
+                value={missingBusinessQuery}
+                onChange={setMissingBusinessQuery}
+                onSelect={(suggestion) => {
+                  void handleMissingBusinessSelect(
+                    suggestion as PlaceSuggestion,
+                  );
+                }}
+                placeholder="Search business name or address"
+                disabled={missingBusinessLoading}
+              />
+              {missingBusinessLoading ? (
+                <div className="text-xs text-muted-foreground">
+                  Loading business details...
+                </div>
+              ) : null}
+            </div>
           </CardContent>
         </Card>
       </div>

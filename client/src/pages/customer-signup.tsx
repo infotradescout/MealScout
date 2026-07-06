@@ -99,8 +99,27 @@ const BUSINESS_SUBTYPE_LABELS: Record<BusinessSubType, string> = {
   restaurant: "Restaurant owner",
   bar: "Bar owner",
   food_truck: "Food truck owner",
-  caterer: "Caterer",
-  private_chef: "Private chef",
+  caterer: "Caterer owner",
+  private_chef: "Private chef owner",
+};
+
+const getBusinessProfileActionLabel = (businessSubType: BusinessSubType) =>
+  `Create ${BUSINESS_SUBTYPE_LABELS[businessSubType]
+    .replace(/\s+owner$/i, "")
+    .toLowerCase()} profile`;
+
+const buildRestaurantSignupHref = (
+  businessSubType: BusinessSubType,
+  source = "customer-signup",
+) => {
+  const params = new URLSearchParams({
+    businessType: businessSubType,
+    source,
+  });
+  if (businessSubType === "food_truck") {
+    params.set("claim", "1");
+  }
+  return `/restaurant-signup?${params.toString()}`;
 };
 
 type SignupFlowOption = {
@@ -162,7 +181,7 @@ const signupFlowOptions: SignupFlowOption[] = [
     businessSubType: "food_truck",
     label: "Food Truck",
     description: "Claim your truck and get discovered around town.",
-    href: "/customer-signup?role=business&businessType=food_truck",
+    href: buildRestaurantSignupHref("food_truck"),
     icon: Truck,
   },
   {
@@ -171,7 +190,7 @@ const signupFlowOptions: SignupFlowOption[] = [
     businessSubType: "restaurant",
     label: "Restaurant",
     description: "Create your profile, menu, and local deal surfaces.",
-    href: "/customer-signup?role=business&businessType=restaurant",
+    href: buildRestaurantSignupHref("restaurant"),
     icon: Building2,
   },
   {
@@ -180,7 +199,7 @@ const signupFlowOptions: SignupFlowOption[] = [
     businessSubType: "bar",
     label: "Bar",
     description: "Promote food, drinks, specials, and events.",
-    href: "/customer-signup?role=business&businessType=bar",
+    href: buildRestaurantSignupHref("bar"),
     icon: Beer,
   },
   {
@@ -189,7 +208,7 @@ const signupFlowOptions: SignupFlowOption[] = [
     businessSubType: "caterer",
     label: "Caterer",
     description: "Build a catering profile for local bookings.",
-    href: "/customer-signup?role=business&businessType=caterer",
+    href: buildRestaurantSignupHref("caterer"),
     icon: UtensilsCrossed,
   },
   {
@@ -198,7 +217,7 @@ const signupFlowOptions: SignupFlowOption[] = [
     businessSubType: "private_chef",
     label: "Private Chef",
     description: "Get discovered for private meals and events.",
-    href: "/customer-signup?role=business&businessType=private_chef",
+    href: buildRestaurantSignupHref("private_chef"),
     icon: ChefHat,
   },
   {
@@ -275,14 +294,7 @@ export default function CustomerSignup() {
           : "/scout";
 
   const getBusinessRedirectPath = () => {
-    const params = new URLSearchParams({
-      businessType: businessSubType,
-      source: "post-verification",
-    });
-    if (businessSubType === "food_truck") {
-      params.set("claim", "1");
-    }
-    return `/restaurant-signup?${params.toString()}`;
+    return buildRestaurantSignupHref(businessSubType, "post-verification");
   };
 
   const getRegistrationUserType = () =>
@@ -311,6 +323,15 @@ export default function CustomerSignup() {
     setSignupFlowSelected(true);
     setLocation(preserveReferralHref(option.href));
   };
+
+  useEffect(() => {
+    if (accountType !== "business") return;
+    setLocation(
+      preserveReferralHref(
+        buildRestaurantSignupHref(businessSubType, "customer-signup-redirect"),
+      ),
+    );
+  }, [accountType, businessSubType, setLocation, urlReferralTag]);
 
   const goToVerificationHandoff = (redirectPath: string) => {
     try {
@@ -429,6 +450,7 @@ export default function CustomerSignup() {
             phone: data.phone || existing.phone || "",
             businessType: businessSubType,
             menuSourceUrl: data.menuSourceUrl || existing.menuSourceUrl || "",
+            acceptTerms: data.acceptTerms === true,
           }),
         );
       } else if (accountType === "host") {
@@ -862,9 +884,7 @@ export default function CustomerSignup() {
       : accountType === "event_organizer"
         ? "Create event organizer profile"
         : accountType === "business"
-          ? businessSubType === "food_truck"
-            ? "Create food truck profile"
-            : "Create restaurant profile"
+          ? getBusinessProfileActionLabel(businessSubType)
           : accountType === "supplier"
             ? "Create supplier profile"
             : "Go to dashboard";

@@ -35,7 +35,10 @@ import { MenuHighlightsRail } from "@/components/public-profile/MenuHighlightsRa
 import { TruckSchedulePanel } from "@/components/public-profile/TruckSchedulePanel";
 import { RestaurantHoursPanel } from "@/components/public-profile/RestaurantHoursPanel";
 import { PlanYourVisitPanel } from "@/components/public-profile/PlanYourVisitPanel";
-import { ThinProfileState, isThinProfile } from "@/components/public-profile/ThinProfileState";
+import {
+  ThinProfileState,
+  isThinProfile,
+} from "@/components/public-profile/ThinProfileState";
 import { PublicProfileDecisionBar } from "@/components/public-profile/PublicProfileDecisionBar";
 import { RelatedScoutRail } from "@/components/public-profile/RelatedScoutRail";
 import { useAuth } from "@/hooks/useAuth";
@@ -47,7 +50,13 @@ import {
 } from "@/components/public-profile/truckScheduleTruth";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import {
   CalendarDays,
@@ -176,8 +185,14 @@ const hasPostedScheduleOrTimeWindow = (profile: PublicProfilePayload) => {
 };
 
 const normalizePublicProfileEntity = (value: string | null | undefined) => {
-  const normalized = String(value || "").toLowerCase().trim();
-  if (normalized === "food_truck" || normalized === "food-truck" || normalized === "foodtruck") {
+  const normalized = String(value || "")
+    .toLowerCase()
+    .trim();
+  if (
+    normalized === "food_truck" ||
+    normalized === "food-truck" ||
+    normalized === "foodtruck"
+  ) {
     return "truck";
   }
   return normalized;
@@ -207,18 +222,23 @@ type LocationDiscoveryPayload = {
 };
 
 const asSafeCtas = (ctas: PublicCta[] | undefined) =>
-  (Array.isArray(ctas) ? ctas : []).filter((cta) => Boolean(cta?.safe && cta?.href));
+  (Array.isArray(ctas) ? ctas : []).filter((cta) =>
+    Boolean(cta?.safe && cta?.href),
+  );
 
 const ctaTarget = (cta: PublicCta) =>
   cta.type === "internal" || cta.type === "phone" ? undefined : "_blank";
 
 const ctaRel = (cta: PublicCta) =>
-  cta.type === "internal" || cta.type === "phone" ? undefined : "noopener noreferrer";
+  cta.type === "internal" || cta.type === "phone"
+    ? undefined
+    : "noopener noreferrer";
 
 const isSelfProfileCta = (profile: PublicProfilePayload, cta: PublicCta) =>
   cta.type === "internal" && cta.href === profile.profilePath;
 
-const isDetailsCta = (cta: PublicCta) => /details/i.test(String(cta.label || ""));
+const isDetailsCta = (cta: PublicCta) =>
+  /details/i.test(String(cta.label || ""));
 
 const uniqueByHref = (ctas: PublicCta[]) => {
   const seen = new Set<string>();
@@ -230,8 +250,12 @@ const uniqueByHref = (ctas: PublicCta[]) => {
   });
 };
 
-const ctaPriorityForProfile = (profile: PublicProfilePayload, cta: PublicCta) => {
-  if (typeof cta.priority === "number" && Number.isFinite(cta.priority)) return cta.priority;
+const ctaPriorityForProfile = (
+  profile: PublicProfilePayload,
+  cta: PublicCta,
+) => {
+  if (typeof cta.priority === "number" && Number.isFinite(cta.priority))
+    return cta.priority;
   const label = String(cta.label || "").toLowerCase();
   if (profile.entity === "restaurant") {
     if (cta.type === "order" || label.includes("order")) return 100;
@@ -262,22 +286,42 @@ const ctaPriorityForProfile = (profile: PublicProfilePayload, cta: PublicCta) =>
   return 0;
 };
 
-const pickActionCtas = (profile: PublicProfilePayload, safeCtas: PublicCta[], limit = 6) =>
+const pickActionCtas = (
+  profile: PublicProfilePayload,
+  safeCtas: PublicCta[],
+  limit = 6,
+) =>
   uniqueByHref(
-    safeCtas.filter((cta) => !isSelfProfileCta(profile, cta) && !isDetailsCta(cta)),
+    safeCtas.filter(
+      (cta) => !isSelfProfileCta(profile, cta) && !isDetailsCta(cta),
+    ),
   )
-    .sort((a, b) => ctaPriorityForProfile(profile, b) - ctaPriorityForProfile(profile, a))
+    .sort(
+      (a, b) =>
+        ctaPriorityForProfile(profile, b) - ctaPriorityForProfile(profile, a),
+    )
     .slice(0, limit);
 
-const locationLine = (profile: { addressPublicLabel?: string | null; city?: string | null; state?: string | null }) =>
+const locationLine = (profile: {
+  addressPublicLabel?: string | null;
+  city?: string | null;
+  state?: string | null;
+}) =>
   profile.addressPublicLabel ||
   [profile.city, profile.state].filter(Boolean).join(", ") ||
   null;
 
 const decisionLocationLine = (profile: PublicProfilePayload) => {
-  if (isRestaurantLikeEntity(profile.entity) && profile.profileType === "truck") {
+  if (
+    isRestaurantLikeEntity(profile.entity) &&
+    profile.profileType === "truck"
+  ) {
     const schedule = (profile as PublicRestaurantProfile).truckSchedule;
-    const stop = schedule?.currentStop || schedule?.todayStop || schedule?.nextStop || null;
+    const stop =
+      schedule?.currentStop ||
+      schedule?.todayStop ||
+      schedule?.nextStop ||
+      null;
     const stopLabel = stop
       ? stop.addressPublicLabel ||
         stop.locationName ||
@@ -295,7 +339,11 @@ const phoneLine = (profile: PublicProfilePayload) =>
       ? profile.phonePublic
       : profile.phone || null;
 
-const renderCtaButton = (cta: PublicCta, variant: "default" | "outline", key: string) => (
+const renderCtaButton = (
+  cta: PublicCta,
+  variant: "default" | "outline",
+  key: string,
+) => (
   <a
     key={key}
     href={cta.href}
@@ -374,7 +422,10 @@ function HeroBlock({ profile }: { profile: PublicProfilePayload }) {
       <div className="space-y-3 p-4 sm:p-5">
         <div className="flex flex-wrap items-center gap-2 text-xs">
           {liveStatus ? <Badge variant="secondary">{liveStatus}</Badge> : null}
-          <Badge variant="outline" className="border-orange-400/45 text-orange-200">
+          <Badge
+            variant="outline"
+            className="border-orange-400/45 text-orange-200"
+          >
             {profileTypeLabel}
           </Badge>
           {"verifiedProfile" in profile && profile.verifiedProfile ? (
@@ -383,7 +434,10 @@ function HeroBlock({ profile }: { profile: PublicProfilePayload }) {
             </Badge>
           ) : null}
           {"locallyOwned" in profile && profile.locallyOwned ? (
-            <Badge variant="outline" className="border-emerald-300/35 text-emerald-200/85">
+            <Badge
+              variant="outline"
+              className="border-emerald-300/35 text-emerald-200/85"
+            >
               Locally owned
             </Badge>
           ) : null}
@@ -392,7 +446,8 @@ function HeroBlock({ profile }: { profile: PublicProfilePayload }) {
           <h1 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
             {profile.displayName}
           </h1>
-          {profile.entity === "restaurant" && (profile.cuisineTags?.length || profile.serviceType) ? (
+          {profile.entity === "restaurant" &&
+          (profile.cuisineTags?.length || profile.serviceType) ? (
             <p className="text-sm font-medium text-orange-100/85">
               {[...(profile.cuisineTags || []).slice(0, 2), profile.serviceType]
                 .filter(Boolean)
@@ -421,7 +476,9 @@ function HeroBlock({ profile }: { profile: PublicProfilePayload }) {
           ) : null}
         </div>
         {profile.description ? (
-          <p className="line-clamp-3 text-sm leading-6 text-white/70">{profile.description}</p>
+          <p className="line-clamp-3 text-sm leading-6 text-white/70">
+            {profile.description}
+          </p>
         ) : null}
       </div>
     </section>
@@ -439,17 +496,24 @@ function PublicProfileShareControls({
   sharePath?: string | null;
   title: string;
   description: string;
-  onShareAction: (actionType: string, targetType?: string | null, href?: string | null) => void;
+  onShareAction: (
+    actionType: string,
+    targetType?: string | null,
+    href?: string | null,
+  ) => void;
 }) {
   const { toast } = useToast();
   const [copied, setCopied] = useState(false);
-  const targetPath = sharePath || profile.profilePath || (() => {
-    try {
-      return new URL(profile.canonicalUrl).pathname;
-    } catch {
-      return typeof window !== "undefined" ? window.location.pathname : "/";
-    }
-  })();
+  const targetPath =
+    sharePath ||
+    profile.profilePath ||
+    (() => {
+      try {
+        return new URL(profile.canonicalUrl).pathname;
+      } catch {
+        return typeof window !== "undefined" ? window.location.pathname : "/";
+      }
+    })();
 
   const resolveShareUrl = async () => resolveCanonicalShareUrl(targetPath);
 
@@ -482,7 +546,8 @@ function PublicProfileShareControls({
       onShareAction("share_copy", "copy_fallback", shareUrl);
       toast({
         title: "Link copied",
-        description: "Sharing is not available here, so the profile link was copied.",
+        description:
+          "Sharing is not available here, so the profile link was copied.",
       });
     } catch {
       toast({
@@ -528,7 +593,11 @@ function PublicProfileShareControls({
           className="border-white/20 text-white hover:bg-white/10"
           data-testid="button-public-profile-copy-link"
         >
-          {copied ? <Check className="mr-2 h-4 w-4" /> : <Copy className="mr-2 h-4 w-4" />}
+          {copied ? (
+            <Check className="mr-2 h-4 w-4" />
+          ) : (
+            <Copy className="mr-2 h-4 w-4" />
+          )}
           Copy Link
         </Button>
       </div>
@@ -551,16 +620,26 @@ function LocationNowSection({ profile }: { profile: PublicLocationProfile }) {
         {hasAny ? (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div className="rounded-lg border border-white/10 bg-black/20 p-3">
-              <p className="text-xs uppercase tracking-wide text-white/60">Trucks here now</p>
+              <p className="text-xs uppercase tracking-wide text-white/60">
+                Trucks here now
+              </p>
               <p className="mt-1 text-2xl font-semibold text-white">{now}</p>
             </div>
             <div className="rounded-lg border border-white/10 bg-black/20 p-3">
-              <p className="text-xs uppercase tracking-wide text-white/60">Trucks tonight</p>
-              <p className="mt-1 text-2xl font-semibold text-white">{tonight}</p>
+              <p className="text-xs uppercase tracking-wide text-white/60">
+                Trucks tonight
+              </p>
+              <p className="mt-1 text-2xl font-semibold text-white">
+                {tonight}
+              </p>
             </div>
             <div className="rounded-lg border border-white/10 bg-black/20 p-3">
-              <p className="text-xs uppercase tracking-wide text-white/60">Upcoming</p>
-              <p className="mt-1 text-2xl font-semibold text-white">{upcoming}</p>
+              <p className="text-xs uppercase tracking-wide text-white/60">
+                Upcoming
+              </p>
+              <p className="mt-1 text-2xl font-semibold text-white">
+                {upcoming}
+              </p>
             </div>
           </div>
         ) : (
@@ -594,16 +673,16 @@ function QuickActionRow({
     (cta) => cta.type !== "share",
   );
   const actions = preferredOrder
-    .flatMap((type) =>
-      actionPool.filter((cta) => cta.type === type),
-    )
+    .flatMap((type) => actionPool.filter((cta) => cta.type === type))
     .reduce((acc, cta) => {
       if (acc.find((existing) => existing.href === cta.href)) return acc;
       acc.push(cta);
       return acc;
     }, [] as PublicCta[])
     .concat(
-      actionPool.filter((cta) => !preferredOrder.includes(cta.type) || cta.type === "external"),
+      actionPool.filter(
+        (cta) => !preferredOrder.includes(cta.type) || cta.type === "external",
+      ),
     )
     .reduce((acc, cta) => {
       if (acc.find((existing) => existing.href === cta.href)) return acc;
@@ -612,7 +691,9 @@ function QuickActionRow({
     }, [] as PublicCta[])
     .slice(0, 7);
   if (actions.length === 0) return null;
-  const headerLabel = actions.some((cta) => cta.type === "menu" || cta.type === "order")
+  const headerLabel = actions.some(
+    (cta) => cta.type === "menu" || cta.type === "order",
+  )
     ? "Get food"
     : "Quick links";
   return (
@@ -650,23 +731,30 @@ function LocationTruckOptionsSection({
   profile: PublicLocationProfile;
 }) {
   const hostId = String(profile.id || "").trim();
-  const { data: nowData, isLoading: nowLoading } = useQuery<LocationDiscoveryPayload>({
-    queryKey: ["/api/public/discovery/location", hostId, "now"],
-    enabled: Boolean(hostId),
-    queryFn: async () => {
-      const res = await fetch(apiUrl(`/api/public/discovery/location/${encodeURIComponent(hostId)}/time/now`),
-      );
-      if (!res.ok) return { totalTrucks: 0, trucks: [] };
-      return res.json();
-    },
-  });
+  const { data: nowData, isLoading: nowLoading } =
+    useQuery<LocationDiscoveryPayload>({
+      queryKey: ["/api/public/discovery/location", hostId, "now"],
+      enabled: Boolean(hostId),
+      queryFn: async () => {
+        const res = await fetch(
+          apiUrl(
+            `/api/public/discovery/location/${encodeURIComponent(hostId)}/time/now`,
+          ),
+        );
+        if (!res.ok) return { totalTrucks: 0, trucks: [] };
+        return res.json();
+      },
+    });
 
   const { data: tonightData, isLoading: tonightLoading } =
     useQuery<LocationDiscoveryPayload>({
       queryKey: ["/api/public/discovery/location", hostId, "tonight"],
       enabled: Boolean(hostId),
       queryFn: async () => {
-        const res = await fetch(apiUrl(`/api/public/discovery/location/${encodeURIComponent(hostId)}/time/tonight`),
+        const res = await fetch(
+          apiUrl(
+            `/api/public/discovery/location/${encodeURIComponent(hostId)}/time/tonight`,
+          ),
         );
         if (!res.ok) return { totalTrucks: 0, trucks: [] };
         return res.json();
@@ -694,7 +782,8 @@ function LocationTruckOptionsSection({
     key: string,
     featured = false,
   ) => {
-    const image = truck.coverImageUrl || truck.logoUrl || truck.imageUrl || null;
+    const image =
+      truck.coverImageUrl || truck.logoUrl || truck.imageUrl || null;
     const scheduleLabel = formatScheduleLabel(truck);
     return (
       <div
@@ -716,21 +805,30 @@ function LocationTruckOptionsSection({
               />
             ) : (
               <div className="flex h-full w-full items-center justify-center text-xs font-semibold text-white/75">
-                {String(truck.name || "Truck").slice(0, 2).toUpperCase()}
+                {String(truck.name || "Truck")
+                  .slice(0, 2)
+                  .toUpperCase()}
               </div>
             )}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold text-white">{truck.name}</p>
+            <p className="truncate text-sm font-semibold text-white">
+              {truck.name}
+            </p>
             {truck.cuisineType ? (
-              <p className="truncate text-xs text-white/70">{truck.cuisineType}</p>
+              <p className="truncate text-xs text-white/70">
+                {truck.cuisineType}
+              </p>
             ) : null}
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <Badge variant="secondary">
                 {status === "here_now" ? "Here now" : "Tonight"}
               </Badge>
               {scheduleLabel ? (
-                <Badge variant="outline" className="border-white/15 text-white/80">
+                <Badge
+                  variant="outline"
+                  className="border-white/15 text-white/80"
+                >
                   {scheduleLabel}
                 </Badge>
               ) : null}
@@ -785,7 +883,12 @@ function LocationTruckOptionsSection({
                 <p className="text-xs font-semibold uppercase tracking-wide text-orange-200/90">
                   Happening now
                 </p>
-                {renderTruckCard(featuredCurrent, "here_now", `featured:${featuredCurrent.id}`, true)}
+                {renderTruckCard(
+                  featuredCurrent,
+                  "here_now",
+                  `featured:${featuredCurrent.id}`,
+                  true,
+                )}
               </div>
             ) : null}
             {remainingCurrent.length > 0 ? (
@@ -828,7 +931,8 @@ function LocationTruckOptionsSection({
 
 function LocationMapSection({ profile }: { profile: PublicLocationProfile }) {
   const hasCoords =
-    typeof profile.latitude === "number" && typeof profile.longitude === "number";
+    typeof profile.latitude === "number" &&
+    typeof profile.longitude === "number";
   const mapHref = hasCoords
     ? `https://maps.google.com/?q=${profile.latitude},${profile.longitude}`
     : null;
@@ -843,7 +947,10 @@ function LocationMapSection({ profile }: { profile: PublicLocationProfile }) {
           <div className="rounded-xl border border-white/10 bg-gradient-to-br from-[#17120f] to-[#0f0d0b] p-3">
             <div className="mb-3 flex items-center justify-between">
               <p className="text-sm font-medium text-white">Map preview</p>
-              <Badge variant="outline" className="border-white/20 text-white/70">
+              <Badge
+                variant="outline"
+                className="border-white/20 text-white/70"
+              >
                 {profile.latitude?.toFixed(4)}, {profile.longitude?.toFixed(4)}
               </Badge>
             </div>
@@ -859,13 +966,15 @@ function LocationMapSection({ profile }: { profile: PublicLocationProfile }) {
             Map coordinates are not available yet.
           </div>
         )}
-        {locationLine(profile) ? <p className="text-sm text-white/80">{locationLine(profile)}</p> : null}
+        {locationLine(profile) ? (
+          <p className="text-sm text-white/80">{locationLine(profile)}</p>
+        ) : null}
         {mapHref ? (
-            <a
-              href={mapHref}
-              data-analytics-action="directions_click"
-              data-analytics-target-type="map"
-              target="_blank"
+          <a
+            href={mapHref}
+            data-analytics-action="directions_click"
+            data-analytics-target-type="map"
+            target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1 text-sm font-medium text-orange-300 hover:text-orange-200"
           >
@@ -877,20 +986,30 @@ function LocationMapSection({ profile }: { profile: PublicLocationProfile }) {
   );
 }
 
-function LocationAmenitiesSection({ profile }: { profile: PublicLocationProfile }) {
+function LocationAmenitiesSection({
+  profile,
+}: {
+  profile: PublicLocationProfile;
+}) {
   const amenities = Array.isArray(profile.amenities) ? profile.amenities : [];
   const notes = profile.publicRules || profile.publicParkingSummary;
   if (amenities.length === 0 && !notes) return null;
   return (
     <Card className="border-white/10 bg-[#0f0d0b]">
       <CardHeader>
-        <CardTitle className="text-xl text-white">Amenities and notes</CardTitle>
+        <CardTitle className="text-xl text-white">
+          Amenities and notes
+        </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
         {amenities.length > 0 ? (
           <div className="flex flex-wrap gap-2">
             {amenities.map((item) => (
-              <Badge key={item} variant="outline" className="border-white/20 text-white/80">
+              <Badge
+                key={item}
+                variant="outline"
+                className="border-white/20 text-white/80"
+              >
                 {item}
               </Badge>
             ))}
@@ -915,7 +1034,10 @@ function RestaurantSignals({ profile }: { profile: PublicRestaurantProfile }) {
   if (profile.deals.totalActive > 0) signals.push("Deal today");
   if (menuCompleteness.state === "complete") signals.push("Menu available");
   if (menuCompleteness.state === "partial") signals.push("Menu preview");
-  if (profile.profileType === "truck" && hasTruckScheduleSignal(profile.truckSchedule)) {
+  if (
+    profile.profileType === "truck" &&
+    hasTruckScheduleSignal(profile.truckSchedule)
+  ) {
     signals.push("Truck schedule available");
   }
   if (profile.recommendations.total > 0) signals.push("Local favorite");
@@ -940,11 +1062,10 @@ function RestaurantSignals({ profile }: { profile: PublicRestaurantProfile }) {
 }
 
 function AboutFoodStyle({ profile }: { profile: PublicRestaurantProfile }) {
-  const normalizedServiceType = normalizeBusinessTypeLabel(profile.serviceType || "");
-  const tags = [
-    ...profile.cuisineTags,
-    normalizedServiceType || "",
-  ]
+  const normalizedServiceType = normalizeBusinessTypeLabel(
+    profile.serviceType || "",
+  );
+  const tags = [...profile.cuisineTags, normalizedServiceType || ""]
     .map((value) => String(value || "").trim())
     .filter(Boolean)
     .slice(0, 10);
@@ -956,11 +1077,17 @@ function AboutFoodStyle({ profile }: { profile: PublicRestaurantProfile }) {
         <CardTitle className="text-xl text-white">About</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
-        {profile.description ? <p className="text-sm text-white/85">{profile.description}</p> : null}
+        {profile.description ? (
+          <p className="text-sm text-white/85">{profile.description}</p>
+        ) : null}
         {tags.length > 0 ? (
           <div className="flex flex-wrap gap-2">
             {tags.map((tag) => (
-              <Badge key={tag} variant="outline" className="border-white/20 text-white/80">
+              <Badge
+                key={tag}
+                variant="outline"
+                className="border-white/20 text-white/80"
+              >
                 {tag}
               </Badge>
             ))}
@@ -982,19 +1109,26 @@ function MenuSection({
   const [recommendComment, setRecommendComment] = useState("");
   const [recommendRating, setRecommendRating] = useState("5");
   const [recommendPhoto, setRecommendPhoto] = useState<File | null>(null);
-  const [submitStateByItem, setSubmitStateByItem] = useState<Record<string, string>>({});
+  const [submitStateByItem, setSubmitStateByItem] = useState<
+    Record<string, string>
+  >({});
   const [submittingItemId, setSubmittingItemId] = useState<string | null>(null);
   const menuVariants = Array.isArray(profile.menuVariants)
-    ? profile.menuVariants.filter((variant) => String(variant?.id || "").trim().length > 0)
+    ? profile.menuVariants.filter(
+        (variant) => String(variant?.id || "").trim().length > 0,
+      )
     : [];
   const [selectedMenuId, setSelectedMenuId] = useState<string>(
     String(profile.activeMenuId || menuVariants[0]?.id || ""),
   );
   useEffect(() => {
-    setSelectedMenuId(String(profile.activeMenuId || menuVariants[0]?.id || ""));
+    setSelectedMenuId(
+      String(profile.activeMenuId || menuVariants[0]?.id || ""),
+    );
   }, [profile.activeMenuId, profile.id, menuVariants]);
   const activeVariant =
-    (selectedMenuId && menuVariants.find((variant) => String(variant.id) === selectedMenuId)) ||
+    (selectedMenuId &&
+      menuVariants.find((variant) => String(variant.id) === selectedMenuId)) ||
     menuVariants[0] ||
     null;
   const menuCta = safeCtas.find(
@@ -1026,10 +1160,15 @@ function MenuSection({
   const pricedSections = structuredSections
     .map((section) => ({
       ...section,
-      items: section.items.filter((item) => Boolean(String(item.priceLabel || "").trim())),
+      items: section.items.filter((item) =>
+        Boolean(String(item.priceLabel || "").trim()),
+      ),
     }))
     .filter((section) => section.items.length > 0);
-  const pricedItemCount = pricedSections.reduce((count, section) => count + section.items.length, 0);
+  const pricedItemCount = pricedSections.reduce(
+    (count, section) => count + section.items.length,
+    0,
+  );
   const unpricedItems = structuredSections.flatMap((section) =>
     section.items
       .filter((item) => !String(item.priceLabel || "").trim())
@@ -1048,10 +1187,17 @@ function MenuSection({
   const menuApproval = profile.menuApproval;
   const menuRejected = menuApproval?.status === "rejected";
   const fallbackMenuLink =
-    profile.menuPdfUrl || profile.menuImageUrl || activeVariant?.menuUrl || profile.menuUrl || null;
-  const updatedLabel = (activeVariant?.menuLastUpdatedAt || profile.menuLastUpdatedAt)
-    ? new Date(activeVariant?.menuLastUpdatedAt || profile.menuLastUpdatedAt || "").toLocaleDateString()
-    : null;
+    profile.menuPdfUrl ||
+    profile.menuImageUrl ||
+    activeVariant?.menuUrl ||
+    profile.menuUrl ||
+    null;
+  const updatedLabel =
+    activeVariant?.menuLastUpdatedAt || profile.menuLastUpdatedAt
+      ? new Date(
+          activeVariant?.menuLastUpdatedAt || profile.menuLastUpdatedAt || "",
+        ).toLocaleDateString()
+      : null;
   const shouldCompactThinMenu =
     profile.profileType === "truck" &&
     menuCompleteness.state === "partial" &&
@@ -1061,7 +1207,9 @@ function MenuSection({
   const compactMenuPreviewItems = pricedSections
     .flatMap((section) =>
       section.items.map((item) => ({
-        label: item.priceLabel ? `${item.name} · ${item.priceLabel}` : item.name,
+        label: item.priceLabel
+          ? `${item.name} · ${item.priceLabel}`
+          : item.name,
       })),
     )
     .slice(0, 3);
@@ -1079,11 +1227,14 @@ function MenuSection({
       formData.append("comment", recommendComment);
       formData.append("rating", recommendRating);
       if (recommendPhoto) formData.append("image", recommendPhoto);
-      const res = await fetch(apiUrl(`/api/menu-items/${encodeURIComponent(menuItemId)}/recommend`), {
-        method: "POST",
-        credentials: "include",
-        body: formData,
-      });
+      const res = await fetch(
+        apiUrl(`/api/menu-items/${encodeURIComponent(menuItemId)}/recommend`),
+        {
+          method: "POST",
+          credentials: "include",
+          body: formData,
+        },
+      );
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setSubmitStateByItem((prev) => ({
@@ -1096,9 +1247,10 @@ function MenuSection({
       }
       setSubmitStateByItem((prev) => ({
         ...prev,
-        [menuItemId]: data?.photoStatus?.status === "pending"
-          ? "Recommendation submitted. Photo is pending business review."
-          : "Recommendation submitted.",
+        [menuItemId]:
+          data?.photoStatus?.status === "pending"
+            ? "Recommendation submitted. Photo is pending business review."
+            : "Recommendation submitted.",
       }));
       setRecommendComment("");
       setRecommendPhoto(null);
@@ -1123,17 +1275,24 @@ function MenuSection({
       <CardContent className="space-y-4">
         {menuStateLabel ? (
           <div className="flex flex-wrap gap-2">
-            <Badge variant="outline" className="border-amber-300/35 text-amber-100">
+            <Badge
+              variant="outline"
+              className="border-amber-300/35 text-amber-100"
+            >
               {menuStateLabel}
             </Badge>
           </div>
         ) : null}
         {menuVariants.length > 1 ? (
           <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-white/60">Select menu</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-white/60">
+              Select menu
+            </p>
             <div className="flex flex-wrap gap-2">
               {menuVariants.map((variant) => {
-                const active = String(variant.id) === String(selectedMenuId || activeVariant?.id || "");
+                const active =
+                  String(variant.id) ===
+                  String(selectedMenuId || activeVariant?.id || "");
                 return (
                   <button
                     key={variant.id}
@@ -1172,23 +1331,33 @@ function MenuSection({
         ) : null}
         {menuCompleteness.state === "unavailable" ? (
           <p className="rounded-md border border-white/15 bg-white/5 px-3 py-2 text-xs text-white/75">
-            {profile.profileType === "truck" ? "No menu posted yet." : "Menu unavailable right now."}
+            {profile.profileType === "truck"
+              ? "No menu posted yet."
+              : "Menu unavailable right now."}
           </p>
         ) : null}
-        {profile.profileType === "truck" && !hasStructuredMenu && menuCompleteness.state !== "unavailable" ? (
+        {profile.profileType === "truck" &&
+        !hasStructuredMenu &&
+        menuCompleteness.state !== "unavailable" ? (
           <p className="rounded-md border border-white/15 bg-white/5 px-3 py-2 text-xs text-white/75">
             No menu posted yet.
           </p>
         ) : null}
         {updatedLabel ? (
-          <p className="text-xs text-white/65">Menu last updated {updatedLabel}</p>
+          <p className="text-xs text-white/65">
+            Menu last updated {updatedLabel}
+          </p>
         ) : null}
 
         {shouldCompactThinMenu && compactMenuPreviewItems.length > 0 ? (
           <div className="space-y-2">
             <div className="flex flex-wrap gap-2">
               {compactMenuPreviewItems.map((item) => (
-                <Badge key={item.label} variant="outline" className="border-white/20 text-white/80">
+                <Badge
+                  key={item.label}
+                  variant="outline"
+                  className="border-white/20 text-white/80"
+                >
                   {item.label}
                 </Badge>
               ))}
@@ -1200,7 +1369,9 @@ function MenuSection({
           <div className="space-y-4">
             {pricedSections.map((section) => (
               <div key={section.name} className="space-y-2">
-                <p className="text-sm font-semibold text-white/90">{section.name}</p>
+                <p className="text-sm font-semibold text-white/90">
+                  {section.name}
+                </p>
                 <div className="space-y-2">
                   {section.items.map((item, index) => (
                     <div
@@ -1209,13 +1380,19 @@ function MenuSection({
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <p className="truncate text-sm font-medium text-white">{item.name}</p>
+                          <p className="truncate text-sm font-medium text-white">
+                            {item.name}
+                          </p>
                           {item.description ? (
-                            <p className="mt-1 text-xs text-white/70">{item.description}</p>
+                            <p className="mt-1 text-xs text-white/70">
+                              {item.description}
+                            </p>
                           ) : null}
                         </div>
                         {item.priceLabel ? (
-                          <p className="text-sm font-semibold text-orange-200">{item.priceLabel}</p>
+                          <p className="text-sm font-semibold text-orange-200">
+                            {item.priceLabel}
+                          </p>
                         ) : null}
                       </div>
                       {item.menuItemId ? (
@@ -1224,7 +1401,9 @@ function MenuSection({
                             type="button"
                             onClick={() =>
                               setRecommendingKey((current) =>
-                                current === item.menuItemId ? null : item.menuItemId || null,
+                                current === item.menuItemId
+                                  ? null
+                                  : item.menuItemId || null,
                               )
                             }
                             className="text-xs font-medium text-orange-300 hover:text-orange-200"
@@ -1240,15 +1419,21 @@ function MenuSection({
                             <div className="space-y-2 rounded-md border border-white/10 bg-black/30 p-2">
                               <textarea
                                 value={recommendComment}
-                                onChange={(event) => setRecommendComment(event.target.value)}
+                                onChange={(event) =>
+                                  setRecommendComment(event.target.value)
+                                }
                                 placeholder="Why do you recommend this dish?"
                                 className="min-h-[64px] w-full rounded border border-white/20 bg-black/40 px-2 py-1 text-xs text-white"
                               />
                               <div className="flex items-center gap-2">
-                                <label className="text-xs text-white/70">Rating</label>
+                                <label className="text-xs text-white/70">
+                                  Rating
+                                </label>
                                 <select
                                   value={recommendRating}
-                                  onChange={(event) => setRecommendRating(event.target.value)}
+                                  onChange={(event) =>
+                                    setRecommendRating(event.target.value)
+                                  }
                                   className="rounded border border-white/20 bg-black/40 px-2 py-1 text-xs text-white"
                                 >
                                   <option value="5">5</option>
@@ -1260,13 +1445,16 @@ function MenuSection({
                               </div>
                               <div className="space-y-1">
                                 <p className="text-xs text-white/65">
-                                  Got a photo of this dish? Add it so others know what to expect.
+                                  Got a photo of this dish? Add it so others
+                                  know what to expect.
                                 </p>
                                 <input
                                   type="file"
                                   accept="image/*"
                                   onChange={(event) =>
-                                    setRecommendPhoto(event.target.files?.[0] || null)
+                                    setRecommendPhoto(
+                                      event.target.files?.[0] || null,
+                                    )
                                   }
                                   className="text-xs text-white/80"
                                 />
@@ -1274,8 +1462,14 @@ function MenuSection({
                               <div className="flex items-center gap-2">
                                 <Button
                                   size="sm"
-                                  onClick={() => submitRecommendation(String(item.menuItemId || ""))}
-                                  disabled={submittingItemId === item.menuItemId}
+                                  onClick={() =>
+                                    submitRecommendation(
+                                      String(item.menuItemId || ""),
+                                    )
+                                  }
+                                  disabled={
+                                    submittingItemId === item.menuItemId
+                                  }
                                 >
                                   {submittingItemId === item.menuItemId
                                     ? "Submitting..."
@@ -1303,10 +1497,15 @@ function MenuSection({
 
         {!shouldCompactThinMenu && unpricedItems.length > 0 ? (
           <div className="space-y-2">
-            <p className="text-sm font-medium text-white/90">More items listed</p>
+            <p className="text-sm font-medium text-white/90">
+              More items listed
+            </p>
             <div className="space-y-1">
               {unpricedItems.map((item, index) => (
-                <p key={`${item.sectionName}:${item.name}:${index}`} className="text-xs text-white/75">
+                <p
+                  key={`${item.sectionName}:${item.name}:${index}`}
+                  className="text-xs text-white/75"
+                >
                   {item.sectionName}: {item.name}
                 </p>
               ))}
@@ -1319,7 +1518,11 @@ function MenuSection({
             <p className="text-sm font-medium text-white/90">Featured items</p>
             <div className="flex flex-wrap gap-2">
               {featuredItems.map((item) => (
-                <Badge key={item} variant="outline" className="border-white/20 text-white/80">
+                <Badge
+                  key={item}
+                  variant="outline"
+                  className="border-white/20 text-white/80"
+                >
                   {item}
                 </Badge>
               ))}
@@ -1329,11 +1532,11 @@ function MenuSection({
         {menuCta ? (
           renderCtaButton(menuCta, "default", "menu-cta")
         ) : fallbackMenuLink ? (
-              <a
-                href={fallbackMenuLink}
-                data-analytics-action="menu_click"
-                data-analytics-target-type="menu"
-                target="_blank"
+          <a
+            href={fallbackMenuLink}
+            data-analytics-action="menu_click"
+            data-analytics-target-type="menu"
+            target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1 text-sm font-medium text-orange-300 hover:text-orange-200"
           >
@@ -1357,13 +1560,12 @@ function FullMenuSection({
 
 function DealsSection({ profile }: { profile: PublicRestaurantProfile }) {
   const dealItems = Array.isArray(profile.deals.items)
-    ? profile.deals.items.filter(
-        (item) =>
-          Boolean(
-            String(item?.id || "").trim() &&
-              String(item?.title || "").trim() &&
-              String(item?.actionHref || "").trim(),
-          ),
+    ? profile.deals.items.filter((item) =>
+        Boolean(
+          String(item?.id || "").trim() &&
+          String(item?.title || "").trim() &&
+          String(item?.actionHref || "").trim(),
+        ),
       )
     : [];
   if (dealItems.length === 0) return null;
@@ -1398,10 +1600,16 @@ function DealsSection({ profile }: { profile: PublicRestaurantProfile }) {
       </CardHeader>
       <CardContent className="space-y-2.5">
         {dealItems.map((deal) => (
-          <div key={deal.id} className="rounded-lg border border-white/10 bg-black/20 p-3">
+          <div
+            key={deal.id}
+            className="rounded-lg border border-white/10 bg-black/20 p-3"
+          >
             <div className="flex items-center justify-between gap-2">
               <p className="text-sm font-semibold text-white">{deal.title}</p>
-              <Badge variant="outline" className="border-white/20 text-white/80">
+              <Badge
+                variant="outline"
+                className="border-white/20 text-white/80"
+              >
                 {dealTypeLabel(deal.dealType)}
               </Badge>
             </div>
@@ -1413,7 +1621,10 @@ function DealsSection({ profile }: { profile: PublicRestaurantProfile }) {
                 <Badge variant="secondary">{dateWindowLabel(deal)}</Badge>
               ) : null}
               {deal.timeWindowLabel ? (
-                <Badge variant="outline" className="border-white/15 text-white/80">
+                <Badge
+                  variant="outline"
+                  className="border-white/15 text-white/80"
+                >
                   {deal.timeWindowLabel}
                 </Badge>
               ) : null}
@@ -1424,12 +1635,14 @@ function DealsSection({ profile }: { profile: PublicRestaurantProfile }) {
                 data-analytics-action="deal_click"
                 data-analytics-target-type={deal.actionType || "deal"}
                 target={
-                  deal.actionType === "internal" || deal.actionType === "show_this_deal"
+                  deal.actionType === "internal" ||
+                  deal.actionType === "show_this_deal"
                     ? undefined
                     : "_blank"
                 }
                 rel={
-                  deal.actionType === "internal" || deal.actionType === "show_this_deal"
+                  deal.actionType === "internal" ||
+                  deal.actionType === "show_this_deal"
                     ? undefined
                     : "noopener noreferrer"
                 }
@@ -1448,16 +1661,17 @@ function DealsSection({ profile }: { profile: PublicRestaurantProfile }) {
 function EventsSection({
   profile,
 }: {
-  profile: Pick<PublicRestaurantProfile, "events"> | Pick<PublicLocationProfile, "events">;
+  profile:
+    | Pick<PublicRestaurantProfile, "events">
+    | Pick<PublicLocationProfile, "events">;
 }) {
   const eventItems = Array.isArray(profile.events?.items)
-    ? profile.events.items.filter(
-        (item) =>
-          Boolean(
-            String(item?.id || "").trim() &&
-              String(item?.title || "").trim() &&
-              String(item?.actionHref || "").trim(),
-          ),
+    ? profile.events.items.filter((item) =>
+        Boolean(
+          String(item?.id || "").trim() &&
+          String(item?.title || "").trim() &&
+          String(item?.actionHref || "").trim(),
+        ),
       )
     : [];
   if (eventItems.length === 0) return null;
@@ -1475,10 +1689,16 @@ function EventsSection({
       </CardHeader>
       <CardContent className="space-y-2.5">
         {eventItems.map((event) => (
-          <div key={event.id} className="rounded-lg border border-white/10 bg-black/20 p-3">
+          <div
+            key={event.id}
+            className="rounded-lg border border-white/10 bg-black/20 p-3"
+          >
             <div className="flex items-center justify-between gap-2">
               <p className="text-sm font-semibold text-white">{event.title}</p>
-              <Badge variant="outline" className="border-white/20 text-white/80 capitalize">
+              <Badge
+                variant="outline"
+                className="border-white/20 text-white/80 capitalize"
+              >
                 {typeLabel(event.eventType)}
               </Badge>
             </div>
@@ -1490,14 +1710,19 @@ function EventsSection({
                 <Badge variant="secondary">{event.dateLabel}</Badge>
               ) : null}
               {event.timeWindowLabel ? (
-                <Badge variant="outline" className="border-white/15 text-white/80">
+                <Badge
+                  variant="outline"
+                  className="border-white/15 text-white/80"
+                >
                   {event.timeWindowLabel}
                 </Badge>
               ) : null}
             </div>
             {event.locationName || event.addressPublicLabel ? (
               <p className="mt-2 text-xs text-white/70">
-                {[event.locationName, event.addressPublicLabel].filter(Boolean).join(" · ")}
+                {[event.locationName, event.addressPublicLabel]
+                  .filter(Boolean)
+                  .join(" · ")}
               </p>
             ) : null}
             <div className="mt-3">
@@ -1505,8 +1730,16 @@ function EventsSection({
                 href={event.actionHref}
                 data-analytics-action="event_click"
                 data-analytics-target-type={event.actionType || "event"}
-                target={event.actionType === "internal" || event.actionType === "rsvp" ? undefined : "_blank"}
-                rel={event.actionType === "internal" || event.actionType === "rsvp" ? undefined : "noopener noreferrer"}
+                target={
+                  event.actionType === "internal" || event.actionType === "rsvp"
+                    ? undefined
+                    : "_blank"
+                }
+                rel={
+                  event.actionType === "internal" || event.actionType === "rsvp"
+                    ? undefined
+                    : "noopener noreferrer"
+                }
                 className="inline-flex items-center gap-1 rounded-md bg-orange-500 px-3 py-1.5 text-xs font-semibold text-black hover:bg-orange-400"
               >
                 <CalendarDays className="h-3.5 w-3.5" />
@@ -1520,7 +1753,11 @@ function EventsSection({
   );
 }
 
-function FeaturedBartendersSection({ profile }: { profile: PublicRestaurantProfile }) {
+function FeaturedBartendersSection({
+  profile,
+}: {
+  profile: PublicRestaurantProfile;
+}) {
   if (profile.profileType !== "bar") return null;
   const raw = Array.isArray((profile as any).featuredBartenders)
     ? (profile as any).featuredBartenders
@@ -1532,13 +1769,18 @@ function FeaturedBartendersSection({ profile }: { profile: PublicRestaurantProfi
         (entry.isActive ?? true) &&
         Boolean(String(entry.name || "").trim()),
     )
-    .sort((a: any, b: any) => Number(a?.displayOrder || 0) - Number(b?.displayOrder || 0));
+    .sort(
+      (a: any, b: any) =>
+        Number(a?.displayOrder || 0) - Number(b?.displayOrder || 0),
+    );
   if (featured.length === 0) return null;
 
   return (
     <Card className="border-white/10 bg-[#0f0d0b]">
       <CardHeader>
-        <CardTitle className="text-xl text-white">Featured bartenders</CardTitle>
+        <CardTitle className="text-xl text-white">
+          Featured bartenders
+        </CardTitle>
       </CardHeader>
       <CardContent className="space-y-2.5">
         {featured.map((entry: any, index: number) => (
@@ -1556,27 +1798,43 @@ function FeaturedBartendersSection({ profile }: { profile: PublicRestaurantProfi
                 />
               ) : null}
               <div>
-                <p className="text-sm font-semibold text-white">{String(entry.name)}</p>
+                <p className="text-sm font-semibold text-white">
+                  {String(entry.name)}
+                </p>
                 {entry.role || entry.title ? (
-                  <p className="text-xs text-white/70">{String(entry.role || entry.title)}</p>
+                  <p className="text-xs text-white/70">
+                    {String(entry.role || entry.title)}
+                  </p>
                 ) : null}
               </div>
             </div>
             <div className="mt-2 flex flex-wrap gap-2">
-              {entry.featuredNights ? <Badge variant="secondary">{String(entry.featuredNights)}</Badge> : null}
+              {entry.featuredNights ? (
+                <Badge variant="secondary">
+                  {String(entry.featuredNights)}
+                </Badge>
+              ) : null}
               {entry.signatureDrink ? (
-                <Badge variant="outline" className="border-white/15 text-white/80">
+                <Badge
+                  variant="outline"
+                  className="border-white/15 text-white/80"
+                >
                   Signature: {String(entry.signatureDrink)}
                 </Badge>
               ) : null}
               {entry.specialty ? (
-                <Badge variant="outline" className="border-white/15 text-white/80">
+                <Badge
+                  variant="outline"
+                  className="border-white/15 text-white/80"
+                >
                   {String(entry.specialty)}
                 </Badge>
               ) : null}
             </div>
             {entry.bio || entry.tagline ? (
-              <p className="mt-2 text-xs text-white/75">{String(entry.bio || entry.tagline)}</p>
+              <p className="mt-2 text-xs text-white/75">
+                {String(entry.bio || entry.tagline)}
+              </p>
             ) : null}
           </div>
         ))}
@@ -1587,7 +1845,10 @@ function FeaturedBartendersSection({ profile }: { profile: PublicRestaurantProfi
 
 function ProofSection({ profile }: { profile: PublicRestaurantProfile }) {
   const metrics = [
-    { label: "Recommendations", value: Number(profile.recommendations.total || 0) },
+    {
+      label: "Recommendations",
+      value: Number(profile.recommendations.total || 0),
+    },
     { label: "Reviews", value: Number(profile.reviewSummary.count || 0) },
   ].filter((metric) => metric.value > 0);
   if (metrics.length === 0) return null;
@@ -1598,9 +1859,16 @@ function ProofSection({ profile }: { profile: PublicRestaurantProfile }) {
       </CardHeader>
       <CardContent className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {metrics.map((metric) => (
-          <div key={metric.label} className="rounded-lg border border-white/10 bg-black/20 p-3">
-            <p className="text-xs uppercase tracking-wide text-white/60">{metric.label}</p>
-            <p className="mt-1 text-2xl font-semibold text-white">{metric.value}</p>
+          <div
+            key={metric.label}
+            className="rounded-lg border border-white/10 bg-black/20 p-3"
+          >
+            <p className="text-xs uppercase tracking-wide text-white/60">
+              {metric.label}
+            </p>
+            <p className="mt-1 text-2xl font-semibold text-white">
+              {metric.value}
+            </p>
           </div>
         ))}
       </CardContent>
@@ -1609,7 +1877,10 @@ function ProofSection({ profile }: { profile: PublicRestaurantProfile }) {
 }
 
 function GalleryStrip({ profile }: { profile: PublicRestaurantProfile }) {
-  if (!Array.isArray(profile.galleryImages) || profile.galleryImages.length === 0) {
+  if (
+    !Array.isArray(profile.galleryImages) ||
+    profile.galleryImages.length === 0
+  ) {
     return null;
   }
   const images = profile.galleryImages
@@ -1628,12 +1899,17 @@ function GalleryStrip({ profile }: { profile: PublicRestaurantProfile }) {
   return (
     <Card className="border-white/10 bg-[#0f0d0b]">
       <CardHeader>
-        <CardTitle className="text-base font-semibold text-white/90">Gallery</CardTitle>
+        <CardTitle className="text-base font-semibold text-white/90">
+          Gallery
+        </CardTitle>
       </CardHeader>
       <CardContent>
         <div className="flex gap-2.5 overflow-x-auto pb-1">
           {images.map((image, idx) => (
-            <div key={`${image.url}-${idx}`} className="relative h-24 w-36 flex-none overflow-hidden rounded-md border border-white/10">
+            <div
+              key={`${image.url}-${idx}`}
+              className="relative h-24 w-36 flex-none overflow-hidden rounded-md border border-white/10"
+            >
               <img
                 src={image.url}
                 alt={`${profile.displayName} ${idx + 1}`}
@@ -1653,7 +1929,8 @@ function GalleryStrip({ profile }: { profile: PublicRestaurantProfile }) {
 
 function RestaurantSchedule({ profile }: { profile: PublicRestaurantProfile }) {
   const hasHours = Boolean(String(profile.hours || "").trim());
-  const schedule = profile.profileType === "truck" ? profile.truckSchedule : null;
+  const schedule =
+    profile.profileType === "truck" ? profile.truckSchedule : null;
   const scheduleRows = getTruckScheduleRows(schedule);
   const currentStop = scheduleRows.currentStop;
   const todayStop = scheduleRows.todayStop;
@@ -1664,10 +1941,12 @@ function RestaurantSchedule({ profile }: { profile: PublicRestaurantProfile }) {
   const scheduleEmptyState = getTruckScheduleEmptyStateLabel();
   const scheduleStatusBadge = getTruckScheduleStatusBadgeLabel(schedule);
   const truckEmptyScheduleLabel =
-    profile.profileType === "truck" && scheduleEmptyState === "No schedule posted"
+    profile.profileType === "truck" &&
+    scheduleEmptyState === "No schedule posted"
       ? "No upcoming stops posted."
       : scheduleEmptyState;
-  if (!hasHours && !hasTruckSchedule && profile.profileType !== "truck") return null;
+  if (!hasHours && !hasTruckSchedule && profile.profileType !== "truck")
+    return null;
 
   const stopRow = (
     label: string,
@@ -1681,7 +1960,9 @@ function RestaurantSchedule({ profile }: { profile: PublicRestaurantProfile }) {
           : "rounded-lg border border-white/10 bg-black/20 p-3"
       }
     >
-      <p className="text-xs font-semibold uppercase tracking-wide text-white/65">{label}</p>
+      <p className="text-xs font-semibold uppercase tracking-wide text-white/65">
+        {label}
+      </p>
       <p className="mt-1 text-sm font-semibold text-white">
         {stop.locationName ||
           stop.addressPublicLabel ||
@@ -1691,7 +1972,11 @@ function RestaurantSchedule({ profile }: { profile: PublicRestaurantProfile }) {
         {[stop.date, stop.timeWindowLabel].filter(Boolean).join(" · ")}
       </p>
       <div className="mt-2 flex flex-wrap gap-2">
-        {stop.status ? <Badge variant="secondary">{String(stop.status).replace(/_/g, " ")}</Badge> : null}
+        {stop.status ? (
+          <Badge variant="secondary">
+            {String(stop.status).replace(/_/g, " ")}
+          </Badge>
+        ) : null}
         {stop.directionsUrl ? (
           <a
             href={stop.directionsUrl}
@@ -1729,13 +2014,20 @@ function RestaurantSchedule({ profile }: { profile: PublicRestaurantProfile }) {
         {profile.profileType === "truck" && hasTruckSchedule ? (
           <div className="space-y-3">
             {scheduleStatusBadge ? (
-              <Badge variant="outline" className="border-orange-300/35 text-orange-200">
+              <Badge
+                variant="outline"
+                className="border-orange-300/35 text-orange-200"
+              >
                 {scheduleStatusBadge}
               </Badge>
             ) : null}
             {currentStop ? stopRow("Here now", currentStop, true) : null}
-            {!currentStop && todayStop ? stopRow("Today's stop", todayStop) : null}
-            {!currentStop && !todayStop && nextStop ? stopRow("Next stop", nextStop) : null}
+            {!currentStop && todayStop
+              ? stopRow("Today's stop", todayStop)
+              : null}
+            {!currentStop && !todayStop && nextStop
+              ? stopRow("Next stop", nextStop)
+              : null}
             {upcomingStops.length > 0 ? (
               <div className="space-y-2">
                 <p className="text-xs font-semibold uppercase tracking-wide text-white/65">
@@ -1750,10 +2042,14 @@ function RestaurantSchedule({ profile }: { profile: PublicRestaurantProfile }) {
                       <p className="text-sm font-medium text-white">
                         {stop.locationName ||
                           stop.addressPublicLabel ||
-                          (stop.status === "closed" ? "Closed" : "Scheduled stop")}
+                          (stop.status === "closed"
+                            ? "Closed"
+                            : "Scheduled stop")}
                       </p>
                       <p className="text-xs text-white/70">
-                        {[stop.date, stop.timeWindowLabel].filter(Boolean).join(" · ")}
+                        {[stop.date, stop.timeWindowLabel]
+                          .filter(Boolean)
+                          .join(" · ")}
                       </p>
                     </div>
                   ))}
@@ -1773,10 +2069,14 @@ function RestaurantSchedule({ profile }: { profile: PublicRestaurantProfile }) {
                     >
                       <p className="text-sm font-medium text-white">Closed</p>
                       <p className="text-xs text-white/70">
-                        {[stop.date, stop.timeWindowLabel].filter(Boolean).join(" · ")}
+                        {[stop.date, stop.timeWindowLabel]
+                          .filter(Boolean)
+                          .join(" · ")}
                       </p>
                       {stop.notice ? (
-                        <p className="mt-1 text-xs text-white/65">{stop.notice}</p>
+                        <p className="mt-1 text-xs text-white/65">
+                          {stop.notice}
+                        </p>
                       ) : null}
                     </div>
                   ))}
@@ -1813,7 +2113,9 @@ function RestaurantSocial({
         cta.type === "external" &&
         !/instagram|facebook|x\.com|twitter/i.test(String(cta.href || "")),
     ),
-    follow: safeCtas.filter((cta) => cta.type === "social" || cta.type === "share"),
+    follow: safeCtas.filter(
+      (cta) => cta.type === "social" || cta.type === "share",
+    ),
   };
   const unique = (ctas: PublicCta[]) =>
     ctas.reduce((acc, cta) => {
@@ -1834,7 +2136,9 @@ function RestaurantSocial({
       <CardContent className="space-y-3">
         {websiteActions.length > 0 ? (
           <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-white/60">Website</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-white/60">
+              Website
+            </p>
             <div className="flex flex-wrap gap-2">
               {websiteActions.map((cta, idx) =>
                 renderCtaButton(cta, "outline", `website-${cta.href}-${idx}`),
@@ -1844,7 +2148,9 @@ function RestaurantSocial({
         ) : null}
         {followActions.length > 0 ? (
           <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-white/60">Follow</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-white/60">
+              Follow
+            </p>
             <div className="flex flex-wrap gap-2">
               {followActions.map((cta, idx) =>
                 renderCtaButton(cta, "outline", `follow-${cta.href}-${idx}`),
@@ -1872,7 +2178,8 @@ function RelatedLocalDiscovery({
           Truck-first discovery in {data.city}
         </CardTitle>
         <CardDescription className="text-white/60">
-          MealScout coverage is limited and grows as local trucks and places update their profiles.
+          MealScout coverage is limited and grows as local trucks and places
+          update their profiles.
         </CardDescription>
       </CardHeader>
       <CardContent className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
@@ -1889,7 +2196,7 @@ function RelatedLocalDiscovery({
           Food trucks today
         </a>
         <a
-          href="/claim-truck"
+          href="/claim-business"
           className="rounded-md border border-white/10 px-3 py-2 text-white/85 hover:bg-white/10"
         >
           Claim or update a truck
@@ -1922,29 +2229,35 @@ export default function PublicProfilePage() {
     return String(params.profileType || "").trim();
   })();
   const cleanBusinessSlug = cleanBusinessRoute?.businessSlug || null;
-  const isCleanBusinessRoute = !inferredProfileType && Boolean(cleanBusinessSlug);
-  const { data: cleanBusinessResolution, isLoading: cleanBusinessLoading } = useQuery<{
-    entityType: "restaurant" | "truck" | "bar" | "location" | "supplier";
-    id: string;
-    businessSlug: string;
-  }>({
-    queryKey: ["/api/public/resolve-business", cleanBusinessSlug],
-    enabled: Boolean(isCleanBusinessRoute && cleanBusinessSlug),
-    queryFn: async () => {
-      const res = await fetch(
-        apiUrl(
-          `/api/public/resolve-business/${encodeURIComponent(
-            String(cleanBusinessSlug || ""),
-          )}`,
-        ),
-      );
-      if (!res.ok) throw new Error("Profile not found");
-      return res.json();
-    },
-    retry: false,
-  });
+  const isCleanBusinessRoute =
+    !inferredProfileType && Boolean(cleanBusinessSlug);
+  const { data: cleanBusinessResolution, isLoading: cleanBusinessLoading } =
+    useQuery<{
+      entityType: "restaurant" | "truck" | "bar" | "location" | "supplier";
+      id: string;
+      businessSlug: string;
+    }>({
+      queryKey: ["/api/public/resolve-business", cleanBusinessSlug],
+      enabled: Boolean(isCleanBusinessRoute && cleanBusinessSlug),
+      queryFn: async () => {
+        const res = await fetch(
+          apiUrl(
+            `/api/public/resolve-business/${encodeURIComponent(
+              String(cleanBusinessSlug || ""),
+            )}`,
+          ),
+        );
+        if (!res.ok) throw new Error("Profile not found");
+        return res.json();
+      },
+      retry: false,
+    });
   const rawProfileId = String(
-    params.profileId || params.id || params.slug || cleanBusinessResolution?.id || "",
+    params.profileId ||
+      params.id ||
+      params.slug ||
+      cleanBusinessResolution?.id ||
+      "",
   ).trim();
   const resolvedProfileId = extractUuidFromSlug(rawProfileId) || rawProfileId;
   const normalizedProfileType = normalizePublicProfileEntity(
@@ -1958,10 +2271,19 @@ export default function PublicProfilePage() {
   const locationSearch =
     typeof window !== "undefined" ? window.location.search : "";
   const { data, isLoading } = useQuery<PublicProfilePayload>({
-    queryKey: ["/api/public/profiles", normalizedProfileType, resolvedProfileId, locationSearch],
-    enabled: !!normalizedProfileType && !!resolvedProfileId && !invalidRestaurantRoute,
+    queryKey: [
+      "/api/public/profiles",
+      normalizedProfileType,
+      resolvedProfileId,
+      locationSearch,
+    ],
+    enabled:
+      !!normalizedProfileType && !!resolvedProfileId && !invalidRestaurantRoute,
     queryFn: async () => {
-      const res = await fetch(apiUrl(`/api/public/profiles/${encodeURIComponent(String(normalizedProfileType || ""))}/${encodeURIComponent(String(resolvedProfileId || ""))}${locationSearch || ""}`),
+      const res = await fetch(
+        apiUrl(
+          `/api/public/profiles/${encodeURIComponent(String(normalizedProfileType || ""))}/${encodeURIComponent(String(resolvedProfileId || ""))}${locationSearch || ""}`,
+        ),
       );
       if (!res.ok) throw new Error("Profile not found");
       return res.json();
@@ -1975,18 +2297,20 @@ export default function PublicProfilePage() {
   const { user, isAuthenticated } = useAuth();
 
   // Load user's favorited restaurant IDs when authenticated
-  const { data: userFavorites } = useQuery<Array<{ restaurantId: string; restaurant?: { id: string } }>>(
-    {
-      queryKey: ["/api/favorites/restaurants", "profile-personalization"],
-      enabled: isAuthenticated && Boolean(data?.id),
-      queryFn: async () => {
-        const res = await fetch("/api/favorites/restaurants", { credentials: "include" });
-        if (!res.ok) return [];
-        return res.json();
-      },
-      staleTime: 5 * 60_000,
+  const { data: userFavorites } = useQuery<
+    Array<{ restaurantId: string; restaurant?: { id: string } }>
+  >({
+    queryKey: ["/api/favorites/restaurants", "profile-personalization"],
+    enabled: isAuthenticated && Boolean(data?.id),
+    queryFn: async () => {
+      const res = await fetch("/api/favorites/restaurants", {
+        credentials: "include",
+      });
+      if (!res.ok) return [];
+      return res.json();
     },
-  );
+    staleTime: 5 * 60_000,
+  });
 
   const userFavoriteIds = useMemo(() => {
     const ids = new Set<string>();
@@ -1997,7 +2321,9 @@ export default function PublicProfilePage() {
     return ids;
   }, [userFavorites]);
 
-  const isCurrentProfileFavorited = Boolean(data?.id && userFavoriteIds.has(data.id));
+  const isCurrentProfileFavorited = Boolean(
+    data?.id && userFavoriteIds.has(data.id),
+  );
 
   const sentViewRef = useRef<string>("");
   const imageFailureRef = useRef<Set<string>>(new Set());
@@ -2018,7 +2344,11 @@ export default function PublicProfilePage() {
         if (raw.startsWith("tel:")) return "phone";
         if (raw.includes("maps.google.com")) return "map";
         if (raw.includes("/menu/")) return "menu";
-        if (raw.includes("doordash") || raw.includes("ubereats") || raw.includes("grubhub")) {
+        if (
+          raw.includes("doordash") ||
+          raw.includes("ubereats") ||
+          raw.includes("grubhub")
+        ) {
           return "delivery";
         }
         if (raw.startsWith("/")) return "internal";
@@ -2057,9 +2387,14 @@ export default function PublicProfilePage() {
       >,
       dedupeSuffix?: string,
     ) => {
-      const profileId = String(data?.id || resolvedProfileId || "").trim() || null;
-      const profileType = String(data?.profileType || normalizedProfileType || "").trim() || null;
-      const path = typeof window !== "undefined" ? window.location.pathname : pathname || "/";
+      const profileId =
+        String(data?.id || resolvedProfileId || "").trim() || null;
+      const profileType =
+        String(data?.profileType || normalizedProfileType || "").trim() || null;
+      const path =
+        typeof window !== "undefined"
+          ? window.location.pathname
+          : pathname || "/";
       const dedupeKey = dedupeSuffix
         ? `${type}:${profileType || "unknown"}:${profileId || path}:${dedupeSuffix}`
         : undefined;
@@ -2078,7 +2413,13 @@ export default function PublicProfilePage() {
         dedupeKey,
       );
     },
-    [data?.id, data?.profileType, normalizedProfileType, pathname, resolvedProfileId],
+    [
+      data?.id,
+      data?.profileType,
+      normalizedProfileType,
+      pathname,
+      resolvedProfileId,
+    ],
   );
 
   useEffect(() => {
@@ -2090,8 +2431,10 @@ export default function PublicProfilePage() {
     if (querySource === "qr") {
       const params = new URLSearchParams(window.location.search);
       const qrType = String(params.get("type") || "").toLowerCase();
-      if (qrType === "menu") trackProfileEvent("qr_menu_open", "qr", window.location.href);
-      else if (qrType === "specials") trackProfileEvent("qr_specials_open", "qr", window.location.href);
+      if (qrType === "menu")
+        trackProfileEvent("qr_menu_open", "qr", window.location.href);
+      else if (qrType === "specials")
+        trackProfileEvent("qr_specials_open", "qr", window.location.href);
       else trackProfileEvent("qr_profile_open", "qr", window.location.href);
     }
   }, [data?.id, data?.profileType, querySource, trackProfileEvent]);
@@ -2099,7 +2442,11 @@ export default function PublicProfilePage() {
   useEffect(() => {
     if (isLoading || cleanBusinessLoading || data) return;
     if (!normalizedProfileType && !resolvedProfileId) return;
-    trackQualitySignal("public_profile_not_found_viewed", undefined, "not-found");
+    trackQualitySignal(
+      "public_profile_not_found_viewed",
+      undefined,
+      "not-found",
+    );
   }, [
     cleanBusinessLoading,
     data,
@@ -2112,7 +2459,11 @@ export default function PublicProfilePage() {
   useEffect(() => {
     if (!data || !isRestaurantLikeEntity(data.entity)) return;
     if (!hasStructuredPublicMenu(data)) {
-      trackQualitySignal("missing_menu_viewed", { missing_menu: true }, "missing-menu");
+      trackQualitySignal(
+        "missing_menu_viewed",
+        { missing_menu: true },
+        "missing-menu",
+      );
     }
     if (!hasPostedScheduleOrTimeWindow(data)) {
       trackQualitySignal(
@@ -2128,8 +2479,9 @@ export default function PublicProfilePage() {
     const imageCandidates = [
       { type: "cover", url: String((data as any).coverImageUrl || "").trim() },
       { type: "logo", url: String((data as any).logoUrl || "").trim() },
-    ].filter((candidate): candidate is { type: "logo" | "cover"; url: string } =>
-      Boolean(candidate.url),
+    ].filter(
+      (candidate): candidate is { type: "logo" | "cover"; url: string } =>
+        Boolean(candidate.url),
     );
 
     imageCandidates.forEach((candidate) => {
@@ -2163,7 +2515,9 @@ export default function PublicProfilePage() {
   }, [cleanBusinessRoute?.affiliateTag, resolvedCleanBusinessPath]);
 
   if ((isLoading || cleanBusinessLoading) && !invalidRestaurantRoute) {
-    return <div className="mx-auto max-w-4xl px-4 py-10">Loading profile...</div>;
+    return (
+      <div className="mx-auto max-w-4xl px-4 py-10">Loading profile...</div>
+    );
   }
 
   if (!data) {
@@ -2222,14 +2576,20 @@ export default function PublicProfilePage() {
 
       <header className="border-b border-white/10 bg-[#0b0908]/95">
         <div className="mx-auto flex w-full max-w-5xl items-center justify-between px-4 py-3">
-          <Link href="/" className="text-base font-semibold tracking-tight text-white">
+          <Link
+            href="/"
+            className="text-base font-semibold tracking-tight text-white"
+          >
             MealScout
           </Link>
           <div className="flex items-center gap-3 text-xs sm:text-sm">
             <Link href="/scout" className="text-white/75 hover:text-white">
               Scout trucks
             </Link>
-            <Link href="/claim-truck" className="text-orange-200 hover:text-orange-100">
+            <Link
+              href="/claim-business"
+              className="text-orange-200 hover:text-orange-100"
+            >
               Claim or update
             </Link>
           </div>
@@ -2238,14 +2598,20 @@ export default function PublicProfilePage() {
 
       <ProfileErrorBoundary
         onPageError={() =>
-          trackQualitySignal("public_profile_page_error", undefined, "render-error")
+          trackQualitySignal(
+            "public_profile_page_error",
+            undefined,
+            "render-error",
+          )
         }
       >
         <main
           className="mx-auto max-w-5xl space-y-6 px-4 pb-28 pt-6 sm:pb-32 sm:pt-8 md:pb-8"
           onClickCapture={(event) => {
             const target = event.target as HTMLElement | null;
-            const anchor = target?.closest("a[data-analytics-action]") as HTMLAnchorElement | null;
+            const anchor = target?.closest(
+              "a[data-analytics-action]",
+            ) as HTMLAnchorElement | null;
             if (!anchor) return;
             const action = String(anchor.dataset.analyticsAction || "").trim();
             if (!action) return;
@@ -2294,8 +2660,9 @@ export default function PublicProfilePage() {
               ) : (
                 <>
                   {/* Menu highlights rail — personalized, featured first */}
-                  {(restaurantProfile.menuSections?.length > 0 ||
-                    (restaurantProfile.menuVariants?.[0]?.menuSections?.length ?? 0) > 0) ? (
+                  {restaurantProfile.menuSections?.length > 0 ||
+                  (restaurantProfile.menuVariants?.[0]?.menuSections?.length ??
+                    0) > 0 ? (
                     <MenuHighlightsRail
                       menuSections={
                         restaurantProfile.menuVariants?.[0]?.menuSections ??
@@ -2307,7 +2674,10 @@ export default function PublicProfilePage() {
                   ) : null}
 
                   {/* Full menu section */}
-                  <FullMenuSection profile={restaurantProfile} safeCtas={safeCtas} />
+                  <FullMenuSection
+                    profile={restaurantProfile}
+                    safeCtas={safeCtas}
+                  />
 
                   {/* Truck schedule — elevated panel */}
                   <TruckSchedulePanel profile={restaurantProfile} />
@@ -2331,7 +2701,10 @@ export default function PublicProfilePage() {
                   <ProofSection profile={restaurantProfile} />
 
                   {/* Social links */}
-                  <RestaurantSocial profile={restaurantProfile} safeCtas={safeCtas} />
+                  <RestaurantSocial
+                    profile={restaurantProfile}
+                    safeCtas={safeCtas}
+                  />
                 </>
               )}
             </>
@@ -2373,8 +2746,9 @@ export default function PublicProfilePage() {
               ) : (
                 <>
                   {/* Menu highlights rail */}
-                  {(restaurantProfile.menuSections?.length > 0 ||
-                    (restaurantProfile.menuVariants?.[0]?.menuSections?.length ?? 0) > 0) ? (
+                  {restaurantProfile.menuSections?.length > 0 ||
+                  (restaurantProfile.menuVariants?.[0]?.menuSections?.length ??
+                    0) > 0 ? (
                     <MenuHighlightsRail
                       menuSections={
                         restaurantProfile.menuVariants?.[0]?.menuSections ??
@@ -2386,7 +2760,10 @@ export default function PublicProfilePage() {
                   ) : null}
 
                   {/* Full menu */}
-                  <FullMenuSection profile={restaurantProfile} safeCtas={safeCtas} />
+                  <FullMenuSection
+                    profile={restaurantProfile}
+                    safeCtas={safeCtas}
+                  />
 
                   {/* Hours */}
                   <RestaurantHoursPanel profile={restaurantProfile} />
@@ -2413,7 +2790,10 @@ export default function PublicProfilePage() {
                   <ProofSection profile={restaurantProfile} />
 
                   {/* Social links */}
-                  <RestaurantSocial profile={restaurantProfile} safeCtas={safeCtas} />
+                  <RestaurantSocial
+                    profile={restaurantProfile}
+                    safeCtas={safeCtas}
+                  />
                 </>
               )}
             </>
@@ -2434,12 +2814,18 @@ export default function PublicProfilePage() {
               <HeroBlock profile={data} />
               <Card className="border-white/10 bg-[#0f0d0b]">
                 <CardHeader>
-                  <CardTitle className="text-xl text-white">Supplier profile</CardTitle>
+                  <CardTitle className="text-xl text-white">
+                    Supplier profile
+                  </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3 text-sm text-white/80">
                   {data.description ? <p>{data.description}</p> : null}
-                  {typeof (data as any).metrics?.activeProductCount === "number" ? (
-                    <p>Active products: {(data as any).metrics.activeProductCount}</p>
+                  {typeof (data as any).metrics?.activeProductCount ===
+                  "number" ? (
+                    <p>
+                      Active products:{" "}
+                      {(data as any).metrics.activeProductCount}
+                    </p>
                   ) : null}
                 </CardContent>
               </Card>
@@ -2463,17 +2849,16 @@ export default function PublicProfilePage() {
               userFavoriteIds={userFavoriteIds}
             />
           ) : (
-            <RelatedLocalDiscovery
-              data={data}
-              citySlug={citySlug}
-            />
+            <RelatedLocalDiscovery data={data} citySlug={citySlug} />
           )}
 
           {/* Mobile sticky action dock — always accessible */}
           <MobileActionDock
             safeCtas={safeCtas}
             profileId={data?.id}
-            onAction={(actionType, href) => trackProfileEvent(actionType, "dock", href)}
+            onAction={(actionType, href) =>
+              trackProfileEvent(actionType, "dock", href)
+            }
           />
         </main>
       </ProfileErrorBoundary>
@@ -2485,7 +2870,7 @@ export default function PublicProfilePage() {
             <Link href="/scout" className="hover:text-white">
               Scout trucks
             </Link>
-            <Link href="/claim-truck" className="hover:text-white">
+            <Link href="/claim-business" className="hover:text-white">
               Business owner?
             </Link>
           </div>

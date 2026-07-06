@@ -424,6 +424,18 @@ export default function RestaurantSignup() {
           setClaimQuery(q);
           setClaimAutoSearch(true);
         }
+
+        const prefillName = String(params.get("prefillName") || "").trim();
+        const prefillAddress = String(
+          params.get("prefillAddress") || "",
+        ).trim();
+        const prefillCity = String(params.get("prefillCity") || "").trim();
+        const prefillState = String(params.get("prefillState") || "").trim();
+
+        if (prefillName) form.setValue("name", prefillName);
+        if (prefillAddress) form.setValue("address", prefillAddress);
+        if (prefillCity) form.setValue("city", prefillCity);
+        if (prefillState) form.setValue("state", prefillState);
         window.setTimeout(() => {
           const input = document.querySelector<HTMLInputElement>(
             '[data-testid="input-claim-search"]',

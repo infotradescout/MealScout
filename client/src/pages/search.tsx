@@ -359,6 +359,11 @@ export default function SearchPage() {
 
   const { data: featuredDeals, isLoading: featuredLoading } = useQuery({
     queryKey: ["/api/deals/featured"],
+    queryFn: async () => {
+      const response = await fetch(apiUrl("/api/deals/featured"));
+      if (!response.ok) throw new Error("Failed to fetch featured deals");
+      return response.json();
+    },
     enabled: !searchQuery && !userLocation && !isLocating,
   });
 

@@ -52,7 +52,8 @@ const NAV_HELP: Record<string, string> = {
   "Parking Pass": "Food trucks use this to book approved host parking spots.",
   Profile: "Manage your account, saved items, and business setup.",
   More: "Open additional tools and pages for your account role.",
-  "Admin Dashboard": "Use admin tools to manage users, businesses, and platform operations.",
+  "Admin Dashboard":
+    "Use admin tools to manage users, businesses, and platform operations.",
 };
 
 let hasGlobalNavigation = false;
@@ -226,9 +227,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
   if (isWheelPage || isDocFullscreen || isScoutMapFullscreen) return null;
   if (!isGlobalScope && !showLocalNav) return null;
 
-  const dashboardPath = !user
-    ? "/customer-signup"
-    : "/dashboard";
+  const dashboardPath = !user ? "/customer-signup" : "/dashboard";
   const isScoutRoute =
     currentPath === "/scout" || currentPath.startsWith("/scout/");
   const desktopNavPositionClass = isScoutRoute
@@ -236,22 +235,29 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     : "right-6";
   const disableScoutHelpBubbles = isScoutRoute;
 
-  const lane: "guest" | "admin_staff" | "event" | "supplier" | "food_truck" | "restaurant" | "host" | "customer" =
-    !user
-      ? "guest"
-      : isAdmin || isStaff
-        ? "admin_staff"
-        : isEventCoordinator
-          ? "event"
-          : isSupplier
-            ? "supplier"
-            : isFoodTruck
-              ? "food_truck"
-              : isRestaurantOwner || hasBusinessTeamAccess
-                ? "restaurant"
-                : isHost
-                  ? "host"
-                  : "customer";
+  const lane:
+    | "guest"
+    | "admin_staff"
+    | "event"
+    | "supplier"
+    | "food_truck"
+    | "restaurant"
+    | "host"
+    | "customer" = !user
+    ? "guest"
+    : isAdmin || isStaff
+      ? "admin_staff"
+      : isEventCoordinator
+        ? "event"
+        : isSupplier
+          ? "supplier"
+          : isFoodTruck
+            ? "food_truck"
+            : isRestaurantOwner || hasBusinessTeamAccess
+              ? "restaurant"
+              : isHost
+                ? "host"
+                : "customer";
   const isRestaurantHostCapable = lane === "restaurant" && isHost;
   // A restaurant/food_truck-laned user who also has a real host row (verified
   // owning both, e.g. a bar operator who's also a venue host) needs a path to
@@ -292,13 +298,21 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
       businessOnboardingRequired
         ? { path: businessOnboardingPath, icon: Store, label: "Set Up" }
         : isRestaurantHostCapable
-          ? { path: "/parking-pass", icon: ParkingSquare, label: "Parking Pass" }
+          ? {
+              path: "/parking-pass",
+              icon: ParkingSquare,
+              label: "Parking Pass",
+            }
           : { path: "/orders", icon: ShoppingCart, label: "Orders" },
       businessOnboardingRequired
         ? { path: businessOnboardingPath, icon: UserPlus, label: "Claim" }
         : { path: "/kitchen", icon: ChefHat, label: "Kitchen" },
       businessOnboardingRequired
-        ? { path: businessOnboardingPath, icon: LayoutDashboard, label: "Finish" }
+        ? {
+            path: businessOnboardingPath,
+            icon: LayoutDashboard,
+            label: "Finish",
+          }
         : { path: dashboardPath, icon: LayoutDashboard, label: "Dashboard" },
     ],
     host: [
@@ -338,9 +352,13 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     basePrimary[1],
     basePrimary[2],
     lane === "guest"
-      ? { path: "/claim-truck", icon: Truck, label: "Claim" }
+      ? { path: "/claim-business", icon: Truck, label: "Claim" }
       : { path: "/share-hub", icon: Share2, label: "Share" },
-    { icon: MoreHorizontal, label: "More", onClick: () => setMoreOpen((v) => !v) },
+    {
+      icon: MoreHorizontal,
+      label: "More",
+      onClick: () => setMoreOpen((v) => !v),
+    },
   ].filter(Boolean) as NavItem[];
 
   const dedupeByPath = (items: NavItem[]) => {
@@ -359,13 +377,15 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     if (lane === "guest") {
       items.push(
         { path: "/login", icon: User, label: "Login" },
-        { path: "/restaurant-signup?businessType=food_truck", icon: Store, label: "Truck" },
-        { path: "/claim-truck", icon: Truck, label: "Claim" },
+        {
+          path: "/restaurant-signup?businessType=food_truck",
+          icon: Store,
+          label: "Truck",
+        },
+        { path: "/claim-business", icon: Truck, label: "Claim" },
       );
     } else if (lane === "customer") {
-      items.push(
-        { path: "/profile", icon: User, label: "Profile" },
-      );
+      items.push({ path: "/profile", icon: User, label: "Profile" });
     } else if (lane === "food_truck") {
       items.push(
         { path: dashboardPath, icon: LayoutDashboard, label: "Dashboard" },
@@ -373,23 +393,49 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
         { path: "/events", icon: Calendar, label: "Events" },
         { path: "/suppliers", icon: Truck, label: "Suppliers" },
         { path: "/subscribe", icon: BarChart3, label: "Subscription" },
-        { path: "/restaurant-owner-dashboard", icon: BarChart3, label: "Reports" },
+        {
+          path: "/restaurant-owner-dashboard",
+          icon: BarChart3,
+          label: "Reports",
+        },
         ...(hasSecondaryHostLink
-          ? [{ path: "/host/dashboard", icon: ParkingSquare, label: "Host Venue" } as NavItem]
+          ? [
+              {
+                path: "/host/dashboard",
+                icon: ParkingSquare,
+                label: "Host Venue",
+              } as NavItem,
+            ]
           : []),
         { path: "/profile", icon: User, label: "Profile" },
       );
     } else if (lane === "restaurant") {
       items.push(
         ...(isRestaurantHostCapable
-          ? [{ path: "/parking-pass", icon: ParkingSquare, label: "Parking Pass" } as NavItem]
+          ? [
+              {
+                path: "/parking-pass",
+                icon: ParkingSquare,
+                label: "Parking Pass",
+              } as NavItem,
+            ]
           : []),
         { path: "/events", icon: Calendar, label: "Events" },
         { path: "/suppliers", icon: Truck, label: "Suppliers" },
         { path: "/subscribe", icon: BarChart3, label: "Subscription" },
-        { path: "/restaurant-owner-dashboard", icon: BarChart3, label: "Reports" },
+        {
+          path: "/restaurant-owner-dashboard",
+          icon: BarChart3,
+          label: "Reports",
+        },
         ...(hasSecondaryHostLink
-          ? [{ path: "/host/dashboard", icon: ParkingSquare, label: "Host Venue" } as NavItem]
+          ? [
+              {
+                path: "/host/dashboard",
+                icon: ParkingSquare,
+                label: "Host Venue",
+              } as NavItem,
+            ]
           : []),
         { path: "/profile", icon: User, label: "Profile" },
       );
@@ -413,17 +459,41 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
       items.push(
         { path: "/admin/dashboard", icon: Shield, label: "Admin Dashboard" },
         { path: "/staff", icon: Users, label: "Staff" },
-        { path: "/admin/control-center", icon: Shield, label: "Control Center" },
+        {
+          path: "/admin/control-center",
+          icon: Shield,
+          label: "Control Center",
+        },
         { path: "/admin/geo/heatmap", icon: BarChart3, label: "Geo Heatmap" },
-        { path: "/admin/dashboard?tab=restaurants", icon: Store, label: "Businesses" },
-        { path: "/admin/dashboard?tab=trucks", icon: Truck, label: "Food Trucks" },
-        { path: "/admin/dashboard?tab=hosts", icon: ParkingSquare, label: "Hosts" },
-        { path: "/admin/dashboard?tab=events", icon: Calendar, label: "Events" },
+        {
+          path: "/admin/dashboard?tab=restaurants",
+          icon: Store,
+          label: "Businesses",
+        },
+        {
+          path: "/admin/dashboard?tab=trucks",
+          icon: Truck,
+          label: "Food Trucks",
+        },
+        {
+          path: "/admin/dashboard?tab=hosts",
+          icon: ParkingSquare,
+          label: "Hosts",
+        },
+        {
+          path: "/admin/dashboard?tab=events",
+          icon: Calendar,
+          label: "Events",
+        },
         { path: "/parking-pass", icon: ParkingSquare, label: "Parking Pass" },
         { path: "/deal-creation", icon: Tag, label: "Deals" },
         { path: "/orders", icon: ShoppingCart, label: "Orders" },
         { path: "/admin/dashboard?tab=users", icon: UserPlus, label: "Users" },
-        { path: "/admin/giveaway-wheel", icon: Clapperboard, label: "Giveaway Wheel" },
+        {
+          path: "/admin/giveaway-wheel",
+          icon: Clapperboard,
+          label: "Giveaway Wheel",
+        },
         { path: "/profile", icon: User, label: "Profile" },
       );
     }
@@ -440,7 +510,9 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
 
   const moreItems = buildMoreItems();
   const isActive = (path: string) =>
-    location === path || location.startsWith(`${path}/`) || location.startsWith(`${path}?`);
+    location === path ||
+    location.startsWith(`${path}/`) ||
+    location.startsWith(`${path}?`);
 
   const buildOwnerToolHref = (destination: string) => {
     try {
@@ -472,7 +544,9 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
                 <LongPressHelp
                   disabled={disableScoutHelpBubbles}
                   key={`${item.path}-${idx}`}
-                  description={NAV_HELP[item.label] || `${item.label} navigation`}
+                  description={
+                    NAV_HELP[item.label] || `${item.label} navigation`
+                  }
                 >
                   <Link
                     href={buildOwnerToolHref(item.path)}
@@ -540,14 +614,18 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
                   <LongPressHelp
                     disabled={disableScoutHelpBubbles}
                     key={`${item.path}-${index}`}
-                    description={NAV_HELP[item.label] || `${item.label} navigation`}
+                    description={
+                      NAV_HELP[item.label] || `${item.label} navigation`
+                    }
                   >
                     <Link
                       href={buildOwnerToolHref(item.path)}
                       aria-label={item.label}
                       aria-current={active ? "page" : undefined}
                       className={`flex flex-col items-center justify-end gap-0.5 flex-1 min-w-0 h-full transition-colors ${isPrimary ? "pb-0.5" : "pb-1"} ${
-                        active ? "text-orange-300" : "text-white/70 hover:text-white"
+                        active
+                          ? "text-orange-300"
+                          : "text-white/70 hover:text-white"
                       }`}
                     >
                       {isPrimary ? (
@@ -564,7 +642,9 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
                       ) : (
                         <item.icon className="h-4.5 w-4.5" aria-hidden="true" />
                       )}
-                      <span className="text-[9px] font-medium truncate max-w-full leading-none">{item.label}</span>
+                      <span className="text-[9px] font-medium truncate max-w-full leading-none">
+                        {item.label}
+                      </span>
                     </Link>
                   </LongPressHelp>
                 );
@@ -582,11 +662,15 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
                     aria-expanded={moreOpen}
                     onClick={item.onClick}
                     className={`flex flex-col items-center justify-end gap-0.5 flex-1 min-w-0 h-full pb-1 transition-colors ${
-                      moreOpen ? "text-orange-300" : "text-white/70 hover:text-white"
+                      moreOpen
+                        ? "text-orange-300"
+                        : "text-white/70 hover:text-white"
                     }`}
                   >
                     <item.icon className="h-4.5 w-4.5" aria-hidden="true" />
-                    <span className="text-[9px] font-medium leading-none">{item.label}</span>
+                    <span className="text-[9px] font-medium leading-none">
+                      {item.label}
+                    </span>
                   </button>
                 </LongPressHelp>
               );

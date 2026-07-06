@@ -23,7 +23,11 @@ function parseOpenStatus(openStatus: string | null): {
   return { isOpen: null, label: openStatus };
 }
 
-export function RestaurantHoursPanel({ profile }: { profile: PublicRestaurantProfile }) {
+export function RestaurantHoursPanel({
+  profile,
+}: {
+  profile: PublicRestaurantProfile;
+}) {
   if (profile.profileType === "truck") return null;
 
   const { isOpen, label: statusLabel } = parseOpenStatus(profile.openStatus);
@@ -85,7 +89,7 @@ export function RestaurantHoursPanel({ profile }: { profile: PublicRestaurantPro
         <div className="rounded-2xl border border-white/8 bg-black/15 px-4 py-5 text-center space-y-2">
           <p className="text-sm text-white/50">Hours not posted yet.</p>
           <a
-            href="/claim-truck"
+            href="/claim-business"
             className="inline-block text-xs font-semibold text-orange-300 hover:text-orange-200"
           >
             Own this place? Add your hours →

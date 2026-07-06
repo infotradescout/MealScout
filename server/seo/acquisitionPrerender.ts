@@ -28,7 +28,10 @@ const escapeHtml = (value: string) =>
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
 
-const buildPageHtml = (canonicalBaseUrl: string, page: AcquisitionPageConfig) => {
+const buildPageHtml = (
+  canonicalBaseUrl: string,
+  page: AcquisitionPageConfig,
+) => {
   const canonical = `${canonicalBaseUrl}${page.path}`;
   const schema = {
     "@context": "https://schema.org",
@@ -105,7 +108,7 @@ export function registerAcquisitionPrerenderRoutes(
       ],
       ctaLinks: [
         { label: "Owner Signup", href: "/customer-signup?role=business" },
-        { label: "Claim Food Truck", href: "/claim-truck" },
+        { label: "Claim Food Truck", href: "/claim-business" },
         { label: "Scout Local Dashboard", href: "/scout" },
         { label: "Sitemap", href: "/sitemap" },
       ],
@@ -162,4 +165,3 @@ export function registerAcquisitionPrerenderRoutes(
     });
   }
 }
-

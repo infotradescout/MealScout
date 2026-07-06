@@ -14,7 +14,10 @@
  *
  * "Not much is here yet, but the page still works."
  */
-import type { PublicRestaurantProfile, PublicCta } from "@shared/publicProfiles";
+import type {
+  PublicRestaurantProfile,
+  PublicCta,
+} from "@shared/publicProfiles";
 import { normalizeBusinessTypeLabel } from "@/lib/publicMenuCompleteness";
 import { MapPin, MenuSquare, CalendarDays, Globe } from "lucide-react";
 
@@ -27,7 +30,7 @@ type ThinProfileStateProps = {
 
 function isThinProfile(profile: PublicRestaurantProfile): boolean {
   const hasMenu =
-    (profile.menuSections?.some((s) => (s.items?.length ?? 0) > 0)) ||
+    profile.menuSections?.some((s) => (s.items?.length ?? 0) > 0) ||
     Boolean(profile.menuUrl || profile.menuImageUrl || profile.menuPdfUrl);
   const hasScheduleOrHours =
     Boolean(profile.hours || profile.openStatus) ||
@@ -44,9 +47,7 @@ export function ThinProfileState({
   initials,
 }: ThinProfileStateProps) {
   const typeLabel = normalizeBusinessTypeLabel(
-    profile.profileType === "truck"
-      ? "food_truck"
-      : profile.profileType,
+    profile.profileType === "truck" ? "food_truck" : profile.profileType,
   );
 
   // Pick the single best CTA
@@ -56,7 +57,7 @@ export function ThinProfileState({
     .find(Boolean);
 
   const claimHref =
-    profile.profileType === "truck" ? "/claim-truck" : "/claim-truck";
+    profile.profileType === "truck" ? "/claim-business" : "/claim-business";
 
   return (
     <div className="flex flex-col items-center gap-6 py-8 px-4 text-center">
@@ -69,7 +70,9 @@ export function ThinProfileState({
             className="h-full w-full object-cover"
           />
         ) : (
-          <span className="text-2xl font-black text-orange-100">{initials}</span>
+          <span className="text-2xl font-black text-orange-100">
+            {initials}
+          </span>
         )}
       </div>
 
@@ -93,8 +96,16 @@ export function ThinProfileState({
       {bestCta ? (
         <a
           href={bestCta.href}
-          target={bestCta.type === "external" || bestCta.type === "map" ? "_blank" : undefined}
-          rel={bestCta.type === "external" || bestCta.type === "map" ? "noopener noreferrer" : undefined}
+          target={
+            bestCta.type === "external" || bestCta.type === "map"
+              ? "_blank"
+              : undefined
+          }
+          rel={
+            bestCta.type === "external" || bestCta.type === "map"
+              ? "noopener noreferrer"
+              : undefined
+          }
           data-analytics-action="thin_profile_cta"
           data-analytics-target-type={bestCta.type}
           className="inline-flex items-center gap-2 rounded-xl bg-orange-500 px-5 py-2.5 text-sm font-bold text-black hover:bg-orange-400"

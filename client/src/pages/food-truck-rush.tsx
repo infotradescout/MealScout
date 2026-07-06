@@ -575,21 +575,15 @@ function FoodTruckRush() {
           </div>
           <div className="grid grid-cols-3 gap-2 text-center sm:min-w-80">
             <div className="rounded-lg border border-sky-500/30 bg-zinc-800 px-3 py-2">
-              <p className="text-xs font-semibold text-zinc-400">
-                Score
-              </p>
+              <p className="text-xs font-semibold text-zinc-400">Score</p>
               <p className="text-2xl font-black text-amber-400">{score}</p>
             </div>
             <div className="rounded-lg border border-sky-500/30 bg-zinc-800 px-3 py-2">
-              <p className="text-xs font-semibold text-zinc-400">
-                Timer
-              </p>
+              <p className="text-xs font-semibold text-zinc-400">Timer</p>
               <p className="text-2xl font-black text-zinc-100">{timeLeft}s</p>
             </div>
             <div className="rounded-lg border border-sky-500/30 bg-zinc-800 px-3 py-2">
-              <p className="text-xs font-semibold text-zinc-400">
-                Streak
-              </p>
+              <p className="text-xs font-semibold text-zinc-400">Streak</p>
               <p className="text-2xl font-black text-amber-400">{streak}</p>
             </div>
           </div>
@@ -738,7 +732,9 @@ function FoodTruckRush() {
                 <p className="text-xs font-bold uppercase tracking-[0.18em] text-zinc-400">
                   Rank Preview
                 </p>
-                <p className="mt-2 text-xl font-black text-amber-300">{rank.name}</p>
+                <p className="mt-2 text-xl font-black text-amber-300">
+                  {rank.name}
+                </p>
               </div>
 
               <div
@@ -793,7 +789,9 @@ function FoodTruckRush() {
                 <p className="text-xs font-bold uppercase tracking-[0.18em] text-zinc-400">
                   Final Score
                 </p>
-                <p className="mt-2 text-6xl font-black leading-none text-amber-400">{score}</p>
+                <p className="mt-2 text-6xl font-black leading-none text-amber-400">
+                  {score}
+                </p>
                 <p className="mt-4 text-2xl font-black text-amber-300">
                   {rank.name}
                 </p>
@@ -822,7 +820,7 @@ function FoodTruckRush() {
                     </Link>
                   </Button>
                   <Button asChild variant="outline">
-                    <Link href="/claim-truck">
+                    <Link href="/claim-business">
                       <Truck aria-hidden="true" />
                       Claim My Food Truck
                     </Link>
