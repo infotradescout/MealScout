@@ -5031,7 +5031,7 @@ export default function ExplorePreview() {
                   {user && <ScoutPointsBadge userId={String(user.id)} />}
                 </div>
 
-                {/* Top-right: recenter */}
+                {/* Top-right: recenter (sits below the map's own "Live" badge so the two don't overlap) */}
                 <button
                   type="button"
                   onClick={() => {
@@ -5041,7 +5041,7 @@ export default function ExplorePreview() {
                     }
                   }}
                   aria-label="Recenter map"
-                  className="absolute right-3 top-3 z-20 inline-flex h-9 w-9 items-center justify-center rounded-full bg-[#100c0a]/80 ring-1 ring-orange-200/30 backdrop-blur-xl shadow-[0_8px_20px_rgba(0,0,0,0.38)]"
+                  className="absolute right-3 top-14 z-20 inline-flex h-9 w-9 items-center justify-center rounded-full bg-[#100c0a]/80 ring-1 ring-orange-200/30 backdrop-blur-xl shadow-[0_8px_20px_rgba(0,0,0,0.38)]"
                 >
                   <Navigation2
                     className="h-4 w-4 text-white"
@@ -10638,7 +10638,7 @@ function MapActivityPips({
   return (
     <div
       className={[
-        "pointer-events-none absolute left-3 top-3 z-20 flex max-w-[calc(100%-1.5rem)] flex-wrap",
+        "pointer-events-none absolute left-3 top-14 z-20 flex max-w-[calc(100%-1.5rem)] flex-wrap",
         mode === "high_activity" ? "gap-2" : "gap-1.5",
       ].join(" ")}
     >
