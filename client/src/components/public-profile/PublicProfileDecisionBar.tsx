@@ -110,13 +110,14 @@ const availabilityAnswer = (profile: PublicRestaurantProfile) => {
     if (primary.kind === "next" || primary.kind === "upcoming") {
       return { label: "Scheduled", value: primary.label };
     }
-    return { label: "Schedule", value: "Schedule not posted yet" };
+    return null;
   }
 
   const openStatus = clean(profile.openStatus);
+  if (!openStatus && !clean(profile.hours)) return null;
   return {
     label: "Open status",
-    value: openStatus || "Hours not posted yet",
+    value: openStatus,
     detail: clean(profile.hours) || null,
   };
 };
@@ -143,6 +144,33 @@ export function PublicProfileDecisionBar({
       : "Menu not posted yet";
   const orderDetail = menuItem?.priceLabel || menuItem?.description || null;
   const ActionIcon = action?.type === "map" ? Route : action?.type === "menu" ? MenuSquare : ExternalLink;
+  const tiles = [
+    {
+      icon: profile.profileType === "truck" ? Truck : Utensils,
+      label: "Type",
+      value: typeLabel,
+    },
+    availability
+      ? {
+          icon: Clock3,
+          label: availability.label,
+          value: availability.value,
+          detail: availability.detail,
+        }
+      : null,
+    {
+      icon: MapPin,
+      label: location.label,
+      value: location.value,
+      detail: location.detail,
+    },
+    {
+      icon: MenuSquare,
+      label: "What to order",
+      value: orderValue,
+      detail: orderDetail,
+    },
+  ].filter(Boolean);
 
   return (
     <section
@@ -151,35 +179,21 @@ export function PublicProfileDecisionBar({
       data-public-profile-decision-bar="true"
       data-profile-kind={profile.profileType}
     >
-      <div className="grid gap-2 md:grid-cols-5">
-        <DecisionTile
-          icon={profile.profileType === "truck" ? Truck : Utensils}
-          label="Type"
-          value={typeLabel}
-        />
-        <DecisionTile
-          icon={Clock3}
-          label={availability.label}
-          value={availability.value}
-          detail={availability.detail}
-        />
-        <DecisionTile
-          icon={MapPin}
-          label={location.label}
-          value={location.value}
-          detail={location.detail}
-        />
-        <DecisionTile
-          icon={MenuSquare}
-          label="What to order"
-          value={orderValue}
-          detail={orderDetail}
-        />
-        <div className="rounded-xl border border-orange-300/25 bg-orange-500/10 p-3">
-          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-orange-100/70">
-            Best action
-          </p>
-          {action ? (
+      <div className="grid gap-2 md:grid-cols-4">
+        {tiles.map((tile) => (
+          <DecisionTile
+            key={`${tile!.label}:${tile!.value}`}
+            icon={tile!.icon}
+            label={tile!.label}
+            value={tile!.value}
+            detail={tile!.detail}
+          />
+        ))}
+        {action ? (
+          <div className="rounded-xl border border-orange-300/25 bg-orange-500/10 p-3">
+            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-orange-100/70">
+              Best action
+            </p>
             <a
               href={action.href}
               target={action.type === "external" || action.type === "map" ? "_blank" : undefined}
@@ -191,10 +205,8 @@ export function PublicProfileDecisionBar({
               <ActionIcon className="h-4 w-4" />
               <span className="truncate">{action.label}</span>
             </a>
-          ) : (
-            <p className="mt-2 text-sm font-semibold text-white/65">No action posted yet</p>
-          )}
-        </div>
+          </div>
+        ) : null}
       </div>
     </section>
   );

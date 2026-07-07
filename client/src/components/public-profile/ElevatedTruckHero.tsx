@@ -66,6 +66,32 @@ function LiveStatusPill({ kind }: { kind: "current" | "today" | "next" | "upcomi
   return null;
 }
 
+const GENERIC_TRUCK_TEXT = new Set([
+  "food_truck",
+  "food truck",
+  "truck",
+  "restaurant",
+]);
+
+const cleanCuisineTags = (tags: string[] | null | undefined) =>
+  (tags ?? [])
+    .map((tag) => String(tag || "").trim())
+    .filter((tag) => tag && !GENERIC_TRUCK_TEXT.has(tag.toLowerCase()))
+    .slice(0, 2);
+
+const isGenericTruckDescription = (
+  description: string | null | undefined,
+  profile: PublicRestaurantProfile,
+) => {
+  const normalized = String(description || "").trim().toLowerCase();
+  if (!normalized) return true;
+  return (
+    GENERIC_TRUCK_TEXT.has(normalized) ||
+    normalized === String(profile.profileType || "").toLowerCase() ||
+    normalized === String(profile.serviceType || "").toLowerCase()
+  );
+};
+
 export function ElevatedTruckHero({
   profile,
   isAuthenticated = false,
@@ -90,13 +116,10 @@ export function ElevatedTruckHero({
   const hasSchedule = hasTruckScheduleSignal(profile.truckSchedule);
   const primaryStop = getTruckSchedulePrimaryStop(profile.truckSchedule);
 
-  // serviceType is just businessType again (e.g. "food_truck") — already
-  // shown as the type badge above, so it's dropped here to avoid showing
-  // the same thing twice (once as a badge, once as raw, unformatted text).
-  const cuisineSummary = (profile.cuisineTags ?? [])
-    .slice(0, 2)
-    .filter(Boolean)
-    .join(" · ");
+  const cuisineSummary = cleanCuisineTags(profile.cuisineTags).join(" · ");
+  const description = isGenericTruckDescription(profile.description, profile)
+    ? null
+    : profile.description;
 
   const locationSummary = [profile.city, profile.state].filter(Boolean).join(", ");
 
@@ -112,7 +135,7 @@ export function ElevatedTruckHero({
         logoImageUrl={heroAssets.logoImageUrl}
         categoryPhoto={categoryPhoto}
         theme="truck"
-        heightClassName="h-40 md:h-56"
+        heightClassName="h-28 md:h-40"
         badge={
           <ProfileFavoriteButton
             restaurantId={profile.id}
@@ -124,7 +147,7 @@ export function ElevatedTruckHero({
       />
 
       {/* Info block */}
-      <div className="space-y-3 p-4 sm:p-5">
+      <div className="space-y-2.5 p-4 sm:p-5">
         {/* Type badge + live status */}
         <div className="flex flex-wrap items-center gap-2">
           <span className="rounded-full border border-orange-400/30 bg-orange-500/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.18em] text-orange-200">
@@ -154,9 +177,9 @@ export function ElevatedTruckHero({
         ) : null}
 
         {/* Description */}
-        {profile.description ? (
+        {description ? (
           <p className="line-clamp-3 text-sm leading-6 text-white/65">
-            {profile.description}
+            {description}
           </p>
         ) : null}
 

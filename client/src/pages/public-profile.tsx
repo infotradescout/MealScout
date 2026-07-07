@@ -250,6 +250,20 @@ const uniqueByHref = (ctas: PublicCta[]) => {
   });
 };
 
+const GENERIC_PROFILE_SUMMARY_TEXT = new Set([
+  "food_truck",
+  "food truck",
+  "truck",
+  "restaurant",
+  "bar",
+]);
+
+const cleanProfileCuisineTags = (tags: string[] | null | undefined) =>
+  (tags ?? [])
+    .map((tag) => String(tag || "").trim())
+    .filter((tag) => tag && !GENERIC_PROFILE_SUMMARY_TEXT.has(tag.toLowerCase()))
+    .slice(0, 2);
+
 const ctaPriorityForProfile = (
   profile: PublicProfilePayload,
   cta: PublicCta,
@@ -411,6 +425,9 @@ function HeroBlock({ profile }: { profile: PublicProfilePayload }) {
           : profile.profileType === "supplier"
             ? "Supplier"
             : "Restaurant";
+  const cuisineSummary = isRestaurantLikeEntity(profile.entity)
+    ? cleanProfileCuisineTags((profile as PublicRestaurantProfile).cuisineTags).join(" · ")
+    : "";
 
   return (
     <section className="overflow-hidden rounded-xl border border-white/10 bg-[#0f0d0b]">
@@ -446,12 +463,9 @@ function HeroBlock({ profile }: { profile: PublicProfilePayload }) {
           <h1 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
             {profile.displayName}
           </h1>
-          {profile.entity === "restaurant" &&
-          (profile.cuisineTags?.length || profile.serviceType) ? (
+          {cuisineSummary ? (
             <p className="text-sm font-medium text-orange-100/85">
-              {[...(profile.cuisineTags || []).slice(0, 2), profile.serviceType]
-                .filter(Boolean)
-                .join(" · ")}
+              {cuisineSummary}
             </p>
           ) : null}
         </div>
@@ -2650,20 +2664,8 @@ export default function PublicProfilePage() {
                 />
               ) : (
                 <>
-                  <PublicProfileDecisionBar
-                    profile={restaurantProfile}
-                    safeCtas={safeCtas}
-                  />
-
-                  {/* Why go now — time-sensitive signals */}
-                  <WhyGoNowPanel profile={restaurantProfile} />
-
-                  {/* Quick actions — desktop in-flow */}
-                  <div className="hidden md:block">
-                    <QuickActionRow profile={data} safeCtas={safeCtas} />
-                  </div>
-
-                  {/* Menu highlights rail — personalized, featured first */}
+                  {/* Food first: truck visitors should see what they can order
+                      before schedule/status/admin summary panels. */}
                   {restaurantProfile.menuSections?.length > 0 ||
                   (restaurantProfile.menuVariants?.[0]?.menuSections?.length ??
                     0) > 0 ? (
@@ -2677,11 +2679,23 @@ export default function PublicProfilePage() {
                     />
                   ) : null}
 
-                  {/* Full menu section */}
                   <FullMenuSection
                     profile={restaurantProfile}
                     safeCtas={safeCtas}
                   />
+
+                  <PublicProfileDecisionBar
+                    profile={restaurantProfile}
+                    safeCtas={safeCtas}
+                  />
+
+                  {/* Why go now — time-sensitive signals */}
+                  <WhyGoNowPanel profile={restaurantProfile} />
+
+                  {/* Quick actions — desktop in-flow */}
+                  <div className="hidden md:block">
+                    <QuickActionRow profile={data} safeCtas={safeCtas} />
+                  </div>
 
                   {/* Truck schedule — elevated panel */}
                   <TruckSchedulePanel profile={restaurantProfile} />
