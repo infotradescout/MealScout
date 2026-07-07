@@ -22,6 +22,7 @@
  */
 import type { PublicRestaurantProfile } from "@shared/publicProfiles";
 import { ProfileHeroMedia, buildPublicProfileHeroAssets } from "./ProfileHeroMedia";
+import { getDishCategoryPhoto } from "@/lib/dishCategoryPhoto";
 import { ProfileFavoriteButton } from "./ProfileFavoriteButton";
 import { ProfileRecommendButton } from "./ProfileRecommendButton";
 import { normalizeBusinessTypeLabel } from "@/lib/publicMenuCompleteness";
@@ -68,10 +69,18 @@ export function ElevatedProfileHero({
 
   const typeLabel = normalizeBusinessTypeLabel(profile.profileType);
 
-  const cuisineSummary = [
-    ...(profile.cuisineTags ?? []).slice(0, 2),
-    profile.serviceType,
-  ]
+  const categoryPhoto = heroAssets.coverImageUrl
+    ? null
+    : getDishCategoryPhoto(
+        profile.displayName,
+        ...(profile.cuisineTags ?? []),
+      );
+
+  // serviceType is just businessType again (e.g. "restaurant") — already
+  // shown as the type badge above, so it's dropped here to avoid showing
+  // the same thing twice (once as a badge, once as raw, unformatted text).
+  const cuisineSummary = (profile.cuisineTags ?? [])
+    .slice(0, 2)
     .filter(Boolean)
     .join(" · ");
 
@@ -91,6 +100,7 @@ export function ElevatedProfileHero({
         displayName={profile.displayName}
         coverImageUrl={heroAssets.coverImageUrl}
         logoImageUrl={heroAssets.logoImageUrl}
+        categoryPhoto={categoryPhoto}
         theme="default"
         heightClassName="h-36 md:h-52"
         badge={

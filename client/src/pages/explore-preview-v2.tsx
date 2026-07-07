@@ -65,6 +65,10 @@ import { GOOGLE_MAPS_WEB_API_KEY } from "@/lib/mapProvider";
 import { apiUrl } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 import { buildPublicProfilePath } from "@/lib/public-profile-path";
+import {
+  getDishCategoryPhoto,
+  type DishCategoryPhoto,
+} from "@/lib/dishCategoryPhoto";
 import type {
   MapAdapterMarker,
   MapBoundsLike,
@@ -1174,6 +1178,75 @@ function getSourceLabel(entityOrMeta: FreshnessMeta): string | null {
   if (entityOrMeta.hasMenu) return "Menu updated";
   if (entityOrMeta.hasDeal) return "Deal today";
   return null;
+}
+
+function splitCuisineCategories(raw: string | null | undefined): string[] {
+  return String(raw || "")
+    .split(",")
+    .map((v) => v.trim())
+    .filter(Boolean);
+}
+
+// A business's cuisine field is often several categories crammed into one
+// string (e.g. "Asian, Hawaiian, Korean BBQ") - showing all of them on a
+// small dish card is exactly the kind of clutter that makes cards hard to
+// scan. This picks exactly one: prefer a category matching the viewer's own
+// interests (inferred from what they've favorited), otherwise a stable pick
+// from the business's own list (same category every time for a given
+// business, distributed across their categories rather than always the
+// first one) so cards stay consistent without needing personalization data.
+function pickDisplayCategory(
+  cuisineTypeRaw: string | null | undefined,
+  userInterestCuisines: Set<string>,
+  seedKey: string,
+): string | null {
+  const categories = splitCuisineCategories(cuisineTypeRaw);
+  if (categories.length === 0) return null;
+  if (categories.length === 1) return categories[0];
+  if (userInterestCuisines.size > 0) {
+    const match = categories.find((c) =>
+      userInterestCuisines.has(c.toLowerCase()),
+    );
+    if (match) return match;
+  }
+  let hash = 0;
+  for (let i = 0; i < seedKey.length; i += 1) {
+    hash = (hash * 31 + seedKey.charCodeAt(i)) >>> 0;
+  }
+  return categories[hash % categories.length];
+}
+
+// Reads the same react-query cache entry the main Scout page already
+// populates (`/api/favorites/restaurants`) so dish cards can infer "cuisines
+// this viewer likes" without a separate fetch or prop-drilling the favorites
+// list through every card's parent.
+function useFavoriteCuisineInterests(
+  currentUserId?: string | null,
+): Set<string> {
+  const { data: favoriteRestaurantsData = [] } = useQuery<any[]>({
+    queryKey: ["/api/favorites/restaurants", "scout"],
+    enabled: !!currentUserId,
+    queryFn: async () => {
+      const response = await fetch("/api/favorites/restaurants", {
+        credentials: "include",
+      });
+      if (!response.ok) return [];
+      return response.json();
+    },
+    staleTime: 60_000,
+    retry: false,
+  });
+  return useMemo(() => {
+    const cuisines = new Set<string>();
+    for (const favorite of favoriteRestaurantsData) {
+      for (const category of splitCuisineCategories(
+        favorite?.restaurant?.cuisineType,
+      )) {
+        cuisines.add(category.toLowerCase());
+      }
+    }
+    return cuisines;
+  }, [favoriteRestaurantsData]);
 }
 
 function getOperationalBadges(entityOrMeta: FreshnessMeta): string[] {
@@ -6094,110 +6167,6 @@ function CompactDecisionCardShell({
   );
 }
 
-type DishCategoryPhoto = { image: string; label: string };
-
-const DISH_CATEGORY_PHOTO_RULES: Array<{
-  match: RegExp;
-  image: string;
-  label: string;
-}> = [
-  // Ordered most-specific-first: several real menu items hit more than one
-  // keyword group (e.g. "Authentic Cuban Sandwich" contains "pulled pork"),
-  // and the first matching rule wins, so the more specific dish category
-  // goes ahead of the broader one it could otherwise get misread as.
-  {
-    match:
-      /sandwich|\bsub\b|hoagie|\bcuban\b|panini|\bwrap\b|\bmelt\b|po.?boy/i,
-    image: "/atmospheric/craving-sandwich.jpg",
-    label: "Sandwiches",
-  },
-  {
-    match: /\bbbq\b|barbecue|brisket|\bribs\b|pulled pork|smoked|smokehouse/i,
-    image: "/atmospheric/craving-bbq.jpg",
-    label: "BBQ",
-  },
-  {
-    match: /\bwings?\b|buffalo|hot wings|\bflats\b|\bdrums\b/i,
-    image: "/atmospheric/craving-wings.jpg",
-    label: "Wings",
-  },
-  {
-    match: /\bpoke\b|sushi|ahi tuna|nigiri|sashimi|\bmaki\b|poke bowl/i,
-    image: "/atmospheric/craving-poke.jpg",
-    label: "Poke & Sushi",
-  },
-  {
-    match:
-      /seafood|shrimp|\bcrab\b|\bfish\b|grouper|snapper|oyster|scallop|lobster/i,
-    image: "/atmospheric/craving-seafood.jpg",
-    label: "Seafood",
-  },
-  {
-    match: /salad|greens|caesar|garden salad|greek salad|chopped salad/i,
-    image: "/atmospheric/craving-salad.jpg",
-    label: "Salads",
-  },
-  {
-    match: /\bcoffee\b|\blatte\b|espresso|cappuccino|cold brew|\bmocha\b/i,
-    image: "/atmospheric/craving-coffee.jpg",
-    label: "Coffee",
-  },
-  {
-    match:
-      /smoothie bowl|acai|açaí|berry bowl|granola bowl|pitaya|\bgranola\b|\bblended\b/i,
-    image: "/atmospheric/craving-smoothie-bowl.jpg",
-    label: "Smoothie Bowls",
-  },
-  {
-    match:
-      /breakfast|\beggs\b|\bbacon\b|biscuit|pancakes?|\bwaffles?\b|hash browns?|omelet|brunch/i,
-    image: "/atmospheric/craving-breakfast.jpg",
-    label: "Breakfast",
-  },
-  {
-    match: /burger|cheeseburger|hamburger|smash/i,
-    image: "/atmospheric/craving-burgers.jpg",
-    label: "Burgers",
-  },
-  {
-    match: /taco|burrito|quesadilla|nacho/i,
-    image: "/atmospheric/craving-tacos.jpg",
-    label: "Tacos",
-  },
-  {
-    match: /pizza|slice|calzone/i,
-    image: "/atmospheric/craving-pizza.jpg",
-    label: "Pizza",
-  },
-  {
-    match: /ramen|noodle|pho\b/i,
-    image: "/atmospheric/craving-ramen.jpg",
-    label: "Noodles",
-  },
-  {
-    match: /ice cream|dessert|cake|cookie|donut|pastry|sweet|churro/i,
-    image: "/atmospheric/craving-dessert.jpg",
-    label: "Desserts",
-  },
-  {
-    match: /juice|drink|tea\b|lemonade|boba/i,
-    image: "/atmospheric/craving-drinks.jpg",
-    label: "Drinks",
-  },
-];
-
-function getDishCategoryPhoto(
-  ...textParts: Array<string | null | undefined>
-): DishCategoryPhoto | null {
-  const haystack = textParts.filter(Boolean).join(" ").toLowerCase();
-  if (!haystack.trim()) return null;
-  for (const rule of DISH_CATEGORY_PHOTO_RULES) {
-    if (rule.match.test(haystack))
-      return { image: rule.image, label: rule.label };
-  }
-  return null;
-}
-
 function ScoutCardMedia({
   imageUrl,
   fallbackIcon,
@@ -8618,14 +8587,12 @@ function LocalMenuItemCard({
   const tags = Array.isArray(item.dietaryTags)
     ? item.dietaryTags.filter(Boolean).slice(0, 2)
     : [];
-  const freshnessMeta: FreshnessMeta = {
-    kind: "menu",
-    updatedAt: readStringField(item, ["updatedAt", "lastUpdatedAt"]),
-    confirmedAt: readStringField(item, ["confirmedAt", "lastConfirmedAt"]),
-    hasMenu: true,
-    hasDistance: Boolean(distLabel),
-  };
-  const badges = getOperationalBadges(freshnessMeta).slice(0, 3);
+  const userInterestCuisines = useFavoriteCuisineInterests(currentUserId);
+  const displayCategory = pickDisplayCategory(
+    item.cuisineType,
+    userInterestCuisines,
+    String(item.restaurantId || item.id),
+  );
   const canEdit = isOwnedByCurrentUser(item, currentUserId);
   const actions = canEdit
     ? [
@@ -8847,8 +8814,7 @@ function LocalMenuItemCard({
           {item.restaurantName || "Local spot"}
         </p>
         <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-white/55">
-          {item.cuisineType && <span>{item.cuisineType}</span>}
-          {item.restaurantCity && <span>{item.restaurantCity}</span>}
+          {displayCategory && <span>{displayCategory}</span>}
           {distLabel && <span>{distLabel}</span>}
         </div>
         {item.description && (
@@ -8868,16 +8834,6 @@ function LocalMenuItemCard({
             ))}
           </div>
         )}
-        <div className="mt-2 flex flex-wrap gap-1">
-          {badges.map((badge) => (
-            <span
-              key={badge}
-              className={getFreshnessBadgeClass(freshnessMeta, badge)}
-            >
-              {badge}
-            </span>
-          ))}
-        </div>
         <OwnerOperationalActions actions={actions} />
         <div className="mt-2 border-t border-white/8 pt-2">
           <button
@@ -8996,6 +8952,12 @@ function NearbyPickCard({
   const tags = Array.isArray(item.dietaryTags)
     ? item.dietaryTags.filter(Boolean).slice(0, 3)
     : [];
+  const userInterestCuisines = useFavoriteCuisineInterests(currentUserId);
+  const displayCategory = pickDisplayCategory(
+    item.cuisineType,
+    userInterestCuisines,
+    String(item.restaurantId || item.id),
+  );
 
   const [isRecommendDialogOpen, setIsRecommendDialogOpen] = useState(false);
   const [recommendComment, setRecommendComment] = useState("");
@@ -9224,7 +9186,7 @@ function NearbyPickCard({
         </p>
         <p className="mt-0.5 truncate text-xs font-semibold text-orange-200/85">
           {item.restaurantName || "Local spot"}
-          {item.cuisineType ? ` · ${item.cuisineType}` : ""}
+          {displayCategory ? ` · ${displayCategory}` : ""}
         </p>
         {tags.length > 0 && (
           <p className="mt-1 truncate text-[11px] text-white/50">

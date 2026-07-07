@@ -22,6 +22,7 @@
  */
 import type { PublicRestaurantProfile } from "@shared/publicProfiles";
 import { ProfileHeroMedia, buildPublicProfileHeroAssets } from "./ProfileHeroMedia";
+import { getDishCategoryPhoto } from "@/lib/dishCategoryPhoto";
 import { ProfileFavoriteButton } from "./ProfileFavoriteButton";
 import { ProfileRecommendButton } from "./ProfileRecommendButton";
 import {
@@ -79,13 +80,21 @@ export function ElevatedTruckHero({
     truckPhotoLogo: (profile as any).truckPhotoLogo,
   });
 
+  const categoryPhoto = heroAssets.coverImageUrl
+    ? null
+    : getDishCategoryPhoto(
+        profile.displayName,
+        ...(profile.cuisineTags ?? []),
+      );
+
   const hasSchedule = hasTruckScheduleSignal(profile.truckSchedule);
   const primaryStop = getTruckSchedulePrimaryStop(profile.truckSchedule);
 
-  const cuisineSummary = [
-    ...(profile.cuisineTags ?? []).slice(0, 2),
-    profile.serviceType,
-  ]
+  // serviceType is just businessType again (e.g. "food_truck") — already
+  // shown as the type badge above, so it's dropped here to avoid showing
+  // the same thing twice (once as a badge, once as raw, unformatted text).
+  const cuisineSummary = (profile.cuisineTags ?? [])
+    .slice(0, 2)
     .filter(Boolean)
     .join(" · ");
 
@@ -101,6 +110,7 @@ export function ElevatedTruckHero({
         displayName={profile.displayName}
         coverImageUrl={heroAssets.coverImageUrl}
         logoImageUrl={heroAssets.logoImageUrl}
+        categoryPhoto={categoryPhoto}
         theme="truck"
         heightClassName="h-40 md:h-56"
         badge={

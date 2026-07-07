@@ -1,4 +1,5 @@
 import { type ReactNode, useEffect, useState } from "react";
+import type { DishCategoryPhoto } from "@/lib/dishCategoryPhoto";
 
 type PublicProfileHeroAssetInput = {
   entity?: string | null;
@@ -18,6 +19,7 @@ type ProfileHeroMediaProps = {
   theme?: "default" | "truck";
   heightClassName?: string;
   badge?: ReactNode;
+  categoryPhoto?: DishCategoryPhoto | null;
 };
 
 const normalizeAssetUrl = (value: unknown) => {
@@ -71,6 +73,7 @@ export function ProfileHeroMedia({
   theme = "default",
   heightClassName = "h-28 md:h-48",
   badge,
+  categoryPhoto = null,
 }: ProfileHeroMediaProps) {
   const [coverImageFailed, setCoverImageFailed] = useState(false);
   const [logoImageFailed, setLogoImageFailed] = useState(false);
@@ -111,6 +114,23 @@ export function ProfileHeroMedia({
           className="absolute inset-0 h-full w-full object-cover"
           onError={() => setCoverImageFailed(true)}
         />
+      ) : categoryPhoto ? (
+        <div
+          data-testid="public-profile-hero-cover-category-fallback"
+          className="absolute inset-0"
+        >
+          <img
+            src={categoryPhoto.image}
+            alt=""
+            loading="eager"
+            decoding="async"
+            className="absolute inset-0 h-full w-full object-cover"
+            aria-hidden="true"
+          />
+          <span className="absolute right-3 top-3 rounded-full bg-black/70 px-2 py-1 text-[9px] font-black uppercase tracking-[0.08em] text-white/85 ring-1 ring-white/25 backdrop-blur-sm">
+            {categoryPhoto.label} · photo coming soon
+          </span>
+        </div>
       ) : (
         <div
           data-testid="public-profile-hero-cover-fallback"

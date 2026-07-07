@@ -2632,20 +2632,10 @@ export default function PublicProfilePage() {
                 isFavorited={isCurrentProfileFavorited}
               />
 
-              <PublicProfileDecisionBar
-                profile={restaurantProfile}
-                safeCtas={safeCtas}
-              />
-
-              {/* Why go now — time-sensitive signals */}
-              <WhyGoNowPanel profile={restaurantProfile} />
-
-              {/* Quick actions — desktop in-flow */}
-              <div className="hidden md:block">
-                <QuickActionRow profile={data} safeCtas={safeCtas} />
-              </div>
-
-              {/* Thin profile state — graceful when data is sparse */}
+              {/* Thin profile state — graceful when data is sparse. Skips the
+                  decision bar / quick actions stack below, which otherwise
+                  spells out "not posted yet" for nearly every field on a
+                  profile that has almost no data. */}
               {isThinProfile(restaurantProfile) ? (
                 <ThinProfileState
                   profile={restaurantProfile}
@@ -2660,6 +2650,19 @@ export default function PublicProfilePage() {
                 />
               ) : (
                 <>
+                  <PublicProfileDecisionBar
+                    profile={restaurantProfile}
+                    safeCtas={safeCtas}
+                  />
+
+                  {/* Why go now — time-sensitive signals */}
+                  <WhyGoNowPanel profile={restaurantProfile} />
+
+                  {/* Quick actions — desktop in-flow */}
+                  <div className="hidden md:block">
+                    <QuickActionRow profile={data} safeCtas={safeCtas} />
+                  </div>
+
                   {/* Menu highlights rail — personalized, featured first */}
                   {restaurantProfile.menuSections?.length > 0 ||
                   (restaurantProfile.menuVariants?.[0]?.menuSections?.length ??
@@ -2719,20 +2722,9 @@ export default function PublicProfilePage() {
                 isFavorited={isCurrentProfileFavorited}
               />
 
-              <PublicProfileDecisionBar
-                profile={restaurantProfile}
-                safeCtas={safeCtas}
-              />
-
-              {/* Why go now — deals, events, open status */}
-              <WhyGoNowPanel profile={restaurantProfile} />
-
-              {/* Quick actions — desktop in-flow */}
-              <div className="hidden md:block">
-                <QuickActionRow profile={data} safeCtas={safeCtas} />
-              </div>
-
-              {/* Thin profile state */}
+              {/* Thin profile state — skips the decision bar / quick actions
+                  stack below, which otherwise spells out "not posted yet"
+                  for nearly every field on a profile that has almost no data. */}
               {isThinProfile(restaurantProfile) ? (
                 <ThinProfileState
                   profile={restaurantProfile}
@@ -2747,6 +2739,19 @@ export default function PublicProfilePage() {
                 />
               ) : (
                 <>
+                  <PublicProfileDecisionBar
+                    profile={restaurantProfile}
+                    safeCtas={safeCtas}
+                  />
+
+                  {/* Why go now — deals, events, open status */}
+                  <WhyGoNowPanel profile={restaurantProfile} />
+
+                  {/* Quick actions — desktop in-flow */}
+                  <div className="hidden md:block">
+                    <QuickActionRow profile={data} safeCtas={safeCtas} />
+                  </div>
+
                   {/* Menu highlights rail */}
                   {restaurantProfile.menuSections?.length > 0 ||
                   (restaurantProfile.menuVariants?.[0]?.menuSections?.length ??

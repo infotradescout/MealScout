@@ -2,15 +2,11 @@
  * ThinProfileState
  *
  * A graceful, intentional presentation for profiles that have limited data.
- * The page still works and looks polished — it does not feel broken.
- *
- * Shows:
- * - Name and correct type label
- * - Polished image/logo fallback (initials)
- * - Best available action (directions, website, call)
- * - Compact "menu not posted" state
- * - Compact "schedule/hours not posted" state
- * - Tasteful owner/claim CTA
+ * Renders below the hero (which already shows name/logo/address/photo/a
+ * recommend button), so this only adds what the hero doesn't: the single
+ * best action and a claim CTA. It shows only what's actually available — it
+ * does not announce what's missing (no "menu not posted" placeholders) and
+ * does not repeat the hero's name/logo/recommend button.
  *
  * "Not much is here yet, but the page still works."
  */
@@ -19,8 +15,8 @@ import type {
   PublicCta,
 } from "@shared/publicProfiles";
 import { normalizeBusinessTypeLabel } from "@/lib/publicMenuCompleteness";
-import { MapPin, MenuSquare, CalendarDays, Globe } from "lucide-react";
-import { ProfileRecommendButton } from "./ProfileRecommendButton";
+import { MapPin, MenuSquare, Globe } from "lucide-react";
+import { hasTruckScheduleSignal } from "./truckScheduleTruth";
 
 type ThinProfileStateProps = {
   profile: PublicRestaurantProfile;
@@ -34,9 +30,13 @@ function isThinProfile(profile: PublicRestaurantProfile): boolean {
   const hasMenu =
     profile.menuSections?.some((s) => (s.items?.length ?? 0) > 0) ||
     Boolean(profile.menuUrl || profile.menuImageUrl || profile.menuPdfUrl);
+  // truckSchedule.status defaults to the placeholder string "unknown" when a
+  // truck has no real schedule data, so it can't be used as a signal on its
+  // own — hasTruckScheduleSignal checks for actual stops with real content,
+  // same as ElevatedTruckHero/TruckSchedulePanel use.
   const hasScheduleOrHours =
     Boolean(profile.hours || profile.openStatus) ||
-    (profile.profileType === "truck" && Boolean(profile.truckSchedule?.status));
+    (profile.profileType === "truck" && hasTruckScheduleSignal(profile.truckSchedule));
   const hasDescription = Boolean(String(profile.description || "").trim());
   const hasGallery = (profile.galleryImages?.length ?? 0) > 0;
   return !hasMenu && !hasScheduleOrHours && !hasDescription && !hasGallery;
@@ -45,9 +45,6 @@ function isThinProfile(profile: PublicRestaurantProfile): boolean {
 export function ThinProfileState({
   profile,
   safeCtas,
-  logoImageUrl,
-  initials,
-  isAuthenticated = false,
 }: ThinProfileStateProps) {
   const typeLabel = normalizeBusinessTypeLabel(
     profile.profileType === "truck" ? "food_truck" : profile.profileType,
@@ -63,38 +60,7 @@ export function ThinProfileState({
     profile.profileType === "truck" ? "/claim-business" : "/claim-business";
 
   return (
-    <div className="flex flex-col items-center gap-6 py-8 px-4 text-center">
-      {/* Logo / initials */}
-      <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-3xl border border-orange-300/25 bg-[radial-gradient(circle_at_30%_30%,rgba(251,146,60,0.25),transparent_60%),linear-gradient(145deg,#1d100a,#0d0a08)] shadow-[0_12px_32px_rgba(0,0,0,0.4)]">
-        {logoImageUrl ? (
-          <img
-            src={logoImageUrl}
-            alt={profile.displayName}
-            className="h-full w-full object-cover"
-          />
-        ) : (
-          <span className="text-2xl font-black text-orange-100">
-            {initials}
-          </span>
-        )}
-      </div>
-
-      {/* Name and type */}
-      <div className="space-y-1">
-        <span className="inline-block rounded-full border border-orange-400/30 bg-orange-500/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.18em] text-orange-200">
-          {typeLabel}
-        </span>
-        <h1 className="text-2xl font-bold tracking-tight text-white">
-          {profile.displayName}
-        </h1>
-        {profile.addressPublicLabel ? (
-          <p className="flex items-center justify-center gap-1.5 text-sm text-white/60">
-            <MapPin className="h-3.5 w-3.5 text-orange-200/60" />
-            {profile.addressPublicLabel}
-          </p>
-        ) : null}
-      </div>
-
+    <div className="flex flex-col items-center gap-6 py-6 px-4 text-center">
       {/* Best CTA */}
       {bestCta ? (
         <a
@@ -120,29 +86,6 @@ export function ThinProfileState({
           {bestCta.label}
         </a>
       ) : null}
-
-      {/* Recommend — thin profiles have no menu items to recommend a dish
-          from, so this gives them a restaurant-level recommend action too */}
-      <ProfileRecommendButton
-        restaurantId={profile.id}
-        isAuthenticated={isAuthenticated}
-      />
-
-      {/* Compact unavailable states */}
-      <div className="w-full max-w-xs space-y-2 text-left">
-        <div className="flex items-center gap-2 rounded-xl border border-white/8 bg-black/15 px-3 py-2.5">
-          <MenuSquare className="h-4 w-4 flex-none text-white/30" />
-          <p className="text-xs text-white/50">Menu not posted yet</p>
-        </div>
-        <div className="flex items-center gap-2 rounded-xl border border-white/8 bg-black/15 px-3 py-2.5">
-          <CalendarDays className="h-4 w-4 flex-none text-white/30" />
-          <p className="text-xs text-white/50">
-            {profile.profileType === "truck"
-              ? "Schedule not posted yet"
-              : "Hours not posted yet"}
-          </p>
-        </div>
-      </div>
 
       {/* Owner claim CTA */}
       <div className="rounded-2xl border border-white/10 bg-[#0f0d0b] px-4 py-4 text-center space-y-1 w-full max-w-xs">
