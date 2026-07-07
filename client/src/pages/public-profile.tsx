@@ -5,6 +5,8 @@ import { Link, useParams } from "wouter";
 import type {
   PublicCta,
   PublicLocationProfile,
+  PublicMenuItem,
+  PublicMenuSection,
   PublicRestaurantProfile,
   PublicSupplierProfile,
 } from "@shared/publicProfiles";
@@ -44,12 +46,19 @@ import { RelatedScoutRail } from "@/components/public-profile/RelatedScoutRail";
 import { useAuth } from "@/hooks/useAuth";
 import {
   getTruckScheduleEmptyStateLabel,
+  getTruckSchedulePrimaryStop,
   getTruckScheduleRows,
   getTruckScheduleStatusBadgeLabel,
   hasTruckScheduleSignal,
 } from "@/components/public-profile/truckScheduleTruth";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Card,
   CardContent,
@@ -261,7 +270,9 @@ const GENERIC_PROFILE_SUMMARY_TEXT = new Set([
 const cleanProfileCuisineTags = (tags: string[] | null | undefined) =>
   (tags ?? [])
     .map((tag) => String(tag || "").trim())
-    .filter((tag) => tag && !GENERIC_PROFILE_SUMMARY_TEXT.has(tag.toLowerCase()))
+    .filter(
+      (tag) => tag && !GENERIC_PROFILE_SUMMARY_TEXT.has(tag.toLowerCase()),
+    )
     .slice(0, 2);
 
 const ctaPriorityForProfile = (
@@ -426,7 +437,9 @@ function HeroBlock({ profile }: { profile: PublicProfilePayload }) {
             ? "Supplier"
             : "Restaurant";
   const cuisineSummary = isRestaurantLikeEntity(profile.entity)
-    ? cleanProfileCuisineTags((profile as PublicRestaurantProfile).cuisineTags).join(" · ")
+    ? cleanProfileCuisineTags(
+        (profile as PublicRestaurantProfile).cuisineTags,
+      ).join(" · ")
     : "";
 
   return (
@@ -727,6 +740,375 @@ function QuickActionRow({
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+function TruckVisitStrip({
+  profile,
+  safeCtas,
+}: {
+  profile: PublicRestaurantProfile;
+  safeCtas: PublicCta[];
+}) {
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const rows = getTruckScheduleRows(profile.truckSchedule);
+  const primary = getTruckSchedulePrimaryStop(profile.truckSchedule);
+  const action = pickActionCtas(
+    profile as unknown as PublicProfilePayload,
+    safeCtas,
+    8,
+  ).find((cta) =>
+    ["map", "order", "menu", "phone", "external", "social"].includes(cta.type),
+  );
+  const stop = primary.stop;
+  const stopPlace =
+    stop?.locationName ||
+    stop?.addressPublicLabel ||
+    [profile.city, profile.state].filter(Boolean).join(", ") ||
+    null;
+  const stopTime = stop?.timeWindowLabel || null;
+  const statusLabel =
+    primary.kind === "current"
+      ? "Open now"
+      : primary.kind === "today"
+        ? "Open today"
+        : primary.kind === "next" || primary.kind === "upcoming"
+          ? "Next scheduled"
+          : "Schedule not posted";
+  const statusClass =
+    primary.kind === "current"
+      ? "border-emerald-300/35 bg-emerald-500/12 text-emerald-100"
+      : rows.hasActionableSchedule
+        ? "border-orange-300/35 bg-orange-500/10 text-orange-100"
+        : "border-white/15 bg-white/5 text-white/60";
+
+  return (
+    <section
+      aria-label="Truck visit summary"
+      className="rounded-2xl border border-white/10 bg-[#100d0b] px-3 py-3 sm:px-4"
+    >
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div className="min-w-0 space-y-1.5">
+          <div className="flex flex-wrap items-center gap-2">
+            <span
+              className={`rounded-full border px-2.5 py-1 text-[11px] font-bold ${statusClass}`}
+            >
+              {statusLabel}
+            </span>
+            {rows.hasActionableSchedule ? (
+              <button
+                type="button"
+                onClick={() => setScheduleOpen(true)}
+                className="text-xs font-semibold text-orange-200 hover:text-orange-100"
+              >
+                See full schedule
+              </button>
+            ) : null}
+          </div>
+          <p className="truncate text-sm font-semibold text-white">
+            {stopPlace || "Base area not posted"}
+          </p>
+          {stopTime ? (
+            <p className="text-xs text-white/55">{stopTime}</p>
+          ) : null}
+        </div>
+
+        {action ? (
+          <a
+            href={action.href}
+            target={ctaTarget(action)}
+            rel={ctaRel(action)}
+            data-analytics-action="truck_visit_strip_cta"
+            data-analytics-target-type={action.type}
+            className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-xl bg-orange-500 px-4 text-sm font-bold text-black hover:bg-orange-400"
+          >
+            {action.label}
+          </a>
+        ) : rows.hasActionableSchedule ? (
+          <button
+            type="button"
+            onClick={() => setScheduleOpen(true)}
+            className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-xl border border-white/15 px-4 text-sm font-bold text-white/85 hover:bg-white/8"
+          >
+            View schedule
+          </button>
+        ) : null}
+      </div>
+
+      <Dialog open={scheduleOpen} onOpenChange={setScheduleOpen}>
+        <DialogContent className="max-h-[86vh] w-[calc(100vw-1rem)] max-w-2xl overflow-y-auto border-white/10 bg-[#0f0d0b] text-white">
+          <DialogHeader>
+            <DialogTitle className="text-white">
+              {profile.displayName} schedule
+            </DialogTitle>
+          </DialogHeader>
+          <TruckSchedulePanel profile={profile} />
+        </DialogContent>
+      </Dialog>
+    </section>
+  );
+}
+
+const menuSectionsForProfile = (
+  profile: PublicRestaurantProfile,
+): PublicMenuSection[] => {
+  const variants = Array.isArray(profile.menuVariants)
+    ? profile.menuVariants
+    : [];
+  const activeVariant =
+    variants.find(
+      (variant) => String(variant.id) === String(profile.activeMenuId || ""),
+    ) ||
+    variants[0] ||
+    null;
+  const sections = activeVariant?.menuSections?.length
+    ? activeVariant.menuSections
+    : profile.menuSections;
+  return (Array.isArray(sections) ? sections : []).filter(
+    (section) =>
+      String(section?.name || "").trim() &&
+      Array.isArray(section?.items) &&
+      section.items.length > 0,
+  );
+};
+
+const scoreMenuShelfItem = (
+  item: PublicMenuItem,
+  featuredNames: Set<string>,
+  userItemNames: Set<string>,
+  recommendedNames: Set<string>,
+  hasRecommendationSignal: boolean,
+  seedKey: string,
+) => {
+  const name = String(item.name || "")
+    .trim()
+    .toLowerCase();
+  const itemAny = item as any;
+  const recommendationCount = Math.max(
+    0,
+    Number(
+      itemAny.recommendationCount ??
+        itemAny.recommendationsCount ??
+        itemAny.communityRecommendationCount ??
+        0,
+    ) || 0,
+  );
+  const hasUserSignal = userItemNames.size > 0;
+  const stableRandom = stableUnitHash(`${seedKey}:${name}`);
+  const qualityScore =
+    (item.imageUrl ? 20 : 0) +
+    (item.priceLabel ? 10 : 0) +
+    (item.description ? 5 : 0);
+
+  if (hasUserSignal) {
+    return (
+      (userItemNames.has(name) ? 1000 : 0) +
+      recommendationCount * 20 +
+      (recommendedNames.has(name) ? 120 : 0) +
+      (item.featured || featuredNames.has(name) ? 80 : 0) +
+      qualityScore +
+      stableRandom
+    );
+  }
+
+  if (hasRecommendationSignal) {
+    return (
+      recommendationCount * 25 +
+      (recommendedNames.has(name) ? 160 : 0) +
+      (item.featured || featuredNames.has(name) ? 120 : 0) +
+      qualityScore +
+      stableRandom
+    );
+  }
+
+  return stableRandom;
+};
+
+const stableUnitHash = (value: string) => {
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i += 1) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0) / 4294967295;
+};
+
+const optionalNameSet = (...values: unknown[]) => {
+  const names = new Set<string>();
+  for (const value of values) {
+    const list = Array.isArray(value) ? value : [];
+    for (const entry of list) {
+      const name =
+        typeof entry === "string"
+          ? entry
+          : String((entry as any)?.name || (entry as any)?.menuItemName || "");
+      const normalized = name.trim().toLowerCase();
+      if (normalized) names.add(normalized);
+    }
+  }
+  return names;
+};
+
+function TruckMenuShelf({ profile }: { profile: PublicRestaurantProfile }) {
+  const sections = menuSectionsForProfile(profile);
+  const [activeIndex, setActiveIndex] = useState(0);
+  useEffect(() => setActiveIndex(0), [profile.id, profile.activeMenuId]);
+  if (sections.length === 0) return null;
+
+  const featuredNames = new Set(
+    (profile.featuredMenuItems || [])
+      .map((name) =>
+        String(name || "")
+          .trim()
+          .toLowerCase(),
+      )
+      .filter(Boolean),
+  );
+  const profileAny = profile as any;
+  const userItemNames = optionalNameSet(
+    profileAny.personalizedMenuItemNames,
+    profileAny.userFavoriteItemNames,
+    profileAny.userRecommendedItemNames,
+    profileAny.savedMenuItemNames,
+    profileAny.userMenuItems,
+  );
+  const recommendedNames = optionalNameSet(
+    profileAny.recommendedMenuItemNames,
+    profileAny.topRecommendedMenuItems,
+    profileAny.communityRecommendedMenuItems,
+  );
+  const seen = new Set<string>();
+  const uniqueItems = sections
+    .flatMap((section) => section.items || [])
+    .filter((item) => {
+      const key = String(item.name || "")
+        .trim()
+        .toLowerCase();
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  const hasRecommendationSignal =
+    featuredNames.size > 0 ||
+    recommendedNames.size > 0 ||
+    uniqueItems.some((item) => {
+      const itemAny = item as any;
+      return (
+        Number(
+          itemAny.recommendationCount ??
+            itemAny.recommendationsCount ??
+            itemAny.communityRecommendationCount ??
+            0,
+        ) > 0
+      );
+    });
+  const topItems = uniqueItems
+    .sort(
+      (a, b) =>
+        scoreMenuShelfItem(
+          b,
+          featuredNames,
+          userItemNames,
+          recommendedNames,
+          hasRecommendationSignal,
+          profile.id,
+        ) -
+        scoreMenuShelfItem(
+          a,
+          featuredNames,
+          userItemNames,
+          recommendedNames,
+          hasRecommendationSignal,
+          profile.id,
+        ),
+    )
+    .slice(0, 8);
+  const activeSection = sections[Math.min(activeIndex, sections.length - 1)];
+  const activeItems = (activeSection?.items || []).filter((item) =>
+    String(item.name || "").trim(),
+  );
+
+  return (
+    <section aria-label="Food preview" className="space-y-4">
+      {topItems.length > 0 ? (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-white/45">
+              Top food
+            </p>
+          </div>
+          <MenuItemSideRail items={topItems} />
+        </div>
+      ) : null}
+
+      {sections.length > 1 ? (
+        <div className="space-y-2">
+          <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 scrollbar-none">
+            {sections.map((section, index) => {
+              const active = index === activeIndex;
+              return (
+                <button
+                  key={`${section.name}:${index}`}
+                  type="button"
+                  onClick={() => setActiveIndex(index)}
+                  className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-bold ${
+                    active
+                      ? "border-orange-300/60 bg-orange-500 text-black"
+                      : "border-white/15 bg-white/5 text-white/70"
+                  }`}
+                >
+                  {section.name}
+                </button>
+              );
+            })}
+          </div>
+          <MenuItemSideRail items={activeItems} />
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function MenuItemSideRail({ items }: { items: PublicMenuItem[] }) {
+  if (items.length === 0) return null;
+  return (
+    <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-1 scrollbar-none">
+      {items.map((item, index) => (
+        <article
+          key={`${item.name}:${index}`}
+          className="w-40 shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-[#0f0d0b]"
+        >
+          <div className="relative h-24 bg-gradient-to-br from-[#241309] to-[#0d0a08]">
+            {item.imageUrl ? (
+              <img
+                src={item.imageUrl}
+                alt={item.name}
+                loading="lazy"
+                decoding="async"
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_40%,rgba(251,146,60,0.2),transparent_55%)]" />
+            )}
+          </div>
+          <div className="space-y-1 p-2.5">
+            <p className="line-clamp-2 text-xs font-bold leading-snug text-white">
+              {item.name}
+            </p>
+            {item.priceLabel ? (
+              <p className="text-[11px] font-bold text-orange-200">
+                {item.priceLabel}
+              </p>
+            ) : null}
+            {item.description ? (
+              <p className="line-clamp-2 text-[10px] leading-snug text-white/50">
+                {item.description}
+              </p>
+            ) : null}
+          </div>
+        </article>
+      ))}
+    </div>
   );
 }
 
@@ -2664,27 +3046,14 @@ export default function PublicProfilePage() {
                 />
               ) : (
                 <>
-                  {/* Food first: truck visitors should see what they can order
-                      before schedule/status/admin summary panels. */}
-                  {restaurantProfile.menuSections?.length > 0 ||
-                  (restaurantProfile.menuVariants?.[0]?.menuSections?.length ??
-                    0) > 0 ? (
-                    <MenuHighlightsRail
-                      menuSections={
-                        restaurantProfile.menuVariants?.[0]?.menuSections ??
-                        restaurantProfile.menuSections
-                      }
-                      featuredMenuItems={restaurantProfile.featuredMenuItems}
-                      userFavoriteItemNames={new Set()}
-                    />
-                  ) : null}
-
-                  <FullMenuSection
+                  <TruckVisitStrip
                     profile={restaurantProfile}
                     safeCtas={safeCtas}
                   />
 
-                  <PublicProfileDecisionBar
+                  <TruckMenuShelf profile={restaurantProfile} />
+
+                  <FullMenuSection
                     profile={restaurantProfile}
                     safeCtas={safeCtas}
                   />
@@ -2696,9 +3065,6 @@ export default function PublicProfilePage() {
                   <div className="hidden md:block">
                     <QuickActionRow profile={data} safeCtas={safeCtas} />
                   </div>
-
-                  {/* Truck schedule — elevated panel */}
-                  <TruckSchedulePanel profile={restaurantProfile} />
 
                   {/* Plan your visit — base area/contact/directions when public */}
                   <PlanYourVisitPanel profile={restaurantProfile} />
