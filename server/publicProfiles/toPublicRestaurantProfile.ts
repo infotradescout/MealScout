@@ -41,7 +41,9 @@ export function toPublicRestaurantProfile(input: {
   const normalizePhone = (value: unknown) =>
     String(value || "").replace(/[^\d]/g, "");
   const normalizeDomain = (value: unknown) => {
-    const raw = String(value || "").trim().toLowerCase();
+    const raw = String(value || "")
+      .trim()
+      .toLowerCase();
     if (!raw) return "";
     return raw
       .replace(/^https?:\/\//, "")
@@ -55,11 +57,15 @@ export function toPublicRestaurantProfile(input: {
       ? (row.rawData as Record<string, any>)
       : {};
   const evidenceIngest =
-    rawData && typeof rawData.evidenceIngest === "object" && rawData.evidenceIngest
+    rawData &&
+    typeof rawData.evidenceIngest === "object" &&
+    rawData.evidenceIngest
       ? (rawData.evidenceIngest as Record<string, any>)
       : {};
   const quarantineConfig =
-    rawData && typeof rawData.evidenceQuarantine === "object" && rawData.evidenceQuarantine
+    rawData &&
+    typeof rawData.evidenceQuarantine === "object" &&
+    rawData.evidenceQuarantine
       ? (rawData.evidenceQuarantine as Record<string, any>)
       : evidenceIngest &&
           typeof evidenceIngest.quarantine === "object" &&
@@ -67,7 +73,9 @@ export function toPublicRestaurantProfile(input: {
         ? (evidenceIngest.quarantine as Record<string, any>)
         : {};
   const extractedEvidence =
-    evidenceIngest && typeof evidenceIngest.extracted === "object" && evidenceIngest.extracted
+    evidenceIngest &&
+    typeof evidenceIngest.extracted === "object" &&
+    evidenceIngest.extracted
       ? (evidenceIngest.extracted as Record<string, any>)
       : {};
   const evidenceExternalBusinessName =
@@ -84,25 +92,45 @@ export function toPublicRestaurantProfile(input: {
     normalizePhone(extractedEvidence.phone) &&
     normalizePhone(row.phone) === normalizePhone(extractedEvidence.phone);
   const hardIdentityEmailMatch =
-    String(row.email || "").trim().toLowerCase() &&
-    String(extractedEvidence.email || "").trim().toLowerCase() &&
-    String(row.email || "").trim().toLowerCase() ===
-      String(extractedEvidence.email || "").trim().toLowerCase();
+    String(row.email || "")
+      .trim()
+      .toLowerCase() &&
+    String(extractedEvidence.email || "")
+      .trim()
+      .toLowerCase() &&
+    String(row.email || "")
+      .trim()
+      .toLowerCase() ===
+      String(extractedEvidence.email || "")
+        .trim()
+        .toLowerCase();
   const hardIdentityWebsiteMatch =
     normalizeDomain(row.websiteUrl) &&
-    normalizeDomain(extractedEvidence.website || extractedEvidence.websiteUrl) &&
+    normalizeDomain(
+      extractedEvidence.website || extractedEvidence.websiteUrl,
+    ) &&
     normalizeDomain(row.websiteUrl) ===
-      normalizeDomain(extractedEvidence.website || extractedEvidence.websiteUrl);
+      normalizeDomain(
+        extractedEvidence.website || extractedEvidence.websiteUrl,
+      );
   const hardIdentityAddressMatch =
-    normalizedAddressLabel(joinedAddressLabel(row.address, row.city, row.state)) &&
-    normalizedAddressLabel(extractedEvidence.address || extractedEvidence.location_text) &&
-    normalizedAddressLabel(joinedAddressLabel(row.address, row.city, row.state)) ===
-      normalizedAddressLabel(extractedEvidence.address || extractedEvidence.location_text);
+    normalizedAddressLabel(
+      joinedAddressLabel(row.address, row.city, row.state),
+    ) &&
+    normalizedAddressLabel(
+      extractedEvidence.address || extractedEvidence.location_text,
+    ) &&
+    normalizedAddressLabel(
+      joinedAddressLabel(row.address, row.city, row.state),
+    ) ===
+      normalizedAddressLabel(
+        extractedEvidence.address || extractedEvidence.location_text,
+      );
   const hasHardIdentityAnchor = Boolean(
     hardIdentityPhoneMatch ||
-      hardIdentityEmailMatch ||
-      hardIdentityWebsiteMatch ||
-      hardIdentityAddressMatch,
+    hardIdentityEmailMatch ||
+    hardIdentityWebsiteMatch ||
+    hardIdentityAddressMatch,
   );
   const externalNameMismatch =
     Boolean(evidenceExternalBusinessName) &&
@@ -111,13 +139,15 @@ export function toPublicRestaurantProfile(input: {
   const quarantineByRule = externalNameMismatch && !hasHardIdentityAnchor;
   const isQuarantined = Boolean(
     quarantineConfig.active === true ||
-      String(quarantineConfig.status || "")
-        .trim()
-        .toLowerCase() === "quarantined" ||
-      quarantineByRule,
+    String(quarantineConfig.status || "")
+      .trim()
+      .toLowerCase() === "quarantined" ||
+    quarantineByRule,
   );
   const quarantineDecisions =
-    quarantineConfig && typeof quarantineConfig.decisions === "object" && quarantineConfig.decisions
+    quarantineConfig &&
+    typeof quarantineConfig.decisions === "object" &&
+    quarantineConfig.decisions
       ? (quarantineConfig.decisions as Record<string, any>)
       : {};
   const decisionStatus = (evidenceId: string) =>
@@ -128,11 +158,14 @@ export function toPublicRestaurantProfile(input: {
     )
       .trim()
       .toLowerCase();
-  const isAccepted = (evidenceId: string) => decisionStatus(evidenceId) === "accepted";
-  const isRejected = (evidenceId: string) => decisionStatus(evidenceId) === "rejected";
+  const isAccepted = (evidenceId: string) =>
+    decisionStatus(evidenceId) === "accepted";
+  const isRejected = (evidenceId: string) =>
+    decisionStatus(evidenceId) === "rejected";
   const hidePublicTrustFields =
     isQuarantined && quarantineConfig.allowPublicTrustFields !== true;
-  const hideMedia = hidePublicTrustFields && quarantineConfig.hideMedia !== false;
+  const hideMedia =
+    hidePublicTrustFields && quarantineConfig.hideMedia !== false;
   const publicActionLinks =
     row &&
     typeof row.socialAutopostSettings === "object" &&
@@ -220,12 +253,18 @@ export function toPublicRestaurantProfile(input: {
   const cateringUrl =
     String(
       publicActionLinks.cateringInquiryUrl ||
-      row.cateringInquiryUrl || row.cateringUrl || row.cateringRequestUrl || "",
+        row.cateringInquiryUrl ||
+        row.cateringUrl ||
+        row.cateringRequestUrl ||
+        "",
     ).trim() || null;
   const truckBookingUrl =
     String(
       publicActionLinks.truckBookingInquiryUrl ||
-      row.truckBookingInquiryUrl || row.truckBookingUrl || row.bookingInquiryUrl || "",
+        row.truckBookingInquiryUrl ||
+        row.truckBookingUrl ||
+        row.bookingInquiryUrl ||
+        "",
     ).trim() || null;
   const instagramUrl =
     isRejected("social_links") ||
@@ -244,11 +283,7 @@ export function toPublicRestaurantProfile(input: {
       : String(row.xUrl || "").trim() || null;
   const hoursValue =
     String(
-      row.hours ||
-        row.businessHours ||
-        row.hoursSummary ||
-        row.openHours ||
-        "",
+      row.hours || row.businessHours || row.hoursSummary || row.openHours || "",
     ).trim() || null;
   const openStatusValue =
     String(
@@ -266,7 +301,10 @@ export function toPublicRestaurantProfile(input: {
         "",
     ).trim() || null;
   const upcomingCountValue = Number(
-    row.upcomingCount ?? row.upcomingScheduleCount ?? row.truckUpcomingCount ?? 0,
+    row.upcomingCount ??
+      row.upcomingScheduleCount ??
+      row.truckUpcomingCount ??
+      0,
   );
   const featuredMenuItemsRaw = Array.isArray(row.featuredMenuItems)
     ? row.featuredMenuItems
@@ -287,41 +325,52 @@ export function toPublicRestaurantProfile(input: {
   const mappedGalleryImages =
     hideMedia && !isAccepted("media_gallery")
       ? ([] as any[])
-      : rawGalleryImages
-    .map((entry: any) => {
-      if (!entry) return null;
-      if (typeof entry === "string") {
-        return imageAsset(entry, "gallery");
-      }
-      const url = String(entry?.url || entry?.imageUrl || "").trim();
-      if (!url) return null;
-      const sourceRaw = String(entry?.source || "gallery")
-        .trim()
-        .toLowerCase()
-        .replace(/[^a-z_]/g, "_");
-      const source = (
-        ["cover_image", "logo", "gallery", "google_photo", "spot_image", "fallback"] as const
-      ).includes(sourceRaw as any)
-        ? (sourceRaw as
-            | "cover_image"
-            | "logo"
-            | "gallery"
-            | "google_photo"
-            | "spot_image"
-            | "fallback")
-        : "gallery";
-      const publicApproved = Boolean(entry?.publicApproved);
-      if (!publicApproved) return null;
-      const built = imageAsset(url, source);
-      if (!built) return null;
-      return {
-        ...built,
-        publicApproved,
-        lastVerifiedAt: String(entry?.lastVerifiedAt || "").trim() || built.lastVerifiedAt,
-      };
-    })
-    .filter(Boolean) as PublicRestaurantProfile["galleryImages"];
-  const menuSectionsRaw = Array.isArray(row.menuSections) ? row.menuSections : [];
+      : (rawGalleryImages
+          .map((entry: any) => {
+            if (!entry) return null;
+            if (typeof entry === "string") {
+              return imageAsset(entry, "gallery");
+            }
+            const url = String(entry?.url || entry?.imageUrl || "").trim();
+            if (!url) return null;
+            const sourceRaw = String(entry?.source || "gallery")
+              .trim()
+              .toLowerCase()
+              .replace(/[^a-z_]/g, "_");
+            const source = (
+              [
+                "cover_image",
+                "logo",
+                "gallery",
+                "google_photo",
+                "spot_image",
+                "fallback",
+              ] as const
+            ).includes(sourceRaw as any)
+              ? (sourceRaw as
+                  | "cover_image"
+                  | "logo"
+                  | "gallery"
+                  | "google_photo"
+                  | "spot_image"
+                  | "fallback")
+              : "gallery";
+            const publicApproved = Boolean(entry?.publicApproved);
+            if (!publicApproved) return null;
+            const built = imageAsset(url, source);
+            if (!built) return null;
+            return {
+              ...built,
+              publicApproved,
+              lastVerifiedAt:
+                String(entry?.lastVerifiedAt || "").trim() ||
+                built.lastVerifiedAt,
+            };
+          })
+          .filter(Boolean) as PublicRestaurantProfile["galleryImages"]);
+  const menuSectionsRaw = Array.isArray(row.menuSections)
+    ? row.menuSections
+    : [];
   const menuSections = menuSectionsRaw
     .map((section: any) => {
       const sectionName = String(section?.name || "").trim();
@@ -330,11 +379,13 @@ export function toPublicRestaurantProfile(input: {
         .map((item: any) => {
           const itemName = String(item?.name || "").trim();
           if (!itemName) return null;
-          const hasPrice = item?.priceCents !== null && item?.priceCents !== undefined;
+          const hasPrice =
+            item?.priceCents !== null && item?.priceCents !== undefined;
           const priceValue = Number(item?.priceCents);
-          const priceLabel = hasPrice && Number.isFinite(priceValue)
-            ? `$${(priceValue / 100).toFixed(2)}`
-            : null;
+          const priceLabel =
+            hasPrice && Number.isFinite(priceValue)
+              ? `$${(priceValue / 100).toFixed(2)}`
+              : null;
           return {
             menuItemId: String((item as any)?.menuItemId || "").trim() || null,
             name: itemName,
@@ -342,10 +393,18 @@ export function toPublicRestaurantProfile(input: {
             description: String(item?.description || "").trim() || null,
             imageUrl: String(item?.imageUrl || "").trim() || null,
             featured: Boolean(item?.featured),
+            recommendationCount: Math.max(
+              0,
+              Number(item?.recommendationCount || 0) || 0,
+            ),
+            userRecommended: Boolean(item?.userRecommended),
           };
         })
         .filter(Boolean)
-        .slice(0, 24) as PublicRestaurantProfile["menuSections"][number]["items"];
+        .slice(
+          0,
+          24,
+        ) as PublicRestaurantProfile["menuSections"][number]["items"];
       if (!sectionName || items.length === 0) return null;
       return {
         name: sectionName,
@@ -353,7 +412,9 @@ export function toPublicRestaurantProfile(input: {
       };
     })
     .filter(Boolean) as PublicRestaurantProfile["menuSections"];
-  const menuVariantsRaw = Array.isArray(row.menuVariants) ? row.menuVariants : [];
+  const menuVariantsRaw = Array.isArray(row.menuVariants)
+    ? row.menuVariants
+    : [];
   const menuVariants = menuVariantsRaw
     .map((variant: any) => {
       const variantId = String(variant?.id || "").trim();
@@ -371,16 +432,25 @@ export function toPublicRestaurantProfile(input: {
               if (!itemName) return null;
               const priceLabel = String(item?.priceLabel || "").trim() || null;
               return {
-                menuItemId: String((item as any)?.menuItemId || "").trim() || null,
+                menuItemId:
+                  String((item as any)?.menuItemId || "").trim() || null,
                 name: itemName,
                 priceLabel,
                 description: String(item?.description || "").trim() || null,
                 imageUrl: String(item?.imageUrl || "").trim() || null,
                 featured: Boolean(item?.featured),
+                recommendationCount: Math.max(
+                  0,
+                  Number(item?.recommendationCount || 0) || 0,
+                ),
+                userRecommended: Boolean(item?.userRecommended),
               };
             })
             .filter(Boolean)
-            .slice(0, 24) as PublicRestaurantProfile["menuSections"][number]["items"];
+            .slice(
+              0,
+              24,
+            ) as PublicRestaurantProfile["menuSections"][number]["items"];
           if (!sectionName || items.length === 0) return null;
           return { name: sectionName, items };
         })
@@ -401,23 +471,27 @@ export function toPublicRestaurantProfile(input: {
     ? new Date(row.menuLastUpdatedAt).toISOString()
     : null;
   const rawMenuApproval =
-    rawData && typeof rawData.ownerMenuApproval === "object" && rawData.ownerMenuApproval
+    rawData &&
+    typeof rawData.ownerMenuApproval === "object" &&
+    rawData.ownerMenuApproval
       ? (rawData.ownerMenuApproval as Record<string, any>)
       : {};
   const ownerMenuApprovalStatus = String(rawMenuApproval.status || "")
     .trim()
     .toLowerCase();
   const ownerMenuApproved =
-    ownerMenuApprovalStatus === "approved" || rawMenuApproval.ownerApproved === true;
+    ownerMenuApprovalStatus === "approved" ||
+    rawMenuApproval.ownerApproved === true;
   const ownerMenuRejected =
-    ownerMenuApprovalStatus === "rejected" || ownerMenuApprovalStatus === "not_current";
+    ownerMenuApprovalStatus === "rejected" ||
+    ownerMenuApprovalStatus === "not_current";
   const hasAnyMenuSurface = Boolean(
     menuSections.length > 0 ||
-      menuVariants.some((variant) => variant.menuSections.length > 0) ||
-      menuUrl ||
-      menuImageUrl ||
-      menuPdfUrl ||
-      featuredMenuItems.length > 0,
+    menuVariants.some((variant) => variant.menuSections.length > 0) ||
+    menuUrl ||
+    menuImageUrl ||
+    menuPdfUrl ||
+    featuredMenuItems.length > 0,
   );
   const menuApproval =
     profileType === "truck" && ownerMenuApproved
@@ -439,10 +513,12 @@ export function toPublicRestaurantProfile(input: {
         : profileType === "truck" && hasAnyMenuSurface
           ? {
               status: "needs_owner_confirmation" as const,
-              label: "Menu added from available source — needs owner confirmation",
+              label:
+                "Menu added from available source — needs owner confirmation",
               ownerApproved: false,
               ownerApprovalRequired: true,
-              reviewedAt: String(rawMenuApproval.reviewedAt || "").trim() || null,
+              reviewedAt:
+                String(rawMenuApproval.reviewedAt || "").trim() || null,
             }
           : {
               status: "unavailable" as const,
@@ -451,16 +527,17 @@ export function toPublicRestaurantProfile(input: {
               ownerApprovalRequired: false,
               reviewedAt: null,
             };
-  const publicMenuSections = menuApproval.status === "rejected" ? [] : menuSections;
+  const publicMenuSections =
+    menuApproval.status === "rejected" ? [] : menuSections;
   const publicMenuVariants =
-    menuApproval.status === "rejected"
-      ? []
-      : menuVariants;
+    menuApproval.status === "rejected" ? [] : menuVariants;
   const publicFeaturedMenuItems =
     menuApproval.status === "rejected" ? [] : featuredMenuItems;
   const publicMenuUrl = menuApproval.status === "rejected" ? null : menuUrl;
-  const publicMenuImageUrl = menuApproval.status === "rejected" ? null : menuImageUrl;
-  const publicMenuPdfUrl = menuApproval.status === "rejected" ? null : menuPdfUrl;
+  const publicMenuImageUrl =
+    menuApproval.status === "rejected" ? null : menuImageUrl;
+  const publicMenuPdfUrl =
+    menuApproval.status === "rejected" ? null : menuPdfUrl;
   const dealCount = Math.max(
     0,
     Number(
@@ -507,7 +584,14 @@ export function toPublicRestaurantProfile(input: {
         .toLowerCase()
         .replace(/[^a-z_]/g, "_");
       const normalizedActionType = (
-        ["call", "show_this_deal", "order", "website", "menu", "internal"] as const
+        [
+          "call",
+          "show_this_deal",
+          "order",
+          "website",
+          "menu",
+          "internal",
+        ] as const
       ).includes(actionTypeRaw as any)
         ? (actionTypeRaw as
             | "call"
@@ -573,7 +657,8 @@ export function toPublicRestaurantProfile(input: {
       const normalizedActionType = (
         ["rsvp", "share", "website", "directions", "internal"] as const
       ).includes(actionTypeRaw as any)
-        ? (actionTypeRaw as "rsvp" | "share" | "website" | "directions" | "internal")
+        ? (actionTypeRaw as
+            "rsvp" | "share" | "website" | "directions" | "internal")
         : "internal";
       return {
         id,
@@ -585,7 +670,8 @@ export function toPublicRestaurantProfile(input: {
         dateLabel: String(item?.dateLabel || "").trim() || null,
         timeWindowLabel: String(item?.timeWindowLabel || "").trim() || null,
         locationName: String(item?.locationName || "").trim() || null,
-        addressPublicLabel: String(item?.addressPublicLabel || "").trim() || null,
+        addressPublicLabel:
+          String(item?.addressPublicLabel || "").trim() || null,
         imageUrl: String(item?.imageUrl || "").trim() || null,
         actionLabel: String(item?.actionLabel || "").trim() || "View event",
         actionHref,
@@ -611,7 +697,9 @@ export function toPublicRestaurantProfile(input: {
       row.googleRating ??
       Number.NaN,
   );
-  const reviewRating = Number.isFinite(reviewRatingRaw) ? reviewRatingRaw : null;
+  const reviewRating = Number.isFinite(reviewRatingRaw)
+    ? reviewRatingRaw
+    : null;
   const recommendationTotal = Math.max(
     0,
     Number(
@@ -632,9 +720,24 @@ export function toPublicRestaurantProfile(input: {
 
   const ctas = [
     buildPublicCta({ label: "Profile", href: canonicalPath, type: "internal" }),
-    buildPublicCta({ label: "Order online", href: onlineOrderingUrl, type: "order", priority: 100 }),
-    buildPublicCta({ label: "Delivery", href: deliveryUrl, type: "order", priority: 96 }),
-    buildPublicCta({ label: "Menu", href: publicMenuUrl, type: "menu", priority: 94 }),
+    buildPublicCta({
+      label: "Order online",
+      href: onlineOrderingUrl,
+      type: "order",
+      priority: 100,
+    }),
+    buildPublicCta({
+      label: "Delivery",
+      href: deliveryUrl,
+      type: "order",
+      priority: 96,
+    }),
+    buildPublicCta({
+      label: "Menu",
+      href: publicMenuUrl,
+      type: "menu",
+      priority: 94,
+    }),
     buildPublicCta({
       label: "Get directions",
       href:
@@ -644,14 +747,40 @@ export function toPublicRestaurantProfile(input: {
       type: "map",
       priority: 92,
     }),
-    buildPublicCta({ label: "Call", href: phonePublic ? `tel:${phonePublic}` : null, type: "phone", priority: 90 }),
-    buildPublicCta({ label: "Website", href: websiteUrl, type: "external", priority: 86 }),
-    buildPublicCta({ label: "Instagram", href: instagramUrl, type: "social", priority: 82 }),
-    buildPublicCta({ label: "Facebook", href: facebookPageUrl, type: "social", priority: 81 }),
-    buildPublicCta({ label: "X", href: xUrl, type: "social", priority: 78 }),
-    buildPublicCta({ label: "Catering inquiry", href: cateringUrl, type: "catering", priority: 74 }),
     buildPublicCta({
-      label: profileType === "truck" ? "Truck booking inquiry" : "Booking inquiry",
+      label: "Call",
+      href: phonePublic ? `tel:${phonePublic}` : null,
+      type: "phone",
+      priority: 90,
+    }),
+    buildPublicCta({
+      label: "Website",
+      href: websiteUrl,
+      type: "external",
+      priority: 86,
+    }),
+    buildPublicCta({
+      label: "Instagram",
+      href: instagramUrl,
+      type: "social",
+      priority: 82,
+    }),
+    buildPublicCta({
+      label: "Facebook",
+      href: facebookPageUrl,
+      type: "social",
+      priority: 81,
+    }),
+    buildPublicCta({ label: "X", href: xUrl, type: "social", priority: 78 }),
+    buildPublicCta({
+      label: "Catering inquiry",
+      href: cateringUrl,
+      type: "catering",
+      priority: 74,
+    }),
+    buildPublicCta({
+      label:
+        profileType === "truck" ? "Truck booking inquiry" : "Booking inquiry",
       href: truckBookingUrl,
       type: "booking",
       priority: 72,
@@ -697,15 +826,16 @@ export function toPublicRestaurantProfile(input: {
       imageAsset(logoUrl, "logo"),
       ...mappedGalleryImages,
     ].filter(Boolean) as PublicRestaurantProfile["galleryImages"],
-    verifiedProfile: hidePublicTrustFields && !isAccepted("identity_verification")
-      ? false
-      : Boolean(
-          row.verifiedProfile ??
+    verifiedProfile:
+      hidePublicTrustFields && !isAccepted("identity_verification")
+        ? false
+        : Boolean(
+            row.verifiedProfile ??
             row.isVerified ??
             row.profileVerified ??
             row.claimVerified ??
             false,
-        ),
+          ),
     locallyOwned: Boolean(
       row.locallyOwned ?? row.isLocallyOwned ?? row.localOwned ?? false,
     ),
@@ -762,9 +892,7 @@ export function toPublicRestaurantProfile(input: {
             upcomingCount: Math.max(
               0,
               Number(
-                row?.truckSchedule?.upcomingCount ??
-                  upcomingCountValue ??
-                  0,
+                row?.truckSchedule?.upcomingCount ?? upcomingCountValue ?? 0,
               ) || 0,
             ),
             closedCount: Math.max(

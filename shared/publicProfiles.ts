@@ -1,10 +1,5 @@
 export type PublicProfileType =
-  | "restaurant"
-  | "truck"
-  | "bar"
-  | "location"
-  | "host"
-  | "supplier";
+  "restaurant" | "truck" | "bar" | "location" | "host" | "supplier";
 
 export type PublicCtaType =
   | "internal"
@@ -83,7 +78,8 @@ export type PublicDealItem = {
   imageUrl: string | null;
   actionLabel: string;
   actionHref: string;
-  actionType: "call" | "show_this_deal" | "order" | "website" | "menu" | "internal";
+  actionType:
+    "call" | "show_this_deal" | "order" | "website" | "menu" | "internal";
 };
 
 export type PublicEventSummary = {
@@ -123,6 +119,8 @@ export type PublicMenuItem = {
   description: string | null;
   imageUrl: string | null;
   featured: boolean;
+  recommendationCount?: number;
+  userRecommended?: boolean;
 };
 
 export type PublicMenuSection = {
@@ -140,7 +138,8 @@ export type PublicMenuVariant = {
 };
 
 export type PublicMenuApprovalState = {
-  status: "owner_approved" | "needs_owner_confirmation" | "rejected" | "unavailable";
+  status:
+    "owner_approved" | "needs_owner_confirmation" | "rejected" | "unavailable";
   label: string;
   ownerApproved: boolean;
   ownerApprovalRequired: boolean;

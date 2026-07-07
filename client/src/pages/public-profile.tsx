@@ -887,13 +887,17 @@ const scoreMenuShelfItem = (
   const recommendationCount = Math.max(
     0,
     Number(
-      itemAny.recommendationCount ??
+      item.recommendationCount ??
+        itemAny.recommendationCount ??
         itemAny.recommendationsCount ??
         itemAny.communityRecommendationCount ??
         0,
     ) || 0,
   );
-  const hasUserSignal = userItemNames.size > 0;
+  const userRecommended = Boolean(
+    item.userRecommended || itemAny.userRecommended,
+  );
+  const hasUserSignal = userRecommended || userItemNames.size > 0;
   const stableRandom = stableUnitHash(`${seedKey}:${name}`);
   const qualityScore =
     (item.imageUrl ? 20 : 0) +
@@ -902,6 +906,7 @@ const scoreMenuShelfItem = (
 
   if (hasUserSignal) {
     return (
+      (userRecommended ? 1200 : 0) +
       (userItemNames.has(name) ? 1000 : 0) +
       recommendationCount * 20 +
       (recommendedNames.has(name) ? 120 : 0) +
@@ -995,7 +1000,8 @@ function TruckMenuShelf({ profile }: { profile: PublicRestaurantProfile }) {
       const itemAny = item as any;
       return (
         Number(
-          itemAny.recommendationCount ??
+          item.recommendationCount ??
+            itemAny.recommendationCount ??
             itemAny.recommendationsCount ??
             itemAny.communityRecommendationCount ??
             0,
@@ -2680,6 +2686,7 @@ export default function PublicProfilePage() {
         apiUrl(
           `/api/public/profiles/${encodeURIComponent(String(normalizedProfileType || ""))}/${encodeURIComponent(String(resolvedProfileId || ""))}${locationSearch || ""}`,
         ),
+        { credentials: "include" },
       );
       if (!res.ok) throw new Error("Profile not found");
       return res.json();
