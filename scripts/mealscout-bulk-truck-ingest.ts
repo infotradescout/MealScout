@@ -521,7 +521,17 @@ const run = async () => {
     const { scoredRestaurants, scoredListings } = await findMatches(record);
     const strongRestaurantMatches = scoredRestaurants.filter((x: any) => x.score >= 10);
     const strongListingMatches = scoredListings.filter((x: any) => x.score >= 10);
-    const totalStrong = strongRestaurantMatches.length + strongListingMatches.length;
+    // A restaurant and its own linked import-listing companion (restaurant.claimedFromImportId
+    // === listing.id) are the same real-world business, not two independent candidates - collapse
+    // them before counting "strong matches" so an already-onboarded business (which always has
+    // both rows) doesn't perpetually trip needs_review every time it reappears in a later seed file.
+    const linkedListingIds = new Set(
+      strongRestaurantMatches.map((x: any) => x.row.claimedFromImportId).filter(Boolean),
+    );
+    const unlinkedStrongListingMatches = strongListingMatches.filter(
+      (x: any) => !linkedListingIds.has(x.row.id),
+    );
+    const totalStrong = strongRestaurantMatches.length + unlinkedStrongListingMatches.length;
 
     let action: Action = "needs_review";
     if (!record.businessName) {
