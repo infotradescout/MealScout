@@ -20,6 +20,7 @@ import {
   insertVerificationRequestSchema,
   verificationRequests,
   deals,
+  imageUploads,
   restaurantFavorites,
   restaurantFollows,
   restaurantUserRecommendations,
@@ -30,6 +31,11 @@ import {
   menuItems,
   restaurants,
 } from "@shared/schema";
+import {
+  isCloudinaryConfigured,
+  upload as imageUpload,
+  uploadToCloudinary,
+} from "../imageUpload";
 import {
   computeHomeRankingScore,
   getHomeRankingReasons,
@@ -50,7 +56,9 @@ const messageBodyToHtml = (value: string) =>
     .split(/\n{2,}/)
     .map((paragraph) => paragraph.trim())
     .filter(Boolean)
-    .map((paragraph) => `<p>${escapeHtml(paragraph).replace(/\n/g, "<br />")}</p>`)
+    .map(
+      (paragraph) => `<p>${escapeHtml(paragraph).replace(/\n/g, "<br />")}</p>`,
+    )
     .join("");
 
 type AnalyticsAccessResult = {
@@ -280,10 +288,12 @@ export function registerRestaurantCoreRoutes(
 
   app.get("/api/restaurants/public", async (req, res) => {
     try {
-      const { lat, lng, radius = 12, limit = 80 } = req.query as Record<
-        string,
-        string | undefined
-      >;
+      const {
+        lat,
+        lng,
+        radius = 12,
+        limit = 80,
+      } = req.query as Record<string, string | undefined>;
       const parsedLimit = Math.max(
         1,
         Math.min(200, Number.parseInt(String(limit || "80"), 10) || 80),
@@ -340,7 +350,9 @@ export function registerRestaurantCoreRoutes(
                       count: sql<number>`cast(count(*) as integer)`,
                     })
                     .from(restaurantFavorites)
-                    .where(inArray(restaurantFavorites.restaurantId, restaurantIds))
+                    .where(
+                      inArray(restaurantFavorites.restaurantId, restaurantIds),
+                    )
                     .groupBy(restaurantFavorites.restaurantId),
                 [],
               ),
@@ -353,7 +365,9 @@ export function registerRestaurantCoreRoutes(
                       count: sql<number>`cast(count(*) as integer)`,
                     })
                     .from(restaurantFollows)
-                    .where(inArray(restaurantFollows.restaurantId, restaurantIds))
+                    .where(
+                      inArray(restaurantFollows.restaurantId, restaurantIds),
+                    )
                     .groupBy(restaurantFollows.restaurantId),
                 [],
               ),
@@ -469,10 +483,16 @@ export function registerRestaurantCoreRoutes(
           : [[], [], [], [], [], { rows: [] }, { rows: [] }, { rows: [] }];
 
       const favoritesByRestaurant = new Map(
-        favoriteRows.map((row: any) => [String(row.restaurantId), Number(row.count) || 0]),
+        favoriteRows.map((row: any) => [
+          String(row.restaurantId),
+          Number(row.count) || 0,
+        ]),
       );
       const followsByRestaurant = new Map(
-        followRows.map((row: any) => [String(row.restaurantId), Number(row.count) || 0]),
+        followRows.map((row: any) => [
+          String(row.restaurantId),
+          Number(row.count) || 0,
+        ]),
       );
       const recommendationsByRestaurant = new Map(
         recommendationRows.map((row: any) => [
@@ -481,7 +501,10 @@ export function registerRestaurantCoreRoutes(
         ]),
       );
       const activeDealsByRestaurant = new Map(
-        activeDealRows.map((row: any) => [String(row.restaurantId), Number(row.count) || 0]),
+        activeDealRows.map((row: any) => [
+          String(row.restaurantId),
+          Number(row.count) || 0,
+        ]),
       );
       const videoRecommendationsByRestaurant = new Map(
         videoRecommendationRows.map((row: any) => [
@@ -569,9 +592,13 @@ export function registerRestaurantCoreRoutes(
           const lngRaw =
             restaurant.currentLongitude ?? restaurant.longitude ?? null;
           const targetLat =
-            typeof latRaw === "number" ? latRaw : Number.parseFloat(String(latRaw));
+            typeof latRaw === "number"
+              ? latRaw
+              : Number.parseFloat(String(latRaw));
           const targetLng =
-            typeof lngRaw === "number" ? lngRaw : Number.parseFloat(String(lngRaw));
+            typeof lngRaw === "number"
+              ? lngRaw
+              : Number.parseFloat(String(lngRaw));
           if (!Number.isFinite(targetLat) || !Number.isFinite(targetLng)) {
             return null;
           }
@@ -587,7 +614,8 @@ export function registerRestaurantCoreRoutes(
               Math.sin(dLng / 2);
           const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
           const distanceKm = earthRadiusKm * c;
-          if (!Number.isFinite(distanceKm) || distanceKm > radiusKm) return null;
+          if (!Number.isFinite(distanceKm) || distanceKm > radiusKm)
+            return null;
 
           return attachTrustSignals(restaurant, distanceKm * 0.621371);
         })
@@ -595,11 +623,13 @@ export function registerRestaurantCoreRoutes(
 
       const sorted = withDistance.sort((a: any, b: any) => {
         const aScore =
-          typeof a.homeRankingScore === "number" && Number.isFinite(a.homeRankingScore)
+          typeof a.homeRankingScore === "number" &&
+          Number.isFinite(a.homeRankingScore)
             ? a.homeRankingScore
             : 0;
         const bScore =
-          typeof b.homeRankingScore === "number" && Number.isFinite(b.homeRankingScore)
+          typeof b.homeRankingScore === "number" &&
+          Number.isFinite(b.homeRankingScore)
             ? b.homeRankingScore
             : 0;
         if (aScore !== bScore) return bScore - aScore;
@@ -639,99 +669,99 @@ export function registerRestaurantCoreRoutes(
     }
   });
 
-  app.post(
-    "/api/restaurants/:restaurantId/message",
-    async (req: any, res) => {
-      try {
-        const { restaurantId } = req.params;
-        const userId = req.user?.id || null;
-        const rawGuestEmail = String(req.body?.email || "").trim();
-        const rawGuestName = String(req.body?.name || "").trim();
-        const senderKey = userId || rawGuestEmail || req.ip || "anonymous";
-        const actionGate = consumeEngagementWindow(
-          `${senderKey}:${restaurantId}:business-message`,
-        );
-        if (!actionGate.allowed) {
-          return res.status(429).json({
-            message: "Please wait a moment before sending another message.",
-            retryAfterSeconds: actionGate.retryAfterSeconds,
-          });
-        }
+  app.post("/api/restaurants/:restaurantId/message", async (req: any, res) => {
+    try {
+      const { restaurantId } = req.params;
+      const userId = req.user?.id || null;
+      const rawGuestEmail = String(req.body?.email || "").trim();
+      const rawGuestName = String(req.body?.name || "").trim();
+      const senderKey = userId || rawGuestEmail || req.ip || "anonymous";
+      const actionGate = consumeEngagementWindow(
+        `${senderKey}:${restaurantId}:business-message`,
+      );
+      if (!actionGate.allowed) {
+        return res.status(429).json({
+          message: "Please wait a moment before sending another message.",
+          retryAfterSeconds: actionGate.retryAfterSeconds,
+        });
+      }
 
-        const restaurant = await storage.getRestaurant(restaurantId);
-        if (!restaurant || !isPublicBusinessVisible(restaurant)) {
-          return res.status(404).json({ message: "Business not found" });
-        }
+      const restaurant = await storage.getRestaurant(restaurantId);
+      if (!restaurant || !isPublicBusinessVisible(restaurant)) {
+        return res.status(404).json({ message: "Business not found" });
+      }
 
-        const owner = await storage.getUser(restaurant.ownerId);
-        if (!owner?.email) {
-          return res
-            .status(400)
-            .json({ message: "This business is not accepting messages yet" });
-        }
+      const owner = await storage.getUser(restaurant.ownerId);
+      if (!owner?.email) {
+        return res
+          .status(400)
+          .json({ message: "This business is not accepting messages yet" });
+      }
 
-        const sender = userId ? await storage.getUser(userId) : null;
-        const senderEmail = String(sender?.email || req.user?.email || "").trim();
-        const replyEmail = senderEmail || rawGuestEmail;
-        const emailLooksValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(replyEmail);
-        if (!replyEmail || !emailLooksValid) {
-          return res.status(400).json({
-            message: "Enter a valid reply email before messaging this business",
-          });
-        }
-        if (!sender && rawGuestName.length < 2) {
-          return res.status(400).json({
-            message: "Enter your name before messaging this business",
-          });
-        }
+      const sender = userId ? await storage.getUser(userId) : null;
+      const senderEmail = String(sender?.email || req.user?.email || "").trim();
+      const replyEmail = senderEmail || rawGuestEmail;
+      const emailLooksValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(replyEmail);
+      if (!replyEmail || !emailLooksValid) {
+        return res.status(400).json({
+          message: "Enter a valid reply email before messaging this business",
+        });
+      }
+      if (!sender && rawGuestName.length < 2) {
+        return res.status(400).json({
+          message: "Enter your name before messaging this business",
+        });
+      }
 
-        const topic = String(req.body?.topic || "Question")
-          .trim()
-          .slice(0, 60);
-        const preferredReply =
-          String(req.body?.preferredReply || "email") === "phone"
-            ? "phone"
-            : "email";
-        const phone = String(req.body?.phone || "").trim().slice(0, 40);
-        if (preferredReply === "phone" && phone.length < 7) {
-          return res.status(400).json({
-            message: "Enter a callback number or choose email reply",
-          });
-        }
-        const message = String(req.body?.message || "").trim();
-        if (message.length < 10 || message.length > 2000) {
-          return res.status(400).json({
-            message: "Message must be between 10 and 2000 characters",
-          });
-        }
+      const topic = String(req.body?.topic || "Question")
+        .trim()
+        .slice(0, 60);
+      const preferredReply =
+        String(req.body?.preferredReply || "email") === "phone"
+          ? "phone"
+          : "email";
+      const phone = String(req.body?.phone || "")
+        .trim()
+        .slice(0, 40);
+      if (preferredReply === "phone" && phone.length < 7) {
+        return res.status(400).json({
+          message: "Enter a callback number or choose email reply",
+        });
+      }
+      const message = String(req.body?.message || "").trim();
+      if (message.length < 10 || message.length > 2000) {
+        return res.status(400).json({
+          message: "Message must be between 10 and 2000 characters",
+        });
+      }
 
-        const senderName =
-          [sender?.firstName, sender?.lastName].filter(Boolean).join(" ") ||
-          req.user?.name ||
-          rawGuestName ||
-          "A MealScout user";
-        const businessName = restaurant.name || "your business";
-        const conversationId = crypto.randomUUID();
-        const baseUrl = String(
-          process.env.PUBLIC_BASE_URL || "http://localhost:5000",
-        ).replace(/\/+$/, "");
-        const dashboardUrl = `${baseUrl}/restaurant-owner-dashboard`;
-        const trackedDashboardUrl = `${baseUrl}/api/restaurants/messages/${conversationId}/open?restaurantId=${encodeURIComponent(restaurantId)}`;
-        const safeBusinessName = escapeHtml(businessName);
-        const safeSenderName = escapeHtml(senderName);
-        const safeSenderEmail = escapeHtml(replyEmail);
-        const safePhone = escapeHtml(phone);
-        const safeTopic = escapeHtml(topic || "General question");
-        const replyLine =
-          preferredReply === "phone" && phone
-            ? `<p><strong>Preferred reply:</strong> Call/text ${safePhone}</p><p><strong>Backup email:</strong> ${safeSenderEmail}</p>`
-            : `<p><strong>Reply directly to:</strong> ${safeSenderEmail}</p>`;
-        const textReplyLine =
-          preferredReply === "phone" && phone
-            ? `Preferred reply: Call/text ${phone}\nBackup email: ${replyEmail}`
-            : `Reply directly to: ${replyEmail}`;
-        const subjectTopic = topic || "Question";
-        const html = `
+      const senderName =
+        [sender?.firstName, sender?.lastName].filter(Boolean).join(" ") ||
+        req.user?.name ||
+        rawGuestName ||
+        "A MealScout user";
+      const businessName = restaurant.name || "your business";
+      const conversationId = crypto.randomUUID();
+      const baseUrl = String(
+        process.env.PUBLIC_BASE_URL || "http://localhost:5000",
+      ).replace(/\/+$/, "");
+      const dashboardUrl = `${baseUrl}/restaurant-owner-dashboard`;
+      const trackedDashboardUrl = `${baseUrl}/api/restaurants/messages/${conversationId}/open?restaurantId=${encodeURIComponent(restaurantId)}`;
+      const safeBusinessName = escapeHtml(businessName);
+      const safeSenderName = escapeHtml(senderName);
+      const safeSenderEmail = escapeHtml(replyEmail);
+      const safePhone = escapeHtml(phone);
+      const safeTopic = escapeHtml(topic || "General question");
+      const replyLine =
+        preferredReply === "phone" && phone
+          ? `<p><strong>Preferred reply:</strong> Call/text ${safePhone}</p><p><strong>Backup email:</strong> ${safeSenderEmail}</p>`
+          : `<p><strong>Reply directly to:</strong> ${safeSenderEmail}</p>`;
+      const textReplyLine =
+        preferredReply === "phone" && phone
+          ? `Preferred reply: Call/text ${phone}\nBackup email: ${replyEmail}`
+          : `Reply directly to: ${replyEmail}`;
+      const subjectTopic = topic || "Question";
+      const html = `
           <p><strong>${safeSenderName}</strong> contacted <strong>${safeBusinessName}</strong> from MealScout.</p>
           <p><strong>Topic:</strong> ${safeTopic}</p>
           <hr style="border:none;border-top:1px solid #e5e7eb;margin:16px 0;" />
@@ -741,79 +771,83 @@ export function registerRestaurantCoreRoutes(
           <p style="color:#6b7280;font-size:13px;">MealScout shared this email address because the user chose to contact your business. No live location data, payment details, or private preference data was included.</p>
           <p><a href="${trackedDashboardUrl}">Open your MealScout dashboard</a></p>
         `;
-        const text = `${senderName} contacted ${businessName} from MealScout.\n\nTopic: ${subjectTopic}\n\n${message}\n\n${textReplyLine}\n\nMealScout shared this reply info because the user chose to contact your business. No live location data, payment details, or private preference data was included.\n\nDashboard: ${trackedDashboardUrl}`;
+      const text = `${senderName} contacted ${businessName} from MealScout.\n\nTopic: ${subjectTopic}\n\n${message}\n\n${textReplyLine}\n\nMealScout shared this reply info because the user chose to contact your business. No live location data, payment details, or private preference data was included.\n\nDashboard: ${trackedDashboardUrl}`;
 
-        const notificationResult = await notifyUser({
-          user: owner,
-          topic: "businessMessages",
-          title: `MealScout ${subjectTopic}: ${businessName}`,
-          body: `${senderName} sent ${businessName} a MealScout message.`,
-          actionUrl: `/api/restaurants/messages/${conversationId}/open?restaurantId=${encodeURIComponent(restaurantId)}`,
-          priority: "high",
-          sourceType: "business_message",
-          sourceId: conversationId,
-          actorUserId: userId,
-          channels: ["in_app", "email", "sms"],
-          emailHtml: html,
-          emailText: text,
-          smsText: `MealScout: ${senderName} sent ${businessName} a message. Open your dashboard to respond.`,
-          metadata: {
-            conversationId,
-            restaurantId,
-            restaurantOwnerId: restaurant.ownerId,
-            topic,
-            preferredReply,
-            senderKind: userId ? "registered_user" : "guest",
-            hasReplyEmail: Boolean(replyEmail),
-            hasPhone: Boolean(phone),
-            messageLength: message.length,
-            source: "restaurant_profile",
-          },
-        });
-        const notificationChannels = notificationResult.channels || {};
-        const ok =
-          notificationChannels.email === "sent" ||
-          notificationChannels.in_app === "created" ||
-          notificationChannels.sms === "sent";
+      const notificationResult = await notifyUser({
+        user: owner,
+        topic: "businessMessages",
+        title: `MealScout ${subjectTopic}: ${businessName}`,
+        body: `${senderName} sent ${businessName} a MealScout message.`,
+        actionUrl: `/api/restaurants/messages/${conversationId}/open?restaurantId=${encodeURIComponent(restaurantId)}`,
+        priority: "high",
+        sourceType: "business_message",
+        sourceId: conversationId,
+        actorUserId: userId,
+        channels: ["in_app", "email", "sms"],
+        emailHtml: html,
+        emailText: text,
+        smsText: `MealScout: ${senderName} sent ${businessName} a message. Open your dashboard to respond.`,
+        metadata: {
+          conversationId,
+          restaurantId,
+          restaurantOwnerId: restaurant.ownerId,
+          topic,
+          preferredReply,
+          senderKind: userId ? "registered_user" : "guest",
+          hasReplyEmail: Boolean(replyEmail),
+          hasPhone: Boolean(phone),
+          messageLength: message.length,
+          source: "restaurant_profile",
+        },
+      });
+      const notificationChannels = notificationResult.channels || {};
+      const ok =
+        notificationChannels.email === "sent" ||
+        notificationChannels.in_app === "created" ||
+        notificationChannels.sms === "sent";
 
-        await trackBusinessConversationEvent(
-          "business_contact_intent_sent",
+      await trackBusinessConversationEvent(
+        "business_contact_intent_sent",
+        {
+          conversationId,
+          restaurantId,
+          restaurantOwnerId: restaurant.ownerId,
+          topic,
+          preferredReply,
+          senderKind: userId ? "registered_user" : "guest",
+          hasReplyEmail: Boolean(replyEmail),
+          hasPhone: Boolean(phone),
+          messageLength: message.length,
+          delivered: ok,
+          notificationId: notificationResult.notificationId,
+          notificationChannels,
+          source: "restaurant_profile",
+        },
+        userId,
+      );
+
+      if (userId) {
+        await trackEngagement(
+          "restaurant_user_message_sent",
+          userId,
+          restaurantId,
           {
             conversationId,
-            restaurantId,
-            restaurantOwnerId: restaurant.ownerId,
             topic,
             preferredReply,
-            senderKind: userId ? "registered_user" : "guest",
-            hasReplyEmail: Boolean(replyEmail),
-            hasPhone: Boolean(phone),
-            messageLength: message.length,
             delivered: ok,
-            notificationId: notificationResult.notificationId,
-            notificationChannels,
-            source: "restaurant_profile",
           },
-          userId,
         );
-
-        if (userId) {
-          await trackEngagement("restaurant_user_message_sent", userId, restaurantId, {
-            conversationId,
-            topic,
-            preferredReply,
-            delivered: ok,
-          });
-        }
-
-        res.json({ success: ok, conversationId });
-      } catch (error: any) {
-        console.error("Error sending business message:", error);
-        res.status(500).json({
-          message: error?.message || "Failed to send message",
-        });
       }
-    },
-  );
+
+      res.json({ success: ok, conversationId });
+    } catch (error: any) {
+      console.error("Error sending business message:", error);
+      res.status(500).json({
+        message: error?.message || "Failed to send message",
+      });
+    }
+  });
 
   app.get(
     "/api/restaurants/messages/:conversationId/open",
@@ -915,11 +949,7 @@ export function registerRestaurantCoreRoutes(
         });
 
         const favorite = await storage.createRestaurantFavorite(favoriteData);
-        void trackEngagement(
-          "restaurant_favorite_added",
-          userId,
-          restaurantId,
-        );
+        void trackEngagement("restaurant_favorite_added", userId, restaurantId);
         await autoFollowRestaurant(userId, restaurantId);
         res.json(favorite);
       } catch (error: any) {
@@ -1085,12 +1115,38 @@ export function registerRestaurantCoreRoutes(
   app.post(
     "/api/restaurants/:restaurantId/recommend",
     isAuthenticated,
+    imageUpload.single("image"),
     async (req: any, res) => {
       try {
         const { restaurantId } = req.params;
         const userId = req.user.id;
+
+        const restaurant = await storage.getRestaurant(restaurantId);
+        if (!restaurant) {
+          return res.status(404).json({ message: "Restaurant not found" });
+        }
+
+        const body = req.body || {};
+        const comment = String(body.comment || "").trim() || null;
+        const scoresRaw =
+          typeof body.scores === "string"
+            ? JSON.parse(body.scores || "{}")
+            : body.scores || {};
+        const scores = {
+          food: Number(scoresRaw.food ?? body.foodScore ?? 0) || null,
+          value: Number(scoresRaw.value ?? body.valueScore ?? 0) || null,
+          speed: Number(scoresRaw.speed ?? body.speedScore ?? 0) || null,
+          vibe: Number(scoresRaw.vibe ?? body.vibeScore ?? 0) || null,
+        };
+        const scoreValues = Object.values(scores).filter(
+          (value): value is number =>
+            typeof value === "number" && Number.isFinite(value) && value > 0,
+        );
+        const hasContext = Boolean(
+          comment || scoreValues.length > 0 || req.file,
+        );
         const actionGate = consumeEngagementWindow(
-          `${userId}:${restaurantId}:recommend:add`,
+          `${userId}:${restaurantId}:recommend:${hasContext ? "context" : "tap"}`,
         );
         if (!actionGate.allowed) {
           return res.status(429).json({
@@ -1098,11 +1154,16 @@ export function registerRestaurantCoreRoutes(
             retryAfterSeconds: actionGate.retryAfterSeconds,
           });
         }
-
-        const restaurant = await storage.getRestaurant(restaurantId);
-        if (!restaurant) {
-          return res.status(404).json({ message: "Restaurant not found" });
-        }
+        const averageScore =
+          scoreValues.length > 0
+            ? Math.round(
+                scoreValues.reduce((sum, value) => sum + value, 0) /
+                  scoreValues.length,
+              )
+            : null;
+        const rating = averageScore
+          ? Math.max(1, Math.min(5, Math.round(averageScore / 20)))
+          : null;
 
         const recommendationData =
           insertRestaurantUserRecommendationSchema.parse({
@@ -1110,28 +1171,127 @@ export function registerRestaurantCoreRoutes(
             userId,
           });
 
-        const recommendation =
-          await storage.createRestaurantUserRecommendation(recommendationData);
+        let recommendation: any = null;
+        let createdRecommendation = false;
+        try {
+          recommendation =
+            await storage.createRestaurantUserRecommendation(
+              recommendationData,
+            );
+          createdRecommendation = true;
+        } catch (error: any) {
+          if (error.code !== "23505") throw error;
+          const [existing] = await db
+            .select()
+            .from(restaurantUserRecommendations)
+            .where(
+              and(
+                eq(restaurantUserRecommendations.restaurantId, restaurantId),
+                eq(restaurantUserRecommendations.userId, userId),
+              ),
+            )
+            .limit(1);
+          recommendation = existing;
+        }
         await autoFollowRestaurant(userId, restaurantId);
 
-        // Bare recommend = 1 point, matching dish-level recommend. Adding
-        // detail via POST /api/reviews (the pre-existing endpoint this
-        // reuses) carries additional weight on top of this - see that route.
-        await db
-          .update(users)
-          .set({
-            recommendationCount: sql`${users.recommendationCount} + 1`,
-            influenceScore: sql`${users.influenceScore} + 1`,
-            updatedAt: new Date(),
-          } as any)
-          .where(eq(users.id, userId));
+        let proofPhoto: any = null;
+        if (req.file) {
+          if (!isCloudinaryConfigured()) {
+            return res.status(503).json({
+              message: "Image upload service not configured",
+            });
+          }
+          const uploadResult = await uploadToCloudinary(
+            req.file.buffer,
+            "restaurant-recommendation-photos",
+            `restaurant-recommendation-${restaurantId}-${userId}-${Date.now()}`,
+          );
+          const [createdUpload] = await db
+            .insert(imageUploads)
+            .values({
+              uploadedByUserId: userId,
+              imageType: "restaurant_recommendation_photo",
+              entityId: recommendation?.id || restaurantId,
+              entityType: "restaurant_recommendation",
+              cloudinaryPublicId: uploadResult.publicId,
+              cloudinaryUrl: uploadResult.secureUrl,
+              thumbnailUrl: uploadResult.thumbnailUrl,
+              width: uploadResult.width,
+              height: uploadResult.height,
+              fileSize: uploadResult.bytes,
+              mimeType: req.file.mimetype,
+            } as any)
+            .returning();
+          proofPhoto = createdUpload;
+        }
+
+        if (hasContext) {
+          const scoreLines =
+            scoreValues.length > 0
+              ? [
+                  scores.food ? `Food: ${scores.food}/100` : null,
+                  scores.value ? `Value: ${scores.value}/100` : null,
+                  scores.speed ? `Speed: ${scores.speed}/100` : null,
+                  scores.vibe ? `Vibe: ${scores.vibe}/100` : null,
+                ]
+                  .filter(Boolean)
+                  .join("\n")
+              : "";
+          const photoLine = proofPhoto?.cloudinaryUrl
+            ? `Photo proof: ${proofPhoto.cloudinaryUrl}`
+            : "";
+          const reviewComment =
+            [comment, scoreLines, photoLine].filter(Boolean).join("\n\n") ||
+            "Recommended on MealScout.";
+          await storage.createReview({
+            restaurantId,
+            userId,
+            rating: rating || 5,
+            comment: reviewComment,
+          } as any);
+        }
+
+        const influenceBump = createdRecommendation
+          ? hasContext
+            ? 3
+            : 1
+          : hasContext
+            ? 2
+            : 0;
+        if (createdRecommendation || hasContext) {
+          await db
+            .update(users)
+            .set({
+              recommendationCount: createdRecommendation
+                ? sql`${users.recommendationCount} + 1`
+                : users.recommendationCount,
+              reviewCount: hasContext
+                ? sql`${users.reviewCount} + 1`
+                : users.reviewCount,
+              influenceScore:
+                influenceBump > 0
+                  ? sql`${users.influenceScore} + ${influenceBump}`
+                  : users.influenceScore,
+              updatedAt: new Date(),
+            } as any)
+            .where(eq(users.id, userId));
+        }
 
         void trackEngagement(
-          "restaurant_recommend_added",
+          hasContext
+            ? "restaurant_recommend_context_added"
+            : "restaurant_recommend_added",
           userId,
           restaurantId,
         );
-        res.json(recommendation);
+        res.json({
+          ...recommendation,
+          success: true,
+          alreadyExists: !createdRecommendation,
+          contextSaved: hasContext,
+          proofPhoto,
+        });
       } catch (error: any) {
         console.error("Error adding restaurant recommendation:", error);
         if (error.code === "23505") {
@@ -1174,7 +1334,8 @@ export function registerRestaurantCoreRoutes(
         );
         if (!isAuthorized) {
           return res.status(403).json({
-            message: "Unauthorized: you can only set this for restaurants you own",
+            message:
+              "Unauthorized: you can only set this for restaurants you own",
           });
         }
 
@@ -1235,7 +1396,10 @@ export function registerRestaurantCoreRoutes(
         const viewerId = req.user?.id || null;
         const limit = Math.max(
           1,
-          Math.min(50, Number.parseInt(String(req.query.limit || "12"), 10) || 12),
+          Math.min(
+            50,
+            Number.parseInt(String(req.query.limit || "12"), 10) || 12,
+          ),
         );
 
         const rowsResult = await db.execute(sql<{
@@ -1307,14 +1471,13 @@ export function registerRestaurantCoreRoutes(
           userId: String(row.user_id || ""),
           createdAt: row.created_at,
           authorName:
-            String([row.first_name, row.last_name].filter(Boolean).join(" ").trim()) ||
-            "Community Member",
+            String(
+              [row.first_name, row.last_name].filter(Boolean).join(" ").trim(),
+            ) || "Community Member",
           likeCount: Number(row.like_count) || 0,
           shareCount: Number(row.share_count) || 0,
-          comment:
-            String(row.recommendation_comment || "").trim() || null,
-          photoUrl:
-            String(row.recommendation_photo_url || "").trim() || null,
+          comment: String(row.recommendation_comment || "").trim() || null,
+          photoUrl: String(row.recommendation_photo_url || "").trim() || null,
           hasVideoRecommendation: Boolean(row.has_video_recommendation),
           viewerReaction:
             row.viewer_reaction === "like" || row.viewer_reaction === "dislike"
@@ -1335,9 +1498,13 @@ export function registerRestaurantCoreRoutes(
     isAuthenticated,
     async (req: any, res) => {
       try {
-        const recommendationId = String(req.params.recommendationId || "").trim();
+        const recommendationId = String(
+          req.params.recommendationId || "",
+        ).trim();
         const userId = String(req.user.id || "").trim();
-        const reaction = String(req.body?.reaction || "").trim().toLowerCase();
+        const reaction = String(req.body?.reaction || "")
+          .trim()
+          .toLowerCase();
 
         if (!recommendationId) {
           return res.status(400).json({ message: "Invalid recommendation id" });
@@ -1348,15 +1515,17 @@ export function registerRestaurantCoreRoutes(
             .json({ message: "Reaction must be like, dislike, or clear" });
         }
 
-        const existing = await db.execute(sql<{ id: string; reaction_type: string }>`
+        const existing = await db.execute(sql<{
+          id: string;
+          reaction_type: string;
+        }>`
           select id, reaction_type
           from recommendation_reactions
           where recommendation_id = ${recommendationId} and user_id = ${userId}
           limit 1
         `);
         const existingRow = ((existing as any)?.rows || [])[0] as
-          | { id: string; reaction_type: string }
-          | undefined;
+          { id: string; reaction_type: string } | undefined;
 
         if (reaction === "clear") {
           await db.execute(sql`
@@ -1408,7 +1577,9 @@ export function registerRestaurantCoreRoutes(
     isAuthenticated,
     async (req: any, res) => {
       try {
-        const recommendationId = String(req.params.recommendationId || "").trim();
+        const recommendationId = String(
+          req.params.recommendationId || "",
+        ).trim();
         const userId = String(req.user.id || "").trim();
         if (!recommendationId) {
           return res.status(400).json({ message: "Invalid recommendation id" });

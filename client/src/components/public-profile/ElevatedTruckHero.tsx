@@ -21,12 +21,13 @@
  *   - Favorite button
  */
 import type { PublicRestaurantProfile } from "@shared/publicProfiles";
-import { ProfileHeroMedia, buildPublicProfileHeroAssets } from "./ProfileHeroMedia";
+import {
+  ProfileHeroMedia,
+  buildPublicProfileHeroAssets,
+} from "./ProfileHeroMedia";
 import { getDishCategoryPhoto } from "@/lib/dishCategoryPhoto";
 import { ProfileRecommendButton } from "./ProfileRecommendButton";
-import {
-  getTruckSchedulePrimaryStop,
-} from "./truckScheduleTruth";
+import { getTruckSchedulePrimaryStop } from "./truckScheduleTruth";
 import { Flame } from "lucide-react";
 
 type ElevatedTruckHeroProps = {
@@ -38,7 +39,11 @@ type ElevatedTruckHeroProps = {
   isFavorited?: boolean;
 };
 
-function LiveStatusPill({ kind }: { kind: "current" | "today" | "next" | "upcoming" | "empty" }) {
+function LiveStatusPill({
+  kind,
+}: {
+  kind: "current" | "today" | "next" | "upcoming" | "empty";
+}) {
   if (kind === "current") {
     return (
       <span className="inline-flex items-center gap-1.5 rounded-full border border-orange-400/40 bg-orange-500/20 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.15em] text-orange-200">
@@ -81,7 +86,9 @@ const isGenericTruckDescription = (
   description: string | null | undefined,
   profile: PublicRestaurantProfile,
 ) => {
-  const normalized = String(description || "").trim().toLowerCase();
+  const normalized = String(description || "")
+    .trim()
+    .toLowerCase();
   if (!normalized) return true;
   return (
     GENERIC_TRUCK_TEXT.has(normalized) ||
@@ -105,10 +112,7 @@ export function ElevatedTruckHero({
 
   const categoryPhoto = heroAssets.coverImageUrl
     ? null
-    : getDishCategoryPhoto(
-        profile.displayName,
-        ...(profile.cuisineTags ?? []),
-      );
+    : getDishCategoryPhoto(profile.displayName, ...(profile.cuisineTags ?? []));
 
   const primaryStop = getTruckSchedulePrimaryStop(profile.truckSchedule);
 
@@ -159,7 +163,9 @@ export function ElevatedTruckHero({
 
         {/* Cuisine */}
         {cuisineSummary ? (
-          <p className="text-sm font-medium text-orange-100/80">{cuisineSummary}</p>
+          <p className="text-sm font-medium text-orange-100/80">
+            {cuisineSummary}
+          </p>
         ) : null}
 
         {/* Description */}

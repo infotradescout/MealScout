@@ -41,6 +41,7 @@ export function ProfileRecommendButton({
   const [isSubmittingContext, setIsSubmittingContext] = useState(false);
   const [contextSaved, setContextSaved] = useState(false);
   const [recommendationText, setRecommendationText] = useState("");
+  const [proofImage, setProofImage] = useState<File | null>(null);
   const [scores, setScores] = useState({
     food: 80,
     value: 75,
@@ -54,7 +55,9 @@ export function ProfileRecommendButton({
     setIsRecommended(true);
     try {
       const res = await fetch(
-        apiUrl(`/api/restaurants/${encodeURIComponent(restaurantId)}/recommend`),
+        apiUrl(
+          `/api/restaurants/${encodeURIComponent(restaurantId)}/recommend`,
+        ),
         { method: "POST", credentials: "include" },
       );
       if (!res.ok) throw new Error("Failed to recommend");
@@ -80,36 +83,30 @@ export function ProfileRecommendButton({
 
   const handleSubmitContext = useCallback(async () => {
     const text = recommendationText.trim();
-    if (!text && contextSaved) return;
+    if (!text && !proofImage && contextSaved) return;
     setIsSubmittingContext(true);
     try {
-      const averageScore =
-        (scores.food + scores.value + scores.speed + scores.vibe) / 4;
-      const rating = Math.max(1, Math.min(5, Math.round(averageScore / 20)));
-      const scoreLines = [
-        `Food: ${scores.food}/100`,
-        `Value: ${scores.value}/100`,
-        `Speed: ${scores.speed}/100`,
-        `Vibe: ${scores.vibe}/100`,
-      ].join("\n");
-      const comment = [text, scoreLines].filter(Boolean).join("\n\n");
-      const res = await fetch(apiUrl("/api/reviews"), {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          restaurantId,
-          rating,
-          comment,
-        }),
-      });
+      const formData = new FormData();
+      formData.append("comment", text);
+      formData.append("scores", JSON.stringify(scores));
+      if (proofImage) formData.append("image", proofImage);
+      const res = await fetch(
+        apiUrl(
+          `/api/restaurants/${encodeURIComponent(restaurantId)}/recommend`,
+        ),
+        {
+          method: "POST",
+          credentials: "include",
+          body: formData,
+        },
+      );
       if (!res.ok) throw new Error("Failed to save context");
       setContextSaved(true);
       setIsDialogOpen(false);
     } finally {
       setIsSubmittingContext(false);
     }
-  }, [contextSaved, recommendationText, restaurantId, scores]);
+  }, [contextSaved, proofImage, recommendationText, restaurantId, scores]);
 
   const updateScore = (key: keyof typeof scores, value: number) => {
     setScores((current) => ({ ...current, [key]: value }));
@@ -152,6 +149,25 @@ export function ProfileRecommendButton({
               placeholder="What should someone know before they go?"
               className="min-h-24 border-white/15 bg-black/25 text-white placeholder:text-white/35"
             />
+
+            <label className="block rounded-xl border border-white/10 bg-black/20 p-3">
+              <span className="text-xs font-bold uppercase tracking-[0.14em] text-white/45">
+                Photo proof
+              </span>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(event) =>
+                  setProofImage(event.target.files?.[0] || null)
+                }
+                className="mt-2 block w-full text-xs text-white/65 file:mr-3 file:rounded-lg file:border-0 file:bg-white/10 file:px-3 file:py-2 file:text-xs file:font-bold file:text-white hover:file:bg-white/15"
+              />
+              {proofImage ? (
+                <span className="mt-2 block truncate text-xs text-orange-200">
+                  {proofImage.name}
+                </span>
+              ) : null}
+            </label>
 
             <div className="space-y-3">
               {(
