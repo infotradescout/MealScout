@@ -23,13 +23,11 @@
 import type { PublicRestaurantProfile } from "@shared/publicProfiles";
 import { ProfileHeroMedia, buildPublicProfileHeroAssets } from "./ProfileHeroMedia";
 import { getDishCategoryPhoto } from "@/lib/dishCategoryPhoto";
-import { ProfileFavoriteButton } from "./ProfileFavoriteButton";
 import { ProfileRecommendButton } from "./ProfileRecommendButton";
 import {
   getTruckSchedulePrimaryStop,
-  hasTruckScheduleSignal,
 } from "./truckScheduleTruth";
-import { MapPin, Clock3, Flame } from "lucide-react";
+import { Flame } from "lucide-react";
 
 type ElevatedTruckHeroProps = {
   profile: PublicRestaurantProfile & {
@@ -95,7 +93,6 @@ const isGenericTruckDescription = (
 export function ElevatedTruckHero({
   profile,
   isAuthenticated = false,
-  isFavorited = false,
 }: ElevatedTruckHeroProps) {
   const heroAssets = buildPublicProfileHeroAssets({
     entity: "truck",
@@ -113,15 +110,12 @@ export function ElevatedTruckHero({
         ...(profile.cuisineTags ?? []),
       );
 
-  const hasSchedule = hasTruckScheduleSignal(profile.truckSchedule);
   const primaryStop = getTruckSchedulePrimaryStop(profile.truckSchedule);
 
   const cuisineSummary = cleanCuisineTags(profile.cuisineTags).join(" · ");
   const description = isGenericTruckDescription(profile.description, profile)
     ? null
     : profile.description;
-
-  const locationSummary = [profile.city, profile.state].filter(Boolean).join(", ");
 
   return (
     <section
@@ -136,14 +130,6 @@ export function ElevatedTruckHero({
         categoryPhoto={categoryPhoto}
         theme="truck"
         heightClassName="h-28 md:h-40"
-        badge={
-          <ProfileFavoriteButton
-            restaurantId={profile.id}
-            isAuthenticated={isAuthenticated}
-            initialIsFavorited={isFavorited}
-            profilePath={profile.profilePath}
-          />
-        }
       />
 
       {/* Info block */}
@@ -183,54 +169,6 @@ export function ElevatedTruckHero({
           </p>
         ) : null}
 
-        {/* Primary stop card — the "where is it?" answer */}
-        {hasSchedule && primaryStop.stop ? (
-          <div
-            className={`rounded-2xl border p-3.5 space-y-1.5 ${
-              primaryStop.kind === "current"
-                ? "border-orange-400/30 bg-orange-500/10"
-                : "border-white/10 bg-black/20"
-            }`}
-          >
-            <p
-              className={`text-[10px] font-bold uppercase tracking-[0.18em] ${
-                primaryStop.kind === "current" ? "text-orange-200/70" : "text-white/40"
-              }`}
-            >
-              {primaryStop.label}
-            </p>
-            <p className="text-base font-bold text-white">
-              {primaryStop.stop.locationName ||
-                primaryStop.stop.addressPublicLabel ||
-                primaryStop.label}
-            </p>
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-white/65">
-              {primaryStop.stop.timeWindowLabel ? (
-                <span className="flex items-center gap-1">
-                  <Clock3 className="h-3.5 w-3.5 text-orange-200/60" />
-                  {primaryStop.stop.timeWindowLabel}
-                </span>
-              ) : null}
-              {primaryStop.stop.addressPublicLabel &&
-              primaryStop.stop.addressPublicLabel !== primaryStop.stop.locationName ? (
-                <span className="flex items-center gap-1">
-                  <MapPin className="h-3.5 w-3.5 text-orange-200/60" />
-                  {primaryStop.stop.addressPublicLabel}
-                </span>
-              ) : null}
-            </div>
-          </div>
-        ) : !hasSchedule && locationSummary ? (
-          /* No schedule — show base location */
-          <div className="rounded-2xl border border-white/8 bg-black/15 px-3.5 py-3">
-            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/35">
-              Based in
-            </p>
-            <p className="mt-1 text-sm font-semibold text-white/80">{locationSummary}</p>
-          </div>
-        ) : null}
-
-        {/* Recommend — always available, independent of any specific dish */}
         <ProfileRecommendButton
           restaurantId={profile.id}
           isAuthenticated={isAuthenticated}
