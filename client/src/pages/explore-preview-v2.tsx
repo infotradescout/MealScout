@@ -771,7 +771,6 @@ const DISCOVERY_LAYERS: Record<
   localBoard: {
     title: "Community Picks",
     href: "/scout",
-    subtitle: "Saved, shared, and revisited local spots nearby.",
   },
   cravings: {
     title: "Search by Craving",
@@ -6972,8 +6971,7 @@ function ActiveSceneContent({
         {
           id: "community_picks",
           title: DISCOVERY_LAYERS.localBoard.title,
-          subtitle:
-            "Saved, followed, recommended, and revisited by locals nearby.",
+          subtitle: undefined,
           linkHref: DISCOVERY_LAYERS.localBoard.href,
           cards: restaurantRailCards(communityPickCards, "community_pick"),
           className: compactRailSectionClass,
@@ -7099,7 +7097,6 @@ function ActiveSceneContent({
           <SectionHeader
             title={DISCOVERY_LAYERS.localBoard.title}
             linkHref={DISCOVERY_LAYERS.localBoard.href}
-            subtitle="Saved, followed, or shared by people nearby."
             itemCount={topLocalFavoriteRestaurants.length}
           />
           <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
@@ -8743,7 +8740,7 @@ function LocalMenuItemCard({
                 : "text-orange-300 hover:text-orange-200"
             }`}
           >
-            <Star
+            <Heart
               className={`h-3 w-3 ${hasRecommended ? "fill-current" : ""}`}
               aria-hidden="true"
             />

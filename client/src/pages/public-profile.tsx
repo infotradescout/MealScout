@@ -1509,7 +1509,6 @@ function MenuSection({
 }) {
   const [recommendingKey, setRecommendingKey] = useState<string | null>(null);
   const [recommendComment, setRecommendComment] = useState("");
-  const [recommendRating, setRecommendRating] = useState("5");
   const [recommendPhoto, setRecommendPhoto] = useState<File | null>(null);
   const [submitStateByItem, setSubmitStateByItem] = useState<
     Record<string, string>
@@ -1627,7 +1626,6 @@ function MenuSection({
     try {
       const formData = new FormData();
       formData.append("comment", recommendComment);
-      formData.append("rating", recommendRating);
       if (recommendPhoto) formData.append("image", recommendPhoto);
       const res = await fetch(
         apiUrl(`/api/menu-items/${encodeURIComponent(menuItemId)}/recommend`),
@@ -1827,24 +1825,6 @@ function MenuSection({
                                 placeholder="Why do you recommend this dish?"
                                 className="min-h-[64px] w-full rounded border border-white/20 bg-black/40 px-2 py-1 text-xs text-white"
                               />
-                              <div className="flex items-center gap-2">
-                                <label className="text-xs text-white/70">
-                                  Rating
-                                </label>
-                                <select
-                                  value={recommendRating}
-                                  onChange={(event) =>
-                                    setRecommendRating(event.target.value)
-                                  }
-                                  className="rounded border border-white/20 bg-black/40 px-2 py-1 text-xs text-white"
-                                >
-                                  <option value="5">5</option>
-                                  <option value="4">4</option>
-                                  <option value="3">3</option>
-                                  <option value="2">2</option>
-                                  <option value="1">1</option>
-                                </select>
-                              </div>
                               <div className="space-y-1">
                                 <p className="text-xs text-white/65">
                                   Got a photo of this dish? Add it so others
