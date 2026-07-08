@@ -14925,17 +14925,10 @@ export default function AdminDashboard() {
                     </Card>
                   </div>
 
-                  {dealStats.averageRating > 0 && (
-                    <div className="mt-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <p className="text-sm font-medium">Average Rating</p>
-                        <Badge variant="outline">
-                          {dealStats.averageRating.toFixed(1)} / 5.0
-                        </Badge>
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        Based on {dealStats.totalFeedback} reviews
-                      </div>
+                  {dealStats.totalFeedback > 0 && (
+                    <div className="mt-4 text-xs text-muted-foreground">
+                      {dealStats.totalFeedback} feedback response
+                      {dealStats.totalFeedback === 1 ? "" : "s"}
                     </div>
                   )}
                 </div>

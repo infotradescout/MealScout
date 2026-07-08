@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ToastAction } from "@/components/ui/toast";
-import { Flame, Clock, Star, UserPlus } from "lucide-react";
+import { Flame, Clock, Heart, UserPlus } from "lucide-react";
 import { GoldenForkIcon } from "@/components/award-badges";
 import { apiRequest } from "@/lib/queryClient";
 import { trackDealViewOnce } from "@/lib/dealViewTracking";
@@ -617,12 +617,14 @@ export default function DealCard({ deal, popularity = null }: DealCardProps) {
         setRecommendSelection(true);
       }
 
-      // Optional recommendation text routed through reviews endpoint with a positive rating
+      // Optional recommendation context adds weight without creating a rating.
       if (recommendationText.trim().length > 0) {
-        await apiRequest("POST", "/api/reviews", {
-          restaurantId: deal.restaurantId,
-          rating: 5,
-          comment: recommendationText.trim(),
+        const formData = new FormData();
+        formData.append("comment", recommendationText.trim());
+        await fetch(`/api/restaurants/${encodeURIComponent(deal.restaurantId)}/recommend`, {
+          method: "POST",
+          credentials: "include",
+          body: formData,
         });
       }
 
@@ -745,7 +747,7 @@ export default function DealCard({ deal, popularity = null }: DealCardProps) {
               {deal.title}
             </p>
 
-            {/* Rating + Distance */}
+            {/* Distance and activity */}
             <div className="flex items-center gap-1.5 mb-1.5 text-[11px] text-secondary">
               {isLiveTruck && (
                 <div className="flex items-center gap-1 rounded-full bg-[rgba(245,158,11,0.18)] px-1.5 py-0.5 text-[11px] font-semibold text-[color:var(--accent-text)]">
@@ -753,23 +755,8 @@ export default function DealCard({ deal, popularity = null }: DealCardProps) {
                   Live now
                 </div>
               )}
-              <div className="flex items-center gap-0.5">
-                <svg
-                  width="10"
-                  height="10"
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
-                  className="text-[color:var(--accent-text)]"
-                >
-                  <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-                </svg>
-                <span className="font-medium">4.5</span>
-              </div>
               {deal.distance !== undefined && (
-                <>
-                  <span>•</span>
-                  <span>{deal.distance.toFixed(1)} mi</span>
-                </>
+                <span>{deal.distance.toFixed(1)} mi</span>
               )}
               {deal.minOrderAmount && (
                 <>
@@ -1014,7 +1001,7 @@ export default function DealCard({ deal, popularity = null }: DealCardProps) {
                     : "bg-card text-muted border-subtle"
                   }`}
                 >
-                  <Star
+                  <Heart
                     className={`w-5 h-5 ${
                       favoriteSelection ? "fill-yellow-500 text-yellow-600" : ""
                     }`}

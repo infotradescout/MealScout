@@ -780,10 +780,6 @@ export function registerRestaurantOperationsRoutes(
             0,
           ),
           conversionRate: 0,
-          averageRating:
-            (await storage.getRestaurantAverageRating(
-              req.params.restaurantId,
-            )) || 0,
         };
 
         if (stats.totalViews > 0) {

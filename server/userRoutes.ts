@@ -7,7 +7,7 @@
 import { Router, Request, Response } from "express";
 import { and, desc, eq, gte, ilike, isNull, or, sql } from "drizzle-orm";
 import { db } from "./db";
-import { dealClaims, deals, reviews, users } from "@shared/schema";
+import { dealClaims, deals, users } from "@shared/schema";
 import { getUserCreditBalance } from "./creditService";
 import { isAuthenticated } from "./unifiedAuth";
 import { storage } from "./storage";
@@ -60,11 +60,6 @@ router.get("/stats", isAuthenticated, async (req: any, res: Response) => {
       .from(dealClaims)
       .where(and(eq(dealClaims.userId, userId), gte(dealClaims.claimedAt, monthStart)));
 
-    const [avgRatingRow] = await db
-      .select({ avgRating: sql<number>`AVG(${reviews.rating})` })
-      .from(reviews)
-      .where(eq(reviews.userId, userId));
-
     const favoritesCount = await storage.getUserRestaurantFavoritesCount(userId);
 
     const claims: Array<{
@@ -97,9 +92,6 @@ router.get("/stats", isAuthenticated, async (req: any, res: Response) => {
       totalDealsUsed: totalDealsUsedRow?.count ?? 0,
       totalSavings: Math.round(totalSavings * 100) / 100,
       favoriteRestaurants: favoritesCount,
-      averageRating: avgRatingRow?.avgRating
-        ? Math.round(Number(avgRatingRow.avgRating) * 10) / 10
-        : 0,
       dealsThisMonth: dealsThisMonthRow?.count ?? 0,
     });
   } catch (error) {

@@ -19,7 +19,7 @@ import {
   MoreHorizontal,
   Trash2,
   Edit,
-  Star,
+  CheckCircle2,
   X,
 } from "lucide-react";
 import { BackHeader } from "@/components/back-header";
@@ -273,7 +273,7 @@ export default function AddressesPage() {
                           onClick={() => handleSetDefault(address.id)}
                           data-testid={`button-set-default-${address.id}`}
                         >
-                          <Star className="w-4 h-4 mr-2" />
+                          <CheckCircle2 className="w-4 h-4 mr-2" />
                           Set as Default
                         </DropdownMenuItem>
                       )}

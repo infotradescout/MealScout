@@ -52,7 +52,6 @@ export type PublicRecommendationSummary = {
 
 export type PublicReviewSummary = {
   count: number;
-  rating: number | null;
 };
 
 export type PublicDealSummary = {

@@ -720,9 +720,9 @@ export function registerBookingRoutes(
           address: z.string().optional(),
           city: z.string().optional(),
           state: z.string().optional(),
-          rating: optionalNumber(z.coerce.number().int().min(1).max(5)),
+          rating: optionalNumber(z.coerce.number().int().min(0).max(100)),
           arrivalCleanliness: optionalNumber(
-            z.coerce.number().int().min(1).max(5),
+            z.coerce.number().int().min(0).max(100),
           ),
           customersServed: optionalNumber(z.coerce.number().int().min(0)),
           salesCents: optionalNumber(z.coerce.number().int().min(0)),

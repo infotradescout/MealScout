@@ -960,28 +960,23 @@ export function registerMenuRoutes(app: Express) {
           ),
         );
 
-      // Dish-level "CVS score" (0-100): same rank-by-recommendations-and-
-      // activity philosophy as HOME_RANKING_WEIGHTS/AWARD_RANKING_WEIGHTS,
-      // applied per dish instead of per restaurant. Volume (recommendation
-      // count) counts for more than the raw rating average, same ratio as
-      // the restaurant-level formula.
+      // Dish-level CVS score (0-100): rank-by-recommendations-and-activity,
+      // applied per dish instead of per restaurant.
       const dishAggregateRows = await db
         .select({
           menuItemId: menuItemRecommendations.menuItemId,
           recommendationCount: sql<number>`count(*)::int`,
-          avgRating: sql<number | null>`avg(${menuItemRecommendations.rating})`,
         })
         .from(menuItemRecommendations)
         .groupBy(menuItemRecommendations.menuItemId);
 
       const dishAggregateByItemId = new Map<
         string,
-        { recommendationCount: number; avgRating: number }
+        { recommendationCount: number }
       >();
       for (const row of dishAggregateRows) {
         dishAggregateByItemId.set(String(row.menuItemId), {
           recommendationCount: Number(row.recommendationCount || 0),
-          avgRating: row.avgRating != null ? Number(row.avgRating) : 0,
         });
       }
 
@@ -1185,18 +1180,11 @@ export function registerMenuRoutes(app: Express) {
           const dishAggregate = dishAggregateByItemId.get(String(row.id));
           const dishRecommendationCount =
             dishAggregate?.recommendationCount || 0;
-          const dishAvgRating = dishAggregate?.avgRating || 0;
           // Hidden until a dish has at least one recommendation - never show
           // a fabricated/placeholder score for dishes with no real signal.
           const cvsScore =
             dishRecommendationCount > 0
-              ? Math.min(
-                  100,
-                  Math.round(
-                    Math.min(70, dishRecommendationCount * 7) +
-                      (dishAvgRating > 0 ? (dishAvgRating / 5) * 30 : 0),
-                  ),
-                )
+              ? Math.min(100, Math.round(dishRecommendationCount * 12))
               : null;
 
           return {
@@ -2101,7 +2089,6 @@ export function registerMenuRoutes(app: Express) {
       const payload = z
         .object({
           comment: z.string().max(500).optional().nullable(),
-          rating: z.number().int().min(1).max(5).optional().nullable(),
           caption: z.string().max(280).optional().nullable(),
           aiGenerated: z.boolean().optional(),
         })
@@ -2155,7 +2142,7 @@ export function registerMenuRoutes(app: Express) {
           menuItemId,
           userId: req.user.id,
           comment: insertComment,
-          rating: payload.rating ?? null,
+          rating: null,
         });
         const [inserted] = await db
           .insert(menuItemRecommendations)
@@ -2180,12 +2167,11 @@ export function registerMenuRoutes(app: Express) {
       } else {
         const hadComment = Boolean(recommendation.comment);
         const nextComment = String(payload.comment || "").trim() || null;
-        const nextRating = payload.rating ?? null;
         const [updated] = await db
           .update(menuItemRecommendations)
           .set({
             comment: nextComment,
-            rating: nextRating,
+            rating: null,
             updatedAt: new Date(),
           } as any)
           .where(eq(menuItemRecommendations.id, recommendation.id))

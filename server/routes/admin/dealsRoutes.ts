@@ -40,9 +40,7 @@ export function registerDealAdminRoutes(app: Express) {
         res.json({
           views: viewsCount,
           claims: claimsCount,
-          averageRating: feedbackStats.averageRating,
           totalFeedback: feedbackStats.totalFeedback,
-          ratingDistribution: feedbackStats.ratingDistribution,
         });
       } catch (error) {
         console.error("Error fetching deal stats:", error);

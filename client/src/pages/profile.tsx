@@ -16,7 +16,7 @@ import {
   HelpCircle,
   LogOut,
   ChevronRight,
-  Star,
+  ShieldCheck,
   MapPin,
   Store,
   Building2,
@@ -439,7 +439,7 @@ export default function ProfilePage() {
                   {user?.email}
                 </p>
                 <div className="flex items-center mt-2">
-                  <Star className="w-4 h-4 text-[color:var(--status-warning)] mr-1" />
+                  <ShieldCheck className="w-4 h-4 text-[color:var(--status-warning)] mr-1" />
                   <span
                     className="text-sm font-medium text-foreground"
                     data-testid="text-user-type"

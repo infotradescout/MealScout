@@ -371,14 +371,14 @@ export function registerDealDiscoveryRoutes(
     try {
       const reviewData = insertReviewSchema.parse({
         ...req.body,
+        rating: 0,
         userId: req.user.id,
       });
 
       const review = await storage.createReview(reviewData);
 
-      // This is the detail step that adds weight on top of a bare recommend
-      // (see /api/restaurants/:restaurantId/recommend) - a written rating +
-      // comment carries more than the initial tap.
+      // This detail step adds weight on top of a bare recommend
+      // (see /api/restaurants/:restaurantId/recommend).
       await db
         .update(users)
         .set({
@@ -407,15 +407,4 @@ export function registerDealDiscoveryRoutes(
     }
   });
 
-  app.get("/api/reviews/restaurant/:restaurantId/rating", async (req, res) => {
-    try {
-      const rating = await storage.getRestaurantAverageRating(
-        req.params.restaurantId,
-      );
-      res.json({ rating });
-    } catch (error) {
-      console.error("Error fetching rating:", error);
-      res.status(500).json({ message: "Failed to fetch rating" });
-    }
-  });
 }

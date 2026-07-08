@@ -1247,7 +1247,7 @@ export function registerRestaurantCoreRoutes(
           await storage.createReview({
             restaurantId,
             userId,
-            rating: rating || 5,
+            rating: 0,
             comment: reviewComment,
           } as any);
         }

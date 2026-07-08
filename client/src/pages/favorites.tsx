@@ -3,7 +3,7 @@ import { Link } from "wouter";
 import Navigation from "@/components/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Heart, Search, MapPin, Star } from "lucide-react";
+import { Heart, Search, MapPin, Utensils } from "lucide-react";
 import { BackHeader } from "@/components/back-header";
 import { useAuth } from "@/hooks/useAuth";
 import { SEOHead } from "@/components/seo-head";
@@ -130,7 +130,7 @@ export default function FavoritesPage() {
                             </span>
                             {favorite.restaurant.cuisineType && (
                               <span className="flex items-center gap-1">
-                                <Star className="h-3 w-3" />
+                                <Utensils className="h-3 w-3" />
                                 {favorite.restaurant.cuisineType}
                               </span>
                             )}

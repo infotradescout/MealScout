@@ -97,16 +97,6 @@ export function generateRestaurantSchema(restaurant: Restaurant) {
     schema.image = restaurant.imageUrl;
   }
 
-  if (restaurant.rating && restaurant.reviewCount) {
-    schema.aggregateRating = {
-      "@type": "AggregateRating",
-      ratingValue: restaurant.rating,
-      reviewCount: restaurant.reviewCount,
-      bestRating: "5",
-      worstRating: "1",
-    };
-  }
-
   if (restaurant.priceRange) {
     schema.priceRange = "$".repeat(restaurant.priceRange);
   }

@@ -686,20 +686,9 @@ export function toPublicRestaurantProfile(input: {
       row.reviewCount ??
         row.totalReviews ??
         row.ratingsCount ??
-        row.googleReviewCount ??
         0,
     ) || 0,
   );
-  const reviewRatingRaw = Number(
-    row.reviewRating ??
-      row.rating ??
-      row.avgRating ??
-      row.googleRating ??
-      Number.NaN,
-  );
-  const reviewRating = Number.isFinite(reviewRatingRaw)
-    ? reviewRatingRaw
-    : null;
   const recommendationTotal = Math.max(
     0,
     Number(
@@ -861,7 +850,7 @@ export function toPublicRestaurantProfile(input: {
       ),
       items: eventItems,
     },
-    reviewSummary: { count: reviewCount, rating: reviewRating },
+    reviewSummary: { count: reviewCount },
     recommendations: {
       total: recommendationTotal,
       likes: recommendationLikes,

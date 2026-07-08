@@ -14,7 +14,6 @@ export const AWARD_RANKING_WEIGHTS = {
   videoRecommendation: 150,
   favorites: 180,
   follows: 20,
-  avgRating: 20,
   totalDealClaims: 10,
   totalDealViews: 1,
   communityActivity: 8,

@@ -24,7 +24,6 @@ import {
   MessageCircle,
   Minimize2,
   Navigation2,
-  Star,
   Tag,
   TrendingUp,
   Truck as TruckIcon,
@@ -7774,7 +7773,7 @@ function ScoutPointsBadge({ userId }: { userId: string }) {
   const pts = (data.totalFavorites ?? 0) * 10 + (data.totalStories ?? 0) * 5;
   return (
     <span className="inline-flex items-center gap-1 rounded-full bg-[#100c0a]/80 px-2.5 py-1.5 text-[11px] font-black text-amber-300 ring-1 ring-orange-200/30 backdrop-blur-xl shadow-[0_8px_20px_rgba(0,0,0,0.38)]">
-      <Star
+      <Flame
         className="h-3 w-3 fill-amber-400 text-amber-400"
         aria-hidden="true"
       />

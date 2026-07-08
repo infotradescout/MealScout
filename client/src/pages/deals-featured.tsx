@@ -4,7 +4,7 @@ import { Link } from "wouter";
 import Navigation from "@/components/navigation";
 import DealCard from "@/components/deal-card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Star, SlidersHorizontal, Filter } from "lucide-react";
+import { ArrowLeft, Flame, SlidersHorizontal, Filter } from "lucide-react";
 import { SEOHead } from "@/components/seo-head";
 import {
   sendGeoPing,
@@ -104,7 +104,7 @@ export default function FeaturedDealsPage() {
           </Link>
           <div className="flex items-center">
             <div className="w-8 h-8 bg-gradient-to-r from-[color:var(--accent-text)] to-[color:var(--status-error)] rounded-lg flex items-center justify-center mr-3 shadow-clean">
-              <Star className="w-4 h-4 text-white" />
+              <Flame className="w-4 h-4 text-white" />
             </div>
             <div>
               <h1 className="text-xl font-bold text-foreground">
@@ -207,7 +207,7 @@ export default function FeaturedDealsPage() {
         ) : (
           <div className="text-center py-12">
             <div className="w-20 h-20 bg-[color:var(--accent-text)]/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <Star className="w-8 h-8 text-[color:var(--accent-text)]" />
+              <Flame className="w-8 h-8 text-[color:var(--accent-text)]" />
             </div>
             <h3 className="font-bold text-lg text-foreground mb-2">
               No time-sensitive specials yet

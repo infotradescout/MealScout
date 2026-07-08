@@ -6488,9 +6488,11 @@ export default function ParkingPassPage() {
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                           <div className="space-y-2">
-                            <Label>Overall rating (1-5)</Label>
-                            <select
-                              className="h-9 w-full rounded-md border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-2 text-sm"
+                            <Label>Stop score (0-100)</Label>
+                            <Input
+                              type="number"
+                              min={0}
+                              max={100}
                               value={reportDraft.rating || ""}
                               onChange={(event) =>
                                 handleReportFieldChange(
@@ -6498,19 +6500,15 @@ export default function ParkingPassPage() {
                                   event.target.value,
                                 )
                               }
-                            >
-                              <option value="">Optional</option>
-                              {[1, 2, 3, 4, 5].map((value) => (
-                                <option key={value} value={value}>
-                                  {value}
-                                </option>
-                              ))}
-                            </select>
+                              placeholder="Optional"
+                            />
                           </div>
                           <div className="space-y-2">
-                            <Label>Spot cleanliness on arrival</Label>
-                            <select
-                              className="h-9 w-full rounded-md border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-2 text-sm"
+                            <Label>Arrival cleanliness (0-100)</Label>
+                            <Input
+                              type="number"
+                              min={0}
+                              max={100}
                               value={reportDraft.arrivalCleanliness || ""}
                               onChange={(event) =>
                                 handleReportFieldChange(
@@ -6518,14 +6516,8 @@ export default function ParkingPassPage() {
                                   event.target.value,
                                 )
                               }
-                            >
-                              <option value="">Optional</option>
-                              {[1, 2, 3, 4, 5].map((value) => (
-                                <option key={value} value={value}>
-                                  {value}
-                                </option>
-                              ))}
-                            </select>
+                              placeholder="Optional"
+                            />
                           </div>
                           <div className="space-y-2">
                             <Label>Customers served</Label>

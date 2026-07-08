@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
@@ -15,17 +14,13 @@ interface DealFeedbackProps {
 
 export function DealFeedback({ dealId, compact = false }: DealFeedbackProps) {
   const { toast } = useToast();
-  const [rating, setRating] = useState(0);
-  const [hoveredRating, setHoveredRating] = useState(0);
-  const [feedbackType, setFeedbackType] = useState<'rating' | 'suggestion' | 'issue'>('rating');
+  const [feedbackType, setFeedbackType] = useState<'worked' | 'suggestion' | 'issue'>('worked');
   const [comment, setComment] = useState('');
   const [isHelpful, setIsHelpful] = useState<boolean | null>(null);
   const [showForm, setShowForm] = useState(false);
 
   const { data: stats } = useQuery<{
-    averageRating: number;
     totalFeedback: number;
-    ratingDistribution: { [key: number]: number };
   }>({
     queryKey: ['/api/deals', dealId, 'feedback', 'stats'],
   });
@@ -43,9 +38,8 @@ export function DealFeedback({ dealId, compact = false }: DealFeedbackProps) {
         description: "Your feedback helps us improve deal quality.",
       });
       
-      setRating(0);
       setComment('');
-      setFeedbackType('rating');
+      setFeedbackType('worked');
       setIsHelpful(null);
       setShowForm(false);
     },
@@ -59,17 +53,7 @@ export function DealFeedback({ dealId, compact = false }: DealFeedbackProps) {
   });
 
   const handleSubmit = () => {
-    if (rating === 0) {
-      toast({
-        title: "Rating Required",
-        description: "Please select a star rating before submitting.",
-        variant: "destructive",
-      });
-      return;
-    }
-
     submitFeedbackMutation.mutate({
-      rating,
       feedbackType,
       comment: comment.trim() || null,
       isHelpful,
@@ -85,9 +69,9 @@ export function DealFeedback({ dealId, compact = false }: DealFeedbackProps) {
       >
         {stats && stats.totalFeedback > 0 && (
           <div className="flex items-center gap-1 text-sm">
-            <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-            <span className="font-medium">{stats.averageRating.toFixed(1)}</span>
-            <span className="text-muted-foreground">({stats.totalFeedback})</span>
+            <span className="text-muted-foreground">
+              {stats.totalFeedback} response{stats.totalFeedback === 1 ? '' : 's'}
+            </span>
           </div>
         )}
         {!showForm ? (
@@ -101,41 +85,18 @@ export function DealFeedback({ dealId, compact = false }: DealFeedbackProps) {
             className="text-sm font-medium"
             data-testid="button-show-feedback-form"
           >
-            Rate Deal
+            Give Feedback
           </Button>
         ) : (
           <div className="flex items-center gap-2">
-            <div className="flex gap-1">
-              {[1, 2, 3, 4, 5].map((star) => (
-                <button
-                  key={star}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setRating(star);
-                  }}
-                  onMouseEnter={() => setHoveredRating(star)}
-                  onMouseLeave={() => setHoveredRating(0)}
-                  className="transition-transform hover:scale-110"
-                  data-testid={`star-${star}`}
-                >
-                  <Star
-                    className={`h-5 w-5 ${
-                      star <= (hoveredRating || rating)
-                        ? 'fill-yellow-400 text-yellow-400'
-                        : 'text-[color:var(--text-muted)]'
-                    }`}
-                  />
-                </button>
-              ))}
-            </div>
             <Button
               size="sm"
               onClick={(e) => {
                 e.stopPropagation();
                 handleSubmit();
               }}
-              disabled={rating === 0 || submitFeedbackMutation.isPending}
-              data-testid="button-submit-rating"
+              disabled={submitFeedbackMutation.isPending}
+              data-testid="button-submit-feedback"
             >
               {submitFeedbackMutation.isPending ? 'Submitting...' : 'Submit'}
             </Button>
@@ -159,42 +120,14 @@ export function DealFeedback({ dealId, compact = false }: DealFeedbackProps) {
   return (
     <div className="space-y-4 p-4 border rounded-lg" data-testid="feedback-full">
       <div>
-        <h3 className="text-lg font-semibold mb-2">Rate This Deal</h3>
+        <h3 className="text-lg font-semibold mb-2">Deal Feedback</h3>
         {stats && stats.totalFeedback > 0 && (
           <div className="flex items-center gap-2 mb-4">
-            <div className="flex items-center gap-1">
-              <Star className="h-5 w-5 fill-yellow-400 text-yellow-400" />
-              <span className="font-medium text-lg">{stats.averageRating.toFixed(1)}</span>
-            </div>
             <span className="text-sm text-muted-foreground">
-              Based on {stats.totalFeedback} {stats.totalFeedback === 1 ? 'review' : 'reviews'}
+              {stats.totalFeedback} feedback response{stats.totalFeedback === 1 ? '' : 's'}
             </span>
           </div>
         )}
-      </div>
-
-      <div>
-        <Label className="mb-2 block">Your Rating</Label>
-        <div className="flex gap-2">
-          {[1, 2, 3, 4, 5].map((star) => (
-            <button
-              key={star}
-              onClick={() => setRating(star)}
-              onMouseEnter={() => setHoveredRating(star)}
-              onMouseLeave={() => setHoveredRating(0)}
-              className="transition-transform hover:scale-110"
-              data-testid={`star-${star}`}
-            >
-              <Star
-                className={`h-8 w-8 ${
-                  star <= (hoveredRating || rating)
-                    ? 'fill-yellow-400 text-yellow-400'
-                    : 'text-[color:var(--text-muted)]'
-                }`}
-              />
-            </button>
-          ))}
-        </div>
       </div>
 
       <div>
@@ -205,8 +138,8 @@ export function DealFeedback({ dealId, compact = false }: DealFeedbackProps) {
           data-testid="feedback-type-selector"
         >
           <div className="flex items-center space-x-2">
-            <RadioGroupItem value="rating" id="rating" data-testid="radio-rating" />
-            <Label htmlFor="rating" className="cursor-pointer">General Rating</Label>
+            <RadioGroupItem value="worked" id="worked" data-testid="radio-worked" />
+            <Label htmlFor="worked" className="cursor-pointer">Worked as expected</Label>
           </div>
           <div className="flex items-center space-x-2">
             <RadioGroupItem value="suggestion" id="suggestion" data-testid="radio-suggestion" />
@@ -258,18 +191,17 @@ export function DealFeedback({ dealId, compact = false }: DealFeedbackProps) {
       <div className="flex gap-2">
         <Button
           onClick={handleSubmit}
-          disabled={rating === 0 || submitFeedbackMutation.isPending}
+          disabled={submitFeedbackMutation.isPending}
           data-testid="button-submit-feedback"
         >
           {submitFeedbackMutation.isPending ? 'Submitting...' : 'Submit Feedback'}
         </Button>
-        {rating > 0 && (
+        {(comment || isHelpful !== null || feedbackType !== 'worked') && (
           <Button
             variant="outline"
             onClick={() => {
-              setRating(0);
               setComment('');
-              setFeedbackType('rating');
+              setFeedbackType('worked');
               setIsHelpful(null);
             }}
             data-testid="button-reset-feedback"

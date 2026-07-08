@@ -3,7 +3,7 @@ import { Link } from 'wouter';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Award, MapPin, Star, TrendingUp } from 'lucide-react';
+import { Award, MapPin, Trophy, TrendingUp } from 'lucide-react';
 
 interface GoldenPlateRestaurant {
   id: string;
@@ -188,7 +188,7 @@ export default function GoldenPlateWinners() {
                           </div>
                           <div className="text-center">
                             <div className="flex items-center justify-center">
-                              <Star className="h-5 w-5 text-amber-500 fill-amber-500" />
+                              <Trophy className="h-5 w-5 text-amber-500" />
                               <span className="ml-1 text-2xl font-bold text-amber-600">
                                 {winner.goldenPlateCount}
                               </span>

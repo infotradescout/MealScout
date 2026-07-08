@@ -446,14 +446,6 @@ async function restaurantPage(baseUrl: string, restaurantId: string) {
       addressRegion: row.state || undefined,
       addressCountry: "US",
     },
-    aggregateRating:
-      row.googleRating && row.googleReviewCount
-        ? {
-            "@type": "AggregateRating",
-            ratingValue: Number(row.googleRating),
-            reviewCount: Number(row.googleReviewCount),
-          }
-        : undefined,
     sameAs: [
       row.websiteUrl,
       row.instagramUrl,

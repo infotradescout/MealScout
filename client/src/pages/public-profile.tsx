@@ -2231,7 +2231,7 @@ function ProofSection({ profile }: { profile: PublicRestaurantProfile }) {
       label: "Recommendations",
       value: Number(profile.recommendations.total || 0),
     },
-    { label: "Reviews", value: Number(profile.reviewSummary.count || 0) },
+    { label: "Recommendation notes", value: Number(profile.reviewSummary.count || 0) },
   ].filter((metric) => metric.value > 0);
   if (metrics.length === 0) return null;
   return (

@@ -371,7 +371,6 @@ export interface IStorage {
   // Review operations
   createReview(review: InsertReview): Promise<Review>;
   getRestaurantReviews(restaurantId: string): Promise<Review[]>;
-  getRestaurantAverageRating(restaurantId: string): Promise<number>;
 
   // Admin operations
   ensureAdminExists(): Promise<void>;
@@ -718,11 +717,8 @@ export interface IStorage {
   createDealFeedback(feedback: InsertDealFeedback): Promise<DealFeedback>;
   getDealFeedback(dealId: string): Promise<DealFeedback[]>;
   getUserDealFeedback(userId: string): Promise<DealFeedback[]>;
-  getDealAverageRating(dealId: string): Promise<number>;
   getDealFeedbackStats(dealId: string): Promise<{
-    averageRating: number;
     totalFeedback: number;
-    ratingDistribution: { [key: number]: number };
   }>;
 
   // Stripe lookup operations
@@ -2873,15 +2869,6 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(reviews.createdAt));
   }
 
-  async getRestaurantAverageRating(restaurantId: string): Promise<number> {
-    const [result] = await db
-      .select({ avg: sql<number>`avg(${reviews.rating})` })
-      .from(reviews)
-      .where(eq(reviews.restaurantId, restaurantId));
-
-    return result.avg || 0;
-  }
-
   // Admin operations
   async ensureAdminExists(): Promise<void> {
     const adminEmail = process.env.ADMIN_EMAIL;
@@ -3573,7 +3560,7 @@ export class DatabaseStorage implements IStorage {
       await this.createReview({
         userId: customer1.id,
         restaurantId: restaurant1.id,
-        rating: 5,
+        rating: 0,
         comment:
           "Best beignets in Hammond! Just like being in New Orleans. The coffee is strong and perfect with the powdered sugar treats.",
       });
@@ -3581,7 +3568,7 @@ export class DatabaseStorage implements IStorage {
       await this.createReview({
         userId: customer1.id,
         restaurantId: restaurant2.id,
-        rating: 4,
+        rating: 0,
         comment:
           "Great seafood as always! The endless shrimp deal is amazing - so many varieties to try. Service was quick and friendly.",
       });
@@ -3589,7 +3576,7 @@ export class DatabaseStorage implements IStorage {
       await this.createReview({
         userId: customer1.id,
         restaurantId: restaurant3.id,
-        rating: 5,
+        rating: 0,
         comment:
           "Authentic NYC pizza! Thin crust perfection. The deal makes it even better - great value in the city.",
       });
@@ -3597,7 +3584,7 @@ export class DatabaseStorage implements IStorage {
       await this.createReview({
         userId: customer1.id,
         restaurantId: restaurant4.id,
-        rating: 5,
+        rating: 0,
         comment:
           "Iconic NYC deli! The pastrami sandwich is legendary. Worth the wait and every penny. A true New York experience.",
       });
@@ -3605,7 +3592,7 @@ export class DatabaseStorage implements IStorage {
       await this.createReview({
         userId: customer1.id,
         restaurantId: restaurant5.id,
-        rating: 4,
+        rating: 0,
         comment:
           "Classic LA burger joint! Fresh ingredients and the Animal Style fries are addictive. Great California vibes.",
       });
@@ -3613,7 +3600,7 @@ export class DatabaseStorage implements IStorage {
       await this.createReview({
         userId: customer1.id,
         restaurantId: restaurant6.id,
-        rating: 5,
+        rating: 0,
         comment:
           "Incredible authentic Oaxacan food! The mole varieties are amazing. Each one tells a story of traditional flavors.",
       });
@@ -3621,7 +3608,7 @@ export class DatabaseStorage implements IStorage {
       await this.createReview({
         userId: customer1.id,
         restaurantId: restaurant7.id,
-        rating: 5,
+        rating: 0,
         comment:
           "Best deep dish in Chicago! The crust is buttery perfection and loaded with cheese. A Chicago must-have!",
       });
@@ -3629,7 +3616,7 @@ export class DatabaseStorage implements IStorage {
       await this.createReview({
         userId: customer1.id,
         restaurantId: restaurant8.id,
-        rating: 4,
+        rating: 0,
         comment:
           "True Chicago Italian beef! Messy but delicious. The juice and hot peppers make it perfect. Pure Chicago tradition.",
       });
@@ -3637,7 +3624,7 @@ export class DatabaseStorage implements IStorage {
       await this.createReview({
         userId: customer1.id,
         restaurantId: restaurant9.id,
-        rating: 4,
+        rating: 0,
         comment:
           "Great Tex-Mex in Houston! The margaritas are strong and the fajitas sizzle. Happy hour deals are fantastic.",
       });
@@ -3645,7 +3632,7 @@ export class DatabaseStorage implements IStorage {
       await this.createReview({
         userId: customer1.id,
         restaurantId: restaurant10.id,
-        rating: 5,
+        rating: 0,
         comment:
           "BBQ perfection in Austin! The brisket melts in your mouth. Worth the line - Texas BBQ at its finest.",
       });
@@ -3653,7 +3640,7 @@ export class DatabaseStorage implements IStorage {
       await this.createReview({
         userId: customer1.id,
         restaurantId: restaurant11.id,
-        rating: 4,
+        rating: 0,
         comment:
           "Authentic Cuban food in Miami! The cafÃ© cubano is perfect and the breakfast is hearty. Real Cuban flavors.",
       });
@@ -3661,7 +3648,7 @@ export class DatabaseStorage implements IStorage {
       await this.createReview({
         userId: customer1.id,
         restaurantId: restaurant12.id,
-        rating: 5,
+        rating: 0,
         comment:
           "Amazing chowder in Seattle! Creamy, rich, and full of fresh clams. Perfect for the Pacific Northwest weather.",
       });
@@ -3669,7 +3656,7 @@ export class DatabaseStorage implements IStorage {
       await this.createReview({
         userId: customer1.id,
         restaurantId: foodTruck1.id,
-        rating: 5,
+        rating: 0,
         comment:
           "Best po-boys outside of New Orleans! The shrimp po-boy is massive and perfectly seasoned. Worth finding wherever they are!",
       });
@@ -3677,7 +3664,7 @@ export class DatabaseStorage implements IStorage {
       await this.createReview({
         userId: customer1.id,
         restaurantId: foodTruck2.id,
-        rating: 5,
+        rating: 0,
         comment:
           "NYC street food legend! The white sauce is incredible and the chicken is perfectly seasoned. Late night favorite!",
       });
@@ -3685,7 +3672,7 @@ export class DatabaseStorage implements IStorage {
       await this.createReview({
         userId: customer1.id,
         restaurantId: foodTruck3.id,
-        rating: 4,
+        rating: 0,
         comment:
           "Fusion done right in LA! Korean BBQ tacos are unique and delicious. Great mix of flavors and cultures.",
       });
@@ -5250,21 +5237,8 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(dealFeedback.createdAt));
   }
 
-  async getDealAverageRating(dealId: string): Promise<number> {
-    const result = await db
-      .select({
-        avgRating: sql<number>`AVG(${dealFeedback.rating})`,
-      })
-      .from(dealFeedback)
-      .where(eq(dealFeedback.dealId, dealId));
-
-    return result[0]?.avgRating || 0;
-  }
-
   async getDealFeedbackStats(dealId: string): Promise<{
-    averageRating: number;
     totalFeedback: number;
-    ratingDistribution: { [key: number]: number };
   }> {
     const feedback = await db
       .select()
@@ -5272,30 +5246,9 @@ export class DatabaseStorage implements IStorage {
       .where(eq(dealFeedback.dealId, dealId));
 
     const totalFeedback = feedback.length;
-    const averageRating =
-      totalFeedback > 0
-        ? feedback.reduce((sum: number, f: any) => sum + f.rating, 0) /
-          totalFeedback
-        : 0;
-
-    const ratingDistribution: { [key: number]: number } = {
-      1: 0,
-      2: 0,
-      3: 0,
-      4: 0,
-      5: 0,
-    };
-
-    feedback.forEach((f: any) => {
-      if (f.rating >= 1 && f.rating <= 5) {
-        ratingDistribution[f.rating] = (ratingDistribution[f.rating] || 0) + 1;
-      }
-    });
 
     return {
-      averageRating: Math.round(averageRating * 10) / 10,
       totalFeedback,
-      ratingDistribution,
     };
   }
 

@@ -9,7 +9,7 @@
  * Renders nothing when there are no displayable items.
  */
 import type { PublicMenuSection, PublicMenuItem } from "@shared/publicProfiles";
-import { Star } from "lucide-react";
+import { Heart } from "lucide-react";
 
 type MenuHighlightsRailProps = {
   menuSections: PublicMenuSection[];
@@ -102,7 +102,7 @@ export function MenuHighlightsRail({
                 <div className="absolute top-1.5 left-1.5 flex flex-col gap-1">
                   {isUserFav && (
                     <span className="inline-flex items-center gap-0.5 rounded-full bg-orange-500/90 px-1.5 py-0.5 text-[9px] font-bold text-black">
-                      <Star className="h-2.5 w-2.5" />
+                      <Heart className="h-2.5 w-2.5 fill-current" />
                       Saved
                     </span>
                   )}

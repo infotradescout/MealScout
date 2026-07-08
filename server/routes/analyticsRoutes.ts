@@ -269,6 +269,7 @@ export function registerAnalyticsRoutes(app: Express) {
       const { dealId } = req.params;
       const validatedData = insertDealFeedbackSchema.parse({
         ...req.body,
+        rating: 0,
         dealId,
         userId: req.user?.id || null,
       });

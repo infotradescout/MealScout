@@ -2657,9 +2657,9 @@ export const insertDealFeedbackSchema = createInsertSchema(dealFeedback)
     rating: z
       .number()
       .int()
-      .min(1, "Rating must be at least 1")
+      .min(0, "Rating must be at least 0")
       .max(5, "Rating must be at most 5"),
-    feedbackType: z.enum(["rating", "suggestion", "issue"]),
+    feedbackType: z.enum(["worked", "suggestion", "issue"]),
     comment: z
       .string()
       .max(500, "Comment must be less than 500 characters")

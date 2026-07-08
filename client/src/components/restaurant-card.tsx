@@ -135,10 +135,6 @@ export default function RestaurantCard({ restaurant, userLocation, showDistance 
           
           <div className="flex items-center justify-between mt-3">
             <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-1">
-                <i className="fas fa-star text-yellow-400 text-xs"></i>
-                <span className="text-xs text-muted-foreground" data-testid={`text-rating-${restaurant.id}`}>4.5</span>
-              </div>
               {!restaurant.isFoodTruck && (
                 <div className="flex items-center space-x-1">
                   <i className="fas fa-clock text-muted-foreground text-xs"></i>

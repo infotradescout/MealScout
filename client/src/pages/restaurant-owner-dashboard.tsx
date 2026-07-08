@@ -36,7 +36,7 @@ import {
   DollarSign,
   Eye,
   ShoppingCart,
-  Star,
+  Heart,
   Calendar,
   Settings,
   CreditCard,
@@ -105,7 +105,6 @@ interface DashboardStats {
   totalViews: number;
   totalClaims: number;
   conversionRate: number;
-  averageRating: number;
 }
 
 interface FavoritesAnalytics {
@@ -4719,7 +4718,7 @@ export default function RestaurantOwnerDashboard() {
                       <div className="flex items-center justify-between">
                         <div>
                           <p className="text-sm text-muted-foreground flex items-center gap-1">
-                            <Star className="h-3 w-3" />
+                            <Heart className="h-3 w-3" />
                             Total Favorites
                           </p>
                           <p
@@ -4734,7 +4733,7 @@ export default function RestaurantOwnerDashboard() {
                             )}
                           </p>
                         </div>
-                        <Star className="h-8 w-8 text-yellow-500" />
+                        <Heart className="h-8 w-8 text-yellow-500" />
                       </div>
                       <p className="text-xs text-muted-foreground mt-2">
                         Users who favorited your restaurant

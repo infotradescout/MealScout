@@ -243,8 +243,8 @@ export async function awardGoldenFork(userId: string): Promise<boolean> {
 /**
  * Calculate ranking score for a restaurant
  * Formula: (manualRecommendations * 50) + (videoRecommendations * 150)
- *   + (favoritesCount * 35) + (followCount * 20)
- *   + (avgRating * 20) + (totalDealClaims * 10) + (totalDealViews * 1)
+ *   + (favoritesCount * 180) + (followCount * 20)
+ *   + (totalDealClaims * 10) + (totalDealViews * 1)
  */
 export async function calculateRestaurantRankingScore(restaurantId: string): Promise<number> {
   // Get restaurant data
@@ -278,14 +278,6 @@ export async function calculateRestaurantRankingScore(restaurantId: string): Pro
     where: (follow: any) => eq(follow.restaurantId, restaurantId),
   });
   const followCount = follows.length;
-
-  // Get average rating
-  const reviews = await db.query.reviews.findMany({
-    where: (rev: any) => eq(rev.restaurantId, restaurantId),
-  });
-  const avgRating = reviews.length > 0
-    ? reviews.reduce((sum: number, r: any) => sum + r.rating, 0) / reviews.length
-    : 0;
 
   // Get deal claims count
   const deals = await storage.getDealsByRestaurant(restaurantId);
@@ -345,7 +337,6 @@ export async function calculateRestaurantRankingScore(restaurantId: string): Pro
     dishRecommendationCount * AWARD_RANKING_WEIGHTS.dishRecommendation +
     favoritesCount * AWARD_RANKING_WEIGHTS.favorites +
     followCount * AWARD_RANKING_WEIGHTS.follows +
-    Math.round(avgRating * AWARD_RANKING_WEIGHTS.avgRating) +
     totalDealClaims * AWARD_RANKING_WEIGHTS.totalDealClaims +
     totalDealViews * AWARD_RANKING_WEIGHTS.totalDealViews +
     communityActivityScore * AWARD_RANKING_WEIGHTS.communityActivity;

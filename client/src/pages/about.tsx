@@ -7,7 +7,7 @@ import {
   MapPin, 
   Heart, 
   Users, 
-  Star, 
+  Navigation, 
   ShoppingBag,
   TrendingUp,
   Award,
@@ -34,7 +34,7 @@ export default function About() {
   const stats = [
     { number: "10,000+", label: "Active Diners", icon: Users },
     { number: "500+", label: "Food Trucks", icon: ShoppingBag },
-    { number: "50,000+", label: "Parking Pass Visits", icon: Star },
+    { number: "50,000+", label: "Parking Pass Visits", icon: Navigation },
     { number: "25+", label: "Cities Covered", icon: MapPin }
   ];
 

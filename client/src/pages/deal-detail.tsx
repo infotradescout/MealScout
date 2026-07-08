@@ -69,15 +69,6 @@ export default function DealDetail() {
     enabled: !!(deal as Deal)?.restaurantId,
   });
 
-  const { data: rating } = useQuery({
-    queryKey: [
-      "/api/reviews/restaurant",
-      (deal as Deal)?.restaurantId,
-      "rating",
-    ],
-    enabled: !!(deal as Deal)?.restaurantId,
-  });
-
   const { data: affiliateTagData } = useQuery<{
     tag: string;
     sharePath: string;
@@ -312,17 +303,11 @@ export default function DealDetail() {
                   {distance.toFixed(1)} mi away
                 </span>
               )}
-              <span data-testid="text-restaurant-rating">
-                <i className="fas fa-star mr-1 text-primary"></i>
-                {(rating as any)?.rating &&
-                typeof (rating as any).rating === "number"
-                  ? (rating as any).rating.toFixed(1)
-                  : (rating as any)?.rating &&
-                      !isNaN(Number((rating as any).rating))
-                    ? Number((rating as any).rating).toFixed(1)
-                    : "New"}
-                {Array.isArray(reviews) && ` (${reviews.length})`}
-              </span>
+              {Array.isArray(reviews) && reviews.length > 0 ? (
+                <span data-testid="text-restaurant-recommendations">
+                  {reviews.length} recommendation{reviews.length === 1 ? "" : "s"}
+                </span>
+              ) : null}
             </div>
           </div>
           <div className="w-14 h-14 bg-primary/10 border border-primary/20 rounded-2xl flex items-center justify-center">
@@ -439,18 +424,6 @@ export default function DealDetail() {
                             >
                               {review.user?.firstName || "Anonymous"}
                             </p>
-                            <div className="flex text-[color:var(--status-warning)]">
-                              {[...Array(5)].map((_, i) => (
-                                <i
-                                  key={i}
-                                  className={`fas fa-star text-xs ${
-                                    i < review.rating
-                                      ? "text-[color:var(--status-warning)]"
-                                      : "text-muted-foreground"
-                                  }`}
-                                ></i>
-                              ))}
-                            </div>
                           </div>
                           <p
                             className="text-xs text-muted-foreground"
