@@ -135,7 +135,7 @@ export const SCOUT_HORIZONTAL_ROW_REGISTRY: ScoutHorizontalRowDefinition[] = [
   },
   {
     id: "popular_dishes",
-    title: "Popular Dishes",
+    title: "Menu Highlights",
     acceptedCardKinds: ["menu_item"],
     priority: 10,
     maxCards: 10,

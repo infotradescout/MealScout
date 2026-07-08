@@ -779,12 +779,12 @@ const DISCOVERY_LAYERS: Record<
     subtitle: "Search dishes, trucks, places, and events by what sounds good.",
   },
   trending: {
-    title: "Popular Nearby",
+    title: "Local Activity",
     href: "/search",
-    subtitle: "Fresh finds and active trucks near you right now.",
+    subtitle: "Nearby places with recent real activity.",
   },
   menuItems: {
-    title: "Popular Dishes",
+    title: "Menu Highlights",
     href: "/search",
     subtitle: "Dishes and menu items from restaurants and trucks near you.",
   },
@@ -6651,7 +6651,7 @@ function ActiveSceneContent({
       })),
       ...popularDishCards.map((item) => ({
         sourceRowId: "popular_dishes" as const,
-        sectionLabel: "Popular Dishes",
+        sectionLabel: "Menu Highlights",
         summary: formatScoutCount(
           popularDishCards.length,
           "popular dish",
@@ -6728,9 +6728,16 @@ function ActiveSceneContent({
       ...nearbyOnlyDecisionItems,
     ];
     const primaryFirstScreenDecision = firstScreenDecisionItems[0] ?? null;
+    const truckFirstScreenLead =
+      primaryFirstScreenDecision?.cardType === "truck" &&
+      (primaryFirstScreenDecision.sourceRowId === "live_trucks_now" ||
+        primaryFirstScreenDecision.sourceRowId === "food_trucks_today" ||
+        primaryFirstScreenDecision.sourceRowId === "open_now_near_you");
     const popularDishesRailTitle =
       primaryFirstScreenDecision?.sourceRowId === "popular_dishes"
         ? "More Dishes Nearby"
+        : truckFirstScreenLead
+          ? "Food From Nearby Trucks"
         : DISCOVERY_LAYERS.menuItems.title;
     const foodTrucksTodayRailTitle =
       primaryFirstScreenDecision?.sourceRowId === "food_trucks_today"
@@ -6912,7 +6919,9 @@ function ActiveSceneContent({
           title: popularDishesRailTitle,
           subtitle:
             popularDishes.length > 0
-              ? DISCOVERY_LAYERS.menuItems.subtitle
+              ? truckFirstScreenLead
+                ? "Menu items from trucks and nearby kitchens, ranked from real local signals."
+                : DISCOVERY_LAYERS.menuItems.subtitle
               : "Recent menu items from nearby restaurants and trucks.",
           linkHref: DISCOVERY_LAYERS.menuItems.href,
           cards: menuItemRailCards(popularDishCards),
@@ -6957,8 +6966,8 @@ function ActiveSceneContent({
         },
         {
           id: "trending_this_week",
-          title: "Popular Nearby",
-          subtitle: "Fresh finds and active trucks near you right now.",
+          title: "Local Activity",
+          subtitle: "Nearby places with recent real activity.",
           linkHref: DISCOVERY_LAYERS.trending.href,
           cards: restaurantRailCards(trendingPlaceCards),
           className: compactRailSectionClass,
@@ -7071,57 +7080,6 @@ function ActiveSceneContent({
           thinMarket={isLowActivityLane && firstScreenDecisionItems.length <= 1}
         />
         {renderSearchDock?.()}
-        {(() => {
-          // Prefer items with a real photo or a substantial price - a $2
-          // side/add-on isn't really a "pick," and is also more likely to
-          // hit the generic no-photo fallback, which looks bad blown up
-          // to this section's large card size. Fall back to the unfiltered
-          // list in thin markets rather than hiding the section entirely.
-          const strongCandidates = localMenuItems.filter(
-            (item) =>
-              Boolean(item.imageUrl) ||
-              (typeof item.priceCents === "number" && item.priceCents >= 500),
-          );
-          const nearbyPicksAll =
-            strongCandidates.length > 0 ? strongCandidates : localMenuItems;
-          const nearbyPicks = nearbyPicksAll.slice(0, 2);
-          return nearbyPicks.length > 0 ? (
-            <section className="px-5 pt-2">
-              <SectionHeader
-                title="Nearby picks"
-                linkHref={DISCOVERY_LAYERS.menuItems.href}
-                itemCount={nearbyPicksAll.length}
-                onSeeAll={
-                  onOpenResultsSheet
-                    ? () =>
-                        onOpenResultsSheet({
-                          title: "Nearby picks",
-                          items: nearbyPicksAll,
-                          renderItem: (item, index) => (
-                            <NearbyPickCard
-                              item={item}
-                              position={index}
-                              currentUserId={currentUserId}
-                            />
-                          ),
-                          getKey: (item) => String(item.id),
-                        })
-                    : undefined
-                }
-              />
-              <div className="grid grid-cols-2 gap-3">
-                {nearbyPicks.map((item, index) => (
-                  <NearbyPickCard
-                    key={item.id}
-                    item={item}
-                    position={index}
-                    currentUserId={currentUserId}
-                  />
-                ))}
-              </div>
-            </section>
-          ) : null;
-        })()}
         {scoutRows.map((row) => (
           <ScoutHorizontalCategoryRail
             key={row.id}
@@ -8827,321 +8785,6 @@ function LocalMenuItemCard({
             {hasRecommended ? "Recommended" : "Recommend"}
           </button>
         </div>
-      </div>
-      <Dialog
-        open={isRecommendDialogOpen}
-        onOpenChange={setIsRecommendDialogOpen}
-      >
-        <DialogContent
-          className="max-w-sm"
-          onClick={(event) => event.stopPropagation()}
-        >
-          <DialogHeader>
-            <DialogTitle>{item.name}</DialogTitle>
-            <DialogDescription>
-              Tell us why you recommend it, or just close this - your
-              recommendation is already saved.
-            </DialogDescription>
-          </DialogHeader>
-          <textarea
-            value={recommendComment}
-            onChange={(event) => setRecommendComment(event.target.value)}
-            placeholder="What makes this dish worth it? (optional)"
-            className="min-h-[72px] w-full rounded border border-[color:var(--border-subtle)] bg-black/20 px-2 py-1.5 text-sm"
-          />
-          <div className="flex items-center gap-2">
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(event) =>
-                setRecommendPhoto(event.target.files?.[0] || null)
-              }
-              className="flex-1 text-xs"
-            />
-          </div>
-          <div className="flex items-center justify-between gap-2">
-            <button
-              type="button"
-              onClick={removeRecommendation}
-              disabled={isRemovingRecommend}
-              className="text-xs text-[color:var(--text-muted)] underline hover:text-[color:var(--text-primary)] disabled:opacity-60"
-            >
-              Remove recommendation
-            </button>
-            <button
-              type="button"
-              onClick={submitEnrichedRecommendation}
-              disabled={isSubmittingEnrich}
-              className="rounded-full bg-orange-400 px-3 py-1.5 text-xs font-black text-[#1a0d08] disabled:opacity-60"
-            >
-              {isSubmittingEnrich ? "Saving…" : "Save"}
-            </button>
-          </div>
-        </DialogContent>
-      </Dialog>
-    </Link>
-  );
-}
-
-// "Nearby picks" dish card - compact visual variant for the top food shelf.
-function NearbyPickCard({
-  item,
-  position,
-  currentUserId,
-}: {
-  item: LocalMenuItemFeedItem;
-  position: number;
-  currentUserId?: string | null;
-}) {
-  const price =
-    typeof item.priceCents === "number" && Number.isFinite(item.priceCents)
-      ? `$${(item.priceCents / 100).toFixed(item.priceCents % 100 === 0 ? 0 : 2)}`
-      : null;
-  const distLabel =
-    typeof item.distanceMiles === "number" &&
-    Number.isFinite(item.distanceMiles)
-      ? `${item.distanceMiles.toFixed(item.distanceMiles < 10 ? 1 : 0)} mi`
-      : null;
-  const tags = Array.isArray(item.dietaryTags)
-    ? item.dietaryTags.filter(Boolean).slice(0, 3)
-    : [];
-  const userInterestCuisines = useFavoriteCuisineInterests(currentUserId);
-  const displayCategory = pickDisplayCategory(
-    item.cuisineType,
-    userInterestCuisines,
-    String(item.restaurantId || item.id),
-  );
-
-  const [isRecommendDialogOpen, setIsRecommendDialogOpen] = useState(false);
-  const [recommendComment, setRecommendComment] = useState("");
-  const [recommendPhoto, setRecommendPhoto] = useState<File | null>(null);
-  const [isSubmittingEnrich, setIsSubmittingEnrich] = useState(false);
-  const [isRemovingRecommend, setIsRemovingRecommend] = useState(false);
-  const [isTogglingRecommend, setIsTogglingRecommend] = useState(false);
-  const [hasRecommended, setHasRecommended] = useState(false);
-
-  const { data: myRecommendationData } = useQuery({
-    queryKey: ["/api/menu-items", item.id, "my-recommendation", currentUserId],
-    queryFn: async () => {
-      const res = await fetch(
-        `/api/menu-items/${encodeURIComponent(item.id)}/my-recommendation`,
-        { credentials: "include" },
-      );
-      if (!res.ok) return null;
-      return res.json();
-    },
-    enabled: Boolean(currentUserId),
-    staleTime: 60_000,
-  });
-
-  useEffect(() => {
-    setHasRecommended(Boolean((myRecommendationData as any)?.recommendation));
-  }, [myRecommendationData]);
-
-  const postMenuItemRecommendation = async (opts: {
-    comment?: string;
-    photo?: File | null;
-  }) => {
-    const formData = new FormData();
-    formData.append("comment", opts.comment ?? "");
-    if (opts.photo) formData.append("image", opts.photo);
-    return fetch(`/api/menu-items/${encodeURIComponent(item.id)}/recommend`, {
-      method: "POST",
-      credentials: "include",
-      body: formData,
-    });
-  };
-
-  const handleRecommendClick = async (event: React.MouseEvent) => {
-    event.preventDefault();
-    event.stopPropagation();
-    if (!currentUserId) {
-      window.location.href = `/login?redirect=${encodeURIComponent("/scout-v2")}`;
-      return;
-    }
-    if (hasRecommended) {
-      setIsRecommendDialogOpen(true);
-      return;
-    }
-    setIsTogglingRecommend(true);
-    try {
-      const res = await postMenuItemRecommendation({});
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        toast({
-          variant: "destructive",
-          description:
-            String(data?.message || "").trim() ||
-            "Couldn't recommend this dish.",
-        });
-        return;
-      }
-      setHasRecommended(true);
-      setIsRecommendDialogOpen(true);
-    } finally {
-      setIsTogglingRecommend(false);
-    }
-  };
-
-  const submitEnrichedRecommendation = async () => {
-    setIsSubmittingEnrich(true);
-    try {
-      const res = await postMenuItemRecommendation({
-        comment: recommendComment,
-        photo: recommendPhoto,
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        toast({
-          variant: "destructive",
-          description:
-            String(data?.message || "").trim() ||
-            "Couldn't save your recommendation.",
-        });
-        return;
-      }
-      toast({
-        description:
-          data?.photoStatus?.status === "pending"
-            ? "Recommendation saved. Photo is pending approval."
-            : "Recommendation saved.",
-      });
-      setRecommendComment("");
-      setRecommendPhoto(null);
-      setIsRecommendDialogOpen(false);
-    } finally {
-      setIsSubmittingEnrich(false);
-    }
-  };
-
-  const removeRecommendation = async () => {
-    setIsRemovingRecommend(true);
-    try {
-      const res = await fetch(
-        `/api/menu-items/${encodeURIComponent(item.id)}/recommend`,
-        { method: "DELETE", credentials: "include" },
-      );
-      if (res.ok) {
-        setHasRecommended(false);
-        setIsRecommendDialogOpen(false);
-        setRecommendComment("");
-        setRecommendPhoto(null);
-      }
-    } finally {
-      setIsRemovingRecommend(false);
-    }
-  };
-
-  useEffect(() => {
-    trackLocalMenuItemEngagement({
-      eventName: "menu_item_impression",
-      itemId: item.id,
-      restaurantId: item.restaurantId,
-      layerId: "menuItems",
-      surface: "scout_v2_nearby_picks",
-      position,
-      discoveryScore: item.discoveryScore,
-      discoveryReasons: item.discoveryReasons,
-    });
-  }, [
-    item.id,
-    item.restaurantId,
-    item.discoveryScore,
-    item.discoveryReasons,
-    position,
-  ]);
-
-  return (
-    <Link
-      href={getMenuItemProfilePath(item)}
-      onClick={() =>
-        trackLocalMenuItemEngagement({
-          eventName: "menu_item_click",
-          itemId: item.id,
-          restaurantId: item.restaurantId,
-          layerId: "menuItems",
-          surface: "scout_v2_nearby_picks",
-          position,
-          discoveryScore: item.discoveryScore,
-          discoveryReasons: item.discoveryReasons,
-        })
-      }
-      className="block overflow-hidden rounded-xl bg-[#170d08]/92 ring-1 ring-orange-100/18 transition duration-200 hover:-translate-y-0.5 hover:ring-orange-200/36 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
-      aria-label={`Open ${item.name} from ${item.restaurantName || "local menu"}`}
-      data-testid="scout-v2-nearby-pick-card"
-    >
-      <div className="relative aspect-[4/3] bg-[#120805]/70">
-        <ScoutCardMedia
-          imageUrl={
-            item.imageUrl ||
-            item.restaurantLogoUrl ||
-            item.restaurantCoverImageUrl ||
-            null
-          }
-          fallbackIcon={
-            <Utensils className="h-5 w-5 text-orange-200/80" aria-hidden="true" />
-          }
-          fallbackTestId="scout-v2-nearby-pick-card-image-fallback"
-          imageClassName="absolute inset-0 h-full w-full object-cover"
-          fallbackClassName="!bg-[linear-gradient(150deg,#3a2013_0%,#241209_60%,#1a0f0a_100%)]"
-          categoryPhoto={getDishCategoryPhoto(item.name, item.description)}
-        />
-        <div className="absolute inset-0 bg-gradient-to-b from-black/8 via-transparent to-black/58" />
-        <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-md bg-orange-300 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-[#1a0d08]">
-          <Utensils className="h-3 w-3" aria-hidden="true" />
-          Dish
-        </span>
-        {price && (
-          <span className="absolute right-2 top-2 rounded-md bg-[#120805]/86 px-2 py-0.5 text-[11px] font-black text-orange-100 ring-1 ring-orange-300/24">
-            {price}
-          </span>
-        )}
-        {typeof item.cvsScore === "number" && (
-          <span className="absolute bottom-2 left-2 inline-flex items-center gap-1 rounded-md bg-orange-400 px-2 py-0.5 text-[11px] font-black text-[#1a0d08]">
-            <Flame className="h-3 w-3" aria-hidden="true" />
-            {item.cvsScore}
-          </span>
-        )}
-        <button
-          type="button"
-          onClick={handleRecommendClick}
-          disabled={isTogglingRecommend}
-          aria-pressed={hasRecommended}
-          aria-label={
-            hasRecommended ? "Recommended - tap for more" : "Recommend"
-          }
-          title={hasRecommended ? "Recommended - tap for more" : "Recommend"}
-          className={`absolute bottom-2 right-2 inline-flex h-7 w-7 items-center justify-center rounded-full backdrop-blur-sm transition ${
-            hasRecommended
-              ? "bg-orange-300 text-[#1a0d08]"
-              : "bg-black/35 text-white ring-1 ring-white/40 hover:bg-black/50"
-          }`}
-        >
-          <Heart
-            className={`h-3.5 w-3.5 ${hasRecommended ? "fill-current" : ""}`}
-            aria-hidden="true"
-          />
-        </button>
-      </div>
-      <div className="px-3 pb-3 pt-2.5">
-        <p className="line-clamp-2 min-h-[2.25rem] text-sm font-black leading-tight text-white">
-          {item.name}
-        </p>
-        <p className="mt-1 truncate text-xs font-semibold text-orange-200/82">
-          {item.restaurantName || "Local spot"}
-          {displayCategory ? ` · ${displayCategory}` : ""}
-        </p>
-        {tags.length > 0 && (
-          <p className="mt-1 truncate text-[11px] text-white/46">
-            {tags.join(" · ")}
-          </p>
-        )}
-        {distLabel && (
-          <div className="mt-1.5 flex items-center gap-1 text-[11px] text-white/55">
-            <MapPin className="h-3 w-3" aria-hidden="true" />
-            {distLabel}
-          </div>
-        )}
       </div>
       <Dialog
         open={isRecommendDialogOpen}
