@@ -41,7 +41,6 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import ShareButton from "@/components/share-button";
 import { useAuth } from "@/hooks/useAuth";
 import {
   useEffectiveLocationContext,
@@ -8606,7 +8605,6 @@ function LocalMenuItemCard({
 
   const [isRecommendDialogOpen, setIsRecommendDialogOpen] = useState(false);
   const [recommendComment, setRecommendComment] = useState("");
-  const [recommendRating, setRecommendRating] = useState("5");
   const [recommendPhoto, setRecommendPhoto] = useState<File | null>(null);
   const [isSubmittingEnrich, setIsSubmittingEnrich] = useState(false);
   const [isRemovingRecommend, setIsRemovingRecommend] = useState(false);
@@ -8637,12 +8635,10 @@ function LocalMenuItemCard({
 
   const postMenuItemRecommendation = async (opts: {
     comment?: string;
-    rating?: string;
     photo?: File | null;
   }) => {
     const formData = new FormData();
     formData.append("comment", opts.comment ?? "");
-    formData.append("rating", opts.rating ?? "5");
     if (opts.photo) formData.append("image", opts.photo);
     // Same-origin for the same reason as the my-recommendation check above.
     return fetch(`/api/menu-items/${encodeURIComponent(item.id)}/recommend`, {
@@ -8689,7 +8685,6 @@ function LocalMenuItemCard({
     try {
       const res = await postMenuItemRecommendation({
         comment: recommendComment,
-        rating: recommendRating,
         photo: recommendPhoto,
       });
       const data = await res.json().catch(() => ({}));
@@ -8876,24 +8871,6 @@ function LocalMenuItemCard({
             className="min-h-[72px] w-full rounded border border-[color:var(--border-subtle)] bg-black/20 px-2 py-1.5 text-sm"
           />
           <div className="flex items-center gap-2">
-            <label
-              className="text-xs text-[color:var(--text-muted)]"
-              htmlFor={`rating-${item.id}`}
-            >
-              Rating
-            </label>
-            <select
-              id={`rating-${item.id}`}
-              value={recommendRating}
-              onChange={(event) => setRecommendRating(event.target.value)}
-              className="rounded border border-[color:var(--border-subtle)] bg-black/20 px-1.5 py-1 text-sm"
-            >
-              <option value="5">5</option>
-              <option value="4">4</option>
-              <option value="3">3</option>
-              <option value="2">2</option>
-              <option value="1">1</option>
-            </select>
             <input
               type="file"
               accept="image/*"
@@ -8961,7 +8938,6 @@ function NearbyPickCard({
 
   const [isRecommendDialogOpen, setIsRecommendDialogOpen] = useState(false);
   const [recommendComment, setRecommendComment] = useState("");
-  const [recommendRating, setRecommendRating] = useState("5");
   const [recommendPhoto, setRecommendPhoto] = useState<File | null>(null);
   const [isSubmittingEnrich, setIsSubmittingEnrich] = useState(false);
   const [isRemovingRecommend, setIsRemovingRecommend] = useState(false);
@@ -8988,12 +8964,10 @@ function NearbyPickCard({
 
   const postMenuItemRecommendation = async (opts: {
     comment?: string;
-    rating?: string;
     photo?: File | null;
   }) => {
     const formData = new FormData();
     formData.append("comment", opts.comment ?? "");
-    formData.append("rating", opts.rating ?? "5");
     if (opts.photo) formData.append("image", opts.photo);
     return fetch(`/api/menu-items/${encodeURIComponent(item.id)}/recommend`, {
       method: "POST",
@@ -9038,7 +9012,6 @@ function NearbyPickCard({
     try {
       const res = await postMenuItemRecommendation({
         comment: recommendComment,
-        rating: recommendRating,
         photo: recommendPhoto,
       });
       const data = await res.json().catch(() => ({}));
@@ -9222,24 +9195,6 @@ function NearbyPickCard({
             className="min-h-[72px] w-full rounded border border-[color:var(--border-subtle)] bg-black/20 px-2 py-1.5 text-sm"
           />
           <div className="flex items-center gap-2">
-            <label
-              className="text-xs text-[color:var(--text-muted)]"
-              htmlFor={`nearby-pick-rating-${item.id}`}
-            >
-              Rating
-            </label>
-            <select
-              id={`nearby-pick-rating-${item.id}`}
-              value={recommendRating}
-              onChange={(event) => setRecommendRating(event.target.value)}
-              className="rounded border border-[color:var(--border-subtle)] bg-black/20 px-1.5 py-1 text-sm"
-            >
-              <option value="5">5</option>
-              <option value="4">4</option>
-              <option value="3">3</option>
-              <option value="2">2</option>
-              <option value="1">1</option>
-            </select>
             <input
               type="file"
               accept="image/*"
@@ -9633,8 +9588,8 @@ function NearbyRestaurantCard({
     setIsFollowed(true);
     try {
       // The tap itself is the shallow like/follow/recommend - it's already
-      // saved by the time the popup opens. The popup just offers to add more
-      // (or Share/Favorite); closing it without doing anything is fine.
+      // saved by the time the context card opens. Closing it without adding
+      // details keeps the recommendation.
       await sendRestaurantAction("recommend", true);
       setIsRecommendDialogOpen(true);
     } catch {
@@ -9646,24 +9601,34 @@ function NearbyRestaurantCard({
   const [isRecommendDialogOpen, setIsRecommendDialogOpen] = useState(false);
   const [restaurantRecommendComment, setRestaurantRecommendComment] =
     useState("");
-  const [restaurantRecommendRating, setRestaurantRecommendRating] =
-    useState("5");
+  const [restaurantRecommendPhoto, setRestaurantRecommendPhoto] =
+    useState<File | null>(null);
+  const [restaurantRecommendScores, setRestaurantRecommendScores] = useState({
+    food: 80,
+    value: 75,
+    speed: 75,
+    vibe: 75,
+  });
   const [isSubmittingRestaurantRecommend, setIsSubmittingRestaurantRecommend] =
     useState(false);
 
   const submitRestaurantRecommendationDetails = async () => {
     setIsSubmittingRestaurantRecommend(true);
     try {
-      const response = await fetch("/api/reviews", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          restaurantId,
-          rating: Number(restaurantRecommendRating),
-          comment: restaurantRecommendComment.trim() || null,
-        }),
-      });
+      const formData = new FormData();
+      formData.append("comment", restaurantRecommendComment.trim());
+      formData.append("scores", JSON.stringify(restaurantRecommendScores));
+      if (restaurantRecommendPhoto) {
+        formData.append("image", restaurantRecommendPhoto);
+      }
+      const response = await fetch(
+        `/api/restaurants/${encodeURIComponent(restaurantId)}/recommend`,
+        {
+          method: "POST",
+          credentials: "include",
+          body: formData,
+        },
+      );
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
         toast({
@@ -9676,6 +9641,7 @@ function NearbyRestaurantCard({
       }
       toast({ description: "Recommendation saved." });
       setRestaurantRecommendComment("");
+      setRestaurantRecommendPhoto(null);
       setIsRecommendDialogOpen(false);
     } catch {
       toast({
@@ -9865,9 +9831,8 @@ function NearbyRestaurantCard({
             className="flex items-center gap-1.5"
             aria-label={`${name} quick actions`}
           >
-            {/* Single entry point: a bare tap is the shallow like/follow/recommend
-                bundle (no popup). Tapping again (already recommended) opens the
-                popup, where Share, Favorite, and enrichment live. */}
+            {/* Single entry point: a bare tap saves the shallow recommend.
+                Tapping again opens optional context, with no duplicate actions. */}
             <button
               type="button"
               onClick={recommend}
@@ -9902,43 +9867,9 @@ function NearbyRestaurantCard({
           <DialogHeader>
             <DialogTitle>{name}</DialogTitle>
             <DialogDescription>
-              Tell us why you recommend it, or just close this - your
-              recommendation is already saved.
+              Add context if you want. Closing keeps your recommendation saved.
             </DialogDescription>
           </DialogHeader>
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={toggleFavorite}
-              disabled={pendingAction === "favorite"}
-              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition ${
-                isFavorite
-                  ? "bg-orange-300 text-[#1a0d08]"
-                  : "bg-white/8 text-white/80 hover:bg-white/12"
-              }`}
-            >
-              <Bookmark
-                className={`h-3.5 w-3.5 ${isFavorite ? "fill-current" : ""}`}
-                aria-hidden="true"
-              />
-              {isFavorite ? "Favorited" : "Favorite"}
-            </button>
-            <ShareButton
-              url={profileHref}
-              title={name}
-              variant="outline"
-              size="sm"
-            />
-          </div>
-          {isFollowed && (
-            <button
-              type="button"
-              onClick={toggleFollow}
-              className="self-start text-[11px] text-[color:var(--text-muted)] underline underline-offset-2"
-            >
-              Following · Unfollow
-            </button>
-          )}
           <textarea
             value={restaurantRecommendComment}
             onChange={(event) =>
@@ -9947,27 +9878,43 @@ function NearbyRestaurantCard({
             placeholder="What makes this place worth it? (optional)"
             className="min-h-[72px] w-full rounded border border-[color:var(--border-subtle)] bg-black/20 px-2 py-1.5 text-sm"
           />
-          <div className="flex items-center gap-2">
-            <label
-              className="text-xs text-[color:var(--text-muted)]"
-              htmlFor={`restaurant-rating-${restaurantId}`}
-            >
-              Rating
-            </label>
-            <select
-              id={`restaurant-rating-${restaurantId}`}
-              value={restaurantRecommendRating}
-              onChange={(event) =>
-                setRestaurantRecommendRating(event.target.value)
-              }
-              className="rounded border border-[color:var(--border-subtle)] bg-black/20 px-1.5 py-1 text-sm"
-            >
-              <option value="5">5</option>
-              <option value="4">4</option>
-              <option value="3">3</option>
-              <option value="2">2</option>
-              <option value="1">1</option>
-            </select>
+          <input
+            type="file"
+            accept="image/*"
+            onChange={(event) =>
+              setRestaurantRecommendPhoto(event.target.files?.[0] || null)
+            }
+            className="text-xs"
+          />
+          <div className="space-y-3">
+            {(
+              [
+                ["food", "Food"],
+                ["value", "Value"],
+                ["speed", "Speed"],
+                ["vibe", "Vibe"],
+              ] as const
+            ).map(([key, label]) => (
+              <label key={key} className="block space-y-1">
+                <span className="flex items-center justify-between text-xs font-semibold text-[color:var(--text-muted)]">
+                  <span>{label}</span>
+                  <span>{restaurantRecommendScores[key]}</span>
+                </span>
+                <input
+                  type="range"
+                  min="1"
+                  max="100"
+                  value={restaurantRecommendScores[key]}
+                  onChange={(event) =>
+                    setRestaurantRecommendScores((current) => ({
+                      ...current,
+                      [key]: Number(event.target.value),
+                    }))
+                  }
+                  className="w-full accent-orange-400"
+                />
+              </label>
+            ))}
           </div>
           <div className="flex justify-end">
             <button
