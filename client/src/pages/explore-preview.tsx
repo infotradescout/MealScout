@@ -1,3 +1,8 @@
+// DEAD SURFACE: not routed. Do not edit for /scout. Live /scout is
+// explore-preview-v2.tsx (ScoutPageV2). This file is kept only because
+// several scripts/*.contract.test.ts read it directly by path; deleting it
+// or removing its lazy import in App.tsx breaks those tests. See
+// docs/qa/mealscout-ui-served-state-audit-2026-07-06.md.
 import {
   useCallback,
   useEffect,
