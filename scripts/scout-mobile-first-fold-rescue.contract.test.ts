@@ -1,20 +1,21 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-const scoutPage = readFileSync("client/src/pages/explore-preview.tsx", "utf8");
+const scoutPage = readFileSync("client/src/pages/explore-preview-v2.tsx", "utf8");
 const locationHook = readFileSync(
   "client/src/hooks/useEffectiveLocationContext.ts",
   "utf8",
 );
 
 const requiredScoutSnippets = [
-  "Coverage is still thin here, so Scout is showing the closest real place first.",
+  "Coverage is still thin here, so Scout is showing the closest real",
+  "place first.",
   "Browse nearby",
-  "View map",
-  "See trending",
+  "Search nearby",
   'data-testid="scout-thin-market-state"',
   'data-testid="scout-compact-card-image-fallback"',
-  "useEffectiveLocationContext(Boolean(user?.id) && !authEffectiveLocationContext)",
+  "useEffectiveLocationContext(",
+  "Boolean(user?.id) && !authEffectiveLocationContext",
   'savedLocation?.source === "super_admin_default"',
   'marketKey: "pensacola-fl"',
 ];

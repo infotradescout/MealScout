@@ -271,7 +271,7 @@ Still requires fixtures, staging, or explicit production-test-record approval:
 
 ## Trace Examples
 
-- Public user enters `/scout`: `client/src/App.tsx` routes to `ScoutPage`, then calls discovery APIs backed by public discovery, live trucks, public events, restaurants/subscribed, and deals/nearby route groups.
+- Public user enters `/scout`: `client/src/App.tsx` routes to `ScoutPageV2` (`client/src/pages/explore-preview-v2.tsx`), then calls discovery APIs backed by public discovery, live trucks, public events, restaurants/subscribed, and deals/nearby route groups.
 - Customer opens `/p/...`: `client/src/App.tsx` routes to `PublicProfilePage`; backend profile resolution lives in public discovery/profile routes and public profile prerender routes.
 - Truck owner reaches dashboard: `/restaurant-owner-dashboard` or `/restaurant/dashboard` routes to `RestaurantOwnerDashboard`; backend ownership/profile/deal/menu/schedule surfaces are restaurant operations, restaurant core, deal management, menu, and business team routes.
 - Host creates/open spots: `/host/dashboard` and `/parking-pass` host setup flows call host/event/Parking Pass APIs, especially `/api/hosts/parking-pass` and event route groups.

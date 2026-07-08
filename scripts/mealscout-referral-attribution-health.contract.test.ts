@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import {
   buildTrackedAttributedPath,
   buildTrackedAttributedUrl,
-} from "../server/shareTargetPolicy";
+} from "../server/shareTargetPolicy.ts";
 
 const shareRoutes = readFileSync("server/shareRoutes.ts", "utf8");
 const sharePolicy = readFileSync("server/shareTargetPolicy.ts", "utf8");
@@ -107,7 +107,7 @@ function requireIncludes(source: string, snippet: string, label: string) {
 [
   '<Route path="/customer-signup/:refTag" component={CustomerSignup} />',
   '<Route path="/claim-truck/:refTag" component={ClaimTruckPage} />',
-  '<Route path="/directory/:refTag" component={ScoutPage} />',
+  '<Route path="/directory/:refTag" component={ScoutPageV2} />',
   '<Route path="/ref/:tag" component={ReferralRedirect} />',
 ].forEach((snippet) =>
   requireIncludes(appSource, snippet, "compatibility routing"),

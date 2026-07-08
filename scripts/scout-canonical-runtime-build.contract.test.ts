@@ -1,19 +1,28 @@
 import { readFileSync } from "node:fs";
 
 const appSource = readFileSync("client/src/App.tsx", "utf8");
-const scoutPage = readFileSync("client/src/pages/explore-preview.tsx", "utf8");
+const scoutPage = readFileSync("client/src/pages/explore-preview-v2.tsx", "utf8");
+const quarantinedScoutPage = readFileSync("client/src/pages/explore-preview.tsx", "utf8");
 const scoutCopy = readFileSync("client/src/features/scout/scoutSceneCopy.ts", "utf8");
 const scoutSearchDock = readFileSync("client/src/components/scout/ScoutSearchDock.tsx", "utf8");
 const publicProfilePage = readFileSync("client/src/pages/public-profile.tsx", "utf8");
 const platformBuild = readFileSync("scripts/platformBuild.mjs", "utf8");
 
-if (!appSource.includes('const ScoutPage = lazy(() => import("@/pages/explore-preview"));')) {
-  throw new Error("Canonical /scout route must lazy-load explore-preview.");
+if (!appSource.includes('const ScoutPageV2 = lazy(() => import("@/pages/explore-preview-v2"));')) {
+  throw new Error("Canonical /scout route must lazy-load explore-preview-v2.");
+}
+
+if (
+  !quarantinedScoutPage.includes("DEAD SURFACE") ||
+  !quarantinedScoutPage.includes("explore-preview-v2.tsx (ScoutPageV2)")
+) {
+  throw new Error("Legacy explore-preview.tsx must be explicitly quarantined as a dead surface.");
 }
 
 for (const routeSnippet of [
-  '<Route path="/scout" component={ScoutPage} />',
-  '<Route path="/directory" component={ScoutPage} />',
+  '<Route path="/scout" component={ScoutPageV2} />',
+  '<Route path="/directory" component={ScoutPageV2} />',
+  '<Route path="/scout-v2" component={ScoutPageV2} />',
   '<Route path="/scout-prototype" component={ScoutPrototype} />',
 ]) {
   if (!appSource.includes(routeSnippet)) {
@@ -26,9 +35,9 @@ for (const requiredScoutSnippet of [
   'title: "Open Now Near You"',
   'title: "Food Trucks Today"',
   'title: DISCOVERY_LAYERS.restaurants.title',
-  "title: \"What's Hot\"",
+  'title: "Local Activity"',
   'title: "Newest on MealScout"',
-  'title: DISCOVERY_LAYERS.menuItems.title',
+  'DISCOVERY_LAYERS.menuItems.title',
   'title: DISCOVERY_LAYERS.deals.title',
   'title: DISCOVERY_LAYERS.events.title',
   'const { data: trendingData } = useQuery<ScoutTrendingResponse>({',
@@ -40,9 +49,9 @@ for (const requiredScoutSnippet of [
   "function ScoutFirstScreenDecisionStack(",
   'data-scout-first-screen-decision-stack="true"',
   'data-scout-immediate-compact-card="true"',
-  'placement="inline"',
-  "renderSearchDock?.()",
-  "No nearby food signals yet",
+  'placement="fixed"',
+  "{scoutRows.map((row) => (",
+  "No nearby food yet",
   "Try search or move the map",
 ]) {
   if (!scoutPage.includes(requiredScoutSnippet)) {
@@ -93,7 +102,8 @@ if (!scoutSearchDock.includes('data-scout-search-placement={placement}')) {
 for (const publicProfileSnippet of [
   "const invalidRestaurantRoute =",
   "!UUID_LIKE_RE.test(resolvedProfileId)",
-  "enabled: !!normalizedProfileType && !!resolvedProfileId && !invalidRestaurantRoute",
+  "enabled:",
+  "!!normalizedProfileType && !!resolvedProfileId && !invalidRestaurantRoute",
   "retry: false,",
 ]) {
   if (!publicProfilePage.includes(publicProfileSnippet)) {
@@ -101,7 +111,7 @@ for (const publicProfileSnippet of [
   }
 }
 
-if (!platformBuild.includes('run("npx", ["vite", "build"]);')) {
+if (!platformBuild.includes('run("vite", ["build"]);')) {
   throw new Error("Platform build must emit the production client bundle to dist/public.");
 }
 
