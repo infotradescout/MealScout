@@ -86,7 +86,7 @@ for (const section of oauthFailureSections) {
   }
 }
 
-if (!app.includes('<Route path="/scout" component={ScoutPage} />')) {
+if (!app.includes('<Route path="/scout" component={ScoutPageV2} />')) {
   throw new Error("/scout route must exist and remain public-route valid with query params.");
 }
 

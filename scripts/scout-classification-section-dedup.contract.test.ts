@@ -4,9 +4,9 @@ import {
   assignScoutBusinessCardsBySection,
   getScoutBusinessKey,
   normalizeScoutBusinessKind,
-} from "../client/src/features/scout/scoutDiscoveryModel";
+} from "../client/src/features/scout/scoutDiscoveryModel.ts";
 
-const scoutPage = readFileSync("client/src/pages/explore-preview.tsx", "utf8");
+const scoutPage = readFileSync("client/src/pages/explore-preview-v2.tsx", "utf8");
 const normalizedScoutPage = scoutPage.replace(/\r\n/g, "\n");
 const scoutTypes = readFileSync("client/src/features/scout/scoutTypes.ts", "utf8");
 

@@ -5,7 +5,7 @@ import {
   buildTrackedAttributedPath,
   buildTrackedAttributedUrl,
   buildUniversalAttributedPath,
-} from "../server/shareTargetPolicy";
+} from "../server/shareTargetPolicy.ts";
 
 const TAG = "alpha-tag";
 
@@ -78,7 +78,7 @@ assert(
   "Compatibility routing must continue accepting /claim-truck/:refTag.",
 );
 assert(
-  appSource.includes('<Route path="/directory/:refTag" component={ScoutPage} />'),
+  appSource.includes('<Route path="/directory/:refTag" component={ScoutPageV2} />'),
   "Compatibility routing must continue accepting /directory/:refTag.",
 );
 assert(

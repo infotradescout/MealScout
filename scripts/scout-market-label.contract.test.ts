@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-const scoutPage = readFileSync("client/src/pages/explore-preview.tsx", "utf8");
+const scoutPage = readFileSync("client/src/pages/explore-preview-v2.tsx", "utf8");
 const navigation = readFileSync("client/src/components/navigation.tsx", "utf8");
 
 assert.ok(
@@ -16,7 +16,7 @@ assert.ok(
 
 assert.ok(
   scoutPage.includes('const scoutMarketEyebrow =') &&
-    scoutPage.includes('"Pensacola launch market"'),
+    scoutPage.includes('"Food around Pensacola"'),
   "Scout first fold must expose the active Pensacola launch market label.",
 );
 

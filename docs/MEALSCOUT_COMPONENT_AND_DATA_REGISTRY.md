@@ -4,13 +4,14 @@ Living registry for mapping visual targets to real app surfaces.
 
 ## Scout page
 - Likely files:
-- `client/src/pages/explore-preview.tsx`
+- `client/src/pages/explore-preview-v2.tsx` (canonical owner for `/scout`, `/directory`, and `/scout-v2`)
+- `client/src/pages/explore-preview.tsx` (dead/quarantined legacy surface; do not treat as canonical)
 - `client/src/pages/map.tsx` (related map surface patterns)
 - `client/src/components/navigation.tsx`
 - Likely APIs/data sources:
 - `/api/events/public`
 - `/api/map/locations`
-- role-aware local state and query filters inside `explore-preview.tsx`
+- role-aware local state and query filters inside `explore-preview-v2.tsx`
 - Role/lane notes:
 - consumer-first discovery surface; avoid exposing operator-only controls
 - Implementation cautions:
@@ -65,7 +66,7 @@ Living registry for mapping visual targets to real app surfaces.
 
 ## Recommendation system (consumer discovery ranking surfaces)
 - Likely files:
-- `client/src/pages/explore-preview.tsx`
+- `client/src/pages/explore-preview-v2.tsx`
 - related utility selectors inside that page
 - Likely APIs/data sources:
 - `/api/events/public`
@@ -78,7 +79,7 @@ Living registry for mapping visual targets to real app surfaces.
 
 ## Restaurant/truck cards
 - Likely files:
-- `client/src/pages/explore-preview.tsx`
+- `client/src/pages/explore-preview-v2.tsx`
 - `client/src/pages/parking-pass.tsx` (spot/location cards)
 - `client/src/components/deal-card.tsx` (deal-linked navigation)
 - Likely APIs/data sources:
@@ -101,7 +102,7 @@ Living registry for mapping visual targets to real app surfaces.
 
 ## Event cards
 - Likely files:
-- `client/src/pages/explore-preview.tsx`
+- `client/src/pages/explore-preview-v2.tsx`
 - `client/src/pages/event-detail.tsx`
 - `server/routes/eventRoutes.ts`
 - Likely APIs/data sources:
@@ -113,7 +114,7 @@ Living registry for mapping visual targets to real app surfaces.
 
 ## Map surfaces
 - Likely files:
-- `client/src/pages/explore-preview.tsx`
+- `client/src/pages/explore-preview-v2.tsx`
 - `client/src/pages/map.tsx`
 - `client/src/components/maps/GoogleMapPicker.tsx`
 - `server/routes/publicMapRoutes.ts`

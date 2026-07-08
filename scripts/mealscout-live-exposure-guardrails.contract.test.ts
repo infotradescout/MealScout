@@ -3,7 +3,8 @@ import { readFileSync } from "node:fs";
 const read = (path: string) => readFileSync(path, "utf8");
 
 const navigation = read("client/src/components/navigation.tsx");
-const scout = read("client/src/pages/explore-preview.tsx");
+const scout = read("client/src/pages/explore-preview-v2.tsx");
+const quarantinedScout = read("client/src/pages/explore-preview.tsx");
 const map = read("client/src/pages/map.tsx");
 const publicProfile = read("client/src/pages/public-profile.tsx");
 const app = read("client/src/App.tsx");
@@ -41,12 +42,18 @@ for (const redGuestLink of [
 }
 
 assert(
-  sixSlotNav.includes('lane === "guest"') && sixSlotNav.includes('path: "/claim-truck"'),
-  "Guest six-slot nav must replace the share slot with claim-truck containment.",
+  sixSlotNav.includes('lane === "guest"') && sixSlotNav.includes('path: "/claim-business"'),
+  "Guest six-slot nav must replace the share slot with claim-business containment.",
 );
 assert(
   navigation.includes('path: "/restaurant-signup?businessType=food_truck"'),
   "Guest nav must preserve the food-truck signup intake lane.",
+);
+
+assert(
+  quarantinedScout.includes("DEAD SURFACE") &&
+    quarantinedScout.includes("explore-preview-v2.tsx (ScoutPageV2)"),
+  "Legacy explore-preview.tsx must stay marked as quarantined/dead, not canonical.",
 );
 
 for (const blockedScoutExit of [

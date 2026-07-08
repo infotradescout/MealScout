@@ -135,18 +135,18 @@ Key token finding: the warm-vs-black inconsistency is **at the token level** (`-
    `<Route>` usages. **Implication:** any "make Scout look better" effort spent in
    `explore-preview.tsx` is wasted — it is not served. Do not delete in this lane; flag for a
    later cleanup lane.
-2. **STALE CONTRACT TESTS reference the old route wiring.** Several contract tests still assert
-   `<Route path="/scout" component={ScoutPage} />` / `/directory/:refTag component={ScoutPage}`:
+2. **STALE CONTRACT TESTS reference the old route wiring (RESOLVED 2026-07-08).** Several contract tests
+   previously asserted `<Route path="/scout" component={ScoutPage} />` /
+   `/directory/:refTag component={ScoutPage}`:
    - `scripts/mealscout-affiliate-referral-capture.contract.test.ts` (L89)
    - `scripts/mealscout-public-auth-route-boundary-audit.contract.test.ts` (L107)
    - `scripts/MEALSCOUT_REFERRAL_DOCTRINE.contract.test.ts` (L81)
    - `scripts/mealscout-referral-attribution-health.contract.test.ts` (L110)
-   Because live routing now uses `ScoutPageV2`, these assertions are drifted and would fail if run.
-   **Risk:** referral-attribution / auth-boundary guardrails may be silently red. Needs a
-   dedicated (non-UI) reconciliation decision by the operator — is `ScoutPageV2` the intended
-   canonical, and should the tests be updated to match? **Not changed here.**
-3. **STALE DOCS:** `MEALSCOUT_ROUTE_MAP.md` (L274) and `MEALSCOUT_C7_OWNER_DASHBOARD_CONTEXT.md`
-   (L25273) still state `/scout` routes to `ScoutPage`. Documentation drift only; update in a docs lane.
+   Because live routing now uses `ScoutPageV2`, these assertions were drifted. They now assert
+   `ScoutPageV2` route ownership while preserving the same referral/auth route coverage.
+3. **STALE DOCS (RESOLVED 2026-07-08):** `MEALSCOUT_ROUTE_MAP.md` and
+   `MEALSCOUT_C7_OWNER_DASHBOARD_CONTEXT.md` now state `/scout` routes to `ScoutPageV2`
+   (`client/src/pages/explore-preview-v2.tsx`).
 4. **DUPLICATE DISCOVERY ALIASES:** `/scout`, `/directory`, `/scout-v2` all render the same
    `ScoutPageV2`. Not harmful, but three public aliases of one surface can dilute canonical URLs;
    revisit for SEO canonicalization later (not a UI-rebuild blocker).

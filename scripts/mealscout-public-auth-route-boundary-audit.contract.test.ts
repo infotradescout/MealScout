@@ -104,7 +104,7 @@ requireMatch(
 [
   "const publicRoutePrefixes",
   "shouldUseGuestRoutes",
-  '<Route path="/scout" component={ScoutPage} />',
+  '<Route path="/scout" component={ScoutPageV2} />',
   'path="/p/:profileType/:profileId"',
   '<Route path="/parking-pass" component={ParkingPassPage} />',
   'path="/restaurant-owner-dashboard"',

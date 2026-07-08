@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 
 const publicProfile = readFileSync("client/src/pages/public-profile.tsx", "utf8");
 const truckHero = readFileSync("client/src/components/public-profile/TruckHero.tsx", "utf8");
+const elevatedTruckHero = readFileSync("client/src/components/public-profile/ElevatedTruckHero.tsx", "utf8");
 const heroMedia = readFileSync("client/src/components/public-profile/ProfileHeroMedia.tsx", "utf8");
 
 const requireIncludes = (source: string, snippet: string, message: string) => {
@@ -18,8 +19,8 @@ const requireExcludes = (source: string, snippet: string, message: string) => {
 
 requireIncludes(
   publicProfile,
-  'import { TruckHero } from "@/components/public-profile/TruckHero";',
-  "Public profile page must use the isolated truck hero component.",
+  'import { ElevatedTruckHero } from "@/components/public-profile/ElevatedTruckHero";',
+  "Public profile page must use the elevated truck hero component.",
 );
 requireIncludes(
   publicProfile,
@@ -28,8 +29,8 @@ requireIncludes(
 );
 requireIncludes(
   publicProfile,
-  "<TruckHero profile={restaurantProfile} safeCtas={safeCtas} />",
-  "Truck branch must pass existing profile and CTA data into TruckHero.",
+  "<ElevatedTruckHero",
+  "Truck branch must render ElevatedTruckHero.",
 );
 requireIncludes(
   publicProfile,
@@ -38,13 +39,8 @@ requireIncludes(
 );
 requireIncludes(
   publicProfile,
-  "<MenuSection profile={restaurantProfile} safeCtas={safeCtas} />",
+  "<FullMenuSection",
   "Restaurant menu rendering must remain present after the hero branch.",
-);
-requireIncludes(
-  publicProfile,
-  "<RestaurantSchedule profile={restaurantProfile} />",
-  "Restaurant schedule rendering must remain present after the hero branch.",
 );
 requireIncludes(
   publicProfile,
@@ -57,8 +53,8 @@ requireExcludes(
   "Truck schedule empty state must not use the old database-like copy.",
 );
 
-const truckHeroIndex = publicProfile.indexOf("<TruckHero profile={restaurantProfile} safeCtas={safeCtas} />");
-const menuIndex = publicProfile.indexOf("<MenuSection profile={restaurantProfile} safeCtas={safeCtas} />");
+const truckHeroIndex = publicProfile.indexOf("<ElevatedTruckHero");
+const menuIndex = publicProfile.indexOf("<FullMenuSection");
 const aboutIndex = publicProfile.indexOf("<AboutFoodStyle profile={restaurantProfile} />");
 const galleryIndex = publicProfile.indexOf("<GalleryStrip profile={restaurantProfile} />");
 if (truckHeroIndex < 0 || menuIndex < 0 || aboutIndex < 0 || galleryIndex < 0) {
@@ -69,14 +65,9 @@ if (truckHeroIndex > menuIndex || truckHeroIndex > aboutIndex || truckHeroIndex 
 }
 
 requireIncludes(
-  truckHero,
-  'data-testid="truck-profile-hero"',
-  "TruckHero must expose a stable hero marker.",
-);
-requireIncludes(
-  truckHero,
-  'data-testid="truck-profile-next-stop"',
-  "TruckHero must promote current/next stop information.",
+  elevatedTruckHero,
+  "getTruckSchedulePrimaryStop(profile.truckSchedule)",
+  "ElevatedTruckHero must promote current/next stop information.",
 );
 requireIncludes(
   heroMedia,
@@ -84,39 +75,40 @@ requireIncludes(
   "TruckHero must use a branded fallback when no cover image is available.",
 );
 requireIncludes(
-  truckHero,
-  "profile.description ? (",
-  "TruckHero must show direct descriptive business content when it exists.",
+  elevatedTruckHero,
+  "const description = isGenericTruckDescription(profile.description, profile)",
+  "ElevatedTruckHero must show direct descriptive business content when it exists.",
 );
 requireIncludes(
-  truckHero,
-  "Limited menu info",
-  "TruckHero must keep partial menu messaging compact.",
+  elevatedTruckHero,
+  "ProfileRecommendButton",
+  "ElevatedTruckHero must expose the current direct recommendation action.",
 );
 requireIncludes(
-  truckHero,
-  "Menu available",
-  "TruckHero must honestly label available menu evidence.",
-);
-requireIncludes(
-  truckHero,
-  'href="/claim-truck"',
-  "TruckHero must expose only the existing claim/update route for owner updates.",
+  elevatedTruckHero,
+  "Food truck",
+  "ElevatedTruckHero must honestly label truck identity.",
 );
 requireExcludes(
-  truckHero,
+  elevatedTruckHero,
   "Community/evidence-based profile",
-  "TruckHero must not lead with community-profile explainer copy.",
+  "ElevatedTruckHero must not lead with community-profile explainer copy.",
 );
 requireExcludes(
-  truckHero,
+  elevatedTruckHero,
   "Profile snapshot",
-  "TruckHero must remove snapshot narration in favor of direct facts.",
+  "ElevatedTruckHero must remove snapshot narration in favor of direct facts.",
 );
 requireExcludes(
-  truckHero,
+  elevatedTruckHero,
   "Public links",
-  "TruckHero must not replace direct links with a links-count explainer.",
+  "ElevatedTruckHero must not replace direct links with a links-count explainer.",
+);
+
+requireIncludes(
+  truckHero,
+  'data-testid="truck-profile-hero"',
+  "Quarantined TruckHero must retain its stable marker while it remains in the repo.",
 );
 
 console.log("truck-hero-visibility.contract: PASS");

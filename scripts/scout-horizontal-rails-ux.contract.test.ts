@@ -5,15 +5,16 @@ import {
   assignScoutBusinessCardsBySection,
   getScoutBusinessKey,
   normalizeScoutBusinessKind,
-} from "../client/src/features/scout/scoutDiscoveryModel";
+} from "../client/src/features/scout/scoutDiscoveryModel.ts";
 
-const scoutPage = readFileSync("client/src/pages/explore-preview.tsx", "utf8");
+const scoutPage = readFileSync("client/src/pages/explore-preview-v2.tsx", "utf8");
 const searchDock = readFileSync("client/src/components/scout/ScoutSearchDock.tsx", "utf8");
 
 const expectedRowIds = [
   "live_trucks_now",
   "food_trucks_today",
   "open_now_near_you",
+  "host_locations",
   "saved_favorites",
   "following",
   "order_again",
@@ -108,10 +109,11 @@ for (const snippet of [
   "highPriorityDecisionItems.length > 0",
   "firstScreenSuppressedBusinessKey",
   "suppressFirstScreenBusiness",
-  'placement="inline"',
+  'placement="fixed"',
   "overflow-x-hidden",
   'data-scout-mobile-thirds-map="true"',
-  'const compactMapHeight = "clamp(250px, 32dvh, 310px)";',
+  "const compactMapHeight = isThinScoutViewport",
+  '"clamp(250px, 32dvh, 310px)"',
   "scoutSearchMode",
   "scoutSearchIntent",
   "restaurantSearchPriority",
@@ -132,14 +134,14 @@ assert.ok(
 );
 assert.ok(
   scoutPage.includes(
-    "<ScoutFirstScreenDecisionStack items={firstScreenDecisionItems} />\n        {renderSearchDock?.()}\n        {scoutRows.map",
+    "<ScoutFirstScreenDecisionStack\n          items={firstScreenDecisionItems}\n          thinMarket={isLowActivityLane && firstScreenDecisionItems.length <= 1}\n        />\n        {scoutRows.map",
   ),
-  "Scout default flow must render compact decision stack, then inline search, then full rails.",
+  "Scout default flow must render compact decision stack, then full rails.",
 );
 assert.ok(
-  scoutPage.includes(
-    "highPriorityDecisionItems.length > 0\n        ? []\n        : nearbyRestaurantCards.map",
-  ),
+  scoutPage.includes("const nearbyOnlyDecisionItems: ScoutImmediateDecisionItem[] =") &&
+    scoutPage.includes("highPriorityDecisionItems.length > 0") &&
+    scoutPage.includes(": nearbyRestaurantCards.map"),
   "Nearby Restaurants may only seed the immediate stack when stronger real signals are empty.",
 );
 
