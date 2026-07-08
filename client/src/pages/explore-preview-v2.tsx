@@ -2690,6 +2690,19 @@ export default function ExplorePreview() {
   }, [closeScoutSearch, location]);
 
   useEffect(() => {
+    const openSearchFromNav = () => {
+      setScoutSearchMode(true);
+    };
+    window.addEventListener("mealscout:open-scout-search", openSearchFromNav);
+    return () => {
+      window.removeEventListener(
+        "mealscout:open-scout-search",
+        openSearchFromNav,
+      );
+    };
+  }, []);
+
+  useEffect(() => {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
     const requestedPreview = (
@@ -5223,30 +5236,26 @@ export default function ExplorePreview() {
               moreRailSubtitle={moreRailSubtitle}
               scoutSearchMode={scoutSearchMode}
               scoutSearchIntent={scoutSearchIntent}
-              renderSearchDock={() => (
-                <ScoutSearchDock
-                  placement="inline"
-                  searchMode={scoutSearchMode}
-                  query={scoutSearchQuery}
-                  activeFilter={scoutSearchFilter}
-                  resultSummary={
-                    scoutSearchMode
-                      ? `${sceneFilteredMapMarkers.filter((marker) => marker.kind !== "user").length} matches nearby`
-                      : formatScoutResultSummary(localActivityCount)
-                  }
-                  onOpen={() => setScoutSearchMode(true)}
-                  onClose={closeScoutSearch}
-                  onQueryChange={setScoutSearchQuery}
-                  onFilterChange={(filter) => {
-                    setScoutSearchMode(true);
-                    setScoutSearchFilter(filter);
-                  }}
-                />
-              )}
               onOpenResultsSheet={setResultsSheet}
             />
           </ActiveScenePanel>
         )}
+        {scoutSearchMode ? (
+          <ScoutSearchDock
+            placement="fixed"
+            searchMode={scoutSearchMode}
+            query={scoutSearchQuery}
+            activeFilter={scoutSearchFilter}
+            resultSummary={`${sceneFilteredMapMarkers.filter((marker) => marker.kind !== "user").length} matches nearby`}
+            onOpen={() => setScoutSearchMode(true)}
+            onClose={closeScoutSearch}
+            onQueryChange={setScoutSearchQuery}
+            onFilterChange={(filter) => {
+              setScoutSearchMode(true);
+              setScoutSearchFilter(filter);
+            }}
+          />
+        ) : null}
         {resultsSheet ? (
           <ScoutResultsSheet
             data={resultsSheet}
@@ -6283,7 +6292,6 @@ function ActiveSceneContent({
   moreRailSubtitle,
   scoutSearchMode,
   scoutSearchIntent,
-  renderSearchDock,
   onOpenResultsSheet,
 }: {
   laneId: ScoutSceneLaneId;
@@ -6333,7 +6341,6 @@ function ActiveSceneContent({
   moreRailSubtitle: string;
   scoutSearchMode: boolean;
   scoutSearchIntent: ScoutSearchIntent;
-  renderSearchDock?: () => ReactNode;
   onOpenResultsSheet?: (data: ScoutResultsSheetData) => void;
 }) {
   const isLowActivityLane = scoutActivityMode === "low_activity";
@@ -6791,7 +6798,6 @@ function ActiveSceneContent({
               isLowActivityLane && firstScreenDecisionItems.length <= 1
             }
           />
-          {renderSearchDock?.()}
           <ScoutSceneEmptyState laneId="for_you" />
         </>
       );
@@ -7063,7 +7069,6 @@ function ActiveSceneContent({
           items={firstScreenDecisionItems}
           thinMarket={isLowActivityLane && firstScreenDecisionItems.length <= 1}
         />
-        {renderSearchDock?.()}
         {scoutRows.map((row) => (
           <ScoutHorizontalCategoryRail
             key={row.id}

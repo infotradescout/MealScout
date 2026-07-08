@@ -23,6 +23,7 @@ import {
   X,
   Compass,
   Heart,
+  Search,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -346,14 +347,25 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
   };
 
   const basePrimary = primarySlotsByLane[lane];
+  const openScoutSearch = () => {
+    if (typeof window === "undefined") return;
+    window.dispatchEvent(new CustomEvent("mealscout:open-scout-search"));
+  };
   const sixSlotNav: NavItem[] = [
     { path: "/scout", icon: Compass, label: "Scout" },
+    ...(isScoutRoute
+      ? [{ icon: Search, label: "Search", onClick: openScoutSearch }]
+      : []),
     basePrimary[0],
     basePrimary[1],
     basePrimary[2],
-    lane === "guest"
-      ? { path: "/claim-business", icon: Truck, label: "Claim" }
-      : { path: "/share-hub", icon: Share2, label: "Share" },
+    ...(isScoutRoute
+      ? []
+      : [
+          lane === "guest"
+            ? { path: "/claim-business", icon: Truck, label: "Claim" }
+            : { path: "/share-hub", icon: Share2, label: "Share" },
+        ]),
     {
       icon: MoreHorizontal,
       label: "More",
@@ -572,10 +584,10 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
                   <button
                     type="button"
                     aria-label={item.label}
-                    aria-expanded={moreOpen}
+                    aria-expanded={item.label === "More" ? moreOpen : undefined}
                     onClick={item.onClick}
                     className={`inline-flex h-11 items-center gap-2 rounded-xl px-3 text-sm font-bold transition-all ${
-                      moreOpen
+                      item.label === "More" && moreOpen
                         ? "bg-primary text-[#1a0d08] shadow-[0_0_20px_rgba(255,90,47,0.4)]"
                         : "text-white/60 hover:text-white hover:bg-white/5"
                     }`}
@@ -607,7 +619,11 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
           >
             {sixSlotNav.map((item, index) => {
               const isPrimary = index === 0;
-              const active = item.path ? isActive(item.path) : moreOpen;
+              const active = item.path
+                ? isActive(item.path)
+                : item.label === "More"
+                  ? moreOpen
+                  : false;
 
               if (item.path) {
                 return (
@@ -659,10 +675,10 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
                   <button
                     type="button"
                     aria-label={item.label}
-                    aria-expanded={moreOpen}
+                    aria-expanded={item.label === "More" ? moreOpen : undefined}
                     onClick={item.onClick}
                     className={`flex flex-col items-center justify-end gap-0.5 flex-1 min-w-0 h-full pb-1 transition-colors ${
-                      moreOpen
+                      active
                         ? "text-orange-300"
                         : "text-white/70 hover:text-white"
                     }`}
