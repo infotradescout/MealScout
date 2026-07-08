@@ -1259,13 +1259,13 @@ export function registerRestaurantCoreRoutes(
           );
         }
 
-        if (comment) {
+        if (comment || proofPhoto?.cloudinaryUrl) {
           const photoLine = proofPhoto?.cloudinaryUrl
             ? `Photo proof: ${proofPhoto.cloudinaryUrl}`
             : "";
-          const reviewComment = [comment, photoLine]
-            .filter(Boolean)
-            .join("\n\n");
+          const reviewComment =
+            [comment, photoLine].filter(Boolean).join("\n\n") ||
+            "Photo proof added on MealScout.";
           await storage.createReview({
             restaurantId,
             userId,
