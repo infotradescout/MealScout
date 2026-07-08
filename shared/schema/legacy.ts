@@ -1316,6 +1316,12 @@ export const restaurantUserRecommendations = pgTable(
     userId: varchar("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
+    // Structured quick-review signals (1-100 each) - not a public star
+    // rating. Nullable: most recommends are a bare tap with no context.
+    foodScore: integer("food_score"),
+    valueScore: integer("value_score"),
+    speedScore: integer("speed_score"),
+    vibeScore: integer("vibe_score"),
     recommendedAt: timestamp("recommended_at").defaultNow(),
     createdAt: timestamp("created_at").defaultNow(),
   },

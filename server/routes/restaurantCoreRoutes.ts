@@ -1154,17 +1154,6 @@ export function registerRestaurantCoreRoutes(
             retryAfterSeconds: actionGate.retryAfterSeconds,
           });
         }
-        const averageScore =
-          scoreValues.length > 0
-            ? Math.round(
-                scoreValues.reduce((sum, value) => sum + value, 0) /
-                  scoreValues.length,
-              )
-            : null;
-        const rating = averageScore
-          ? Math.max(1, Math.min(5, Math.round(averageScore / 20)))
-          : null;
-
         const recommendationData =
           insertRestaurantUserRecommendationSchema.parse({
             restaurantId,
@@ -1226,24 +1215,20 @@ export function registerRestaurantCoreRoutes(
           proofPhoto = createdUpload;
         }
 
-        if (hasContext) {
-          const scoreLines =
-            scoreValues.length > 0
-              ? [
-                  scores.food ? `Food: ${scores.food}/100` : null,
-                  scores.value ? `Value: ${scores.value}/100` : null,
-                  scores.speed ? `Speed: ${scores.speed}/100` : null,
-                  scores.vibe ? `Vibe: ${scores.vibe}/100` : null,
-                ]
-                  .filter(Boolean)
-                  .join("\n")
-              : "";
+        if (scoreValues.length > 0 && recommendation?.id) {
+          await storage.setRestaurantUserRecommendationQuickReview(
+            recommendation.id,
+            scores,
+          );
+        }
+
+        if (comment) {
           const photoLine = proofPhoto?.cloudinaryUrl
             ? `Photo proof: ${proofPhoto.cloudinaryUrl}`
             : "";
-          const reviewComment =
-            [comment, scoreLines, photoLine].filter(Boolean).join("\n\n") ||
-            "Recommended on MealScout.";
+          const reviewComment = [comment, photoLine]
+            .filter(Boolean)
+            .join("\n\n");
           await storage.createReview({
             restaurantId,
             userId,
@@ -1290,6 +1275,7 @@ export function registerRestaurantCoreRoutes(
           success: true,
           alreadyExists: !createdRecommendation,
           contextSaved: hasContext,
+          quickReview: scoreValues.length > 0 ? scores : null,
           proofPhoto,
         });
       } catch (error: any) {
