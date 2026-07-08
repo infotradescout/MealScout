@@ -2690,19 +2690,6 @@ export default function ExplorePreview() {
   }, [closeScoutSearch, location]);
 
   useEffect(() => {
-    const openSearchFromNav = () => {
-      setScoutSearchMode(true);
-    };
-    window.addEventListener("mealscout:open-scout-search", openSearchFromNav);
-    return () => {
-      window.removeEventListener(
-        "mealscout:open-scout-search",
-        openSearchFromNav,
-      );
-    };
-  }, []);
-
-  useEffect(() => {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
     const requestedPreview = (
@@ -5240,22 +5227,24 @@ export default function ExplorePreview() {
             />
           </ActiveScenePanel>
         )}
-        {scoutSearchMode ? (
-          <ScoutSearchDock
-            placement="fixed"
-            searchMode={scoutSearchMode}
-            query={scoutSearchQuery}
-            activeFilter={scoutSearchFilter}
-            resultSummary={`${sceneFilteredMapMarkers.filter((marker) => marker.kind !== "user").length} matches nearby`}
-            onOpen={() => setScoutSearchMode(true)}
-            onClose={closeScoutSearch}
-            onQueryChange={setScoutSearchQuery}
-            onFilterChange={(filter) => {
-              setScoutSearchMode(true);
-              setScoutSearchFilter(filter);
-            }}
-          />
-        ) : null}
+        <ScoutSearchDock
+          placement="fixed"
+          searchMode={scoutSearchMode}
+          query={scoutSearchQuery}
+          activeFilter={scoutSearchFilter}
+          resultSummary={
+            scoutSearchMode
+              ? `${sceneFilteredMapMarkers.filter((marker) => marker.kind !== "user").length} matches nearby`
+              : formatScoutResultSummary(localActivityCount)
+          }
+          onOpen={() => setScoutSearchMode(true)}
+          onClose={closeScoutSearch}
+          onQueryChange={setScoutSearchQuery}
+          onFilterChange={(filter) => {
+            setScoutSearchMode(true);
+            setScoutSearchFilter(filter);
+          }}
+        />
         {resultsSheet ? (
           <ScoutResultsSheet
             data={resultsSheet}

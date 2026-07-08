@@ -23,7 +23,6 @@ import {
   X,
   Compass,
   Heart,
-  Search,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -347,25 +346,14 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
   };
 
   const basePrimary = primarySlotsByLane[lane];
-  const openScoutSearch = () => {
-    if (typeof window === "undefined") return;
-    window.dispatchEvent(new CustomEvent("mealscout:open-scout-search"));
-  };
   const sixSlotNav: NavItem[] = [
     { path: "/scout", icon: Compass, label: "Scout" },
-    ...(isScoutRoute
-      ? [{ icon: Search, label: "Search", onClick: openScoutSearch }]
-      : []),
     basePrimary[0],
     basePrimary[1],
     basePrimary[2],
-    ...(isScoutRoute
-      ? []
-      : [
-          lane === "guest"
-            ? { path: "/claim-business", icon: Truck, label: "Claim" }
-            : { path: "/share-hub", icon: Share2, label: "Share" },
-        ]),
+    lane === "guest"
+      ? { path: "/claim-business", icon: Truck, label: "Claim" }
+      : { path: "/share-hub", icon: Share2, label: "Share" },
     {
       icon: MoreHorizontal,
       label: "More",
