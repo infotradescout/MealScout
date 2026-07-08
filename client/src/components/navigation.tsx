@@ -537,7 +537,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
         data-nav-root={scope}
         className={`hidden lg:block fixed top-6 z-50 ${desktopNavPositionClass}`}
       >
-        <div className="rounded-2xl border border-white/5 bg-[#120805]/40 backdrop-blur-xl shadow-[0_8px_32px_rgba(0,0,0,0.4)] p-2">
+        <div className="rounded-2xl border border-white/5 bg-[var(--bg-popup)]/40 backdrop-blur-xl shadow-[0_8px_32px_rgba(0,0,0,0.4)] p-2">
           <div className="flex items-center gap-1">
             {sixSlotNav.map((item, idx) =>
               item.path ? (
@@ -599,7 +599,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
       >
         <div className="w-full px-0">
           <div
-            className="relative flex items-end justify-between gap-1 px-1.5 rounded-none border-t border-orange-500/20 bg-[#0b0b0b] pb-[env(safe-area-inset-bottom)]"
+            className="relative flex items-end justify-between gap-1 px-1.5 rounded-none border-t border-orange-500/20 bg-[var(--bg-popup)] pb-[env(safe-area-inset-bottom)]"
             style={{
               height: "var(--scout-nav-height, 58px)",
               boxShadow: "0 -8px 22px rgba(0,0,0,0.42)",
@@ -634,7 +634,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
                     >
                       {isPrimary ? (
                         <span
-                          className="flex h-8.5 w-8.5 items-center justify-center rounded-full bg-[#120805]/70 ring-[1.5px] ring-orange-500/90 -mt-3"
+                          className="flex h-8.5 w-8.5 items-center justify-center rounded-full bg-[var(--bg-popup)]/70 ring-[1.5px] ring-orange-500/90 -mt-3"
                           style={{
                             boxShadow:
                               "0 0 0 2px rgba(255,90,47,0.13), 0 0 12px rgba(255,90,47,0.26)",
@@ -691,12 +691,12 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
           aria-label="More options"
         >
           <div
-            className="absolute inset-0 bg-[#120805]/60 backdrop-blur-sm"
+            className="absolute inset-0 bg-[var(--bg-popup)]/60 backdrop-blur-sm"
             onClick={() => setMoreOpen(false)}
           />
           <div
             ref={sheetRef}
-            className="absolute left-0 right-0 bottom-[calc(env(safe-area-inset-bottom)+5.5rem)] mx-4 rounded-3xl bg-[#120805]/80 backdrop-blur-2xl border border-white/10 shadow-[0_-16px_48px_rgba(0,0,0,0.7)] overflow-hidden"
+            className="absolute left-0 right-0 bottom-[calc(env(safe-area-inset-bottom)+5.5rem)] mx-4 rounded-3xl bg-[var(--bg-popup)]/80 backdrop-blur-2xl border border-white/10 shadow-[0_-16px_48px_rgba(0,0,0,0.7)] overflow-hidden"
           >
             <div className="flex items-center justify-between px-5 pt-4 pb-2">
               <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-white/40">
