@@ -4732,11 +4732,11 @@ export default function ExplorePreview() {
     ? "w-[184px] sm:w-[206px]"
     : "w-[204px] sm:w-[228px]";
   const standardCardWidth = isHighActivity
-    ? "w-[194px] sm:w-[214px]"
-    : "w-[206px] sm:w-[228px]";
+    ? "w-[172px] sm:w-[190px]"
+    : "w-[184px] sm:w-[204px]";
   const featureCardWidth = isHighActivity
-    ? "w-[218px] sm:w-[238px]"
-    : "w-[238px] sm:w-[268px]";
+    ? "w-[190px] sm:w-[212px]"
+    : "w-[204px] sm:w-[226px]";
   const restaurantsRailTitle = isMediumActivity
     ? "Open Near You"
     : nearbyRestaurantsTitle;
@@ -8583,9 +8583,6 @@ function LocalMenuItemCard({
     Number.isFinite(item.distanceMiles)
       ? `${item.distanceMiles.toFixed(item.distanceMiles < 10 ? 1 : 0)} mi`
       : null;
-  const tags = Array.isArray(item.dietaryTags)
-    ? item.dietaryTags.filter(Boolean).slice(0, 2)
-    : [];
   const userInterestCuisines = useFavoriteCuisineInterests(currentUserId);
   const displayCategory = pickDisplayCategory(
     item.cuisineType,
@@ -8763,74 +8760,56 @@ function LocalMenuItemCard({
           discoveryReasons: item.discoveryReasons,
         })
       }
-      className="block overflow-hidden rounded-[0.85rem] bg-[#2c1609]/92 p-2 ring-1 ring-orange-200/30 transition duration-200 hover:-translate-y-0.5 hover:ring-orange-200/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
-      style={{ boxShadow: "0 14px 34px rgba(0,0,0,0.48)" }}
+      className="block overflow-hidden rounded-xl bg-[#170d08]/92 ring-1 ring-orange-100/18 transition duration-200 hover:-translate-y-0.5 hover:ring-orange-200/36 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
+      style={{ boxShadow: "0 12px 28px rgba(0,0,0,0.38)" }}
       aria-label={`Open ${item.name} from ${item.restaurantName || "local menu"}`}
       data-testid="scout-local-menu-item-card"
     >
-      <div className="relative rounded-[0.7rem] bg-[#180b05]/76 p-3 ring-1 ring-orange-200/10">
-        <div className="relative mx-auto aspect-square w-[82%] rounded-full bg-orange-200/10 p-2 ring-1 ring-orange-100/20">
-          <div className="relative h-full w-full overflow-hidden rounded-full bg-[#120805]/60 ring-1 ring-black/30">
-            <ScoutCardMedia
-              imageUrl={
-                item.imageUrl ||
-                item.restaurantLogoUrl ||
-                item.restaurantCoverImageUrl ||
-                null
-              }
-              fallbackIcon={
-                <Utensils
-                  className="h-5 w-5 text-white/80"
-                  aria-hidden="true"
-                />
-              }
-              fallbackTestId="scout-local-menu-item-card-image-fallback"
-              imageClassName="absolute inset-0 h-full w-full object-cover"
-              fallbackClassName="bg-[linear-gradient(150deg,#fb923c_0%,#ea580c_45%,#9a3412_100%)]"
-              categoryPhoto={getDishCategoryPhoto(item.name, item.description)}
-            />
-          </div>
-        </div>
-        <span className="absolute left-2.5 top-2.5 inline-flex items-center gap-1 rounded-md bg-orange-300 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-[#1a0d08]">
+      <div className="relative aspect-[4/3] bg-[#120805]/70">
+        <ScoutCardMedia
+          imageUrl={
+            item.imageUrl ||
+            item.restaurantLogoUrl ||
+            item.restaurantCoverImageUrl ||
+            null
+          }
+          fallbackIcon={
+            <Utensils className="h-5 w-5 text-white/80" aria-hidden="true" />
+          }
+          fallbackTestId="scout-local-menu-item-card-image-fallback"
+          imageClassName="absolute inset-0 h-full w-full object-cover"
+          fallbackClassName="bg-[linear-gradient(150deg,#fb923c_0%,#ea580c_45%,#9a3412_100%)]"
+          categoryPhoto={getDishCategoryPhoto(item.name, item.description)}
+        />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/8 via-transparent to-black/58" />
+        <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-md bg-orange-300 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-[#1a0d08]">
           <Utensils className="h-3 w-3" aria-hidden="true" />
           Dish
         </span>
         {price && (
-          <span className="absolute right-2.5 top-2.5 rounded-md bg-[#120805]/86 px-2 py-1 text-[11px] font-black text-orange-100 ring-1 ring-orange-300/30">
+          <span className="absolute right-2 top-2 rounded-md bg-[#120805]/86 px-2 py-0.5 text-[11px] font-black text-orange-100 ring-1 ring-orange-300/24">
             {price}
           </span>
         )}
       </div>
-      <div className="border-t border-dashed border-orange-100/20 px-2.5 pb-1 pt-3">
-        <p className="line-clamp-2 text-sm font-bold leading-snug text-white">
+      <div className="px-3 pb-3 pt-2.5">
+        <p className="line-clamp-2 min-h-[2.25rem] text-sm font-bold leading-tight text-white">
           {item.name}
         </p>
-        <p className="mt-1 truncate text-xs font-semibold text-orange-200/85">
+        <p className="mt-1 truncate text-xs font-semibold text-orange-200/82">
           {item.restaurantName || "Local spot"}
         </p>
-        <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-white/55">
+        <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-white/48">
           {displayCategory && <span>{displayCategory}</span>}
           {distLabel && <span>{distLabel}</span>}
         </div>
         {item.description && (
-          <p className="mt-2 line-clamp-2 text-xs leading-snug text-white/58">
+          <p className="mt-2 line-clamp-2 text-xs leading-snug text-white/62">
             {item.description}
           </p>
         )}
-        {tags.length > 0 && (
-          <div className="mt-2 flex flex-wrap gap-1">
-            {tags.map((tag) => (
-              <span
-                key={tag}
-                className="rounded-full bg-white/8 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-white/65"
-              >
-                {tag}
-              </span>
-            ))}
-          </div>
-        )}
         <OwnerOperationalActions actions={actions} />
-        <div className="mt-2 border-t border-white/8 pt-2">
+        <div className="mt-2">
           <button
             type="button"
             onClick={handleRecommendClick}
@@ -8904,10 +8883,7 @@ function LocalMenuItemCard({
   );
 }
 
-// "Nearby picks" dish card - visual-only variant of LocalMenuItemCard for the
-// new top-of-page section. Reuses the exact same recommend/favorite Dialog
-// interaction logic verbatim; only the markup differs (overlay price/CVS
-// score/heart on the photo instead of a below-image text link).
+// "Nearby picks" dish card - compact visual variant for the top food shelf.
 function NearbyPickCard({
   item,
   position,
@@ -9090,44 +9066,38 @@ function NearbyPickCard({
           discoveryReasons: item.discoveryReasons,
         })
       }
-      className="block overflow-hidden rounded-[0.85rem] bg-[#2c1609]/92 p-2 ring-1 ring-orange-200/30 transition duration-200 hover:-translate-y-0.5 hover:ring-orange-200/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
+      className="block overflow-hidden rounded-xl bg-[#170d08]/92 ring-1 ring-orange-100/18 transition duration-200 hover:-translate-y-0.5 hover:ring-orange-200/36 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
       aria-label={`Open ${item.name} from ${item.restaurantName || "local menu"}`}
       data-testid="scout-v2-nearby-pick-card"
     >
-      <div className="relative rounded-[0.7rem] bg-[#180b05]/76 p-3 ring-1 ring-orange-200/10">
-        <div className="relative mx-auto aspect-square w-[82%] rounded-full bg-orange-200/10 p-2 ring-1 ring-orange-100/20">
-          <div className="relative h-full w-full overflow-hidden rounded-full bg-[#120805]/60 ring-1 ring-black/30">
-            <ScoutCardMedia
-              imageUrl={
-                item.imageUrl ||
-                item.restaurantLogoUrl ||
-                item.restaurantCoverImageUrl ||
-                null
-              }
-              fallbackIcon={
-                <Utensils
-                  className="h-6 w-6 text-orange-200/80"
-                  aria-hidden="true"
-                />
-              }
-              fallbackTestId="scout-v2-nearby-pick-card-image-fallback"
-              imageClassName="absolute inset-0 h-full w-full object-cover"
-              fallbackClassName="!bg-[linear-gradient(150deg,#3a2013_0%,#241209_60%,#1a0f0a_100%)]"
-              categoryPhoto={getDishCategoryPhoto(item.name, item.description)}
-            />
-          </div>
-        </div>
-        <span className="absolute left-2.5 top-2.5 inline-flex items-center gap-1 rounded-md bg-orange-300 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-[#1a0d08]">
+      <div className="relative aspect-[4/3] bg-[#120805]/70">
+        <ScoutCardMedia
+          imageUrl={
+            item.imageUrl ||
+            item.restaurantLogoUrl ||
+            item.restaurantCoverImageUrl ||
+            null
+          }
+          fallbackIcon={
+            <Utensils className="h-5 w-5 text-orange-200/80" aria-hidden="true" />
+          }
+          fallbackTestId="scout-v2-nearby-pick-card-image-fallback"
+          imageClassName="absolute inset-0 h-full w-full object-cover"
+          fallbackClassName="!bg-[linear-gradient(150deg,#3a2013_0%,#241209_60%,#1a0f0a_100%)]"
+          categoryPhoto={getDishCategoryPhoto(item.name, item.description)}
+        />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/8 via-transparent to-black/58" />
+        <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-md bg-orange-300 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-[#1a0d08]">
           <Utensils className="h-3 w-3" aria-hidden="true" />
           Dish
         </span>
         {price && (
-          <span className="absolute right-2.5 top-2.5 rounded-md bg-[#120805]/86 px-2 py-1 text-[11px] font-black text-orange-100 ring-1 ring-orange-300/30">
+          <span className="absolute right-2 top-2 rounded-md bg-[#120805]/86 px-2 py-0.5 text-[11px] font-black text-orange-100 ring-1 ring-orange-300/24">
             {price}
           </span>
         )}
         {typeof item.cvsScore === "number" && (
-          <span className="absolute bottom-2.5 left-2.5 inline-flex items-center gap-1 rounded-md bg-orange-400 px-2 py-1 text-[11px] font-black text-[#1a0d08]">
+          <span className="absolute bottom-2 left-2 inline-flex items-center gap-1 rounded-md bg-orange-400 px-2 py-0.5 text-[11px] font-black text-[#1a0d08]">
             <Flame className="h-3 w-3" aria-hidden="true" />
             {item.cvsScore}
           </span>
@@ -9141,7 +9111,7 @@ function NearbyPickCard({
             hasRecommended ? "Recommended - tap for more" : "Recommend"
           }
           title={hasRecommended ? "Recommended - tap for more" : "Recommend"}
-          className={`absolute bottom-2.5 right-2.5 inline-flex h-7 w-7 items-center justify-center rounded-full backdrop-blur-sm transition ${
+          className={`absolute bottom-2 right-2 inline-flex h-7 w-7 items-center justify-center rounded-full backdrop-blur-sm transition ${
             hasRecommended
               ? "bg-orange-300 text-[#1a0d08]"
               : "bg-black/35 text-white ring-1 ring-white/40 hover:bg-black/50"
@@ -9153,16 +9123,16 @@ function NearbyPickCard({
           />
         </button>
       </div>
-      <div className="border-t border-dashed border-orange-100/20 px-2.5 pb-1 pt-3">
-        <p className="line-clamp-1 text-sm font-black leading-snug text-white">
+      <div className="px-3 pb-3 pt-2.5">
+        <p className="line-clamp-2 min-h-[2.25rem] text-sm font-black leading-tight text-white">
           {item.name}
         </p>
-        <p className="mt-0.5 truncate text-xs font-semibold text-orange-200/85">
+        <p className="mt-1 truncate text-xs font-semibold text-orange-200/82">
           {item.restaurantName || "Local spot"}
           {displayCategory ? ` · ${displayCategory}` : ""}
         </p>
         {tags.length > 0 && (
-          <p className="mt-1 truncate text-[11px] text-white/50">
+          <p className="mt-1 truncate text-[11px] text-white/46">
             {tags.join(" · ")}
           </p>
         )}
@@ -9489,8 +9459,8 @@ function NearbyRestaurantCard({
     }),
   ];
   const cardShellClass = isFoodTruckEntity
-    ? "group relative block overflow-hidden rounded-[1.65rem] bg-[#100806]/88 ring-1 ring-orange-300/30 transition duration-200 hover:-translate-y-0.5 hover:ring-orange-200/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
-    : "group block overflow-hidden rounded-[1rem] bg-[#0c1714]/84 ring-1 ring-emerald-200/20 transition duration-200 hover:-translate-y-0.5 hover:ring-emerald-200/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70";
+    ? "group relative block overflow-hidden rounded-xl bg-[#170d08]/92 ring-1 ring-orange-100/18 transition duration-200 hover:-translate-y-0.5 hover:ring-orange-200/36 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
+    : "group block overflow-hidden rounded-xl bg-[#0d1713]/88 ring-1 ring-emerald-100/16 transition duration-200 hover:-translate-y-0.5 hover:ring-emerald-200/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70";
   const labelPillClass = isFoodTruckEntity
     ? "bg-[#120805]/72 text-orange-100 ring-orange-200/20"
     : "bg-[#071411]/72 text-emerald-100 ring-emerald-200/20";
@@ -9658,33 +9628,11 @@ function NearbyRestaurantCard({
       href={profileHref}
       className={cardShellClass}
       aria-label={`Open ${name}`}
-      style={{ boxShadow: "0 16px 42px rgba(0,0,0,0.48)" }}
+      style={{ boxShadow: "0 12px 28px rgba(0,0,0,0.38)" }}
       data-testid="scout-restaurant-card"
     >
-      {isFoodTruckEntity ? (
-        <>
-          <span
-            className="absolute inset-y-0 left-0 z-20 w-2 bg-[repeating-linear-gradient(180deg,rgba(251,146,60,0.95)_0_10px,rgba(88,39,12,0.95)_10px_18px)]"
-            aria-hidden="true"
-          />
-          <span
-            className="absolute left-5 top-5 bottom-5 z-20 w-px bg-orange-200/20"
-            aria-hidden="true"
-          />
-          <span
-            className="absolute left-[1.05rem] top-5 z-20 h-2 w-2 rounded-full bg-orange-300 shadow-[0_0_12px_rgba(251,146,60,0.8)]"
-            aria-hidden="true"
-          />
-          <span
-            className="absolute left-[1.05rem] bottom-5 z-20 h-2 w-2 rounded-full bg-emerald-300 shadow-[0_0_12px_rgba(52,211,153,0.75)]"
-            aria-hidden="true"
-          />
-        </>
-      ) : null}
       {/* Image */}
-      <div
-        className={`relative w-full bg-[#120805]/60 ${isFoodTruckEntity ? "aspect-[16/9] pl-2" : "aspect-[4/3]"}`}
-      >
+      <div className="relative aspect-[4/3] w-full bg-[#120805]/60">
         <ScoutCardMedia
           imageUrl={img || null}
           fallbackIcon={placeIcon}
@@ -9696,7 +9644,7 @@ function NearbyRestaurantCard({
           className="absolute inset-0"
           style={{
             backgroundImage:
-              "linear-gradient(180deg, rgba(0,0,0,0) 40%, rgba(0,0,0,0.75) 100%)",
+              "linear-gradient(180deg, rgba(0,0,0,0.05), rgba(0,0,0,0.62))",
           }}
           aria-hidden="true"
         />
@@ -9709,7 +9657,7 @@ function NearbyRestaurantCard({
           </span>
         )}
         <span
-          className={`absolute top-2.5 right-2.5 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ring-1 ${labelPillClass}`}
+          className={`absolute left-2 top-2 inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ring-1 ${labelPillClass}`}
         >
           {isFoodTruckEntity ? (
             <TruckIcon className="h-3 w-3" aria-hidden="true" />
@@ -9723,12 +9671,12 @@ function NearbyRestaurantCard({
       <div
         className={
           isFoodTruckEntity
-            ? "border-t border-orange-200/12 bg-[#190b06]/92 px-3 py-3 pl-7"
-            : "border-t border-emerald-200/10 bg-[#0f1b17]/82 px-3 py-2.5"
+            ? "px-3 pb-3 pt-2.5"
+            : "px-3 pb-3 pt-2.5"
         }
       >
-        <div className="flex items-baseline justify-between gap-2">
-          <p className="min-w-0 truncate text-white font-semibold text-sm leading-snug">
+        <div className="flex items-start justify-between gap-2">
+          <p className="min-w-0 line-clamp-2 min-h-[2.25rem] text-sm font-bold leading-tight text-white">
             {name}
           </p>
           {statusLabels.length > 0 && (
@@ -9748,10 +9696,10 @@ function NearbyRestaurantCard({
             </span>
           )}
         </div>
-        <div className="mt-0.5 flex items-center gap-1.5 flex-wrap">
+        <div className="mt-1 flex items-center gap-1.5 overflow-hidden text-[11px]">
           {cuisine && (
             <span
-              className={`${isFoodTruckEntity ? "text-orange-300/80" : "text-emerald-200/76"} text-[11px]`}
+              className={`${isFoodTruckEntity ? "text-orange-300/80" : "text-emerald-200/76"} truncate`}
             >
               {cuisine}
             </span>
@@ -9760,23 +9708,23 @@ function NearbyRestaurantCard({
             <span className="text-white/30 text-[11px]">·</span>
           )}
           {location && (
-            <span className="text-white/60 text-[11px] truncate">
+            <span className="truncate text-white/55">
               {location}
             </span>
           )}
           {distLabel && (
             <>
               <span className="text-white/30 text-[11px]">·</span>
-              <span className="text-white/50 text-[11px]">{distLabel}</span>
+              <span className="shrink-0 text-white/50">{distLabel}</span>
             </>
           )}
         </div>
         {menuPreview.length > 0 && (
           <div
-            className="mt-2 flex items-center gap-2 border-t border-white/8 pt-2"
+            className="mt-2 flex items-center gap-2 rounded-lg bg-white/[0.04] p-1.5"
             data-testid="scout-menu-preview"
           >
-            <div className="h-9 w-9 shrink-0 overflow-hidden rounded-lg relative">
+            <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded-md">
               <ScoutCardMedia
                 imageUrl={menuPreview[0].imageUrl || null}
                 fallbackIcon={
@@ -9796,9 +9744,6 @@ function NearbyRestaurantCard({
             <div className="min-w-0 flex-1">
               <p className="truncate text-[11px] font-semibold text-white/85">
                 {menuPreview[0].name}
-              </p>
-              <p className="text-[9px] font-bold uppercase tracking-wide text-orange-200/70">
-                Featured item
               </p>
             </div>
             {formatPrice(menuPreview[0].priceCents) && (
