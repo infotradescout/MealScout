@@ -768,14 +768,12 @@ const DISCOVERY_LAYERS: Record<
     subtitle: "Search dishes, trucks, places, and events by what sounds good.",
   },
   trending: {
-    title: "Popular Nearby",
+    title: "Local Activity",
     href: "/search",
-    subtitle: "Fresh finds and active trucks near you right now.",
   },
   menuItems: {
-    title: "Popular Dishes",
+    title: "Menu Highlights",
     href: "/search",
-    subtitle: "Dishes and menu items from restaurants and trucks near you.",
   },
   foodTrucks: {
     title: "Food Trucks Today",
@@ -5897,7 +5895,7 @@ function CompactDecisionCardShell({
     variant === "dish"
       ? "rounded-[0.85rem] bg-[#2c1609]/82 ring-orange-200/25"
       : variant === "truck"
-        ? "rounded-[1.3rem] bg-[#100806]/84 ring-orange-300/30"
+        ? "rounded-[1.3rem] bg-[#100806]/84 ring-orange-200/18"
         : variant === "deal"
           ? "rounded-[0.95rem] bg-[#12200f]/72 ring-lime-200/20"
           : variant === "event"
@@ -5927,15 +5925,9 @@ function CompactDecisionCardShell({
           : "bg-orange-400 text-[#1a0d08]";
   return (
     <div
-      className={`relative flex min-h-[82px] items-center gap-3 overflow-hidden p-2.5 ring-1 ${variant === "truck" ? "pl-4" : ""} ${shellClass}`}
+      className={`relative flex min-h-[82px] items-center gap-3 overflow-hidden p-2.5 ring-1 ${shellClass}`}
       data-scout-immediate-compact-card="true"
     >
-      {variant === "truck" ? (
-        <span
-          className="absolute inset-y-0 left-0 w-1.5 bg-[repeating-linear-gradient(180deg,rgba(251,146,60,0.95)_0_8px,rgba(88,39,12,0.95)_8px_14px)]"
-          aria-hidden="true"
-        />
-      ) : null}
       {variant === "dish" ? (
         <span
           className="absolute inset-x-3 bottom-0 border-t border-dashed border-orange-100/20"
@@ -6589,7 +6581,7 @@ function ActiveSceneContent({
       })),
       ...popularDishCards.map((item) => ({
         sourceRowId: "popular_dishes" as const,
-        sectionLabel: "Popular Dishes",
+        sectionLabel: "Menu Highlights",
         summary: formatScoutCount(
           popularDishCards.length,
           "popular dish",
@@ -6666,9 +6658,16 @@ function ActiveSceneContent({
       ...nearbyOnlyDecisionItems,
     ];
     const primaryFirstScreenDecision = firstScreenDecisionItems[0] ?? null;
+    const truckFirstScreenLead =
+      primaryFirstScreenDecision?.cardType === "truck" &&
+      (primaryFirstScreenDecision.sourceRowId === "live_trucks_now" ||
+        primaryFirstScreenDecision.sourceRowId === "food_trucks_today" ||
+        primaryFirstScreenDecision.sourceRowId === "open_now_near_you");
     const popularDishesRailTitle =
       primaryFirstScreenDecision?.sourceRowId === "popular_dishes"
         ? "More Dishes Nearby"
+        : truckFirstScreenLead
+          ? "Food From Nearby Trucks"
         : DISCOVERY_LAYERS.menuItems.title;
     const firstScreenSuppressedBusinessKey =
       primaryFirstScreenDecision?.cardType === "truck" ||
@@ -6841,10 +6840,7 @@ function ActiveSceneContent({
         {
           id: "popular_dishes",
           title: popularDishesRailTitle,
-          subtitle:
-            popularDishes.length > 0
-              ? DISCOVERY_LAYERS.menuItems.subtitle
-              : "Recent menu items from nearby restaurants and trucks.",
+          subtitle: undefined,
           linkHref: DISCOVERY_LAYERS.menuItems.href,
           cards: menuItemRailCards(popularDishCards),
           className: railSectionClass,
@@ -6888,8 +6884,8 @@ function ActiveSceneContent({
         },
         {
           id: "trending_this_week",
-          title: "Popular Nearby",
-          subtitle: "Fresh finds and active trucks near you right now.",
+          title: "Local Activity",
+          subtitle: undefined,
           linkHref: DISCOVERY_LAYERS.trending.href,
           cards: restaurantRailCards(trendingPlaceCards),
           className: compactRailSectionClass,
@@ -7322,7 +7318,7 @@ function SceneMixedFeedCard({ item }: { item: CravingBoardItem }) {
     item.kind === "Menu"
       ? "rounded-[0.85rem] bg-[#2c1609]/82 ring-orange-200/25 hover:bg-[#351a0a]/92 hover:ring-orange-200/50"
       : item.kind === "Truck"
-        ? "rounded-[1.35rem] bg-[#100806]/84 ring-orange-300/30 hover:bg-[#1a0d07]/92 hover:ring-orange-200/40"
+        ? "rounded-[1.35rem] bg-[#100806]/84 ring-orange-200/18 hover:bg-[#1a0d07]/92 hover:ring-orange-200/28"
         : item.kind === "Deal"
           ? "rounded-xl bg-[#12200f]/72 ring-lime-200/20 hover:bg-[#172913]/86 hover:ring-lime-200/30"
           : item.kind === "Event"
@@ -7342,14 +7338,8 @@ function SceneMixedFeedCard({ item }: { item: CravingBoardItem }) {
   return (
     <Link
       href={item.href}
-      className={`relative flex items-center gap-3 overflow-hidden px-3 py-2.5 text-white ring-1 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70 ${item.kind === "Truck" ? "pl-5" : ""} ${shellClass}`}
+      className={`relative flex items-center gap-3 overflow-hidden px-3 py-2.5 text-white ring-1 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70 ${shellClass}`}
     >
-      {item.kind === "Truck" ? (
-        <span
-          className="absolute inset-y-0 left-0 w-1.5 bg-[repeating-linear-gradient(180deg,rgba(251,146,60,0.95)_0_8px,rgba(88,39,12,0.95)_8px_14px)]"
-          aria-hidden="true"
-        />
-      ) : null}
       {item.kind === "Menu" ? (
         <span
           className="absolute inset-x-3 bottom-0 border-t border-dashed border-orange-100/20"
@@ -8074,30 +8064,14 @@ function LiveTruckCard({
   return (
     <Link
       href={getTruckProfilePath(truck)}
-      className="group relative block overflow-hidden rounded-[1.7rem] bg-[#100806]/90 ring-1 ring-orange-300/40 transition duration-200 hover:-translate-y-0.5 hover:ring-emerald-200/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70"
+      className="group relative block overflow-hidden rounded-xl bg-[#100806]/90 ring-1 ring-orange-200/20 transition duration-200 hover:-translate-y-0.5 hover:ring-emerald-200/32 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70"
       aria-label={`Open ${truck.name}`}
       style={{
         boxShadow:
-          "0 18px 54px rgba(0,0,0,0.56), inset 0 0 0 1px rgba(251,146,60,0.08)",
+          "0 14px 36px rgba(0,0,0,0.48), inset 0 0 0 1px rgba(251,146,60,0.05)",
       }}
     >
-      <span
-        className="absolute inset-y-0 left-0 z-20 w-2 bg-[repeating-linear-gradient(180deg,rgba(251,146,60,0.95)_0_10px,rgba(88,39,12,0.95)_10px_18px)]"
-        aria-hidden="true"
-      />
-      <span
-        className="absolute left-5 top-5 bottom-5 z-20 w-px bg-orange-200/20"
-        aria-hidden="true"
-      />
-      <span
-        className="absolute left-[1.05rem] top-5 z-20 h-2 w-2 rounded-full bg-orange-300 shadow-[0_0_12px_rgba(251,146,60,0.8)]"
-        aria-hidden="true"
-      />
-      <span
-        className="absolute left-[1.05rem] bottom-5 z-20 h-2 w-2 rounded-full bg-emerald-300 shadow-[0_0_12px_rgba(52,211,153,0.75)]"
-        aria-hidden="true"
-      />
-      <div className="relative aspect-[16/11] w-full bg-[#120805]/60 pl-2">
+      <div className="relative aspect-[16/11] w-full bg-[#120805]/60">
         <ScoutCardMedia
           imageUrl={heroImage || null}
           fallbackIcon={
@@ -8901,7 +8875,7 @@ function NearbyRestaurantCard({
     }),
   ];
   const cardShellClass = isFoodTruckEntity
-    ? "group relative block overflow-hidden rounded-[1.65rem] bg-[#100806]/88 ring-1 ring-orange-300/30 transition duration-200 hover:-translate-y-0.5 hover:ring-orange-200/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
+    ? "group relative block overflow-hidden rounded-xl bg-[#100806]/88 ring-1 ring-orange-200/18 transition duration-200 hover:-translate-y-0.5 hover:ring-orange-200/28 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
     : "group block overflow-hidden rounded-[1rem] bg-[#0c1714]/84 ring-1 ring-emerald-200/20 transition duration-200 hover:-translate-y-0.5 hover:ring-emerald-200/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70";
   const labelPillClass = isFoodTruckEntity
     ? "bg-[#120805]/72 text-orange-100 ring-orange-200/20"
@@ -9073,29 +9047,9 @@ function NearbyRestaurantCard({
       style={{ boxShadow: "0 16px 42px rgba(0,0,0,0.48)" }}
       data-testid="scout-restaurant-card"
     >
-      {isFoodTruckEntity ? (
-        <>
-          <span
-            className="absolute inset-y-0 left-0 z-20 w-2 bg-[repeating-linear-gradient(180deg,rgba(251,146,60,0.95)_0_10px,rgba(88,39,12,0.95)_10px_18px)]"
-            aria-hidden="true"
-          />
-          <span
-            className="absolute left-5 top-5 bottom-5 z-20 w-px bg-orange-200/20"
-            aria-hidden="true"
-          />
-          <span
-            className="absolute left-[1.05rem] top-5 z-20 h-2 w-2 rounded-full bg-orange-300 shadow-[0_0_12px_rgba(251,146,60,0.8)]"
-            aria-hidden="true"
-          />
-          <span
-            className="absolute left-[1.05rem] bottom-5 z-20 h-2 w-2 rounded-full bg-emerald-300 shadow-[0_0_12px_rgba(52,211,153,0.75)]"
-            aria-hidden="true"
-          />
-        </>
-      ) : null}
       {/* Image */}
       <div
-        className={`relative w-full bg-[#120805]/60 ${isFoodTruckEntity ? "aspect-[16/9] pl-2" : "aspect-[4/3]"}`}
+        className={`relative w-full bg-[#120805]/60 ${isFoodTruckEntity ? "aspect-[16/9]" : "aspect-[4/3]"}`}
       >
         <ScoutCardMedia
           imageUrl={img || null}
@@ -9367,7 +9321,7 @@ function SavedRestaurantCard({
     restaurant.neighborhood || restaurant.city || restaurant.address;
   const cuisine = restaurant.cuisineType;
   const cardShellClass = isFoodTruckEntity
-    ? "relative block overflow-hidden rounded-[1.55rem] bg-[#100806]/86 ring-1 ring-orange-300/30 transition hover:bg-[#1a0d07]/92 hover:ring-orange-200/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
+    ? "relative block overflow-hidden rounded-xl bg-[#100806]/86 ring-1 ring-orange-200/18 transition hover:bg-[#1a0d07]/92 hover:ring-orange-200/28 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
     : "block overflow-hidden rounded-xl bg-[#0c1714]/82 ring-1 ring-emerald-200/20 transition hover:bg-[#121f1b]/88 hover:ring-emerald-200/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70";
   const labelPillClass = isFoodTruckEntity
     ? "bg-[#120805]/72 text-orange-100 ring-orange-200/20"
@@ -9379,14 +9333,8 @@ function SavedRestaurantCard({
       className={cardShellClass}
       aria-label={`Open saved ${canonicalLabel.toLowerCase()} ${name}`}
     >
-      {isFoodTruckEntity ? (
-        <span
-          className="absolute inset-y-0 left-0 z-20 w-2 bg-[repeating-linear-gradient(180deg,rgba(251,146,60,0.95)_0_10px,rgba(88,39,12,0.95)_10px_18px)]"
-          aria-hidden="true"
-        />
-      ) : null}
       <div
-        className={`relative h-24 bg-[#120805]/50 ${isFoodTruckEntity ? "pl-2" : ""}`}
+        className="relative h-24 bg-[#120805]/50"
       >
         <ScoutCardMedia
           imageUrl={img || null}
@@ -9423,7 +9371,7 @@ function SavedRestaurantCard({
       <div
         className={
           isFoodTruckEntity
-            ? "border-t border-orange-200/12 bg-[#190b06]/90 px-3 py-3 pl-6"
+            ? "border-t border-orange-200/10 bg-[#190b06]/90 px-3 py-3"
             : "border-t border-emerald-200/10 bg-[#0f1b17]/80 px-3 py-3"
         }
       >
@@ -10399,30 +10347,14 @@ function TruckCard({
         event.preventDefault();
         onSelect(truck);
       }}
-      className="relative block overflow-hidden rounded-[1.65rem] bg-[#100806]/88 ring-1 ring-orange-300/30 transition duration-200 hover:-translate-y-0.5 hover:ring-orange-200/40 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
+      className="relative block overflow-hidden rounded-xl bg-[#100806]/88 ring-1 ring-orange-200/18 transition duration-200 hover:-translate-y-0.5 hover:ring-orange-200/28 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
       style={{
         boxShadow:
-          "0 16px 42px rgba(0,0,0,0.5), inset 0 0 0 1px rgba(251,146,60,0.08)",
+          "0 14px 36px rgba(0,0,0,0.46), inset 0 0 0 1px rgba(251,146,60,0.05)",
       }}
     >
-      <span
-        className="absolute inset-y-0 left-0 z-20 w-2 bg-[repeating-linear-gradient(180deg,rgba(251,146,60,0.95)_0_10px,rgba(88,39,12,0.95)_10px_18px)]"
-        aria-hidden="true"
-      />
-      <span
-        className="absolute left-5 top-5 bottom-5 z-20 w-px bg-orange-200/20"
-        aria-hidden="true"
-      />
-      <span
-        className="absolute left-[1.05rem] top-5 z-20 h-2 w-2 rounded-full bg-orange-300 shadow-[0_0_12px_rgba(251,146,60,0.8)]"
-        aria-hidden="true"
-      />
-      <span
-        className="absolute left-[1.05rem] bottom-5 z-20 h-2 w-2 rounded-full bg-emerald-300 shadow-[0_0_12px_rgba(52,211,153,0.75)]"
-        aria-hidden="true"
-      />
       {/* Hero image */}
-      <div className="relative aspect-[16/9] w-full overflow-hidden bg-[#120805]/40 pl-2">
+      <div className="relative aspect-[16/9] w-full overflow-hidden bg-[#120805]/40">
         <ScoutCardMedia
           imageUrl={img || null}
           fallbackIcon={
