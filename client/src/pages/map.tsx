@@ -2786,6 +2786,28 @@ export default function MapPage() {
   const supplierPins = visibleSupplierLocations.length;
   const activityPins =
     liveTruckPins + crowdSightingPins + hostPins + eventPins + supplierPins;
+  const mapDiscoverySummary = [
+    {
+      label: "Food trucks",
+      value: liveTruckPins,
+      helper: "active nearby",
+    },
+    {
+      label: "Deals",
+      value: visibleDeals.length,
+      helper: visibleDeals.length === 1 ? "local offer" : "local offers",
+    },
+    {
+      label: "Events",
+      value: eventPins,
+      helper: eventPins === 1 ? "food event" : "food events",
+    },
+    {
+      label: "Host stops",
+      value: hostPins,
+      helper: hostPins === 1 ? "place to check" : "places to check",
+    },
+  ];
   const totalHostParkingLocations = effectiveBookableHostIds.size;
   const mapHostParkingLocations = visibleHostLocations.length;
   const isNightTheme =
@@ -3792,6 +3814,29 @@ export default function MapPage() {
             </Button>
           ) : null}
         </div>
+
+        <section
+          className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4"
+          aria-label="Nearby discovery summary"
+          data-testid="map-discovery-summary"
+        >
+          {mapDiscoverySummary.map((item) => (
+            <div
+              key={item.label}
+              className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)]/80 px-3 py-2 shadow-clean"
+            >
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                {item.label}
+              </p>
+              <p className="mt-1 text-lg font-bold leading-none text-foreground">
+                {item.value}
+              </p>
+              <p className="mt-1 truncate text-[11px] text-muted-foreground">
+                {item.helper}
+              </p>
+            </div>
+          ))}
+        </section>
 
         {/* Location Status */}
         {locationError && (
