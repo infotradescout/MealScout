@@ -98,13 +98,13 @@ const resolveMapBranding = (): MapBranding => {
     appName: "MealScout",
     mapName: "Nearby Food Map",
     canonicalBaseUrl: "https://www.mealscout.us",
-    seoTitle: "MealScout Map | Nearby Food Trucks and Local Food",
+    seoTitle: "MealScout Map | Nearby Local Food",
     seoDescription:
-      "Explore nearby food trucks, posted truck status, and local food spots on MealScout.",
+      "Explore nearby restaurants, food trucks, posted status, and local food spots on MealScout.",
     seoKeywords:
       "food truck map near me, local food truck map, nearby food trucks, interactive food truck map, food truck parking map, local dining map",
     mapSchemaDescription:
-      "Interactive truck-first map for nearby food trucks and local food spots.",
+      "Interactive local food map for nearby restaurants, food trucks, and local food spots.",
     exploreHeading: "Worth discovering",
     exploreDescription:
       "Jump back to Scout, refresh your location, or keep browsing nearby food on the map.",
