@@ -151,6 +151,7 @@ const ForRestaurants = lazy(() => import("@/pages/for-restaurants"));
 const ForBars = lazy(() => import("@/pages/for-bars"));
 const ForHosts = lazy(() => import("@/pages/for-hosts"));
 const ForEvents = lazy(() => import("@/pages/for-events"));
+const ProfileSetupPage = lazy(() => import("@/pages/profile-setup"));
 const HostLocationPartnerPage = lazy(
   () => import("@/pages/host-location-partner"),
 );
@@ -212,6 +213,7 @@ const publicRoutePrefixes = [
   "/contact",
   "/install",
   "/host-signup",
+  "/profile-setup",
   "/for-restaurants",
   "/for-bars",
   "/for-hosts",
@@ -353,6 +355,7 @@ function SharedPublicRoutes() {
       <Route path="/contact" component={Contact} />
       <Route path="/install" component={InstallApp} />
       <Route path="/host-signup" component={HostSignup} />
+      <Route path="/profile-setup" component={ProfileSetupPage} />
       <Route path="/for-restaurants" component={ForRestaurants} />
       <Route path="/for-bars" component={ForBars} />
       <Route path="/for-hosts" component={ForHosts} />
