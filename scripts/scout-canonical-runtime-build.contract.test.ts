@@ -52,7 +52,7 @@ for (const requiredScoutSnippet of [
   'placement="fixed"',
   "{scoutRows.map((row) => (",
   "No nearby food yet",
-  "Try search or move the map",
+  "Search nearby food or move the map",
 ]) {
   if (!scoutPage.includes(requiredScoutSnippet)) {
     throw new Error(`Canonical Scout page missing snippet: ${requiredScoutSnippet}`);
@@ -73,6 +73,9 @@ for (const forbiddenScoutSnippet of [
   "Find what is worth eating nearby.",
   "Open now, trending this week, fresh dishes, deals, and food events in one local view.",
   "Search dishes, trucks, places, or events",
+  "widen the board",
+  "The local board is quiet right now.",
+  "Nothing strong here yet.",
 ]) {
   if (scoutPage.includes(forbiddenScoutSnippet)) {
     throw new Error(`Canonical Scout page must not include stale copy: ${forbiddenScoutSnippet}`);
@@ -93,6 +96,14 @@ for (const copySnippet of [
 
 if (!scoutSearchDock.includes("Search dishes, cravings, places, trucks, or events")) {
   throw new Error("Scout search dock must guide dish/craving/place/truck/event discovery.");
+}
+
+if (
+  !scoutSearchDock.includes("bg-[#fff7ed]/94") ||
+  scoutSearchDock.includes("bg-[#0f0a07]/94") ||
+  scoutSearchDock.includes("Updates live on the map and feed.")
+) {
+  throw new Error("Scout search dock must use the lighter food-discovery shell and consumer copy.");
 }
 
 if (!scoutSearchDock.includes('data-scout-search-placement={placement}')) {

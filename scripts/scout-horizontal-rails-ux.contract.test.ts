@@ -152,6 +152,9 @@ for (const staleSnippet of [
   "<FilterNearbyChips",
   'events={[]}',
   'deals={[]}',
+  "widen the board",
+  "The local board is quiet right now.",
+  "Nothing strong here yet.",
 ]) {
   assert.ok(!scoutPage.includes(staleSnippet), `Scout For You runtime must not keep stale snippet: ${staleSnippet}`);
 }
@@ -167,11 +170,14 @@ for (const snippet of [
   'placement?: "fixed" | "inline";',
   'data-scout-search-placement={placement}',
   'placement === "inline"',
+  "Fresh nearby picks update as you search.",
+  "bg-[#fff7ed]/94",
 ]) {
   assert.ok(searchDock.includes(snippet), `Scout search dock missing persistent search-mode snippet: ${snippet}`);
 }
 
 assert.ok(!searchDock.includes('href="/search"'), "Scout search dock must not leave Scout for a one-off /search route.");
+assert.ok(!searchDock.includes("bg-[#0f0a07]/94"), "Scout search dock must not regress to near-black chrome.");
 
 const truck = { id: "truck-1", businessType: "food_truck", isFoodTruck: true };
 const restaurant = { id: "restaurant-1", businessType: "restaurant", isFoodTruck: false };

@@ -8,8 +8,8 @@ const locationHook = readFileSync(
 );
 
 const requiredScoutSnippets = [
-  "Coverage is still thin here, so Scout is showing the closest real",
-  "place first.",
+  "Nearby food coverage is still growing, so Scout is showing the",
+  "closest real place first.",
   "Browse nearby",
   "Search nearby",
   'data-testid="scout-thin-market-state"',
@@ -29,6 +29,7 @@ for (const snippet of requiredScoutSnippets) {
 
 const prohibitedScoutSnippets = [
   "local food signals",
+  "widen the board",
 ];
 
 for (const snippet of prohibitedScoutSnippets) {
