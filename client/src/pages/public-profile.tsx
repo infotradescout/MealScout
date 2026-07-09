@@ -20,6 +20,7 @@ import {
   normalizeBusinessTypeLabel,
 } from "@/lib/publicMenuCompleteness";
 import { extractUuidFromSlug } from "@/lib/seo-slug";
+import { slugifySeoTerm } from "@/lib/seo-city";
 import { resolveCanonicalShareUrl } from "@/lib/share";
 import { setAffiliateRef } from "@/lib/share";
 import { SEOHead } from "@/components/seo-head";
@@ -2928,7 +2929,10 @@ export default function PublicProfilePage() {
       : null) ||
     data.seo?.canonicalUrl ||
     data.canonicalUrl;
-  const citySlug = String((data as any).citySlug || "").trim() || null;
+  const citySlug =
+    String((data as any).citySlug || "").trim() ||
+    slugifySeoTerm(data.city) ||
+    null;
   const restaurantProfile = isRestaurantLikeEntity(data.entity)
     ? (data as PublicRestaurantProfile)
     : null;
