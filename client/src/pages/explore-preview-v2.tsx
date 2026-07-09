@@ -4810,8 +4810,8 @@ export default function ExplorePreview() {
   return (
     <>
       <SEOHead
-        title="Scout | MealScout"
-        description="Discover food trucks, restaurants, and deals near you. MealScout puts the local food scene right in your hands."
+        title="Scout Local Food Discovery | MealScout"
+        description="Discover food trucks, restaurants, dishes, events, and local food deals near you with MealScout."
       />
 
       {/* Quiet page base. Warm espresso/roasted-brown wash instead of

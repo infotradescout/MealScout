@@ -56,6 +56,19 @@ const resolvePublicBaseUrl = () =>
       "https://www.mealscout.us",
   ).replace(/\/+$/, "");
 
+const friendlyLocationTypeLabel = (value: string | null | undefined) => {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (!normalized) return "";
+  if (normalized === "private_residence") return "Private event location";
+  if (normalized === "business") return "Business";
+  if (normalized === "other") return "Host location";
+  return normalized
+    .split("_")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+};
+
 const isMissingRelationError = (error: unknown, relationName?: string) => {
   const err = error as { code?: string; message?: string } | null;
   if (!err || err.code !== "42P01") return false;
@@ -1738,6 +1751,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           name: row.name,
           id: row.id,
         });
+
         return sendPublicJson(res, {
           exists: true,
           entityType: routeEntity,
@@ -2047,6 +2061,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           name: row.businessName,
           id: row.id,
         });
+        const locationTypeLabel = friendlyLocationTypeLabel(row.locationType);
 
         return sendPublicJson(res, {
           entityType: "host",
@@ -2074,7 +2089,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           },
           knowledgeGaps,
           sourceTruthStatements: [
-            row.locationType ? `Location type: ${row.locationType}` : null,
+            locationTypeLabel ? `Location type: ${locationTypeLabel}` : null,
             row.spotCount ? `${row.spotCount} parking spots configured` : null,
             row.stripeOnboardingCompleted ? "Stripe onboarding complete" : null,
             row.isVerified ? "Verified host on MealScout" : null,
