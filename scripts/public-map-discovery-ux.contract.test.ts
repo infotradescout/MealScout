@@ -1,20 +1,19 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-const source = readFileSync("client/src/pages/map.tsx", "utf8");
+const source = readFileSync("client/src/pages/explore-preview-v2.tsx", "utf8");
 
 const requiredSnippets = [
-  "const mapDiscoverySummary = [",
   'aria-label="Nearby discovery summary"',
   'data-testid="map-discovery-summary"',
   'label: "Food trucks"',
+  'label: "Open places"',
   'label: "Deals"',
   'label: "Events"',
-  'label: "Host stops"',
-  "visibleDeals.length",
-  "liveTruckPins",
-  "eventPins",
-  "hostPins",
+  "truckCount > 0",
+  "restaurantCount > 0",
+  "dealCount > 0",
+  "eventCount > 0",
 ];
 
 for (const snippet of requiredSnippets) {
