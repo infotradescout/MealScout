@@ -79,7 +79,9 @@ export function createScoutController(
 
   const filtered = filterEntities(config, entities, state, activeAction);
   const ranked = [...filtered].sort(
-    (a, b) => (config.rank?.(b, state) ?? 0) - (config.rank?.(a, state) ?? 0),
+    (a, b) =>
+      scoreEntity(config, b, state, activeAction) -
+      scoreEntity(config, a, state, activeAction),
   );
 
   const lanes: ScoutDerivedLane[] = config.lanes.map((lane) => {
@@ -122,7 +124,7 @@ function filterEntities(
   state: ScoutSearchState,
   activeAction: ScoutAction | null,
 ): ScoutEntity[] {
-  const terms = tokenize([state.query, ...(activeAction?.queryBoosts ?? [])].join(" "));
+  const terms = tokenize(state.query);
   const fields = config.searchFields ?? DEFAULT_SEARCH_FIELDS;
 
   return entities.filter((entity) => {
@@ -132,16 +134,43 @@ function filterEntities(
 
     if (terms.length === 0) return true;
 
-    const haystack = [
-      ...fields.map((field) => String(entity[field] ?? "")),
-      ...(entity.tags ?? []),
-      ...Object.values(entity.signals ?? {}).map((value) => String(value ?? "")),
-    ]
-      .join(" ")
-      .toLowerCase();
+    const haystack = getSearchHaystack(entity, fields);
 
     return terms.every((term) => haystack.includes(term));
   });
+}
+
+function scoreEntity(
+  config: ScoutBlueprintConfig,
+  entity: ScoutEntity,
+  state: ScoutSearchState,
+  activeAction: ScoutAction | null,
+): number {
+  const baseScore = config.rank?.(entity, state) ?? 0;
+  const boostTerms = tokenize((activeAction?.queryBoosts ?? []).join(" "));
+  if (boostTerms.length === 0) return baseScore;
+
+  const fields = config.searchFields ?? DEFAULT_SEARCH_FIELDS;
+  const haystack = getSearchHaystack(entity, fields);
+  const boostScore = boostTerms.reduce(
+    (score, term) => score + (haystack.includes(term) ? 5 : 0),
+    0,
+  );
+
+  return baseScore + boostScore;
+}
+
+function getSearchHaystack(
+  entity: ScoutEntity,
+  fields: Array<keyof ScoutEntity>,
+): string {
+  return [
+    ...fields.map((field) => String(entity[field] ?? "")),
+    ...(entity.tags ?? []),
+    ...Object.values(entity.signals ?? {}).map((value) => String(value ?? "")),
+  ]
+    .join(" ")
+    .toLowerCase();
 }
 
 function tokenize(value: string): string[] {
