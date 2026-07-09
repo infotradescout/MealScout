@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 
 const routeMapPath = "MEALSCOUT_ROUTE_MAP.md";
+const appSource = readFileSync("client/src/App.tsx", "utf8");
 
 if (!existsSync(routeMapPath)) {
   throw new Error("MEALSCOUT_ROUTE_MAP.md must exist.");
@@ -32,6 +33,8 @@ function requireMatch(pattern: RegExp, label: string) {
   "Danger Routes",
   "Validation Routes",
   "Trace Examples",
+  "Public route source inventory",
+  "Legacy/dead-looking public surfaces to verify before editing",
 ].forEach((snippet) => requireIncludes(snippet));
 
 [
@@ -46,6 +49,55 @@ function requireMatch(pattern: RegExp, label: string) {
   "/locations-with-trucks/:city",
   "/menu/:restaurantId",
 ].forEach((snippet) => requireIncludes(snippet, `public customer route ${snippet}`));
+
+[
+  "`/scout`, `/scout/:refTag`, `/directory`, `/directory/:refTag`, `/scout-v2` | `client/src/pages/explore-preview-v2.tsx`",
+  "`/map` | `RedirectToScout` in `client/src/App.tsx`, then `client/src/pages/explore-preview-v2.tsx`",
+  "Production `/map` does not mount `client/src/pages/map.tsx`.",
+  "`/sitemap` | `client/src/pages/sitemap.tsx`",
+  "`/restaurant/:id`, `/restaurant/:id/:profileSlug`, `/truck/:slug`, `/bar/:slug`, `/location/:slug`, `/p/:profileType/:profileId`, `/p/:profileType/:profileId/:profileSlug` | `client/src/pages/public-profile.tsx`",
+  "`/city/:city/food`, `/food-trucks-today/:city`, `/deals-today/:city`, `/events-today/:city`, `/locations-with-trucks/:city`, `/cuisine/:cuisine/:city` | `client/src/pages/public-seo-landing.tsx`",
+  "`/profile-setup` | `client/src/pages/profile-setup.tsx`",
+  "`client/src/pages/map.tsx` currently exists but is not mounted by `client/src/App.tsx`",
+  "`client/src/pages/explore-preview.tsx` is legacy/quarantined",
+  "`client/src/pages/trending.tsx` exists, but `/trending` redirects to `/scout`",
+].forEach((snippet) => requireIncludes(snippet, `public route source inventory ${snippet}`));
+
+[
+  'const ScoutPageV2 = lazy(() => import("@/pages/explore-preview-v2"));',
+  '<Route path="/scout" component={ScoutPageV2} />',
+  '<Route path="/scout/:refTag" component={ScoutPageV2} />',
+  '<Route path="/directory" component={ScoutPageV2} />',
+  '<Route path="/scout-v2" component={ScoutPageV2} />',
+  '<Route path="/map" component={RedirectToScout} />',
+  '<Route path="/trending" component={RedirectToScout} />',
+  '<Route path="/sitemap" component={Sitemap} />',
+  '<Route path="/profile-setup" component={ProfileSetupPage} />',
+  '<Route path="/city/:city/food" component={PublicSeoLandingPage} />',
+  '<Route path="/food-trucks-today/:city" component={PublicSeoLandingPage} />',
+].forEach((snippet) => {
+  if (!appSource.includes(snippet)) {
+    throw new Error(`App route source missing expected routed surface: ${snippet}`);
+  }
+});
+
+if (
+  !/path="\/p\/:profileType\/:profileId\/:profileSlug"[\s\S]{0,120}component=\{PublicProfilePage\}/.test(
+    appSource,
+  )
+) {
+  throw new Error("App route source missing public profile slug route to PublicProfilePage.");
+}
+
+[
+  '<Route path="/map" component={MapPage} />',
+  'const MapPage = lazy(() => import("@/pages/map"));',
+  '<Route path="/trending" component={Trending} />',
+].forEach((snippet) => {
+  if (appSource.includes(snippet)) {
+    throw new Error(`App route source must not mount legacy public surface: ${snippet}`);
+  }
+});
 
 [
   "/restaurant-owner-dashboard",
