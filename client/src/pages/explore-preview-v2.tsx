@@ -1538,7 +1538,7 @@ function formatScoutCount(
 }
 
 function formatScoutResultSummary(count: number): string {
-  if (count <= 0) return "Try search, the map, or a wider area";
+  if (count <= 0) return "Search nearby food or widen your area";
   return `${count} ${count === 1 ? "spot" : "spots"} nearby`;
 }
 
@@ -4783,7 +4783,7 @@ export default function ExplorePreview() {
             : activeSceneLaneId === "new_menus"
               ? "Fresh menu updates nearby"
               : activeSceneLaneId === "worth_discovering"
-                ? "New and under-scouted spots nearby"
+                ? "New and lesser-known spots nearby"
                 : "Find trucks, bowls, pop-ups, and local favorites near you.";
   const compactMapMarketHint =
     trucksServingNow.length > 0
@@ -4964,8 +4964,8 @@ export default function ExplorePreview() {
                       </Suspense>
                       {(!hasMapKey || googleMapFailed) && (
                         <div className="pointer-events-none absolute left-1/2 top-1/2 z-10 max-w-[18rem] -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-white/88 px-5 py-4 text-center text-sm font-bold text-orange-900 ring-1 ring-orange-200/60 backdrop-blur-xl">
-                          Full pan and zoom are warming up. The MealScout map is
-                          still available.
+                          Full pan and zoom are loading. You can still browse
+                          nearby food.
                         </div>
                       )}
                     </>
@@ -5142,7 +5142,7 @@ export default function ExplorePreview() {
                   aria-label="Open full map"
                   className="absolute bottom-3 left-1/2 z-20 -translate-x-1/2 inline-flex items-center gap-1.5 rounded-full bg-[#100c0a]/72 px-4 py-2 text-[11px] font-black text-white/80 ring-1 ring-white/14 backdrop-blur-xl"
                 >
-                  Pull down for full map
+                  Open full map
                   <ChevronDown
                     className="h-3.5 w-3.5 text-white/60"
                     aria-hidden="true"
@@ -5234,7 +5234,7 @@ export default function ExplorePreview() {
           activeFilter={scoutSearchFilter}
           resultSummary={
             scoutSearchMode
-              ? `${sceneFilteredMapMarkers.filter((marker) => marker.kind !== "user").length} matches nearby`
+              ? `${sceneFilteredMapMarkers.filter((marker) => marker.kind !== "user").length} nearby picks`
               : formatScoutResultSummary(localActivityCount)
           }
           onOpen={() => setScoutSearchMode(true)}
@@ -5484,7 +5484,7 @@ function ActiveSceneIntro({ laneId }: { laneId: ScoutSceneLaneId }) {
     },
     worth_discovering: {
       title: "Worth Discovering",
-      subtitle: "New, quiet, or under-scouted spots nearby.",
+      subtitle: "New, quiet, or lesser-known spots nearby.",
     },
   };
   const activeCopy = laneCopy[laneId] ?? laneCopy.for_you;
@@ -5740,12 +5740,12 @@ function ScoutFirstScreenDecisionStack({
         data-scout-first-screen-decision-stack="true"
         data-scout-first-screen-empty="true"
       >
-        <div className="rounded-[1.1rem] bg-[#120805]/72 px-4 py-3 text-white ring-1 ring-white/10">
-          <p className="text-[11px] font-black uppercase tracking-[0.12em] text-orange-200/75">
+        <div className="rounded-[1.1rem] bg-[#fff7ed]/94 px-4 py-3 text-[#251208] ring-1 ring-orange-200/60 shadow-[0_12px_28px_rgba(92,45,18,0.16)]">
+          <p className="text-[11px] font-black uppercase tracking-[0.12em] text-orange-700">
             No nearby food yet
           </p>
-          <p className="mt-1 text-sm font-semibold text-white/70">
-            Try search or move the map
+          <p className="mt-1 text-sm font-semibold text-stone-600">
+            Search nearby food or move the map
           </p>
           <ScoutRecoveryActions className="mt-3" />
         </div>
@@ -5759,32 +5759,32 @@ function ScoutFirstScreenDecisionStack({
       data-scout-first-screen-decision-stack="true"
       data-scout-decision-source-row={primary.sourceRowId}
     >
-      <div className="rounded-[1.1rem] bg-[#120805]/78 p-3 text-white ring-1 ring-orange-200/20 shadow-[0_16px_40px_rgba(0,0,0,0.36)]">
+      <div className="rounded-[1.1rem] bg-[#fff7ed]/94 p-3 text-[#251208] ring-1 ring-orange-200/60 shadow-[0_14px_34px_rgba(92,45,18,0.18)]">
         <div className="mb-2 flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[11px] font-black uppercase tracking-[0.12em] text-orange-200/78">
+            <p className="text-[11px] font-black uppercase tracking-[0.12em] text-orange-700">
               {primary.sectionLabel}
             </p>
-            <p className="mt-0.5 truncate text-xs font-semibold text-white/55">
+            <p className="mt-0.5 truncate text-xs font-semibold text-stone-600">
               {primary.summary}
             </p>
           </div>
-          <span className="shrink-0 rounded-full bg-orange-400/14 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-orange-100 ring-1 ring-orange-200/20">
+          <span className="shrink-0 rounded-full bg-orange-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-orange-800 ring-1 ring-orange-200/80">
             Best now
           </span>
         </div>
         <ScoutImmediateCompactCard item={primary} />
         {thinMarket ? (
           <div
-            className="mt-3 rounded-2xl bg-white/[0.045] px-3 py-3 ring-1 ring-white/10"
+            className="mt-3 rounded-2xl bg-white/70 px-3 py-3 ring-1 ring-orange-200/70"
             data-testid="scout-thin-market-state"
           >
-            <p className="text-sm font-black text-white">
-              Coverage is still thin here, so Scout is showing the closest real
-              place first.
+            <p className="text-sm font-black text-[#251208]">
+              Nearby food coverage is still growing, so Scout is showing the
+              closest real place first.
             </p>
-            <p className="mt-1 text-xs font-semibold leading-relaxed text-white/62">
-              Browse nearby or open the map while you widen the board.
+            <p className="mt-1 text-xs font-semibold leading-relaxed text-stone-600">
+              Browse nearby or open the map while you widen your search.
             </p>
             <ScoutRecoveryActions className="mt-3" />
           </div>
@@ -6731,8 +6731,8 @@ function ActiveSceneContent({
         : "Food Trucks Today";
     const foodTrucksTodayRailSubtitle =
       primaryFirstScreenDecision?.sourceRowId === "food_trucks_today"
-        ? "Other scheduled trucks and open-now options from real local data."
-        : "Scheduled trucks and open-now options from real local data.";
+        ? "Other scheduled trucks and open-now options nearby."
+        : "Scheduled trucks and open-now options nearby.";
     const firstScreenSuppressedBusinessKey =
       primaryFirstScreenDecision?.cardType === "truck" ||
       primaryFirstScreenDecision?.cardType === "restaurant"
@@ -6956,7 +6956,7 @@ function ActiveSceneContent({
         {
           id: "new_to_mealscout",
           title: "Newest on MealScout",
-          subtitle: "Fresh local listings that recently joined the board.",
+          subtitle: "Fresh local listings recently added nearby.",
           linkHref: "/search",
           cards: restaurantRailCards(newToMealScoutCards),
           className: compactRailSectionClass,
@@ -6975,7 +6975,7 @@ function ActiveSceneContent({
           id: "worth_discovering",
           title: "Worth Discovering",
           subtitle:
-            "Quiet, nearby food spots not already claimed by stronger shelves.",
+            "Quiet nearby food spots not already shown in your top picks.",
           linkHref: DISCOVERY_LAYERS.restaurants.href,
           cards: businessSectionRailCards(worthDiscoveringCards),
           className: compactRailSectionClass,
@@ -7433,7 +7433,7 @@ function SceneMixedFeed({ items }: { items: CravingBoardItem[] }) {
       <ul
         className="space-y-2.5"
         role="list"
-        aria-label="Today around you feed"
+        aria-label="Today around you picks"
       >
         {items.map((item) => (
           <li key={item.id}>
@@ -7577,7 +7577,7 @@ function SceneMixedFeedCard({ item }: { item: CravingBoardItem }) {
 function ActiveSceneEmptyState({ laneId }: { laneId: ScoutSceneLaneId }) {
   const isForYou = laneId === "for_you";
   const title = isForYou
-    ? "The local board is quiet right now."
+    ? "Nearby food is quiet right now."
     : laneId === "community"
       ? "No local favorites nearby yet."
       : laneId === "deals"
@@ -7586,7 +7586,7 @@ function ActiveSceneEmptyState({ laneId }: { laneId: ScoutSceneLaneId }) {
           ? "No food trucks nearby right now."
           : laneId === "events"
             ? "No food events nearby right now."
-            : "Nothing strong here yet.";
+            : "Nothing nearby yet.";
   const body = isForYou
     ? "Try Worth Discovering, New Menus, or widen your area."
     : laneId === "community"
@@ -7597,7 +7597,7 @@ function ActiveSceneEmptyState({ laneId }: { laneId: ScoutSceneLaneId }) {
           ? "Try Restaurants, Events, or Worth Discovering."
           : laneId === "events"
             ? "Check Nearby or Worth Discovering."
-            : "Try another scene or widen your area.";
+            : "Try another nearby category or widen your area.";
 
   return (
     <section className="px-4 pb-4">
@@ -7656,7 +7656,7 @@ function ExploreSceneTiles({
   return (
     <section className="px-4 pb-10">
       <h3 className="mb-2 text-xs font-black uppercase tracking-[0.14em] text-white/44">
-        Explore the scene
+        Explore nearby food
       </h3>
       <div className="grid grid-cols-2 gap-2.5">
         {lowerTiles.map((lane) => {
@@ -7733,7 +7733,7 @@ function QuietNearbyNotice() {
     <section className="px-4 pb-6">
       <div className="rounded-2xl bg-white/[0.04] px-4 py-3 text-white ring-1 ring-white/10">
         <p className="text-sm font-black">
-          The local board is quiet right now.
+          Nearby food is quiet right now.
         </p>
         <p className="mt-1 text-xs font-semibold leading-relaxed text-white/58">
           Try Worth Discovering, New Menus, or widen your area.
@@ -10200,7 +10200,7 @@ function ScoutMapHud({
   const sceneLine =
     totalPins > 0
       ? `${liveTruckCount} trucks • ${dealCount} deals • ${eventCount} events`
-      : "No nearby pins yet - pan the map or widen radius";
+      : "No nearby spots yet - pan the map or widen radius";
 
   return (
     <div className="pointer-events-none absolute left-3 right-3 top-[calc(env(safe-area-inset-top)+4.25rem)] z-20 sm:left-4 sm:right-auto sm:w-[360px]">
@@ -10226,7 +10226,7 @@ function ScoutMapHud({
                 Map
               </p>
               <p className="truncate text-sm font-black text-white">
-                Local food scene
+                Local food nearby
               </p>
             </div>
           </div>
@@ -10269,7 +10269,7 @@ function ScoutMapHud({
         {isExpanded && (
           <div className="mt-3">
             <p className="text-xs text-white/62">
-              Tap the glowing pins to jump into what's cooking near you right
+              Tap nearby spots to jump into what's cooking near you right
               now.
             </p>
             <div className="mt-3 grid grid-cols-4 gap-2 text-center">
@@ -10315,8 +10315,8 @@ function ScoutMapHud({
 
         {isExpanded && localActivityCount === 0 ? (
           <div className="mt-3 rounded-2xl bg-white/7 px-3 py-2 text-xs text-white/72 ring-1 ring-white/10">
-            No nearby pins right here yet. Pan the map or widen discovery from
-            the feed below.
+            No nearby spots right here yet. Pan the map or widen discovery from
+            the picks below.
           </div>
         ) : null}
       </div>
