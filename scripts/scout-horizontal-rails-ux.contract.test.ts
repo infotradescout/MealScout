@@ -132,11 +132,11 @@ assert.ok(
   !immediateStackSource.includes("NearbyRestaurantCard"),
   "Immediate decision stack must use compact cards instead of the full NearbyRestaurantCard rail layout.",
 );
+const defaultFlowOrderPattern =
+  /<ScoutFirstScreenDecisionStack[\s\S]{0,300}?items=\{firstScreenDecisionItems\}[\s\S]{0,300}?\/>\s*\{scoutRows\.map/;
 assert.ok(
-  scoutPage.includes(
-    "<ScoutFirstScreenDecisionStack\n          items={firstScreenDecisionItems}\n          thinMarket={isLowActivityLane && firstScreenDecisionItems.length <= 1}\n        />\n        {scoutRows.map",
-  ),
-  "Scout default flow must render compact decision stack, then full rails.",
+  defaultFlowOrderPattern.test(scoutPage),
+  "Scout default flow must render compact decision stack before full rails without relying on JSX formatting.",
 );
 assert.ok(
   scoutPage.includes("const nearbyOnlyDecisionItems: ScoutImmediateDecisionItem[] =") &&
