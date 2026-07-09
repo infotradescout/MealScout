@@ -2922,7 +2922,7 @@ export default function PublicProfilePage() {
   const description =
     data.seo?.seoDescription ||
     data.description ||
-    "Find truck-first local food coverage, public menus, and posted schedule details on MealScout.";
+    "Find local food coverage, public menus, and posted schedule details on MealScout.";
   const canonicalUrl =
     (resolvedCleanBusinessPath && typeof window !== "undefined"
       ? new URL(resolvedCleanBusinessPath, window.location.origin).toString()
@@ -2972,7 +2972,7 @@ export default function PublicProfilePage() {
           </Link>
           <div className="flex items-center gap-3 text-xs sm:text-sm">
             <Link href="/scout" className="text-white/75 hover:text-white">
-              Scout trucks
+              Open Scout
             </Link>
             <Link
               href="/claim-business"
@@ -3256,7 +3256,7 @@ export default function PublicProfilePage() {
           <p>MealScout</p>
           <div className="flex items-center gap-4">
             <Link href="/scout" className="hover:text-white">
-              Scout trucks
+              Open Scout
             </Link>
             <Link href="/claim-business" className="hover:text-white">
               Business owner?

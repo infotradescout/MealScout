@@ -44,7 +44,7 @@ type NavigationProps = {
 
 const NAV_HELP: Record<string, string> = {
   Scout: "Find food trucks and local food near you.",
-  Map: "Open the truck-first map for nearby food and trucks.",
+  Map: "Open the local food map for nearby places and trucks.",
   Truck: "List a food truck on MealScout.",
   Claim: "Claim or update a food truck profile.",
   Login: "Sign in to your MealScout account.",
