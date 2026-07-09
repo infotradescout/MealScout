@@ -138,6 +138,24 @@ const labelize = (value: string | null | undefined) =>
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
 
+const indexableRobots =
+  "index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1";
+const noindexRobots = "noindex,follow";
+
+const friendlyLocationTypeLabel = (value: string | null | undefined) => {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (!normalized) return "";
+  if (normalized === "private_residence") return "Private event location";
+  if (normalized === "business") return "Business";
+  if (normalized === "other") return "Host location";
+  return labelize(normalized);
+};
+
+const isSyntheticTestEntityName = (value: string | null | undefined) => {
+  const normalized = cleanText(value).toLowerCase();
+  return /^test (truck|restaurant|business|vendor)\b/.test(normalized);
+};
+
 const moneyFromCents = (value: unknown) => {
   const cents = Number(value);
   return Number.isFinite(cents) && cents > 0 ? Math.round(cents) / 100 : null;
@@ -345,6 +363,7 @@ async function restaurantPage(baseUrl: string, restaurantId: string) {
   const isUnclaimed = await isImportSystemOwner(row.ownerId);
 
   const name = cleanText(row.name, "MealScout business");
+  const isSyntheticTestEntity = isSyntheticTestEntityName(name);
   const cityState = [row.city, row.state]
     .map((value) => cleanText(value))
     .filter(Boolean)
@@ -459,9 +478,7 @@ async function restaurantPage(baseUrl: string, restaurantId: string) {
     description,
     canonicalPath,
     imageUrl: image,
-    robots: isUnclaimed
-      ? "noindex,follow"
-      : "index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1",
+    robots: isUnclaimed || isSyntheticTestEntity ? noindexRobots : indexableRobots,
     schema: [localBusiness, ...videoSchemas(baseUrl, videos, name)],
     links: [
       { label: "Open profile", href: canonicalPath },
@@ -469,7 +486,7 @@ async function restaurantPage(baseUrl: string, restaurantId: string) {
         ? [{ label: "Catering", href: `${canonicalPath}?service=catering` }]
         : []),
       { label: "Find food nearby", href: "/search" },
-      { label: "Scout local dashboard", href: "/scout" },
+      { label: "Open Scout", href: "/scout" },
     ],
     body: [
       row.cuisineType ? `Cuisine: ${row.cuisineType}` : "",
@@ -508,6 +525,7 @@ async function hostPage(baseUrl: string, hostId: string) {
     row.description || row.notes,
     `${name}${cityState ? ` in ${cityState}` : ""} is a MealScout host location for food truck parking and events.`,
   );
+  const locationTypeLabel = friendlyLocationTypeLabel(row.locationType);
 
   return {
     title: `${name} Food Truck Location${cityState ? ` in ${cityState}` : ""} | MealScout`,
@@ -535,11 +553,11 @@ async function hostPage(baseUrl: string, hostId: string) {
     ],
     links: [
       { label: "Open location", href: canonicalPath },
-      { label: "Book parking", href: "/parking-pass" },
-      { label: "Find food trucks", href: "/scout" },
+      { label: "Host food trucks", href: "/parking-pass" },
+      { label: "Explore nearby food", href: "/scout" },
     ],
     body: [
-      row.locationType ? `Location type: ${row.locationType}` : "",
+      locationTypeLabel ? `Location type: ${locationTypeLabel}` : "",
       cityState ? `Area: ${cityState}` : "",
       videos.length
         ? `${videos.length} public video${videos.length === 1 ? "" : "s"} available for this location.`
