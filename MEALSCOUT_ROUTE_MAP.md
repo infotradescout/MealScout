@@ -7,10 +7,10 @@ This map is a cleanup aid, not a refactor plan. Source of truth inspected for th
 Entry routes:
 
 - `/` - guest welcome; authenticated users redirect toward `/scout`.
-- `/scout` - primary customer discovery surface. Uses Scout prototype page code today.
+- `/scout` - primary customer discovery surface. Routes to `ScoutPageV2` from `client/src/pages/explore-preview-v2.tsx`.
 - `/search` - customer search.
-- `/map` - map discovery.
-- `/trending` - customer trending discovery.
+- `/map` - public map entry. `client/src/App.tsx` routes this to `RedirectToScout`, which redirects to `/scout`; the live surface is `client/src/pages/explore-preview-v2.tsx`, not `client/src/pages/map.tsx`.
+- `/trending` - legacy discovery entry. `client/src/App.tsx` routes this to `RedirectToScout`, which redirects to `/scout`.
 - `/deals`, `/deals/featured`, `/deals/:city`, `/deal/:id` - deal discovery/detail.
 - `/restaurant/:id`, `/truck/:slug`, `/bar/:slug`, `/location/:slug` - public detail pages.
 - `/p/:profileType/:profileId` and `/p/:profileType/:profileId/:profileSlug` - public profile routes.
@@ -20,6 +20,27 @@ Entry routes:
 - `/menu/:restaurantId`, `/checkout/:restaurantId`, `/order-confirmation/:orderId` - public menu and pickup checkout surfaces.
 - `/suppliers`, `/supplier/:slug`, `/suppliers/:supplierId` - supplier marketplace public/detail routes.
 - `/video`, `/video/:id`, `/scoutcoin`, `/status`, `/install`, `/sitemap`, `/about`, `/contact`, `/faq`, legal/comparison pages - public content routes.
+
+Public route source inventory:
+
+| Route family | Current frontend source | Notes |
+| --- | --- | --- |
+| `/scout`, `/scout/:refTag`, `/directory`, `/directory/:refTag`, `/scout-v2` | `client/src/pages/explore-preview-v2.tsx` (`ScoutPageV2`) | Canonical public Scout discovery surface. |
+| `/map` | `RedirectToScout` in `client/src/App.tsx`, then `client/src/pages/explore-preview-v2.tsx` | Production `/map` does not mount `client/src/pages/map.tsx`. |
+| `/trending` | `RedirectToScout` in `client/src/App.tsx`, then `client/src/pages/explore-preview-v2.tsx` | Legacy entry preserved as redirect. |
+| `/sitemap` | `client/src/pages/sitemap.tsx` | Public content/discovery index. |
+| `/restaurant/:id`, `/restaurant/:id/:profileSlug`, `/truck/:slug`, `/bar/:slug`, `/location/:slug`, `/p/:profileType/:profileId`, `/p/:profileType/:profileId/:profileSlug` | `client/src/pages/public-profile.tsx` | Public profile route families. |
+| clean business slug routes | `CleanPublicProfileRoute` in `client/src/App.tsx`, then `client/src/pages/public-profile.tsx` | Only renders when `parseCleanAffiliateBusinessRoute` accepts the path. |
+| `/city/:city/food`, `/food-trucks-today/:city`, `/deals-today/:city`, `/events-today/:city`, `/locations-with-trucks/:city`, `/cuisine/:cuisine/:city` | `client/src/pages/public-seo-landing.tsx` | SEO/discovery landing surfaces. |
+| `/city/:city`, `/food-trucks/:citySlug`, `/food-trucks/:citySlug/:cuisineSlug` | `client/src/pages/city-landing.tsx` | City and food-truck city landing routes. |
+| `/city/:city/:mode` | `client/src/pages/city-discovery.tsx` | Generic city discovery mode route; keep route ordering in mind when auditing `/city/:city/food`. |
+| `/profile-setup` | `client/src/pages/profile-setup.tsx` | Public profile setup offer page. |
+
+Legacy/dead-looking public surfaces to verify before editing:
+
+- `client/src/pages/map.tsx` currently exists but is not mounted by `client/src/App.tsx`; `/map` redirects to `/scout` and uses `client/src/pages/explore-preview-v2.tsx`.
+- `client/src/pages/explore-preview.tsx` is legacy/quarantined; `ScoutPageV2` is the canonical Scout route.
+- `client/src/pages/trending.tsx` exists, but `/trending` redirects to `/scout` and is not mounted as a standalone public page.
 
 Main backend groups:
 
