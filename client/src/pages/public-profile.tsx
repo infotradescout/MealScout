@@ -2545,7 +2545,7 @@ function RestaurantSocial({
   );
 }
 
-function RelatedLocalDiscovery({
+function PublicProfileRelatedDiscoveryLinks({
   data,
   citySlug,
 }: {
@@ -2553,18 +2553,31 @@ function RelatedLocalDiscovery({
   citySlug: string | null;
 }) {
   if (!data.city || !citySlug) return null;
+  const encodedCitySlug = encodeURIComponent(citySlug);
   return (
     <Card className="border-white/10 bg-[#0f0d0b]">
       <CardHeader>
         <CardTitle className="text-base text-white">
-          Truck-first discovery in {data.city}
+          Explore more food in {data.city}
         </CardTitle>
         <CardDescription className="text-white/60">
-          MealScout coverage is limited and grows as local trucks and places
-          update their profiles.
+          Find nearby restaurants, trucks, bars, and fresh local updates from
+          MealScout.
         </CardDescription>
       </CardHeader>
       <CardContent className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
+        <a
+          href={`/city/${encodedCitySlug}/food`}
+          className="rounded-md border border-white/10 px-3 py-2 text-white/85 hover:bg-white/10"
+        >
+          Browse local food
+        </a>
+        <a
+          href={`/food-trucks-today/${encodedCitySlug}`}
+          className="rounded-md border border-white/10 px-3 py-2 text-white/85 hover:bg-white/10"
+        >
+          Food trucks today
+        </a>
         <a
           href="/scout"
           className="rounded-md border border-white/10 px-3 py-2 text-white/85 hover:bg-white/10"
@@ -2572,22 +2585,10 @@ function RelatedLocalDiscovery({
           Open Scout
         </a>
         <a
-          href={`/food-trucks-today/${encodeURIComponent(citySlug)}`}
-          className="rounded-md border border-white/10 px-3 py-2 text-white/85 hover:bg-white/10"
-        >
-          Food trucks today
-        </a>
-        <a
           href="/claim-business"
           className="rounded-md border border-white/10 px-3 py-2 text-white/85 hover:bg-white/10"
         >
-          Claim or update a truck
-        </a>
-        <a
-          href="/restaurant-signup?businessType=food_truck"
-          className="rounded-md border border-white/10 px-3 py-2 text-white/85 hover:bg-white/10"
-        >
-          List a food truck
+          Claim or update a profile
         </a>
       </CardContent>
     </Card>
@@ -3217,13 +3218,22 @@ export default function PublicProfilePage() {
 
           {/* Personalized related discovery rail */}
           {restaurantProfile ? (
-            <RelatedScoutRail
-              profile={restaurantProfile}
-              citySlug={citySlug}
-              userFavoriteIds={userFavoriteIds}
-            />
+            <>
+              <RelatedScoutRail
+                profile={restaurantProfile}
+                citySlug={citySlug}
+                userFavoriteIds={userFavoriteIds}
+              />
+              <PublicProfileRelatedDiscoveryLinks
+                data={data}
+                citySlug={citySlug}
+              />
+            </>
           ) : (
-            <RelatedLocalDiscovery data={data} citySlug={citySlug} />
+            <PublicProfileRelatedDiscoveryLinks
+              data={data}
+              citySlug={citySlug}
+            />
           )}
 
           {/* Mobile sticky action dock — always accessible */}
