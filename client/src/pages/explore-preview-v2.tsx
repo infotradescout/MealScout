@@ -10063,16 +10063,16 @@ function MapActivityPips({
 
   const pips = [
     truckCount > 0
-      ? { label: "Trucks", value: truckCount, className: "bg-orange-300" }
+      ? { label: "Food trucks", value: truckCount, className: "bg-orange-300" }
       : null,
     restaurantCount > 0
-      ? { label: "Open", value: restaurantCount, className: "bg-emerald-300" }
+      ? { label: "Open places", value: restaurantCount, className: "bg-emerald-300" }
       : null,
     dealCount > 0
       ? { label: "Deals", value: dealCount, className: "bg-lime-300" }
       : null,
     eventCount > 0
-      ? { label: "Today", value: eventCount, className: "bg-amber-300" }
+      ? { label: "Events", value: eventCount, className: "bg-amber-300" }
       : null,
   ].filter(
     (item): item is { label: string; value: number; className: string } =>
@@ -10083,6 +10083,8 @@ function MapActivityPips({
 
   return (
     <div
+      aria-label="Nearby discovery summary"
+      data-testid="map-discovery-summary"
       className={[
         "pointer-events-none absolute left-3 top-14 z-20 flex max-w-[calc(100%-1.5rem)] flex-wrap",
         mode === "high_activity" ? "gap-2" : "gap-1.5",
