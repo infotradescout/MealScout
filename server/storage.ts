@@ -356,6 +356,14 @@ export interface IStorage {
 
   // Deal claim operations
   claimDeal(claim: InsertDealClaim): Promise<DealClaim>;
+  claimDealAtomic(
+    dealId: string,
+    userId: string,
+    perCustomerLimit: number,
+  ): Promise<
+    | { ok: true; claim: DealClaim }
+    | { ok: false; reason: "already_claimed" | "sold_out" }
+  >;
   getUserDealClaims(userId: string): Promise<DealClaim[]>;
   getUserDealClaimsWithDetails(userId: string): Promise<any[]>;
   getDealClaimsCount(dealId: string, userId?: string): Promise<number>;
@@ -2765,6 +2773,60 @@ export class DatabaseStorage implements IStorage {
   async claimDeal(claim: InsertDealClaim): Promise<DealClaim> {
     const [newClaim] = await db.insert(dealClaims).values(claim).returning();
     return newClaim;
+  }
+
+  // Claiming a deal previously read currentUses/totalUsesLimit and the
+  // per-user claim count, then separately inserted the claim and
+  // incremented currentUses -- two concurrent claims near the cap could
+  // both pass the check before either write landed, overselling a
+  // limited deal. This does the limit check and the increment as a
+  // single conditional UPDATE inside a transaction, so only as many
+  // claims as the deal's totalUsesLimit actually allows can ever
+  // succeed, regardless of concurrent requests.
+  async claimDealAtomic(
+    dealId: string,
+    userId: string,
+    perCustomerLimit: number,
+  ): Promise<
+    | { ok: true; claim: DealClaim }
+    | { ok: false; reason: "already_claimed" | "sold_out" }
+  > {
+    return await db.transaction(async (tx: any) => {
+      const [existingCountRow] = await tx
+        .select({ count: sql<number>`count(*)` })
+        .from(dealClaims)
+        .where(and(eq(dealClaims.dealId, dealId), eq(dealClaims.userId, userId)));
+      if (Number(existingCountRow?.count || 0) >= perCustomerLimit) {
+        return { ok: false, reason: "already_claimed" as const };
+      }
+
+      const [reserved] = await tx
+        .update(deals)
+        .set({
+          currentUses: sql`${deals.currentUses} + 1`,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(deals.id, dealId),
+            or(
+              isNull(deals.totalUsesLimit),
+              lt(deals.currentUses, deals.totalUsesLimit),
+            ),
+          ),
+        )
+        .returning({ id: deals.id });
+
+      if (!reserved) {
+        return { ok: false, reason: "sold_out" as const };
+      }
+
+      const [newClaim] = await tx
+        .insert(dealClaims)
+        .values({ dealId, userId })
+        .returning();
+      return { ok: true, claim: newClaim };
+    });
   }
 
   async getUserDealClaims(userId: string): Promise<DealClaim[]> {

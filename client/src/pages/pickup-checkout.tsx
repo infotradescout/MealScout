@@ -95,6 +95,7 @@ export default function CheckoutPage() {
   const [, navigate] = useLocation();
   const [cart, setCart] = useState<CartItem[]>([]);
   const [menuInfo, setMenuInfo] = useState<MenuInfo | null>(null);
+  const [menuInfoError, setMenuInfoError] = useState(false);
   const [readiness, setReadiness] = useState<OrderingReadiness | null>(null);
   const [orderingEnabled, setOrderingEnabled] = useState(true);
   const [paymentMethod, setPaymentMethod] = useState<"card" | "cash">("card");
@@ -124,8 +125,12 @@ export default function CheckoutPage() {
 
     // Also fetch menu to check acceptsCash + hidePlatformFee
     if (restaurantId) {
+      setMenuInfoError(false);
       fetch(`/api/menus/${encodeURIComponent(restaurantId)}`)
-        .then((r) => r.json())
+        .then((r) => {
+          if (!r.ok) throw new Error(`Menu lookup failed (${r.status})`);
+          return r.json();
+        })
         .then((payload: any) => {
           setOrderingEnabled(Boolean(payload?.orderingEnabled));
           setReadiness(payload?.readiness || null);
@@ -138,7 +143,10 @@ export default function CheckoutPage() {
             });
           }
         })
-        .catch(() => {});
+        // A failed lookup previously left menuInfo null, which silently
+        // hides the cash option with no explanation -- surface it instead
+        // so a diner who expected to pay cash isn't just confused.
+        .catch(() => setMenuInfoError(true));
     }
   }, [restaurantId]);
 
@@ -476,6 +484,13 @@ export default function CheckoutPage() {
                 </div>
               )}
             </RadioGroup>
+            {menuInfoError && (
+              <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                Couldn't check whether this restaurant accepts cash at pickup.
+                Card payment is available; refresh to try again.
+              </p>
+            )}
           </CardContent>
         </Card>
 
