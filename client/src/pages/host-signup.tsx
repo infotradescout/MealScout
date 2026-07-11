@@ -137,7 +137,9 @@ function HostSignup() {
     if (!contactEmail.trim())
       validationErrors.contactEmail = "Contact email is required";
     if (contactPhone.replace(/\D/g, "").length < 10)
-      validationErrors.contactPhone = "Contact phone is required";
+      validationErrors.contactPhone = contactPhone.trim()
+        ? "Enter a valid 10-digit phone number, including area code"
+        : "Contact phone is required";
     if (!locationType) validationErrors.locationType = "Select a location type";
 
     setErrors(validationErrors);

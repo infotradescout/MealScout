@@ -79,24 +79,20 @@ export function registerClaimRoutes(
           return res.status(404).json({ message: "Restaurant not found" });
         }
 
-        const existingClaims = await storage.getDealClaimsCount(dealId, userId);
-        if (existingClaims >= (deal.perCustomerLimit || 1)) {
-          return res
-            .status(400)
-            .json({ message: "Deal already claimed by user" });
+        const claimResult = await storage.claimDealAtomic(
+          dealId,
+          userId,
+          deal.perCustomerLimit || 1,
+        );
+        if (!claimResult.ok) {
+          return res.status(400).json({
+            message:
+              claimResult.reason === "already_claimed"
+                ? "Deal already claimed by user"
+                : "Deal is no longer available",
+          });
         }
-
-        if (
-          deal.totalUsesLimit &&
-          (deal.currentUses || 0) >= deal.totalUsesLimit
-        ) {
-          return res
-            .status(400)
-            .json({ message: "Deal is no longer available" });
-        }
-
-        const claim = await storage.claimDeal({ dealId, userId });
-        await storage.incrementDealUses(dealId);
+        const claim = claimResult.claim;
 
         try {
           await sendDealClaimedNotification(dealId, userId);

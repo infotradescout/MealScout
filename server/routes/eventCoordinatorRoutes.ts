@@ -11,6 +11,8 @@ import {
 import { storage } from "../storage";
 import { db } from "../db";
 import { and, eq, inArray, desc, sql } from "drizzle-orm";
+import { emailService } from "../emailService";
+import { canEmailForTopic } from "../utils/notificationPreferences";
 import {
   computeAcceptedCount,
   shouldBlockAcceptance,
@@ -282,6 +284,38 @@ export function registerEventCoordinatorRoutes(
           interestId,
           status,
         );
+
+        // A truck applying to an event here previously had no way to learn
+        // whether they were accepted or declined except by polling
+        // /my-interests -- mirrors the notification hostInterestRoutes.ts
+        // already sends for the equivalent host-side accept/decline action.
+        (async () => {
+          try {
+            const truck = await storage.getRestaurant(interest.truckId);
+            if (!truck) return;
+            const owner = await storage.getUser(truck.ownerId);
+            if (
+              !owner ||
+              !owner.email ||
+              !canEmailForTopic((owner as any).accountSettings, "nearbyEvents")
+            ) {
+              return;
+            }
+            const eventHost = await storage.getHost(event.hostId);
+            const hostDisplayName =
+              eventHost?.businessName || event.name || "the event host";
+            await emailService.sendInterestStatusUpdate(
+              owner.email,
+              truck.name,
+              hostDisplayName,
+              new Date(event.date).toLocaleDateString(),
+              status as "accepted" | "declined",
+            );
+          } catch (err) {
+            console.error("Failed to send event interest status notification:", err);
+          }
+        })();
+
         res.json({ message: `Interest ${status}`, interest: updated });
       } catch (error: any) {
         console.error("Error updating interest status:", error);
@@ -360,8 +394,12 @@ export function registerEventCoordinatorRoutes(
           name: z.string().min(1),
           description: z.string().optional(),
           date: z.string().min(1),
-          startTime: z.string().min(1),
-          endTime: z.string().min(1),
+          startTime: z
+            .string()
+            .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Start time must be in HH:MM format"),
+          endTime: z
+            .string()
+            .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "End time must be in HH:MM format"),
           maxTrucks: z.number().int().min(1).max(50),
         });
 
