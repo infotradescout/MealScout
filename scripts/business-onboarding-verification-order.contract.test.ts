@@ -7,7 +7,7 @@ const requiredContinuationSnippets = [
   'nextRequiredStep = "menu";',
   'continuationPath = "/menu-builder";',
   'nextRequiredStep = "schedule";',
-  'continuationPath = "/parking-pass-manage";',
+  'continuationPath = "/restaurant-owner-dashboard?setup=schedule";',
   'nextRequiredStep = "verification";',
   'reason = "Verification details are still missing, but setup can continue.";',
 ];

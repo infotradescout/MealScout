@@ -110,11 +110,15 @@ const availabilityAnswer = (profile: PublicRestaurantProfile) => {
     if (primary.kind === "next" || primary.kind === "upcoming") {
       return { label: "Scheduled", value: primary.label };
     }
-    return null;
+    // No actionable schedule — say so instead of silently dropping the
+    // tile, same honest-label pattern used for menu/location above.
+    return { label: "Schedule", value: "Schedule not posted yet" };
   }
 
   const openStatus = clean(profile.openStatus);
-  if (!openStatus && !clean(profile.hours)) return null;
+  if (!openStatus && !clean(profile.hours)) {
+    return { label: "Hours", value: "Hours not posted yet" };
+  }
   return {
     label: "Open status",
     value: openStatus,

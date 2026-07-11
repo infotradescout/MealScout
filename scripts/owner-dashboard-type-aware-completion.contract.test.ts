@@ -4,11 +4,11 @@ const ownerDashboard = readFileSync("client/src/pages/restaurant-owner-dashboard
 
 const requiredSnippets = [
   "const hasOperatingTimeRequirement = isFoodTruck",
-  "? hasSchedule || hasTruckScheduleSignals",
+  "? hasValidTruckScheduleWindow || scheduleUpdatedRecently",
   ": hasSchedule;",
   "hasOperatingTimeRequirement &&",
   "...(isFoodTruck",
-  "label: \"Truck schedule complete\"",
+  "label: \"Schedule this week\"",
   "href: \"/restaurant-owner-dashboard?setup=schedule&truck=1\"",
   ": [",
   "label: \"Hours complete\"",
@@ -23,7 +23,7 @@ for (const snippet of requiredSnippets) {
   }
 }
 
-const truckLabelIndex = ownerDashboard.indexOf('label: "Truck schedule complete"');
+const truckLabelIndex = ownerDashboard.indexOf('label: "Schedule this week"');
 const hoursLabelIndex = ownerDashboard.indexOf('label: "Hours complete"');
 if (truckLabelIndex < 0 || hoursLabelIndex < 0) {
   throw new Error("Both schedule/hour labels must exist in type-aware branch");
