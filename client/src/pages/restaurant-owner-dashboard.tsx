@@ -254,6 +254,7 @@ export default function RestaurantOwnerDashboard() {
   >("disconnected");
   const [gpsAccuracy, setGpsAccuracy] = useState<number | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const hasWarnedFallbackAccuracyRef = useRef(false);
 
   const isRestaurantOwner = user?.userType === "restaurant_owner";
   const isFoodTruck = user?.userType === "food_truck";
@@ -1027,6 +1028,20 @@ export default function RestaurantOwnerDashboard() {
     return null;
   };
 
+  // A quiet inline error string is easy to miss, and "approximate location"
+  // undersells that customers could be sent miles from the truck's real
+  // spot. Surface it once per broadcast session as a toast too.
+  const warnFallbackAccuracy = (accuracyMeters: number) => {
+    if (hasWarnedFallbackAccuracyRef.current) return;
+    hasWarnedFallbackAccuracyRef.current = true;
+    const accuracyMiles = accuracyMeters / 1609;
+    toast({
+      title: "Broadcasting an approximate location",
+      description: `GPS isn't available, so customers may see your truck up to ${accuracyMiles.toFixed(1)} miles from where you actually are. Enable location access for an exact pin.`,
+      variant: "destructive",
+    });
+  };
+
   // GPS tracking effect with fallback
   useEffect(() => {
     if (isBroadcasting && sessionId) {
@@ -1040,6 +1055,7 @@ export default function RestaurantOwnerDashboard() {
             setGpsAccuracy(fallbackLocation.accuracy || 10000);
             setLocationError("Using approximate location (GPS unavailable)");
             setConnectionStatus("connected");
+            warnFallbackAccuracy(fallbackLocation.accuracy || 10000);
 
             updateLocationMutation.mutate({
               lat: fallbackLocation.lat,
@@ -1070,6 +1086,7 @@ export default function RestaurantOwnerDashboard() {
           setGpsAccuracy(position.coords.accuracy);
           setLocationError(null);
           setConnectionStatus("connected");
+          hasWarnedFallbackAccuracyRef.current = false;
 
           // Only send updates if location changed significantly (50m threshold)
           if (
@@ -1114,6 +1131,7 @@ export default function RestaurantOwnerDashboard() {
             setGpsAccuracy(fallbackLocation.accuracy || 10000);
             setLocationError(fallbackMessage + "Using approximate location.");
             setConnectionStatus("connected");
+            warnFallbackAccuracy(fallbackLocation.accuracy || 10000);
 
             updateLocationMutation.mutate({
               lat: fallbackLocation.lat,
@@ -1147,20 +1165,43 @@ export default function RestaurantOwnerDashboard() {
     currentRestaurant,
   ]);
 
-  // Auto-stop broadcasting after 2 minutes of inactivity
+  // Warn, then auto-stop broadcasting after 2 minutes of inactivity.
+  // A silent auto-stop is easy to miss if the owner has put the phone
+  // down or switched tabs, so this surfaces a toast at both stages
+  // instead of only updating the (easy to miss) inline error box.
   useEffect(() => {
     if (isBroadcasting && lastBroadcast) {
-      const timeout = setTimeout(() => {
+      const warningTimeout = setTimeout(() => {
+        if (Date.now() - lastBroadcast.getTime() > 90000) {
+          toast({
+            title: "Your live location hasn't updated in a while",
+            description:
+              "MealScout will stop broadcasting your truck as live in about 30 seconds unless a new location comes in.",
+            variant: "destructive",
+          });
+        }
+      }, 90000);
+
+      const stopTimeout = setTimeout(() => {
         if (Date.now() - lastBroadcast.getTime() > 120000) {
           // 2 minutes
           stopFoodTruckSessionMutation.mutate();
           setLocationError("Session timed out due to inactivity");
+          toast({
+            title: "You've gone offline on MealScout",
+            description:
+              "No location update was received for 2 minutes, so your truck was taken off the live map. Start broadcasting again when you're ready.",
+            variant: "destructive",
+          });
         }
       }, 125000); // Check after 2 minutes 5 seconds
 
-      return () => clearTimeout(timeout);
+      return () => {
+        clearTimeout(warningTimeout);
+        clearTimeout(stopTimeout);
+      };
     }
-  }, [lastBroadcast, isBroadcasting, stopFoodTruckSessionMutation]);
+  }, [lastBroadcast, isBroadcasting, stopFoodTruckSessionMutation, toast]);
 
   // Operating hours form schema
   const operatingHoursSchema = z.object({
@@ -1345,6 +1386,7 @@ export default function RestaurantOwnerDashboard() {
     }
 
     setConnectionStatus("connecting");
+    hasWarnedFallbackAccuracyRef.current = false;
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
@@ -2017,6 +2059,66 @@ export default function RestaurantOwnerDashboard() {
           </p>
         </CardContent>
       </Card>
+
+      {currentRestaurant && (() => {
+        // The full completion checklist lives further down the page, under
+        // "Profile value" analytics. Owners were landing here with no
+        // first-screen signal of what's missing before they go live, so
+        // this gives a compact summary up top that links straight to it.
+        const topCompletionStatus = computeProfileCompletionStatus(currentRestaurant as any, {
+          hasActiveDeal: Number(stats?.activeDeals || 0) > 0,
+        });
+        const topCompletionKeys = [
+          "menu",
+          "photos",
+          "hours",
+          "service-area",
+          "contact",
+          "social",
+          "catering-events",
+          "deal",
+        ] as const;
+        const topCompletionDoneCount = topCompletionKeys.filter((key) =>
+          Boolean((topCompletionStatus as any)[key]),
+        ).length;
+        const topCompletionTotal = topCompletionKeys.length;
+        const isComplete = topCompletionDoneCount === topCompletionTotal;
+
+        return (
+          <Card
+            className={`mb-6 ${isComplete ? "border-[color:var(--status-success)]/30 bg-[color:var(--status-success)]/5" : "border-amber-300 bg-amber-50"}`}
+            data-testid="card-top-profile-completion"
+          >
+            <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
+              <div>
+                <p
+                  className={`text-sm font-semibold ${isComplete ? "text-[color:var(--status-success)]" : "text-amber-900"}`}
+                >
+                  {isComplete
+                    ? "Your profile is ready to go live"
+                    : `Profile setup: ${topCompletionDoneCount}/${topCompletionTotal} complete`}
+                </p>
+                <p
+                  className={`mt-1 text-xs ${isComplete ? "text-[color:var(--status-success)]/80" : "text-amber-900/80"}`}
+                >
+                  {isComplete
+                    ? "Keep details current as your business changes."
+                    : "Missing menu, photos, hours, or contact info means customers see an incomplete profile. See what's left below."}
+                </p>
+              </div>
+              {!isComplete && (
+                <a
+                  href="#profile-completion-details"
+                  className="rounded-md border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100"
+                  data-testid="link-jump-to-completion-details"
+                >
+                  See what's missing
+                </a>
+              )}
+            </CardContent>
+          </Card>
+        );
+      })()}
 
       {currentRestaurant && menuApprovalRequired ? (
         <Card
@@ -3049,7 +3151,10 @@ export default function RestaurantOwnerDashboard() {
                 </div>
               ) : null}
 
-              <div className="rounded-lg border border-border p-4">
+              <div
+                id="profile-completion-details"
+                className="rounded-lg border border-border p-4 scroll-mt-24"
+              >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <p className="text-sm font-semibold">Profile value</p>
