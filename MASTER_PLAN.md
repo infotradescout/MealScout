@@ -11,14 +11,15 @@ Single source of truth for roadmap, operations, deployment, testing, deferred fe
 - Enforce trust, verification, and role-based actions.
 - Grow monetization without pay-to-play ranking.
 
-## Current Reality (as of April 2026)
+## Current Reality (as of July 2026)
 
 - Core app is live with auth, map, parking pass, events, deals, admin, and Stripe support.
 - **Online Ordering** has been launched and gated behind a $25/mo premium subscription per restaurant.
 - **LISA (Location Intelligence & Supply Analytics)** is actively processing market intel, supply prices, and operating briefs.
-- **Backend Refactoring** is underway (Phase 3 in progress), successfully extracting auth tokens, analytics, and parking pass repositories behind `IStorage`.
+- **Backend Refactoring**: Phase 2 (route composition), Phase 3 (storage split), and Phase 5 (oversized route decomposition) are merged and verified — see `docs/refactor/REFACTOR_BOARD.md` (nothing queued or in progress as of this writing). Phase 4 (schema modularization) has not started.
 - **Mobile Responsiveness** has been completed across 30+ pages with a mobile-first design strategy (320px baseline).
 - **Map & Geocode Integrity** is complete, achieving 100% coordinate coverage for primary hosts and secondary addresses.
+- **Site-drift sweep (2026-07-05)**: consolidated duplicated public route definitions in `App.tsx`, unified business signup entry points onto the canonical `/restaurant-signup?businessType=...` flow, and fixed several route-level bugs (`/search` featured deals query, `/dashboard` blank fallback, `/share-hub` double auth fetch). See `docs/refactor/REFACTOR_BOARD.md` "Verified" section for the full list.
 
 ## Execution Plan
 
@@ -36,15 +37,13 @@ Single source of truth for roadmap, operations, deployment, testing, deferred fe
 
 ### Phase 2: Backend Refactor Continuation (Now)
 
-1. **Complete Phase 3 (Storage Split)**
-   - Finish extracting domain-specific query logic into repository-style modules (e.g., `usersRepository`, `hostsEventsRepository`, `restaurantsDealsRepository`).
-   - Keep `IStorage` stable while moving implementation code behind it.
+1. **Storage Split (`docs/refactor/REFACTOR_BOARD.md` phase-3-storage-split)** — merged. Domain-specific query logic lives in repository-style modules (e.g., `usersRepository`, `paymentsSubscriptionsRepository`) behind a stable `IStorage`.
 
-2. **Phase 4 (Route Decomposition)**
-   - Break up oversized extracted route modules (`adminManagementRoutes`, `supplierMarketplaceRoutes`, `hostRoutes`) into focused sub-modules.
+2. **Route Decomposition (REFACTOR_BOARD phase-5-oversized-route-splits)** — merged. `adminManagementRoutes`, `supplierMarketplaceRoutes`, and `hostRoutes` have been broken into focused sub-modules (e.g., `server/routes/suppliers/*`, `server/routes/admin/*`, `server/routes/hosts/*`).
 
-3. **Phase 5 (Schema Modularization)**
-   - Modularize `shared/schema.ts` into focused files by domain (e.g., `core`, `users`, `restaurants`, `deals`) while preserving the `@shared/schema` import path.
+3. **Schema Modularization** — the domain-file structure exists (`shared/schema.ts` re-exports `./schema/{core,users,restaurants,deals,hosts,events,parkingPass,admin,suppliers,ordering,hiring,marketIntel,growth,misc,moderation,scoutcoin}`), but `shared/schema/legacy.ts` still holds a large share of the actual table definitions pending further migration into the domain files. Not fully complete.
+
+4. **Next backend refactor lane**: nothing is queued on `docs/refactor/REFACTOR_BOARD.md` as of this writing — pick the next target from oversized files before starting new phases.
 
 ### Phase 3: LISA & Market Intel Expansion (Near Term)
 

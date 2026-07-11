@@ -16,7 +16,7 @@ import {
   fetchWebsiteProfilePreview,
   WebsiteImportError,
 } from "../utils/websiteProfileImport";
-import { users, insertRestaurantSchema, type User } from "@shared/schema";
+import { users, telemetryEvents, insertRestaurantSchema, type User } from "@shared/schema";
 
 type RestaurantSignupRouteDependencies = {
   ensureTrialForUser: (user: User) => Promise<User | null | undefined>;
@@ -50,6 +50,7 @@ const restaurantSignupUserSchema = z.object({
     })
     .min(1, PASSWORD_REQUIREMENTS)
     .refine(isPasswordStrong, PASSWORD_REQUIREMENTS),
+  phoneContactConsent: z.boolean().optional(),
 });
 
 const LEGAL_ACCEPTANCE_REQUIRED_MESSAGE = "You must accept the terms";
@@ -170,11 +171,25 @@ export function registerRestaurantSignupRoutes(
 
         const passwordHash = await bcrypt.hash(validatedUserData.password, 10);
         const normalizedPhone = validatedUserData.phone.replace(/\D/g, "");
+        const { phoneContactConsent, ...emailUserData } = validatedUserData;
         user = await storage.upsertUserByAuth(
           "email",
-          { ...validatedUserData, phone: normalizedPhone, passwordHash },
+          { ...emailUserData, phone: normalizedPhone, passwordHash },
           "restaurant_owner",
         );
+
+        // The consent checkbox on the signup form ("MealScout may call or
+        // text me about onboarding") wasn't persisted anywhere before this;
+        // record it so support/legal can look it up per user.
+        try {
+          await db.insert(telemetryEvents).values({
+            eventName: "restaurant_signup_phone_contact_consent",
+            userId: user.id,
+            properties: { consent: phoneContactConsent !== false },
+          });
+        } catch (error) {
+          console.warn("Failed to record phone contact consent telemetry:", error);
+        }
 
         const token = randomBytes(32).toString("hex");
         const tokenHash = createHash("sha256").update(token).digest("hex");
@@ -418,8 +433,13 @@ export function registerRestaurantSignupRoutes(
           message: getFriendlySignupValidationMessage(error),
         });
       }
-      res.status(400).json({
-        message: "Please complete the required fields.",
+      // An unexpected failure here (DB error, a downstream service throwing,
+      // etc.) is not the same as "you filled out the form wrong" — reporting
+      // it as a 400 validation message left owners with no way to tell a
+      // typo apart from a real outage. Be honest that it's our side.
+      res.status(500).json({
+        message:
+          "Something went wrong creating your account. Please try again in a moment, and contact support if it keeps happening.",
       });
     }
   });

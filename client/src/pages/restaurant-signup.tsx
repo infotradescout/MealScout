@@ -204,6 +204,25 @@ function getSafeFreeProfileErrorMessage(
   return normalized;
 }
 
+const BLANK_RESTAURANT_FORM_VALUES: RestaurantFormData = {
+  name: "",
+  address: "",
+  city: "",
+  state: "",
+  phone: "",
+  businessType: "food_truck",
+  confirmNotFoodTruck: false,
+  cuisineType: "",
+  description: "",
+  websiteUrl: "",
+  instagramUrl: "",
+  facebookPageUrl: "",
+  hasParking: false,
+  hasWifi: false,
+  hasOutdoorSeating: false,
+  acceptTerms: false,
+};
+
 const SIGNUP_TERMS_ACCEPTANCE_KEY =
   "mealscout:restaurant-signup-accepted-terms";
 
@@ -288,6 +307,8 @@ export default function RestaurantSignup() {
 
   const RESTAURANT_DRAFT_KEY = "mealscout:restaurant-signup-draft";
   const MENU_IMPORT_DRAFT_KEY = "mealscout:menu-import-draft";
+  const RESTAURANT_DRAFT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+  const [restoredDraftAt, setRestoredDraftAt] = useState<Date | null>(null);
 
   const menuSourceUrl = useMemo(() => {
     if (typeof window === "undefined") return "";
@@ -337,35 +358,49 @@ export default function RestaurantSignup() {
   };
 
   const restaurantDefaultValues = useMemo<RestaurantFormData>(() => {
-    const base: RestaurantFormData = {
-      name: "",
-      address: "",
-      city: "",
-      state: "",
-      phone: "",
-      businessType: "food_truck",
-      confirmNotFoodTruck: false,
-      cuisineType: "",
-      description: "",
-      websiteUrl: "",
-      instagramUrl: "",
-      facebookPageUrl: "",
-      hasParking: false,
-      hasWifi: false,
-      hasOutdoorSeating: false,
-      acceptTerms: false,
-    };
+    const base: RestaurantFormData = BLANK_RESTAURANT_FORM_VALUES;
 
     if (typeof window === "undefined") return base;
 
     try {
       const stored = window.localStorage.getItem(RESTAURANT_DRAFT_KEY);
       if (!stored) return base;
-      const parsed = JSON.parse(stored) as Partial<RestaurantFormData>;
-      return { ...base, ...parsed };
+      const parsed = JSON.parse(stored) as Partial<RestaurantFormData> & {
+        __savedAt?: number;
+      };
+      const savedAt = parsed.__savedAt;
+      if (
+        typeof savedAt === "number" &&
+        Date.now() - savedAt > RESTAURANT_DRAFT_MAX_AGE_MS
+      ) {
+        // Stale draft (older than a week) — don't silently prefill with
+        // data the owner probably doesn't remember entering.
+        window.localStorage.removeItem(RESTAURANT_DRAFT_KEY);
+        return base;
+      }
+      const { __savedAt, ...draftFields } = parsed;
+      return { ...base, ...draftFields };
     } catch {
       return base;
     }
+  }, []);
+
+  // Let the owner know their in-progress details were restored, rather than
+  // silently prefilling a form they may not remember filling out before.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const stored = window.localStorage.getItem(RESTAURANT_DRAFT_KEY);
+      if (!stored) return;
+      const parsed = JSON.parse(stored) as { __savedAt?: number };
+      if (typeof parsed.__savedAt === "number") {
+        setRestoredDraftAt(new Date(parsed.__savedAt));
+      }
+    } catch {
+      // ignore
+    }
+    // Only check once on mount; the draft is re-saved continuously after that.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const form = useForm<RestaurantFormData>({
@@ -485,7 +520,7 @@ export default function RestaurantSignup() {
       try {
         window.localStorage.setItem(
           RESTAURANT_DRAFT_KEY,
-          JSON.stringify(value),
+          JSON.stringify({ ...value, __savedAt: Date.now() }),
         );
       } catch {
         // ignore storage errors
@@ -579,84 +614,60 @@ export default function RestaurantSignup() {
         const payload = await res.json();
         return payload?.restaurant || payload;
       }
-      // Check if user is already authenticated
-      if (isAuthenticated && user) {
-        // For authenticated users, use existing user data
-        const requestData = {
-          userData: {
-            email: user.email,
-            firstName: user.firstName,
-            lastName: user.lastName,
-            phone: user.phone || data.phone, // Use restaurant phone if user doesn't have one
-            // No password needed for authenticated users
-          },
-          restaurantData: {
-            name: data.name,
-            address: data.address,
-            city: data.city,
-            state: data.state,
-            phone: data.phone,
-            businessType: data.businessType,
-            cuisineType: data.cuisineType,
-            description: data.description,
-            websiteUrl: data.websiteUrl,
-            instagramUrl: data.instagramUrl,
-            facebookPageUrl: data.facebookPageUrl,
-            acceptTerms: data.acceptTerms,
-            amenities: {
-              parking: data.hasParking,
-              wifi: data.hasWifi,
-              outdoor_seating: data.hasOutdoorSeating,
-            },
-          },
-        };
-        const res = await apiRequest(
-          "POST",
-          "/api/restaurants/signup",
-          requestData,
-        );
-        const payload = await res.json();
-        return payload?.restaurant || payload;
-      } else {
-        // For new registrations, get user data from signup form
-        const signupData = signupForm.getValues();
+      // The restaurant payload is identical either way; only userData
+      // differs between an already-authenticated owner and a brand new
+      // signup. Building it once here avoids the two branches drifting.
+      const restaurantData = {
+        name: data.name,
+        address: data.address,
+        city: data.city,
+        state: data.state,
+        phone: data.phone,
+        businessType: data.businessType,
+        cuisineType: data.cuisineType,
+        description: data.description,
+        websiteUrl: data.websiteUrl,
+        instagramUrl: data.instagramUrl,
+        facebookPageUrl: data.facebookPageUrl,
+        acceptTerms: data.acceptTerms,
+        amenities: {
+          parking: data.hasParking,
+          wifi: data.hasWifi,
+          outdoor_seating: data.hasOutdoorSeating,
+        },
+      };
 
-        const requestData = {
-          userData: {
-            email: signupData.email,
-            firstName: signupData.firstName,
-            lastName: signupData.lastName,
-            phone: signupData.phone,
-            password: signupData.password,
-          },
-          restaurantData: {
-            name: data.name,
-            address: data.address,
-            city: data.city,
-            state: data.state,
-            phone: data.phone,
-            businessType: data.businessType,
-            cuisineType: data.cuisineType,
-            description: data.description,
-            websiteUrl: data.websiteUrl,
-            instagramUrl: data.instagramUrl,
-            facebookPageUrl: data.facebookPageUrl,
-            acceptTerms: data.acceptTerms,
-            amenities: {
-              parking: data.hasParking,
-              wifi: data.hasWifi,
-              outdoor_seating: data.hasOutdoorSeating,
+      const signupData = signupForm.getValues();
+      const requestData = isAuthenticated && user
+        ? {
+            userData: {
+              email: user.email,
+              firstName: user.firstName,
+              lastName: user.lastName,
+              phone: user.phone || data.phone, // Use restaurant phone if user doesn't have one
+              // No password needed for authenticated users
             },
-          },
-        };
-        const res = await apiRequest(
-          "POST",
-          "/api/restaurants/signup",
-          requestData,
-        );
-        const payload = await res.json();
-        return payload?.restaurant || payload;
-      }
+            restaurantData,
+          }
+        : {
+            userData: {
+              email: signupData.email,
+              firstName: signupData.firstName,
+              lastName: signupData.lastName,
+              phone: signupData.phone,
+              phoneContactConsent: signupData.phoneContactConsent,
+              password: signupData.password,
+            },
+            restaurantData,
+          };
+
+      const res = await apiRequest(
+        "POST",
+        "/api/restaurants/signup",
+        requestData,
+      );
+      const payload = await res.json();
+      return payload?.restaurant || payload;
     },
     onSuccess: (restaurant: any) => {
       if (restaurant?.requiresEmailVerification) {
@@ -878,6 +889,47 @@ export default function RestaurantSignup() {
       setClaimError(error.message || COPY.forms.restaurant.claimNoResults);
     } finally {
       setClaimRequestingId(null);
+    }
+  };
+
+  const [claimDisputingId, setClaimDisputingId] = useState<string | null>(
+    null,
+  );
+
+  // "Request this truck" only re-notifies whoever is already on file as the
+  // invited owner, which is a dead end for a legitimate owner when that
+  // invite is stale or wrong. This routes them to a human via the existing
+  // support ticket system instead of leaving no path forward.
+  const handleDisputeClaim = async (listing: any) => {
+    if (!isAuthenticated) {
+      toast({
+        title: "Create your account first",
+        description:
+          "Finish creating your MealScout account below, then come back to dispute this claim so we know who to follow up with.",
+      });
+      return;
+    }
+    setClaimDisputingId(listing.id);
+    setClaimError("");
+    try {
+      const res = await apiRequest("POST", "/api/support/tickets", {
+        subject: `Truck claim dispute: ${listing.name || listing.id}`,
+        description: `I searched for "${listing.name || listing.id}" (listing ${listing.id}) while trying to claim my food truck on MealScout, but it already has an invited owner on file. I believe that's incorrect and I'm the actual owner. Please review and reassign.`,
+        category: "business_profile",
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.message || "Failed to submit dispute");
+      }
+      toast({
+        title: "Sent to MealScout support",
+        description:
+          "We'll review this claim and follow up by email. This usually takes 1 business day.",
+      });
+    } catch (error: any) {
+      setClaimError(error.message || "Failed to submit dispute. Please try again.");
+    } finally {
+      setClaimDisputingId(null);
     }
   };
 
@@ -1627,6 +1679,37 @@ export default function RestaurantSignup() {
                   )}
                   className="space-y-6"
                 >
+                  {restoredDraftAt && (
+                    <div
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)] p-3 text-xs text-[color:var(--text-secondary)]"
+                      data-testid="banner-restored-draft"
+                    >
+                      <span>
+                        We restored details you started on{" "}
+                        {restoredDraftAt.toLocaleDateString(undefined, {
+                          month: "short",
+                          day: "numeric",
+                        })}
+                        .
+                      </span>
+                      <button
+                        type="button"
+                        className="font-medium text-[color:var(--action-primary)] underline"
+                        onClick={() => {
+                          try {
+                            window.localStorage.removeItem(RESTAURANT_DRAFT_KEY);
+                          } catch {
+                            // ignore
+                          }
+                          form.reset(BLANK_RESTAURANT_FORM_VALUES);
+                          setRestoredDraftAt(null);
+                        }}
+                        data-testid="button-clear-restored-draft"
+                      >
+                        Start over instead
+                      </button>
+                    </div>
+                  )}
                   <div className="grid gap-4 sm:grid-cols-2">
                     <FormField
                       control={form.control}
@@ -1795,26 +1878,39 @@ export default function RestaurantSignup() {
                                   {COPY.forms.restaurant.claimSelectButton}
                                 </Button>
                               ) : (
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant="outline"
-                                  disabled={
-                                    claimRequestingId === listing.id ||
-                                    Number(
-                                      listing.requestCooldownMinutes || 0,
-                                    ) > 0
-                                  }
-                                  onClick={() => handleRequestTruck(listing.id)}
-                                  data-testid={`button-claim-request-${listing.id}`}
-                                >
-                                  {Number(listing.requestCooldownMinutes || 0) >
-                                  0
-                                    ? `Try again in ${listing.requestCooldownMinutes}m`
-                                    : claimRequestingId === listing.id
+                                <div className="flex flex-col items-end gap-1">
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    disabled={
+                                      claimRequestingId === listing.id ||
+                                      Number(
+                                        listing.requestCooldownMinutes || 0,
+                                      ) > 0
+                                    }
+                                    onClick={() => handleRequestTruck(listing.id)}
+                                    data-testid={`button-claim-request-${listing.id}`}
+                                  >
+                                    {Number(listing.requestCooldownMinutes || 0) >
+                                    0
+                                      ? `Try again in ${listing.requestCooldownMinutes}m`
+                                      : claimRequestingId === listing.id
+                                        ? "Sending..."
+                                        : "Request this truck"}
+                                  </Button>
+                                  <button
+                                    type="button"
+                                    className="text-[11px] font-medium text-[color:var(--action-primary)] underline disabled:opacity-50"
+                                    disabled={claimDisputingId === listing.id}
+                                    onClick={() => handleDisputeClaim(listing)}
+                                    data-testid={`button-claim-dispute-${listing.id}`}
+                                  >
+                                    {claimDisputingId === listing.id
                                       ? "Sending..."
-                                      : "Request this truck"}
-                                </Button>
+                                      : "That's not right — I'm the owner"}
+                                  </button>
+                                </div>
                               )}
                             </div>
                           ))}
@@ -2212,8 +2308,10 @@ export default function RestaurantSignup() {
               )}
               {!isAutoBusinessVerified && (
                 <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-                  <strong>Verification required</strong> —{" "}
-                  {COPY.verification.pendingBanner}
+                  <strong>Verification recommended</strong> —{" "}
+                  {COPY.verification.pendingBanner} You can skip this step and
+                  submit documents later, but parking pass bookings and
+                  premium features stay locked until then.
                 </div>
               )}
               <div className="rounded-xl border border-dashed border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)] p-4">
