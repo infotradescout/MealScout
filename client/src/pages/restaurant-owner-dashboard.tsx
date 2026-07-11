@@ -1774,10 +1774,20 @@ export default function RestaurantOwnerDashboard() {
       }
       return body;
     },
-    onSuccess: (_payload, variables) => {
+    onSuccess: (payload, variables) => {
       queryClient.invalidateQueries({
         queryKey: ["/api/restaurants/my-restaurants"],
       });
+      // profileDraft only re-syncs from the fetched restaurant when the
+      // restaurant id changes (see the effect above), so without this it
+      // stays stale after an upload. Clicking Save afterward would PATCH
+      // profile-basics with the old logoUrl/coverImageUrl and silently
+      // revert the image that was just uploaded.
+      if (variables.kind === "logo" && payload?.url) {
+        setProfileDraft((prev) => ({ ...prev, logoUrl: String(payload.url) }));
+      } else if (variables.kind === "cover" && payload?.url) {
+        setProfileDraft((prev) => ({ ...prev, coverImageUrl: String(payload.url) }));
+      }
       toast({
         title: "Media uploaded",
         description:
