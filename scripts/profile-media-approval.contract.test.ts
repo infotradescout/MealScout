@@ -13,7 +13,7 @@ const ownerDashboard = readFileSync(
 const requiredMediaRouteSnippets = [
   '"/api/upload/restaurant-gallery"',
   "allowedCategories",
-  "publicApproved: Boolean(isStaffOrAdmin)",
+  "publicApproved: isTrustedUploader",
   "approvalStatus: galleryEntry.publicApproved ? \"approved\" : \"pending\"",
   '"/api/restaurants/:restaurantId/media-gallery/:mediaId"',
   "requestedApproval !== undefined && isStaffOrAdmin",
