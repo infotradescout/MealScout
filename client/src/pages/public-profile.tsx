@@ -459,10 +459,16 @@ function HeroBlock({ profile }: { profile: PublicProfilePayload }) {
           >
             {profileTypeLabel}
           </Badge>
-          {"verifiedProfile" in profile && profile.verifiedProfile ? (
-            <Badge variant="outline" className="border-white/20 text-white/65">
-              Verified
-            </Badge>
+          {"verifiedProfile" in profile ? (
+            profile.verifiedProfile ? (
+              <Badge variant="outline" className="border-white/20 text-white/65">
+                Verified
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="border-white/10 text-white/40">
+                Unverified listing
+              </Badge>
+            )
           ) : null}
           {"locallyOwned" in profile && profile.locallyOwned ? (
             <Badge
@@ -2269,7 +2275,22 @@ function GalleryStrip({ profile }: { profile: PublicRestaurantProfile }) {
   const images = profile.galleryImages
     .filter((image) => image.publicApproved && image.url)
     .slice(0, 12);
-  if (images.length === 0) return null;
+  if (images.length === 0) {
+    // Photos were uploaded but none are approved yet — say so instead of
+    // silently disappearing, which looked identical to never uploading any.
+    return (
+      <Card className="border-white/10 bg-[#0f0d0b]">
+        <CardHeader>
+          <CardTitle className="text-base font-semibold text-white/90">
+            Gallery
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-white/50">Photos pending review.</p>
+        </CardContent>
+      </Card>
+    );
+  }
   const imageTypeLabel = (source: string) => {
     if (source === "cover_image") return "Cover";
     if (source === "logo") return "Logo";
@@ -3180,7 +3201,10 @@ export default function PublicProfilePage() {
             /* ── LOCATION / HOST PROFILE LAYOUT ── */
             <>
               <HeroBlock profile={data} />
-              <QuickActionRow profile={data} safeCtas={safeCtas} />
+              {/* Quick actions — desktop in-flow; mobile relies on the sticky MobileActionDock below to avoid duplicate CTAs */}
+              <div className="hidden md:block">
+                <QuickActionRow profile={data} safeCtas={safeCtas} />
+              </div>
               <LocationNowSection profile={data} />
               <LocationTruckOptionsSection profile={data} />
               <EventsSection profile={data} />
@@ -3251,7 +3275,7 @@ export default function PublicProfilePage() {
         </main>
       </ProfileErrorBoundary>
 
-      <footer className="mt-8 border-t border-white/10 bg-[#0b0908]">
+      <footer className="mt-8 border-t border-white/10 bg-[#0b0908] pb-28 sm:pb-32 md:pb-0">
         <div className="mx-auto flex w-full max-w-5xl flex-col gap-2 px-4 py-5 text-sm text-white/70 sm:flex-row sm:items-center sm:justify-between">
           <p>MealScout</p>
           <div className="flex items-center gap-4">

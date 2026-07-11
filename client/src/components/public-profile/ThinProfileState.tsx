@@ -15,7 +15,7 @@ import type {
   PublicCta,
 } from "@shared/publicProfiles";
 import { normalizeBusinessTypeLabel } from "@/lib/publicMenuCompleteness";
-import { MapPin, MenuSquare, Globe } from "lucide-react";
+import { MapPin, MenuSquare, Phone, ShoppingBag } from "lucide-react";
 import { hasTruckScheduleSignal } from "./truckScheduleTruth";
 
 type ThinProfileStateProps = {
@@ -80,9 +80,9 @@ export function ThinProfileState({
           className="inline-flex items-center gap-2 rounded-xl bg-orange-500 px-5 py-2.5 text-sm font-bold text-black hover:bg-orange-400"
         >
           {bestCta.type === "map" && <MapPin className="h-4 w-4" />}
-          {bestCta.type === "phone" && <MapPin className="h-4 w-4" />}
+          {bestCta.type === "phone" && <Phone className="h-4 w-4" />}
           {bestCta.type === "menu" && <MenuSquare className="h-4 w-4" />}
-          {bestCta.type === "order" && <Globe className="h-4 w-4" />}
+          {bestCta.type === "order" && <ShoppingBag className="h-4 w-4" />}
           {bestCta.label}
         </a>
       ) : null}
