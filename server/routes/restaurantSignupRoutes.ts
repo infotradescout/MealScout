@@ -7,6 +7,7 @@ import { z } from "zod";
 import { db } from "../db";
 import { emailService } from "../emailService";
 import { storage } from "../storage";
+import { emitMealScoutEvent, buildMealScoutEventInput } from "../services/merlinEventEmitter";
 import { isPasswordStrong, PASSWORD_REQUIREMENTS } from "../utils/passwordPolicy";
 import { vacEvaluateRestaurantSignup } from "../vacLite";
 import { promoteBusinessSetupToProfile } from "../services/businessOnboardingPromotion";
@@ -383,6 +384,25 @@ export function registerRestaurantSignupRoutes(
         } catch (error) {
           console.error("[Phase 2] Error attaching user referral:", error);
         }
+      }
+
+      try {
+        const event = buildMealScoutEventInput({
+          entity_id: restaurant.id,
+          event_type: "restaurant_onboarded",
+          user,
+          restaurant,
+          payload: {
+            business_name: (restaurant as any).name,
+            city: (restaurant as any).city,
+            county: (restaurant as any).county,
+            location:
+              `${(restaurant as any).city || ""} ${(restaurant as any).state || ""}`.trim() || undefined
+          }
+        });
+        await emitMealScoutEvent(event).catch(() => {});
+      } catch (error) {
+        console.warn("[Merlin emitter] restaurant signup emit failed:", error);
       }
 
       res.json({

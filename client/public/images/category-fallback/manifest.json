@@ -1,0 +1,43 @@
+{
+  "source": "Generated category fallback asset contact sheet from OpenAI image generation in ChatGPT session; cropped into individual image files.",
+  "usage_rule": "Use only as honest category fallback when real item/restaurant images are absent. Display as '<category> · photo coming soon'. Do not imply these are actual menu item photos.",
+  "priority_rule": "real item image -> restaurant logo -> restaurant cover -> generated category fallback -> generic icon",
+  "files": [
+    {
+      "file": "craving-poke.jpg",
+      "category": "poke/sushi"
+    },
+    {
+      "file": "craving-smoothie-bowl.jpg",
+      "category": "smoothie bowls/açaí"
+    },
+    {
+      "file": "craving-sandwich.jpg",
+      "category": "sandwiches"
+    },
+    {
+      "file": "craving-salad.jpg",
+      "category": "salads"
+    },
+    {
+      "file": "craving-wings.jpg",
+      "category": "wings"
+    },
+    {
+      "file": "craving-seafood.jpg",
+      "category": "seafood"
+    },
+    {
+      "file": "craving-bbq.jpg",
+      "category": "bbq"
+    },
+    {
+      "file": "craving-coffee.jpg",
+      "category": "coffee"
+    },
+    {
+      "file": "craving-breakfast.jpg",
+      "category": "breakfast"
+    }
+  ]
+}

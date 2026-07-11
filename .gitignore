@@ -32,6 +32,8 @@ ios/App/App.xcworkspace/xcuserdata/
 ios/App/App.xcworkspace/xcshareddata/swiftpm/
 ios/App/App.xcodeproj/xcuserdata/
 .tools/
+test-results/
+playwright-report/
 
 .env*.local
 
