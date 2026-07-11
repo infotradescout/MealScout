@@ -15,8 +15,9 @@ import type {
   PublicCta,
 } from "@shared/publicProfiles";
 import { normalizeBusinessTypeLabel } from "@/lib/publicMenuCompleteness";
-import { MapPin, MenuSquare, Phone, ShoppingBag } from "lucide-react";
+import { MapPin, MenuSquare, Phone, ShoppingBag, ExternalLink } from "lucide-react";
 import { hasTruckScheduleSignal } from "./truckScheduleTruth";
+import { CTA_TYPE_PRIORITY_ORDER } from "./ctaTypePriority";
 
 type ThinProfileStateProps = {
   profile: PublicRestaurantProfile;
@@ -50,9 +51,8 @@ export function ThinProfileState({
     profile.profileType === "truck" ? "food_truck" : profile.profileType,
   );
 
-  // Pick the single best CTA
-  const priorityTypes = ["map", "order", "menu", "phone", "external"];
-  const bestCta = priorityTypes
+  // Pick the single best CTA, same priority order as the mobile action dock
+  const bestCta = CTA_TYPE_PRIORITY_ORDER
     .flatMap((type) => safeCtas.filter((c) => c.type === type))
     .find(Boolean);
 
@@ -83,6 +83,9 @@ export function ThinProfileState({
           {bestCta.type === "phone" && <Phone className="h-4 w-4" />}
           {bestCta.type === "menu" && <MenuSquare className="h-4 w-4" />}
           {bestCta.type === "order" && <ShoppingBag className="h-4 w-4" />}
+          {!["map", "phone", "menu", "order"].includes(bestCta.type) && (
+            <ExternalLink className="h-4 w-4" />
+          )}
           {bestCta.label}
         </a>
       ) : null}

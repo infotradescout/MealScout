@@ -302,14 +302,22 @@ export function registerMediaRoutes(app: Express) {
         const existingGallery = Array.isArray((existingSettings as any).publicGalleryImages)
           ? [...((existingSettings as any).publicGalleryImages as any[])]
           : [];
+        // There is no admin-wide queue that surfaces pending gallery
+        // uploads across restaurants (only a per-restaurant approve button
+        // in this same owner dashboard), so uploads from non-staff owners
+        // were effectively stuck "Pending" forever unless a staff member
+        // happened to open that specific restaurant. Verified restaurants
+        // are already trusted elsewhere in the app (auto-verify, badges),
+        // so skip the moderation queue for them too.
+        const isTrustedUploader = isStaffOrAdmin || Boolean((restaurant as any)?.isVerified);
         const galleryEntry = {
           id: imageUpload?.id || randomUUID(),
           url: result.secureUrl,
           source: "gallery",
           category,
-          publicApproved: Boolean(isStaffOrAdmin),
+          publicApproved: isTrustedUploader,
           uploadedAt: new Date().toISOString(),
-          lastVerifiedAt: isStaffOrAdmin ? new Date().toISOString() : null,
+          lastVerifiedAt: isTrustedUploader ? new Date().toISOString() : null,
         };
         existingGallery.push(galleryEntry);
 

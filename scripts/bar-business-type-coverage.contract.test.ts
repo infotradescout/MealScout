@@ -1,6 +1,12 @@
 import { readFileSync } from "node:fs";
 
-const scout = readFileSync("client/src/pages/scout-prototype.tsx", "utf8");
+// The live /scout surface is ScoutPageV2 (explore-preview-v2.tsx), not
+// scout-prototype.tsx (a secondary /scout-prototype page). It was rewritten
+// onto a card/surface-based architecture that no longer contains the old
+// inline isBarBusinessType pattern this test originally checked, but it
+// does still route bars correctly, just via buildPublicProfilePath with an
+// explicit "bar" entityType instead.
+const scout = readFileSync("client/src/pages/explore-preview-v2.tsx", "utf8");
 const adminUsers = readFileSync("server/routes/admin/userAdminRoutes.ts", "utf8");
 const ownerDashboard = readFileSync(
   "client/src/pages/restaurant-owner-dashboard.tsx",
@@ -10,10 +16,10 @@ const publicProfile = readFileSync("client/src/pages/public-profile.tsx", "utf8"
 const businessTypes = readFileSync("shared/businessTypes.ts", "utf8");
 
 const requiredScout = [
-  'import { isBarBusinessType } from "@shared/businessTypes";',
-  "const isBar = isBarBusinessType(r.businessType);",
-  'href: isBar ? `/p/bar/${r.id}` : `/restaurant/${r.id}`',
-  'type: isBar ? "BAR" : "RESTAURANT"',
+  'import { buildPublicProfilePath } from "@/lib/public-profile-path";',
+  '.toLowerCase() === "bar"',
+  'return "bar";',
+  'explicitType === "bar"',
 ];
 
 const requiredAdmin = [

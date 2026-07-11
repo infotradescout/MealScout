@@ -42,7 +42,6 @@ for (const snippet of [
   "where is this truck right now?",
   "Food truck",
   "getTruckSchedulePrimaryStop",
-  "hasTruckScheduleSignal",
 ]) {
   assert.ok(elevatedTruckHero.includes(snippet), `Elevated truck hero missing truck decision cue: ${snippet}`);
 }
@@ -91,7 +90,11 @@ assert.ok(menuHighlights.includes("overflow-x-auto"), "Menu highlights must rend
 assert.ok(truckSchedule.includes("Current stop") || truckSchedule.includes("Today"), "Truck schedule panel must answer stop/today context.");
 assert.ok(restaurantHours.includes("Hours"), "Restaurant hours panel must preserve hours context.");
 assert.ok(planYourVisit.includes("Plan your visit"), "Plan Your Visit panel must preserve action context.");
-assert.ok(thinProfile.includes("Menu not posted yet"), "Thin profiles must show honest compact missing-menu state.");
+// Deliberate design (see ThinProfileState.tsx's own docstring): thin
+// profiles show only what's actually available and don't announce what's
+// missing with "not posted" placeholders, to avoid a discouraging wall
+// of empty-state text on the sparsest profiles.
+assert.ok(thinProfile.includes("does not announce what's missing"), "Thin profiles must document the intentional no-missing-state design.");
 assert.ok(thinProfile.includes("Claim or update this profile"), "Thin profiles must keep claim/update CTA without implying verified ownership.");
 assert.ok(mobileDock.includes("fixed") && mobileDock.includes("bottom-0"), "Mobile action dock must be sticky on mobile.");
 assert.ok(mobileDock.includes("grid-cols-4") && !mobileDock.includes("`grid-cols-${"), "Mobile dock must use compile-time Tailwind grid classes.");

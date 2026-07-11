@@ -10,6 +10,7 @@
  */
 import type { PublicCta } from "@shared/publicProfiles";
 import { ExternalLink, MapPin, Phone, MenuSquare, ShoppingBag, CalendarDays } from "lucide-react";
+import { CTA_TYPE_PRIORITY } from "./ctaTypePriority";
 
 type DockAction = {
   cta: PublicCta;
@@ -25,19 +26,6 @@ const CTA_TYPE_ICON: Record<string, typeof MapPin> = {
   booking: CalendarDays,
   catering: CalendarDays,
   external: ExternalLink,
-};
-
-const CTA_TYPE_PRIORITY: Record<string, number> = {
-  map: 1,
-  order: 2,
-  menu: 3,
-  phone: 4,
-  booking: 5,
-  catering: 6,
-  external: 7,
-  social: 8,
-  share: 9,
-  internal: 10,
 };
 
 function shortLabel(cta: PublicCta): string {

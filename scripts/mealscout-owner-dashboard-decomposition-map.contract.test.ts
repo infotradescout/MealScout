@@ -16,7 +16,10 @@ const cleanupMap = readFileSync(cleanupMapPath, "utf8");
 const ownerDashboard = readFileSync("client/src/pages/restaurant-owner-dashboard.tsx", "utf8");
 const menuBuilder = readFileSync("client/src/pages/menu-builder.tsx", "utf8");
 const parkingPass = readFileSync("client/src/pages/parking-pass.tsx", "utf8");
-const dashboardRouter = readFileSync("client/src/pages/dashboard-router.tsx", "utf8");
+// The role -> dashboard routing decision moved out of dashboard-router.tsx
+// (now just a thin redirect shell) into a shared helper so /dashboard and
+// account-continuation flows can both use it.
+const dashboardRouter = readFileSync("client/src/lib/dashboard-route.ts", "utf8");
 const dashboardSwitcher = readFileSync("client/src/components/dashboard-switcher.tsx", "utf8");
 const loginContinuation = readFileSync("server/services/loginContinuation.ts", "utf8");
 const restaurantOperationsRoutes = readFileSync("server/routes/restaurantOperationsRoutes.ts", "utf8");
@@ -275,8 +278,8 @@ function requireMatch(source: string, pattern: RegExp, label: string) {
 ].forEach((snippet) => requireIncludes(parkingPass, snippet, `Parking Pass evidence ${snippet}`));
 
 [
-  'primaryType === "restaurant_owner" || primaryType === "food_truck"',
-  'setLocation("/restaurant-owner-dashboard")',
+  'roles.has("restaurant_owner") || roles.has("food_truck")',
+  'return "/restaurant-owner-dashboard";',
 ].forEach((snippet) => requireIncludes(dashboardRouter, snippet, `dashboard router evidence ${snippet}`));
 
 [
@@ -287,7 +290,7 @@ function requireMatch(source: string, pattern: RegExp, label: string) {
 [
   'continuationPath = "/restaurant-owner-dashboard?setup=profile"',
   'continuationPath = "/menu-builder"',
-  'continuationPath = "/parking-pass-manage"',
+  'continuationPath = "/restaurant-owner-dashboard?setup=schedule"',
   'continuationPath = "/restaurant-owner-dashboard?setup=verification"',
 ].forEach((snippet) => requireIncludes(loginContinuation, snippet, `login continuation evidence ${snippet}`));
 
@@ -325,8 +328,8 @@ requireMatch(
 
 requireMatch(
   cleanupMap,
-  /C8 - Public\/Auth Route Boundary Audit[\s\S]*Status: `NEXT`/,
-  "CLEANUP_MAP.md marks C8 NEXT",
+  /C8 - Public\/Auth Route Boundary Audit[\s\S]*Status: `DONE`/,
+  "CLEANUP_MAP.md marks C8 DONE",
 );
 
 const scopeDriftTerms = /\b(Merlin|TradeScout)\b/i;

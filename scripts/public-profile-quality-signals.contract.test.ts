@@ -103,7 +103,9 @@ if (signalClientBlock.includes(".message") || signalClientBlock.includes("String
 if (!profileBoundary.includes("componentDidCatch(_error: Error, _errorInfo: ErrorInfo)")) {
   throw new Error("Profile error boundary must avoid reading raw error details");
 }
-if (!publicProfile.includes('trackQualitySignal("public_profile_page_error", undefined, "render-error")')) {
+const pageErrorSignalPattern =
+  /trackQualitySignal\(\s*"public_profile_page_error",\s*undefined,\s*"render-error",?\s*\)/;
+if (!pageErrorSignalPattern.test(publicProfile)) {
   throw new Error("Public profile page error signal must use safe render-error category only");
 }
 
