@@ -13,6 +13,11 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import { authUrl } from "@/lib/api";
+import {
+  createAdaptiveImageMetadata,
+  getAdaptiveImageForPlacement,
+  type AdaptiveImageSource,
+} from "@/lib/adaptiveImages";
 
 const SAVED_DEALS_KEY = "mealscout_saved_deals";
 let followSnapshotPromise: Promise<Set<string>> | null = null;
@@ -70,6 +75,7 @@ interface Deal {
   discountValue: string;
   minOrderAmount?: string;
   imageUrl?: string;
+  adaptiveImage?: AdaptiveImageSource | null;
   facebookPageUrl?: string;
   isAiGenerated?: boolean;
   restaurant?: {
@@ -118,6 +124,14 @@ function formatRelativeTime(value?: string | null): string | null {
 
 const getDefaultImage = (cuisineType?: string, title?: string) => {
   const images = {
+    poke: "/images/category-fallback/craving-poke.jpg",
+    smoothieBowl: "/images/category-fallback/craving-smoothie-bowl.jpg",
+    sandwich: "/images/category-fallback/craving-sandwich.jpg",
+    salad: "/images/category-fallback/craving-salad.jpg",
+    wings: "/images/category-fallback/craving-wings.jpg",
+    bbq: "/images/category-fallback/craving-bbq.jpg",
+    coffee: "/images/category-fallback/craving-coffee.jpg",
+    breakfast: "/images/category-fallback/craving-breakfast.jpg",
     pizza:
       "https://images.unsplash.com/photo-1565299624946-b28f40a0ca4b?w=400&h=300&fit=crop&auto=format",
     burger:
@@ -135,8 +149,7 @@ const getDefaultImage = (cuisineType?: string, title?: string) => {
     cafe: "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=400&h=300&fit=crop&auto=format",
     creole:
       "https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=400&h=300&fit=crop&auto=format",
-    seafood:
-      "https://images.unsplash.com/photo-1565299585323-38174c97c24d?w=400&h=300&fit=crop&auto=format",
+    seafood: "/images/category-fallback/craving-seafood.jpg",
     sushi:
       "https://images.unsplash.com/photo-1563379091339-03246963d51a?w=400&h=300&fit=crop&auto=format",
     deli: "https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=400&h=300&fit=crop&auto=format",
@@ -150,41 +163,46 @@ const getDefaultImage = (cuisineType?: string, title?: string) => {
   const lowerTitle = title?.toLowerCase() || "";
 
   // Title-based matching
-  if (lowerTitle.includes("burger") || lowerTitle.includes("sandwich"))
-    return images.burger;
+  if (lowerTitle.includes("poke")) return images.poke;
+  if (lowerTitle.includes("wing")) return images.wings;
+  if (lowerTitle.includes("bbq") || lowerTitle.includes("barbecue"))
+    return images.bbq;
+  if (lowerTitle.includes("smoothie") || lowerTitle.includes("acai") || lowerTitle.includes("açaí"))
+    return images.smoothieBowl;
+  if (lowerTitle.includes("salad")) return images.salad;
+  if (lowerTitle.includes("sandwich")) return images.sandwich;
+  if (lowerTitle.includes("burger")) return images.burger;
   if (lowerTitle.includes("pizza")) return images.pizza;
   if (lowerTitle.includes("taco") || lowerTitle.includes("burrito"))
     return images.mexican;
   if (lowerTitle.includes("sushi") || lowerTitle.includes("roll"))
     return images.sushi;
-  if (
-    lowerTitle.includes("beignet") ||
-    lowerTitle.includes("coffee") ||
-    lowerTitle.includes("pastry")
-  )
+  if (lowerTitle.includes("coffee")) return images.coffee;
+  if (lowerTitle.includes("beignet") || lowerTitle.includes("pastry"))
     return images.cafe;
+  if (
+    lowerTitle.includes("breakfast") ||
+    lowerTitle.includes("brunch") ||
+    lowerTitle.includes("mimosa")
+  )
+    return images.breakfast;
   if (lowerTitle.includes("curry") || lowerTitle.includes("naan"))
     return images.indian;
   if (lowerTitle.includes("pasta") || lowerTitle.includes("garlic bread"))
     return images.italian;
   if (lowerTitle.includes("noodle") || lowerTitle.includes("bowl"))
     return images.asian;
-  if (
-    lowerTitle.includes("jambalaya") ||
-    lowerTitle.includes("brunch") ||
-    lowerTitle.includes("mimosa")
-  )
-    return images.creole;
+  if (lowerTitle.includes("jambalaya")) return images.creole;
   if (
     lowerTitle.includes("shrimp") ||
     lowerTitle.includes("fish") ||
     lowerTitle.includes("catch")
   )
     return images.seafood;
-  if (lowerTitle.includes("smoothie") || lowerTitle.includes("salad"))
-    return images.healthy;
 
   // Cuisine-based matching
+  if (lowerCuisine.includes("bbq") || lowerCuisine.includes("barbecue"))
+    return images.bbq;
   if (lowerCuisine.includes("mexican")) return images.mexican;
   if (lowerCuisine.includes("chinese") || lowerCuisine.includes("asian"))
     return images.chinese;
@@ -233,6 +251,12 @@ export default function DealCard({ deal, popularity = null }: DealCardProps) {
   );
   const [, setLocation] = useLocation();
   const lastUpdatedLabel = formatRelativeTime(deal.restaurant?.lastBroadcastAt);
+  const fallbackImageUrl = getDefaultImage(deal.restaurant?.cuisineType, deal.title);
+  const cardImage = getAdaptiveImageForPlacement(
+    deal.adaptiveImage ?? createAdaptiveImageMetadata(deal.imageUrl),
+    "vendor_card",
+    fallbackImageUrl,
+  );
 
   // Initialize saved state from localStorage for quick UX feedback
   useEffect(() => {
@@ -673,12 +697,10 @@ export default function DealCard({ deal, popularity = null }: DealCardProps) {
           {/* Image with gradient overlay - framed inside card */}
           <div className="deal-card-media relative h-24 overflow-hidden rounded-t-2xl">
             <img
-              src={
-                deal.imageUrl ||
-                getDefaultImage(deal.restaurant?.cuisineType, deal.title)
-              }
+              src={cardImage.url}
               alt={deal.title}
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+              style={{ objectPosition: cardImage.objectPosition }}
               loading="lazy"
               decoding="async"
               referrerPolicy="no-referrer"
