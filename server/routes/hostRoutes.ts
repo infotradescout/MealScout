@@ -997,39 +997,71 @@ export function registerHostRoutes(app: Express) {
           });
         }
 
-        const summary = await getHostEarningsSummary(host.id);
+        // getHostEarningsSummary's availableCents already subtracts
+        // pending/approved payout requests, but reading the summary,
+        // validating against it, and inserting a new request were three
+        // separate round trips with no lock between them -- two concurrent
+        // requests (double-click, retry) could both read the same
+        // availableCents before either insert committed, both pass
+        // validation, and both get created, letting a host request payouts
+        // summing to more than they've actually earned. Serialize per-host
+        // with an advisory lock so the read-check-insert is atomic.
         const requestedAmountRaw = Number(req.body?.amountCents);
-        const requestedAmountCents = Number.isFinite(requestedAmountRaw)
-          ? Math.floor(requestedAmountRaw)
-          : summary.availableCents;
+        const notes =
+          typeof req.body?.notes === "string" && req.body.notes.trim()
+            ? req.body.notes.trim()
+            : null;
 
-        if (requestedAmountCents <= 0) {
-          return res
-            .status(400)
-            .json({ message: "Payout amount must be greater than $0.00" });
-        }
-        if (requestedAmountCents > summary.availableCents) {
-          return res.status(400).json({
-            message: "Requested amount exceeds available earnings.",
-            availableCents: summary.availableCents,
+        let createdRequest: typeof hostPayoutRequests.$inferSelect;
+        try {
+          createdRequest = await db.transaction(async (tx: any) => {
+            await tx.execute(
+              sql`SELECT pg_advisory_xact_lock(hashtext(${`host_payout:${host.id}`}))`,
+            );
+
+            const summary = await getHostEarningsSummary(host.id, tx);
+            const requestedAmountCents = Number.isFinite(requestedAmountRaw)
+              ? Math.floor(requestedAmountRaw)
+              : summary.availableCents;
+
+            if (requestedAmountCents <= 0) {
+              throw Object.assign(
+                new Error("Payout amount must be greater than $0.00"),
+                { statusCode: 400 },
+              );
+            }
+            if (requestedAmountCents > summary.availableCents) {
+              throw Object.assign(
+                new Error("Requested amount exceeds available earnings."),
+                { statusCode: 400, availableCents: summary.availableCents },
+              );
+            }
+
+            const [inserted] = await tx
+              .insert(hostPayoutRequests)
+              .values({
+                hostId: host.id,
+                userId: req.user.id,
+                amountCents: requestedAmountCents,
+                status: "pending",
+                notes,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+              })
+              .returning();
+            return inserted;
           });
+        } catch (error: any) {
+          if (error?.statusCode === 400) {
+            return res.status(400).json({
+              message: error.message,
+              ...(error.availableCents !== undefined
+                ? { availableCents: error.availableCents }
+                : {}),
+            });
+          }
+          throw error;
         }
-
-        const [createdRequest] = await db
-          .insert(hostPayoutRequests)
-          .values({
-            hostId: host.id,
-            userId: req.user.id,
-            amountCents: requestedAmountCents,
-            status: "pending",
-            notes:
-              typeof req.body?.notes === "string" && req.body.notes.trim()
-                ? req.body.notes.trim()
-                : null,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          })
-          .returning();
 
         const updatedSummary = await getHostEarningsSummary(host.id);
 

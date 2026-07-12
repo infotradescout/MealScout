@@ -1,6 +1,6 @@
 import { db } from "./db";
 import { affiliateCommissionLedger, users } from "@shared/schema";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
 type CommissionSource =
   | "subscription_payment"
@@ -102,32 +102,47 @@ async function createCommissionEntry(
   const amount = (amountCents / 100) * (percent / 100);
   if (amount <= 0) return null;
 
-  const existing = await db
-    .select({ id: affiliateCommissionLedger.id })
-    .from(affiliateCommissionLedger)
-    .where(
-      and(
-        eq(affiliateCommissionLedger.affiliateUserId, affiliateUserId),
-        eq(affiliateCommissionLedger.commissionSource, commissionSource),
-        eq(affiliateCommissionLedger.stripeInvoiceId, referenceId),
-      ),
-    )
-    .limit(1);
+  // The read-then-insert idempotency check below has no unique constraint
+  // backing it, so two concurrent deliveries of the same Stripe event
+  // (Stripe documents at-least-once delivery) could both pass the "not
+  // found" check before either insert commits, producing duplicate
+  // commissions and duplicate credits. Serialize on the same key the
+  // idempotency check uses.
+  const commission = await db.transaction(async (tx: any) => {
+    await tx.execute(
+      sql`SELECT pg_advisory_xact_lock(hashtext(${`affiliate_commission:${affiliateUserId}:${commissionSource}:${referenceId}`}))`,
+    );
 
-  if (existing.length > 0) return null;
+    const existing = await tx
+      .select({ id: affiliateCommissionLedger.id })
+      .from(affiliateCommissionLedger)
+      .where(
+        and(
+          eq(affiliateCommissionLedger.affiliateUserId, affiliateUserId),
+          eq(affiliateCommissionLedger.commissionSource, commissionSource),
+          eq(affiliateCommissionLedger.stripeInvoiceId, referenceId),
+        ),
+      )
+      .limit(1);
 
-  const [commission] = await db
-    .insert(affiliateCommissionLedger)
-    .values({
-      affiliateUserId,
-      restaurantId: restaurantId || null,
-      amount: amount.toString(),
-      commissionPercent: percent,
-      sourceAmountCents: amountCents,
-      commissionSource,
-      stripeInvoiceId: referenceId,
-    })
-    .returning();
+    if (existing.length > 0) return null;
+
+    const [inserted] = await tx
+      .insert(affiliateCommissionLedger)
+      .values({
+        affiliateUserId,
+        restaurantId: restaurantId || null,
+        amount: amount.toString(),
+        commissionPercent: percent,
+        sourceAmountCents: amountCents,
+        commissionSource,
+        stripeInvoiceId: referenceId,
+      })
+      .returning();
+    return inserted;
+  });
+
+  if (!commission) return null;
 
   try {
     const { createCreditFromCommission } = await import("./creditService");
