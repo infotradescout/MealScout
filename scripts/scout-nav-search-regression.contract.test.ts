@@ -3,13 +3,19 @@ import { readFileSync } from "node:fs";
 const scoutPage = readFileSync("client/src/pages/scout-prototype.tsx", "utf8");
 const navComponent = readFileSync("client/src/components/navigation.tsx", "utf8");
 
+// This test's original numeric-constant formula (GLOBAL_NAV_HEIGHT = 58,
+// etc., string-concatenated calc() expressions) was superseded by a CSS
+// custom property system (--scout-safe-bottom, --scout-nav-height, etc.)
+// -- same structural idea, later iteration. Check the current system.
 const requiredScoutSnippets = [
-  "const GLOBAL_NAV_HEIGHT = 58;",
-  "const SCOUT_SCENE_RAIL_HEIGHT = 50;",
-  "const SCOUT_SEARCH_DOCK_HEIGHT = 46;",
-  "const SCOUT_DOCK_GAP = 0;",
-  "const scoutDockBottom = `calc(env(safe-area-inset-bottom) + ${GLOBAL_NAV_HEIGHT}px)`;",
-  "const feedBottomClearance = `calc(env(safe-area-inset-bottom) + ${GLOBAL_NAV_HEIGHT + SCOUT_SCENE_RAIL_HEIGHT + SCOUT_SEARCH_DOCK_HEIGHT + SCOUT_DOCK_GAP + 18}px)`;",
+  '"--scout-nav-height": "58px",',
+  '"--scout-chip-height": "50px",',
+  '"--scout-search-height": "46px",',
+  '"--scout-dock-gap": "12px",',
+  "const scoutDockBottom =",
+  "calc(var(--scout-safe-bottom) + var(--scout-nav-height) + var(--scout-dock-gap))",
+  "const feedBottomClearance =",
+  "calc(var(--scout-nav-height) + var(--scout-dock-gap) + var(--scout-bottom-dock-height) + 28px)",
   'className="fixed inset-x-0 z-[1000] pointer-events-none"',
 ];
 
@@ -27,8 +33,13 @@ const requiredNavSnippets = [
   "bottom-[calc(env(safe-area-inset-bottom)+5.5rem)]",
 ];
 
+// isScoutRoute itself is legitimate now -- it drives
+// disableScoutHelpBubbles (help bubble triggers are disabled outright on
+// scout routes), an unrelated, confirmed-valid feature. What this test
+// actually guards against is the old *bug*: isScoutRoute repositioning
+// overlay bottom offsets via a ternary, which would reintroduce the
+// original nav/search collision.
 const forbiddenNavSnippets = [
-  "const isScoutRoute =",
   "bottom: isScoutRoute",
   "11.5rem",
 ];

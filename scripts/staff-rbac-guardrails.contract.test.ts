@@ -5,7 +5,9 @@ import {
   isInternalTeamUserType,
 } from "../server/roleAccess";
 
-const read = (path: string) => readFileSync(path, "utf8");
+// Normalize CRLF -> LF so multi-line marker matching below (which embeds
+// literal "\n") works the same on a Windows checkout as it does in CI.
+const read = (path: string) => readFileSync(path, "utf8").replace(/\r\n/g, "\n");
 
 const staffRoutes = read("server/staffRoutes.ts");
 const unifiedAuth = read("server/unifiedAuth.ts");

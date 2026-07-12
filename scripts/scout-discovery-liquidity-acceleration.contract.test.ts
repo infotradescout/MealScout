@@ -13,10 +13,14 @@ const requiredSnippets = [
   "const worthDiscoveringSurfaceCards = useMemo(",
   "const sceneSurfaceCards = useMemo(() => {",
   "const fallbackSurfaceCards = useMemo(",
-  "Showing restaurants, trucks, deals, and events near",
-  "Community-backed picks are light here, so nearby food options stay visible.",
-  "Late-night coverage is light here, so Scout is keeping nearby food options visible instead of showing a blank lane.",
-  "Worth Discovering is quiet here, so Scout is falling back to the nearest honest local options.",
+  // A copy simplification pass ("clean up public copy while preserving
+  // protected language") reworded these per-scene subtitles; the fallback
+  // intent (show nearby options instead of a blank lane, without
+  // overclaiming coverage) is preserved, just phrased more plainly.
+  "Restaurants, trucks, deals, and events near",
+  "Explore nearby food and local favorites around",
+  "Late-night food options near",
+  "More nearby spots worth checking around",
   "const coverageBadgeLabel =",
   "Local matches use nearby, live, and community-backed discovery signals when available.",
 ];
