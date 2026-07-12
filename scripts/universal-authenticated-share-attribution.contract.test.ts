@@ -113,7 +113,11 @@ assert(
 );
 
 assert(
-  shareHub.includes('fetch("/api/auth/user"') &&
+  // Share Hub's own fetch("/api/auth/user") call was replaced by the
+  // shared useAuth() hook (2026-07-05 site-drift-sweep fix), deriving
+  // from the same authenticated user state instead of a redundant
+  // second request.
+  shareHub.includes("useAuth()") &&
     !shareHub.includes('fetch("/api/affiliate/tag"') &&
     !shareHub.includes("/api/restaurants/my") &&
     shareHub.includes(

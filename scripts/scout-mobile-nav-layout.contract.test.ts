@@ -3,20 +3,26 @@ import { readFileSync } from "node:fs";
 const scoutPage = readFileSync("client/src/pages/scout-prototype.tsx", "utf8");
 const navComponent = readFileSync("client/src/components/navigation.tsx", "utf8");
 
+// The layout-math system this test originally checked (named JS pixel
+// constants like GLOBAL_NAV_HEIGHT = 58, string-concatenated into calc()
+// expressions) was replaced with CSS custom properties set once as inline
+// style vars and referenced via var(--scout-...) inside calc() -- the
+// same structural idea (stack safe-area-inset + nav + search + chip
+// heights to compute dock/feed bottom clearance), just implemented more
+// idiomatically. Check the current CSS-custom-property system instead.
 const scoutRequired = [
-  'const MOBILE_SAFE_BOTTOM = "env(safe-area-inset-bottom)";',
-  "const GLOBAL_NAV_HEIGHT = 58;",
-  "const GLOBAL_NAV_OVERHANG = 14;",
-  "const SCOUT_SCENE_RAIL_HEIGHT = 50;",
-  "const SCOUT_SEARCH_DOCK_HEIGHT = 46;",
-  "const SCOUT_DOCK_FRAME_HEIGHT = 14;",
-  "const SCOUT_DOCK_GAP = 6;",
-  "const scoutBottomStackBase = `calc(${MOBILE_SAFE_BOTTOM} + ${GLOBAL_NAV_HEIGHT + GLOBAL_NAV_OVERHANG}px)`;",
-  "const scoutDockBottom = `calc(${scoutBottomStackBase} + ${SCOUT_DOCK_GAP}px)`;",
-  "const feedBottomClearance = `calc(${scoutBottomStackBase} + ${SCOUT_SCENE_RAIL_HEIGHT + SCOUT_SEARCH_DOCK_HEIGHT + SCOUT_DOCK_FRAME_HEIGHT + SCOUT_DOCK_GAP + 28}px)`;",
-  '"--scout-bottom-stack-base": scoutBottomStackBase,',
-  '"--scout-bottom-stack-clearance": feedBottomClearance,',
-  'className="fixed inset-x-0 z-[1200] pointer-events-none"',
+  '"--scout-safe-bottom": "env(safe-area-inset-bottom, 0px)",',
+  '"--scout-nav-height": "58px",',
+  '"--scout-search-height": "46px",',
+  '"--scout-chip-height": "50px",',
+  '"--scout-dock-gap": "12px",',
+  '"--scout-bottom-dock-height":',
+  "calc(var(--scout-safe-bottom) + var(--scout-nav-height) + var(--scout-search-height) + var(--scout-chip-height) + var(--scout-dock-gap))",
+  "const scoutDockBottom =",
+  "calc(var(--scout-safe-bottom) + var(--scout-nav-height) + var(--scout-dock-gap))",
+  "const feedBottomClearance =",
+  "calc(var(--scout-nav-height) + var(--scout-dock-gap) + var(--scout-bottom-dock-height) + 28px)",
+  'className="fixed inset-x-0 z-[1000] pointer-events-none"',
   "style={{ paddingBottom: feedBottomClearance }}",
 ];
 
@@ -26,12 +32,17 @@ for (const snippet of scoutRequired) {
   }
 }
 
+// The route-conditional bottom-offset math this test checked in
+// navigation.tsx (repositioning help bubbles 11.5rem/5.5rem up on scout
+// routes) was replaced by a simpler mechanism: help bubble triggers are
+// disabled outright on scout routes (disableScoutHelpBubbles), since the
+// scout page now owns its own bottom-clearance CSS vars instead of
+// navigation.tsx guessing at scout-specific spacing.
 const navRequired = [
   "const isScoutRoute =",
   "currentPath === \"/scout\" || currentPath.startsWith(\"/scout/\")",
-  "bottom: isScoutRoute",
-  '"calc(env(safe-area-inset-bottom) + 11.5rem)"',
-  '"calc(env(safe-area-inset-bottom) + 5.5rem)"',
+  "const disableScoutHelpBubbles = isScoutRoute;",
+  "disabled={disableScoutHelpBubbles}",
 ];
 
 for (const snippet of navRequired) {

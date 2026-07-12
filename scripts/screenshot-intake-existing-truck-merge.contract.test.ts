@@ -1,6 +1,11 @@
 import { readFileSync } from "node:fs";
 
-const routeSource = readFileSync("server/routes/admin/truckImportAdminRoutes.ts", "utf8");
+// Normalize CRLF -> LF so multi-line marker matching below (which embeds
+// literal "\n") works the same on a Windows checkout as it does in CI.
+const routeSource = readFileSync(
+  "server/routes/admin/truckImportAdminRoutes.ts",
+  "utf8",
+).replace(/\r\n/g, "\n");
 
 const requiredSnippets = [
   '"/api/admin/profile-evidence/apply"',
