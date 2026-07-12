@@ -84,7 +84,15 @@ assert(
 assert(
   publicProfileMapper.includes('const menuUrl = String(row.menuUrl || "").trim() || null;') &&
     publicProfileMapper.includes("menuSectionsRaw") &&
-    publicProfileMapper.includes("buildPublicCta({ label: \"Menu\", href: menuUrl"),
+    // publicMenuUrl now gates menuUrl behind moderation status
+    // (rejected -> null) but is still derived directly from the same raw
+    // menuUrl, and the Menu CTA still uses it as a distinct href from the
+    // structured menuSections/menuSectionsRaw evidence.
+    publicProfileMapper.includes(
+      'const publicMenuUrl = menuApproval.status === "rejected" ? null : menuUrl;',
+    ) &&
+    publicProfileMapper.includes('label: "Menu"') &&
+    publicProfileMapper.includes("href: publicMenuUrl"),
   "Public profile mapper must keep menu URL and structured menu evidence distinct.",
 );
 

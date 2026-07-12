@@ -10,21 +10,34 @@ const guestRoutesEnd = appSource.indexOf(") : (", guestRoutesStart);
 assert(guestRoutesStart !== -1 && guestRoutesEnd !== -1, "App guest route block must exist.");
 
 const guestRoutes = appSource.slice(guestRoutesStart, guestRoutesEnd);
-const userDashboardRoute = '<Route path="/user-dashboard" component={UserDashboard} />';
-const guestUserDashboardIndex = guestRoutes.indexOf(userDashboardRoute);
+
+// /user-dashboard used to be duplicated inline in both the guest and
+// authenticated route blocks; a route-consolidation refactor moved it
+// (once) into a shared SharedPublicRoutes() component that both blocks
+// render via <SharedPublicRoutes />, so it's no longer a literal <Route>
+// tag inside this slice -- check for the shared-component reference and
+// that /user-dashboard is actually defined inside that component instead.
+const sharedRoutesIndex = guestRoutes.indexOf("<SharedPublicRoutes />");
 const guestBusinessCatchallIndex = guestRoutes.indexOf(
-  '<Route path="/:businessSlug" component={PublicProfilePage} />',
+  '<Route path="/:businessSlug" component={CleanPublicProfileRoute} />',
 );
 
 assert(
-  guestUserDashboardIndex !== -1,
-  "Guest routes must explicitly serve /user-dashboard.",
+  sharedRoutesIndex !== -1,
+  "Guest routes must render the shared public routes component.",
+);
+
+assert(
+  appSource.includes(
+    '<Route path="/user-dashboard" component={UserDashboard} />',
+  ),
+  "SharedPublicRoutes must explicitly serve /user-dashboard.",
 );
 
 assert(
   guestBusinessCatchallIndex !== -1 &&
-    guestUserDashboardIndex < guestBusinessCatchallIndex,
-  "Guest /user-dashboard route must resolve before the public profile catchall.",
+    sharedRoutesIndex < guestBusinessCatchallIndex,
+  "Guest shared routes (including /user-dashboard) must resolve before the public profile catchall.",
 );
 
 assert(

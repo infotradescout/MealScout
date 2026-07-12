@@ -10,10 +10,16 @@ const appRoutes = readFileSync("client/src/App.tsx", "utf8");
 
 const requiredClientSnippets = [
   "const normalizePublicProfileEntity = (value: string | null | undefined) => {",
-  'if (normalized === "food_truck" || normalized === "food-truck" || normalized === "foodtruck") {',
+  'normalized === "food_truck" ||',
+  'normalized === "food-truck" ||',
+  'normalized === "foodtruck"',
   'return "truck";',
   'const resolvedProfileId = extractUuidFromSlug(rawProfileId) || rawProfileId;',
-  'queryKey: ["/api/public/profiles", normalizedProfileType, resolvedProfileId, locationSearch],',
+  'queryKey: [',
+  '"/api/public/profiles",',
+  'normalizedProfileType,',
+  'resolvedProfileId,',
+  'locationSearch,',
   '`/api/public/profiles/${encodeURIComponent(String(normalizedProfileType || ""))}/${encodeURIComponent(String(resolvedProfileId || ""))}${locationSearch || ""}`',
 ];
 
@@ -25,7 +31,9 @@ for (const snippet of requiredClientSnippets) {
 
 const requiredServerSnippets = [
   "const normalizePublicProfileEntity = (value: string | null | undefined) => {",
-  'if (normalized === "food_truck" || normalized === "food-truck" || normalized === "foodtruck") {',
+  'normalized === "food_truck" ||',
+  'normalized === "food-truck" ||',
+  'normalized === "foodtruck"',
   'if (normalized === "food_trucks") return "truck";',
   'app.get("/api/public/profiles/:entity/:id", async (req, res) => {',
   "const entity = normalizePublicProfileEntity(req.params.entity);",

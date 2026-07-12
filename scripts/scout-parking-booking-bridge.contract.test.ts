@@ -16,7 +16,10 @@ const requiredScoutSnippets = [
   "eventMenuId",
   'if (card.entityType === "host_spot")',
   'label: "View details"',
-  "/p/host/",
+  // Host-spot "View details" links moved from a hardcoded /p/host/ prefix
+  // to the shared buildPublicProfilePath("location", ...) helper, which
+  // now produces clean /location/{slug} URLs.
+  'buildPublicProfilePath("location", String(card.entityId), card.title)',
 ];
 
 for (const snippet of requiredScoutSnippets) {

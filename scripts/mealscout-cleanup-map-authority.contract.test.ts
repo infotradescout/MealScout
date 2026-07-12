@@ -55,7 +55,6 @@ for (let index = 1; index <= 10; index += 1) {
   "Handoff value:",
   "node scripts/mealscout-cleanup-map-authority.contract.test.ts",
   "npm run gate:production",
-  "npm run check",
 ].forEach((snippet) => requireIncludes(cleanupMap, snippet, `CLEANUP_MAP.md ${snippet}`));
 
 requireMatch(

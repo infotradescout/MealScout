@@ -148,8 +148,8 @@ requireMatch(
 
 requireMatch(
   cleanupMap,
-  /C7 - Owner Dashboard Decomposition Map[\s\S]*Status: `NEXT`/,
-  "CLEANUP_MAP.md marks C7 NEXT",
+  /C7 - Owner Dashboard Decomposition Map[\s\S]*Status: `DONE`/,
+  "CLEANUP_MAP.md marks C7 DONE",
 );
 
 const productFeatureLines = combined

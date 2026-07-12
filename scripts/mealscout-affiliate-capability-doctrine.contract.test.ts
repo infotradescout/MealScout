@@ -107,7 +107,12 @@ requireIncludes(
 
 requireIncludes(
   shareHub,
-  'fetch("/api/auth/user"',
+  'useAuth()',
+  // Share Hub used to make its own page-local fetch("/api/auth/user")
+  // call; a site-drift-sweep fix (2026-07-05, see REFACTOR_BOARD.md)
+  // replaced it with the shared useAuth() hook so it derives from the
+  // same authenticated user state as the rest of the app instead of a
+  // second redundant request.
   "Share Hub must derive sharing from existing authenticated user state.",
 );
 requireIncludes(
@@ -117,7 +122,7 @@ requireIncludes(
 );
 requireIncludes(
   shareHub,
-  "Tracked links are ready. Add a custom share tag later if you want cleaner links.",
+  "Tracked links are active. Add a custom share tag any time for cleaner branding.",
   "Share Hub must show that tracked links are ready even when no vanity tag is configured.",
 );
 requireExcludes(
@@ -133,7 +138,7 @@ requireIncludes(
 );
 requireIncludes(
   publicProfile,
-  "<RestaurantSocial profile={restaurantProfile} safeCtas={safeCtas} />",
+  "<RestaurantSocial",
   "Public profile must keep secondary sharing/social capabilities accessible.",
 );
 

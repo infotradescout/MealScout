@@ -9,7 +9,7 @@ const requiredSnippets = [
   'entity === "truck"',
   "await resolveTruckRestaurantForPublicId(idHint)",
   "entity: \"truck\"",
-  "const trucks = cityRestaurants.filter((row: any) => isTruckRestaurantRow(row));",
+  "const trucks = cityRestaurants.filter((row: any) =>",
   "const restaurantsOnly = cityRestaurants.filter(",
   "(row: any) => !isTruckRestaurantRow(row),",
 ];

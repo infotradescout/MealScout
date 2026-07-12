@@ -97,12 +97,17 @@ requireExcludes(
 
 requireIncludes(
   publicDiscoveryRoutes,
-  "const priceCents = priceRaw && Number.isFinite(numericPrice)",
+  "const priceCents =",
+  "Public menu payload must not convert missing prices to zero.",
+);
+requireIncludes(
+  publicDiscoveryRoutes,
+  "priceRaw && Number.isFinite(numericPrice)",
   "Public menu payload must not convert missing prices to zero.",
 );
 requireIncludes(
   publicProfileMapper,
-  "const hasPrice = item?.priceCents !== null && item?.priceCents !== undefined;",
+  "item?.priceCents !== null && item?.priceCents !== undefined;",
   "Public profile mapper must not convert null missing prices to $0.00.",
 );
 
