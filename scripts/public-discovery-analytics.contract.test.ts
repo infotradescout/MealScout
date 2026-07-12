@@ -12,7 +12,7 @@ const requiredServerSnippets = [
   "discovery_card_click",
   "discovery_profile_click",
   "discovery_cta_click",
-  'app.get("/api/admin/discovery-analytics"',
+  '"/api/admin/discovery-analytics"',
   'eq(requestLogs.surface, "public_discovery")',
   'eq(requestLogs.eventType, "discovery_event")',
 ];

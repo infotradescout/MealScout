@@ -167,8 +167,8 @@ requireMatch(
 
 requireMatch(
   cleanupMap,
-  /C6 - Parking Pass Page Decomposition Map[\s\S]*Status: `NEXT`/,
-  "CLEANUP_MAP.md marks C6 NEXT",
+  /C6 - Parking Pass Page Decomposition Map[\s\S]*Status: `DONE`/,
+  "CLEANUP_MAP.md marks C6 DONE",
 );
 
 [

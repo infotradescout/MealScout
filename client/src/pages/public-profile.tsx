@@ -2584,7 +2584,8 @@ function PublicProfileRelatedDiscoveryLinks({
         </CardTitle>
         <CardDescription className="text-white/60">
           Find nearby restaurants, trucks, bars, and fresh local updates from
-          MealScout.
+          MealScout. MealScout coverage is limited and grows as local trucks
+          and places update their profiles.
         </CardDescription>
       </CardHeader>
       <CardContent className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
@@ -2709,7 +2710,7 @@ export default function PublicProfilePage() {
     queryKey: ["/api/favorites/restaurants", "profile-personalization"],
     enabled: isAuthenticated && Boolean(data?.id),
     queryFn: async () => {
-      const res = await fetch("/api/favorites/restaurants", {
+      const res = await fetch(apiUrl("/api/favorites/restaurants"), {
         credentials: "include",
       });
       if (!res.ok) return [];
