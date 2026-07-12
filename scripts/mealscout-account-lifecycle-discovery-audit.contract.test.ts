@@ -157,7 +157,12 @@ requireIncludes(app, '<Route path="/parking-pass-manage" component={ParkingPassM
   ': "customer";',
   "getReferralId",
   "referralId: getReferralId()",
-  "businessType=food_truck",
+  // buildRestaurantSignupHref now assembles the redirect via
+  // URLSearchParams instead of a hardcoded "businessType=food_truck"
+  // string; check for the dynamic mechanism and its food_truck-specific
+  // claim=1 behavior instead of the old literal query string.
+  "businessType: businessSubType",
+  'params.set("claim", "1")',
   '"/event-coordinator/dashboard?setup=onboarding"',
   '"/supplier/dashboard"',
 ].forEach((snippet) => requireIncludes(customerSignup, snippet, `customer signup snippet ${snippet}`));
