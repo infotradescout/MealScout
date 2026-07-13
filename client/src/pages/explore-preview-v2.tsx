@@ -414,6 +414,13 @@ type ScoutTrendingResponse = {
   places: TrendingPlaceSummary[];
 };
 
+type ScoutGlobalSearchResponse = {
+  query: string;
+  restaurants: RestaurantSummary[];
+  deals: DealSummary[];
+  events: EventSummary[];
+};
+
 interface RestaurantRelationshipSnapshot {
   favoriteIds: Set<string>;
   followIds: Set<string>;
@@ -3423,6 +3430,35 @@ export default function ExplorePreview() {
     retry: false,
   });
 
+  const {
+    data: globalSearchData,
+    isLoading: globalSearchLoading,
+  } = useQuery<ScoutGlobalSearchResponse>({
+    queryKey: ["/api/search", "scout-network", scoutSearchQuery.trim()],
+    enabled: scoutSearchMode && scoutSearchQuery.trim().length >= 2,
+    queryFn: async () => {
+      const query = scoutSearchQuery.trim();
+      const response = await fetch(
+        `/api/search?q=${encodeURIComponent(query)}`,
+        { credentials: "include" },
+      );
+      if (!response.ok) {
+        return { query, restaurants: [], deals: [], events: [] };
+      }
+      const data = await response.json();
+      return {
+        query,
+        restaurants: Array.isArray(data?.restaurants)
+          ? data.restaurants
+          : [],
+        deals: Array.isArray(data?.deals) ? data.deals : [],
+        events: Array.isArray(data?.events) ? data.events : [],
+      };
+    },
+    staleTime: 60_000,
+    retry: false,
+  });
+
   const { data: favoriteRestaurantsData = [] } = useQuery<any[]>({
     queryKey: ["/api/favorites/restaurants", "scout"],
     enabled: !!user,
@@ -4573,16 +4609,24 @@ export default function ExplorePreview() {
       scoutSearchQuery,
     ],
   );
-  const activeMarketPlaces = useMemo(() => {
-    const places = Array.isArray(trendingData?.places)
+  const activeMarketPlaces = useMemo<RestaurantSummary[]>(() => {
+    const byId = new Map<string, RestaurantSummary>();
+    const networkMatches = Array.isArray(globalSearchData?.restaurants)
+      ? globalSearchData.restaurants
+      : [];
+    const trendingPlaces = Array.isArray(trendingData?.places)
       ? trendingData.places
       : [];
-    return places.slice(0, 40);
-  }, [trendingData?.places]);
+    for (const place of [...networkMatches, ...trendingPlaces]) {
+      const id = String(place?.id || "").trim();
+      if (!id || byId.has(id)) continue;
+      byId.set(id, place);
+    }
+    return Array.from(byId.values());
+  }, [globalSearchData?.restaurants, trendingData?.places]);
 
   const activeMarketDishes = useMemo(() => {
-    const items = Array.isArray(trendingData?.items) ? trendingData.items : [];
-    return items.slice(0, 60);
+    return Array.isArray(trendingData?.items) ? trendingData.items : [];
   }, [trendingData?.items]);
 
   const activityFallbackRestaurants = useMemo(
@@ -4689,7 +4733,8 @@ export default function ExplorePreview() {
     !localMenuItemsLoading &&
     !nearbyDealsLoading &&
     !eventsLoading;
-  const activityFallbackSettled = !trendingLoading;
+  const activityFallbackSettled =
+    !trendingLoading && !globalSearchLoading;
   const showActivityFallback =
     localDiscoverySettled &&
     activityFallbackSettled &&
