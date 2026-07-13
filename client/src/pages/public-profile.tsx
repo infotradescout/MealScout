@@ -34,6 +34,7 @@ import { ElevatedTruckHero } from "@/components/public-profile/ElevatedTruckHero
 import { ElevatedProfileHero } from "@/components/public-profile/ElevatedProfileHero";
 import { WhyGoNowPanel } from "@/components/public-profile/WhyGoNowPanel";
 import { MobileActionDock } from "@/components/public-profile/MobileActionDock";
+import { rankPublicCtas } from "@/components/public-profile/profileActionPolicy";
 import { MenuHighlightsRail } from "@/components/public-profile/MenuHighlightsRail";
 import { TruckSchedulePanel } from "@/components/public-profile/TruckSchedulePanel";
 import { RestaurantHoursPanel } from "@/components/public-profile/RestaurantHoursPanel";
@@ -276,41 +277,10 @@ const cleanProfileCuisineTags = (tags: string[] | null | undefined) =>
     )
     .slice(0, 2);
 
-const ctaPriorityForProfile = (
-  profile: PublicProfilePayload,
-  cta: PublicCta,
-) => {
-  if (typeof cta.priority === "number" && Number.isFinite(cta.priority))
-    return cta.priority;
-  const label = String(cta.label || "").toLowerCase();
-  if (profile.entity === "restaurant") {
-    if (cta.type === "order" || label.includes("order")) return 100;
-    if (cta.type === "menu" || label.includes("menu")) return 96;
-    if (cta.type === "map") return 92;
-    if (cta.type === "phone") return 90;
-    if (cta.type === "external") return 85;
-  }
-  if (profile.entity === "host") {
-    if (cta.type === "map") return 100;
-    if (label.includes("food")) return 95;
-    if (cta.type === "external") return 86;
-    if (cta.type === "phone") return 84;
-  }
-  if (profile.entity === "supplier") {
-    if (cta.type === "external") return 92;
-    if (cta.type === "phone") return 88;
-    if (cta.type === "map") return 86;
-  }
-  if (cta.type === "map") return 90;
-  if (cta.type === "menu") return 88;
-  if (cta.type === "order") return 86;
-  if (cta.type === "phone") return 84;
-  if (cta.type === "social") return 76;
-  if (cta.type === "share") return 74;
-  if (cta.type === "external") return 72;
-  if (cta.type === "internal" && !isSelfProfileCta(profile, cta)) return 60;
-  return 0;
-};
+const getActionPolicyProfileType = (profile: PublicProfilePayload) =>
+  profile.entity === "restaurant"
+    ? profile.profileType
+    : profile.entity;
 
 const pickActionCtas = (
   profile: PublicProfilePayload,
@@ -318,15 +288,13 @@ const pickActionCtas = (
   limit = 6,
 ) =>
   uniqueByHref(
-    safeCtas.filter(
-      (cta) => !isSelfProfileCta(profile, cta) && !isDetailsCta(cta),
+    rankPublicCtas(
+      safeCtas.filter(
+        (cta) => !isSelfProfileCta(profile, cta) && !isDetailsCta(cta),
+      ),
+      getActionPolicyProfileType(profile),
     ),
-  )
-    .sort(
-      (a, b) =>
-        ctaPriorityForProfile(profile, b) - ctaPriorityForProfile(profile, a),
-    )
-    .slice(0, limit);
+  ).slice(0, limit);
 
 const locationLine = (profile: {
   addressPublicLabel?: string | null;
