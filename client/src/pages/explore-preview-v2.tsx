@@ -4529,78 +4529,134 @@ export default function ExplorePreview() {
   const showQuickUpdateBar = isFoodOperator(user);
   const scoutTruckInventoryForFeed = useMemo(
     () =>
-      filterScoutSearchRows(
-        scoutTruckInventory,
-        scoutSearchMode,
-        scoutSearchQuery,
-        scoutSearchIntent,
-        "truck",
+      canonicalizeScoutRows(
+        filterScoutSearchRows(
+          scoutTruckInventory,
+          scoutSearchMode,
+          scoutSearchQuery,
+          scoutSearchIntent,
+          "truck",
+        ),
+        {
+          kind: "food_truck",
+          scope: "nearby",
+          source: "live_presence",
+          query: scoutSearchMode ? scoutSearchQuery : undefined,
+        },
       ),
     [scoutSearchIntent, scoutSearchMode, scoutSearchQuery, scoutTruckInventory],
   );
   const nearbyRestaurantsForFeed = useMemo(
     () =>
-      filterScoutSearchRows(
-        nearbyRestaurants,
-        scoutSearchMode,
-        scoutSearchQuery,
-        scoutSearchIntent,
-        "restaurant",
+      canonicalizeScoutRows(
+        filterScoutSearchRows(
+          nearbyRestaurants,
+          scoutSearchMode,
+          scoutSearchQuery,
+          scoutSearchIntent,
+          "restaurant",
+        ),
+        {
+          kind: "business",
+          scope: "nearby",
+          source: "local_inventory",
+          query: scoutSearchMode ? scoutSearchQuery : undefined,
+        },
       ),
     [nearbyRestaurants, scoutSearchIntent, scoutSearchMode, scoutSearchQuery],
   );
   const allDealsForFeed = useMemo(
     () =>
-      filterScoutSearchRows(
-        allDeals,
-        scoutSearchMode,
-        scoutSearchQuery,
-        scoutSearchIntent,
-        "deal",
+      canonicalizeScoutRows(
+        filterScoutSearchRows(
+          allDeals,
+          scoutSearchMode,
+          scoutSearchQuery,
+          scoutSearchIntent,
+          "deal",
+        ),
+        {
+          kind: "deal",
+          scope: "nearby",
+          source: "deal",
+          query: scoutSearchMode ? scoutSearchQuery : undefined,
+        },
       ),
     [allDeals, scoutSearchIntent, scoutSearchMode, scoutSearchQuery],
   );
   const visibleEventsForFeed = useMemo(
     () =>
-      filterScoutSearchRows(
-        visibleEvents,
-        scoutSearchMode,
-        scoutSearchQuery,
-        scoutSearchIntent,
-        "event",
+      canonicalizeScoutRows(
+        filterScoutSearchRows(
+          visibleEvents,
+          scoutSearchMode,
+          scoutSearchQuery,
+          scoutSearchIntent,
+          "event",
+        ),
+        {
+          kind: "event",
+          scope: "nearby",
+          source: "event",
+          query: scoutSearchMode ? scoutSearchQuery : undefined,
+        },
       ),
     [scoutSearchIntent, scoutSearchMode, scoutSearchQuery, visibleEvents],
   );
   const localMenuItemsForFeed = useMemo(
     () =>
-      filterScoutSearchRows(
-        localMenuItems,
-        scoutSearchMode,
-        scoutSearchQuery,
-        scoutSearchIntent,
-        "menu_item",
+      canonicalizeScoutRows(
+        filterScoutSearchRows(
+          localMenuItems,
+          scoutSearchMode,
+          scoutSearchQuery,
+          scoutSearchIntent,
+          "menu_item",
+        ),
+        {
+          kind: "dish",
+          scope: "nearby",
+          source: "menu",
+          query: scoutSearchMode ? scoutSearchQuery : undefined,
+        },
       ),
     [localMenuItems, scoutSearchIntent, scoutSearchMode, scoutSearchQuery],
   );
   const popularDishesForFeed = useMemo(
     () =>
-      filterScoutSearchRows(
-        popularDishes,
-        scoutSearchMode,
-        scoutSearchQuery,
-        scoutSearchIntent,
-        "menu_item",
+      canonicalizeScoutRows(
+        filterScoutSearchRows(
+          popularDishes,
+          scoutSearchMode,
+          scoutSearchQuery,
+          scoutSearchIntent,
+          "menu_item",
+        ),
+        {
+          kind: "dish",
+          scope: "nearby",
+          source: "trending",
+          query: scoutSearchMode ? scoutSearchQuery : undefined,
+        },
       ),
     [popularDishes, scoutSearchIntent, scoutSearchMode, scoutSearchQuery],
   );
   const trendingPlacesThisWeekForFeed = useMemo(
     () =>
-      filterScoutSearchRows(
-        trendingPlacesThisWeek,
-        scoutSearchMode,
-        scoutSearchQuery,
-        scoutSearchIntent,
-        "restaurant",
+      canonicalizeScoutRows(
+        filterScoutSearchRows(
+          trendingPlacesThisWeek,
+          scoutSearchMode,
+          scoutSearchQuery,
+          scoutSearchIntent,
+          "restaurant",
+        ),
+        {
+          kind: "business",
+          scope: "nearby",
+          source: "trending",
+          query: scoutSearchMode ? scoutSearchQuery : undefined,
+        },
       ),
     [
       scoutSearchIntent,
@@ -4611,12 +4667,20 @@ export default function ExplorePreview() {
   );
   const newToMealScoutRestaurantsForFeed = useMemo(
     () =>
-      filterScoutSearchRows(
-        newToMealScoutRestaurants,
-        scoutSearchMode,
-        scoutSearchQuery,
-        scoutSearchIntent,
-        "restaurant",
+      canonicalizeScoutRows(
+        filterScoutSearchRows(
+          newToMealScoutRestaurants,
+          scoutSearchMode,
+          scoutSearchQuery,
+          scoutSearchIntent,
+          "restaurant",
+        ),
+        {
+          kind: "business",
+          scope: "nearby",
+          source: "local_inventory",
+          query: scoutSearchMode ? scoutSearchQuery : undefined,
+        },
       ),
     [
       newToMealScoutRestaurants,
@@ -4626,34 +4690,61 @@ export default function ExplorePreview() {
     ],
   );
   const activeMarketPlaces = useMemo<RestaurantSummary[]>(() => {
-    const byId = new Map<string, RestaurantSummary>();
-    const networkMatches = Array.isArray(globalSearchData?.restaurants)
-      ? globalSearchData.restaurants
-      : [];
-    const trendingPlaces = Array.isArray(trendingData?.places)
-      ? trendingData.places
-      : [];
-    for (const place of [...networkMatches, ...trendingPlaces]) {
-      const id = String(place?.id || "").trim();
-      if (!id || byId.has(id)) continue;
-      byId.set(id, place);
-    }
-    return Array.from(byId.values());
-  }, [globalSearchData?.restaurants, trendingData?.places]);
+    const rows = [
+      ...(Array.isArray(globalSearchData?.restaurants)
+        ? globalSearchData.restaurants
+        : []),
+      ...(Array.isArray(trendingData?.places) ? trendingData.places : []),
+    ];
+    return canonicalizeScoutRows(rows, {
+      kind: "business",
+      scope: "network",
+      source: "network_search",
+      query: scoutSearchMode ? scoutSearchQuery : undefined,
+    });
+  }, [
+    globalSearchData?.restaurants,
+    scoutSearchMode,
+    scoutSearchQuery,
+    trendingData?.places,
+  ]);
 
-  const activeMarketDishes = useMemo(() => {
-    return Array.isArray(trendingData?.items) ? trendingData.items : [];
-  }, [trendingData?.items]);
+  const activeMarketDishes = useMemo(
+    () =>
+      canonicalizeScoutRows(
+        Array.isArray(trendingData?.items) ? trendingData.items : [],
+        {
+          kind: "dish",
+          scope: "network",
+          source: "trending",
+          query: scoutSearchMode ? scoutSearchQuery : undefined,
+        },
+      ),
+    [
+      scoutSearchMode,
+      scoutSearchQuery,
+      trendingData?.items,
+    ],
+  );
 
   const activityFallbackRestaurants = useMemo(
     () =>
-      filterScoutFallbackRows(
-        activeMarketPlaces,
-        scoutSearchMode,
-        scoutSearchQuery,
-        scoutSearchIntent,
-        "restaurant",
-      ).slice(0, 8),
+      canonicalizeScoutRows(
+        filterScoutFallbackRows(
+          activeMarketPlaces,
+          scoutSearchMode,
+          scoutSearchQuery,
+          scoutSearchIntent,
+          "restaurant",
+        ),
+        {
+          kind: "business",
+          scope: "network",
+          source: "network_search",
+          query: scoutSearchMode ? scoutSearchQuery : undefined,
+          limit: 8,
+        },
+      ),
     [
       activeMarketPlaces,
       scoutSearchIntent,
@@ -4664,13 +4755,22 @@ export default function ExplorePreview() {
 
   const activityFallbackDishes = useMemo(
     () =>
-      filterScoutFallbackRows(
-        activeMarketDishes,
-        scoutSearchMode,
-        scoutSearchQuery,
-        scoutSearchIntent,
-        "menu_item",
-      ).slice(0, 8),
+      canonicalizeScoutRows(
+        filterScoutFallbackRows(
+          activeMarketDishes,
+          scoutSearchMode,
+          scoutSearchQuery,
+          scoutSearchIntent,
+          "menu_item",
+        ),
+        {
+          kind: "dish",
+          scope: "network",
+          source: "trending",
+          query: scoutSearchMode ? scoutSearchQuery : undefined,
+          limit: 8,
+        },
+      ),
     [
       activeMarketDishes,
       scoutSearchIntent,
