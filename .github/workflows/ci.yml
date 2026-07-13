@@ -31,6 +31,9 @@ jobs:
       - name: Scout Fallback and Navigation Contract
         run: npm run test:scout-fallback
 
+      - name: Canonical Scout Discovery Result Contract
+        run: npm run test:scout-discovery-result
+
       - name: Build
         run: npm run build
 
