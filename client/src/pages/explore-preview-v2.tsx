@@ -1,4 +1,5 @@
 import { deriveTruckPresence } from "@shared/consumerEntity";
+import { expandScoutSearchTerms } from "@shared/scoutSearchIntent";
 import { resolveBusinessMedia, type BusinessMediaAsset } from "@/lib/businessMedia";
 import {
   useCallback,
@@ -2487,19 +2488,6 @@ function filterScoutSearchRows<T>(
   );
 }
 
-const SCOUT_FALLBACK_QUERY_ALIASES: Record<string, string[]> = {
-  taco: ["taco", "tacos", "mexican", "tex-mex", "taqueria", "burrito", "quesadilla"],
-  tacos: ["taco", "tacos", "mexican", "tex-mex", "taqueria", "burrito", "quesadilla"],
-  burger: ["burger", "burgers", "hamburger", "cheeseburger"],
-  burgers: ["burger", "burgers", "hamburger", "cheeseburger"],
-  pizza: ["pizza", "pizzeria", "italian"],
-  sushi: ["sushi", "japanese", "sashimi", "roll"],
-  bbq: ["bbq", "barbecue", "brisket", "smoked"],
-  barbecue: ["bbq", "barbecue", "brisket", "smoked"],
-  wings: ["wing", "wings", "chicken"],
-  vegan: ["vegan", "plant-based", "vegetarian"],
-};
-
 function filterScoutFallbackRows<T>(
   rows: T[],
   searchMode: boolean,
@@ -2508,12 +2496,7 @@ function filterScoutFallbackRows<T>(
   kindHint?: string,
 ): T[] {
   if (!searchMode || !query.trim()) return rows;
-  const terms = tokenizeScoutSearch(query);
-  const expandedTerms = Array.from(
-    new Set(
-      terms.flatMap((term) => SCOUT_FALLBACK_QUERY_ALIASES[term] ?? [term]),
-    ),
-  );
+  const expandedTerms = expandScoutSearchTerms(query);
   const fallbackIntent =
     kindHint === "restaurant" && intent === "dishes" ? "all" : intent;
   return rows.filter(
