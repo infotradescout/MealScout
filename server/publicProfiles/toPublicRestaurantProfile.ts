@@ -1,4 +1,8 @@
 import type { PublicRestaurantProfile } from "@shared/publicProfiles";
+import {
+  isBarBusinessType,
+  isTruckBusinessType,
+} from "@shared/businessTypes";
 import { toPublicProfileSeo } from "./toPublicProfileSeo";
 import {
   buildPublicCta,
@@ -175,9 +179,9 @@ export function toPublicRestaurantProfile(input: {
       : {};
   const profileType =
     input.profileType ||
-    (row.isFoodTruck || row.businessType === "food_truck"
+    (row.isFoodTruck || isTruckBusinessType(row.businessType)
       ? "truck"
-      : row.businessType === "bar"
+      : isBarBusinessType(row.businessType)
         ? "bar"
         : "restaurant");
   const id = String(row.id || "");

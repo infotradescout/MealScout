@@ -40,6 +40,9 @@ jobs:
       - name: Public Profile Action Policy Contract
         run: npm run test:profile-action-policy
 
+      - name: Business Type Taxonomy Contract
+        run: npm run test:business-type-taxonomy
+
       - name: Build
         run: npm run build
 

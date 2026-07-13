@@ -2,6 +2,10 @@ import { eq } from "drizzle-orm";
 
 import { hosts, suppliers } from "@shared/schema";
 import { normalizeCleanBusinessSlug } from "@shared/cleanAffiliateLinks";
+import {
+  isBarBusinessType,
+  isTruckBusinessType,
+} from "@shared/businessTypes";
 
 import { db } from "../db";
 import { storage } from "../storage";
@@ -39,10 +43,10 @@ const toSlug = (value: unknown) =>
     .slice(0, 80);
 
 const classifyRestaurantEntityType = (row: any) => {
-  if (row?.isFoodTruck || String(row?.businessType || "") === "food_truck") {
+  if (row?.isFoodTruck || isTruckBusinessType(row?.businessType)) {
     return "truck" as const;
   }
-  if (String(row?.businessType || "") === "bar") {
+  if (isBarBusinessType(row?.businessType)) {
     return "bar" as const;
   }
   return "restaurant" as const;
