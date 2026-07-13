@@ -97,12 +97,7 @@ const ThemedScoutMap = lazy(
  *   - /atmospheric/mealscout-welcome-map-night.png (welcome map-pin scene)
  */
 const SCOUT_BACKGROUND_IMAGE = "/atmospheric/foodpark-night-hero.jpg";
-const PENSACOLA_LAUNCH_MARKET = {
-  label: "Pensacola, FL",
-  lat: 30.4213,
-  lng: -87.2169,
-  marketKey: "pensacola-fl",
-} as const;
+const SCOUT_ACTIVITY_FALLBACK_LABEL = "other active areas";
 
 function formatScoutMarketLabel({
   city,
@@ -3294,24 +3289,6 @@ export default function ExplorePreview() {
     staleTime: 120_000,
   });
 
-  const {
-    data: pensacolaRestaurantFallbackData = [],
-    isLoading: pensacolaRestaurantFallbackLoading,
-  } = useQuery<RestaurantSummary[]>({
-      queryKey: ["/api/restaurants/nearby", "pensacola-fallback", 40],
-      queryFn: async () => {
-        const response = await fetch(
-          `/api/restaurants/nearby/${PENSACOLA_LAUNCH_MARKET.lat}/${PENSACOLA_LAUNCH_MARKET.lng}?radius=40`,
-          { credentials: "include" },
-        );
-        if (!response.ok) return [];
-        const data = await response.json();
-        return Array.isArray(data) ? data : [];
-      },
-      staleTime: 300_000,
-      retry: false,
-    });
-
   const nearbyFoodBusinesses = useMemo<RestaurantSummary[]>(() => {
     const byId = new Map<string, RestaurantSummary>();
     for (const restaurant of [
@@ -4590,87 +4567,46 @@ export default function ExplorePreview() {
       scoutSearchQuery,
     ],
   );
-  const pensacolaTrendingPlaces = useMemo(() => {
+  const activeMarketPlaces = useMemo(() => {
     const places = Array.isArray(trendingData?.places)
       ? trendingData.places
       : [];
-    return places
-      .filter((place) => {
-        const city = String(place.city || "").trim().toLowerCase();
-        const state = String(place.state || "").trim().toLowerCase();
-        return city === "pensacola";
-      })
-      .slice(0, 8);
+    return places.slice(0, 40);
   }, [trendingData?.places]);
 
-  const pensacolaPopularDishes = useMemo(() => {
+  const activeMarketDishes = useMemo(() => {
     const items = Array.isArray(trendingData?.items) ? trendingData.items : [];
-    return items
-      .filter((item) => {
-        const city = String(item.restaurantCity || "").trim().toLowerCase();
-        const state = String(item.restaurantState || "").trim().toLowerCase();
-        return city === "pensacola" || state === "fl";
-      })
-      .slice(0, 8);
+    return items.slice(0, 60);
   }, [trendingData?.items]);
 
-  const pensacolaFallbackRestaurants = useMemo(() => {
-    const rows = Array.isArray(pensacolaRestaurantFallbackData)
-      ? pensacolaRestaurantFallbackData
-      : [];
-    const related = filterScoutFallbackRows(
-      rows,
-      scoutSearchMode,
-      scoutSearchQuery,
-      scoutSearchIntent,
-      "restaurant",
-    );
-    const trendingIds = new Set(
-      pensacolaTrendingPlaces.map((place) => String(place.id)),
-    );
-    return [...related]
-      .sort(
-        (a, b) =>
-          Number(trendingIds.has(String(b.id))) -
-          Number(trendingIds.has(String(a.id))),
-      )
-      .slice(0, 8);
-  }, [
-    pensacolaRestaurantFallbackData,
-    pensacolaTrendingPlaces,
-    scoutSearchIntent,
-    scoutSearchMode,
-    scoutSearchQuery,
-  ]);
-
-  const pensacolaFallbackDishes = useMemo(
+  const activityFallbackRestaurants = useMemo(
     () =>
       filterScoutFallbackRows(
-        pensacolaPopularDishes,
-        scoutSearchMode,
-        scoutSearchQuery,
-        scoutSearchIntent,
-        "menu_item",
-      ).slice(0, 8),
-    [
-      pensacolaPopularDishes,
-      scoutSearchIntent,
-      scoutSearchMode,
-      scoutSearchQuery,
-    ],
-  );
-
-  const pensacolaFallbackTrending = useMemo(
-    () =>
-      filterScoutFallbackRows(
-        pensacolaTrendingPlaces,
+        activeMarketPlaces,
         scoutSearchMode,
         scoutSearchQuery,
         scoutSearchIntent,
         "restaurant",
       ).slice(0, 8),
     [
-      pensacolaTrendingPlaces,
+      activeMarketPlaces,
+      scoutSearchIntent,
+      scoutSearchMode,
+      scoutSearchQuery,
+    ],
+  );
+
+  const activityFallbackDishes = useMemo(
+    () =>
+      filterScoutFallbackRows(
+        activeMarketDishes,
+        scoutSearchMode,
+        scoutSearchQuery,
+        scoutSearchIntent,
+        "menu_item",
+      ).slice(0, 8),
+    [
+      activeMarketDishes,
       scoutSearchIntent,
       scoutSearchMode,
       scoutSearchQuery,
@@ -4747,32 +4683,30 @@ export default function ExplorePreview() {
     !localMenuItemsLoading &&
     !nearbyDealsLoading &&
     !eventsLoading;
-  const pensacolaFallbackSettled =
-    !pensacolaRestaurantFallbackLoading && !trendingLoading;
-  const showPensacolaFallback =
+  const activityFallbackSettled = !trendingLoading;
+  const showActivityFallback =
     localDiscoverySettled &&
-    pensacolaFallbackSettled &&
+    activityFallbackSettled &&
     (scoutSearchQuery.trim().length > 0
       ? scoutSearchMode && localSearchContentCount === 0
       : localActivityCount === 0 &&
         popularDishesForFeed.length === 0 &&
         trendingPlacesThisWeekForFeed.length === 0);
-  const fallbackMarketLabel = showPensacolaFallback
-    ? PENSACOLA_LAUNCH_MARKET.label
+  const fallbackMarketLabel = showActivityFallback
+    ? SCOUT_ACTIVITY_FALLBACK_LABEL
     : null;
-  const effectiveRestaurantsForFeed = showPensacolaFallback
-    ? pensacolaFallbackRestaurants
+  const effectiveRestaurantsForFeed = showActivityFallback
+    ? activityFallbackRestaurants
     : nearbyRestaurantsForFeed;
-  const effectivePopularDishesForFeed = showPensacolaFallback
-    ? pensacolaFallbackDishes
+  const effectivePopularDishesForFeed = showActivityFallback
+    ? activityFallbackDishes
     : popularDishesForFeed;
-  const effectiveTrendingPlacesForFeed = showPensacolaFallback
-    ? pensacolaFallbackTrending
+  const effectiveTrendingPlacesForFeed = showActivityFallback
+    ? []
     : trendingPlacesThisWeekForFeed;
   const fallbackHasRelatedResults =
-    pensacolaFallbackRestaurants.length > 0 ||
-    pensacolaFallbackDishes.length > 0 ||
-    pensacolaFallbackTrending.length > 0;
+    activityFallbackRestaurants.length > 0 ||
+    activityFallbackDishes.length > 0;
   const nearbyRestaurantsTitle = DISCOVERY_LAYERS.restaurants.title;
   const nearbyRestaurantsSubtitle = DISCOVERY_LAYERS.restaurants.subtitle;
 
@@ -6124,12 +6058,10 @@ function ScoutResultsSheet({
 }
 
 function ScoutFallbackMarketNotice({
-  marketLabel,
   query,
   hasResults,
   onRequestPlace,
 }: {
-  marketLabel: string;
   query: string;
   hasResults: boolean;
   onRequestPlace: () => void;
@@ -6149,15 +6081,15 @@ function ScoutFallbackMarketNotice({
             <p className="text-sm font-black text-white">
               {hasResults
                 ? normalizedQuery
-                  ? `Showing related picks from ${marketLabel}`
-                  : `Showing popular picks from ${marketLabel}`
-                : `No related “${normalizedQuery}” picks in ${marketLabel} either`}
+                  ? "Showing related picks from active areas"
+                  : "Showing popular picks from active areas"
+                : `No related “${normalizedQuery}” picks are active right now`}
             </p>
             <p className="mt-0.5 text-xs font-semibold leading-relaxed text-orange-100/65">
               {hasResults
                 ? normalizedQuery
-                  ? `These are farther away and clearly related to “${normalizedQuery}.”`
-                  : "These are farther away and only appear until local places are added."
+                  ? `These are farther away, may come from any active MealScout area, and clearly relate to “${normalizedQuery}.”`
+                  : "These are farther away and come from MealScout areas with current activity."
                 : "Scout will not substitute unrelated food. Request your favorite place and we’ll add it to the review queue."}
             </p>
           </div>
@@ -7180,8 +7112,8 @@ function ActiveSceneContent({
         primaryFirstScreenDecision.sourceRowId === "open_now_near_you");
     const popularDishesRailTitle = fallbackMarketLabel
       ? fallbackSearchQuery.trim()
-        ? `Related dishes in ${fallbackMarketLabel}`
-        : `Popular dishes in ${fallbackMarketLabel}`
+        ? "Related dishes beyond your area"
+        : "Popular dishes beyond your area"
       : primaryFirstScreenDecision?.sourceRowId === "popular_dishes"
         ? "More Dishes Nearby"
         : truckFirstScreenLead
@@ -7244,7 +7176,6 @@ function ActiveSceneContent({
       if (fallbackMarketLabel) {
         return (
           <ScoutFallbackMarketNotice
-            marketLabel={fallbackMarketLabel}
             query={fallbackSearchQuery}
             hasResults={fallbackHasRelatedResults}
             onRequestPlace={onRequestPlace}
@@ -7411,8 +7342,8 @@ function ActiveSceneContent({
           id: "nearby_restaurants",
           title: fallbackMarketLabel
             ? fallbackSearchQuery.trim()
-              ? `Related places in ${fallbackMarketLabel}`
-              : `Popular in ${fallbackMarketLabel}`
+              ? "Related places beyond your area"
+              : "Popular beyond your area"
             : DISCOVERY_LAYERS.restaurants.title,
           subtitle: fallbackMarketLabel
             ? fallbackSearchQuery.trim()
@@ -7428,8 +7359,8 @@ function ActiveSceneContent({
           id: "trending_this_week",
           title: fallbackMarketLabel
             ? fallbackSearchQuery.trim()
-              ? `Related and trending in ${fallbackMarketLabel}`
-              : `Trending in ${fallbackMarketLabel}`
+              ? "Related activity beyond your area"
+              : "Trending beyond your area"
             : "Local Activity",
           subtitle: fallbackMarketLabel
             ? fallbackSearchQuery.trim()
@@ -7544,7 +7475,6 @@ function ActiveSceneContent({
       <>
         {fallbackMarketLabel ? (
           <ScoutFallbackMarketNotice
-            marketLabel={fallbackMarketLabel}
             query={fallbackSearchQuery}
             hasResults={fallbackHasRelatedResults}
             onRequestPlace={onRequestPlace}
