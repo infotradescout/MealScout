@@ -261,11 +261,15 @@ export function rankScoutDiscoveryResults<T>(
   results: ScoutDiscoveryResult<T>[],
 ): ScoutDiscoveryResult<T>[] {
   return [...results].sort((a, b) => {
-    const aScope = a.location.scope === "nearby" ? 1000 : 0;
-    const bScope = b.location.scope === "nearby" ? 1000 : 0;
-    const scoreA = aScope + a.relevance.score * 10 + a.activity.score;
-    const scoreB = bScope + b.relevance.score * 10 + b.activity.score;
-    if (scoreA !== scoreB) return scoreB - scoreA;
+    if (a.location.scope !== b.location.scope) {
+      return a.location.scope === "nearby" ? -1 : 1;
+    }
+    if (a.relevance.score !== b.relevance.score) {
+      return b.relevance.score - a.relevance.score;
+    }
+    if (a.activity.score !== b.activity.score) {
+      return b.activity.score - a.activity.score;
+    }
     return a.title.localeCompare(b.title);
   });
 }
