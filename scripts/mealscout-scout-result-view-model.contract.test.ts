@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { toScoutDiscoveryResult } from "../shared/scoutDiscoveryResult";
 import { buildScoutResultViewModel } from "../client/src/features/scout/scoutResultViewModel";
 
@@ -63,6 +65,42 @@ const networkWithoutLocation = toScoutDiscoveryResult(
 assert.equal(
   buildScoutResultViewModel(networkWithoutLocation).scopeLabel,
   "Popular on MealScout",
+);
+
+const scoutSource = readFileSync(
+  resolve(process.cwd(), "client/src/pages/explore-preview-v2.tsx"),
+  "utf8",
+);
+const railViewModelFactories = scoutSource.match(
+  /viewModel: buildScoutResultViewModel/g,
+);
+assert.ok(
+  (railViewModelFactories?.length || 0) >= 5,
+  "Every horizontal rail entity kind must be prepared through the canonical view model",
+);
+for (const component of [
+  "LiveTruckCard",
+  "TruckCard",
+  "NearbyRestaurantCard",
+  "LocalMenuItemCard",
+  "DealCard",
+  "EventCard",
+]) {
+  assert.match(
+    scoutSource,
+    new RegExp(`<${component}[\\s\\S]{0,180}viewModel=\\{card\\.viewModel\\}`),
+    `${component} must receive the canonical rail view model`,
+  );
+}
+assert.match(
+  scoutSource,
+  /renderItem: \(card: ScoutRailRenderCard\) =>\s*renderScoutRailCard\(card\)/,
+  "The full-results sheet must reuse the canonical rail renderer",
+);
+assert.match(
+  scoutSource,
+  /<ScoutNetworkScopeBadge label=\{viewModel\?\.scopeLabel\} \/>/,
+  "Network fallback cards must display their dynamic scope label",
 );
 
 console.log("MealScout Scout result view-model contract: PASS");
