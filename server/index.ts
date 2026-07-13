@@ -223,7 +223,28 @@ const extraOrigins = String(process.env.ALLOWED_ORIGINS || "")
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
-const allowedOrigins = Array.from(new Set([...defaultOrigins, ...extraOrigins]));
+const vercelDeploymentOrigins = [
+  process.env.VERCEL_URL,
+  process.env.VERCEL_BRANCH_URL,
+  process.env.VERCEL_PROJECT_PRODUCTION_URL,
+]
+  .map((value) => String(value || "").trim())
+  .filter(Boolean)
+  .map((value) => {
+    try {
+      return new URL(
+        value.startsWith("http://") || value.startsWith("https://")
+          ? value
+          : `https://${value}`,
+      ).origin;
+    } catch {
+      return "";
+    }
+  })
+  .filter(Boolean);
+const allowedOrigins = Array.from(
+  new Set([...defaultOrigins, ...extraOrigins, ...vercelDeploymentOrigins]),
+);
 const allowedActionOrigins = Array.from(
   new Set(
     String(process.env.MEALSCOUT_ALLOWED_ACTION_ORIGINS || "")
