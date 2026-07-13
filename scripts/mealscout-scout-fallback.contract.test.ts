@@ -34,6 +34,11 @@ assert.doesNotMatch(
 );
 assert.doesNotMatch(
   scout,
+  /fallbackMarketLabel|SCOUT_ACTIVITY_FALLBACK_LABEL/,
+  "Network fallback must not masquerade as a fixed market label",
+);
+assert.doesNotMatch(
+  scout,
   /related\.length\s*>\s*0\s*\?\s*related\s*:/,
   "A failed related search must never substitute unrelated popular inventory",
 );
