@@ -310,6 +310,7 @@ type PlaceDetailsResult = {
   placeId: string;
   formattedAddress: string;
   city: string;
+  county: string;
   state: string;
   latitude: number | null;
   longitude: number | null;
@@ -390,6 +391,11 @@ const normalizePlaceDetails = (raw: any): PlaceDetailsResult => {
     extractAddressComponent(components, "locality", "long") ||
     extractAddressComponent(components, "postal_town", "long") ||
     extractAddressComponent(components, "administrative_area_level_2", "long");
+  const county = extractAddressComponent(
+    components,
+    "administrative_area_level_2",
+    "long",
+  );
   const state =
     extractAddressComponent(
       components,
@@ -407,6 +413,7 @@ const normalizePlaceDetails = (raw: any): PlaceDetailsResult => {
     placeId,
     formattedAddress,
     city,
+    county,
     state,
     latitude,
     longitude,
