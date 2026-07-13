@@ -22,30 +22,7 @@ import {
   restaurants,
   videoStories,
 } from "@shared/schema";
-
-const PUBLIC_SEARCH_ALIASES: Record<string, string[]> = {
-  taco: ["taco", "tacos", "mexican", "tex-mex", "taqueria", "burrito", "quesadilla"],
-  tacos: ["taco", "tacos", "mexican", "tex-mex", "taqueria", "burrito", "quesadilla"],
-  burger: ["burger", "burgers", "hamburger", "cheeseburger"],
-  burgers: ["burger", "burgers", "hamburger", "cheeseburger"],
-  pizza: ["pizza", "pizzeria", "italian"],
-  sushi: ["sushi", "japanese", "sashimi", "roll"],
-  bbq: ["bbq", "barbecue", "brisket", "smoked"],
-  barbecue: ["bbq", "barbecue", "brisket", "smoked"],
-  wings: ["wing", "wings", "chicken"],
-  vegan: ["vegan", "plant-based", "vegetarian"],
-};
-
-function expandPublicSearchTerms(query: string): string[] {
-  const tokens = query
-    .toLowerCase()
-    .split(/[^a-z0-9]+/i)
-    .map((token) => token.trim())
-    .filter((token) => token.length > 1);
-  return Array.from(
-    new Set(tokens.flatMap((token) => PUBLIC_SEARCH_ALIASES[token] ?? [token])),
-  );
-}
+import { expandScoutSearchTerms } from "@shared/scoutSearchIntent";
 
 function publicRestaurantActivityScore(restaurant: any): number {
   return (
@@ -306,7 +283,7 @@ export function registerPublicSearchRoutes(app: Express) {
       }
 
       const searchTerm = query.toLowerCase();
-      const searchTerms = expandPublicSearchTerms(searchTerm);
+      const searchTerms = expandScoutSearchTerms(searchTerm);
       const searchValue = `%${searchTerm}%`;
 
       const restaurantMatches = await storage.getAllRestaurants();
