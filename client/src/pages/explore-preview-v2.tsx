@@ -2479,6 +2479,42 @@ function filterScoutSearchRows<T>(
   );
 }
 
+const SCOUT_FALLBACK_QUERY_ALIASES: Record<string, string[]> = {
+  taco: ["taco", "tacos", "mexican", "tex-mex", "taqueria", "burrito", "quesadilla"],
+  tacos: ["taco", "tacos", "mexican", "tex-mex", "taqueria", "burrito", "quesadilla"],
+  burger: ["burger", "burgers", "hamburger", "cheeseburger"],
+  burgers: ["burger", "burgers", "hamburger", "cheeseburger"],
+  pizza: ["pizza", "pizzeria", "italian"],
+  sushi: ["sushi", "japanese", "sashimi", "roll"],
+  bbq: ["bbq", "barbecue", "brisket", "smoked"],
+  barbecue: ["bbq", "barbecue", "brisket", "smoked"],
+  wings: ["wing", "wings", "chicken"],
+  vegan: ["vegan", "plant-based", "vegetarian"],
+};
+
+function filterScoutFallbackRows<T>(
+  rows: T[],
+  searchMode: boolean,
+  query: string,
+  intent: ScoutSearchIntent,
+  kindHint?: string,
+): T[] {
+  if (!searchMode || !query.trim()) return rows;
+  const terms = tokenizeScoutSearch(query);
+  const expandedTerms = Array.from(
+    new Set(
+      terms.flatMap((term) => SCOUT_FALLBACK_QUERY_ALIASES[term] ?? [term]),
+    ),
+  );
+  const fallbackIntent =
+    kindHint === "restaurant" && intent === "dishes" ? "all" : intent;
+  return rows.filter(
+    (row) =>
+      expandedTerms.some((term) => matchesScoutSearchText(row, [term])) &&
+      matchesScoutIntent(row, fallbackIntent, kindHint),
+  );
+}
+
 /* ============================================================
    MAP CENTER OFFSET
    ----
@@ -4582,18 +4618,17 @@ export default function ExplorePreview() {
     const rows = Array.isArray(pensacolaRestaurantFallbackData)
       ? pensacolaRestaurantFallbackData
       : [];
-    const related = filterScoutSearchRows(
+    const related = filterScoutFallbackRows(
       rows,
       scoutSearchMode,
       scoutSearchQuery,
       scoutSearchIntent,
       "restaurant",
     );
-    const preferred = related.length > 0 ? related : rows;
     const trendingIds = new Set(
       pensacolaTrendingPlaces.map((place) => String(place.id)),
     );
-    return [...preferred]
+    return [...related]
       .sort(
         (a, b) =>
           Number(trendingIds.has(String(b.id))) -
@@ -4608,37 +4643,39 @@ export default function ExplorePreview() {
     scoutSearchQuery,
   ]);
 
-  const pensacolaFallbackDishes = useMemo(() => {
-    const related = filterScoutSearchRows(
+  const pensacolaFallbackDishes = useMemo(
+    () =>
+      filterScoutFallbackRows(
+        pensacolaPopularDishes,
+        scoutSearchMode,
+        scoutSearchQuery,
+        scoutSearchIntent,
+        "menu_item",
+      ).slice(0, 8),
+    [
       pensacolaPopularDishes,
+      scoutSearchIntent,
       scoutSearchMode,
       scoutSearchQuery,
-      scoutSearchIntent,
-      "menu_item",
-    );
-    return (related.length > 0 ? related : pensacolaPopularDishes).slice(0, 8);
-  }, [
-    pensacolaPopularDishes,
-    scoutSearchIntent,
-    scoutSearchMode,
-    scoutSearchQuery,
-  ]);
+    ],
+  );
 
-  const pensacolaFallbackTrending = useMemo(() => {
-    const related = filterScoutSearchRows(
+  const pensacolaFallbackTrending = useMemo(
+    () =>
+      filterScoutFallbackRows(
+        pensacolaTrendingPlaces,
+        scoutSearchMode,
+        scoutSearchQuery,
+        scoutSearchIntent,
+        "restaurant",
+      ).slice(0, 8),
+    [
       pensacolaTrendingPlaces,
+      scoutSearchIntent,
       scoutSearchMode,
       scoutSearchQuery,
-      scoutSearchIntent,
-      "restaurant",
-    );
-    return (related.length > 0 ? related : pensacolaTrendingPlaces).slice(0, 8);
-  }, [
-    pensacolaTrendingPlaces,
-    scoutSearchIntent,
-    scoutSearchMode,
-    scoutSearchQuery,
-  ]);
+    ],
+  );
 
   const trucksServingNow = useMemo(
     () => scoutTruckInventoryForFeed.filter(isTruckServingNow),
@@ -4732,6 +4769,10 @@ export default function ExplorePreview() {
   const effectiveTrendingPlacesForFeed = showPensacolaFallback
     ? pensacolaFallbackTrending
     : trendingPlacesThisWeekForFeed;
+  const fallbackHasRelatedResults =
+    pensacolaFallbackRestaurants.length > 0 ||
+    pensacolaFallbackDishes.length > 0 ||
+    pensacolaFallbackTrending.length > 0;
   const nearbyRestaurantsTitle = DISCOVERY_LAYERS.restaurants.title;
   const nearbyRestaurantsSubtitle = DISCOVERY_LAYERS.restaurants.subtitle;
 
@@ -5530,6 +5571,7 @@ export default function ExplorePreview() {
               onOpenResultsSheet={setResultsSheet}
               fallbackMarketLabel={fallbackMarketLabel}
               fallbackSearchQuery={scoutSearchQuery}
+              fallbackHasRelatedResults={fallbackHasRelatedResults}
               onRequestPlace={openFavoritePlaceRequest}
             />
           </ActiveScenePanel>
@@ -6084,10 +6126,12 @@ function ScoutResultsSheet({
 function ScoutFallbackMarketNotice({
   marketLabel,
   query,
+  hasResults,
   onRequestPlace,
 }: {
   marketLabel: string;
   query: string;
+  hasResults: boolean;
   onRequestPlace: () => void;
 }) {
   const normalizedQuery = query.trim();
@@ -6103,12 +6147,18 @@ function ScoutFallbackMarketNotice({
         <div className="mt-1 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
             <p className="text-sm font-black text-white">
-              Showing popular picks from {marketLabel}
+              {hasResults
+                ? normalizedQuery
+                  ? `Showing related picks from ${marketLabel}`
+                  : `Showing popular picks from ${marketLabel}`
+                : `No related “${normalizedQuery}” picks in ${marketLabel} either`}
             </p>
             <p className="mt-0.5 text-xs font-semibold leading-relaxed text-orange-100/65">
-              {normalizedQuery
-                ? `These are farther away and only appear because Scout found no local match for “${normalizedQuery}.”`
-                : "These are farther away and only appear until local places are added."}
+              {hasResults
+                ? normalizedQuery
+                  ? `These are farther away and clearly related to “${normalizedQuery}.”`
+                  : "These are farther away and only appear until local places are added."
+                : "Scout will not substitute unrelated food. Request your favorite place and we’ll add it to the review queue."}
             </p>
           </div>
           <button
@@ -6685,6 +6735,7 @@ function ActiveSceneContent({
   onOpenResultsSheet,
   fallbackMarketLabel,
   fallbackSearchQuery,
+  fallbackHasRelatedResults,
   onRequestPlace,
 }: {
   laneId: ScoutSceneLaneId;
@@ -6737,6 +6788,7 @@ function ActiveSceneContent({
   onOpenResultsSheet?: (data: ScoutResultsSheetData) => void;
   fallbackMarketLabel: string | null;
   fallbackSearchQuery: string;
+  fallbackHasRelatedResults: boolean;
   onRequestPlace: () => void;
 }) {
   const isLowActivityLane = scoutActivityMode === "low_activity";
@@ -7127,7 +7179,9 @@ function ActiveSceneContent({
         primaryFirstScreenDecision.sourceRowId === "food_trucks_today" ||
         primaryFirstScreenDecision.sourceRowId === "open_now_near_you");
     const popularDishesRailTitle = fallbackMarketLabel
-      ? `Popular dishes in ${fallbackMarketLabel}`
+      ? fallbackSearchQuery.trim()
+        ? `Related dishes in ${fallbackMarketLabel}`
+        : `Popular dishes in ${fallbackMarketLabel}`
       : primaryFirstScreenDecision?.sourceRowId === "popular_dishes"
         ? "More Dishes Nearby"
         : truckFirstScreenLead
@@ -7187,15 +7241,18 @@ function ActiveSceneContent({
       worthDiscoveringCards.length > 0;
 
     if (!hasForYouSections) {
+      if (fallbackMarketLabel) {
+        return (
+          <ScoutFallbackMarketNotice
+            marketLabel={fallbackMarketLabel}
+            query={fallbackSearchQuery}
+            hasResults={fallbackHasRelatedResults}
+            onRequestPlace={onRequestPlace}
+          />
+        );
+      }
       return (
         <>
-          {fallbackMarketLabel ? (
-            <ScoutFallbackMarketNotice
-              marketLabel={fallbackMarketLabel}
-              query={fallbackSearchQuery}
-              onRequestPlace={onRequestPlace}
-            />
-          ) : null}
           <ScoutFirstScreenDecisionStack
             items={firstScreenDecisionItems}
             thinMarket={
@@ -7353,10 +7410,14 @@ function ActiveSceneContent({
         {
           id: "nearby_restaurants",
           title: fallbackMarketLabel
-            ? `Popular in ${fallbackMarketLabel}`
+            ? fallbackSearchQuery.trim()
+              ? `Related places in ${fallbackMarketLabel}`
+              : `Popular in ${fallbackMarketLabel}`
             : DISCOVERY_LAYERS.restaurants.title,
           subtitle: fallbackMarketLabel
-            ? "Farther-away picks shown because nothing matched nearby."
+            ? fallbackSearchQuery.trim()
+              ? "Farther-away places that clearly match the search."
+              : "Farther-away picks shown because nothing matched nearby."
             : DISCOVERY_LAYERS.restaurants.subtitle,
           linkHref: DISCOVERY_LAYERS.restaurants.href,
           cards: restaurantRailCards(nearbyRestaurantCards),
@@ -7366,10 +7427,14 @@ function ActiveSceneContent({
         {
           id: "trending_this_week",
           title: fallbackMarketLabel
-            ? `Trending in ${fallbackMarketLabel}`
+            ? fallbackSearchQuery.trim()
+              ? `Related and trending in ${fallbackMarketLabel}`
+              : `Trending in ${fallbackMarketLabel}`
             : "Local Activity",
           subtitle: fallbackMarketLabel
-            ? "These are not nearby; they are fallback discovery picks."
+            ? fallbackSearchQuery.trim()
+              ? "These farther-away picks match the search."
+              : "These are not nearby; they are fallback discovery picks."
             : undefined,
           linkHref: DISCOVERY_LAYERS.trending.href,
           cards: restaurantRailCards(trendingPlaceCards),
@@ -7481,6 +7546,7 @@ function ActiveSceneContent({
           <ScoutFallbackMarketNotice
             marketLabel={fallbackMarketLabel}
             query={fallbackSearchQuery}
+            hasResults={fallbackHasRelatedResults}
             onRequestPlace={onRequestPlace}
           />
         ) : null}
