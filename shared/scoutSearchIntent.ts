@@ -11,13 +11,35 @@ export const SCOUT_SEARCH_ALIASES: Readonly<Record<string, readonly string[]>> =
   vegan: ["vegan", "plant-based", "vegetarian"],
 };
 
+const SCOUT_SEARCH_STOP_WORDS = new Set([
+  "a",
+  "an",
+  "and",
+  "around",
+  "find",
+  "for",
+  "i",
+  "in",
+  "me",
+  "my",
+  "near",
+  "nearby",
+  "please",
+  "show",
+  "the",
+  "want",
+]);
+
 export function tokenizeScoutSearchIntent(query: string): string[] {
   return String(query || "")
     .trim()
     .toLowerCase()
     .split(/[^a-z0-9]+/i)
     .map((token) => token.trim())
-    .filter((token) => token.length > 1);
+    .filter(
+      (token) =>
+        token.length > 1 && !SCOUT_SEARCH_STOP_WORDS.has(token),
+    );
 }
 
 export function expandScoutSearchTerms(query: string): string[] {
