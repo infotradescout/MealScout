@@ -5,6 +5,7 @@ import {
 } from "@shared/scoutSearchIntent";
 import {
   selectScoutDiscoveryResults,
+  toScoutDiscoveryResult,
   type ScoutDiscoveryResultKind,
   type ScoutDiscoveryScope,
   type ScoutDiscoverySource,
@@ -92,6 +93,7 @@ import {
   type ScoutHorizontalRowId,
   type ScoutNormalizedCardKind,
 } from "@/features/scout/scoutDiscoveryModel";
+import { buildScoutResultViewModel } from "@/features/scout/scoutResultViewModel";
 import type { ScoutSceneLane, ScoutSceneId } from "@/features/scout/scoutTypes";
 
 const ThemedScoutMap = lazy(
@@ -6375,18 +6377,28 @@ function ScoutImmediateCompactCard({
         ? "Serving now"
         : "Scheduled";
     const meta = ["Food truck", status, area].filter(Boolean).join(" / ");
-    const image = getTruckImage(truck);
+    const href = getTruckProfilePath(truck);
+    const view = buildScoutResultViewModel(
+      toScoutDiscoveryResult(truck, {
+        kind: "food_truck",
+        scope: "nearby",
+        source: isTruckBroadcastLive(truck) ? "live_presence" : "local_inventory",
+        href,
+      }),
+      { subtitle: meta },
+    );
     const directionsUrl = buildDirectionsUrl(truck);
     return (
       <CompactDecisionCardShell
-        href={getTruckProfilePath(truck)}
-        imageUrl={image}
+        href={view.href}
+        imageUrl={view.imageUrl}
+        imageObjectPosition={view.imageObjectPosition}
         fallbackIcon={
           <TruckIcon className="h-4 w-4 text-white/90" aria-hidden="true" />
         }
-        title={title}
-        meta={meta}
-        primaryActionLabel="View truck"
+        title={view.title || title}
+        meta={view.subtitle || meta}
+        primaryActionLabel={view.primaryActionLabel}
         directionsUrl={directionsUrl}
         categoryPhoto={getDishCategoryPhoto(
           truck.name,
@@ -6416,16 +6428,25 @@ function ScoutImmediateCompactCard({
           : null;
     const area = getRestaurantArea(restaurant);
     const meta = [typeLabel, status, area].filter(Boolean).join(" / ");
-    const image =
-      restaurant.logoUrl ||
-      restaurant.coverImageUrl ||
-      restaurant.heroImageUrl ||
-      restaurant.imageUrl;
+    const href = getRestaurantProfilePath(restaurant);
+    const view = buildScoutResultViewModel(
+      toScoutDiscoveryResult(restaurant, {
+        kind: normalizedKind === "food_truck" ? "food_truck" : "business",
+        scope: "nearby",
+        source: "local_inventory",
+        href,
+      }),
+      {
+        subtitle: meta,
+        variant: normalizedKind === "food_truck" ? "truck" : "place",
+      },
+    );
     const directionsUrl = buildDirectionsUrl(restaurant);
     return (
       <CompactDecisionCardShell
-        href={getRestaurantProfilePath(restaurant)}
-        imageUrl={image}
+        href={view.href}
+        imageUrl={view.imageUrl}
+        imageObjectPosition={view.imageObjectPosition}
         fallbackIcon={
           normalizedKind === "food_truck" ? (
             <TruckIcon className="h-4 w-4 text-white/90" aria-hidden="true" />
@@ -6433,15 +6454,15 @@ function ScoutImmediateCompactCard({
             <MapPin className="h-4 w-4 text-white/90" aria-hidden="true" />
           )
         }
-        title={getRestaurantName(restaurant)}
-        meta={meta}
-        primaryActionLabel="View profile"
+        title={view.title}
+        meta={view.subtitle || meta}
+        primaryActionLabel={view.primaryActionLabel}
         directionsUrl={directionsUrl}
         categoryPhoto={getDishCategoryPhoto(
           getRestaurantName(restaurant),
           restaurant.cuisineType,
         )}
-        variant={normalizedKind === "food_truck" ? "truck" : "place"}
+        variant={view.variant}
       />
     );
   }
@@ -6457,51 +6478,68 @@ function ScoutImmediateCompactCard({
     ]
       .filter(Boolean)
       .join(" / ");
+    const href = getMenuItemProfilePath(menuItem);
+    const view = buildScoutResultViewModel(
+      toScoutDiscoveryResult(menuItem, {
+        kind: "dish",
+        scope: "nearby",
+        source: "menu",
+        href,
+      }),
+      { subtitle: reason || "Popular nearby dish" },
+    );
     return (
       <CompactDecisionCardShell
-        href={getMenuItemProfilePath(menuItem)}
-        imageUrl={
-          menuItem.imageUrl ||
-          menuItem.restaurantLogoUrl ||
-          menuItem.restaurantCoverImageUrl ||
-          null
-        }
+        href={view.href}
+        imageUrl={view.imageUrl}
+        imageObjectPosition={view.imageObjectPosition}
         fallbackIcon={
           <Utensils className="h-4 w-4 text-white/90" aria-hidden="true" />
         }
-        title={menuItem.name}
-        meta={reason || "Popular nearby dish"}
-        primaryActionLabel="View dish"
+        title={view.title}
+        meta={view.subtitle || "Popular nearby dish"}
+        primaryActionLabel={view.primaryActionLabel}
         categoryPhoto={getDishCategoryPhoto(
           menuItem.name,
           menuItem.cuisineType,
         )}
-        variant="dish"
+        variant={view.variant}
       />
     );
   }
 
   if (item.cardType === "deal") {
     const deal = item.deal;
+    const meta =
+      [deal.restaurantName, deal.discountText || deal.description]
+        .filter(Boolean)
+        .join(" / ") || "Active nearby deal";
+    const href = `/deal/${encodeURIComponent(String(deal.id))}`;
+    const view = buildScoutResultViewModel(
+      toScoutDiscoveryResult(deal, {
+        kind: "deal",
+        scope: "nearby",
+        source: "deal",
+        href,
+      }),
+      { subtitle: meta },
+    );
     return (
       <CompactDecisionCardShell
-        href={`/deal/${encodeURIComponent(String(deal.id))}`}
-        imageUrl={deal.imageUrl || null}
+        href={view.href}
+        imageUrl={view.imageUrl}
+        imageObjectPosition={view.imageObjectPosition}
         fallbackIcon={
           <Tag className="h-4 w-4 text-white/90" aria-hidden="true" />
         }
-        title={deal.title || "Local deal"}
-        meta={
-          [deal.restaurantName, deal.discountText || deal.description]
-            .filter(Boolean)
-            .join(" / ") || "Active nearby deal"
-        }
-        primaryActionLabel="View deal"
+        title={view.title}
+        meta={view.subtitle || meta}
+        primaryActionLabel={view.primaryActionLabel}
         categoryPhoto={getDishCategoryPhoto(
           deal.title,
           (deal as any).description,
         )}
-        variant="deal"
+        variant={view.variant}
       />
     );
   }
@@ -6518,20 +6556,39 @@ function ScoutImmediateCompactCard({
       lat: readNumberField(host, ["latitude", "lat"]),
       lng: readNumberField(host, ["longitude", "lng"]),
     });
+    const href = hostId
+      ? `/events?hostId=${encodeURIComponent(hostId)}`
+      : "/events";
+    const meta = ["Host location", area].filter(Boolean).join(" / ");
+    const view = buildScoutResultViewModel(
+      toScoutDiscoveryResult(
+        { ...host, name: hostName, imageUrl: host.spotImageUrl },
+        {
+          kind: "business",
+          scope: "nearby",
+          source: "event",
+          href,
+        },
+      ),
+      {
+        subtitle: meta,
+        primaryActionLabel: "View host",
+        variant: "host",
+      },
+    );
     return (
       <CompactDecisionCardShell
-        href={
-          hostId ? `/events?hostId=${encodeURIComponent(hostId)}` : "/events"
-        }
-        imageUrl={host.spotImageUrl || null}
+        href={view.href}
+        imageUrl={view.imageUrl}
+        imageObjectPosition={view.imageObjectPosition}
         fallbackIcon={
           <MapPin className="h-4 w-4 text-white/90" aria-hidden="true" />
         }
-        title={hostName}
-        meta={["Host location", area].filter(Boolean).join(" / ")}
-        primaryActionLabel="View host"
+        title={view.title}
+        meta={view.subtitle || meta}
+        primaryActionLabel={view.primaryActionLabel}
         directionsUrl={directionsUrl}
-        variant="host"
+        variant={view.variant}
       />
     );
   }
@@ -6545,21 +6602,32 @@ function ScoutImmediateCompactCard({
         day: "numeric",
       })
     : null;
+  const meta =
+    [event.venueName || event.locationName, startLabel]
+      .filter(Boolean)
+      .join(" / ") || "Upcoming nearby event";
+  const href = `/events?eventId=${encodeURIComponent(String(event.id))}`;
+  const view = buildScoutResultViewModel(
+    toScoutDiscoveryResult({ ...event, name: title }, {
+      kind: "event",
+      scope: "nearby",
+      source: "event",
+      href,
+    }),
+    { subtitle: meta },
+  );
   return (
     <CompactDecisionCardShell
-      href={`/events?eventId=${encodeURIComponent(String(event.id))}`}
-      imageUrl={event.imageUrl || event.heroImageUrl || null}
+      href={view.href}
+      imageUrl={view.imageUrl}
+      imageObjectPosition={view.imageObjectPosition}
       fallbackIcon={
         <CalendarDays className="h-4 w-4 text-white/90" aria-hidden="true" />
       }
-      title={title}
-      meta={
-        [event.venueName || event.locationName, startLabel]
-          .filter(Boolean)
-          .join(" / ") || "Upcoming nearby event"
-      }
-      primaryActionLabel="View event"
-      variant="event"
+      title={view.title}
+      meta={view.subtitle || meta}
+      primaryActionLabel={view.primaryActionLabel}
+      variant={view.variant}
     />
   );
 }
@@ -6575,6 +6643,7 @@ type CompactDecisionCardVariant =
 function CompactDecisionCardShell({
   href,
   imageUrl,
+  imageObjectPosition = "50% 50%",
   fallbackIcon,
   title,
   meta,
@@ -6585,6 +6654,7 @@ function CompactDecisionCardShell({
 }: {
   href: string;
   imageUrl?: string | null;
+  imageObjectPosition?: string;
   fallbackIcon: ReactNode;
   title: string;
   meta: string;
@@ -6649,6 +6719,7 @@ function CompactDecisionCardShell({
             src={imageUrl || undefined}
             alt=""
             className="h-full w-full object-cover"
+            style={{ objectPosition: imageObjectPosition }}
             loading="lazy"
             onError={() => setImageFailed(true)}
           />

@@ -34,6 +34,9 @@ jobs:
       - name: Canonical Scout Discovery Result Contract
         run: npm run test:scout-discovery-result
 
+      - name: Scout Result View Model Contract
+        run: npm run test:scout-result-view-model
+
       - name: Build
         run: npm run build
 
