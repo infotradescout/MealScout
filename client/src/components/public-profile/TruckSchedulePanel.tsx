@@ -5,7 +5,7 @@
  * "Where is this truck and when can I find it?"
  *
  * Priority display:
- *   1. Here now (current stop)
+ *   1. Current scheduled stop
  *   2. Today's stop
  *   3. Next stop
  *   4. Upcoming schedule list
@@ -27,10 +27,10 @@ import { MapPin, Clock3, ExternalLink, CalendarDays } from "lucide-react";
 type StopRowProps = {
   label: string;
   stop: PublicTruckScheduleStop;
-  isLive?: boolean;
+  isCurrent?: boolean;
 };
 
-function StopRow({ label, stop, isLive = false }: StopRowProps) {
+function StopRow({ label, stop, isCurrent = false }: StopRowProps) {
   const locationName = stop.locationName || stop.addressPublicLabel || null;
   const timeLabel = stop.timeWindowLabel || null;
   const directionsHref =
@@ -42,14 +42,14 @@ function StopRow({ label, stop, isLive = false }: StopRowProps) {
   return (
     <div
       className={`rounded-2xl border p-4 space-y-2 ${
-        isLive
+        isCurrent
           ? "border-orange-400/35 bg-orange-500/10"
           : "border-white/10 bg-black/20"
       }`}
     >
       <p
         className={`text-[10px] font-bold uppercase tracking-[0.18em] ${
-          isLive ? "text-orange-200/80" : "text-white/45"
+          isCurrent ? "text-orange-200/80" : "text-white/45"
         }`}
       >
         {label}
@@ -57,7 +57,7 @@ function StopRow({ label, stop, isLive = false }: StopRowProps) {
 
       {locationName ? (
         <p
-          className={`text-base font-bold leading-snug ${isLive ? "text-white" : "text-white/90"}`}
+          className={`text-base font-bold leading-snug ${isCurrent ? "text-white" : "text-white/90"}`}
         >
           {locationName}
         </p>
@@ -133,7 +133,7 @@ export function TruckSchedulePanel({
       {hasActionableSchedule ? (
         <div className="space-y-2">
           {currentStop ? (
-            <StopRow label="Here right now" stop={currentStop} isLive />
+            <StopRow label="Scheduled here now" stop={currentStop} isCurrent />
           ) : null}
           {!currentStop && todayStop ? (
             <StopRow label="Today's stop" stop={todayStop} />
