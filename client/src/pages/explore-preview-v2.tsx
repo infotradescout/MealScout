@@ -107,7 +107,6 @@ const PENSACOLA_LAUNCH_MARKET = {
   lng: -87.2169,
   marketKey: "pensacola-fl",
 } as const;
-const SCOUT_ACTIVITY_FALLBACK_LABEL = "other active areas";
 
 function formatScoutMarketLabel({
   city,
@@ -4726,9 +4725,6 @@ export default function ExplorePreview() {
       : localActivityCount === 0 &&
         popularDishesForFeed.length === 0 &&
         trendingPlacesThisWeekForFeed.length === 0);
-  const fallbackMarketLabel = showActivityFallback
-    ? SCOUT_ACTIVITY_FALLBACK_LABEL
-    : null;
   const effectiveRestaurantsForFeed = showActivityFallback
     ? activityFallbackRestaurants
     : nearbyRestaurantsForFeed;
@@ -5537,7 +5533,7 @@ export default function ExplorePreview() {
               scoutSearchMode={scoutSearchMode}
               scoutSearchIntent={scoutSearchIntent}
               onOpenResultsSheet={setResultsSheet}
-              fallbackMarketLabel={fallbackMarketLabel}
+              showActivityFallback={showActivityFallback}
               fallbackSearchQuery={scoutSearchQuery}
               fallbackHasRelatedResults={fallbackHasRelatedResults}
               onRequestPlace={openFavoritePlaceRequest}
@@ -6699,7 +6695,7 @@ function ActiveSceneContent({
   scoutSearchMode,
   scoutSearchIntent,
   onOpenResultsSheet,
-  fallbackMarketLabel,
+  showActivityFallback,
   fallbackSearchQuery,
   fallbackHasRelatedResults,
   onRequestPlace,
@@ -6752,7 +6748,7 @@ function ActiveSceneContent({
   scoutSearchMode: boolean;
   scoutSearchIntent: ScoutSearchIntent;
   onOpenResultsSheet?: (data: ScoutResultsSheetData) => void;
-  fallbackMarketLabel: string | null;
+  showActivityFallback: boolean;
   fallbackSearchQuery: string;
   fallbackHasRelatedResults: boolean;
   onRequestPlace: () => void;
@@ -7144,7 +7140,7 @@ function ActiveSceneContent({
       (primaryFirstScreenDecision.sourceRowId === "live_trucks_now" ||
         primaryFirstScreenDecision.sourceRowId === "food_trucks_today" ||
         primaryFirstScreenDecision.sourceRowId === "open_now_near_you");
-    const popularDishesRailTitle = fallbackMarketLabel
+    const popularDishesRailTitle = showActivityFallback
       ? fallbackSearchQuery.trim()
         ? "Related dishes beyond your area"
         : "Popular dishes beyond your area"
@@ -7207,7 +7203,7 @@ function ActiveSceneContent({
       worthDiscoveringCards.length > 0;
 
     if (!hasForYouSections) {
-      if (fallbackMarketLabel) {
+      if (showActivityFallback) {
         return (
           <ScoutFallbackMarketNotice
             query={fallbackSearchQuery}
@@ -7374,12 +7370,12 @@ function ActiveSceneContent({
         },
         {
           id: "nearby_restaurants",
-          title: fallbackMarketLabel
+          title: showActivityFallback
             ? fallbackSearchQuery.trim()
               ? "Related places beyond your area"
               : "Popular beyond your area"
             : DISCOVERY_LAYERS.restaurants.title,
-          subtitle: fallbackMarketLabel
+          subtitle: showActivityFallback
             ? fallbackSearchQuery.trim()
               ? "Farther-away places that clearly match the search."
               : "Farther-away picks shown because nothing matched nearby."
@@ -7391,12 +7387,12 @@ function ActiveSceneContent({
         },
         {
           id: "trending_this_week",
-          title: fallbackMarketLabel
+          title: showActivityFallback
             ? fallbackSearchQuery.trim()
               ? "Related activity beyond your area"
               : "Trending beyond your area"
             : "Local Activity",
-          subtitle: fallbackMarketLabel
+          subtitle: showActivityFallback
             ? fallbackSearchQuery.trim()
               ? "These farther-away picks match the search."
               : "These are not nearby; they are fallback discovery picks."
@@ -7507,7 +7503,7 @@ function ActiveSceneContent({
 
     return (
       <>
-        {fallbackMarketLabel ? (
+        {showActivityFallback ? (
           <ScoutFallbackMarketNotice
             query={fallbackSearchQuery}
             hasResults={fallbackHasRelatedResults}
