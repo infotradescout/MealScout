@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import Navigation from "@/components/navigation";
+import { ScoutNavSearchProvider } from "@/components/scout/ScoutNavSearchContext";
 import { apiUrl } from "@/lib/api";
 import { TimeOfDayBackground } from "@/components/TimeOfDayBackground";
 import { useToast } from "@/hooks/use-toast";
@@ -597,12 +598,14 @@ function App() {
     return (
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
-          <TimeOfDayBackground />
-          <div className="desktop-full-width app-background app-content min-h-screen md:pt-16 relative z-10">
-            <Toaster />
-            <NotFound />
-            <Navigation scope="global" />
-          </div>
+          <ScoutNavSearchProvider>
+            <TimeOfDayBackground />
+            <div className="desktop-full-width app-background app-content min-h-screen md:pt-16 relative z-10">
+              <Toaster />
+              <NotFound />
+              <Navigation scope="global" />
+            </div>
+          </ScoutNavSearchProvider>
         </TooltipProvider>
       </QueryClientProvider>
     );
@@ -624,12 +627,14 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <TimeOfDayBackground />
-        <div className="desktop-full-width app-background app-content min-h-screen md:pt-16 relative z-10">
-          <Toaster />
-          <Router />
-          <Navigation scope="global" />
-        </div>
+        <ScoutNavSearchProvider>
+          <TimeOfDayBackground />
+          <div className="desktop-full-width app-background app-content min-h-screen md:pt-16 relative z-10">
+            <Toaster />
+            <Router />
+            <Navigation scope="global" />
+          </div>
+        </ScoutNavSearchProvider>
       </TooltipProvider>
     </QueryClientProvider>
   );
