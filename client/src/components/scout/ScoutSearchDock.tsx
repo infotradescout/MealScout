@@ -41,7 +41,7 @@ export function ScoutSearchDock({
   query: string;
   activeFilter: ScoutSearchFilterId | null;
   resultSummary?: string | null;
-  placement?: "fixed" | "inline" | "responsive";
+  placement?: "fixed" | "inline";
   onOpen: () => void;
   onClose: () => void;
   onQueryChange: (value: string) => void;
@@ -49,10 +49,8 @@ export function ScoutSearchDock({
 }) {
   const shellClassName =
     placement === "inline"
-      ? "px-4 pb-4 md:mx-auto md:max-w-[760px]"
-      : placement === "responsive"
-        ? "fixed inset-x-4 z-40 md:static md:mx-auto md:mt-3 md:max-w-[760px] md:px-0"
-        : "fixed inset-x-4 z-40 md:mx-auto md:max-w-[608px]";
+      ? "px-4 pb-4 md:mx-auto md:max-w-[608px]"
+      : "fixed inset-x-4 z-40 md:mx-auto md:max-w-[608px]";
   const shellStyle =
     placement === "inline"
       ? undefined
@@ -71,7 +69,7 @@ export function ScoutSearchDock({
           event.preventDefault();
           onOpen();
         }}
-        className={`overflow-hidden rounded-[1.4rem] bg-[#fff7ed]/[0.96] text-[#241208] ring-1 backdrop-blur-xl shadow-[0_16px_34px_rgba(92,45,18,0.22)] ${
+        className={`overflow-hidden rounded-[1.4rem] bg-[#fff7ed]/94 text-[#241208] ring-1 backdrop-blur-xl shadow-[0_16px_34px_rgba(92,45,18,0.22)] ${
           searchMode ? "ring-orange-300/70" : "ring-orange-200/70"
         }`}
       >
