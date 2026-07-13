@@ -5758,9 +5758,11 @@ function ScoutResultsSheet({
 function ScoutFirstScreenDecisionStack({
   items,
   thinMarket,
+  onOpenMap,
 }: {
   items: ScoutImmediateDecisionItem[];
   thinMarket: boolean;
+  onOpenMap: () => void;
 }) {
   const primary = items[0] ?? null;
 
@@ -5771,14 +5773,14 @@ function ScoutFirstScreenDecisionStack({
         data-scout-first-screen-decision-stack="true"
         data-scout-first-screen-empty="true"
       >
-        <div className="rounded-[1.1rem] bg-[#fff7ed]/94 px-4 py-3 text-[#251208] ring-1 ring-orange-200/60 shadow-[0_12px_28px_rgba(92,45,18,0.16)]">
+        <div className="rounded-[1.1rem] bg-[#fff7ed]/[0.96] px-4 py-3 text-[#251208] shadow-[0_12px_28px_rgba(92,45,18,0.16)] ring-1 ring-orange-200/60">
           <p className="text-[11px] font-black uppercase tracking-[0.12em] text-orange-700">
             No nearby food yet
           </p>
           <p className="mt-1 text-sm font-semibold text-stone-600">
             Search nearby food or move the map
           </p>
-          <ScoutRecoveryActions className="mt-3" />
+          <ScoutRecoveryActions className="mt-3" onOpenMap={onOpenMap} />
         </div>
       </section>
     );
@@ -5790,7 +5792,7 @@ function ScoutFirstScreenDecisionStack({
       data-scout-first-screen-decision-stack="true"
       data-scout-decision-source-row={primary.sourceRowId}
     >
-      <div className="rounded-[1.1rem] bg-[#fff7ed]/94 p-3 text-[#251208] ring-1 ring-orange-200/60 shadow-[0_14px_34px_rgba(92,45,18,0.18)]">
+      <div className="rounded-[1.1rem] bg-[#fff7ed]/[0.96] p-3 text-[#251208] shadow-[0_14px_34px_rgba(92,45,18,0.18)] ring-1 ring-orange-200/60">
         <div className="mb-2 flex items-center justify-between gap-3">
           <div className="min-w-0">
             <p className="text-[11px] font-black uppercase tracking-[0.12em] text-orange-700">
@@ -5804,42 +5806,56 @@ function ScoutFirstScreenDecisionStack({
             Best now
           </span>
         </div>
-        <ScoutImmediateCompactCard item={primary} />
-        {thinMarket ? (
-          <div
-            className="mt-3 rounded-2xl bg-white/70 px-3 py-3 ring-1 ring-orange-200/70"
-            data-testid="scout-thin-market-state"
-          >
-            <p className="text-sm font-black text-[#251208]">
-              Nearby food coverage is still growing, so Scout is showing the
-              closest real place first.
-            </p>
-            <p className="mt-1 text-xs font-semibold leading-relaxed text-stone-600">
-              Browse nearby or open the map while you widen your search.
-            </p>
-            <ScoutRecoveryActions className="mt-3" />
-          </div>
-        ) : null}
+        <div
+          className={
+            thinMarket
+              ? "md:grid md:grid-cols-[minmax(0,1fr)_minmax(260px,0.42fr)] md:items-stretch md:gap-3"
+              : undefined
+          }
+        >
+          <ScoutImmediateCompactCard item={primary} />
+          {thinMarket ? (
+            <div
+              className="mt-3 flex flex-col justify-center rounded-2xl bg-orange-50 px-4 py-4 ring-1 ring-orange-200/80 md:mt-0"
+              data-testid="scout-thin-market-state"
+            >
+              <p className="text-sm font-black text-[#251208]">
+                One nearby match right now
+              </p>
+              <p className="mt-1 text-xs font-semibold leading-relaxed text-stone-600">
+                Move the map or browse all nearby food to widen the results.
+              </p>
+              <ScoutRecoveryActions className="mt-3" onOpenMap={onOpenMap} />
+            </div>
+          ) : null}
+        </div>
       </div>
     </section>
   );
 }
 
-function ScoutRecoveryActions({ className = "" }: { className?: string }) {
+function ScoutRecoveryActions({
+  className = "",
+  onOpenMap,
+}: {
+  className?: string;
+  onOpenMap: () => void;
+}) {
   return (
     <div className={`flex flex-wrap gap-2 ${className}`.trim()}>
       <Link
         href="/search"
-        className="rounded-full bg-[#ff7945] px-3 py-1.5 text-[11px] font-black text-white ring-1 ring-white/20"
+        className="rounded-full bg-[#ff6b35] px-3 py-1.5 text-[11px] font-black text-white shadow-sm ring-1 ring-orange-500/30"
       >
-        Browse nearby
+        Browse all food
       </Link>
-      <Link
-        href="/search"
-        className="rounded-full bg-white/[0.06] px-3 py-1.5 text-[11px] font-black text-white/90 ring-1 ring-white/20"
+      <button
+        type="button"
+        onClick={onOpenMap}
+        className="rounded-full bg-white px-3 py-1.5 text-[11px] font-black text-orange-800 ring-1 ring-orange-200"
       >
-        Search nearby
-      </Link>
+        Move the map
+      </button>
     </div>
   );
 }
@@ -6814,9 +6830,8 @@ function ActiveSceneContent({
         <>
           <ScoutFirstScreenDecisionStack
             items={firstScreenDecisionItems}
-            thinMarket={
-              isLowActivityLane && firstScreenDecisionItems.length <= 1
-            }
+            thinMarket={firstScreenDecisionItems.length <= 1}
+            onOpenMap={openScoutMap}
           />
           <ScoutSceneEmptyState laneId="for_you" />
         </>
@@ -7087,7 +7102,8 @@ function ActiveSceneContent({
       <>
         <ScoutFirstScreenDecisionStack
           items={firstScreenDecisionItems}
-          thinMarket={isLowActivityLane && firstScreenDecisionItems.length <= 1}
+          thinMarket={firstScreenDecisionItems.length <= 1}
+          onOpenMap={openScoutMap}
         />
         {scoutRows.map((row) => (
           <ScoutHorizontalCategoryRail
