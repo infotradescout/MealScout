@@ -30,6 +30,7 @@
     "test:scout-discovery-result": "npx --yes tsx scripts/mealscout-scout-discovery-result.contract.test.ts",
     "test:scout-result-view-model": "npx --yes tsx scripts/mealscout-scout-result-view-model.contract.test.ts",
     "test:profile-action-policy": "npx --yes tsx scripts/mealscout-profile-action-policy.contract.test.ts",
+    "test:business-type-taxonomy": "npx --yes tsx scripts/mealscout-business-type-taxonomy.contract.test.ts",
     "db:generate:sql": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
     "test:flows:e2e": "playwright test",
