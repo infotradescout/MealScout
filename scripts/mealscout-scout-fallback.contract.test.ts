@@ -92,7 +92,7 @@ assert.match(
   /useScoutNavSearch/,
   "Navigation must consume the single Scout search state",
 );
-const mobileSearchIndex = navigation.indexOf("{scoutNavSearch}");
+const mobileSearchIndex = navigation.lastIndexOf("{scoutNavSearch}");
 const mobileNavIndex = navigation.indexOf('className="relative flex items-end');
 assert.ok(
   mobileSearchIndex >= 0 && mobileNavIndex > mobileSearchIndex,
