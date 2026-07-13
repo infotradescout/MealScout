@@ -2593,6 +2593,7 @@ export default function ExplorePreview() {
     restaurantName: string;
     address: string;
     city: string;
+    county: string;
     state: string;
     latitude: number | null;
     longitude: number | null;
@@ -3635,6 +3636,7 @@ export default function ExplorePreview() {
             place.formattedAddress || suggestion.text || "",
           ).trim(),
           city: String(place.city || marketCity || "").trim(),
+          county: String(place.county || "").trim(),
           state: String(place.state || marketState || "").trim(),
           latitude:
             typeof place.latitude === "number" ? place.latitude : null,
@@ -3665,6 +3667,7 @@ export default function ExplorePreview() {
           restaurantName: selectedPlaceRequest.restaurantName,
           address: selectedPlaceRequest.address,
           county:
+            selectedPlaceRequest.county ||
             selectedPlaceRequest.city ||
             String(resolvedScoutLocation?.label || "Scout request"),
           state: selectedPlaceRequest.state || "Unknown",
