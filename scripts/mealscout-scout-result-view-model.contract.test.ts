@@ -71,13 +71,19 @@ const scoutSource = readFileSync(
   resolve(process.cwd(), "client/src/pages/explore-preview-v2.tsx"),
   "utf8",
 );
-const railViewModelFactories = scoutSource.match(
-  /viewModel: buildScoutResultViewModel/g,
-);
-assert.ok(
-  (railViewModelFactories?.length || 0) >= 5,
-  "Every horizontal rail entity kind must be prepared through the canonical view model",
-);
+for (const factory of [
+  "buildTruckResultViewModel",
+  "buildRestaurantResultViewModel",
+  "buildMenuItemResultViewModel",
+  "buildDealResultViewModel",
+  "buildEventResultViewModel",
+]) {
+  assert.match(
+    scoutSource,
+    new RegExp(`viewModel: ${factory}\\(`),
+    `${factory} must prepare its horizontal rail cards`,
+  );
+}
 for (const component of [
   "LiveTruckCard",
   "TruckCard",
@@ -92,6 +98,19 @@ for (const component of [
     `${component} must receive the canonical rail view model`,
   );
 }
+for (const factory of [
+  "buildTruckResultViewModel",
+  "buildRestaurantResultViewModel",
+  "buildMenuItemResultViewModel",
+  "buildDealResultViewModel",
+  "buildEventResultViewModel",
+]) {
+  assert.match(
+    scoutSource,
+    new RegExp(`const cardView = viewModel \\|\\| ${factory}\\(`),
+    `${factory} must also self-resolve cards rendered outside horizontal rails`,
+  );
+}
 assert.match(
   scoutSource,
   /renderItem: \(card: ScoutRailRenderCard\) =>\s*renderScoutRailCard\(card\)/,
@@ -99,7 +118,7 @@ assert.match(
 );
 assert.match(
   scoutSource,
-  /<ScoutNetworkScopeBadge label=\{viewModel\?\.scopeLabel\} \/>/,
+  /<ScoutNetworkScopeBadge label=\{cardView\.scopeLabel\} \/>/,
   "Network fallback cards must display their dynamic scope label",
 );
 
