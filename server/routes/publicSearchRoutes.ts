@@ -23,6 +23,41 @@ import {
   videoStories,
 } from "@shared/schema";
 
+const PUBLIC_SEARCH_ALIASES: Record<string, string[]> = {
+  taco: ["taco", "tacos", "mexican", "tex-mex", "taqueria", "burrito", "quesadilla"],
+  tacos: ["taco", "tacos", "mexican", "tex-mex", "taqueria", "burrito", "quesadilla"],
+  burger: ["burger", "burgers", "hamburger", "cheeseburger"],
+  burgers: ["burger", "burgers", "hamburger", "cheeseburger"],
+  pizza: ["pizza", "pizzeria", "italian"],
+  sushi: ["sushi", "japanese", "sashimi", "roll"],
+  bbq: ["bbq", "barbecue", "brisket", "smoked"],
+  barbecue: ["bbq", "barbecue", "brisket", "smoked"],
+  wings: ["wing", "wings", "chicken"],
+  vegan: ["vegan", "plant-based", "vegetarian"],
+};
+
+function expandPublicSearchTerms(query: string): string[] {
+  const tokens = query
+    .toLowerCase()
+    .split(/[^a-z0-9]+/i)
+    .map((token) => token.trim())
+    .filter((token) => token.length > 1);
+  return Array.from(
+    new Set(tokens.flatMap((token) => PUBLIC_SEARCH_ALIASES[token] ?? [token])),
+  );
+}
+
+function publicRestaurantActivityScore(restaurant: any): number {
+  return (
+    Number(restaurant.homeRankingScore || 0) * 10 +
+    Number(restaurant.communityActivityCount || 0) * 5 +
+    Number(restaurant.recommendationCount || 0) * 4 +
+    Number(restaurant.favoriteCount || 0) * 3 +
+    Number(restaurant.followCount || 0) * 2 +
+    Number(restaurant.activeDealCount || restaurant.activeDealsCount || 0) * 4
+  );
+}
+
 export function registerPublicSearchRoutes(app: Express) {
   app.get("/api/search/suggestions/:query", async (req, res) => {
     try {
@@ -271,6 +306,7 @@ export function registerPublicSearchRoutes(app: Express) {
       }
 
       const searchTerm = query.toLowerCase();
+      const searchTerms = expandPublicSearchTerms(searchTerm);
       const searchValue = `%${searchTerm}%`;
 
       const restaurantMatches = await storage.getAllRestaurants();
@@ -278,21 +314,33 @@ export function registerPublicSearchRoutes(app: Express) {
         .filter((restaurant: any) => {
           if (!restaurant?.isActive) return false;
           if (!isPublicBusinessVisible(restaurant)) return false;
-          const name = String(restaurant.name || "").toLowerCase();
-          const cuisine = String(restaurant.cuisineType || "").toLowerCase();
-          const address = String(restaurant.address || "").toLowerCase();
-          return (
-            name.includes(searchTerm) ||
-            cuisine.includes(searchTerm) ||
-            address.includes(searchTerm)
-          );
+          const haystack = [
+            restaurant.name,
+            restaurant.cuisineType,
+            restaurant.address,
+            restaurant.city,
+            restaurant.state,
+            restaurant.description,
+          ]
+            .map((value) => String(value || "").toLowerCase())
+            .join(" ");
+          return searchTerms.some((term) => haystack.includes(term));
         })
-        .slice(0, 12)
+        .sort(
+          (a: any, b: any) =>
+            publicRestaurantActivityScore(b) -
+            publicRestaurantActivityScore(a),
+        )
+        .slice(0, 24)
         .map((restaurant: any) => ({
           id: restaurant.id,
           name: restaurant.name,
           cuisineType: restaurant.cuisineType,
           address: restaurant.address,
+          city: restaurant.city || null,
+          state: restaurant.state || null,
+          slug: restaurant.slug || null,
+          description: restaurant.description || null,
           logoUrl: restaurant.logoUrl || null,
           coverImageUrl: restaurant.coverImageUrl || null,
           imageUrl:
@@ -303,6 +351,16 @@ export function registerPublicSearchRoutes(app: Express) {
           businessType: restaurant.businessType || null,
           isFoodTruck: Boolean(restaurant.isFoodTruck),
           isVerified: Boolean(restaurant.isVerified),
+          activeDealCount: Number(
+            restaurant.activeDealCount || restaurant.activeDealsCount || 0,
+          ),
+          favoriteCount: Number(restaurant.favoriteCount || 0),
+          followCount: Number(restaurant.followCount || 0),
+          recommendationCount: Number(restaurant.recommendationCount || 0),
+          communityActivityCount: Number(
+            restaurant.communityActivityCount || 0,
+          ),
+          homeRankingScore: Number(restaurant.homeRankingScore || 0),
         }));
 
       const dealsOut = (
