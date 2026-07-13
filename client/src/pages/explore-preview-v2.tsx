@@ -1,3 +1,5 @@
+import { deriveTruckPresence } from "@shared/consumerEntity";
+import { resolveBusinessMedia, type BusinessMediaAsset } from "@/lib/businessMedia";
 import {
   useCallback,
   useEffect,
@@ -999,6 +1001,25 @@ function isOwnedByCurrentUser(
   return ownerId === currentUserId;
 }
 
+const SCOUT_TRUCK_BROADCAST_FRESHNESS_MS = 4 * 60 * 60 * 1000;
+
+function isTruckBroadcastLive(truck: LiveTruckSummary): boolean {
+  return (
+    deriveTruckPresence(
+      {
+        mobileOnline: truck.mobileOnline,
+        liveBroadcasting: truck.liveBroadcasting,
+        currentLatitude: truck.latitude ?? truck.lat,
+        currentLongitude: truck.longitude ?? truck.lng,
+        lastBroadcastAt: truck.lastBroadcastAt,
+        liveUntilAt: truck.liveUntilAt,
+        locationSource: readStringField(truck, ["locationSource", "location_source"]),
+      },
+      { freshnessMs: SCOUT_TRUCK_BROADCAST_FRESHNESS_MS },
+    ).broadcastState === "live"
+  );
+}
+
 function isTruckServingNow(truck: LiveTruckSummary): boolean {
   const explicit = readBooleanField(truck, [
     "isServing",
@@ -1160,7 +1181,7 @@ function getFreshnessLabel(entityOrMeta: FreshnessMeta): string {
     (entityOrMeta.kind === "Truck" || entityOrMeta.kind === "truck") &&
     entityOrMeta.isOpen
   )
-    return "Live now";
+    return "Serving now";
   if (isTodayDate(entityOrMeta.startsAt || entityOrMeta.startTime))
     return "Happening today";
   if (entityOrMeta.isOpen) return "Open now";
@@ -1268,7 +1289,7 @@ function getOperationalBadges(entityOrMeta: FreshnessMeta): string[] {
   if (entityOrMeta.isOpen)
     labels.add(
       entityOrMeta.kind === "Truck" || entityOrMeta.kind === "truck"
-        ? "Live now"
+        ? "Serving now"
         : "Open now",
     );
   if (entityOrMeta.hasDistance) labels.add("Nearby");
@@ -1276,7 +1297,7 @@ function getOperationalBadges(entityOrMeta: FreshnessMeta): string[] {
     labels.add("Happening today");
   const allowedLabels = new Set([
     "Open now",
-    "Live now",
+    "Serving now",
     "Updated today",
     "Confirmed today",
     "Deal today",
@@ -1646,24 +1667,35 @@ function getRestaurantSearchReason(restaurant: RestaurantSummary): string {
   return getRestaurantDiscoveryReason(restaurant);
 }
 
+function resolveScoutBusinessImage(input: {
+  coverImageUrl?: string | null;
+  heroImageUrl?: string | null;
+  imageUrl?: string | null;
+  logoUrl?: string | null;
+}): string | null {
+  const assets: BusinessMediaAsset[] = [
+    ...(input.coverImageUrl
+      ? [{ kind: "cover" as const, image: input.coverImageUrl, publicApproved: true }]
+      : []),
+    ...(input.heroImageUrl
+      ? [{ kind: "hero" as const, image: input.heroImageUrl, publicApproved: true }]
+      : []),
+    ...(input.imageUrl
+      ? [{ kind: "legacy" as const, image: input.imageUrl, publicApproved: true }]
+      : []),
+    ...(input.logoUrl
+      ? [{ kind: "logo" as const, image: input.logoUrl, publicApproved: true }]
+      : []),
+  ];
+  return resolveBusinessMedia(assets, "scout_card")?.url || null;
+}
+
 function getRestaurantImage(restaurant: RestaurantSummary): string | null {
-  return (
-    restaurant.coverImageUrl ||
-    restaurant.heroImageUrl ||
-    restaurant.imageUrl ||
-    restaurant.logoUrl ||
-    null
-  );
+  return resolveScoutBusinessImage(restaurant);
 }
 
 function getTruckImage(truck: LiveTruckSummary): string | null {
-  return (
-    truck.heroImageUrl ||
-    truck.coverImageUrl ||
-    truck.imageUrl ||
-    truck.logoUrl ||
-    null
-  );
+  return resolveScoutBusinessImage(truck);
 }
 
 function buildCravingBoardItems({
@@ -3599,7 +3631,7 @@ export default function ExplorePreview() {
             hasDeal: Boolean(t.activeDealCount && t.activeDealCount > 0),
             isOpen: isServing,
           }),
-          imageUrl: t.heroImageUrl || t.imageUrl || t.logoUrl || null,
+          imageUrl: getTruckImage(t),
         } as MapAdapterMarker;
       })
       .filter((m): m is MapAdapterMarker => m !== null);
@@ -5824,11 +5856,7 @@ function ScoutImmediateCompactCard({
     const area = getTruckArea(truck);
     const status = isTruckServingNow(truck) ? "Live now" : "Scheduled";
     const meta = ["Food truck", status, area].filter(Boolean).join(" / ");
-    const image =
-      truck.logoUrl ||
-      truck.imageUrl ||
-      truck.coverImageUrl ||
-      truck.heroImageUrl;
+    const image = getTruckImage(truck);
     const directionsUrl = buildDirectionsUrl(truck);
     return (
       <CompactDecisionCardShell
@@ -6533,8 +6561,8 @@ function ActiveSceneContent({
         sectionLabel: "Now Serving Trucks",
         summary: formatScoutCount(
           liveTruckCards.length,
-          "truck live now",
-          "trucks live now",
+          "truck serving now",
+          "trucks serving now",
         ),
         cardType: "truck" as const,
         truck,
@@ -10469,12 +10497,7 @@ function TruckCard({
 }) {
   const name = truck.name || "Food Truck";
   const cuisine = truck.cuisineType ?? null;
-  const img =
-    truck.coverImageUrl ??
-    truck.heroImageUrl ??
-    truck.imageUrl ??
-    truck.logoUrl ??
-    null;
+  const img = getTruckImage(truck);
 
   const distMiles = truck.distanceMiles;
   const distKm = truck.distance;
