@@ -13,6 +13,10 @@ const publicSearch = readFileSync(
   new URL("../server/routes/publicSearchRoutes.ts", import.meta.url),
   "utf8",
 );
+const sharedIntent = readFileSync(
+  new URL("../shared/scoutSearchIntent.ts", import.meta.url),
+  "utf8",
+);
 
 assert.match(
   scout,
@@ -40,13 +44,12 @@ assert.match(
   "Fallback copy must describe network activity without naming a fixed city",
 );
 
+assert.match(scout, /from "@shared\/scoutSearchIntent"/);
+assert.match(publicSearch, /from "@shared\/scoutSearchIntent"/);
+assert.doesNotMatch(scout, /SCOUT_FALLBACK_QUERY_ALIASES/);
+assert.doesNotMatch(publicSearch, /PUBLIC_SEARCH_ALIASES/);
 assert.match(
-  publicSearch,
-  /PUBLIC_SEARCH_ALIASES/,
-  "Public search must own shared semantic food expansion",
-);
-assert.match(
-  publicSearch,
+  sharedIntent,
   /tacos:[\s\S]*mexican[\s\S]*tex-mex/,
   "Taco search must include clearly related Mexican and Tex-Mex inventory",
 );
