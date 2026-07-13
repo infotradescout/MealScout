@@ -21,6 +21,10 @@ const sharedIntent = readFileSync(
   new URL("../shared/scoutSearchIntent.ts", import.meta.url),
   "utf8",
 );
+const publicMap = readFileSync(
+  new URL("../server/routes/publicMapRoutes.ts", import.meta.url),
+  "utf8",
+);
 
 assert.match(
   scout,
@@ -72,6 +76,16 @@ assert.match(
 );
 assert.match(publicSearch, /city: restaurant\.city \|\| null/);
 assert.match(publicSearch, /state: restaurant\.state \|\| null/);
+assert.match(
+  publicMap,
+  /const county = extractAddressComponent\([\s\S]*administrative_area_level_2/,
+  "Place details must preserve county for the request workflow",
+);
+assert.match(
+  scout,
+  /selectedPlaceRequest\.county \|\|[\s\S]*selectedPlaceRequest\.city/,
+  "Place requests must prefer the real county over a city fallback",
+);
 
 assert.match(
   navigation,
