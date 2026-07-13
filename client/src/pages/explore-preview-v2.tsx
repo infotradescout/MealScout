@@ -1844,8 +1844,9 @@ function buildCravingBoardItems({
       meta:
         [formatDistance(truck), formatWait(truck)]
           .filter(Boolean)
-          .join(" / ") || "Live now",
-      reason: "Live now",
+          .join(" / ") ||
+        (isTruckBroadcastLive(truck) ? "Live now" : "Serving now"),
+      reason: isTruckBroadcastLive(truck) ? "Live now" : "Serving now",
       freshnessMeta: {
         kind: "truck",
         updatedAt: readStringField(truck, ["updatedAt", "lastUpdatedAt"]),
@@ -2005,7 +2006,7 @@ function buildLocalActivityItems({
     items.push({
       id: `truck-${truck.id}`,
       type: "truck",
-      title: "Live now",
+      title: isTruckBroadcastLive(truck) ? "Live now" : "Serving now",
       subtitle: [truck.name, truck.cuisineType, distance]
         .filter(Boolean)
         .join(" · "),
@@ -2148,7 +2149,8 @@ function getTruckCardTone(truck: LiveTruckSummary): {
   label: string;
   tone: TruckCardTone;
 } {
-  if (isTruckServingNow(truck)) return { label: "Live now", tone: "live" };
+  if (isTruckBroadcastLive(truck)) return { label: "Live now", tone: "live" };
+  if (isTruckServingNow(truck)) return { label: "Serving now", tone: "scheduled" };
 
   const status = readStringField(truck, [
     "serviceStatus",
@@ -5854,7 +5856,11 @@ function ScoutImmediateCompactCard({
     const truck = item.truck;
     const title = truck.name || "Food truck";
     const area = getTruckArea(truck);
-    const status = isTruckServingNow(truck) ? "Live now" : "Scheduled";
+    const status = isTruckBroadcastLive(truck)
+      ? "Live now"
+      : isTruckServingNow(truck)
+        ? "Serving now"
+        : "Scheduled";
     const meta = ["Food truck", status, area].filter(Boolean).join(" / ");
     const image = getTruckImage(truck);
     const directionsUrl = buildDirectionsUrl(truck);
