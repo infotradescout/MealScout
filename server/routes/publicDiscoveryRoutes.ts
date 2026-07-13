@@ -2,6 +2,10 @@ import type { Express } from "express";
 import { createHash } from "crypto";
 import { and, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import { z } from "zod";
+import {
+  isBarBusinessType,
+  isTruckBusinessType,
+} from "@shared/businessTypes";
 
 import { db } from "../db";
 import { storage } from "../storage";
@@ -592,7 +596,7 @@ const normalizePublicProfileEntity = (value: string | null | undefined) => {
 };
 
 const isTruckRestaurantRow = (row: any) =>
-  Boolean(row && (row.isFoodTruck || row.businessType === "food_truck"));
+  Boolean(row && (row.isFoodTruck || isTruckBusinessType(row.businessType)));
 
 const resolveTruckRestaurantForPublicId = async (id: string) => {
   const direct = await storage.getRestaurant(id);
@@ -1454,11 +1458,14 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           return res.status(404).json({ message: "Profile not found" });
         if (
           parsed.profileEntity === "truck" &&
-          !(row.isFoodTruck || row.businessType === "food_truck")
+          !isTruckRestaurantRow(row)
         ) {
           return res.status(404).json({ message: "Profile not found" });
         }
-        if (parsed.profileEntity === "bar" && row.businessType !== "bar") {
+        if (
+          parsed.profileEntity === "bar" &&
+          !isBarBusinessType(row.businessType)
+        ) {
           return res.status(404).json({ message: "Profile not found" });
         }
       }
@@ -1725,7 +1732,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
               return false;
             if (
               entity === "bar" &&
-              String(candidate?.businessType || "") !== "bar"
+              !isBarBusinessType(candidate?.businessType)
             )
               return false;
             return toSlug(candidate?.name) === slugKey;
@@ -1743,7 +1750,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
               ? "bar"
               : isTruckRestaurantRow(row)
                 ? "truck"
-                : row.businessType === "bar"
+                : isBarBusinessType(row.businessType)
                   ? "bar"
                   : "restaurant";
         const canonicalPath = buildPublicProfilePath({
@@ -1888,9 +1895,9 @@ export function registerPublicDiscoveryRoutes(app: Express) {
 
         const canonicalPath = buildPublicProfilePath({
           entityType:
-            row.isFoodTruck || row.businessType === "food_truck"
+            isTruckRestaurantRow(row)
               ? "truck"
-              : row.businessType === "bar"
+              : isBarBusinessType(row.businessType)
                 ? "bar"
                 : "restaurant",
           name: row.name,
@@ -1916,7 +1923,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
               : 0,
             liveLocationActive: Boolean(row.mobileOnline),
             isFoodTruck: Boolean(
-              row.isFoodTruck || row.businessType === "food_truck",
+              isTruckRestaurantRow(row),
             ),
           },
           sourceFields: {
@@ -2262,7 +2269,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
 
       if (entity === "bar") {
         const row = await storage.getRestaurant(id);
-        if (!row || !row.isActive || row.businessType !== "bar") {
+        if (!row || !row.isActive || !isBarBusinessType(row.businessType)) {
           return res.status(404).json({ message: "Profile not found" });
         }
         const ownerUser = await storage.getUser(row.ownerId);
@@ -2400,7 +2407,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
               restaurantRow: row,
             }),
           ]);
-        if (row.isFoodTruck || row.businessType === "food_truck") {
+        if (isTruckRestaurantRow(row)) {
           const mapped = toPublicTruckProfile({
             row: {
               ...row,
@@ -2437,7 +2444,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
             social: mapped.socialLinks,
           });
         }
-        if (row.businessType === "bar") {
+        if (isBarBusinessType(row.businessType)) {
           const mapped = toPublicBarProfile({
             row: {
               ...row,
