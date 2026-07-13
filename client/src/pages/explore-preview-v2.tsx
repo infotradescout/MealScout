@@ -2956,7 +2956,8 @@ export default function ExplorePreview() {
 
   /* --------- events --------- */
 
-  const { data: eventsData } = useQuery<EventsResponse>({
+  const { data: eventsData, isLoading: eventsLoading } =
+    useQuery<EventsResponse>({
     queryKey: ["/api/events/public"],
     enabled: !!resolvedScoutLocation,
     queryFn: async () => {
@@ -3231,7 +3232,10 @@ export default function ExplorePreview() {
       staleTime: 120_000,
     });
 
-  const { data: nearbyPublicRestaurantsData } = useQuery<RestaurantSummary[]>({
+  const {
+    data: nearbyPublicRestaurantsData,
+    isLoading: nearbyPublicRestaurantsLoading,
+  } = useQuery<RestaurantSummary[]>({
     queryKey: resolvedScoutLocation
       ? [
           "/api/restaurants/nearby",
@@ -3254,8 +3258,10 @@ export default function ExplorePreview() {
     staleTime: 120_000,
   });
 
-  const { data: pensacolaRestaurantFallbackData = [] } =
-    useQuery<RestaurantSummary[]>({
+  const {
+    data: pensacolaRestaurantFallbackData = [],
+    isLoading: pensacolaRestaurantFallbackLoading,
+  } = useQuery<RestaurantSummary[]>({
       queryKey: ["/api/restaurants/nearby", "pensacola-fallback", 40],
       queryFn: async () => {
         const response = await fetch(
@@ -3345,7 +3351,10 @@ export default function ExplorePreview() {
     return map;
   }, [nearbyRestaurants, restaurantMenuPreviewQueries]);
 
-  const { data: localMenuItemsData = [] } = useQuery<LocalMenuItemFeedItem[]>({
+  const {
+    data: localMenuItemsData = [],
+    isLoading: localMenuItemsLoading,
+  } = useQuery<LocalMenuItemFeedItem[]>({
     queryKey: resolvedScoutLocation
       ? [
           "/api/menus/local-items",
@@ -3374,7 +3383,8 @@ export default function ExplorePreview() {
     return Array.isArray(localMenuItemsData) ? localMenuItemsData : [];
   }, [localMenuItemsData]);
 
-  const { data: trendingData } = useQuery<ScoutTrendingResponse>({
+  const { data: trendingData, isLoading: trendingLoading } =
+    useQuery<ScoutTrendingResponse>({
     queryKey: ["/api/public/trending", "scout", 7],
     queryFn: async () => {
       const response = await fetch("/api/public/trending?limit=12&days=7", {
@@ -3459,7 +3469,8 @@ export default function ExplorePreview() {
 
   /* --------- nearby deals (location-aware) --------- */
 
-  const { data: nearbyDealsData } = useQuery<DealSummary[]>({
+  const { data: nearbyDealsData, isLoading: nearbyDealsLoading } =
+    useQuery<DealSummary[]>({
     queryKey: resolvedScoutLocation
       ? [
           "/api/deals/nearby",
@@ -4692,12 +4703,23 @@ export default function ExplorePreview() {
     popularDishesForFeed.length +
     trendingPlacesThisWeekForFeed.length +
     newToMealScoutRestaurantsForFeed.length;
+  const localDiscoverySettled =
+    !liveTrucksLoading &&
+    !nearbyRestaurantsLoading &&
+    !nearbyPublicRestaurantsLoading &&
+    !localMenuItemsLoading &&
+    !nearbyDealsLoading &&
+    !eventsLoading;
+  const pensacolaFallbackSettled =
+    !pensacolaRestaurantFallbackLoading && !trendingLoading;
   const showPensacolaFallback =
-    scoutSearchQuery.trim().length > 0
+    localDiscoverySettled &&
+    pensacolaFallbackSettled &&
+    (scoutSearchQuery.trim().length > 0
       ? scoutSearchMode && localSearchContentCount === 0
       : localActivityCount === 0 &&
         popularDishesForFeed.length === 0 &&
-        trendingPlacesThisWeekForFeed.length === 0;
+        trendingPlacesThisWeekForFeed.length === 0);
   const fallbackMarketLabel = showPensacolaFallback
     ? PENSACOLA_LAUNCH_MARKET.label
     : null;
