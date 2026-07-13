@@ -21,6 +21,7 @@ const boundaryFiles = [
   "server/publicProfiles/toPublicRestaurantProfile.ts",
   "server/publicProfiles/publicBusinessSlugResolver.ts",
   "server/utils/truckLocationSemantics.ts",
+  "server/routes/publicDiscoveryRoutes.ts",
 ];
 
 for (const path of boundaryFiles) {
