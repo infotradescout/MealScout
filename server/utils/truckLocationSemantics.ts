@@ -1,3 +1,5 @@
+import { isTruckBusinessType } from "@shared/businessTypes";
+
 export type TruckAddressKind =
   | "business_admin"
   | "operating_location"
@@ -50,7 +52,9 @@ export function isThreeDEatsStaticAdminAddress(params: {
 }
 
 export function isFoodTruckProfile(row: any) {
-  return Boolean(row?.isFoodTruck === true || row?.businessType === "food_truck");
+  return Boolean(
+    row?.isFoodTruck === true || isTruckBusinessType(row?.businessType),
+  );
 }
 
 export function getTruckLocationMetadata(row: any): Record<string, any> {
