@@ -3,6 +3,12 @@ import {
   expandScoutSearchTerms,
   tokenizeScoutSearchIntent,
 } from "@shared/scoutSearchIntent";
+import {
+  selectScoutDiscoveryResults,
+  type ScoutDiscoveryResultKind,
+  type ScoutDiscoveryScope,
+  type ScoutDiscoverySource,
+} from "@shared/scoutDiscoveryResult";
 import { resolveBusinessMedia, type BusinessMediaAsset } from "@/lib/businessMedia";
 import {
   useCallback,
@@ -2503,6 +2509,31 @@ function filterScoutFallbackRows<T>(
       expandedTerms.some((term) => matchesScoutSearchText(row, [term])) &&
       matchesScoutIntent(row, fallbackIntent, kindHint),
   );
+}
+
+function canonicalizeScoutRows<T>(
+  rows: T[],
+  {
+    kind,
+    scope,
+    source,
+    query,
+    limit,
+  }: {
+    kind: ScoutDiscoveryResultKind;
+    scope: ScoutDiscoveryScope;
+    source: ScoutDiscoverySource;
+    query?: string;
+    limit?: number;
+  },
+): T[] {
+  return selectScoutDiscoveryResults(rows, {
+    kind,
+    scope,
+    source,
+    queryTerms: query ? expandScoutSearchTerms(query) : [],
+    limit,
+  }).map((result) => result.raw);
 }
 
 /* ============================================================
