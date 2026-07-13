@@ -3,6 +3,7 @@ import {
   isBarBusinessType,
   isTruckBusinessType,
 } from "@shared/businessTypes";
+import { deriveTruckPresence } from "@shared/consumerEntity";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import {
   Card,
@@ -3963,12 +3964,24 @@ export default function RestaurantOwnerDashboard() {
           const hasValidTruckScheduleWindow =
             hasValidTruckOperatingWindow(truckScheduleEntries);
           const liveByTruckScheduleNow = isTruckLiveBySchedule(truckScheduleEntries);
-          const liveByMobileSignal = Boolean(
-            (currentRestaurant as any).mobileOnline &&
-              parseDateCandidate((currentRestaurant as any).liveUntilAt) &&
-              parseDateCandidate((currentRestaurant as any).liveUntilAt)!.getTime() >
-                Date.now(),
-          );
+          const liveByMobileSignal =
+            deriveTruckPresence(
+              {
+                mobileOnline: (currentRestaurant as any).mobileOnline,
+                liveBroadcasting: (currentRestaurant as any).liveBroadcasting,
+                currentLatitude:
+                  (currentRestaurant as any).currentLatitude ??
+                  (currentRestaurant as any).latitude,
+                currentLongitude:
+                  (currentRestaurant as any).currentLongitude ??
+                  (currentRestaurant as any).longitude,
+                lastBroadcastAt: (currentRestaurant as any).lastBroadcastAt,
+                liveUntilAt: (currentRestaurant as any).liveUntilAt,
+                locationSource: (currentRestaurant as any).locationSource,
+                gpsAccuracy: (currentRestaurant as any).gpsAccuracy,
+              },
+              { freshnessMs: 4 * 60 * 60 * 1000 },
+            ).broadcastState === "live";
           const operatingUpdatedAtCandidate = [
             (currentRestaurant as any).truckScheduleUpdatedAt,
             (currentRestaurant as any).scheduleUpdatedAt,
