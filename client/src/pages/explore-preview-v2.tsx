@@ -97,6 +97,12 @@ const ThemedScoutMap = lazy(
  *   - /atmospheric/mealscout-welcome-map-night.png (welcome map-pin scene)
  */
 const SCOUT_BACKGROUND_IMAGE = "/atmospheric/foodpark-night-hero.jpg";
+const PENSACOLA_LAUNCH_MARKET = {
+  label: "Pensacola, FL",
+  lat: 30.4213,
+  lng: -87.2169,
+  marketKey: "pensacola-fl",
+} as const;
 const SCOUT_ACTIVITY_FALLBACK_LABEL = "other active areas";
 
 function formatScoutMarketLabel({
