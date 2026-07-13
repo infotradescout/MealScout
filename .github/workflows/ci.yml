@@ -28,6 +28,9 @@ jobs:
       - name: Consumer Entity Foundation Contract
         run: npm run test:consumer-entity-foundation
 
+      - name: Scout Fallback and Navigation Contract
+        run: npm run test:scout-fallback
+
       - name: Build
         run: npm run build
 

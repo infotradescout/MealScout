@@ -1,4 +1,8 @@
 import { deriveTruckPresence } from "@shared/consumerEntity";
+import {
+  expandScoutSearchTerms,
+  tokenizeScoutSearchIntent,
+} from "@shared/scoutSearchIntent";
 import { resolveBusinessMedia, type BusinessMediaAsset } from "@/lib/businessMedia";
 import {
   useCallback,
@@ -23,6 +27,7 @@ import {
   Heart,
   MapPin,
   Maximize2,
+  Plus,
   MessageCircle,
   Minimize2,
   Navigation2,
@@ -50,11 +55,10 @@ import {
 import { getReverseGeocodedLocationName } from "@/utils/locationUtils";
 import { SEOHead } from "@/components/seo-head";
 import { ScoutMapHero } from "@/components/scout/ScoutMapHero";
+import { PlaceAutocompleteInput } from "@/components/maps/place-autocomplete-input";
 import { ActiveScenePanel } from "@/components/scout/ActiveScenePanel";
-import {
-  ScoutSearchDock,
-  type ScoutSearchFilterId,
-} from "@/components/scout/ScoutSearchDock";
+import type { ScoutSearchFilterId } from "@/components/scout/ScoutSearchDock";
+import { useScoutNavSearch } from "@/components/scout/ScoutNavSearchContext";
 import { ScoutEmptyState as ScoutSceneEmptyState } from "@/components/scout/ScoutEmptyState";
 import {
   GoogleMapSurface,
@@ -411,6 +415,13 @@ type ScoutTrendingResponse = {
   windowDays: number;
   items: TrendingDishSummary[];
   places: TrendingPlaceSummary[];
+};
+
+type ScoutGlobalSearchResponse = {
+  query: string;
+  restaurants: RestaurantSummary[];
+  deals: DealSummary[];
+  events: EventSummary[];
 };
 
 interface RestaurantRelationshipSnapshot {
@@ -2307,10 +2318,7 @@ function normalizeScoutSearchText(value: unknown): string {
 }
 
 function tokenizeScoutSearch(value: string): string[] {
-  return normalizeScoutSearchText(value)
-    .split(/[^a-z0-9]+/i)
-    .map((token) => token.trim())
-    .filter((token) => token.length > 1);
+  return tokenizeScoutSearchIntent(value);
 }
 
 function inferScoutSearchIntent(
@@ -2479,6 +2487,24 @@ function filterScoutSearchRows<T>(
   );
 }
 
+function filterScoutFallbackRows<T>(
+  rows: T[],
+  searchMode: boolean,
+  query: string,
+  intent: ScoutSearchIntent,
+  kindHint?: string,
+): T[] {
+  if (!searchMode || !query.trim()) return rows;
+  const expandedTerms = expandScoutSearchTerms(query);
+  const fallbackIntent =
+    kindHint === "restaurant" && intent === "dishes" ? "all" : intent;
+  return rows.filter(
+    (row) =>
+      expandedTerms.some((term) => matchesScoutSearchText(row, [term])) &&
+      matchesScoutIntent(row, fallbackIntent, kindHint),
+  );
+}
+
 /* ============================================================
    MAP CENTER OFFSET
    ----
@@ -2550,12 +2576,31 @@ export default function ExplorePreview() {
   );
   const [activeSceneLaneId, setActiveSceneLaneId] =
     useState<ScoutSceneLaneId>("for_you");
-  const [scoutSearchMode, setScoutSearchMode] = useState(false);
-  const [scoutSearchQuery, setScoutSearchQuery] = useState("");
-  const [scoutSearchFilter, setScoutSearchFilter] =
-    useState<ScoutSearchFilterId | null>(null);
+  const {
+    searchMode: scoutSearchMode,
+    query: scoutSearchQuery,
+    activeFilter: scoutSearchFilter,
+    closeSearch: closeScoutSearch,
+    setQuery: setScoutSearchQuery,
+    setActiveFilter: setScoutSearchFilter,
+  } = useScoutNavSearch();
   const [resultsSheet, setResultsSheet] =
     useState<ScoutResultsSheetData | null>(null);
+  const [isPlaceRequestOpen, setIsPlaceRequestOpen] = useState(false);
+  const [placeRequestQuery, setPlaceRequestQuery] = useState("");
+  const [selectedPlaceRequest, setSelectedPlaceRequest] = useState<{
+    placeId: string;
+    restaurantName: string;
+    address: string;
+    city: string;
+    county: string;
+    state: string;
+    latitude: number | null;
+    longitude: number | null;
+  } | null>(null);
+  const [isLoadingPlaceRequest, setIsLoadingPlaceRequest] = useState(false);
+  const [isSubmittingPlaceRequest, setIsSubmittingPlaceRequest] =
+    useState(false);
   const [scoutSourceStatuses, setScoutSourceStatuses] = useState<
     Record<ScoutSourceStatusKey, number | null>
   >({
@@ -2710,12 +2755,6 @@ export default function ExplorePreview() {
     () => inferScoutSearchIntent(scoutSearchQuery, scoutSearchFilter),
     [scoutSearchFilter, scoutSearchQuery],
   );
-
-  const closeScoutSearch = useCallback(() => {
-    setScoutSearchMode(false);
-    setScoutSearchQuery("");
-    setScoutSearchFilter(null);
-  }, []);
 
   useEffect(() => {
     if (!location.startsWith("/scout") && !location.startsWith("/map")) {
@@ -2944,7 +2983,8 @@ export default function ExplorePreview() {
 
   /* --------- events --------- */
 
-  const { data: eventsData } = useQuery<EventsResponse>({
+  const { data: eventsData, isLoading: eventsLoading } =
+    useQuery<EventsResponse>({
     queryKey: ["/api/events/public"],
     enabled: !!resolvedScoutLocation,
     queryFn: async () => {
@@ -3219,7 +3259,10 @@ export default function ExplorePreview() {
       staleTime: 120_000,
     });
 
-  const { data: nearbyPublicRestaurantsData } = useQuery<RestaurantSummary[]>({
+  const {
+    data: nearbyPublicRestaurantsData,
+    isLoading: nearbyPublicRestaurantsLoading,
+  } = useQuery<RestaurantSummary[]>({
     queryKey: resolvedScoutLocation
       ? [
           "/api/restaurants/nearby",
@@ -3317,7 +3360,10 @@ export default function ExplorePreview() {
     return map;
   }, [nearbyRestaurants, restaurantMenuPreviewQueries]);
 
-  const { data: localMenuItemsData = [] } = useQuery<LocalMenuItemFeedItem[]>({
+  const {
+    data: localMenuItemsData = [],
+    isLoading: localMenuItemsLoading,
+  } = useQuery<LocalMenuItemFeedItem[]>({
     queryKey: resolvedScoutLocation
       ? [
           "/api/menus/local-items",
@@ -3346,7 +3392,8 @@ export default function ExplorePreview() {
     return Array.isArray(localMenuItemsData) ? localMenuItemsData : [];
   }, [localMenuItemsData]);
 
-  const { data: trendingData } = useQuery<ScoutTrendingResponse>({
+  const { data: trendingData, isLoading: trendingLoading } =
+    useQuery<ScoutTrendingResponse>({
     queryKey: ["/api/public/trending", "scout", 7],
     queryFn: async () => {
       const response = await fetch("/api/public/trending?limit=12&days=7", {
@@ -3361,6 +3408,35 @@ export default function ExplorePreview() {
         };
       }
       return response.json();
+    },
+    staleTime: 60_000,
+    retry: false,
+  });
+
+  const {
+    data: globalSearchData,
+    isLoading: globalSearchLoading,
+  } = useQuery<ScoutGlobalSearchResponse>({
+    queryKey: ["/api/search", "scout-network", scoutSearchQuery.trim()],
+    enabled: scoutSearchMode && scoutSearchQuery.trim().length >= 2,
+    queryFn: async () => {
+      const query = scoutSearchQuery.trim();
+      const response = await fetch(
+        `/api/search?q=${encodeURIComponent(query)}`,
+        { credentials: "include" },
+      );
+      if (!response.ok) {
+        return { query, restaurants: [], deals: [], events: [] };
+      }
+      const data = await response.json();
+      return {
+        query,
+        restaurants: Array.isArray(data?.restaurants)
+          ? data.restaurants
+          : [],
+        deals: Array.isArray(data?.deals) ? data.deals : [],
+        events: Array.isArray(data?.events) ? data.events : [],
+      };
     },
     staleTime: 60_000,
     retry: false,
@@ -3431,7 +3507,8 @@ export default function ExplorePreview() {
 
   /* --------- nearby deals (location-aware) --------- */
 
-  const { data: nearbyDealsData } = useQuery<DealSummary[]>({
+  const { data: nearbyDealsData, isLoading: nearbyDealsLoading } =
+    useQuery<DealSummary[]>({
     queryKey: resolvedScoutLocation
       ? [
           "/api/deals/nearby",
@@ -3520,6 +3597,121 @@ export default function ExplorePreview() {
     });
     return localItems.slice(0, 8);
   }, [marketCity, marketState, trendingData?.items]);
+
+  const openFavoritePlaceRequest = useCallback(() => {
+    setPlaceRequestQuery("");
+    setSelectedPlaceRequest(null);
+    setIsPlaceRequestOpen(true);
+  }, []);
+
+  const selectFavoritePlaceRequest = useCallback(
+    async (suggestion: {
+      placeId: string;
+      text: string;
+      mainText: string;
+      secondaryText: string;
+      _sessionToken?: string;
+    }) => {
+      setIsLoadingPlaceRequest(true);
+      try {
+        const detailUrl = new URL(
+          `/api/map/place-details/${encodeURIComponent(suggestion.placeId)}`,
+          window.location.origin,
+        );
+        if (suggestion._sessionToken) {
+          detailUrl.searchParams.set("sessionToken", suggestion._sessionToken);
+        }
+        const response = await fetch(detailUrl.toString(), {
+          credentials: "include",
+        });
+        if (!response.ok) throw new Error("Could not load that place");
+        const data = await response.json().catch(() => ({}));
+        const place = data?.place || {};
+        setSelectedPlaceRequest({
+          placeId: String(place.placeId || suggestion.placeId),
+          restaurantName: String(
+            place.name || suggestion.mainText || suggestion.text,
+          ).trim(),
+          address: String(
+            place.formattedAddress || suggestion.text || "",
+          ).trim(),
+          city: String(place.city || marketCity || "").trim(),
+          county: String(place.county || "").trim(),
+          state: String(place.state || marketState || "").trim(),
+          latitude:
+            typeof place.latitude === "number" ? place.latitude : null,
+          longitude:
+            typeof place.longitude === "number" ? place.longitude : null,
+        });
+      } catch {
+        toast({
+          variant: "destructive",
+          description: "We couldn't load that place. Please try another result.",
+        });
+      } finally {
+        setIsLoadingPlaceRequest(false);
+      }
+    },
+    [marketCity, marketState, toast],
+  );
+
+  const submitFavoritePlaceRequest = useCallback(async () => {
+    if (!selectedPlaceRequest?.restaurantName) return;
+    setIsSubmittingPlaceRequest(true);
+    try {
+      const response = await fetch(apiUrl("/api/affiliate/submit-restaurant"), {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          restaurantName: selectedPlaceRequest.restaurantName,
+          address: selectedPlaceRequest.address,
+          county:
+            selectedPlaceRequest.county ||
+            selectedPlaceRequest.city ||
+            String(resolvedScoutLocation?.label || "Scout request"),
+          state: selectedPlaceRequest.state || "Unknown",
+          category: scoutSearchQuery.trim() || undefined,
+          latitude:
+            selectedPlaceRequest.latitude === null
+              ? undefined
+              : String(selectedPlaceRequest.latitude),
+          longitude:
+            selectedPlaceRequest.longitude === null
+              ? undefined
+              : String(selectedPlaceRequest.longitude),
+          description: scoutSearchQuery.trim()
+            ? `Requested from Scout after no nearby result for "${scoutSearchQuery.trim()}".`
+            : "Requested from Scout because local coverage was empty.",
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(String(data?.error || "Request failed"));
+      }
+      toast({
+        description:
+          data?.success === false
+            ? "That place has already been requested."
+            : "Requested. We'll review it for MealScout.",
+      });
+      setIsPlaceRequestOpen(false);
+      setPlaceRequestQuery("");
+      setSelectedPlaceRequest(null);
+    } catch {
+      toast({
+        variant: "destructive",
+        description: "We couldn't send that request. Please try again.",
+      });
+    } finally {
+      setIsSubmittingPlaceRequest(false);
+    }
+  }, [
+    resolvedScoutLocation?.label,
+    scoutSearchQuery,
+    selectedPlaceRequest,
+    toast,
+  ]);
 
   const newToMealScoutRestaurants = useMemo(() => {
     const freshRows = nearbyRestaurants
@@ -4402,6 +4594,60 @@ export default function ExplorePreview() {
       scoutSearchQuery,
     ],
   );
+  const activeMarketPlaces = useMemo<RestaurantSummary[]>(() => {
+    const byId = new Map<string, RestaurantSummary>();
+    const networkMatches = Array.isArray(globalSearchData?.restaurants)
+      ? globalSearchData.restaurants
+      : [];
+    const trendingPlaces = Array.isArray(trendingData?.places)
+      ? trendingData.places
+      : [];
+    for (const place of [...networkMatches, ...trendingPlaces]) {
+      const id = String(place?.id || "").trim();
+      if (!id || byId.has(id)) continue;
+      byId.set(id, place);
+    }
+    return Array.from(byId.values());
+  }, [globalSearchData?.restaurants, trendingData?.places]);
+
+  const activeMarketDishes = useMemo(() => {
+    return Array.isArray(trendingData?.items) ? trendingData.items : [];
+  }, [trendingData?.items]);
+
+  const activityFallbackRestaurants = useMemo(
+    () =>
+      filterScoutFallbackRows(
+        activeMarketPlaces,
+        scoutSearchMode,
+        scoutSearchQuery,
+        scoutSearchIntent,
+        "restaurant",
+      ).slice(0, 8),
+    [
+      activeMarketPlaces,
+      scoutSearchIntent,
+      scoutSearchMode,
+      scoutSearchQuery,
+    ],
+  );
+
+  const activityFallbackDishes = useMemo(
+    () =>
+      filterScoutFallbackRows(
+        activeMarketDishes,
+        scoutSearchMode,
+        scoutSearchQuery,
+        scoutSearchIntent,
+        "menu_item",
+      ).slice(0, 8),
+    [
+      activeMarketDishes,
+      scoutSearchIntent,
+      scoutSearchMode,
+      scoutSearchQuery,
+    ],
+  );
+
   const trucksServingNow = useMemo(
     () => scoutTruckInventoryForFeed.filter(isTruckServingNow),
     [scoutTruckInventoryForFeed],
@@ -4456,6 +4702,44 @@ export default function ExplorePreview() {
     allDealsForFeed.length +
     visibleEventsForFeed.length +
     visibleHosts.length;
+  const localSearchContentCount =
+    scoutTruckInventoryForFeed.length +
+    localMenuItemsForFeed.length +
+    nearbyRestaurantsForFeed.length +
+    allDealsForFeed.length +
+    visibleEventsForFeed.length +
+    popularDishesForFeed.length +
+    trendingPlacesThisWeekForFeed.length +
+    newToMealScoutRestaurantsForFeed.length;
+  const localDiscoverySettled =
+    !liveTrucksLoading &&
+    !nearbyRestaurantsLoading &&
+    !nearbyPublicRestaurantsLoading &&
+    !localMenuItemsLoading &&
+    !nearbyDealsLoading &&
+    !eventsLoading;
+  const activityFallbackSettled =
+    !trendingLoading && !globalSearchLoading;
+  const showActivityFallback =
+    localDiscoverySettled &&
+    activityFallbackSettled &&
+    (scoutSearchQuery.trim().length > 0
+      ? scoutSearchMode && localSearchContentCount === 0
+      : localActivityCount === 0 &&
+        popularDishesForFeed.length === 0 &&
+        trendingPlacesThisWeekForFeed.length === 0);
+  const effectiveRestaurantsForFeed = showActivityFallback
+    ? activityFallbackRestaurants
+    : nearbyRestaurantsForFeed;
+  const effectivePopularDishesForFeed = showActivityFallback
+    ? activityFallbackDishes
+    : popularDishesForFeed;
+  const effectiveTrendingPlacesForFeed = showActivityFallback
+    ? []
+    : trendingPlacesThisWeekForFeed;
+  const fallbackHasRelatedResults =
+    activityFallbackRestaurants.length > 0 ||
+    activityFallbackDishes.length > 0;
   const nearbyRestaurantsTitle = DISCOVERY_LAYERS.restaurants.title;
   const nearbyRestaurantsSubtitle = DISCOVERY_LAYERS.restaurants.subtitle;
 
@@ -4864,14 +5148,8 @@ export default function ExplorePreview() {
         className={`relative z-10 overflow-x-hidden md:-mt-16 ${
           sheetState === "fullMap"
             ? ""
-            : "pb-44 md:mx-auto md:min-h-screen md:max-w-[1120px] md:px-4 xl:max-w-[1280px]"
+            : "pb-[calc(8.5rem+env(safe-area-inset-bottom,0px))] md:mx-auto md:max-w-[1120px] md:px-4 md:pb-8 xl:max-w-[1280px]"
         }`}
-        style={{
-          paddingBottom:
-            sheetState === "fullMap"
-              ? undefined
-              : "calc(8.5rem + env(safe-area-inset-bottom, 0px))",
-        }}
       >
         {/* ============================================================
              SCOUT SURFACE
@@ -5217,15 +5495,15 @@ export default function ExplorePreview() {
               scoutTruckInventory={scoutTruckInventoryForFeed}
               visibleTrucksServingNow={visibleTrucksServingNow}
               visibleOpenRestaurants={visibleOpenRestaurants}
-              nearbyRestaurants={nearbyRestaurantsForFeed}
+              nearbyRestaurants={effectiveRestaurantsForFeed}
               visibleDeals={visibleDeals}
               hotDealCandidates={hotDealCandidates}
               happyHourDeals={happyHourDeals}
               visibleSceneEvents={visibleSceneEvents}
               visibleHosts={visibleHosts}
               localMenuItems={localMenuItemsForFeed}
-              popularDishes={popularDishesForFeed}
-              trendingPlacesThisWeek={trendingPlacesThisWeekForFeed}
+              popularDishes={effectivePopularDishesForFeed}
+              trendingPlacesThisWeek={effectiveTrendingPlacesForFeed}
               newToMealScoutRestaurants={newToMealScoutRestaurantsForFeed}
               openingLaterRestaurants={openingLaterRestaurants}
               visibleLocalActivityItems={visibleLocalActivityItems}
@@ -5258,27 +5536,81 @@ export default function ExplorePreview() {
               scoutSearchMode={scoutSearchMode}
               scoutSearchIntent={scoutSearchIntent}
               onOpenResultsSheet={setResultsSheet}
+              showActivityFallback={showActivityFallback}
+              fallbackSearchQuery={scoutSearchQuery}
+              fallbackHasRelatedResults={fallbackHasRelatedResults}
+              onRequestPlace={openFavoritePlaceRequest}
             />
           </ActiveScenePanel>
         )}
-        <ScoutSearchDock
-          placement="fixed"
-          searchMode={scoutSearchMode}
-          query={scoutSearchQuery}
-          activeFilter={scoutSearchFilter}
-          resultSummary={
-            scoutSearchMode
-              ? `${sceneFilteredMapMarkers.filter((marker) => marker.kind !== "user").length} nearby picks`
-              : formatScoutResultSummary(localActivityCount)
-          }
-          onOpen={() => setScoutSearchMode(true)}
-          onClose={closeScoutSearch}
-          onQueryChange={setScoutSearchQuery}
-          onFilterChange={(filter) => {
-            setScoutSearchMode(true);
-            setScoutSearchFilter(filter);
+        <Dialog
+          open={isPlaceRequestOpen}
+          onOpenChange={(open) => {
+            setIsPlaceRequestOpen(open);
+            if (!open) {
+              setPlaceRequestQuery("");
+              setSelectedPlaceRequest(null);
+            }
           }}
-        />
+        >
+          <DialogContent className="border-orange-200/20 bg-[#24140c] text-white sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Request your favorite place</DialogTitle>
+              <DialogDescription className="text-orange-100/65">
+                Find the business, confirm it, and MealScout will add it to the
+                review queue.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3">
+              <PlaceAutocompleteInput
+                id="scout-place-request"
+                value={placeRequestQuery}
+                onChange={(value) => {
+                  setPlaceRequestQuery(value);
+                  setSelectedPlaceRequest(null);
+                }}
+                onSelect={(suggestion) => {
+                  void selectFavoritePlaceRequest(suggestion);
+                }}
+                placeholder="Search the restaurant or food truck"
+                disabled={isLoadingPlaceRequest || isSubmittingPlaceRequest}
+                inputClassName="border-orange-200/20 bg-black/20 text-white placeholder:text-white/40"
+                dataTestId="scout-place-request-input"
+              />
+              {isLoadingPlaceRequest ? (
+                <p className="text-xs font-semibold text-orange-100/60">
+                  Loading that place…
+                </p>
+              ) : null}
+              {selectedPlaceRequest ? (
+                <div className="rounded-xl border border-orange-200/20 bg-black/20 px-3 py-3">
+                  <p className="text-sm font-black text-white">
+                    {selectedPlaceRequest.restaurantName}
+                  </p>
+                  <p className="mt-1 text-xs font-semibold text-orange-100/60">
+                    {selectedPlaceRequest.address}
+                  </p>
+                </div>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => void submitFavoritePlaceRequest()}
+                disabled={
+                  !selectedPlaceRequest ||
+                  isLoadingPlaceRequest ||
+                  isSubmittingPlaceRequest
+                }
+                className="inline-flex w-full items-center justify-center rounded-xl bg-[#ff6b35] px-4 py-3 text-sm font-black text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-45"
+                data-testid="scout-submit-place-request"
+              >
+                {isSubmittingPlaceRequest
+                  ? "Sending request…"
+                  : "Request this place"}
+              </button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
         {resultsSheet ? (
           <ScoutResultsSheet
             data={resultsSheet}
@@ -5755,6 +6087,56 @@ function ScoutResultsSheet({
       </div>
     </div>,
     document.body,
+  );
+}
+
+function ScoutFallbackMarketNotice({
+  query,
+  hasResults,
+  onRequestPlace,
+}: {
+  query: string;
+  hasResults: boolean;
+  onRequestPlace: () => void;
+}) {
+  const normalizedQuery = query.trim();
+  return (
+    <section
+      className="px-4 pt-3"
+      data-testid="scout-fallback-market-notice"
+    >
+      <div className="rounded-[1.1rem] border border-orange-300/30 bg-[#2a180e] px-4 py-3 shadow-[0_12px_28px_rgba(38,18,8,0.24)]">
+        <p className="text-[10px] font-black uppercase tracking-[0.13em] text-orange-300">
+          {normalizedQuery ? "Nothing matched nearby" : "No nearby listings yet"}
+        </p>
+        <div className="mt-1 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <p className="text-sm font-black text-white">
+              {hasResults
+                ? normalizedQuery
+                  ? "Showing related picks from active areas"
+                  : "Showing popular picks from active areas"
+                : `No related “${normalizedQuery}” picks are active right now`}
+            </p>
+            <p className="mt-0.5 text-xs font-semibold leading-relaxed text-orange-100/65">
+              {hasResults
+                ? normalizedQuery
+                  ? `These are farther away, may come from any active MealScout area, and clearly relate to “${normalizedQuery}.”`
+                  : "These are farther away and come from MealScout areas with current activity."
+                : "Scout will not substitute unrelated food. Request your favorite place and we’ll add it to the review queue."}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onRequestPlace}
+            className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-full bg-[#ff6b35] px-3.5 py-2 text-[11px] font-black text-white shadow-sm ring-1 ring-orange-300/30"
+          >
+            <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+            Request your favorite place
+          </button>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -6316,6 +6698,10 @@ function ActiveSceneContent({
   scoutSearchMode,
   scoutSearchIntent,
   onOpenResultsSheet,
+  showActivityFallback,
+  fallbackSearchQuery,
+  fallbackHasRelatedResults,
+  onRequestPlace,
 }: {
   laneId: ScoutSceneLaneId;
   sceneMixedFeedItems: CravingBoardItem[];
@@ -6365,6 +6751,10 @@ function ActiveSceneContent({
   scoutSearchMode: boolean;
   scoutSearchIntent: ScoutSearchIntent;
   onOpenResultsSheet?: (data: ScoutResultsSheetData) => void;
+  showActivityFallback: boolean;
+  fallbackSearchQuery: string;
+  fallbackHasRelatedResults: boolean;
+  onRequestPlace: () => void;
 }) {
   const isLowActivityLane = scoutActivityMode === "low_activity";
   if (laneId === "for_you") {
@@ -6753,12 +7143,15 @@ function ActiveSceneContent({
       (primaryFirstScreenDecision.sourceRowId === "live_trucks_now" ||
         primaryFirstScreenDecision.sourceRowId === "food_trucks_today" ||
         primaryFirstScreenDecision.sourceRowId === "open_now_near_you");
-    const popularDishesRailTitle =
-      primaryFirstScreenDecision?.sourceRowId === "popular_dishes"
+    const popularDishesRailTitle = showActivityFallback
+      ? fallbackSearchQuery.trim()
+        ? "Related dishes beyond your area"
+        : "Popular dishes beyond your area"
+      : primaryFirstScreenDecision?.sourceRowId === "popular_dishes"
         ? "More Dishes Nearby"
         : truckFirstScreenLead
           ? "Food From Nearby Trucks"
-        : DISCOVERY_LAYERS.menuItems.title;
+          : DISCOVERY_LAYERS.menuItems.title;
     const foodTrucksTodayRailTitle =
       primaryFirstScreenDecision?.sourceRowId === "food_trucks_today"
         ? "More Trucks Nearby"
@@ -6813,6 +7206,15 @@ function ActiveSceneContent({
       worthDiscoveringCards.length > 0;
 
     if (!hasForYouSections) {
+      if (showActivityFallback) {
+        return (
+          <ScoutFallbackMarketNotice
+            query={fallbackSearchQuery}
+            hasResults={fallbackHasRelatedResults}
+            onRequestPlace={onRequestPlace}
+          />
+        );
+      }
       return (
         <>
           <ScoutFirstScreenDecisionStack
@@ -6971,8 +7373,16 @@ function ActiveSceneContent({
         },
         {
           id: "nearby_restaurants",
-          title: DISCOVERY_LAYERS.restaurants.title,
-          subtitle: DISCOVERY_LAYERS.restaurants.subtitle,
+          title: showActivityFallback
+            ? fallbackSearchQuery.trim()
+              ? "Related places beyond your area"
+              : "Popular beyond your area"
+            : DISCOVERY_LAYERS.restaurants.title,
+          subtitle: showActivityFallback
+            ? fallbackSearchQuery.trim()
+              ? "Farther-away places that clearly match the search."
+              : "Farther-away picks shown because nothing matched nearby."
+            : DISCOVERY_LAYERS.restaurants.subtitle,
           linkHref: DISCOVERY_LAYERS.restaurants.href,
           cards: restaurantRailCards(nearbyRestaurantCards),
           className: railSectionClass,
@@ -6980,8 +7390,16 @@ function ActiveSceneContent({
         },
         {
           id: "trending_this_week",
-          title: "Local Activity",
-          subtitle: undefined,
+          title: showActivityFallback
+            ? fallbackSearchQuery.trim()
+              ? "Related activity beyond your area"
+              : "Trending beyond your area"
+            : "Local Activity",
+          subtitle: showActivityFallback
+            ? fallbackSearchQuery.trim()
+              ? "These farther-away picks match the search."
+              : "These are not nearby; they are fallback discovery picks."
+            : undefined,
           linkHref: DISCOVERY_LAYERS.trending.href,
           cards: restaurantRailCards(trendingPlaceCards),
           className: compactRailSectionClass,
@@ -7088,6 +7506,13 @@ function ActiveSceneContent({
 
     return (
       <>
+        {showActivityFallback ? (
+          <ScoutFallbackMarketNotice
+            query={fallbackSearchQuery}
+            hasResults={fallbackHasRelatedResults}
+            onRequestPlace={onRequestPlace}
+          />
+        ) : null}
         <ScoutFirstScreenDecisionStack
           items={firstScreenDecisionItems}
           thinMarket={isLowActivityLane && firstScreenDecisionItems.length <= 1}

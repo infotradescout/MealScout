@@ -26,6 +26,7 @@
     "start:local": "cross-env NODE_ENV=production PUBLIC_BASE_URL=http://127.0.0.1:5200 INCIDENT_SIGNATURE_SECRET=local-dev node dist/server/index.js",
     "check": "tsc",
     "test:consumer-entity-foundation": "npx --yes tsx scripts/mealscout-consumer-entity-foundation.contract.test.ts",
+    "test:scout-fallback": "npx --yes tsx scripts/mealscout-scout-fallback.contract.test.ts",
     "db:generate:sql": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
     "test:flows:e2e": "playwright test",

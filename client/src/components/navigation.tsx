@@ -23,12 +23,14 @@ import {
   X,
   Compass,
   Heart,
+  Search,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useI18n } from "@/lib/i18n";
 import LongPressHelp from "@/components/long-press-help";
+import { useScoutNavSearch } from "@/components/scout/ScoutNavSearchContext";
 
 type NavItem = {
   path?: string;
@@ -69,6 +71,13 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
   const [isReporting, setIsReporting] = useState(false);
   const { t } = useI18n();
   const sheetRef = useRef<HTMLDivElement>(null);
+  const {
+    searchMode,
+    query: scoutSearchQuery,
+    openSearch,
+    closeSearch,
+    setQuery: setScoutSearchQuery,
+  } = useScoutNavSearch();
 
   useEffect(() => {
     if (isGlobalScope) {
@@ -531,14 +540,49 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     }
   };
 
+  const scoutNavSearch = isScoutRoute ? (
+    <form
+      role="search"
+      data-scout-nav-search="true"
+      onSubmit={(event) => {
+        event.preventDefault();
+        openSearch();
+      }}
+      className="flex min-h-11 items-center gap-2 border-t border-orange-200/15 px-3"
+    >
+      <Search className="h-4 w-4 shrink-0 text-orange-400" aria-hidden="true" />
+      <input
+        value={scoutSearchQuery}
+        onFocus={openSearch}
+        onChange={(event) => {
+          openSearch();
+          setScoutSearchQuery(event.target.value);
+        }}
+        className="h-11 min-w-0 flex-1 bg-transparent text-[13px] font-semibold text-white outline-none placeholder:text-white/45"
+        placeholder="Search dishes, cravings, places, trucks, or events"
+        aria-label="Search dishes, cravings, places, trucks, and events"
+      />
+      {searchMode ? (
+        <button
+          type="button"
+          onClick={closeSearch}
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white/60 hover:bg-white/5 hover:text-white"
+          aria-label="Clear and close Scout search"
+        >
+          <X className="h-4 w-4" aria-hidden="true" />
+        </button>
+      ) : null}
+    </form>
+  ) : null;
+
   return (
     <>
       <div
         data-nav-root={scope}
         className={`hidden lg:block fixed top-6 z-50 ${desktopNavPositionClass}`}
       >
-        <div className="rounded-2xl border border-white/5 bg-[var(--bg-popup)]/40 backdrop-blur-xl shadow-[0_8px_32px_rgba(0,0,0,0.4)] p-2">
-          <div className="flex items-center gap-1">
+        <div className="overflow-hidden rounded-2xl border border-white/10 bg-[var(--bg-popup)]/[0.88] shadow-[0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-xl">
+          <div className="flex items-center gap-1 p-2">
             {sixSlotNav.map((item, idx) =>
               item.path ? (
                 <LongPressHelp
@@ -589,6 +633,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
               ),
             )}
           </div>
+          {scoutNavSearch}
         </div>
       </div>
 
@@ -597,6 +642,11 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
         className="fixed left-0 right-0 z-[1100] lg:hidden"
         style={{ bottom: 0 }}
       >
+        {isScoutRoute ? (
+          <div className="mx-3 mb-2 overflow-hidden rounded-2xl border border-white/10 bg-[var(--bg-popup)]/[0.94] shadow-[0_-8px_24px_rgba(0,0,0,0.35)] backdrop-blur-xl">
+            {scoutNavSearch}
+          </div>
+        ) : null}
         <div className="w-full px-0">
           <div
             className="relative flex items-end justify-between gap-1 px-1.5 rounded-none border-t border-orange-500/20 bg-[var(--bg-popup)] pb-[env(safe-area-inset-bottom)]"
