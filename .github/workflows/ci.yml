@@ -37,6 +37,9 @@ jobs:
       - name: Scout Result View Model Contract
         run: npm run test:scout-result-view-model
 
+      - name: Public Profile Action Policy Contract
+        run: npm run test:profile-action-policy
+
       - name: Build
         run: npm run build
 
