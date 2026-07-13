@@ -41,7 +41,7 @@ export function ScoutSearchDock({
   query: string;
   activeFilter: ScoutSearchFilterId | null;
   resultSummary?: string | null;
-  placement?: "fixed" | "inline";
+  placement?: "fixed" | "inline" | "responsive";
   onOpen: () => void;
   onClose: () => void;
   onQueryChange: (value: string) => void;
@@ -49,8 +49,10 @@ export function ScoutSearchDock({
 }) {
   const shellClassName =
     placement === "inline"
-      ? "px-4 pb-4 md:mx-auto md:max-w-[608px]"
-      : "fixed inset-x-4 z-40 md:mx-auto md:max-w-[608px]";
+      ? "px-4 pb-4 md:mx-auto md:max-w-[760px]"
+      : placement === "responsive"
+        ? "fixed inset-x-4 z-40 md:static md:mx-auto md:mt-3 md:max-w-[760px] md:px-0"
+        : "fixed inset-x-4 z-40 md:mx-auto md:max-w-[608px]";
   const shellStyle =
     placement === "inline"
       ? undefined
