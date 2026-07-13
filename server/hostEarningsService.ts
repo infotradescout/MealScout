@@ -2,15 +2,20 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "./db";
 import { hostEarningsLedger, hostPayoutRequests } from "@shared/schema";
 
-export async function getHostEarningsSummary(hostId: string) {
-  const [earnedRow] = await db
+// Accepts an optional transaction client so callers that need an atomic
+// read-check-write (e.g. validating a payout request against the balance
+// before inserting it) can run this inside the same locked transaction
+// instead of a separate connection that wouldn't see uncommitted rows or
+// be serialized by the caller's advisory lock.
+export async function getHostEarningsSummary(hostId: string, dbClient: any = db) {
+  const [earnedRow] = await dbClient
     .select({
       total: sql<number>`coalesce(sum(${hostEarningsLedger.amountCents}), 0)`,
     })
     .from(hostEarningsLedger)
     .where(eq(hostEarningsLedger.hostId, hostId));
 
-  const [pendingRow] = await db
+  const [pendingRow] = await dbClient
     .select({
       total: sql<number>`coalesce(sum(${hostPayoutRequests.amountCents}), 0)`,
     })
@@ -22,7 +27,7 @@ export async function getHostEarningsSummary(hostId: string) {
       ),
     );
 
-  const [paidRow] = await db
+  const [paidRow] = await dbClient
     .select({
       total: sql<number>`coalesce(sum(${hostPayoutRequests.amountCents}), 0)`,
     })
@@ -34,7 +39,7 @@ export async function getHostEarningsSummary(hostId: string) {
       ),
     );
 
-  const [latestEarning] = await db
+  const [latestEarning] = await dbClient
     .select({ createdAt: hostEarningsLedger.createdAt })
     .from(hostEarningsLedger)
     .where(eq(hostEarningsLedger.hostId, hostId))

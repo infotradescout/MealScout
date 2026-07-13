@@ -220,6 +220,62 @@ export function registerStripeWebhookRoutes(
             }
           }
           break;
+        case "invoice.payment_failed": {
+          // Stripe sets the subscription to "past_due" immediately on a
+          // declined card and only reaches "canceled" after the full Smart
+          // Retry schedule (days to weeks later). Nothing previously
+          // reacted to this event, so assertHasOrderingSubscription (which
+          // only checks restaurantSubscriptions.status === "active") kept
+          // granting full ordering access for the entire retry window.
+          // Mark it past_due immediately so access is revoked on decline,
+          // not on eventual cancellation.
+          const failedInvoice = event.data.object;
+          console.log(`[WEBHOOK] Invoice ${failedInvoice.id} payment failed`);
+
+          if (failedInvoice.subscription) {
+            const subscriptionId = String(failedInvoice.subscription);
+            let userForFailedPayment =
+              await storage.getUserByStripeSubscriptionId(subscriptionId);
+            if (!userForFailedPayment && failedInvoice.customer) {
+              userForFailedPayment = await storage.getUserByStripeCustomerId(
+                String(failedInvoice.customer),
+              );
+            }
+
+            if (userForFailedPayment) {
+              try {
+                const userRestaurants = await storage.getRestaurantsByOwner(
+                  userForFailedPayment.id,
+                );
+                for (const restaurant of userRestaurants) {
+                  await db
+                    .update(restaurantSubscriptions)
+                    .set({ status: "past_due", updatedAt: new Date() })
+                    .where(
+                      and(
+                        eq(restaurantSubscriptions.restaurantId, restaurant.id),
+                        eq(restaurantSubscriptions.stripeSubscriptionId, subscriptionId),
+                        eq(restaurantSubscriptions.isLifetimeFree, false),
+                      ),
+                    );
+                }
+                console.log(
+                  `[WEBHOOK] Marked restaurantSubscriptions past_due for user ${userForFailedPayment.id} (subscription ${subscriptionId})`,
+                );
+              } catch (pastDueError) {
+                console.error(
+                  "[WEBHOOK] Error marking restaurantSubscriptions past_due:",
+                  pastDueError,
+                );
+              }
+            } else {
+              console.log(
+                `[WEBHOOK] Warning: No user found for failed invoice subscription ${subscriptionId}`,
+              );
+            }
+          }
+          break;
+        }
         case "payment_intent.succeeded":
           const paymentIntent = event.data.object;
           console.log(`[WEBHOOK] PaymentIntent ${paymentIntent.id} succeeded`);
@@ -641,78 +697,118 @@ export function registerStripeWebhookRoutes(
               metadata.platformFeeCents || 0,
             );
             let cancelled = false;
+            // `cancelled` above only guards against multiple calls within a
+            // single invocation of this handler -- it does nothing against
+            // two genuinely concurrent deliveries of the same Stripe event
+            // (Stripe documents at-least-once delivery, including
+            // near-simultaneous retries), each getting its own fresh
+            // `cancelled = false` closure. Without a lock, both could reach
+            // addCredit before either committed the booking-row status
+            // change that the alreadyProcessed check above relies on,
+            // double-issuing credit for one overbooked payment. Serialize
+            // on the PaymentIntent id and re-check terminal state inside
+            // the lock so a second concurrent caller sees the first's
+            // committed result and skips re-issuing credit.
             const cancelWithCredit = async (reason: string) => {
               if (cancelled) return;
               cancelled = true;
-              const [truck] = await db
-                .select({ ownerId: restaurants.ownerId })
-                .from(restaurants)
-                .where(eq(restaurants.id, truckId));
 
-              if (truck?.ownerId) {
-                const { addCredit } = await import("../creditService");
-                await addCredit(
-                  truck.ownerId,
-                  amountCents / 100,
-                  reason,
-                  paymentIntent.id,
+              await db.transaction(async (tx: any) => {
+                await tx.execute(
+                  sql`SELECT pg_advisory_xact_lock(hashtext(${`payment_intent_credit:${paymentIntent.id}`}))`,
                 );
-              }
 
-              // If we created pending holds ahead of payment, update them instead of inserting,
-              // otherwise the unique constraint (event_id, truck_id) can fail.
-              if (intentRows.length > 0) {
-                const now = new Date();
-                for (const row of intentRows) {
-                  await db
-                    .update(eventBookings)
-                    .set({
-                      status: "cancelled",
-                      stripePaymentStatus: "succeeded",
-                      refundStatus: "credit",
-                      refundAmountCents: row.totalCents,
-                      refundedAt: now,
-                      refundReason: "Credit issued",
-                      cancelledAt: now,
-                      cancellationReason: "Overbooked - credit issued",
-                      updatedAt: now,
-                    })
-                    .where(eq(eventBookings.id, row.id));
+                const recheckRows = await tx
+                  .select()
+                  .from(eventBookings)
+                  .where(
+                    and(
+                      eq(eventBookings.stripePaymentIntentId, paymentIntent.id),
+                      eq(eventBookings.truckId, truckId),
+                    ),
+                  );
+                const recheckAlreadyProcessed = recheckRows.some(
+                  (row: (typeof recheckRows)[number]) =>
+                    row.status === "confirmed" ||
+                    (row.status === "cancelled" && row.refundStatus === "credit"),
+                );
+                if (recheckAlreadyProcessed) {
+                  console.log(
+                    `[WEBHOOK] Skipping duplicate credit issuance for PaymentIntent ${paymentIntent.id} -- already processed by a concurrent delivery`,
+                  );
+                  return;
                 }
-                return;
-              }
 
-              try {
-                await db
-                  .insert(eventBookings)
-                  .values({
-                    eventId: passId,
-                    truckId,
-                    hostId: eventRow.hostId,
-                    hostPriceCents: metadataHostPriceCents,
-                    platformFeeCents: metadataPlatformFeeCents,
-                    totalCents: amountCents,
-                    status: "cancelled",
-                    stripePaymentIntentId: paymentIntent.id,
-                    stripePaymentStatus: "succeeded",
-                    stripeApplicationFeeAmount: metadataPlatformFeeCents,
-                    stripeTransferDestination:
-                      host?.stripeConnectAccountId || null,
-                    slotType: normalizedSlotTypes.join(","),
-                    refundStatus: "credit",
-                    refundAmountCents: amountCents,
-                    refundedAt: new Date(),
-                    refundReason: "Overbooked",
-                    cancelledAt: new Date(),
-                    cancellationReason: "Overbooked - credit issued",
-                  })
-                  .onConflictDoNothing();
-              } catch (error) {
-                console.warn(
-                  "[WEBHOOK] Unable to insert cancelled booking row after credit:",
-                  error,
-                );
-              }
+                const [truck] = await tx
+                  .select({ ownerId: restaurants.ownerId })
+                  .from(restaurants)
+                  .where(eq(restaurants.id, truckId));
+
+                if (truck?.ownerId) {
+                  const { addCredit } = await import("../creditService");
+                  await addCredit(
+                    truck.ownerId,
+                    amountCents / 100,
+                    reason,
+                    paymentIntent.id,
+                  );
+                }
+
+                // If we created pending holds ahead of payment, update them instead of inserting,
+                // otherwise the unique constraint (event_id, truck_id) can fail.
+                if (recheckRows.length > 0) {
+                  const now = new Date();
+                  for (const row of recheckRows) {
+                    await tx
+                      .update(eventBookings)
+                      .set({
+                        status: "cancelled",
+                        stripePaymentStatus: "succeeded",
+                        refundStatus: "credit",
+                        refundAmountCents: row.totalCents,
+                        refundedAt: now,
+                        refundReason: "Credit issued",
+                        cancelledAt: now,
+                        cancellationReason: "Overbooked - credit issued",
+                        updatedAt: now,
+                      })
+                      .where(eq(eventBookings.id, row.id));
+                  }
+                  return;
+                }
+
+                try {
+                  await tx
+                    .insert(eventBookings)
+                    .values({
+                      eventId: passId,
+                      truckId,
+                      hostId: eventRow.hostId,
+                      hostPriceCents: metadataHostPriceCents,
+                      platformFeeCents: metadataPlatformFeeCents,
+                      totalCents: amountCents,
+                      status: "cancelled",
+                      stripePaymentIntentId: paymentIntent.id,
+                      stripePaymentStatus: "succeeded",
+                      stripeApplicationFeeAmount: metadataPlatformFeeCents,
+                      stripeTransferDestination:
+                        host?.stripeConnectAccountId || null,
+                      slotType: normalizedSlotTypes.join(","),
+                      refundStatus: "credit",
+                      refundAmountCents: amountCents,
+                      refundedAt: new Date(),
+                      refundReason: "Overbooked",
+                      cancelledAt: new Date(),
+                      cancellationReason: "Overbooked - credit issued",
+                    })
+                    .onConflictDoNothing();
+                } catch (error) {
+                  console.warn(
+                    "[WEBHOOK] Unable to insert cancelled booking row after credit:",
+                    error,
+                  );
+                }
+              });
             };
 
             const missingDates = expectedDateKeys.filter(
@@ -1517,6 +1613,35 @@ export function registerStripeWebhookRoutes(
                   console.error("[WEBHOOK] Failed to sync stripeSubscriptionId on reactivation:", err);
                 });
               }
+              // A subscription can return to "active" from past_due without a
+              // fresh invoice.payment_succeeded event (e.g. manual recovery in
+              // the Stripe dashboard) -- sync restaurantSubscriptions here too
+              // so ordering access is restored immediately.
+              try {
+                const userRestaurants = await storage.getRestaurantsByOwner(
+                  userForUpdate.id,
+                );
+                for (const restaurant of userRestaurants) {
+                  await db
+                    .update(restaurantSubscriptions)
+                    .set({ status: "active", updatedAt: new Date() })
+                    .where(
+                      and(
+                        eq(restaurantSubscriptions.restaurantId, restaurant.id),
+                        eq(
+                          restaurantSubscriptions.stripeSubscriptionId,
+                          subscriptionUpdated.id,
+                        ),
+                        eq(restaurantSubscriptions.isLifetimeFree, false),
+                      ),
+                    );
+                }
+              } catch (reactivateError) {
+                console.error(
+                  "[WEBHOOK] Error reactivating restaurantSubscriptions:",
+                  reactivateError,
+                );
+              }
               db.insert(lisaClaims).values({
                 app: "mealscout",
                 claimType: LISA_CLAIM_TYPES.SUBSCRIPTION_STARTED,
@@ -1527,6 +1652,44 @@ export function registerStripeWebhookRoutes(
                 actorId: userForUpdate.id,
                 payload: { stripeSubscriptionId: subscriptionUpdated.id },
               }).catch(() => {});
+            } else if (
+              subscriptionUpdated.status === "past_due" ||
+              subscriptionUpdated.status === "unpaid" ||
+              subscriptionUpdated.status === "incomplete" ||
+              subscriptionUpdated.status === "paused"
+            ) {
+              // Defense in depth alongside invoice.payment_failed: if that
+              // event is ever missed, this still catches the status
+              // transition and revokes access instead of leaving
+              // restaurantSubscriptions stuck on "active".
+              console.log(
+                `[WEBHOOK] Subscription ${subscriptionUpdated.id} is ${subscriptionUpdated.status} for user ${userForUpdate.id} -- marking past_due`,
+              );
+              try {
+                const userRestaurants = await storage.getRestaurantsByOwner(
+                  userForUpdate.id,
+                );
+                for (const restaurant of userRestaurants) {
+                  await db
+                    .update(restaurantSubscriptions)
+                    .set({ status: "past_due", updatedAt: new Date() })
+                    .where(
+                      and(
+                        eq(restaurantSubscriptions.restaurantId, restaurant.id),
+                        eq(
+                          restaurantSubscriptions.stripeSubscriptionId,
+                          subscriptionUpdated.id,
+                        ),
+                        eq(restaurantSubscriptions.isLifetimeFree, false),
+                      ),
+                    );
+                }
+              } catch (pastDueSyncError) {
+                console.error(
+                  "[WEBHOOK] Error marking restaurantSubscriptions past_due on subscription.updated:",
+                  pastDueSyncError,
+                );
+              }
             }
           } else {
             console.log(
