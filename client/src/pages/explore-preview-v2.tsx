@@ -4864,14 +4864,8 @@ export default function ExplorePreview() {
         className={`relative z-10 overflow-x-hidden md:-mt-16 ${
           sheetState === "fullMap"
             ? ""
-            : "pb-44 md:mx-auto md:min-h-screen md:max-w-[1120px] md:px-4 xl:max-w-[1280px]"
+            : "pb-[calc(8.5rem+env(safe-area-inset-bottom,0px))] md:mx-auto md:max-w-[1120px] md:px-4 md:pb-8 xl:max-w-[1280px]"
         }`}
-        style={{
-          paddingBottom:
-            sheetState === "fullMap"
-              ? undefined
-              : "calc(8.5rem + env(safe-area-inset-bottom, 0px))",
-        }}
       >
         {/* ============================================================
              SCOUT SURFACE
@@ -5207,6 +5201,27 @@ export default function ExplorePreview() {
              LOWER SHEET — discovery sections. Hidden when fullMap.
              Touch-swipe handlers sit on a thin drag handle at the top.
         ============================================================ */}
+        {sheetState !== "fullMap" ? (
+          <ScoutSearchDock
+            placement="responsive"
+            searchMode={scoutSearchMode}
+            query={scoutSearchQuery}
+            activeFilter={scoutSearchFilter}
+            resultSummary={
+              scoutSearchMode
+                ? `${sceneFilteredMapMarkers.filter((marker) => marker.kind !== "user").length} nearby picks`
+                : formatScoutResultSummary(localActivityCount)
+            }
+            onOpen={() => setScoutSearchMode(true)}
+            onClose={closeScoutSearch}
+            onQueryChange={setScoutSearchQuery}
+            onFilterChange={(filter) => {
+              setScoutSearchMode(true);
+              setScoutSearchFilter(filter);
+            }}
+          />
+        ) : null}
+
         {sheetState !== "fullMap" && (
           <ActiveScenePanel>
             <ActiveSceneContent
@@ -5261,24 +5276,6 @@ export default function ExplorePreview() {
             />
           </ActiveScenePanel>
         )}
-        <ScoutSearchDock
-          placement="fixed"
-          searchMode={scoutSearchMode}
-          query={scoutSearchQuery}
-          activeFilter={scoutSearchFilter}
-          resultSummary={
-            scoutSearchMode
-              ? `${sceneFilteredMapMarkers.filter((marker) => marker.kind !== "user").length} nearby picks`
-              : formatScoutResultSummary(localActivityCount)
-          }
-          onOpen={() => setScoutSearchMode(true)}
-          onClose={closeScoutSearch}
-          onQueryChange={setScoutSearchQuery}
-          onFilterChange={(filter) => {
-            setScoutSearchMode(true);
-            setScoutSearchFilter(filter);
-          }}
-        />
         {resultsSheet ? (
           <ScoutResultsSheet
             data={resultsSheet}
