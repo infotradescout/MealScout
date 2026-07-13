@@ -55,7 +55,9 @@ export const getTruckScheduleStatusBadgeLabel = (
   schedule: PublicTruckScheduleSummary | null | undefined,
 ) => {
   const statusLabel = String(schedule?.statusLabel || "").trim() || null;
-  return getTruckScheduleRows(schedule).hasActionableSchedule ? statusLabel : null;
+  if (!getTruckScheduleRows(schedule).hasActionableSchedule) return null;
+  if (schedule?.status === "here_now") return "Scheduled here now";
+  return statusLabel;
 };
 
 export const hasTruckScheduleCta = (
@@ -71,7 +73,11 @@ export const getTruckSchedulePrimaryStop = (
 ) => {
   const rows = getTruckScheduleRows(schedule);
   if (rows.currentStop) {
-    return { kind: "current" as const, label: "Here now", stop: rows.currentStop };
+    return {
+      kind: "current" as const,
+      label: "Scheduled here now",
+      stop: rows.currentStop,
+    };
   }
   if (rows.todayStop) {
     return { kind: "today" as const, label: "Today", stop: rows.todayStop };
