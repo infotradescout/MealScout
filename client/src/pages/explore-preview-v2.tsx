@@ -1,4 +1,5 @@
 import { deriveTruckPresence } from "@shared/consumerEntity";
+import { isBarBusinessType } from "@shared/businessTypes";
 import {
   expandScoutSearchTerms,
   tokenizeScoutSearchIntent,
@@ -921,9 +922,9 @@ function getRestaurantEntityType(
   const normalizedKind = normalizeScoutBusinessKind(source, "restaurant");
   if (normalizedKind === "food_truck") return "truck";
   if (
-    String(source.entityType || source.profileType || source.businessType || "")
-      .trim()
-      .toLowerCase() === "bar"
+    isBarBusinessType(
+      source.entityType || source.profileType || source.businessType,
+    )
   ) {
     return "bar";
   }
@@ -979,15 +980,12 @@ function getMenuItemProfilePath(item: LocalMenuItemFeedItem): string {
 
 function getTrendingPlaceProfilePath(place: TrendingPlaceSummary): string {
   const placeKind = getScoutRestaurantLikeKind(place);
-  const explicitType = String(place.businessType || "")
-    .trim()
-    .toLowerCase();
   return (
     buildPublicProfilePath({
       entityType:
         placeKind === "food_truck"
           ? "truck"
-          : explicitType === "bar"
+          : isBarBusinessType(place.businessType)
             ? "bar"
             : "restaurant",
       id: place.id,
