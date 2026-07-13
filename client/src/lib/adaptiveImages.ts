@@ -6,6 +6,13 @@ export const adaptiveImagePlacementIds = [
   "social_share_1200x630",
   "mobile_banner",
   "square_thumbnail",
+  "scout_card",
+  "scout_map_preview",
+  "search_result",
+  "profile_gallery",
+  "owner_preview",
+  "deal_card",
+  "social_share",
 ] as const;
 
 export type AdaptiveImagePlacementId = (typeof adaptiveImagePlacementIds)[number];

@@ -1,19 +1,122 @@
-const BAR_TYPES = new Set(["bar", "brewery", "taproom", "nightlife", "venue"]);
-const TRUCK_TYPES = new Set(["food_truck", "truck", "food-truck", "foodtruck"]);
+export const FOOD_BUSINESS_TYPES = [
+  "restaurant",
+  "bar",
+  "food_truck",
+  "caterer",
+  "private_chef",
+] as const;
+
+export type FoodBusinessType = (typeof FOOD_BUSINESS_TYPES)[number];
+
+export type BusinessCapabilities = {
+  recurringHours: boolean;
+  datedStops: boolean;
+  liveLocationBroadcast: boolean;
+  menu: boolean;
+  onlineOrdering: boolean;
+  booking: boolean;
+  eventParticipation: boolean;
+  supplierCatalog: boolean;
+  hostLocations: boolean;
+};
+
+const BAR_ALIASES = new Set(["bar", "brewery", "taproom", "nightlife"]);
+const TRUCK_ALIASES = new Set(["food_truck", "truck", "food-truck", "foodtruck"]);
+
+const CAPABILITIES: Record<FoodBusinessType, BusinessCapabilities> = {
+  restaurant: {
+    recurringHours: true,
+    datedStops: false,
+    liveLocationBroadcast: false,
+    menu: true,
+    onlineOrdering: true,
+    booking: true,
+    eventParticipation: true,
+    supplierCatalog: false,
+    hostLocations: true,
+  },
+  bar: {
+    recurringHours: true,
+    datedStops: false,
+    liveLocationBroadcast: false,
+    menu: true,
+    onlineOrdering: true,
+    booking: true,
+    eventParticipation: true,
+    supplierCatalog: false,
+    hostLocations: true,
+  },
+  food_truck: {
+    recurringHours: true,
+    datedStops: true,
+    liveLocationBroadcast: true,
+    menu: true,
+    onlineOrdering: true,
+    booking: true,
+    eventParticipation: true,
+    supplierCatalog: false,
+    hostLocations: false,
+  },
+  caterer: {
+    recurringHours: false,
+    datedStops: false,
+    liveLocationBroadcast: false,
+    menu: true,
+    onlineOrdering: true,
+    booking: true,
+    eventParticipation: true,
+    supplierCatalog: false,
+    hostLocations: false,
+  },
+  private_chef: {
+    recurringHours: false,
+    datedStops: false,
+    liveLocationBroadcast: false,
+    menu: true,
+    onlineOrdering: false,
+    booking: true,
+    eventParticipation: true,
+    supplierCatalog: false,
+    hostLocations: false,
+  },
+};
 
 export function normalizeBusinessType(value: unknown): string {
   return String(value || "").trim().toLowerCase();
 }
 
+export function toCanonicalFoodBusinessType(
+  value: unknown,
+): FoodBusinessType | null {
+  const normalized = normalizeBusinessType(value);
+  if (BAR_ALIASES.has(normalized)) return "bar";
+  if (TRUCK_ALIASES.has(normalized)) return "food_truck";
+  if (
+    normalized === "restaurant" ||
+    normalized === "caterer" ||
+    normalized === "private_chef"
+  ) {
+    return normalized;
+  }
+  return null;
+}
+
+export function getBusinessCapabilities(
+  value: unknown,
+): BusinessCapabilities | null {
+  const type = toCanonicalFoodBusinessType(value);
+  return type ? CAPABILITIES[type] : null;
+}
+
 export function isBarBusinessType(value: unknown): boolean {
-  return BAR_TYPES.has(normalizeBusinessType(value));
+  return toCanonicalFoodBusinessType(value) === "bar";
 }
 
 export function isTruckBusinessType(value: unknown): boolean {
-  return TRUCK_TYPES.has(normalizeBusinessType(value));
+  return toCanonicalFoodBusinessType(value) === "food_truck";
 }
 
 export function isRestaurantLikeBusinessType(value: unknown): boolean {
-  const normalized = normalizeBusinessType(value);
-  return normalized === "restaurant" || isBarBusinessType(normalized);
+  const normalized = toCanonicalFoodBusinessType(value);
+  return normalized === "restaurant" || normalized === "bar";
 }

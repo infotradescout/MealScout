@@ -25,6 +25,9 @@ jobs:
       - name: Typecheck
         run: npm run check
 
+      - name: Consumer Entity Foundation Contract
+        run: npm run test:consumer-entity-foundation
+
       - name: Build
         run: npm run build
 

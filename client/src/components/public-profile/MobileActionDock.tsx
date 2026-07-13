@@ -10,7 +10,7 @@
  */
 import type { PublicCta } from "@shared/publicProfiles";
 import { ExternalLink, MapPin, Phone, MenuSquare, ShoppingBag, CalendarDays } from "lucide-react";
-import { CTA_TYPE_PRIORITY } from "./ctaTypePriority";
+import { rankPublicCtas } from "./profileActionPolicy";
 
 type DockAction = {
   cta: PublicCta;
@@ -53,19 +53,20 @@ function isSelfProfileAction(cta: PublicCta, profileId?: string | null): boolean
 export function MobileActionDock({
   safeCtas,
   profileId,
+  profileType,
   onAction,
 }: {
   safeCtas: PublicCta[];
   profileId?: string | null;
+  profileType?: string | null;
   onAction?: (actionType: string, href: string) => void;
 }) {
   if (safeCtas.length === 0) return null;
 
   // Deduplicate by href, sort by priority, take top 4
   const seen = new Set<string>();
-  const actions: DockAction[] = safeCtas
+  const actions: DockAction[] = rankPublicCtas(safeCtas, profileType)
     .filter((cta) => cta.type !== "share" && cta.type !== "social" && !isSelfProfileAction(cta, profileId))
-    .sort((a, b) => (CTA_TYPE_PRIORITY[a.type] ?? 99) - (CTA_TYPE_PRIORITY[b.type] ?? 99))
     .reduce<DockAction[]>((acc, cta) => {
       if (seen.has(cta.href)) return acc;
       seen.add(cta.href);

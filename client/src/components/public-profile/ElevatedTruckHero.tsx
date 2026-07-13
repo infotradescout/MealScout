@@ -7,7 +7,7 @@
  *
  * Answers immediately:
  *   - What truck is this?
- *   - Is it live now, serving today, or scheduled?
+ *   - Is it scheduled here now, serving today, or upcoming?
  *   - Where is it?
  *   - What should I order?
  *   - What is the next best action?
@@ -16,7 +16,7 @@
  *   - Full-width cover with warm orange gradient fallback
  *   - Logo/avatar anchored bottom-left
  *   - "Food truck" type label — never "Restaurant"
- *   - Live / Today / Next stop status card
+ *   - Scheduled here / Today / Next stop status card
  *   - Cuisine tags
  *   - Favorite button
  */
@@ -28,7 +28,7 @@ import {
 import { getDishCategoryPhoto } from "@/lib/dishCategoryPhoto";
 import { ProfileRecommendButton } from "./ProfileRecommendButton";
 import { getTruckSchedulePrimaryStop } from "./truckScheduleTruth";
-import { Flame } from "lucide-react";
+import { MapPin } from "lucide-react";
 
 type ElevatedTruckHeroProps = {
   profile: PublicRestaurantProfile & {
@@ -39,7 +39,7 @@ type ElevatedTruckHeroProps = {
   isFavorited?: boolean;
 };
 
-function LiveStatusPill({
+function ScheduleStatusPill({
   kind,
 }: {
   kind: "current" | "today" | "next" | "upcoming" | "empty";
@@ -47,8 +47,8 @@ function LiveStatusPill({
   if (kind === "current") {
     return (
       <span className="inline-flex items-center gap-1.5 rounded-full border border-orange-400/40 bg-orange-500/20 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.15em] text-orange-200">
-        <Flame className="h-3 w-3" />
-        Live now
+        <MapPin className="h-3 w-3" />
+        Scheduled here now
       </span>
     );
   }
@@ -153,7 +153,7 @@ export function ElevatedTruckHero({
               Locally owned
             </span>
           ) : null}
-          <LiveStatusPill kind={primaryStop.kind} />
+          <ScheduleStatusPill kind={primaryStop.kind} />
         </div>
 
         {/* Name */}

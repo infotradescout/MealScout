@@ -1,5 +1,6 @@
 import { type ReactNode, useEffect, useState } from "react";
 import type { DishCategoryPhoto } from "@/lib/dishCategoryPhoto";
+import { resolveBusinessMedia, type BusinessMediaAsset } from "@/lib/businessMedia";
 
 type PublicProfileHeroAssetInput = {
   entity?: string | null;
@@ -47,12 +48,27 @@ export const buildPublicProfileHeroAssets = (
   profile: PublicProfileHeroAssetInput,
 ) => {
   const entity = String(profile.entity || "").trim().toLowerCase();
+  const normalizedCover = normalizeAssetUrl(profile.coverImageUrl);
+  const normalizedLegacy = normalizeAssetUrl(profile.imageUrl);
+  const profileAssets: BusinessMediaAsset[] = [
+    ...(normalizedCover
+      ? [{ kind: "cover" as const, image: normalizedCover, publicApproved: true }]
+      : []),
+    ...(normalizedLegacy
+      ? [{ kind: "legacy" as const, image: normalizedLegacy, publicApproved: true }]
+      : []),
+  ];
+  const resolvedProfileCover =
+    entity === "restaurant" || entity === "truck" || entity === "bar"
+      ? resolveBusinessMedia(profileAssets, "profile_hero")?.url || null
+      : null;
   const coverImageUrl =
     entity === "host" || entity === "location"
       ? pickFirstAssetUrl(profile.spotImageUrl, profile.coverImageUrl, profile.imageUrl)
       : entity === "supplier"
         ? null
-        : pickFirstAssetUrl(profile.coverImageUrl, profile.imageUrl);
+        : resolvedProfileCover ||
+          pickFirstAssetUrl(profile.coverImageUrl, profile.imageUrl);
   const logoImageUrl = pickFirstAssetUrl(
     profile.logoUrl,
     profile.profileImageUrl,
