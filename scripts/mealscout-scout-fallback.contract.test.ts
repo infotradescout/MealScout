@@ -1,5 +1,9 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import {
+  expandScoutSearchTerms,
+  tokenizeScoutSearchIntent,
+} from "../shared/scoutSearchIntent";
 
 const scout = readFileSync(
   new URL("../client/src/pages/explore-preview-v2.tsx", import.meta.url),
@@ -53,6 +57,9 @@ assert.match(
   /tacos:[\s\S]*mexican[\s\S]*tex-mex/,
   "Taco search must include clearly related Mexican and Tex-Mex inventory",
 );
+assert.deepEqual(tokenizeScoutSearchIntent("find tacos near me"), ["tacos"]);
+assert.ok(expandScoutSearchTerms("find tacos near me").includes("mexican"));
+assert.ok(!expandScoutSearchTerms("find tacos near me").includes("me"));
 assert.match(
   publicSearch,
   /publicRestaurantActivityScore/,
