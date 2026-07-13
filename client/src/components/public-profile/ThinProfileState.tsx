@@ -17,7 +17,7 @@ import type {
 import { normalizeBusinessTypeLabel } from "@/lib/publicMenuCompleteness";
 import { MapPin, MenuSquare, Phone, ShoppingBag, ExternalLink } from "lucide-react";
 import { hasTruckScheduleSignal } from "./truckScheduleTruth";
-import { CTA_TYPE_PRIORITY_ORDER } from "./ctaTypePriority";
+import { primaryPublicCta } from "./profileActionPolicy";
 
 type ThinProfileStateProps = {
   profile: PublicRestaurantProfile;
@@ -51,10 +51,8 @@ export function ThinProfileState({
     profile.profileType === "truck" ? "food_truck" : profile.profileType,
   );
 
-  // Pick the single best CTA, same priority order as the mobile action dock
-  const bestCta = CTA_TYPE_PRIORITY_ORDER
-    .flatMap((type) => safeCtas.filter((c) => c.type === type))
-    .find(Boolean);
+  // Use the same entity-aware action policy as the mobile dock and hero actions.
+  const bestCta = primaryPublicCta(safeCtas, profile.profileType);
 
   const claimHref =
     profile.profileType === "truck" ? "/claim-business" : "/claim-business";
