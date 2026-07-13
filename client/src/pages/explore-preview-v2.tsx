@@ -1,5 +1,8 @@
 import { deriveTruckPresence } from "@shared/consumerEntity";
-import { expandScoutSearchTerms } from "@shared/scoutSearchIntent";
+import {
+  expandScoutSearchTerms,
+  tokenizeScoutSearchIntent,
+} from "@shared/scoutSearchIntent";
 import { resolveBusinessMedia, type BusinessMediaAsset } from "@/lib/businessMedia";
 import {
   useCallback,
@@ -2316,10 +2319,7 @@ function normalizeScoutSearchText(value: unknown): string {
 }
 
 function tokenizeScoutSearch(value: string): string[] {
-  return normalizeScoutSearchText(value)
-    .split(/[^a-z0-9]+/i)
-    .map((token) => token.trim())
-    .filter((token) => token.length > 1);
+  return tokenizeScoutSearchIntent(value);
 }
 
 function inferScoutSearchIntent(
