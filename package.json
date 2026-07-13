@@ -27,6 +27,7 @@
     "check": "tsc",
     "test:consumer-entity-foundation": "npx --yes tsx scripts/mealscout-consumer-entity-foundation.contract.test.ts",
     "test:scout-fallback": "npx --yes tsx scripts/mealscout-scout-fallback.contract.test.ts",
+    "test:scout-discovery-result": "npx --yes tsx scripts/mealscout-scout-discovery-result.contract.test.ts",
     "db:generate:sql": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
     "test:flows:e2e": "playwright test",

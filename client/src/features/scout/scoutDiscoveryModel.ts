@@ -1,3 +1,5 @@
+import { toCanonicalFoodBusinessType } from "@shared/businessTypes";
+
 export type ScoutNormalizedCardKind =
   | "food_truck"
   | "restaurant"
@@ -206,21 +208,6 @@ export const SCOUT_PRIMARY_SECTION_PRIORITY: ScoutPrimarySectionId[] = [
   "popular_dishes",
 ];
 
-const TRUCK_TYPES = new Set([
-  "food_truck",
-  "foodtruck",
-  "truck",
-  "mobile_food_vendor",
-  "mobile_vendor",
-]);
-
-const RESTAURANT_TYPES = new Set([
-  "restaurant",
-  "restaurant_owner",
-  "dine_in_restaurant",
-  "sit_down_restaurant",
-]);
-
 const LOCATION_TYPES = new Set(["host", "host_location", "location", "venue", "map_place"]);
 
 function readString(source: unknown, fields: string[]): string | null {
@@ -272,8 +259,9 @@ export function normalizeScoutBusinessKind(
 
   if (explicit) {
     const normalized = normalizeToken(explicit);
-    if (TRUCK_TYPES.has(normalized)) return "food_truck";
-    if (RESTAURANT_TYPES.has(normalized)) return "restaurant";
+    const businessType = toCanonicalFoodBusinessType(normalized);
+    if (businessType === "food_truck") return "food_truck";
+    if (businessType) return "restaurant";
     if (LOCATION_TYPES.has(normalized)) return "map_place";
     if (normalized === "truck_stop" || normalized === "scheduled_stop") return "truck_stop";
     if (normalized === "menu_item" || normalized === "dish") return "menu_item";
