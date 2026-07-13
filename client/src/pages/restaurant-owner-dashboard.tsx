@@ -1,4 +1,8 @@
 import { useState, useEffect, useRef } from "react";
+import {
+  isBarBusinessType,
+  isTruckBusinessType,
+} from "@shared/businessTypes";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import {
   Card,
@@ -644,17 +648,23 @@ export default function RestaurantOwnerDashboard() {
   const currentRestaurant = restaurants.find(
     (r) => r.id === selectedRestaurant,
   );
+  const currentIsTruckBusiness = Boolean(
+    currentRestaurant?.isFoodTruck ||
+      isTruckBusinessType(currentRestaurant?.businessType),
+  );
+  const currentIsBarBusiness = isBarBusinessType(
+    currentRestaurant?.businessType,
+  );
   const currentPublicEntityType =
-    currentRestaurant?.isFoodTruck || currentRestaurant?.businessType === "food_truck"
+    currentIsTruckBusiness
       ? "truck"
-      : currentRestaurant?.businessType === "bar"
+      : currentIsBarBusiness
         ? "bar"
         : "restaurant";
   const currentMenuApproval = (currentRestaurant as any)?.menuApproval || null;
   const menuApprovalRequired = Boolean(
     currentMenuApproval?.ownerApprovalRequired &&
-      (currentRestaurant?.isFoodTruck ||
-        currentRestaurant?.businessType === "food_truck"),
+      currentIsTruckBusiness,
   );
   const { data: publicProfileForQr } = useQuery<PublicProfileQrPayload | null>({
     queryKey: ["/api/public/profiles", currentPublicEntityType, selectedRestaurant, "qr-kit"],
@@ -2225,9 +2235,9 @@ export default function RestaurantOwnerDashboard() {
               </p>
             </div>
             <Badge className="w-fit bg-orange-600 text-white">
-              {isFoodTruck
+              {currentIsTruckBusiness
                 ? "Truck setup workspace"
-                : String(currentRestaurant?.businessType || "").toLowerCase() === "bar"
+                : currentIsBarBusiness
                   ? "Bar setup workspace"
                   : "Business setup workspace"}
             </Badge>
@@ -2238,9 +2248,9 @@ export default function RestaurantOwnerDashboard() {
               <div className="flex w-full items-center gap-2 rounded-md border border-orange-200 bg-white px-3 py-2 text-orange-900 hover:bg-orange-100">
                 <Store className="h-4 w-4 text-orange-900" />
                 <span className="text-sm font-semibold text-orange-900">
-                  {String(currentRestaurant?.businessType || "").toLowerCase() === "bar"
+                  {currentIsBarBusiness
                     ? "Complete bar profile"
-                    : isFoodTruck
+                    : currentIsTruckBusiness
                       ? "Complete truck profile"
                       : "Complete business profile"}
                 </span>
@@ -2257,7 +2267,7 @@ export default function RestaurantOwnerDashboard() {
             <Link
               href={buildOwnerSetupHref(
                 "schedule",
-                isFoodTruck ? { truck: "1" } : undefined,
+                currentIsTruckBusiness ? { truck: "1" } : undefined,
               )}
             >
               <div className="flex w-full items-center gap-2 rounded-md border border-orange-200 bg-white px-3 py-2 text-orange-900 hover:bg-orange-100">
@@ -2597,7 +2607,7 @@ export default function RestaurantOwnerDashboard() {
                 <Link href={menuBuilderHref}>
                   <Button variant="outline">Open menu builder</Button>
                 </Link>
-                <Link href={buildOwnerSetupHref("schedule", isFoodTruck ? { truck: "1" } : undefined)}>
+                <Link href={buildOwnerSetupHref("schedule", currentIsTruckBusiness ? { truck: "1" } : undefined)}>
                   <Button variant="outline">Open schedule/live tools</Button>
                 </Link>
                 <Link href="/deal-creation">
@@ -2656,9 +2666,7 @@ export default function RestaurantOwnerDashboard() {
                       Number(publicProfileForQr.deals?.totalActive || 0) > 0
                         ? `${canonicalUrl}#deals`
                         : null;
-                    const isTruckProfile =
-                      Boolean(currentRestaurant?.isFoodTruck) ||
-                      String(currentRestaurant?.businessType || "") === "food_truck";
+                    const isTruckProfile = currentIsTruckBusiness;
 
                     const options: Array<{
                       id: string;
@@ -3782,8 +3790,7 @@ export default function RestaurantOwnerDashboard() {
               (currentRestaurant as any).instagramUrl ||
               hasActionLinks,
           );
-          const isBarBusiness =
-            String((currentRestaurant as any).businessType || "").toLowerCase() === "bar";
+          const isBarBusiness = currentIsBarBusiness;
           const hasSchedule = Boolean(
             (currentRestaurant as any).operatingHours ||
             (currentRestaurant as any).businessHours ||
