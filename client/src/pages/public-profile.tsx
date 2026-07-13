@@ -3269,6 +3269,7 @@ export default function PublicProfilePage() {
           <MobileActionDock
             safeCtas={safeCtas}
             profileId={data?.id}
+            profileType={data?.profileType}
             onAction={(actionType, href) =>
               trackProfileEvent(actionType, "dock", href)
             }
