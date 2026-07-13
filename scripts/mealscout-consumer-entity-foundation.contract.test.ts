@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import {
   getBusinessCapabilities,
   toCanonicalFoodBusinessType,
@@ -160,5 +162,26 @@ const ownerPreview = resolveBusinessMedia(
   { ownerView: true },
 );
 assert.equal(ownerPreview?.url, "https://example.com/pending-cover.jpg");
+
+const scoutSource = readFileSync(
+  resolve(process.cwd(), "client/src/pages/explore-preview-v2.tsx"),
+  "utf8",
+);
+assert.match(scoutSource, /function isTruckServingNow[\s\S]*return isTruckBroadcastLive\(truck\);/);
+assert.doesNotMatch(
+  scoutSource,
+  /function isTruckServingNow[\s\S]{0,1400}truck\.liveBroadcasting === true/,
+  "Scout serving state must not restore a second broadcast algorithm",
+);
+
+const ownerSource = readFileSync(
+  resolve(process.cwd(), "client/src/pages/restaurant-owner-dashboard.tsx"),
+  "utf8",
+);
+assert.match(
+  ownerSource,
+  /const liveByMobileSignal =[\s\S]{0,1200}deriveTruckPresence\(/,
+  "Owner status must use the canonical truck presence model",
+);
 
 console.log("MealScout consumer entity foundation contract: PASS");
