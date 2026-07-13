@@ -6035,6 +6035,82 @@ type ScoutRailRenderCard =
       viewModel: ScoutResultViewModel;
     };
 
+function buildTruckResultViewModel(
+  truck: LiveTruckSummary,
+  scope: ScoutDiscoveryScope = "nearby",
+): ScoutResultViewModel {
+  return buildScoutResultViewModel(
+    toScoutDiscoveryResult(truck, {
+      kind: "food_truck",
+      scope,
+      source: isTruckBroadcastLive(truck)
+        ? "live_presence"
+        : scope === "network"
+          ? "network_search"
+          : "local_inventory",
+      href: getTruckProfilePath(truck),
+    }),
+  );
+}
+
+function buildRestaurantResultViewModel(
+  restaurant: RestaurantSummary,
+  scope: ScoutDiscoveryScope = "nearby",
+): ScoutResultViewModel {
+  const normalizedKind = getScoutRestaurantLikeKind(restaurant);
+  return buildScoutResultViewModel(
+    toScoutDiscoveryResult(restaurant, {
+      kind: normalizedKind === "food_truck" ? "food_truck" : "business",
+      scope,
+      source: scope === "network" ? "network_search" : "local_inventory",
+      href: getRestaurantProfilePath(restaurant),
+    }),
+    { variant: normalizedKind === "food_truck" ? "truck" : "place" },
+  );
+}
+
+function buildMenuItemResultViewModel(
+  item: LocalMenuItemFeedItem,
+  scope: ScoutDiscoveryScope = "nearby",
+): ScoutResultViewModel {
+  return buildScoutResultViewModel(
+    toScoutDiscoveryResult(item, {
+      kind: "dish",
+      scope,
+      source: scope === "network" ? "network_search" : "menu",
+      href: getMenuItemProfilePath(item),
+    }),
+  );
+}
+
+function buildDealResultViewModel(
+  deal: DealSummary,
+  scope: ScoutDiscoveryScope = "nearby",
+): ScoutResultViewModel {
+  return buildScoutResultViewModel(
+    toScoutDiscoveryResult(deal, {
+      kind: "deal",
+      scope,
+      source: scope === "network" ? "network_search" : "deal",
+      href: `/deal/${encodeURIComponent(String(deal.id))}`,
+    }),
+  );
+}
+
+function buildEventResultViewModel(
+  event: EventSummary,
+  scope: ScoutDiscoveryScope = "nearby",
+): ScoutResultViewModel {
+  return buildScoutResultViewModel(
+    toScoutDiscoveryResult(event, {
+      kind: "event",
+      scope,
+      source: scope === "network" ? "network_search" : "event",
+      href: `/event/${encodeURIComponent(String(event.id))}`,
+    }),
+  );
+}
+
 type ScoutImmediateDecisionItem =
   | {
       sourceRowId: ScoutHorizontalRowId;
@@ -7476,16 +7552,7 @@ function ActiveSceneContent({
         cardType: "truck",
         cardKind: "food_truck",
         truck,
-        viewModel: buildScoutResultViewModel(
-          toScoutDiscoveryResult(truck, {
-            kind: "food_truck",
-            scope,
-            source: isTruckBroadcastLive(truck)
-              ? "live_presence"
-              : "local_inventory",
-            href: getTruckProfilePath(truck),
-          }),
-        ),
+        viewModel: buildTruckResultViewModel(truck, scope),
       }));
     const restaurantRailCards = (
       restaurants: RestaurantSummary[],
@@ -7493,23 +7560,11 @@ function ActiveSceneContent({
       scope: ScoutDiscoveryScope = "nearby",
     ): ScoutRailRenderCard[] =>
       restaurants.map((restaurant) => {
-        const normalizedKind = getScoutRestaurantLikeKind(restaurant);
         return {
           cardType: "restaurant",
           cardKind,
           restaurant,
-          viewModel: buildScoutResultViewModel(
-            toScoutDiscoveryResult(restaurant, {
-              kind:
-                normalizedKind === "food_truck" ? "food_truck" : "business",
-              scope,
-              source: scope === "network" ? "network_search" : "local_inventory",
-              href: getRestaurantProfilePath(restaurant),
-            }),
-            {
-              variant: normalizedKind === "food_truck" ? "truck" : "place",
-            },
-          ),
+          viewModel: buildRestaurantResultViewModel(restaurant, scope),
         };
       });
     const menuItemRailCards = (
@@ -7521,14 +7576,7 @@ function ActiveSceneContent({
         cardKind: "menu_item",
         item,
         position,
-        viewModel: buildScoutResultViewModel(
-          toScoutDiscoveryResult(item, {
-            kind: "dish",
-            scope,
-            source: scope === "network" ? "network_search" : "menu",
-            href: getMenuItemProfilePath(item),
-          }),
-        ),
+        viewModel: buildMenuItemResultViewModel(item, scope),
       }));
     const dealRailCards = (
       deals: DealSummary[],
@@ -7539,14 +7587,7 @@ function ActiveSceneContent({
         cardType: "deal",
         cardKind,
         deal,
-        viewModel: buildScoutResultViewModel(
-          toScoutDiscoveryResult(deal, {
-            kind: "deal",
-            scope,
-            source: scope === "network" ? "network_search" : "deal",
-            href: `/deal/${encodeURIComponent(String(deal.id))}`,
-          }),
-        ),
+        viewModel: buildDealResultViewModel(deal, scope),
       }));
     const eventRailCards = (
       events: EventSummary[],
@@ -7556,14 +7597,7 @@ function ActiveSceneContent({
         cardType: "event",
         cardKind: "event",
         event,
-        viewModel: buildScoutResultViewModel(
-          toScoutDiscoveryResult(event, {
-            kind: "event",
-            scope,
-            source: scope === "network" ? "network_search" : "event",
-            href: `/event/${encodeURIComponent(String(event.id))}`,
-          }),
-        ),
+        viewModel: buildEventResultViewModel(event, scope),
       }));
     const businessSectionRailCards = (
       cards: ScoutBusinessSectionCard[],
@@ -9039,10 +9073,10 @@ function LiveTruckCard({
   const distance = formatDistance(truck);
   const wait = formatWait(truck);
   const vibe = getCrowdVibe(truck);
-  const heroImage =
-    viewModel?.imageUrl || truck.heroImageUrl || truck.imageUrl || truck.logoUrl;
-  const cardTitle = viewModel?.title || truck.name;
-  const cardHref = viewModel?.href || getTruckProfilePath(truck);
+  const cardView = viewModel || buildTruckResultViewModel(truck);
+  const heroImage = cardView.imageUrl;
+  const cardTitle = cardView.title;
+  const cardHref = cardView.href;
   const truckTone = getTruckCardTone(truck);
   const freshnessMeta: FreshnessMeta = {
     kind: "truck",
@@ -9082,7 +9116,7 @@ function LiveTruckCard({
       <div className="relative aspect-[16/11] w-full bg-[#120805]/60">
         <ScoutCardMedia
           imageUrl={heroImage || null}
-          imageObjectPosition={viewModel?.imageObjectPosition}
+          imageObjectPosition={cardView.imageObjectPosition}
           fallbackIcon={
             <TruckIcon className="h-5 w-5 text-white/80" aria-hidden="true" />
           }
@@ -9094,7 +9128,7 @@ function LiveTruckCard({
             truck.vibe,
           )}
         />
-        <ScoutNetworkScopeBadge label={viewModel?.scopeLabel} />
+        <ScoutNetworkScopeBadge label={cardView.scopeLabel} />
         <div
           className="absolute inset-0"
           style={{
@@ -9200,8 +9234,9 @@ function DealCard({
         },
       ]
     : [];
-  const cardTitle = viewModel?.title || deal.title || "Featured Deal";
-  const cardHref = viewModel?.href || `/deal/${deal.id}`;
+  const cardView = viewModel || buildDealResultViewModel(deal);
+  const cardTitle = cardView.title;
+  const cardHref = cardView.href;
 
   return (
     <Link
@@ -9212,8 +9247,8 @@ function DealCard({
     >
       <div className="relative aspect-[4/5] w-full bg-[#120805]/60">
         <ScoutCardMedia
-          imageUrl={viewModel?.imageUrl || deal.imageUrl || null}
-          imageObjectPosition={viewModel?.imageObjectPosition}
+          imageUrl={cardView.imageUrl}
+          imageObjectPosition={cardView.imageObjectPosition}
           fallbackIcon={
             <Tag className="h-5 w-5 text-white/80" aria-hidden="true" />
           }
@@ -9226,7 +9261,7 @@ function DealCard({
           )}
         />
         <ScoutNetworkScopeBadge
-          label={viewModel?.scopeLabel}
+          label={cardView.scopeLabel}
           position="top-right"
         />
         <div
@@ -9321,8 +9356,9 @@ function LocalMenuItemCard({
         },
       ]
     : [];
-  const cardTitle = viewModel?.title || item.name;
-  const cardHref = viewModel?.href || getMenuItemProfilePath(item);
+  const cardView = viewModel || buildMenuItemResultViewModel(item);
+  const cardTitle = cardView.title;
+  const cardHref = cardView.href;
 
   const [isRecommendDialogOpen, setIsRecommendDialogOpen] = useState(false);
   const [recommendComment, setRecommendComment] = useState("");
@@ -9491,14 +9527,8 @@ function LocalMenuItemCard({
     >
       <div className="relative aspect-[4/3] bg-[#120805]/70">
         <ScoutCardMedia
-          imageUrl={
-            viewModel?.imageUrl ||
-            item.imageUrl ||
-            item.restaurantLogoUrl ||
-            item.restaurantCoverImageUrl ||
-            null
-          }
-          imageObjectPosition={viewModel?.imageObjectPosition}
+          imageUrl={cardView.imageUrl}
+          imageObjectPosition={cardView.imageObjectPosition}
           fallbackIcon={
             <Utensils className="h-5 w-5 text-white/80" aria-hidden="true" />
           }
@@ -9507,7 +9537,7 @@ function LocalMenuItemCard({
           fallbackClassName="bg-[linear-gradient(150deg,#fb923c_0%,#ea580c_45%,#9a3412_100%)]"
           categoryPhoto={getDishCategoryPhoto(item.name, item.description)}
         />
-        <ScoutNetworkScopeBadge label={viewModel?.scopeLabel} />
+        <ScoutNetworkScopeBadge label={cardView.scopeLabel} />
         <div className="absolute inset-0 bg-gradient-to-b from-black/8 via-transparent to-black/58" />
         <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-md bg-orange-300 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-[#1a0d08]">
           <Utensils className="h-3 w-3" aria-hidden="true" />
@@ -9619,7 +9649,8 @@ function EventCard({
   viewModel?: ScoutResultViewModel;
   currentUserId?: string | null;
 }) {
-  const title = viewModel?.title || event.title || event.name || "Event";
+  const cardView = viewModel || buildEventResultViewModel(event);
+  const title = cardView.title;
   const venue = event.venueName || event.locationName || "";
   const start = event.startsAt || event.startTime;
   const startLabel = start
@@ -9629,8 +9660,8 @@ function EventCard({
         minute: "2-digit",
       })
     : "";
-  const img = viewModel?.imageUrl || event.heroImageUrl || event.imageUrl;
-  const cardHref = viewModel?.href || `/event/${event.id}`;
+  const img = cardView.imageUrl;
+  const cardHref = cardView.href;
   const freshnessMeta: FreshnessMeta = {
     kind: "event",
     startsAt: event.startsAt,
@@ -9659,7 +9690,7 @@ function EventCard({
       <div className="relative aspect-[4/5] w-full bg-[#120805]/60">
         <ScoutCardMedia
           imageUrl={img || null}
-          imageObjectPosition={viewModel?.imageObjectPosition}
+          imageObjectPosition={cardView.imageObjectPosition}
           fallbackIcon={
             <CalendarDays
               className="h-5 w-5 text-white/80"
@@ -9671,7 +9702,7 @@ function EventCard({
           fallbackClassName="bg-[linear-gradient(150deg,#38bdf8_0%,#2563eb_48%,#1e1b4b_100%)]"
         />
         <ScoutNetworkScopeBadge
-          label={viewModel?.scopeLabel}
+          label={cardView.scopeLabel}
           position="top-right"
         />
         <div
@@ -9769,6 +9800,7 @@ function NearbyRestaurantCard({
   currentUserId?: string | null;
   relationshipSnapshot: RestaurantRelationshipSnapshot;
 }) {
+  const cardView = viewModel || buildRestaurantResultViewModel(restaurant);
   const normalizedKind = getScoutRestaurantLikeKind(restaurant);
   const isFoodTruckEntity = normalizedKind === "food_truck";
   const isBarEntity =
@@ -9787,18 +9819,9 @@ function NearbyRestaurantCard({
       : normalizedKind === "restaurant"
         ? "Restaurant"
         : "Local activity";
-  const profileHref = viewModel?.href || getRestaurantProfilePath(restaurant);
-  const name =
-    viewModel?.title ||
-    restaurant.businessName ||
-    restaurant.name ||
-    canonicalLabel;
-  const img =
-    viewModel?.imageUrl ||
-    restaurant.coverImageUrl ||
-    restaurant.heroImageUrl ||
-    restaurant.imageUrl ||
-    restaurant.logoUrl;
+  const profileHref = cardView.href;
+  const name = cardView.title || canonicalLabel;
+  const img = cardView.imageUrl;
   const cuisine = restaurant.cuisineType;
   const location = restaurant.neighborhood || restaurant.city;
   const dealCount =
@@ -10062,13 +10085,13 @@ function NearbyRestaurantCard({
       <div className="relative aspect-[4/3] w-full bg-[#120805]/60">
         <ScoutCardMedia
           imageUrl={img || null}
-          imageObjectPosition={viewModel?.imageObjectPosition}
+          imageObjectPosition={cardView.imageObjectPosition}
           fallbackIcon={placeIcon}
           fallbackTestId="scout-nearby-restaurant-card-image-fallback"
           imageClassName="absolute inset-0 h-full w-full object-cover"
           categoryPhoto={getDishCategoryPhoto(name, cuisine)}
         />
-        <ScoutNetworkScopeBadge label={viewModel?.scopeLabel} />
+        <ScoutNetworkScopeBadge label={cardView.scopeLabel} />
         <div
           className="absolute inset-0"
           style={{
@@ -11300,10 +11323,11 @@ function TruckCard({
   onSelect?: (truck: LiveTruckSummary) => void;
   currentUserId?: string | null;
 }) {
-  const name = viewModel?.title || truck.name || "Food Truck";
+  const cardView = viewModel || buildTruckResultViewModel(truck);
+  const name = cardView.title || "Food Truck";
   const cuisine = truck.cuisineType ?? null;
-  const img = viewModel?.imageUrl || getTruckImage(truck);
-  const cardHref = viewModel?.href || getTruckProfilePath(truck);
+  const img = cardView.imageUrl;
+  const cardHref = cardView.href;
 
   const distMiles = truck.distanceMiles;
   const distKm = truck.distance;
@@ -11365,7 +11389,7 @@ function TruckCard({
       <div className="relative aspect-[16/9] w-full overflow-hidden bg-[#120805]/40">
         <ScoutCardMedia
           imageUrl={img || null}
-          imageObjectPosition={viewModel?.imageObjectPosition}
+          imageObjectPosition={cardView.imageObjectPosition}
           fallbackIcon={
             <TruckIcon className="h-5 w-5 text-white/80" aria-hidden="true" />
           }
@@ -11377,7 +11401,7 @@ function TruckCard({
             truck.vibe,
           )}
         />
-        <ScoutNetworkScopeBadge label={viewModel?.scopeLabel} />
+        <ScoutNetworkScopeBadge label={cardView.scopeLabel} />
         <div
           className="absolute inset-0"
           style={{
