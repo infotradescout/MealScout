@@ -907,12 +907,6 @@ function readBooleanField(source: unknown, fields: string[]): boolean | null {
   return null;
 }
 
-function parseTimestampMs(value: string | null): number | null {
-  if (!value) return null;
-  const ms = Date.parse(value);
-  return Number.isFinite(ms) ? ms : null;
-}
-
 function getRestaurantEntityType(
   source: Pick<
     RestaurantSummary,
@@ -1059,21 +1053,7 @@ function isTruckServingNow(truck: LiveTruckSummary): boolean {
     return false;
   }
 
-  if (truck.mobileOnline !== true) return false;
-
-  const liveUntilMs = parseTimestampMs(
-    readStringField(truck, ["liveUntilAt", "live_until_at"]),
-  );
-  if (liveUntilMs !== null) return liveUntilMs > Date.now();
-
-  const lastBroadcastMs = parseTimestampMs(
-    readStringField(truck, ["lastBroadcastAt", "last_broadcast_at"]),
-  );
-  if (lastBroadcastMs !== null) {
-    return Date.now() - lastBroadcastMs < 4 * 60 * 60 * 1000;
-  }
-
-  return truck.liveBroadcasting === true;
+  return isTruckBroadcastLive(truck);
 }
 
 function getRestaurantOpenState(
