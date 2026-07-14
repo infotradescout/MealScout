@@ -93,10 +93,20 @@ assert.match(
   "Navigation must consume the single Scout search state",
 );
 const mobileSearchIndex = navigation.lastIndexOf("{scoutNavSearch}");
-const mobileNavIndex = navigation.indexOf('className="relative flex items-end');
+const mobileNavIndex = navigation.indexOf("relative flex items-end");
 assert.ok(
   mobileSearchIndex >= 0 && mobileNavIndex > mobileSearchIndex,
   "On mobile, Scout search must be stacked directly above the bottom navigation",
+);
+assert.match(
+  navigation,
+  /data-scout-mobile-nav-shell=\{isScoutRoute \? "stacked" : undefined\}/,
+  "Mobile Scout search and navigation must share one cohesive shell",
+);
+assert.doesNotMatch(
+  navigation,
+  /mx-3 mb-2 overflow-hidden rounded-2xl[\s\S]{0,220}\{scoutNavSearch\}[\s\S]{0,80}<\/div>[\s\S]{0,80}<div className="w-full px-0">/,
+  "Mobile Scout search must not render as a separate floating card above navigation",
 );
 
 console.log("MealScout Scout fallback and stacked navigation contract: PASS");
