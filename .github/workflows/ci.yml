@@ -43,6 +43,9 @@ jobs:
       - name: Business Type Taxonomy Contract
         run: npm run test:business-type-taxonomy
 
+      - name: Public Data Boundary Contract
+        run: npm run test:public-data-boundary
+
       - name: Build
         run: npm run build
 

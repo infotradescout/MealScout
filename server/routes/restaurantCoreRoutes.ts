@@ -13,6 +13,10 @@ import { vacEvaluateRestaurantSignup } from "../vacLite";
 import { ensurePremiumTrialForUser } from "../services/premiumTrial";
 import { isPublicBusinessVisible } from "../utils/publicBusinessVisibility";
 import {
+  toPublicRestaurantListing,
+  toPublicRestaurantListingArray,
+} from "../publicProfiles/toPublicRestaurantListing";
+import {
   insertRestaurantSchema,
   insertRestaurantFavoriteSchema,
   insertRestaurantFollowSchema,
@@ -279,7 +283,7 @@ export function registerRestaurantCoreRoutes(
         });
       }
 
-      res.json(filteredRestaurants);
+      res.json(toPublicRestaurantListingArray(filteredRestaurants));
     } catch (error) {
       console.error("Error searching restaurants:", error);
       res.status(500).json({ message: "Failed to search restaurants" });
@@ -649,7 +653,7 @@ export function registerRestaurantCoreRoutes(
         return bUpdated - aUpdated;
       });
 
-      res.json(sorted.slice(0, parsedLimit));
+      res.json(toPublicRestaurantListingArray(sorted.slice(0, parsedLimit)));
     } catch (error) {
       console.error("Error fetching public restaurants:", error);
       res.status(500).json({ message: "Failed to fetch public restaurants" });
@@ -662,7 +666,7 @@ export function registerRestaurantCoreRoutes(
       if (!restaurant) {
         return res.status(404).json({ message: "Restaurant not found" });
       }
-      res.json(restaurant);
+      res.json(toPublicRestaurantListing(restaurant));
     } catch (error) {
       console.error("Error fetching restaurant:", error);
       res.status(500).json({ message: "Failed to fetch restaurant" });
@@ -886,7 +890,7 @@ export function registerRestaurantCoreRoutes(
       const radius = parseFloat(req.query.radius as string) || 5;
 
       const restaurants = await storage.getNearbyRestaurants(lat, lng, radius);
-      res.json(restaurants);
+      res.json(toPublicRestaurantListingArray(restaurants));
     } catch (error) {
       console.error("Error fetching nearby restaurants:", error);
       res.status(500).json({ message: "Failed to fetch nearby restaurants" });

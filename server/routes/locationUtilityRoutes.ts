@@ -6,6 +6,7 @@ import { storage } from "../storage";
 import { forwardGeocode, reverseGeocode } from "../utils/geocoding";
 import { isPublicBusinessVisible } from "../utils/publicBusinessVisibility";
 import { deals, menuItems, restaurants as restaurantsTable } from "@shared/schema";
+import { toPublicRestaurantListing } from "../publicProfiles/toPublicRestaurantListing";
 
 type LocationUtilityRouteDependencies = {
   hasBusinessDistributionAccess: (userId: string) => Promise<boolean>;
@@ -313,7 +314,7 @@ export function registerLocationUtilityRoutes(
 
       res.json(
         discoverableRestaurants.map((restaurant) => ({
-          ...sanitizeRestaurantMedia(restaurant),
+          ...toPublicRestaurantListing(sanitizeRestaurantMedia(restaurant)),
           menuItemCount: menuCounts[String(restaurant.id)] || 0,
           menuAvailable: menuEligibleIds.has(String(restaurant.id)),
           activeDealsCount: dealCounts[restaurant.id] || 0,

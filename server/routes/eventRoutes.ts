@@ -49,6 +49,7 @@ import {
   resolveCityTimeZoneSync,
 } from "../services/cityTimeZone";
 import { isSlotPublic, type PublicSlot } from "../services/publicSlotGate";
+import { toPublicEventListingArray } from "../publicProfiles/toPublicEventListing";
 import { distributedRateLimit } from "../middleware/distributedRateLimit";
 import { dateKeyFromUnknown, dateKeyInZone } from "../services/dateKeys";
 
@@ -714,8 +715,10 @@ export function registerEventRoutes(
     try {
       const upcomingEvents = await storage.getAllUpcomingEvents();
       res.json(
-        (Array.isArray(upcomingEvents) ? upcomingEvents : []).filter(
-          (event: any) => !Boolean(event?.requiresPayment),
+        toPublicEventListingArray(
+          (Array.isArray(upcomingEvents) ? upcomingEvents : []).filter(
+            (event: any) => !Boolean(event?.requiresPayment),
+          ),
         ),
       );
     } catch (error: any) {
@@ -728,8 +731,10 @@ export function registerEventRoutes(
     try {
       const upcomingEvents = await storage.getAllUpcomingEvents();
       res.json(
-        (Array.isArray(upcomingEvents) ? upcomingEvents : []).filter(
-          (event: any) => !Boolean(event?.requiresPayment),
+        toPublicEventListingArray(
+          (Array.isArray(upcomingEvents) ? upcomingEvents : []).filter(
+            (event: any) => !Boolean(event?.requiresPayment),
+          ),
         ),
       );
     } catch (error: any) {
