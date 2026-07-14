@@ -101,6 +101,41 @@ assert.equal(
   "Stale live coordinates must not leak into public directions",
 );
 
+const serializedRestaurantHours = toPublicRestaurantProfile({
+  row: {
+    id: "restaurant-hours",
+    name: "Hours Restaurant",
+    hoursSummary: "Mon-Fri 9:00 AM-5:00 PM",
+  },
+  baseUrl: "https://www.mealscout.us",
+  profileType: "restaurant",
+});
+assert.equal(
+  serializedRestaurantHours.operatingHoursSummary,
+  "Mon-Fri 9:00 AM-5:00 PM",
+);
+assert.equal(
+  serializedRestaurantHours.hours,
+  serializedRestaurantHours.operatingHoursSummary,
+  "The deprecated hours alias must remain compatible during migration",
+);
+
+for (const path of [
+  "client/src/pages/public-profile.tsx",
+  "client/src/components/public-profile/RestaurantHoursPanel.tsx",
+  "client/src/components/public-profile/PublicProfileDecisionBar.tsx",
+  "client/src/components/public-profile/WhyGoNowPanel.tsx",
+  "client/src/components/public-profile/ThinProfileState.tsx",
+  "client/src/components/public-profile/ElevatedProfileHero.tsx",
+]) {
+  const source = readFileSync(resolve(process.cwd(), path), "utf8");
+  assert.doesNotMatch(
+    source,
+    /profile\.hours\b/,
+    `${path} must use operatingHoursSummary, not the ambiguous hours alias`,
+  );
+}
+
 const ownerDashboardSource = readFileSync(
   resolve(process.cwd(), "client/src/pages/restaurant-owner-dashboard.tsx"),
   "utf8",
