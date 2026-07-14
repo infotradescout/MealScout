@@ -18,6 +18,10 @@ import {
   getAdaptiveImageForPlacement,
   type AdaptiveImageSource,
 } from "@/lib/adaptiveImages";
+import {
+  DEFAULT_TRUCK_BROADCAST_FRESHNESS_MS,
+  deriveTruckPresence,
+} from "@shared/consumerEntity";
 
 const SAVED_DEALS_KEY = "mealscout_saved_deals";
 let followSnapshotPromise: Promise<Set<string>> | null = null;
@@ -86,9 +90,13 @@ interface Deal {
     longitude?: number;
     isFoodTruck?: boolean;
     mobileOnline?: boolean;
-    currentLatitude?: number;
-    currentLongitude?: number;
+    liveBroadcasting?: boolean | null;
+    currentLatitude?: number | string | null;
+    currentLongitude?: number | string | null;
     lastBroadcastAt?: string | null;
+    liveUntilAt?: string | null;
+    locationSource?: string | null;
+    gpsAccuracy?: number | string | null;
   };
   distance?: number;
   currentUses?: number;
@@ -220,8 +228,22 @@ const getDefaultImage = (cuisineType?: string, title?: string) => {
 
 export default function DealCard({ deal, popularity = null }: DealCardProps) {
   const { user, isGuest } = useAuth();
-  const isLiveTruck =
-    !!deal.restaurant?.isFoodTruck && !!deal.restaurant?.mobileOnline;
+  const isLiveTruck = Boolean(
+    deal.restaurant?.isFoodTruck &&
+      deriveTruckPresence(
+        {
+          mobileOnline: deal.restaurant.mobileOnline,
+          liveBroadcasting: deal.restaurant.liveBroadcasting,
+          currentLatitude: deal.restaurant.currentLatitude,
+          currentLongitude: deal.restaurant.currentLongitude,
+          lastBroadcastAt: deal.restaurant.lastBroadcastAt,
+          liveUntilAt: deal.restaurant.liveUntilAt,
+          locationSource: deal.restaurant.locationSource,
+          gpsAccuracy: deal.restaurant.gpsAccuracy,
+        },
+        { freshnessMs: DEFAULT_TRUCK_BROADCAST_FRESHNESS_MS },
+      ).broadcastState === "live",
+  );
   const [showShareModal, setShowShareModal] = useState(false);
   const [showDealsDrawer, setShowDealsDrawer] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
@@ -1096,4 +1118,3 @@ export default function DealCard({ deal, popularity = null }: DealCardProps) {
     </div>
   );
 }
-

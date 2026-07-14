@@ -4,6 +4,10 @@ import { db } from "../db";
 import { storage } from "../storage";
 import { isPublicBusinessVisible } from "../utils/publicBusinessVisibility";
 import { hasTruckScheduleSignal } from "../utils/truckListingEligibility";
+import {
+  DEFAULT_TRUCK_BROADCAST_FRESHNESS_MS,
+  deriveTruckPresence,
+} from "@shared/consumerEntity";
 import { buildLocalRecommendations } from "./recommendationEngine";
 import {
   deals,
@@ -184,7 +188,20 @@ const isTruckServingNow = (truck: any): boolean => {
     truck?.availableNow,
   ].find((value) => typeof value === "boolean");
   if (typeof explicit === "boolean") return explicit;
-  return truck?.mobileOnline === true;
+  return (
+    deriveTruckPresence(
+      {
+        mobileOnline: truck?.mobileOnline,
+        liveBroadcasting: truck?.liveBroadcasting,
+        currentLatitude: truck?.currentLatitude ?? truck?.lat,
+        currentLongitude: truck?.currentLongitude ?? truck?.lng,
+        lastBroadcastAt: truck?.lastBroadcastAt,
+        liveUntilAt: truck?.liveUntilAt,
+        locationSource: truck?.locationSource,
+      },
+      { freshnessMs: DEFAULT_TRUCK_BROADCAST_FRESHNESS_MS },
+    ).broadcastState === "live"
+  );
 };
 
 const isToday = (value: unknown): boolean => {

@@ -108,6 +108,10 @@ import {
   type InsertClaim,
 } from "@shared/schema";
 import { PARKING_PASS_MEAL_WINDOWS } from "@shared/parkingPassSlots";
+import {
+  deriveTruckPresence,
+  type TruckPresence,
+} from "@shared/consumerEntity";
 import { db, pool } from "./db";
 import {
   eq,
@@ -4423,7 +4427,7 @@ export class DatabaseStorage implements IStorage {
     const staleMinutes = Number.isFinite(staleMinutesRaw)
       ? Math.min(240, Math.max(5, staleMinutesRaw))
       : 240;
-    const freshnessCutoffMs = Date.now() - staleMinutes * 60_000;
+    const freshnessMs = staleMinutes * 60_000;
 
     // Simple query first - just return food trucks with valid locations
     const results = await db
@@ -4476,62 +4480,57 @@ export class DatabaseStorage implements IStorage {
     const visibleResults = results.filter((truck: any) =>
       isPublicBusinessVisible(truck),
     );
-    const freshResults = visibleResults.filter((truck: any) => {
-      const lastBroadcastMs = truck?.lastBroadcastAt
-        ? new Date(truck.lastBroadcastAt).getTime()
-        : Number.NaN;
-      const liveUntilMs = truck?.liveUntilAt
-        ? new Date(truck.liveUntilAt).getTime()
-        : Number.NaN;
-      return (
-        Number.isFinite(lastBroadcastMs) &&
-        lastBroadcastMs >= freshnessCutoffMs &&
-        (!Number.isFinite(liveUntilMs) || liveUntilMs >= Date.now())
+    const freshResults = visibleResults
+      .map((truck: any): { truck: any; presence: TruckPresence } => ({
+        truck,
+        presence: deriveTruckPresence(
+          {
+            mobileOnline: truck.mobileOnline,
+            currentLatitude: truck.currentLatitude,
+            currentLongitude: truck.currentLongitude,
+            lastBroadcastAt: truck.lastBroadcastAt,
+            liveUntilAt: truck.liveUntilAt,
+            locationSource: "owner_gps",
+          },
+          { freshnessMs },
+        ),
+      }))
+      .filter(
+        ({ presence }: { truck: any; presence: TruckPresence }) =>
+          presence.broadcastState === "live",
       );
-    });
 
     // Calculate distance in JavaScript for now (simpler than complex SQL)
-    const trucksWithDistance = freshResults.map((truck: any) => {
-      if (!truck.currentLatitude || !truck.currentLongitude) {
+    const trucksWithDistance = freshResults.map(
+      ({ truck, presence }: { truck: any; presence: TruckPresence }) => {
+        const truckLat = presence.location!.latitude;
+        const truckLng = presence.location!.longitude;
+
+        // Haversine formula for distance calculation
+        const R = 6371; // Earth's radius in kilometers
+        const dLat = ((truckLat - lat) * Math.PI) / 180;
+        const dLng = ((truckLng - lng) * Math.PI) / 180;
+        const a =
+          Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+          Math.cos((lat * Math.PI) / 180) *
+            Math.cos((truckLat * Math.PI) / 180) *
+            Math.sin(dLng / 2) *
+            Math.sin(dLng / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        const distance = R * c;
+
         return {
           ...truck,
-          distance: 999999,
-          distanceMiles: 999999 * 0.621371,
-          lat: null,
-          lng: null,
-          liveBroadcasting: false,
+          distance,
+          distanceMiles: distance * 0.621371,
+          lat: truckLat,
+          lng: truckLng,
+          liveBroadcasting: true,
           locationSource: "live" as const,
           sessionId: truck.sessionId || undefined,
         };
-      }
-
-      const truckLat = parseFloat(truck.currentLatitude);
-      const truckLng = parseFloat(truck.currentLongitude);
-
-      // Haversine formula for distance calculation
-      const R = 6371; // Earth's radius in kilometers
-      const dLat = ((truckLat - lat) * Math.PI) / 180;
-      const dLng = ((truckLng - lng) * Math.PI) / 180;
-      const a =
-        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-        Math.cos((lat * Math.PI) / 180) *
-          Math.cos((truckLat * Math.PI) / 180) *
-          Math.sin(dLng / 2) *
-          Math.sin(dLng / 2);
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      const distance = R * c;
-
-      return {
-        ...truck,
-        distance,
-        distanceMiles: distance * 0.621371,
-        lat: truckLat,
-        lng: truckLng,
-        liveBroadcasting: true,
-        locationSource: "live" as const,
-        sessionId: truck.sessionId || undefined,
-      };
-    });
+      },
+    );
 
     // Filter by radius and sort by distance
     return trucksWithDistance

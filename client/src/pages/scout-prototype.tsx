@@ -16,6 +16,10 @@ import type {
   ScoutSurfaceCard,
   ScoutSurfaceResponse,
 } from "@shared/constants/scoutSurface";
+import {
+  DEFAULT_TRUCK_BROADCAST_FRESHNESS_MS,
+  deriveTruckPresence,
+} from "@shared/consumerEntity";
 
 /* ─── styles ─── */
 const customStyles = `
@@ -119,7 +123,13 @@ interface Truck {
   lat?: number | null;
   lng?: number | null;
   mobileOnline?: boolean;
+  liveBroadcasting?: boolean | null;
   liveUntilAt?: string | null;
+  lastBroadcastAt?: string | null;
+  currentLatitude?: number | string | null;
+  currentLongitude?: number | string | null;
+  locationSource?: string | null;
+  gpsAccuracy?: number | string | null;
   currentStop?: unknown;
   schedule?: unknown;
   truckSchedule?: {
@@ -302,9 +312,23 @@ function truckScheduleIndicatesScheduledToday(truck: Truck) {
 }
 
 function truckIsLiveNow(truck: Truck, nowMs: number) {
-  const liveUntilMs = truck.liveUntilAt ? Date.parse(truck.liveUntilAt) : NaN;
   const locationUpdateLive =
-    truck.mobileOnline === true && Number.isFinite(liveUntilMs) && liveUntilMs > nowMs;
+    deriveTruckPresence(
+      {
+        mobileOnline: truck.mobileOnline,
+        liveBroadcasting: truck.liveBroadcasting,
+        currentLatitude: truck.currentLatitude ?? truck.latitude ?? truck.lat,
+        currentLongitude: truck.currentLongitude ?? truck.longitude ?? truck.lng,
+        lastBroadcastAt: truck.lastBroadcastAt,
+        liveUntilAt: truck.liveUntilAt,
+        locationSource: truck.locationSource,
+        gpsAccuracy: truck.gpsAccuracy,
+      },
+      {
+        now: new Date(nowMs),
+        freshnessMs: DEFAULT_TRUCK_BROADCAST_FRESHNESS_MS,
+      },
+    ).broadcastState === "live";
   const scheduleLive = truckScheduleIndicatesLiveNow(truck);
   if (locationUpdateLive) return { liveNow: true, liveSource: "location_update" as const };
   if (scheduleLive) return { liveNow: true, liveSource: "scheduled_now" as const };

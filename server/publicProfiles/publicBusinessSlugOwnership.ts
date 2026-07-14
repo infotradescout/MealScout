@@ -7,6 +7,10 @@ import {
   suppliers,
 } from "@shared/schema";
 import { normalizeCleanBusinessSlug } from "@shared/cleanAffiliateLinks";
+import {
+  isBarBusinessType,
+  isTruckBusinessType,
+} from "@shared/businessTypes";
 
 import { db } from "../db";
 import { storage } from "../storage";
@@ -181,9 +185,9 @@ export async function ensurePublicBusinessSlugOwnershipForEntity(input: {
     const row = await storage.getRestaurant(id);
     if (!row || !row.isActive) return null;
     const expectedType =
-      row.isFoodTruck || row.businessType === "food_truck"
+      row.isFoodTruck || isTruckBusinessType(row.businessType)
         ? "truck"
-        : row.businessType === "bar"
+        : isBarBusinessType(row.businessType)
           ? "bar"
           : "restaurant";
     if (expectedType !== input.entityType) return null;
@@ -243,9 +247,9 @@ export async function verifyOwnedSlugTarget(
       .limit(1);
     if (!row || !row.isActive) return false;
     const expectedType =
-      row.isFoodTruck || row.businessType === "food_truck"
+      row.isFoodTruck || isTruckBusinessType(row.businessType)
         ? "truck"
-        : row.businessType === "bar"
+        : isBarBusinessType(row.businessType)
           ? "bar"
           : "restaurant";
     return expectedType === ownership.entityType;

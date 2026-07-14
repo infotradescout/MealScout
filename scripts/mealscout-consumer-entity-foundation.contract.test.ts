@@ -154,6 +154,141 @@ assert.doesNotMatch(
   "Owner readiness must not infer live state from mobileOnline alone",
 );
 
+const storageSource = readFileSync(
+  resolve(process.cwd(), "server/storage.ts"),
+  "utf8",
+);
+assert.match(storageSource, /presence: deriveTruckPresence\(/);
+assert.doesNotMatch(
+  storageSource,
+  /const freshnessCutoffMs = Date\.now\(\)/,
+  "Live-truck storage must use the canonical freshness policy",
+);
+
+const scoutSurfaceSource = readFileSync(
+  resolve(process.cwd(), "server/services/scoutSurfaceService.ts"),
+  "utf8",
+);
+assert.match(scoutSurfaceSource, /deriveTruckPresence\(/);
+assert.doesNotMatch(
+  scoutSurfaceSource,
+  /return truck\?\.mobileOnline === true/,
+  "Server Scout cards must not infer serving state from mobileOnline alone",
+);
+
+const dealCardSource = readFileSync(
+  resolve(process.cwd(), "client/src/components/deal-card.tsx"),
+  "utf8",
+);
+assert.match(dealCardSource, /deriveTruckPresence\(/);
+assert.doesNotMatch(
+  dealCardSource,
+  /!!deal\.restaurant\?\.mobileOnline/,
+  "Deal cards must not show Live now from mobileOnline alone",
+);
+
+const scoutPrototypeSource = readFileSync(
+  resolve(process.cwd(), "client/src/pages/scout-prototype.tsx"),
+  "utf8",
+);
+assert.match(scoutPrototypeSource, /deriveTruckPresence\(/);
+assert.doesNotMatch(
+  scoutPrototypeSource,
+  /truck\.mobileOnline === true && Number\.isFinite\(liveUntilMs\)/,
+  "The routed Scout prototype must use canonical broadcast presence",
+);
+
+const scoutSource = readFileSync(
+  resolve(process.cwd(), "client/src/pages/explore-preview-v2.tsx"),
+  "utf8",
+);
+assert.match(scoutSource, /return isTruckBroadcastLive\(truck\)/);
+assert.doesNotMatch(
+  scoutSource,
+  /return truck\.liveBroadcasting === true/,
+  "Scout must not fall back to an unvalidated liveBroadcasting flag",
+);
+assert.doesNotMatch(
+  scoutSource,
+  /imageUrl: r\.coverImageUrl \|\| r\.logoUrl \|\| r\.imageUrl/,
+  "Scout map cards must use the shared business media resolver",
+);
+assert.doesNotMatch(
+  scoutSource,
+  /const img =\s*restaurant\.coverImageUrl \|\|/,
+  "Saved Scout cards must use the shared business media resolver",
+);
+
+const publicProfileSource = readFileSync(
+  resolve(process.cwd(), "client/src/pages/public-profile.tsx"),
+  "utf8",
+);
+assert.match(
+  publicProfileSource,
+  /const truckMedia = buildPublicProfileHeroAssets\(/,
+);
+assert.doesNotMatch(
+  publicProfileSource,
+  /truck\.coverImageUrl \|\| truck\.logoUrl \|\| truck\.imageUrl/,
+  "Public discovery truck cards must use the shared profile media policy",
+);
+
+const publicDiscoverySource = readFileSync(
+  resolve(process.cwd(), "server/routes/publicDiscoveryRoutes.ts"),
+  "utf8",
+);
+assert.match(publicDiscoverySource, /const truckPresence = deriveTruckPresence\(/);
+assert.doesNotMatch(
+  publicDiscoverySource,
+  /liveLocationActive: Boolean\(row\.mobileOnline\)/,
+  "Public canonical metadata must not expose stale mobileOnline rows as live",
+);
+
+for (const path of [
+  "server/seo/publicProfilePrerender.ts",
+  "server/routes/publicSeoLandingRoutes.ts",
+  "server/routes/seoRoutes.ts",
+]) {
+  const source = readFileSync(resolve(process.cwd(), path), "utf8");
+  assert.match(
+    source,
+    /isTruckBusinessType|isBarBusinessType|toCanonicalFoodBusinessType/,
+    `${path} must use the canonical business taxonomy`,
+  );
+  assert.doesNotMatch(
+    source,
+    /businessType === "(?:food_truck|bar)"/,
+    `${path} must not hardcode public business-type routing`,
+  );
+}
+
+const slugOwnershipSource = readFileSync(
+  resolve(
+    process.cwd(),
+    "server/publicProfiles/publicBusinessSlugOwnership.ts",
+  ),
+  "utf8",
+);
+assert.match(slugOwnershipSource, /isTruckBusinessType\(row\.businessType\)/);
+assert.match(slugOwnershipSource, /isBarBusinessType\(row\.businessType\)/);
+assert.doesNotMatch(
+  slugOwnershipSource,
+  /row\.businessType === "(?:food_truck|bar)"/,
+  "Clean public slugs must use the canonical business taxonomy",
+);
+
+const dealDiscoverySource = readFileSync(
+  resolve(process.cwd(), "server/routes/dealDiscoveryRoutes.ts"),
+  "utf8",
+);
+assert.match(dealDiscoverySource, /entityPath: buildPublicProfilePath\(/);
+assert.match(dealDiscoverySource, /: "restaurant",/);
+assert.doesNotMatch(
+  dealDiscoverySource,
+  /row\.businessType === "bar"/,
+  "Deal discovery must route restaurant, truck, and bar profiles canonically",
+);
+
 const stale = deriveTruckPresence(
   {
     mobileOnline: true,

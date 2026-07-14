@@ -12,6 +12,11 @@ import {
   restaurants,
   users,
 } from "@shared/schema";
+import {
+  isBarBusinessType,
+  isTruckBusinessType,
+} from "@shared/businessTypes";
+import { buildPublicProfilePath } from "../publicProfiles/publicProfileUtils";
 
 type DealDiscoveryRouteDependencies = {
   filterDealsByBusinessAccess: <T extends { restaurantId?: string | null }>(
@@ -173,10 +178,15 @@ export function registerDealDiscoveryRoutes(
           cuisineType: row.cuisineType || null,
           city: row.restaurantCity || null,
           state: row.restaurantState || null,
-          entityPath:
-            row.businessType === "bar"
-              ? `/bar/${encodeURIComponent(`${toSlug(row.restaurantName) || row.restaurantId}--${row.restaurantId}`)}`
-              : `/truck/${encodeURIComponent(`${toSlug(row.restaurantName) || row.restaurantId}--${row.restaurantId}`)}`,
+          entityPath: buildPublicProfilePath({
+            entityType: isBarBusinessType(row.businessType)
+              ? "bar"
+              : isTruckBusinessType(row.businessType)
+                ? "truck"
+                : "restaurant",
+            id: row.restaurantId,
+            name: row.restaurantName,
+          }),
         },
         updatedAt: row.updatedAt ? new Date(row.updatedAt).toISOString() : null,
       }));

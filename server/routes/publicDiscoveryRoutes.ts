@@ -6,6 +6,10 @@ import {
   isBarBusinessType,
   isTruckBusinessType,
 } from "@shared/businessTypes";
+import {
+  DEFAULT_TRUCK_BROADCAST_FRESHNESS_MS,
+  deriveTruckPresence,
+} from "@shared/consumerEntity";
 
 import { db } from "../db";
 import { storage } from "../storage";
@@ -1758,7 +1762,6 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           name: row.name,
           id: row.id,
         });
-
         return sendPublicJson(res, {
           exists: true,
           entityType: routeEntity,
@@ -1903,6 +1906,19 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           name: row.name,
           id: row.id,
         });
+        const truckPresence = deriveTruckPresence(
+          {
+            mobileOnline: row.mobileOnline,
+            currentLatitude: row.currentLatitude,
+            currentLongitude: row.currentLongitude,
+            lastBroadcastAt: row.lastBroadcastAt,
+            liveUntilAt: row.liveUntilAt,
+            locationSource: "owner_gps",
+          },
+          { freshnessMs: DEFAULT_TRUCK_BROADCAST_FRESHNESS_MS },
+        );
+        const liveLocationActive =
+          truckPresence.broadcastState === "live";
 
         return sendPublicJson(res, {
           entityType: "restaurant",
@@ -1921,7 +1937,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
               ? activeDeals.filter((deal: any) => deal?.isActive !== false)
                   .length
               : 0,
-            liveLocationActive: Boolean(row.mobileOnline),
+            liveLocationActive,
             isFoodTruck: Boolean(
               isTruckRestaurantRow(row),
             ),
@@ -1937,7 +1953,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           sourceTruthStatements: [
             row.isVerified ? "Verified profile on MealScout" : null,
             row.cuisineType ? `${row.cuisineType} category assigned` : null,
-            row.mobileOnline ? "Live location signal available" : null,
+            liveLocationActive ? "Live location signal available" : null,
             Array.isArray(activeDeals) && activeDeals.length > 0
               ? `${activeDeals.filter((deal: any) => deal?.isActive !== false).length} active deal signals`
               : "No active deal signals yet",

@@ -910,12 +910,6 @@ function readBooleanField(source: unknown, fields: string[]): boolean | null {
   return null;
 }
 
-function parseTimestampMs(value: string | null): number | null {
-  if (!value) return null;
-  const ms = Date.parse(value);
-  return Number.isFinite(ms) ? ms : null;
-}
-
 function getRestaurantEntityType(
   source: Pick<
     RestaurantSummary,
@@ -1060,21 +1054,7 @@ function isTruckServingNow(truck: LiveTruckSummary): boolean {
     return false;
   }
 
-  if (truck.mobileOnline !== true) return false;
-
-  const liveUntilMs = parseTimestampMs(
-    readStringField(truck, ["liveUntilAt", "live_until_at"]),
-  );
-  if (liveUntilMs !== null) return liveUntilMs > Date.now();
-
-  const lastBroadcastMs = parseTimestampMs(
-    readStringField(truck, ["lastBroadcastAt", "last_broadcast_at"]),
-  );
-  if (lastBroadcastMs !== null) {
-    return Date.now() - lastBroadcastMs < 4 * 60 * 60 * 1000;
-  }
-
-  return truck.liveBroadcasting === true;
+  return isTruckBroadcastLive(truck);
 }
 
 function getRestaurantOpenState(
@@ -3900,7 +3880,7 @@ export default function ExplorePreview() {
           title: r.businessName ?? r.name ?? undefined,
           subtitle: getMapMarkerSubtitle(r.cuisineType, freshnessMeta),
           color: getMapMarkerColor(freshnessMeta),
-          imageUrl: r.coverImageUrl || r.logoUrl || r.imageUrl || null,
+          imageUrl: getRestaurantImage(r),
         } as MapAdapterMarker;
       })
       .filter((m): m is MapAdapterMarker => m !== null);
@@ -10342,11 +10322,7 @@ function SavedRestaurantCard({
       : "Local activity";
   const profileHref = getRestaurantProfilePath(restaurant);
   const name = restaurant.businessName || restaurant.name || canonicalLabel;
-  const img =
-    restaurant.coverImageUrl ||
-    restaurant.heroImageUrl ||
-    restaurant.imageUrl ||
-    restaurant.logoUrl;
+  const img = getRestaurantImage(restaurant);
   const location =
     restaurant.neighborhood || restaurant.city || restaurant.address;
   const cuisine = restaurant.cuisineType;
