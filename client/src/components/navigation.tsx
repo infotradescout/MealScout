@@ -548,7 +548,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
         event.preventDefault();
         openSearch();
       }}
-      className="flex min-h-11 items-center gap-2 border-t border-orange-200/15 px-3"
+      className="flex min-h-11 items-center gap-2 px-3"
     >
       <Search className="h-4 w-4 shrink-0 text-orange-400" aria-hidden="true" />
       <input
@@ -633,7 +633,9 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
               ),
             )}
           </div>
-          {scoutNavSearch}
+          <div className="border-t border-orange-200/15">
+            {scoutNavSearch}
+          </div>
         </div>
       </div>
 
@@ -642,19 +644,31 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
         className="fixed left-0 right-0 z-[1100] lg:hidden"
         style={{ bottom: 0 }}
       >
-        {isScoutRoute ? (
-          <div className="mx-3 mb-2 overflow-hidden rounded-2xl border border-white/10 bg-[var(--bg-popup)]/[0.94] shadow-[0_-8px_24px_rgba(0,0,0,0.35)] backdrop-blur-xl">
-            {scoutNavSearch}
-          </div>
-        ) : null}
-        <div className="w-full px-0">
+        <div
+          data-scout-mobile-nav-shell={isScoutRoute ? "stacked" : undefined}
+          className={
+            isScoutRoute
+              ? "mx-3 mb-2 overflow-hidden rounded-[1.35rem] border border-orange-200/20 bg-[#1b100b]/[0.96] shadow-[0_-10px_28px_rgba(65,29,10,0.4)] backdrop-blur-xl"
+              : "w-full px-0"
+          }
+        >
+          {isScoutRoute ? scoutNavSearch : null}
           <div
-            className="relative flex items-end justify-between gap-1 px-1.5 rounded-none border-t border-orange-500/20 bg-[var(--bg-popup)] pb-[env(safe-area-inset-bottom)]"
-            style={{
-              height: "var(--scout-nav-height, 58px)",
-              boxShadow: "0 -8px 22px rgba(0,0,0,0.42)",
-            }}
+            className={
+              isScoutRoute ? "border-t border-orange-200/15" : undefined
+            }
           >
+            <div
+              className={`relative flex items-end justify-between gap-1 px-1.5 rounded-none bg-[var(--bg-popup)] pb-[env(safe-area-inset-bottom)] ${
+                isScoutRoute
+                  ? "bg-transparent"
+                  : "border-t border-orange-500/20"
+              }`}
+              style={{
+                height: "var(--scout-nav-height, 58px)",
+                boxShadow: "0 -8px 22px rgba(0,0,0,0.42)",
+              }}
+            >
             {sixSlotNav.map((item, index) => {
               const isPrimary = index === 0;
               const active = item.path
@@ -728,7 +742,8 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
                   </button>
                 </LongPressHelp>
               );
-            })}
+              })}
+            </div>
           </div>
         </div>
       </nav>
