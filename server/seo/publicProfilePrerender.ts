@@ -14,6 +14,11 @@ import {
 } from "@shared/schema";
 import { shouldServePrerender } from "./botDetection";
 import { buildOfficialSocialEntityMetaTags } from "./officialSocialEntity";
+import {
+  isBarBusinessType,
+  isTruckBusinessType,
+  toCanonicalFoodBusinessType,
+} from "@shared/businessTypes";
 
 type PageLink = { label: string; href: string };
 
@@ -368,16 +373,17 @@ async function restaurantPage(baseUrl: string, restaurantId: string) {
     .map((value) => cleanText(value))
     .filter(Boolean)
     .join(", ");
-  const isTruck = Boolean(row.isFoodTruck) || row.businessType === "food_truck";
-  const isBar = row.businessType === "bar";
-  const isPrivateChef = row.businessType === "private_chef";
+  const canonicalBusinessType = toCanonicalFoodBusinessType(row.businessType);
+  const isTruck = Boolean(row.isFoodTruck) || isTruckBusinessType(row.businessType);
+  const isBar = isBarBusinessType(row.businessType);
+  const isPrivateChef = canonicalBusinessType === "private_chef";
   const ownerType = isTruck ? "food_truck" : "restaurant";
   const rawCateringDetails =
     row.cateringDetails && typeof row.cateringDetails === "object"
       ? (row.cateringDetails as Record<string, any>)
       : {};
   const offersCatering = Boolean(
-    row.offersCatering || row.businessType === "caterer" || isPrivateChef,
+    row.offersCatering || canonicalBusinessType === "caterer" || isPrivateChef,
   );
   const cateringHeadline = cleanText(
     rawCateringDetails.headline || rawCateringDetails.title,
@@ -990,4 +996,3 @@ export function registerPublicProfilePrerenderRoutes(
     ),
   );
 }
-

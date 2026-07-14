@@ -1133,8 +1133,12 @@ function LocationTruckOptionsSection({
     key: string,
     featured = false,
   ) => {
-    const image =
-      truck.coverImageUrl || truck.logoUrl || truck.imageUrl || null;
+    const truckMedia = buildPublicProfileHeroAssets({
+      ...truck,
+      entity: "truck",
+      displayName: truck.name,
+    });
+    const image = truckMedia.coverImageUrl || truckMedia.logoImageUrl;
     const scheduleLabel = formatScheduleLabel(truck);
     return (
       <div

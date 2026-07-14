@@ -25,6 +25,10 @@ import {
   videoStories,
 } from "@shared/schema";
 import { getIndexNowConfig } from "../services/indexNow";
+import {
+  isBarBusinessType,
+  isTruckBusinessType,
+} from "@shared/businessTypes";
 
 const toSlug = (value: string | null | undefined) =>
   String(value || "")
@@ -510,7 +514,7 @@ export function registerSeoRoutes(app: Express) {
       const entries = rows
         .filter(
           (row: any) =>
-            Boolean(row.isFoodTruck) || row.businessType === "food_truck",
+            Boolean(row.isFoodTruck) || isTruckBusinessType(row.businessType),
         )
         .map((row: any) => ({
           loc: `${baseUrl}/truck/${encodeURIComponent(`${toSlug(row.name) || row.id}--${row.id}`)}`,
@@ -540,7 +544,7 @@ export function registerSeoRoutes(app: Express) {
         .limit(50000);
 
       const entries = rows
-        .filter((row: any) => row.businessType === "bar")
+        .filter((row: any) => isBarBusinessType(row.businessType))
         .map((row: any) => ({
           loc: `${baseUrl}/bar/${encodeURIComponent(`${toSlug(row.name) || row.id}--${row.id}`)}`,
           lastmod: row.updatedAt,

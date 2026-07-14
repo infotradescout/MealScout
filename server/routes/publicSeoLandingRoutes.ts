@@ -3,6 +3,7 @@ import { and, desc, eq, gte, ilike, isNotNull, isNull, lte, ne, or } from "drizz
 
 import { db } from "../db";
 import { cities, deals, events, hosts, restaurants } from "@shared/schema";
+import { isTruckBusinessType } from "@shared/businessTypes";
 import { assertPublicResponseSafe } from "../publicProfiles";
 
 const toSlug = (value: string | null | undefined) =>
@@ -41,7 +42,9 @@ const buildPublicProfilePath = (input: {
 };
 
 const buildCard = (row: any) => {
-  const profileType = row.isFoodTruck || row.businessType === "food_truck" ? "truck" : "restaurant";
+  const profileType = row.isFoodTruck || isTruckBusinessType(row.businessType)
+    ? "truck"
+    : "restaurant";
   const slug = toSlug(row.name) || String(row.id);
   const profilePath = buildPublicProfilePath({
     profileType,
