@@ -31,7 +31,7 @@ export function RestaurantHoursPanel({
   if (profile.profileType === "truck") return null;
 
   const { isOpen, label: statusLabel } = parseOpenStatus(profile.openStatus);
-  const hours = String(profile.hours || "").trim();
+  const hours = String(profile.operatingHoursSummary || "").trim();
   const hasAnyHoursData = Boolean(statusLabel || hours);
 
   return (
