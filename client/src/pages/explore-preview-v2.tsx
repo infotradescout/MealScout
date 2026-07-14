@@ -5182,11 +5182,11 @@ export default function ExplorePreview() {
     ? "mx-0 mt-0 rounded-b-[2rem] ring-1 ring-orange-200/25 bg-[#1f140c]"
     : "mx-0 mt-0 rounded-b-[1.8rem] ring-1 ring-orange-100/20 bg-[#211610]";
   const railSectionClass = isHighActivity
-    ? "pl-4 pr-0 pt-1 pb-7"
-    : "pl-4 pr-0 pt-2 pb-9 sm:pl-5";
+    ? "pl-4 pr-0 pt-1 pb-5"
+    : "pl-4 pr-0 pt-2 pb-6 sm:pl-5";
   const compactRailSectionClass = isHighActivity
-    ? "pl-4 pr-0 pt-0 pb-5"
-    : "pl-4 pr-0 pt-1 pb-6 sm:pl-5";
+    ? "pl-4 pr-0 pt-0 pb-4"
+    : "pl-4 pr-0 pt-1 pb-5 sm:pl-5";
   const truckCardWidth = isHighActivity
     ? "w-[184px] sm:w-[206px]"
     : "w-[204px] sm:w-[228px]";
@@ -5793,10 +5793,10 @@ function SectionHeader({
     "inline-flex w-fit shrink-0 items-center gap-1.5 rounded-full bg-orange-500/10 px-3 py-1.5 text-xs font-black uppercase tracking-[0.08em] text-orange-100 ring-1 ring-orange-200/20 transition-colors hover:bg-orange-500/16 sm:text-sm sm:normal-case sm:tracking-normal";
 
   return (
-    <div className="mb-4 pr-5">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between sm:gap-3">
+    <div className="mb-3 pr-5">
+      <div className="flex items-end justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="text-xl font-black tracking-tight text-white sm:text-2xl">
+          <h2 className="text-lg font-black tracking-tight text-orange-50 sm:text-xl">
             {title}
           </h2>
         </div>
@@ -5817,7 +5817,7 @@ function SectionHeader({
         ) : null}
       </div>
       {subtitle ? (
-        <p className="mt-1.5 text-xs leading-relaxed text-white/58 sm:text-sm">
+        <p className="mt-1 text-xs leading-snug text-orange-50/58 sm:text-sm">
           {subtitle}
         </p>
       ) : null}
@@ -6227,14 +6227,14 @@ function ScoutHorizontalCategoryRail({
         data-scout-horizontal-rail="true"
       >
         <ul
-          className="flex w-max max-w-none snap-x snap-mandatory gap-3.5 pr-5 sm:gap-4"
+          className="flex w-max max-w-none snap-x snap-mandatory gap-3.5 pr-5 sm:gap-4 lg:grid lg:w-full lg:grid-cols-4 lg:snap-none"
           role="list"
           aria-label={row.title}
         >
           {row.cards.slice(0, rowMeta.maxCards).map((card, index) => (
             <li
               key={`${row.id}-${card.cardType}-${getScoutRailCardKey(card)}-${index}`}
-              className={`shrink-0 snap-start ${row.cardWidth}`}
+              className={`shrink-0 snap-start ${row.cardWidth} lg:w-auto lg:min-w-0 ${index >= 4 ? "lg:hidden" : ""}`}
               data-scout-card-kind={card.cardKind}
             >
               {renderCard(card)}
@@ -6243,7 +6243,7 @@ function ScoutHorizontalCategoryRail({
         </ul>
       </div>
       {row.cards.length > 2 ? (
-        <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-20 items-center justify-end bg-gradient-to-l from-[#070609] via-[#070609]/82 to-transparent pr-2 sm:flex">
+        <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-20 items-center justify-end bg-gradient-to-l from-[#24150e] via-[#24150e]/82 to-transparent pr-2 sm:flex lg:hidden">
           <span className="rounded-full bg-white/10 px-2 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-white/68 ring-1 ring-white/10">
             Scroll
           </span>
@@ -6343,10 +6343,10 @@ function ScoutFallbackMarketNotice({
     !normalizedQuery && nearbyResultCount === 1 && hasResults;
   return (
     <section
-      className="px-4 pt-3"
+      className="px-4 pt-2 sm:h-full sm:px-0 sm:pt-3"
       data-testid="scout-fallback-market-notice"
     >
-      <div className="rounded-[1.1rem] border border-orange-300/30 bg-[#2a180e] px-4 py-3 shadow-[0_12px_28px_rgba(38,18,8,0.24)]">
+      <div className="h-full rounded-[1.1rem] border border-orange-300/32 bg-[linear-gradient(145deg,#4a2a17_0%,#321b10_58%,#28150d_100%)] px-4 py-3 shadow-[0_12px_28px_rgba(38,18,8,0.24)]">
         <p className="text-[10px] font-black uppercase tracking-[0.13em] text-orange-300">
           {normalizedQuery
             ? "Nothing matched nearby"
@@ -6354,7 +6354,7 @@ function ScoutFallbackMarketNotice({
               ? "Only one nearby spot right now"
               : "No nearby listings yet"}
         </p>
-        <div className="mt-1 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mt-1 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <div className="min-w-0">
             <p className="text-sm font-black text-white">
               {hasOneNearbyResult
@@ -6378,7 +6378,7 @@ function ScoutFallbackMarketNotice({
           <button
             type="button"
             onClick={onRequestPlace}
-            className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-full bg-[#ff6b35] px-3.5 py-2 text-[11px] font-black text-white shadow-sm ring-1 ring-orange-300/30"
+            className="inline-flex w-fit shrink-0 items-center justify-center gap-1.5 rounded-full bg-[#ff6b35] px-3.5 py-2 text-[11px] font-black text-white shadow-sm ring-1 ring-orange-300/30"
           >
             <Plus className="h-3.5 w-3.5" aria-hidden="true" />
             Request your favorite place
@@ -6401,15 +6401,15 @@ function ScoutFirstScreenDecisionStack({
   if (!primary) {
     return (
       <section
-        className="px-4 pb-3 pt-3"
+        className="px-4 pb-3 pt-3 sm:h-full sm:px-0"
         data-scout-first-screen-decision-stack="true"
         data-scout-first-screen-empty="true"
       >
-        <div className="rounded-[1.1rem] bg-[#fff7ed]/94 px-4 py-3 text-[#251208] ring-1 ring-orange-200/60 shadow-[0_12px_28px_rgba(92,45,18,0.16)]">
-          <p className="text-[11px] font-black uppercase tracking-[0.12em] text-orange-700">
+        <div className="h-full rounded-[1.1rem] bg-[linear-gradient(145deg,#57301a_0%,#3b2114_52%,#2b180f_100%)] px-4 py-3 text-orange-50 ring-1 ring-orange-200/35 shadow-[0_12px_28px_rgba(52,25,11,0.26)]">
+          <p className="text-[11px] font-black uppercase tracking-[0.12em] text-orange-300">
             No nearby food yet
           </p>
-          <p className="mt-1 text-sm font-semibold text-stone-600">
+          <p className="mt-1 text-sm font-semibold text-orange-50/65">
             Search nearby food or move the map
           </p>
           <ScoutRecoveryActions className="mt-3" />
@@ -6420,21 +6420,21 @@ function ScoutFirstScreenDecisionStack({
 
   return (
     <section
-      className="px-4 pb-3 pt-3"
+      className="px-4 pb-3 pt-3 sm:h-full sm:px-0"
       data-scout-first-screen-decision-stack="true"
       data-scout-decision-source-row={primary.sourceRowId}
     >
-      <div className="rounded-[1.1rem] bg-[#fff7ed]/94 p-3 text-[#251208] ring-1 ring-orange-200/60 shadow-[0_14px_34px_rgba(92,45,18,0.18)]">
+      <div className="h-full rounded-[1.1rem] bg-[linear-gradient(145deg,#57301a_0%,#3b2114_52%,#2b180f_100%)] p-3 text-orange-50 ring-1 ring-orange-200/35 shadow-[0_14px_34px_rgba(52,25,11,0.28)]">
         <div className="mb-2 flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[11px] font-black uppercase tracking-[0.12em] text-orange-700">
+            <p className="text-[11px] font-black uppercase tracking-[0.12em] text-orange-300">
               {primary.sectionLabel}
             </p>
-            <p className="mt-0.5 truncate text-xs font-semibold text-stone-600">
+            <p className="mt-0.5 truncate text-xs font-semibold text-orange-50/65">
               {primary.summary}
             </p>
           </div>
-          <span className="shrink-0 rounded-full bg-orange-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-orange-800 ring-1 ring-orange-200/80">
+          <span className="shrink-0 rounded-full bg-orange-300 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-[#35180a] ring-1 ring-orange-100/60">
             Best now
           </span>
         </div>
@@ -6795,7 +6795,7 @@ function CompactDecisionCardShell({
             ? "rounded-[1rem] bg-[#0d1724]/72 ring-sky-200/20"
             : variant === "host"
               ? "rounded-[1rem] bg-[#201407]/78 ring-amber-200/30"
-              : "rounded-[0.95rem] bg-[#0c1714]/78 ring-emerald-200/20";
+              : "rounded-[0.95rem] bg-[#24140c]/92 ring-orange-200/24";
   const thumbClass =
     variant === "dish"
       ? "rounded-full bg-orange-200/10 ring-orange-100/25"
@@ -6807,7 +6807,7 @@ function CompactDecisionCardShell({
             ? "rounded-lg bg-sky-200/8 ring-sky-200/20"
             : variant === "host"
               ? "rounded-xl bg-amber-200/10 ring-amber-200/25"
-              : "rounded-lg bg-emerald-200/8 ring-emerald-200/20";
+              : "rounded-xl bg-orange-200/10 ring-orange-200/24";
   const actionClass =
     variant === "deal"
       ? "bg-lime-300 text-[#102006]"
@@ -6818,7 +6818,7 @@ function CompactDecisionCardShell({
           : "bg-orange-400 text-[#1a0d08]";
   return (
     <div
-      className={`relative flex min-h-[82px] items-center gap-3 overflow-hidden p-2.5 ring-1 ${shellClass}`}
+      className={`relative flex min-h-[98px] items-center gap-3 overflow-hidden p-2.5 ring-1 ${shellClass}`}
       data-scout-immediate-compact-card="true"
     >
       {variant === "dish" ? (
@@ -6828,7 +6828,7 @@ function CompactDecisionCardShell({
         />
       ) : null}
       <div
-        className={`flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden ring-1 ${thumbClass}`}
+        className={`flex h-[72px] w-[72px] shrink-0 items-center justify-center overflow-hidden ring-1 ${thumbClass}`}
       >
         {showImage ? (
           <img
@@ -7850,6 +7850,14 @@ function ActiveSceneContent({
       ] satisfies ScoutHorizontalRailDefinition[]
     )
       .sort((a, b) => {
+        const activitySupplementPriority: Partial<
+          Record<ScoutHorizontalRowId, number>
+        > = showActivitySupplement
+          ? {
+              popular_dishes: -2,
+              trending_this_week: -1,
+            }
+          : {};
         const restaurantSearchPriority: Partial<
           Record<ScoutHorizontalRowId, number>
         > =
@@ -7861,10 +7869,12 @@ function ActiveSceneContent({
               }
             : {};
         return (
-          (restaurantSearchPriority[a.id] ??
+          (activitySupplementPriority[a.id] ??
+            restaurantSearchPriority[a.id] ??
             scoutHorizontalRowMeta.get(a.id)?.priority ??
             999) -
-          (restaurantSearchPriority[b.id] ??
+          (activitySupplementPriority[b.id] ??
+            restaurantSearchPriority[b.id] ??
             scoutHorizontalRowMeta.get(b.id)?.priority ??
             999)
         );
@@ -7947,23 +7957,34 @@ function ActiveSceneContent({
             onRequestPlace={onRequestPlace}
           />
         ) : null}
-        <ScoutFirstScreenDecisionStack
-          items={firstScreenDecisionItems}
-          thinMarket={
-            !showActivityFallback &&
-            !showActivitySupplement &&
-            isLowActivityLane &&
-            firstScreenDecisionItems.length <= 1
+        <div
+          className={
+            showActivitySupplement
+              ? "sm:grid sm:grid-cols-2 sm:gap-3 sm:px-4"
+              : undefined
           }
-        />
-        {showActivitySupplement ? (
-          <ScoutFallbackMarketNotice
-            query=""
-            hasResults={true}
-            nearbyResultCount={nearbyResultCount}
-            onRequestPlace={onRequestPlace}
+          data-scout-first-screen-layout={
+            showActivitySupplement ? "local-plus-network" : "local"
+          }
+        >
+          <ScoutFirstScreenDecisionStack
+            items={firstScreenDecisionItems}
+            thinMarket={
+              !showActivityFallback &&
+              !showActivitySupplement &&
+              isLowActivityLane &&
+              firstScreenDecisionItems.length <= 1
+            }
           />
-        ) : null}
+          {showActivitySupplement ? (
+            <ScoutFallbackMarketNotice
+              query=""
+              hasResults={true}
+              nearbyResultCount={nearbyResultCount}
+              onRequestPlace={onRequestPlace}
+            />
+          ) : null}
+        </div>
         {scoutRows.map((row) => (
           <ScoutHorizontalCategoryRail
             key={row.id}
@@ -9601,12 +9622,12 @@ function LocalMenuItemCard({
           discoveryReasons: item.discoveryReasons,
         })
       }
-      className="block overflow-hidden rounded-xl bg-[#170d08]/92 ring-1 ring-orange-100/18 transition duration-200 hover:-translate-y-0.5 hover:ring-orange-200/36 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
+      className="block overflow-hidden rounded-xl bg-[#29170e]/94 ring-1 ring-orange-100/22 transition duration-200 hover:-translate-y-0.5 hover:ring-orange-200/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
       style={{ boxShadow: "0 12px 28px rgba(0,0,0,0.38)" }}
       aria-label={`Open ${cardTitle} from ${item.restaurantName || "local menu"}`}
       data-testid="scout-local-menu-item-card"
     >
-      <div className="relative aspect-[4/3] bg-[#120805]/70">
+      <div className="relative aspect-[16/11] bg-[#120805]/70">
         <ScoutCardMedia
           imageUrl={cardView.imageUrl}
           imageObjectPosition={cardView.imageObjectPosition}
@@ -9642,7 +9663,7 @@ function LocalMenuItemCard({
           {distLabel && <span>{distLabel}</span>}
         </div>
         {item.description && (
-          <p className="mt-2 line-clamp-2 text-xs leading-snug text-white/62">
+          <p className="mt-2 line-clamp-1 text-xs leading-snug text-white/62">
             {item.description}
           </p>
         )}
@@ -9990,11 +10011,11 @@ function NearbyRestaurantCard({
     }),
   ];
   const cardShellClass = isFoodTruckEntity
-    ? "group relative block overflow-hidden rounded-xl bg-[#170d08]/92 ring-1 ring-orange-100/18 transition duration-200 hover:-translate-y-0.5 hover:ring-orange-200/36 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
-    : "group block overflow-hidden rounded-xl bg-[#0d1713]/88 ring-1 ring-emerald-100/16 transition duration-200 hover:-translate-y-0.5 hover:ring-emerald-200/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70";
+    ? "group relative block overflow-hidden rounded-xl bg-[#29170e]/94 ring-1 ring-orange-100/22 transition duration-200 hover:-translate-y-0.5 hover:ring-orange-200/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
+    : "group block overflow-hidden rounded-xl bg-[#28180f]/94 ring-1 ring-orange-100/20 transition duration-200 hover:-translate-y-0.5 hover:ring-orange-200/38 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70";
   const labelPillClass = isFoodTruckEntity
     ? "bg-[#120805]/72 text-orange-100 ring-orange-200/20"
-    : "bg-[#071411]/72 text-emerald-100 ring-emerald-200/20";
+    : "bg-[#1b0e08]/76 text-orange-50 ring-orange-200/24";
   const statusDotClass = isFoodTruckEntity ? "bg-orange-400" : "bg-emerald-400";
   const statusTextClass = isFoodTruckEntity
     ? "text-orange-200/85"
@@ -10163,7 +10184,7 @@ function NearbyRestaurantCard({
       data-testid="scout-restaurant-card"
     >
       {/* Image */}
-      <div className="relative aspect-[4/3] w-full bg-[#120805]/60">
+      <div className="relative aspect-[16/11] w-full bg-[#120805]/60">
         <ScoutCardMedia
           imageUrl={img || null}
           imageObjectPosition={cardView.imageObjectPosition}
@@ -10232,7 +10253,7 @@ function NearbyRestaurantCard({
         <div className="mt-1 flex items-center gap-1.5 overflow-hidden text-[11px]">
           {cuisine && (
             <span
-              className={`${isFoodTruckEntity ? "text-orange-300/80" : "text-emerald-200/76"} truncate`}
+              className="truncate text-orange-200/82"
             >
               {cuisine}
             </span>
