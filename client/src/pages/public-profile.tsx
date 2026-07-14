@@ -189,7 +189,7 @@ const hasStructuredPublicMenu = (profile: PublicProfilePayload) => {
 const hasPostedScheduleOrTimeWindow = (profile: PublicProfilePayload) => {
   if (!isRestaurantLikeEntity(profile.entity)) return true;
   const restaurant = profile as PublicRestaurantProfile;
-  if (String(restaurant.hours || "").trim()) return true;
+  if (String(restaurant.operatingHoursSummary || "").trim()) return true;
   if (restaurant.profileType !== "truck") return false;
 
   return hasTruckScheduleSignal(restaurant.truckSchedule);
@@ -386,7 +386,9 @@ function HeroBlock({ profile }: { profile: PublicProfilePayload }) {
   });
   const decisionLocation = decisionLocationLine(profile);
   const hours = isRestaurantLikeEntity(profile.entity)
-    ? String((profile as PublicRestaurantProfile).hours || "").trim()
+    ? String(
+        (profile as PublicRestaurantProfile).operatingHoursSummary || "",
+      ).trim()
     : "";
   const truckSchedule = isRestaurantLikeEntity(profile.entity)
     ? (profile as PublicRestaurantProfile).truckSchedule
@@ -2272,7 +2274,9 @@ function GalleryStrip({ profile }: { profile: PublicRestaurantProfile }) {
 }
 
 function RestaurantSchedule({ profile }: { profile: PublicRestaurantProfile }) {
-  const hasHours = Boolean(String(profile.hours || "").trim());
+  const hasHours = Boolean(
+    String(profile.operatingHoursSummary || "").trim(),
+  );
   const schedule =
     profile.profileType === "truck" ? profile.truckSchedule : null;
   const scheduleRows = getTruckScheduleRows(schedule);
@@ -2352,7 +2356,7 @@ function RestaurantSchedule({ profile }: { profile: PublicRestaurantProfile }) {
         {hasHours ? (
           <p className="inline-flex items-center gap-1">
             <Clock3 className="h-4 w-4" />
-            {profile.hours}
+            {profile.operatingHoursSummary}
           </p>
         ) : null}
         {profile.profileType === "truck" && hasTruckSchedule ? (

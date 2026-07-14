@@ -218,6 +218,8 @@ export type PublicRestaurantProfile = {
     facebookPageUrl: string | null;
     xUrl: string | null;
   };
+  operatingHoursSummary: string | null;
+  /** @deprecated Use operatingHoursSummary. Kept for public API compatibility. */
   hours: string | null;
   openStatus: string | null;
   coverImageUrl: string | null;

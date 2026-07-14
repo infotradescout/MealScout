@@ -67,7 +67,7 @@ function buildSignals(profile: PublicRestaurantProfile): Signal[] {
       signals.push({
         icon: Clock3,
         label: profile.openStatus,
-        sub: profile.hours || null,
+        sub: profile.operatingHoursSummary || null,
         accent: "emerald",
       });
     }
