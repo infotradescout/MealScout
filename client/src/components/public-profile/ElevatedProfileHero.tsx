@@ -158,10 +158,12 @@ export function ElevatedProfileHero({
               <span>{locationLine}</span>
             </p>
           ) : null}
-          {profile.hours ? (
+          {profile.operatingHoursSummary ? (
             <p className="flex items-start gap-2">
               <Clock3 className="mt-0.5 h-4 w-4 flex-none text-orange-200/60" />
-              <span className="line-clamp-2">{profile.hours}</span>
+              <span className="line-clamp-2">
+                {profile.operatingHoursSummary}
+              </span>
             </p>
           ) : null}
         </div>
