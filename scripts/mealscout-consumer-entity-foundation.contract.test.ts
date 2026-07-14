@@ -4,10 +4,12 @@ import {
   toCanonicalFoodBusinessType,
 } from "../shared/businessTypes";
 import {
+  DEFAULT_TRUCK_BROADCAST_FRESHNESS_MS,
   deriveTruckPresence,
   visitStatusFromPresence,
 } from "../shared/consumerEntity";
 import { resolveBusinessMedia } from "../client/src/lib/businessMedia";
+import { toPublicRestaurantProfile } from "../server/publicProfiles/toPublicRestaurantProfile";
 import {
   primaryPublicCta,
   rankPublicCtas,
@@ -42,6 +44,60 @@ const fresh = deriveTruckPresence(
 assert.equal(fresh.broadcastState, "live");
 assert.equal(fresh.reason, "fresh_broadcast");
 assert.equal(visitStatusFromPresence(fresh)?.state, "live_now");
+assert.equal(DEFAULT_TRUCK_BROADCAST_FRESHNESS_MS, 4 * 60 * 60 * 1000);
+
+const liveSource = deriveTruckPresence(
+  {
+    mobileOnline: true,
+    currentLatitude: 30.4213,
+    currentLongitude: -87.2169,
+    lastBroadcastAt: "2026-07-13T14:58:00.000Z",
+    locationSource: "live",
+  },
+  { now, freshnessMs: DEFAULT_TRUCK_BROADCAST_FRESHNESS_MS },
+);
+assert.equal(liveSource.location?.source, "owner_gps");
+
+const serializedLiveTruck = toPublicRestaurantProfile({
+  row: {
+    id: "truck-live",
+    name: "Live Truck",
+    isFoodTruck: true,
+    mobileOnline: true,
+    currentLatitude: "30.4213",
+    currentLongitude: "-87.2169",
+    lastBroadcastAt: new Date(),
+  },
+  baseUrl: "https://www.mealscout.us",
+  profileType: "truck",
+});
+assert.equal(serializedLiveTruck.truckPresence?.broadcastState, "live");
+assert.equal(serializedLiveTruck.truckPresence?.location?.source, "owner_gps");
+assert.match(
+  serializedLiveTruck.cta.find((action) => action.type === "map")?.href || "",
+  /30\.4213,-87\.2169/,
+);
+
+const serializedStaleTruck = toPublicRestaurantProfile({
+  row: {
+    id: "truck-stale",
+    name: "Stale Truck",
+    isFoodTruck: true,
+    mobileOnline: true,
+    currentLatitude: "30.4213",
+    currentLongitude: "-87.2169",
+    lastBroadcastAt: "2020-01-01T00:00:00.000Z",
+  },
+  baseUrl: "https://www.mealscout.us",
+  profileType: "truck",
+});
+assert.equal(serializedStaleTruck.truckPresence?.broadcastState, "stale");
+assert.equal(serializedStaleTruck.truckPresence?.location, null);
+assert.equal(
+  serializedStaleTruck.cta.some((action) => action.type === "map"),
+  false,
+  "Stale live coordinates must not leak into public directions",
+);
 
 const stale = deriveTruckPresence(
   {
