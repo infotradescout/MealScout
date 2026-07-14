@@ -116,13 +116,13 @@ const availabilityAnswer = (profile: PublicRestaurantProfile) => {
   }
 
   const openStatus = clean(profile.openStatus);
-  if (!openStatus && !clean(profile.hours)) {
+  if (!openStatus && !clean(profile.operatingHoursSummary)) {
     return { label: "Hours", value: "Hours not posted yet" };
   }
   return {
     label: "Open status",
     value: openStatus,
-    detail: clean(profile.hours) || null,
+    detail: clean(profile.operatingHoursSummary) || null,
   };
 };
 
