@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import {
   getBusinessCapabilities,
   toCanonicalFoodBusinessType,
@@ -97,6 +99,24 @@ assert.equal(
   serializedStaleTruck.cta.some((action) => action.type === "map"),
   false,
   "Stale live coordinates must not leak into public directions",
+);
+
+const ownerDashboardSource = readFileSync(
+  resolve(process.cwd(), "client/src/pages/restaurant-owner-dashboard.tsx"),
+  "utf8",
+);
+assert.match(
+  ownerDashboardSource,
+  /import \{[\s\S]*deriveTruckPresence[\s\S]*\} from "@shared\/consumerEntity"/,
+);
+assert.match(
+  ownerDashboardSource,
+  /serverTruckPresence\.broadcastState === "live"/,
+);
+assert.doesNotMatch(
+  ownerDashboardSource,
+  /Boolean\(\s*\(currentRestaurant as any\)\.mobileOnline/,
+  "Owner readiness must not infer live state from mobileOnline alone",
 );
 
 const stale = deriveTruckPresence(
