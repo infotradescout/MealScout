@@ -36,7 +36,7 @@ function isThinProfile(profile: PublicRestaurantProfile): boolean {
   // own — hasTruckScheduleSignal checks for actual stops with real content,
   // same as ElevatedTruckHero/TruckSchedulePanel use.
   const hasScheduleOrHours =
-    Boolean(profile.hours || profile.openStatus) ||
+    Boolean(profile.operatingHoursSummary || profile.openStatus) ||
     (profile.profileType === "truck" && hasTruckScheduleSignal(profile.truckSchedule));
   const hasDescription = Boolean(String(profile.description || "").trim());
   const hasGallery = (profile.galleryImages?.length ?? 0) > 0;
