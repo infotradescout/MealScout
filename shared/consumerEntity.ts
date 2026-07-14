@@ -3,6 +3,8 @@ export type Coordinates = {
   longitude: number;
 };
 
+export const DEFAULT_TRUCK_BROADCAST_FRESHNESS_MS = 4 * 60 * 60 * 1000;
+
 export type TruckPresence = {
   broadcastState: "offline" | "live" | "stale" | "unknown";
   location: (Coordinates & {
@@ -78,7 +80,12 @@ function normalizeSource(
   value: unknown,
 ): "owner_gps" | "manual" | "imported" | "unknown" {
   const source = String(value || "").trim().toLowerCase();
-  if (source === "owner_gps" || source === "gps" || source === "mobile") {
+  if (
+    source === "owner_gps" ||
+    source === "gps" ||
+    source === "mobile" ||
+    source === "live"
+  ) {
     return "owner_gps";
   }
   if (source === "manual") return "manual";

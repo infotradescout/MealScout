@@ -1,5 +1,9 @@
 import type { PublicRestaurantProfile } from "@shared/publicProfiles";
 import {
+  DEFAULT_TRUCK_BROADCAST_FRESHNESS_MS,
+  deriveTruckPresence,
+} from "@shared/consumerEntity";
+import {
   isBarBusinessType,
   isTruckBusinessType,
 } from "@shared/businessTypes";
@@ -213,6 +217,31 @@ export function toPublicRestaurantProfile(input: {
     exposeProfileCoordinates && Number.isFinite(Number(row.longitude))
       ? Number(row.longitude)
       : null;
+  const derivedTruckPresence =
+    profileType === "truck"
+      ? deriveTruckPresence(
+          {
+            mobileOnline: row.mobileOnline,
+            liveBroadcasting: row.liveBroadcasting,
+            currentLatitude: row.currentLatitude,
+            currentLongitude: row.currentLongitude,
+            lastBroadcastAt: row.lastBroadcastAt,
+            liveUntilAt: row.liveUntilAt,
+            locationSource: row.locationSource || "owner_gps",
+            gpsAccuracy: row.gpsAccuracy,
+          },
+          { freshnessMs: DEFAULT_TRUCK_BROADCAST_FRESHNESS_MS },
+        )
+      : null;
+  const truckPresence = derivedTruckPresence
+    ? derivedTruckPresence.broadcastState === "live"
+      ? derivedTruckPresence
+      : { ...derivedTruckPresence, location: null }
+    : null;
+  const directionsLatitude =
+    truckPresence?.location?.latitude ?? publicLatitude;
+  const directionsLongitude =
+    truckPresence?.location?.longitude ?? publicLongitude;
   const phonePublic =
     input.showContact === false ||
     isRejected("contact_phone") ||
@@ -734,8 +763,8 @@ export function toPublicRestaurantProfile(input: {
     buildPublicCta({
       label: "Get directions",
       href:
-        publicLatitude != null && publicLongitude != null
-          ? `https://maps.google.com/?q=${publicLatitude},${publicLongitude}`
+        directionsLatitude != null && directionsLongitude != null
+          ? `https://maps.google.com/?q=${directionsLatitude},${directionsLongitude}`
           : null,
       type: "map",
       priority: 92,
@@ -860,6 +889,7 @@ export function toPublicRestaurantProfile(input: {
       likes: recommendationLikes,
       shares: recommendationShares,
     },
+    truckPresence,
     truckSchedule:
       profileType === "truck"
         ? {

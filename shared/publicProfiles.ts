@@ -1,3 +1,5 @@
+import type { TruckPresence } from "./consumerEntity";
+
 export type PublicProfileType =
   "restaurant" | "truck" | "bar" | "location" | "host" | "supplier";
 
@@ -237,6 +239,7 @@ export type PublicRestaurantProfile = {
   events: PublicEventSummary;
   reviewSummary: PublicReviewSummary;
   recommendations: PublicRecommendationSummary;
+  truckPresence: TruckPresence | null;
   truckSchedule: PublicTruckScheduleSummary | null;
   cta: PublicCta[];
   seo: PublicProfileSeo;

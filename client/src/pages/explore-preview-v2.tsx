@@ -1,4 +1,7 @@
-import { deriveTruckPresence } from "@shared/consumerEntity";
+import {
+  DEFAULT_TRUCK_BROADCAST_FRESHNESS_MS,
+  deriveTruckPresence,
+} from "@shared/consumerEntity";
 import { isBarBusinessType } from "@shared/businessTypes";
 import {
   expandScoutSearchTerms,
@@ -1021,8 +1024,6 @@ function isOwnedByCurrentUser(
   return ownerId === currentUserId;
 }
 
-const SCOUT_TRUCK_BROADCAST_FRESHNESS_MS = 4 * 60 * 60 * 1000;
-
 function isTruckBroadcastLive(truck: LiveTruckSummary): boolean {
   return (
     deriveTruckPresence(
@@ -1035,7 +1036,7 @@ function isTruckBroadcastLive(truck: LiveTruckSummary): boolean {
         liveUntilAt: truck.liveUntilAt,
         locationSource: readStringField(truck, ["locationSource", "location_source"]),
       },
-      { freshnessMs: SCOUT_TRUCK_BROADCAST_FRESHNESS_MS },
+      { freshnessMs: DEFAULT_TRUCK_BROADCAST_FRESHNESS_MS },
     ).broadcastState === "live"
   );
 }

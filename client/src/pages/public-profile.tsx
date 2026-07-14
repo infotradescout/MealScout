@@ -700,6 +700,7 @@ function TruckVisitStrip({
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const rows = getTruckScheduleRows(profile.truckSchedule);
   const primary = getTruckSchedulePrimaryStop(profile.truckSchedule);
+  const isLiveNow = profile.truckPresence?.broadcastState === "live";
   const action = pickActionCtas(
     profile as unknown as PublicProfilePayload,
     safeCtas,
@@ -712,16 +713,17 @@ function TruckVisitStrip({
     [profile.city, profile.state].filter(Boolean).join(", ") ||
     null;
   const stopTime = stop?.timeWindowLabel || null;
-  const statusLabel =
-    primary.kind === "current"
-      ? "Open now"
+  const statusLabel = isLiveNow
+    ? "Live now"
+    : primary.kind === "current"
+      ? "Scheduled here now"
       : primary.kind === "today"
         ? "Open today"
         : primary.kind === "next" || primary.kind === "upcoming"
           ? "Next scheduled"
           : "Schedule not posted";
   const statusClass =
-    primary.kind === "current"
+    isLiveNow
       ? "border-emerald-300/35 bg-emerald-500/12 text-emerald-100"
       : rows.hasActionableSchedule
         ? "border-orange-300/35 bg-orange-500/10 text-orange-100"
