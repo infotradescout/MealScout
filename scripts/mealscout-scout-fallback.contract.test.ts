@@ -106,6 +106,21 @@ assert.match(
   /menuItemRailCards\(supplementalDishCards, "network"\)/,
   "Supplemental dish cards must preserve network scope labels",
 );
+assert.match(
+  scout,
+  /data-scout-first-screen-layout=[\s\S]*local-plus-network/,
+  "Thin markets must pair the nearby result with the network explanation",
+);
+assert.match(
+  scout,
+  /activitySupplementPriority[\s\S]*popular_dishes: -2[\s\S]*trending_this_week: -1/,
+  "Thin-market food and place supplements must render before unrelated rails",
+);
+assert.match(
+  scout,
+  /lg:grid lg:w-full lg:grid-cols-4/,
+  "Desktop Scout rails must fill the available width with a four-card grid",
+);
 
 assert.match(
   navigation,
