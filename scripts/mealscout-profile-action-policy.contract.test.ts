@@ -38,6 +38,26 @@ for (const [path, symbol] of [
   assert.match(source, new RegExp(`${symbol}\\(`));
 }
 
+const publicProfileSource = readFileSync(
+  resolve(process.cwd(), "client/src/pages/public-profile.tsx"),
+  "utf8",
+);
+assert.doesNotMatch(
+  publicProfileSource,
+  /const preferredOrder: PublicCta\["type"\]/,
+  "Public profile surfaces must not restore a local CTA priority order",
+);
+assert.match(
+  publicProfileSource,
+  /const actions = pickActionCtas\(profile, safeCtas, 16\)/,
+  "Quick actions must preserve the canonical ranked CTA order",
+);
+assert.doesNotMatch(
+  publicProfileSource,
+  /\["map", "order", "menu", "phone", "external", "social"\]/,
+  "Truck actions must not maintain a second hard-coded priority list",
+);
+
 assert.equal(
   existsSync(
     resolve(
