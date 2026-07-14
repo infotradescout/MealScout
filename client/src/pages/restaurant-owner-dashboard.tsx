@@ -3,6 +3,10 @@ import {
   isBarBusinessType,
   isTruckBusinessType,
 } from "@shared/businessTypes";
+import {
+  DEFAULT_TRUCK_BROADCAST_FRESHNESS_MS,
+  deriveTruckPresence,
+} from "@shared/consumerEntity";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import {
   Card,
@@ -3930,7 +3934,7 @@ export default function RestaurantOwnerDashboard() {
               return startAt >= now && startAt <= weekAhead;
             });
           };
-          const isTruckLiveBySchedule = (entries: any[]) => {
+          const isTruckServingByScheduleNow = (entries: any[]) => {
             const now = new Date();
             return entries.some((entry) => {
               if (!scheduleStatusAllows(entry?.status)) return false;
@@ -3962,13 +3966,24 @@ export default function RestaurantOwnerDashboard() {
           const truckScheduleEntries = collectTruckScheduleEntries();
           const hasValidTruckScheduleWindow =
             hasValidTruckOperatingWindow(truckScheduleEntries);
-          const liveByTruckScheduleNow = isTruckLiveBySchedule(truckScheduleEntries);
-          const liveByMobileSignal = Boolean(
-            (currentRestaurant as any).mobileOnline &&
-              parseDateCandidate((currentRestaurant as any).liveUntilAt) &&
-              parseDateCandidate((currentRestaurant as any).liveUntilAt)!.getTime() >
-                Date.now(),
+          const servingByTruckScheduleNow =
+            isTruckServingByScheduleNow(truckScheduleEntries);
+          const serverTruckPresence = deriveTruckPresence(
+            {
+              mobileOnline: (currentRestaurant as any).mobileOnline,
+              liveBroadcasting: (currentRestaurant as any).liveBroadcasting,
+              currentLatitude: (currentRestaurant as any).currentLatitude,
+              currentLongitude: (currentRestaurant as any).currentLongitude,
+              lastBroadcastAt: (currentRestaurant as any).lastBroadcastAt,
+              liveUntilAt: (currentRestaurant as any).liveUntilAt,
+              locationSource:
+                (currentRestaurant as any).locationSource || "owner_gps",
+              gpsAccuracy: (currentRestaurant as any).gpsAccuracy,
+            },
+            { freshnessMs: DEFAULT_TRUCK_BROADCAST_FRESHNESS_MS },
           );
+          const liveByMobileSignal =
+            serverTruckPresence.broadcastState === "live";
           const operatingUpdatedAtCandidate = [
             (currentRestaurant as any).truckScheduleUpdatedAt,
             (currentRestaurant as any).scheduleUpdatedAt,
@@ -3984,7 +3999,8 @@ export default function RestaurantOwnerDashboard() {
           const hasOperatingTimeRequirement = isFoodTruck
             ? hasValidTruckScheduleWindow || scheduleUpdatedRecently
             : hasSchedule;
-          const truckLiveNow = liveByMobileSignal || liveByTruckScheduleNow;
+          const truckAvailableNow =
+            liveByMobileSignal || servingByTruckScheduleNow;
           const menuFreshnessDateCandidate = [
             (currentRestaurant as any).menuReviewedAt,
             (currentRestaurant as any).menuUpdatedAt,
@@ -4185,8 +4201,12 @@ export default function RestaurantOwnerDashboard() {
                 ...(isFoodTruck
                   ? [
                       {
-                        label: truckLiveNow ? "Live now status" : "Live now status pending",
-                        done: truckLiveNow,
+                        label: liveByMobileSignal
+                          ? "Live broadcast active"
+                          : servingByTruckScheduleNow
+                            ? "Current scheduled stop active"
+                            : "No live broadcast or current stop",
+                        done: truckAvailableNow,
                         href: "/restaurant-owner-dashboard?setup=schedule&truck=1",
                       },
                     ]
