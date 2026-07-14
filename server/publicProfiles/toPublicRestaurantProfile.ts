@@ -839,6 +839,7 @@ export function toPublicRestaurantProfile(input: {
       facebookPageUrl,
       xUrl,
     },
+    operatingHoursSummary: hoursValue,
     hours: hoursValue,
     openStatus: openStatusValue,
     coverImageUrl,
