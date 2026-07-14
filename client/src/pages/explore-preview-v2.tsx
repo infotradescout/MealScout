@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 96798)
-Total output lines: 11510
-
 import {
   DEFAULT_TRUCK_BROADCAST_FRESHNESS_MS,
   deriveTruckPresence,
@@ -3860,7 +3857,4293 @@ export default function ExplorePreview() {
           }),
           color: getMapMarkerColor({
             kind: "truck",
-            hasDeal: Boolean(t.activeDealCount && t.activ…36798 tokens truncated…null}
+            hasDeal: Boolean(t.activeDealCount && t.activeDealCount > 0),
+            isOpen: isServing,
+          }),
+          imageUrl: getTruckImage(t),
+        } as MapAdapterMarker;
+      })
+      .filter((m): m is MapAdapterMarker => m !== null);
+  }, [scoutTruckInventory]);
+  const liveTruckById = useMemo(() => {
+    const map = new Map<string, LiveTruckSummary>();
+    for (const truck of scoutTruckInventory) map.set(String(truck.id), truck);
+    return map;
+  }, [scoutTruckInventory]);
+
+  const restaurantMarkers = useMemo<MapAdapterMarker[]>(() => {
+    return nearbyRestaurants
+      .map((r) => {
+        const lat = r.latitude ?? r.lat;
+        const lng = r.longitude ?? r.lng;
+        if (typeof lat !== "number" || typeof lng !== "number") return null;
+        const dealCount = Number(r.activeDealsCount || r.activeDealCount || 0);
+        const hasCommunityUpdate =
+          Number(r.communityActivityCount || 0) > 0 ||
+          Number(r.recommendationCount || 0) > 0 ||
+          Number(r.videoRecommendationCount || 0) > 0;
+        const freshnessMeta: FreshnessMeta = {
+          kind: "restaurant",
+          updatedAt: readStringField(r, ["updatedAt", "lastUpdatedAt"]),
+          confirmedAt: readStringField(r, ["confirmedAt", "lastConfirmedAt"]),
+          hasDeal: dealCount > 0,
+          hasCommunityUpdate,
+          hasDistance: Boolean(getRestaurantDistance(r)),
+          isOpen: true,
+        };
+        return {
+          id: `restaurant-${r.id}`,
+          sourceId: String(r.id),
+          kind: "restaurant" as const,
+          lat,
+          lng,
+          title: r.businessName ?? r.name ?? undefined,
+          subtitle: getMapMarkerSubtitle(r.cuisineType, freshnessMeta),
+          color: getMapMarkerColor(freshnessMeta),
+          imageUrl: r.coverImageUrl || r.logoUrl || r.imageUrl || null,
+        } as MapAdapterMarker;
+      })
+      .filter((m): m is MapAdapterMarker => m !== null);
+  }, [nearbyRestaurants]);
+
+  const eventMarkers = useMemo<MapAdapterMarker[]>(() => {
+    return visibleEvents
+      .map((e) => {
+        const lat = e.latitude ?? e.lat ?? e.venueLat;
+        const lng = e.longitude ?? e.lng ?? e.venueLng;
+        if (typeof lat !== "number" || typeof lng !== "number") return null;
+        const freshnessMeta: FreshnessMeta = {
+          kind: "event",
+          startsAt: e.startsAt,
+          startTime: e.startTime,
+          updatedAt: readStringField(e, ["updatedAt", "lastUpdatedAt"]),
+          confirmedAt: readStringField(e, ["confirmedAt", "lastConfirmedAt"]),
+        };
+        return {
+          id: `event-${e.id}`,
+          sourceId: String(e.id),
+          kind: "event" as const,
+          lat,
+          lng,
+          title: e.title ?? e.name ?? undefined,
+          subtitle: getMapMarkerSubtitle(
+            e.venueName ?? e.locationName,
+            freshnessMeta,
+          ),
+          color: getMapMarkerColor(freshnessMeta),
+        } as MapAdapterMarker;
+      })
+      .filter((m): m is MapAdapterMarker => m !== null);
+  }, [visibleEvents]);
+
+  const hostMarkers = useMemo<MapAdapterMarker[]>(() => {
+    return mapHostLocations
+      .map((host) => {
+        const lat = readNumberField(host, ["latitude", "lat"]);
+        const lng = readNumberField(host, ["longitude", "lng"]);
+        if (lat === null || lng === null) return null;
+        const hostKey = getScoutHostMarkerKey(host);
+        const parkedTrucks = parkedTrucksByHostKey.get(hostKey) || [];
+        const address = [host.address, host.city, host.state]
+          .filter(Boolean)
+          .join(", ");
+        const title = host.businessName || host.name || "Host location";
+        return {
+          id: `host-${hostKey}`,
+          sourceId: hostKey,
+          kind: "parking" as const,
+          lat,
+          lng,
+          title,
+          subtitle:
+            parkedTrucks.length > 0
+              ? formatScoutCount(
+                  parkedTrucks.length,
+                  "truck parked here",
+                  "trucks parked here",
+                )
+              : getMapMarkerSubtitle(address || "Host location", {
+                  kind: "host",
+                  updatedAt: readStringField(host, [
+                    "updatedAt",
+                    "lastUpdatedAt",
+                  ]),
+                  confirmedAt: readStringField(host, [
+                    "confirmedAt",
+                    "lastConfirmedAt",
+                  ]),
+                }),
+          color: parkedTrucks.length > 0 ? "#fb923c" : "#f59e0b",
+          address,
+          spotImageUrl: host.spotImageUrl || null,
+          parkedTrucks,
+          parkingStatus: parkedTrucks.length > 0 ? "occupied" : "available",
+        } as MapAdapterMarker;
+      })
+      .filter((m): m is MapAdapterMarker => Boolean(m && m.sourceId));
+  }, [mapHostLocations, parkedTrucksByHostKey]);
+
+  const dealMarkers = useMemo<MapAdapterMarker[]>(() => {
+    return nearbyDeals
+      .map((deal) => {
+        const lat = readNumberField(deal, [
+          "latitude",
+          "lat",
+          "restaurantLatitude",
+          "restaurantLat",
+          "locationLat",
+        ]);
+        const lng = readNumberField(deal, [
+          "longitude",
+          "lng",
+          "restaurantLongitude",
+          "restaurantLng",
+          "locationLng",
+        ]);
+        if (lat === null || lng === null) return null;
+        return {
+          id: `deal-${deal.id}`,
+          sourceId: String(deal.id),
+          kind: "deal" as const,
+          lat,
+          lng,
+          title: deal.title || "Deal today",
+          subtitle: getMapMarkerSubtitle(deal.restaurantName || "Nearby", {
+            kind: "deal",
+            hasDeal: true,
+          }),
+          color: "#fb923c",
+        } as MapAdapterMarker;
+      })
+      .filter((m): m is MapAdapterMarker => Boolean(m));
+  }, [nearbyDeals]);
+
+  // Combined markers for the full Google Map view
+  const allMapMarkers = useMemo<MapAdapterMarker[]>(
+    () => [
+      ...truckMarkers,
+      ...restaurantMarkers,
+      ...eventMarkers,
+      ...hostMarkers,
+      ...dealMarkers,
+    ],
+    [truckMarkers, restaurantMarkers, eventMarkers, hostMarkers, dealMarkers],
+  );
+
+  const scoutDebugCounts = useMemo(() => {
+    const rawLiveTruckRows = Array.isArray(liveTrucksData)
+      ? liveTrucksData
+      : Array.isArray(liveTrucksData?.trucks)
+        ? liveTrucksData.trucks
+        : [];
+    const rawRestaurantRows = Array.isArray(nearbyRestaurantsData)
+      ? nearbyRestaurantsData
+      : [];
+    const rawHostRows = Array.isArray(mapLocationsData?.hostLocations)
+      ? mapLocationsData.hostLocations
+      : [];
+    const rawEventRows = Array.isArray(events) ? events : [];
+    const rawDealRows = Array.isArray(nearbyDeals) ? nearbyDeals : [];
+
+    const hasCoords = (row: unknown) =>
+      readNumberField(row, [
+        "latitude",
+        "lat",
+        "venueLat",
+        "restaurantLatitude",
+        "locationLat",
+      ]) !== null &&
+      readNumberField(row, [
+        "longitude",
+        "lng",
+        "venueLng",
+        "restaurantLongitude",
+        "locationLng",
+      ]) !== null;
+
+    const pinsByKind = allMapMarkers.reduce<Record<string, number>>(
+      (acc, marker) => {
+        acc[marker.kind] = (acc[marker.kind] || 0) + 1;
+        return acc;
+      },
+      {},
+    );
+
+    return {
+      trucksReturned: rawLiveTruckRows.length,
+      trucksMissingCoords: rawLiveTruckRows.filter((row) => !hasCoords(row))
+        .length,
+      trucksShown: scoutTruckInventory.length,
+      restaurantsReturned: rawRestaurantRows.length,
+      restaurantsMissingCoords: rawRestaurantRows.filter(
+        (row) => !hasCoords(row),
+      ).length,
+      hostsReturned: rawHostRows.length,
+      hostsMissingCoords: rawHostRows.filter((row) => !hasCoords(row)).length,
+      hostsShown: mapHostLocations.length,
+      eventsReturned: rawEventRows.length,
+      eventsMissingCoords: rawEventRows.filter((row) => !hasCoords(row)).length,
+      dealsReturned: rawDealRows.length,
+      dealsMissingCoords: rawDealRows.filter((row) => !hasCoords(row)).length,
+      mapPinsBuilt: allMapMarkers.length,
+      mapPinsByKind: pinsByKind,
+    };
+  }, [
+    allMapMarkers,
+    events,
+    liveTrucksData,
+    mapLocationsData,
+    nearbyDeals,
+    nearbyRestaurantsData,
+    scoutTruckInventory.length,
+    mapHostLocations.length,
+  ]);
+
+  const [activeMapLayers, setActiveMapLayers] = useState<MapLayerState>({
+    openNow: true,
+    foodTrucks: true,
+    deals: true,
+    happeningToday: true,
+  });
+
+  const filteredMapMarkers = useMemo<MapAdapterMarker[]>(() => {
+    const searchTerms = tokenizeScoutSearch(scoutSearchQuery);
+    return allMapMarkers.filter((marker) => {
+      let layerAllowed = true;
+      if (marker.kind === "truck")
+        layerAllowed = activeMapLayers.foodTrucks && activeMapLayers.openNow;
+      if (marker.kind === "event")
+        layerAllowed = activeMapLayers.happeningToday;
+      if (marker.kind === "parking") {
+        const hasParkedTruck = Boolean(marker.parkedTrucks?.length);
+        layerAllowed =
+          activeMapLayers.happeningToday ||
+          (hasParkedTruck && activeMapLayers.foodTrucks);
+      }
+      if (marker.kind === "deal") layerAllowed = activeMapLayers.deals;
+      if (marker.kind === "restaurant") {
+        const restaurant = nearbyRestaurants.find(
+          (item) => String(item.id) === String(marker.sourceId),
+        );
+        const hasDeal = Boolean(
+          restaurant &&
+          Number(
+            restaurant.activeDealsCount || restaurant.activeDealCount || 0,
+          ) > 0,
+        );
+        layerAllowed =
+          activeMapLayers.openNow || (hasDeal && activeMapLayers.deals);
+        if (hasDeal && !activeMapLayers.deals) layerAllowed = false;
+      }
+      if (!layerAllowed) return false;
+      if (scoutSearchMode) {
+        if (!matchesScoutSearchText(marker, searchTerms)) return false;
+        if (!matchesScoutIntent(marker, scoutSearchIntent, marker.kind))
+          return false;
+      }
+      return true;
+    });
+  }, [
+    activeMapLayers,
+    allMapMarkers,
+    nearbyRestaurants,
+    scoutSearchIntent,
+    scoutSearchMode,
+    scoutSearchQuery,
+  ]);
+
+  const sceneFilteredMapMarkers = useMemo<MapAdapterMarker[]>(() => {
+    if (activeSceneLaneId === "for_you") return filteredMapMarkers;
+    if (activeSceneLaneId === "community")
+      return filteredMapMarkers.filter(
+        (marker) =>
+          marker.kind === "restaurant" ||
+          marker.kind === "truck" ||
+          marker.kind === "parking",
+      );
+    if (activeSceneLaneId === "nearby_now")
+      return filteredMapMarkers.filter(
+        (marker) =>
+          marker.kind === "truck" ||
+          marker.kind === "restaurant" ||
+          marker.kind === "parking",
+      );
+    if (activeSceneLaneId === "food_trucks")
+      return filteredMapMarkers.filter((marker) => marker.kind === "truck");
+    if (activeSceneLaneId === "restaurants")
+      return filteredMapMarkers.filter(
+        (marker) => marker.kind === "restaurant",
+      );
+    if (activeSceneLaneId === "deals")
+      return filteredMapMarkers.filter(
+        (marker) => marker.kind === "restaurant" || marker.kind === "deal",
+      );
+    if (activeSceneLaneId === "events")
+      return filteredMapMarkers.filter(
+        (marker) => marker.kind === "event" || marker.kind === "parking",
+      );
+    if (activeSceneLaneId === "new_menus")
+      return filteredMapMarkers.filter(
+        (marker) => marker.kind === "restaurant" || marker.kind === "truck",
+      );
+    if (activeSceneLaneId === "late_night")
+      return filteredMapMarkers.filter(
+        (marker) =>
+          marker.kind === "restaurant" ||
+          marker.kind === "event" ||
+          marker.kind === "parking",
+      );
+    if (activeSceneLaneId === "worth_discovering")
+      return filteredMapMarkers.filter(
+        (marker) => marker.kind === "restaurant" || marker.kind === "truck",
+      );
+    return filteredMapMarkers;
+  }, [activeSceneLaneId, filteredMapMarkers]);
+
+  const toggleMapLayer = useCallback((layer: MapLayerId) => {
+    setActiveMapLayers((current) => ({
+      ...current,
+      [layer]: !current[layer],
+    }));
+  }, []);
+
+  useEffect(() => {
+    if (activeSceneLaneId === "food_trucks") {
+      setActiveMapLayers({
+        openNow: true,
+        foodTrucks: true,
+        deals: false,
+        happeningToday: false,
+      });
+      return;
+    }
+    if (activeSceneLaneId === "restaurants") {
+      setActiveMapLayers({
+        openNow: true,
+        foodTrucks: false,
+        deals: true,
+        happeningToday: false,
+      });
+      return;
+    }
+    if (activeSceneLaneId === "deals") {
+      setActiveMapLayers({
+        openNow: false,
+        foodTrucks: false,
+        deals: true,
+        happeningToday: false,
+      });
+      return;
+    }
+    if (activeSceneLaneId === "events" || activeSceneLaneId === "late_night") {
+      setActiveMapLayers({
+        openNow: false,
+        foodTrucks: false,
+        deals: false,
+        happeningToday: true,
+      });
+      return;
+    }
+    setActiveMapLayers({
+      openNow: true,
+      foodTrucks: true,
+      deals: true,
+      happeningToday: true,
+    });
+  }, [activeSceneLaneId]);
+
+  /* --------- map state --------- */
+
+  const HERO_ZOOM = 14;
+  const [mapZoom, setMapZoom] = useState<number>(HERO_ZOOM);
+  const [mapCenter, setMapCenter] = useState<{
+    lat: number;
+    lng: number;
+  } | null>(null);
+  const userPushedMapRef = useRef(false);
+  const [sheetState, setSheetState] = useState<"default" | "fullMap">(
+    "default",
+  );
+  const [selectedLiveTruck, setSelectedLiveTruck] =
+    useState<LiveTruckSummary | null>(null);
+  const [selectedMapMarker, setSelectedMapMarker] =
+    useState<MapAdapterMarker | null>(null);
+  const [mapBounds, setMapBounds] = useState<MapBoundsLike | null>(null);
+  // Once the full map has been opened once, keep GoogleMapSurface mounted
+  // (just hidden) so it doesn't re-initialize on every collapse/expand.
+  // Using state (not ref) so React re-renders when the map should first mount.
+  const [hasOpenedFullMap, setHasOpenedFullMap] = useState(false);
+  const googleMapContainerRef = useRef<HTMLDivElement | null>(null);
+  const [googleMapFailed, setGoogleMapFailed] = useState(false);
+  const { data: mapRuntime } = useQuery<MapRuntimeResponse>({
+    queryKey: ["/api/map/runtime"],
+    queryFn: async () => {
+      const response = await fetch("/api/map/runtime");
+      if (!response.ok) {
+        return { hasGoogleMapsKey: false, googleMapsApiKey: null };
+      }
+      return response.json();
+    },
+    retry: 3,
+    retryDelay: 800,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
+  });
+  const runtimeGoogleMapsApiKey = String(
+    mapRuntime?.googleMapsApiKey || "",
+  ).trim();
+  const runtimeGoogleMapsMapId = String(
+    mapRuntime?.googleMapsMapId || "",
+  ).trim();
+  const mapRuntimeResolved = mapRuntime !== undefined;
+  const buildGoogleMapsMapId = String(
+    (import.meta as any).env?.VITE_GOOGLE_MAPS_MAP_ID || "",
+  ).trim();
+  const effectiveGoogleMapsApiKey =
+    runtimeGoogleMapsApiKey ||
+    (mapRuntimeResolved ? GOOGLE_MAPS_WEB_API_KEY : "");
+  const effectiveGoogleMapsMapId =
+    runtimeGoogleMapsMapId || buildGoogleMapsMapId;
+  const hasMapKey = effectiveGoogleMapsApiKey.length > 0;
+
+  const openScoutMap = useCallback(() => {
+    if (resolvedScoutCoords) {
+      setMapCenter(resolvedScoutCoords);
+    }
+    setHasOpenedFullMap(true);
+    setGoogleMapFailed(false);
+    setSheetState("fullMap");
+  }, [resolvedScoutCoords]);
+
+  const collapseScoutMap = useCallback(() => {
+    setSheetState("default");
+    setSelectedLiveTruck(null);
+    setSelectedMapMarker(null);
+  }, []);
+
+  useEffect(() => {
+    if (!hasMapKey) return;
+    if (sheetState !== "default") return;
+    if (typeof window === "undefined") return;
+    const connection = (navigator as any).connection;
+    if (connection?.saveData) return;
+
+    let cancelled = false;
+    let timeoutId: number | null = null;
+    let idleId: number | null = null;
+
+    const startPrefetch = () => {
+      if (cancelled) return;
+      if (window.location.pathname !== "/scout") return;
+      preloadGoogleMapsScript(effectiveGoogleMapsApiKey);
+    };
+
+    timeoutId = window.setTimeout(() => {
+      if ("requestIdleCallback" in window) {
+        idleId = (window as any).requestIdleCallback(startPrefetch, {
+          timeout: 2500,
+        });
+        return;
+      }
+      startPrefetch();
+    }, 2500);
+
+    return () => {
+      cancelled = true;
+      if (timeoutId !== null) window.clearTimeout(timeoutId);
+      if (idleId !== null && "cancelIdleCallback" in window) {
+        (window as any).cancelIdleCallback(idleId);
+      }
+    };
+  }, [effectiveGoogleMapsApiKey, hasMapKey, sheetState]);
+
+  // When we first get coords, set the map center to the right-quadrant offset.
+  useEffect(() => {
+    if (!resolvedScoutCoords || userPushedMapRef.current) return;
+    setMapCenter(
+      shiftCenterForRightQuadrant(
+        resolvedScoutCoords.lat,
+        resolvedScoutCoords.lng,
+        HERO_ZOOM,
+      ),
+    );
+  }, [resolvedScoutCoords]);
+
+  const handleMapBoundsChanged = useCallback((bounds: MapBoundsLike) => {
+    setMapBounds(bounds);
+  }, []);
+  const handleMapZoomChanged = useCallback((z: number) => {
+    setMapZoom(z);
+    userPushedMapRef.current = true;
+  }, []);
+  const handleMapCenterChanged = useCallback(
+    (c: { lat: number; lng: number }) => {
+      setMapCenter(c);
+      userPushedMapRef.current = true;
+    },
+    [],
+  );
+  const selectLiveTruck = useCallback(
+    (truck: LiveTruckSummary) => {
+      const truckCoords = getTruckCoords(truck);
+      setSelectedLiveTruck(truck);
+      if (truckCoords) {
+        setMapCenter(truckCoords);
+        setMapZoom(16);
+      } else if (resolvedScoutCoords) {
+        setMapCenter(resolvedScoutCoords);
+      }
+      setHasOpenedFullMap(true);
+      setGoogleMapFailed(false);
+      setSheetState("fullMap");
+    },
+    [resolvedScoutCoords],
+  );
+  const handleMarkerTap = useCallback(
+    (marker: MapAdapterMarker) => {
+      if (marker.kind === "truck") {
+        const truck = liveTruckById.get(String(marker.sourceId));
+        if (truck) {
+          selectLiveTruck(truck);
+          setSelectedMapMarker(null);
+          return;
+        }
+        navigate(`/truck/${marker.sourceId}`);
+      } else if (
+        marker.kind === "restaurant" ||
+        marker.kind === "event" ||
+        marker.kind === "parking" ||
+        marker.kind === "deal"
+      ) {
+        setSelectedLiveTruck(null);
+        setSelectedMapMarker(marker);
+        setMapCenter({ lat: marker.lat, lng: marker.lng });
+        setMapZoom(Math.max(mapZoom, 15));
+      }
+    },
+    [liveTruckById, mapZoom, navigate, selectLiveTruck],
+  );
+  const handlePreviewMarkerTap = useCallback(
+    (marker: MapAdapterMarker) => {
+      setHasOpenedFullMap(true);
+      setGoogleMapFailed(false);
+      setSheetState("fullMap");
+      handleMarkerTap(marker);
+    },
+    [handleMarkerTap],
+  );
+
+  /* --------- pull-down-to-fullscreen sheet --------- */
+
+  // When sheetState transitions to fullMap:
+  // 1. Set hasOpenedFullMap so GoogleMapSurface mounts for the first time.
+  // 2. After the 320ms CSS height transition completes, fire a resize event
+  //    so Google Maps re-tiles to the full 100dvh container dimensions.
+  useEffect(() => {
+    if (sheetState === "fullMap") {
+      setHasOpenedFullMap(true);
+      const timer = setTimeout(() => {
+        // Dispatch a native resize event on the window — Google Maps listens
+        // for this and re-tiles automatically.
+        window.dispatchEvent(new Event("resize"));
+      }, 340); // slightly after the 320ms CSS transition
+      return () => clearTimeout(timer);
+    }
+  }, [sheetState]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    document.body.classList.toggle(
+      "mealscout-map-fullscreen",
+      sheetState === "fullMap",
+    );
+    return () => {
+      document.body.classList.remove("mealscout-map-fullscreen");
+    };
+  }, [sheetState]);
+
+  const dragStartY = useRef<number | null>(null);
+  const dragLastY = useRef<number | null>(null);
+  const mouseDragStartY = useRef<number | null>(null);
+  const mouseDragLastY = useRef<number | null>(null);
+
+  const handleSheetTouchStart = useCallback((e: React.TouchEvent) => {
+    const touch = e.touches[0];
+    if (!touch) return;
+    dragStartY.current = touch.clientY;
+    dragLastY.current = touch.clientY;
+  }, []);
+  const handleSheetTouchMove = useCallback((e: React.TouchEvent) => {
+    const touch = e.touches[0];
+    if (!touch) return;
+    dragLastY.current = touch.clientY;
+  }, []);
+  const handleSheetTouchEnd = useCallback(() => {
+    const start = dragStartY.current;
+    const last = dragLastY.current;
+    dragStartY.current = null;
+    dragLastY.current = null;
+    if (start === null || last === null) return;
+    const delta = last - start;
+    // Keep interactions simple: pull down to expand, pull up to collapse.
+    if (delta > 40 && sheetState === "default") {
+      openScoutMap();
+      return;
+    }
+    if (delta < -40 && sheetState === "fullMap") {
+      collapseScoutMap();
+    }
+  }, [collapseScoutMap, openScoutMap, sheetState]);
+
+  const handleSheetMouseDown = useCallback((e: React.MouseEvent) => {
+    mouseDragStartY.current = e.clientY;
+    mouseDragLastY.current = e.clientY;
+  }, []);
+
+  const handleSheetMouseMove = useCallback((e: React.MouseEvent) => {
+    if (mouseDragStartY.current === null) return;
+    mouseDragLastY.current = e.clientY;
+  }, []);
+
+  const handleSheetMouseUp = useCallback(() => {
+    const start = mouseDragStartY.current;
+    const last = mouseDragLastY.current;
+    mouseDragStartY.current = null;
+    mouseDragLastY.current = null;
+    if (start === null || last === null) return;
+    const delta = last - start;
+    if (delta > 24 && sheetState === "default") {
+      openScoutMap();
+      return;
+    }
+    if (delta < -24 && sheetState === "fullMap") {
+      collapseScoutMap();
+    }
+  }, [collapseScoutMap, openScoutMap, sheetState]);
+
+  /* --------- greeting --------- */
+
+  const greetingTime = getGreetingTime();
+  const greetingFirstLine = `Good ${greetingTime},`;
+  const greetingSecondLine = firstName ? `${firstName}.` : "Welcome.";
+
+  /* --------- render --------- */
+
+  const currentUserId = getCurrentUserId(user);
+  const showQuickUpdateBar = isFoodOperator(user);
+  const scoutTruckInventoryForFeed = useMemo(
+    () =>
+      canonicalizeScoutRows(
+        filterScoutSearchRows(
+          scoutTruckInventory,
+          scoutSearchMode,
+          scoutSearchQuery,
+          scoutSearchIntent,
+          "truck",
+        ),
+        {
+          kind: "food_truck",
+          scope: "nearby",
+          source: "live_presence",
+          query: scoutSearchMode ? scoutSearchQuery : undefined,
+        },
+      ),
+    [scoutSearchIntent, scoutSearchMode, scoutSearchQuery, scoutTruckInventory],
+  );
+  const nearbyRestaurantsForFeed = useMemo(
+    () =>
+      canonicalizeScoutRows(
+        filterScoutSearchRows(
+          nearbyRestaurants,
+          scoutSearchMode,
+          scoutSearchQuery,
+          scoutSearchIntent,
+          "restaurant",
+        ),
+        {
+          kind: "business",
+          scope: "nearby",
+          source: "local_inventory",
+          query: scoutSearchMode ? scoutSearchQuery : undefined,
+        },
+      ),
+    [nearbyRestaurants, scoutSearchIntent, scoutSearchMode, scoutSearchQuery],
+  );
+  const allDealsForFeed = useMemo(
+    () =>
+      canonicalizeScoutRows(
+        filterScoutSearchRows(
+          allDeals,
+          scoutSearchMode,
+          scoutSearchQuery,
+          scoutSearchIntent,
+          "deal",
+        ),
+        {
+          kind: "deal",
+          scope: "nearby",
+          source: "deal",
+          query: scoutSearchMode ? scoutSearchQuery : undefined,
+        },
+      ),
+    [allDeals, scoutSearchIntent, scoutSearchMode, scoutSearchQuery],
+  );
+  const visibleEventsForFeed = useMemo(
+    () =>
+      canonicalizeScoutRows(
+        filterScoutSearchRows(
+          visibleEvents,
+          scoutSearchMode,
+          scoutSearchQuery,
+          scoutSearchIntent,
+          "event",
+        ),
+        {
+          kind: "event",
+          scope: "nearby",
+          source: "event",
+          query: scoutSearchMode ? scoutSearchQuery : undefined,
+        },
+      ),
+    [scoutSearchIntent, scoutSearchMode, scoutSearchQuery, visibleEvents],
+  );
+  const localMenuItemsForFeed = useMemo(
+    () =>
+      canonicalizeScoutRows(
+        filterScoutSearchRows(
+          localMenuItems,
+          scoutSearchMode,
+          scoutSearchQuery,
+          scoutSearchIntent,
+          "menu_item",
+        ),
+        {
+          kind: "dish",
+          scope: "nearby",
+          source: "menu",
+          query: scoutSearchMode ? scoutSearchQuery : undefined,
+        },
+      ),
+    [localMenuItems, scoutSearchIntent, scoutSearchMode, scoutSearchQuery],
+  );
+  const popularDishesForFeed = useMemo(
+    () =>
+      canonicalizeScoutRows(
+        filterScoutSearchRows(
+          popularDishes,
+          scoutSearchMode,
+          scoutSearchQuery,
+          scoutSearchIntent,
+          "menu_item",
+        ),
+        {
+          kind: "dish",
+          scope: "nearby",
+          source: "trending",
+          query: scoutSearchMode ? scoutSearchQuery : undefined,
+        },
+      ),
+    [popularDishes, scoutSearchIntent, scoutSearchMode, scoutSearchQuery],
+  );
+  const trendingPlacesThisWeekForFeed = useMemo(
+    () =>
+      canonicalizeScoutRows(
+        filterScoutSearchRows(
+          trendingPlacesThisWeek,
+          scoutSearchMode,
+          scoutSearchQuery,
+          scoutSearchIntent,
+          "restaurant",
+        ),
+        {
+          kind: "business",
+          scope: "nearby",
+          source: "trending",
+          query: scoutSearchMode ? scoutSearchQuery : undefined,
+        },
+      ),
+    [
+      scoutSearchIntent,
+      scoutSearchMode,
+      scoutSearchQuery,
+      trendingPlacesThisWeek,
+    ],
+  );
+  const newToMealScoutRestaurantsForFeed = useMemo(
+    () =>
+      canonicalizeScoutRows(
+        filterScoutSearchRows(
+          newToMealScoutRestaurants,
+          scoutSearchMode,
+          scoutSearchQuery,
+          scoutSearchIntent,
+          "restaurant",
+        ),
+        {
+          kind: "business",
+          scope: "nearby",
+          source: "local_inventory",
+          query: scoutSearchMode ? scoutSearchQuery : undefined,
+        },
+      ),
+    [
+      newToMealScoutRestaurants,
+      scoutSearchIntent,
+      scoutSearchMode,
+      scoutSearchQuery,
+    ],
+  );
+  const activeMarketPlaces = useMemo<RestaurantSummary[]>(() => {
+    const rows = [
+      ...(Array.isArray(globalSearchData?.restaurants)
+        ? globalSearchData.restaurants
+        : []),
+      ...(Array.isArray(trendingData?.places) ? trendingData.places : []),
+    ];
+    return canonicalizeScoutRows(rows, {
+      kind: "business",
+      scope: "network",
+      source: "network_search",
+      query: scoutSearchMode ? scoutSearchQuery : undefined,
+    });
+  }, [
+    globalSearchData?.restaurants,
+    scoutSearchMode,
+    scoutSearchQuery,
+    trendingData?.places,
+  ]);
+
+  const activeMarketDishes = useMemo(
+    () =>
+      canonicalizeScoutRows(
+        Array.isArray(trendingData?.items) ? trendingData.items : [],
+        {
+          kind: "dish",
+          scope: "network",
+          source: "trending",
+          query: scoutSearchMode ? scoutSearchQuery : undefined,
+        },
+      ),
+    [
+      scoutSearchMode,
+      scoutSearchQuery,
+      trendingData?.items,
+    ],
+  );
+
+  const activityFallbackRestaurants = useMemo(
+    () =>
+      canonicalizeScoutRows(
+        filterScoutFallbackRows(
+          activeMarketPlaces,
+          scoutSearchMode,
+          scoutSearchQuery,
+          scoutSearchIntent,
+          "restaurant",
+        ),
+        {
+          kind: "business",
+          scope: "network",
+          source: "network_search",
+          query: scoutSearchMode ? scoutSearchQuery : undefined,
+          limit: 8,
+        },
+      ),
+    [
+      activeMarketPlaces,
+      scoutSearchIntent,
+      scoutSearchMode,
+      scoutSearchQuery,
+    ],
+  );
+
+  const activityFallbackDishes = useMemo(
+    () =>
+      canonicalizeScoutRows(
+        filterScoutFallbackRows(
+          activeMarketDishes,
+          scoutSearchMode,
+          scoutSearchQuery,
+          scoutSearchIntent,
+          "menu_item",
+        ),
+        {
+          kind: "dish",
+          scope: "network",
+          source: "trending",
+          query: scoutSearchMode ? scoutSearchQuery : undefined,
+          limit: 8,
+        },
+      ),
+    [
+      activeMarketDishes,
+      scoutSearchIntent,
+      scoutSearchMode,
+      scoutSearchQuery,
+    ],
+  );
+
+  const trucksServingNow = useMemo(
+    () => scoutTruckInventoryForFeed.filter(isTruckServingNow),
+    [scoutTruckInventoryForFeed],
+  );
+  const restaurantsOpenNow = useMemo(
+    () =>
+      nearbyRestaurantsForFeed.filter(
+        (restaurant) => getRestaurantOpenState(restaurant) === "open",
+      ),
+    [nearbyRestaurantsForFeed],
+  );
+  const moreFoodRestaurants = useMemo(
+    () =>
+      nearbyRestaurantsForFeed.filter(
+        (restaurant) => getRestaurantOpenState(restaurant) !== "open",
+      ),
+    [nearbyRestaurantsForFeed],
+  );
+
+  const showFoodTrucksSection =
+    liveTrucksLoading || trucksServingNow.length > 0;
+  const showRestaurantsSection =
+    nearbyRestaurantsLoading || restaurantsOpenNow.length > 0;
+  const showDealsSection = allDeals.length > 0;
+  const showEventsSection = visibleEvents.length > 0 || visibleHosts.length > 0;
+  const sceneWantsCommunity =
+    activeSceneLaneId === "community" || activeSceneLaneId === "for_you";
+  const sceneWantsNearbyNow =
+    activeSceneLaneId === "nearby_now" || activeSceneLaneId === "for_you";
+  const sceneWantsFoodTrucks =
+    activeSceneLaneId === "food_trucks" || activeSceneLaneId === "for_you";
+  const sceneWantsRestaurants =
+    activeSceneLaneId === "restaurants" ||
+    activeSceneLaneId === "for_you" ||
+    activeSceneLaneId === "nearby_now";
+  const sceneWantsDeals =
+    activeSceneLaneId === "deals" || activeSceneLaneId === "for_you";
+  const sceneWantsEvents =
+    activeSceneLaneId === "events" ||
+    activeSceneLaneId === "for_you" ||
+    activeSceneLaneId === "late_night";
+  const sceneWantsNewMenus =
+    activeSceneLaneId === "new_menus" || activeSceneLaneId === "for_you";
+  const sceneWantsWorthDiscovering =
+    activeSceneLaneId === "worth_discovering" ||
+    activeSceneLaneId === "for_you" ||
+    activeSceneLaneId === "new_menus";
+  const localActivityCount =
+    scoutTruckInventoryForFeed.length +
+    localMenuItemsForFeed.length +
+    nearbyRestaurantsForFeed.length +
+    allDealsForFeed.length +
+    visibleEventsForFeed.length +
+    visibleHosts.length;
+  const localSearchContentCount =
+    scoutTruckInventoryForFeed.length +
+    localMenuItemsForFeed.length +
+    nearbyRestaurantsForFeed.length +
+    allDealsForFeed.length +
+    visibleEventsForFeed.length +
+    popularDishesForFeed.length +
+    trendingPlacesThisWeekForFeed.length +
+    newToMealScoutRestaurantsForFeed.length;
+  const localDiscoverySettled =
+    !liveTrucksLoading &&
+    !nearbyRestaurantsLoading &&
+    !nearbyPublicRestaurantsLoading &&
+    !localMenuItemsLoading &&
+    !nearbyDealsLoading &&
+    !eventsLoading;
+  const activityFallbackSettled =
+    !trendingLoading && !globalSearchLoading;
+  const showActivityFallback =
+    localDiscoverySettled &&
+    activityFallbackSettled &&
+    (scoutSearchQuery.trim().length > 0
+      ? scoutSearchMode && localSearchContentCount === 0
+      : localActivityCount === 0 &&
+        popularDishesForFeed.length === 0 &&
+        trendingPlacesThisWeekForFeed.length === 0);
+  const effectiveRestaurantsForFeed = showActivityFallback
+    ? activityFallbackRestaurants
+    : nearbyRestaurantsForFeed;
+  const effectivePopularDishesForFeed = showActivityFallback
+    ? activityFallbackDishes
+    : popularDishesForFeed;
+  const effectiveTrendingPlacesForFeed = showActivityFallback
+    ? []
+    : trendingPlacesThisWeekForFeed;
+  const fallbackHasRelatedResults =
+    activityFallbackRestaurants.length > 0 ||
+    activityFallbackDishes.length > 0;
+  const nearbyRestaurantsTitle = DISCOVERY_LAYERS.restaurants.title;
+  const nearbyRestaurantsSubtitle = DISCOVERY_LAYERS.restaurants.subtitle;
+
+  const selectedCraving = useMemo(() => {
+    return (
+      SCOUT_SEARCH_OPTIONS.find((cat) => cat.id === selectedCravingId) ??
+      SCOUT_SEARCH_OPTIONS[0]
+    );
+  }, [selectedCravingId]);
+  const handleSceneLaneChange = useCallback((laneId: ScoutSceneLaneId) => {
+    setActiveSceneLaneId(laneId);
+    const lane = SCOUT_SCENE_LANES.find((entry) => entry.id === laneId);
+    if (lane) {
+      setSelectedCravingId(lane.cravingId);
+    }
+  }, []);
+
+  const cravingBoardItems = useMemo(
+    () =>
+      buildCravingBoardItems({
+        craving: selectedCraving,
+        liveTrucks: trucksServingNow,
+        restaurants: restaurantsOpenNow,
+        menuItems: localMenuItemsForFeed,
+        deals: allDealsForFeed,
+        events: visibleEventsForFeed,
+      }),
+    [
+      allDealsForFeed,
+      localMenuItemsForFeed,
+      restaurantsOpenNow,
+      selectedCraving,
+      trucksServingNow,
+      visibleEventsForFeed,
+    ],
+  );
+  const sceneMixedFeedItems = useMemo(() => {
+    const items = cravingBoardItems;
+    if (activeSceneLaneId === "for_you") {
+      const pickByKind = (kind: CravingBoardItem["kind"]) =>
+        items.find((item) => item.kind === kind) || null;
+      const picks: CravingBoardItem[] = [];
+      const add = (candidate: CravingBoardItem | null) => {
+        if (!candidate) return;
+        if (picks.some((entry) => entry.id === candidate.id)) return;
+        picks.push(candidate);
+      };
+      // Balanced first-screen mix: trucks, places, menu, deal, event, and discovery.
+      add(pickByKind("Truck"));
+      add(pickByKind("Place"));
+      add(pickByKind("Menu"));
+      add(pickByKind("Deal"));
+      add(pickByKind("Event"));
+      const discoveryPlace = items.find(
+        (item) =>
+          item.kind === "Place" &&
+          /new|under|fresh|updated|quiet/i.test(String(item.reason || "")),
+      );
+      add(discoveryPlace || null);
+      if (picks.length < 7) {
+        for (const candidate of items) {
+          add(candidate);
+          if (picks.length >= 7) break;
+        }
+      }
+      return picks.slice(0, 7);
+    }
+    if (activeSceneLaneId === "food_trucks") {
+      return items
+        .filter((item) => item.kind === "Truck" || item.kind === "Deal")
+        .slice(0, 7);
+    }
+    if (activeSceneLaneId === "restaurants") {
+      return items
+        .filter((item) => item.kind === "Place" || item.kind === "Menu")
+        .slice(0, 7);
+    }
+    if (activeSceneLaneId === "deals") {
+      return items
+        .filter((item) => item.kind === "Deal" || item.kind === "Place")
+        .slice(0, 7);
+    }
+    if (activeSceneLaneId === "events") {
+      return items
+        .filter((item) => item.kind === "Event" || item.kind === "Place")
+        .slice(0, 7);
+    }
+    if (activeSceneLaneId === "new_menus") {
+      return items
+        .filter((item) => item.kind === "Menu" || item.kind === "Place")
+        .slice(0, 7);
+    }
+    if (activeSceneLaneId === "worth_discovering") {
+      return items
+        .filter((item) => item.kind === "Place" || item.kind === "Truck")
+        .slice(0, 7);
+    }
+    return items.slice(0, 7);
+  }, [activeSceneLaneId, cravingBoardItems]);
+  const featuredRestaurantIds = useMemo(
+    () =>
+      new Set(
+        sceneMixedFeedItems
+          .map((item) => item.restaurantId)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    [sceneMixedFeedItems],
+  );
+  const featuredTruckIds = useMemo(
+    () =>
+      new Set(
+        sceneMixedFeedItems
+          .map((item) => item.truckId)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    [sceneMixedFeedItems],
+  );
+  const featuredDealIds = useMemo(
+    () =>
+      new Set(
+        sceneMixedFeedItems
+          .map((item) => item.dealId)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    [sceneMixedFeedItems],
+  );
+  const featuredEventIds = useMemo(
+    () =>
+      new Set(
+        sceneMixedFeedItems
+          .filter((item) => item.kind === "Event")
+          .map((item) => item.id.replace(/^event-/, ""))
+          .filter(Boolean),
+      ),
+    [sceneMixedFeedItems],
+  );
+
+  const localActivityItems = useMemo(
+    () =>
+      buildLocalActivityItems({
+        menuItems: localMenuItemsForFeed,
+        deals: allDealsForFeed,
+        liveTrucks: trucksServingNow,
+        events: visibleEventsForFeed,
+        hosts: visibleHosts,
+        restaurants: restaurantsOpenNow,
+      }),
+    [
+      allDealsForFeed,
+      localMenuItemsForFeed,
+      restaurantsOpenNow,
+      trucksServingNow,
+      visibleEventsForFeed,
+      visibleHosts,
+    ],
+  );
+  const scoutActivityMode = useMemo(
+    () =>
+      getScoutActivityMode({
+        servingTruckCount: trucksServingNow.length,
+        openRestaurantCount: restaurantsOpenNow.length,
+        dealCount: allDealsForFeed.length,
+        eventCount: visibleEventsForFeed.length + visibleHosts.length,
+        menuUpdateCount: localMenuItemsForFeed.length,
+        activityItemCount: localActivityItems.length,
+        mapMarkerCount: sceneFilteredMapMarkers.filter(
+          (marker) => marker.kind !== "user",
+        ).length,
+      }),
+    [
+      allDealsForFeed.length,
+      sceneFilteredMapMarkers,
+      localActivityItems.length,
+      localMenuItemsForFeed.length,
+      restaurantsOpenNow.length,
+      trucksServingNow.length,
+      visibleEventsForFeed.length,
+      visibleHosts.length,
+    ],
+  );
+  useEffect(() => {
+    if (!showScoutPreviewDebug) return;
+    console.info("[scout-preview-counts]", {
+      ...scoutDebugCounts,
+      visibleScenePins: sceneFilteredMapMarkers.length,
+      statuses: scoutSourceStatuses,
+    });
+  }, [
+    sceneFilteredMapMarkers.length,
+    scoutDebugCounts,
+    scoutSourceStatuses,
+    showScoutPreviewDebug,
+  ]);
+  useEffect(() => {
+    if (!showScoutPreviewDebug) return;
+    const dropped = {
+      trucks: scoutDebugCounts.trucksMissingCoords,
+      restaurants: scoutDebugCounts.restaurantsMissingCoords,
+      hosts: scoutDebugCounts.hostsMissingCoords,
+      events: scoutDebugCounts.eventsMissingCoords,
+      deals: scoutDebugCounts.dealsMissingCoords,
+    };
+    const hasDrops = Object.values(dropped).some((count) => count > 0);
+    if (hasDrops) {
+      console.warn("[scout-preview-dropped-missing-coords]", dropped);
+    }
+  }, [scoutDebugCounts, sceneFilteredMapMarkers.length, showScoutPreviewDebug]);
+  const visibleLocalActivityItems = useMemo(() => {
+    const uniqueKeys = new Set<string>();
+    const uniqueItems = localActivityItems.filter((item) => {
+      const key =
+        getRestaurantIdFromActivity(item) || `${item.type}-${item.entityId}`;
+      if (uniqueKeys.has(key)) return false;
+      uniqueKeys.add(key);
+      return true;
+    });
+    return uniqueItems.length >= 2 && scoutActivityMode !== "low_activity"
+      ? uniqueItems
+      : [];
+  }, [localActivityItems, scoutActivityMode]);
+  const localActivityRestaurantIds = useMemo(() => {
+    return new Set(
+      visibleLocalActivityItems
+        .map(getRestaurantIdFromActivity)
+        .filter((id): id is string => Boolean(id)),
+    );
+  }, [visibleLocalActivityItems]);
+  const visibleOpenRestaurants = useMemo(() => {
+    return restaurantsOpenNow.filter(
+      (restaurant) => !localActivityRestaurantIds.has(String(restaurant.id)),
+    );
+  }, [localActivityRestaurantIds, restaurantsOpenNow]);
+  const visibleTrucksServingNow = useMemo(() => {
+    return trucksServingNow;
+  }, [trucksServingNow]);
+  const visibleDeals = useMemo(() => {
+    return allDealsForFeed;
+  }, [allDealsForFeed]);
+  const hotDealCandidates = useMemo(() => {
+    const happyHourIds = new Set(happyHourDeals.map((deal) => deal.id));
+    return visibleDeals.filter((deal) => !happyHourIds.has(deal.id));
+  }, [happyHourDeals, visibleDeals]);
+  const visibleSceneEvents = useMemo(() => {
+    return visibleEventsForFeed;
+  }, [visibleEventsForFeed]);
+  const topLocalFavoriteRestaurants = useMemo(
+    () =>
+      nearbyRestaurants
+        .map((restaurant) => ({
+          restaurant,
+          score: getRestaurantCommunityScore(restaurant),
+        }))
+        .filter(({ score }) => score > 0)
+        .sort(
+          (a, b) =>
+            b.score - a.score ||
+            (a.restaurant.distanceMiles ?? a.restaurant.distance ?? 999) -
+              (b.restaurant.distanceMiles ?? b.restaurant.distance ?? 999),
+        )
+        .map(({ restaurant }) => restaurant),
+    [nearbyRestaurants],
+  );
+  const topLocalFavoriteIds = useMemo(
+    () =>
+      new Set(
+        topLocalFavoriteRestaurants.map((restaurant) => String(restaurant.id)),
+      ),
+    [topLocalFavoriteRestaurants],
+  );
+  const isHighActivity = scoutActivityMode === "high_activity";
+  const isMediumActivity = scoutActivityMode === "medium_activity";
+  const isLowActivity = scoutActivityMode === "low_activity";
+  const visibleMoreFoodRestaurants = useMemo(() => {
+    if (!isLowActivity) return moreFoodRestaurants;
+    return moreFoodRestaurants.filter(
+      (restaurant) => !topLocalFavoriteIds.has(String(restaurant.id)),
+    );
+  }, [isLowActivity, moreFoodRestaurants, topLocalFavoriteIds]);
+  const openingLaterRestaurants = useMemo(
+    () =>
+      visibleMoreFoodRestaurants.filter(
+        (restaurant) => getRestaurantOpenState(restaurant) === "closed",
+      ),
+    [visibleMoreFoodRestaurants],
+  );
+  const showMoreFoodSection = visibleMoreFoodRestaurants.length > 0;
+  const showTopLocalFavoritesSection =
+    (isLowActivity || activeSceneLaneId === "community") &&
+    topLocalFavoriteRestaurants.length > 0;
+  const isThinScoutViewport = isLowActivity && localActivityCount <= 1;
+  const compactMapHeight = isThinScoutViewport
+    ? "clamp(208px, 24dvh, 238px)"
+    : "clamp(250px, 32dvh, 310px)";
+  const collapsedMapClass = isHighActivity
+    ? "mx-0 mt-0 rounded-b-[2rem] ring-1 ring-orange-200/25 bg-[#1f140c]"
+    : "mx-0 mt-0 rounded-b-[1.8rem] ring-1 ring-orange-100/20 bg-[#211610]";
+  const railSectionClass = isHighActivity
+    ? "pl-4 pr-0 pt-1 pb-7"
+    : "pl-4 pr-0 pt-2 pb-9 sm:pl-5";
+  const compactRailSectionClass = isHighActivity
+    ? "pl-4 pr-0 pt-0 pb-5"
+    : "pl-4 pr-0 pt-1 pb-6 sm:pl-5";
+  const truckCardWidth = isHighActivity
+    ? "w-[184px] sm:w-[206px]"
+    : "w-[204px] sm:w-[228px]";
+  const standardCardWidth = isHighActivity
+    ? "w-[172px] sm:w-[190px]"
+    : "w-[184px] sm:w-[204px]";
+  const featureCardWidth = isHighActivity
+    ? "w-[190px] sm:w-[212px]"
+    : "w-[204px] sm:w-[226px]";
+  const restaurantsRailTitle = isMediumActivity
+    ? "Open Near You"
+    : nearbyRestaurantsTitle;
+  const restaurantsRailSubtitle = isMediumActivity
+    ? "Open restaurants and local places nearby."
+    : nearbyRestaurantsSubtitle;
+  const eventsRailTitle = isHighActivity
+    ? DISCOVERY_LAYERS.events.title
+    : "Upcoming Food Events";
+  const eventsRailSubtitle = isHighActivity
+    ? DISCOVERY_LAYERS.events.subtitle
+    : "Food events and pop-ups coming up nearby.";
+  const moreRailTitle = isLowActivity ? "Worth Checking Out" : "More Nearby";
+  const moreRailSubtitle = isLowActivity
+    ? "Local places and food options around you."
+    : "Nearby trucks and restaurants without current open status.";
+  const laneFoodTrucksTitle =
+    activeSceneLaneId === "food_trucks"
+      ? "Food Trucks Today"
+      : DISCOVERY_LAYERS.foodTrucks.title;
+  const laneRestaurantsTitle =
+    activeSceneLaneId === "restaurants"
+      ? "Nearby Restaurants"
+      : restaurantsRailTitle;
+  const laneDealsTitle =
+    activeSceneLaneId === "deals" ? "Hot Deals" : DISCOVERY_LAYERS.deals.title;
+  const laneEventsTitle =
+    activeSceneLaneId === "events" ? "Events & Pop-Ups" : eventsRailTitle;
+  const laneMoreTitle =
+    activeSceneLaneId === "worth_discovering"
+      ? "Worth Discovering"
+      : moreRailTitle;
+  const showQuickUpdateBarForLane =
+    showQuickUpdateBar &&
+    (activeSceneLaneId === "for_you" ||
+      activeSceneLaneId === "food_trucks" ||
+      activeSceneLaneId === "restaurants" ||
+      activeSceneLaneId === "deals");
+  const compactMapSceneHint =
+    activeSceneLaneId === "food_trucks"
+      ? "Truck activity nearby"
+      : activeSceneLaneId === "restaurants"
+        ? "Open restaurants nearby"
+        : activeSceneLaneId === "deals"
+          ? "Active deals nearby"
+          : activeSceneLaneId === "events"
+            ? "Food events nearby"
+            : activeSceneLaneId === "new_menus"
+              ? "Fresh menu updates nearby"
+              : activeSceneLaneId === "worth_discovering"
+                ? "New and lesser-known spots nearby"
+                : "Find trucks, bowls, pop-ups, and local favorites near you.";
+  const compactMapMarketHint =
+    trucksServingNow.length > 0
+      ? `${scoutMarketEyebrow} • ${formatScoutCount(
+          trucksServingNow.length,
+          "truck nearby now",
+          "trucks nearby now",
+        )}`
+      : scoutMarketEyebrow;
+  const laneHasContent =
+    sceneMixedFeedItems.length > 0 ||
+    (sceneWantsFoodTrucks && visibleTrucksServingNow.length > 0) ||
+    (sceneWantsRestaurants && visibleOpenRestaurants.length > 0) ||
+    (sceneWantsDeals && visibleDeals.length > 0) ||
+    (sceneWantsEvents &&
+      (visibleSceneEvents.length > 0 || visibleHosts.length > 0)) ||
+    (sceneWantsNewMenus && localMenuItems.length > 0) ||
+    (sceneWantsWorthDiscovering && visibleMoreFoodRestaurants.length > 0) ||
+    (sceneWantsCommunity && topLocalFavoriteRestaurants.length > 0);
+  const showForYouWorthFallback =
+    activeSceneLaneId === "for_you" &&
+    sceneMixedFeedItems.length === 0 &&
+    visibleMoreFoodRestaurants.length > 0;
+  return (
+    <>
+      <SEOHead
+        title="Scout Local Food Discovery | MealScout"
+        description="Discover food trucks, restaurants, dishes, events, and local food deals near you with MealScout."
+      />
+
+      {/* Quiet page base. Warm espresso/roasted-brown wash instead of
+          crushing to near-black, so the food photography underneath still
+          reads instead of getting stacked into a flat dark panel. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none fixed inset-0 -z-20 bg-[#1c130c]"
+        style={{
+          backgroundImage:
+            "radial-gradient(90% 50% at 50% -8%, rgba(255,150,72,0.24) 0%, rgba(28,19,12,0) 58%), linear-gradient(180deg, #241708 0%, #1b1109 62%, #170f0a 100%)",
+        }}
+      />
+
+      <main
+        className={`relative z-10 overflow-x-hidden md:-mt-16 ${
+          sheetState === "fullMap"
+            ? ""
+            : "pb-[calc(8.5rem+env(safe-area-inset-bottom,0px))] md:mx-auto md:max-w-[1120px] md:px-4 md:pb-8 xl:max-w-[1280px]"
+        }`}
+      >
+        {/* ============================================================
+             SCOUT SURFACE
+             Default: compact map accessory.
+             Full map: interactive Google Map fills the viewport.
+           ============================================================ */}
+        <ScoutMapHero>
+          <section
+            data-testid="scout-map-container"
+            data-scout-mobile-thirds-map="true"
+            className={`relative overflow-hidden ${
+              sheetState === "fullMap"
+                ? "w-full bg-[#1a1108]"
+                : collapsedMapClass
+            }`}
+            style={{
+              height: sheetState === "fullMap" ? "100dvh" : compactMapHeight,
+              transition: "height 320ms cubic-bezier(0.22,0.61,0.36,1)",
+              touchAction: "auto",
+              boxShadow:
+                sheetState === "fullMap"
+                  ? undefined
+                  : isHighActivity
+                    ? "0 30px 82px rgba(0,0,0,0.74), 0 0 42px rgba(255,100,48,0.10), inset 0 -1px 0 rgba(255,220,170,0.12)"
+                    : "0 28px 70px rgba(0,0,0,0.68), 0 4px 22px rgba(255,138,60,0.08), inset 0 0 0 1px rgba(255,180,110,0.08)",
+            }}
+          >
+            {/* Scout map surfaces
+              ------------------
+              DEFAULT state: compact interactive Google map surface.
+              FULLMAP state: interactive Google Map widget for real
+                pan/zoom/tap-pin exploration.
+          */}
+            <div className="absolute inset-0">
+              <div
+                data-testid="scout-map-preview"
+                className="absolute inset-0"
+                style={{
+                  visibility: "visible",
+                  pointerEvents: sheetState === "fullMap" ? "none" : "auto",
+                  zIndex: 0,
+                }}
+              >
+                {resolvedScoutCoords ? (
+                  // The collapsed/compact preview is always the stylized dark
+                  // map with photo pins, regardless of Google Maps
+                  // availability - it's a decorative teaser, not the
+                  // functional map (that's the "fullMap" surface below, which
+                  // still uses real Google Maps when available). Production
+                  // having a working Maps key meant this preview almost never
+                  // showed the intended redesigned look before this change.
+                  <Suspense fallback={<HeroMapFallback reason="loading" />}>
+                    <ThemedScoutMap
+                      userLocation={resolvedScoutCoords}
+                      markers={sceneFilteredMapMarkers}
+                      zoom={13}
+                      onMarkerTap={handlePreviewMarkerTap}
+                    />
+                  </Suspense>
+                ) : (
+                  <HeroMapFallback
+                    reason={locationStatus === "denied" ? "denied" : "loading"}
+                  />
+                )}
+              </div>
+
+              {/* GoogleMapSurface:
+                - Used for full interactive pan/zoom/tap-pin exploration.
+                - Collapsed preview uses the same styled map family above.
+            */}
+              {sheetState === "fullMap" &&
+              hasMapKey &&
+              !googleMapFailed &&
+              resolvedScoutCoords &&
+              mapCenter ? (
+                <div
+                  ref={googleMapContainerRef}
+                  data-testid="scout-interactive-map"
+                  className="absolute inset-0"
+                  style={{
+                    visibility: "visible",
+                    pointerEvents: sheetState === "fullMap" ? "auto" : "none",
+                    zIndex: 1,
+                  }}
+                >
+                  <MapErrorBoundary>
+                    <GoogleMapSurface
+                      apiKey={effectiveGoogleMapsApiKey}
+                      mapId={effectiveGoogleMapsMapId || undefined}
+                      center={mapCenter}
+                      zoom={mapZoom}
+                      markers={sceneFilteredMapMarkers}
+                      showRoadTrafficLayer={false}
+                      userLocation={resolvedScoutCoords}
+                      isNightTheme={true}
+                      onBoundsChanged={handleMapBoundsChanged}
+                      onZoomChanged={handleMapZoomChanged}
+                      onCenterChanged={handleMapCenterChanged}
+                      onMarkerTap={handleMarkerTap}
+                      onFatalError={() => setGoogleMapFailed(true)}
+                    />
+                  </MapErrorBoundary>
+                </div>
+              ) : sheetState === "fullMap" &&
+                (googleMapFailed ||
+                  !hasMapKey ||
+                  !resolvedScoutCoords ||
+                  !mapCenter) ? (
+                <div
+                  data-testid="scout-interactive-map"
+                  className="absolute inset-0"
+                  style={{ zIndex: 1 }}
+                >
+                  {resolvedScoutCoords ? (
+                    <>
+                      <Suspense fallback={<HeroMapFallback reason="loading" />}>
+                        <ThemedScoutMap
+                          userLocation={resolvedScoutCoords}
+                          markers={sceneFilteredMapMarkers}
+                          zoom={13}
+                          interactive={true}
+                          onMarkerTap={handlePreviewMarkerTap}
+                        />
+                      </Suspense>
+                      {(!hasMapKey || googleMapFailed) && (
+                        <div className="pointer-events-none absolute left-1/2 top-1/2 z-10 max-w-[18rem] -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-white/88 px-5 py-4 text-center text-sm font-bold text-orange-900 ring-1 ring-orange-200/60 backdrop-blur-xl">
+                          Full pan and zoom are loading. You can still browse
+                          nearby food.
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <HeroMapFallback
+                      reason={
+                        locationStatus === "denied" ? "denied" : "loading"
+                      }
+                    />
+                  )}
+                </div>
+              ) : null}
+            </div>
+
+            {/* Premium overlay frame:
+              - Soft top vignette so the controls read cleanly without
+                covering important map labels.
+              - Subtle warm radial center keeps the surface feeling
+                MealScout, not raw Google.
+              - Light edge glow ties the frame together. */}
+            {sheetState !== "fullMap" && (
+              <div
+                aria-hidden="true"
+                className="absolute inset-0 pointer-events-none"
+                style={{
+                  backgroundImage:
+                    "linear-gradient(180deg, rgba(11,8,6,0.62) 0%, rgba(10,7,5,0.22) 26%, rgba(8,6,10,0.04) 54%, rgba(8,6,10,0.58) 100%), radial-gradient(110% 64% at 50% 42%, rgba(255,136,70,0.18), rgba(255,136,70,0.00) 60%), radial-gradient(100% 50% at 50% -8%, rgba(255,111,46,0.12), rgba(255,111,46,0) 56%)",
+                }}
+              />
+            )}
+
+            {sheetState === "fullMap" && (
+              <MapLayerToggles
+                layers={activeMapLayers}
+                onToggle={toggleMapLayer}
+              />
+            )}
+
+            {/* Floating "Collapse" button (top-right) — visible in fullMap state. */}
+            {sheetState === "fullMap" && (
+              <button
+                type="button"
+                onClick={collapseScoutMap}
+                aria-label="Collapse map and return to discover"
+                className="absolute z-30 right-4 top-[calc(env(safe-area-inset-top)+0.75rem)] inline-flex h-12 items-center gap-2 rounded-full bg-white/90 px-4 font-black text-orange-800 ring-1 ring-orange-200/70 backdrop-blur-md transition-colors hover:bg-orange-50"
+                style={{
+                  boxShadow: "0 12px 30px rgba(154,72,18,0.18)",
+                }}
+              >
+                <Minimize2 className="h-4 w-4" aria-hidden="true" />
+                <span className="text-sm">Collapse</span>
+              </button>
+            )}
+
+            {sheetState === "fullMap" && (
+              <ScoutMapHud
+                locationLabel={shortLocation}
+                marketEyebrow={scoutMarketEyebrow}
+                liveTruckCount={liveTrucks.length}
+                restaurantCount={nearbyRestaurants.length}
+                eventCount={visibleEvents.length + visibleHosts.length}
+                dealCount={allDeals.length}
+                localActivityCount={localActivityCount}
+                discoveryRadiusKm={discoveryRadiusKm}
+                onRadiusChange={updateDiscoveryRadiusKm}
+                onRecenter={() => {
+                  if (resolvedScoutCoords) {
+                    setMapCenter(resolvedScoutCoords);
+                    setMapZoom(14);
+                  }
+                }}
+              />
+            )}
+
+            {sheetState === "fullMap" && selectedLiveTruck && (
+              <LiveTruckMapCard
+                truck={selectedLiveTruck}
+                userLocation={resolvedScoutCoords}
+                onClose={() => setSelectedLiveTruck(null)}
+              />
+            )}
+
+            {sheetState === "fullMap" && selectedMapMarker && (
+              <MapPlaceCard
+                marker={selectedMapMarker}
+                userLocation={resolvedScoutCoords}
+                onClose={() => setSelectedMapMarker(null)}
+              />
+            )}
+
+            {sheetState === "fullMap" && mapBounds && (
+              <MapEdgeIndicators
+                markers={sceneFilteredMapMarkers}
+                bounds={mapBounds}
+                center={mapCenter || resolvedScoutCoords}
+                selectedId={
+                  selectedLiveTruck
+                    ? String(selectedLiveTruck.id)
+                    : selectedMapMarker?.id || null
+                }
+                onSelect={(marker) => {
+                  setMapCenter({ lat: marker.lat, lng: marker.lng });
+                  setMapZoom(Math.max(mapZoom, 15));
+                  if (marker.kind === "truck") {
+                    const truck = liveTruckById.get(String(marker.sourceId));
+                    if (truck) setSelectedLiveTruck(truck);
+                  } else {
+                    setSelectedLiveTruck(null);
+                    setSelectedMapMarker(marker);
+                  }
+                }}
+              />
+            )}
+
+            {/* Compact map overlay — matches visual mockup */}
+            {sheetState === "default" && (
+              <>
+                {/* Top-left: wordmark + pts */}
+                <div className="absolute left-3 top-3 z-20 flex items-center gap-2">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-[#100c0a]/80 px-2.5 py-1.5 ring-1 ring-orange-200/30 backdrop-blur-xl shadow-[0_8px_20px_rgba(0,0,0,0.38)]">
+                    <img
+                      src={mealScoutIcon}
+                      alt=""
+                      className="h-5 w-5 object-contain"
+                      aria-hidden="true"
+                    />
+                    <span className="text-[13px] font-black tracking-tight text-white">
+                      Meal<span className="text-orange-400">Scout</span>
+                    </span>
+                  </span>
+                  {user && <ScoutPointsBadge userId={String(user.id)} />}
+                </div>
+
+                {/* Top-right: recenter (sits below the map's own "Live" badge so the two don't overlap) */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (resolvedScoutCoords) {
+                      setMapCenter(resolvedScoutCoords);
+                      setMapZoom(14);
+                    }
+                  }}
+                  aria-label="Recenter map"
+                  className="absolute right-3 top-14 z-20 inline-flex h-9 w-9 items-center justify-center rounded-full bg-[#100c0a]/80 ring-1 ring-orange-200/30 backdrop-blur-xl shadow-[0_8px_20px_rgba(0,0,0,0.38)]"
+                >
+                  <Navigation2
+                    className="h-4 w-4 text-white"
+                    aria-hidden="true"
+                  />
+                </button>
+
+                <MapActivityPips
+                  mode={scoutActivityMode}
+                  truckCount={trucksServingNow.length}
+                  restaurantCount={restaurantsOpenNow.length}
+                  dealCount={allDeals.length}
+                  eventCount={visibleEvents.length + visibleHosts.length}
+                />
+
+                {/* Bottom gradient */}
+                <div
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-x-0 bottom-0 h-[52%]"
+                  style={{
+                    background:
+                      "linear-gradient(180deg, rgba(8,5,2,0) 0%, rgba(8,5,2,0.55) 60%, rgba(8,5,2,0.82) 100%)",
+                  }}
+                />
+
+                {/* Bottom center: pull-down cue */}
+                <button
+                  type="button"
+                  onClick={openScoutMap}
+                  aria-label="Open full map"
+                  className="absolute bottom-3 left-1/2 z-20 -translate-x-1/2 inline-flex items-center gap-1.5 rounded-full bg-[#100c0a]/72 px-4 py-2 text-[11px] font-black text-white/80 ring-1 ring-white/14 backdrop-blur-xl"
+                >
+                  Open full map
+                  <ChevronDown
+                    className="h-3.5 w-3.5 text-white/60"
+                    aria-hidden="true"
+                  />
+                </button>
+
+                {/* Debug overlay (admin only) */}
+                {showScoutPreviewDebug && (
+                  <div className="absolute bottom-12 left-3 right-3 z-20">
+                    <p className="text-[9px] font-bold text-white/60">
+                      {String(isScoutPreviewEligible)} city:
+                      {scoutPreviewCity || "none"} active:
+                      {String(isPensacolaScoutPreview)} source:
+                      {resolvedScoutLocation?.source || "none"} t:
+                      {scoutSourceStatuses.trucks ?? "-"} r:
+                      {scoutSourceStatuses.restaurants ?? "-"} h:
+                      {scoutSourceStatuses.mapLocations ?? "-"} pins:
+                      {scoutDebugCounts.mapPinsBuilt}
+                    </p>
+                  </div>
+                )}
+              </>
+            )}
+          </section>
+        </ScoutMapHero>
+
+        {/* ============================================================
+             LOWER SHEET — discovery sections. Hidden when fullMap.
+             Touch-swipe handlers sit on a thin drag handle at the top.
+        ============================================================ */}
+        {sheetState !== "fullMap" && (
+          <ActiveScenePanel>
+            <ActiveSceneContent
+              laneId={activeSceneLaneId}
+              sceneMixedFeedItems={sceneMixedFeedItems}
+              visibleMoreFoodRestaurants={visibleMoreFoodRestaurants}
+              topLocalFavoriteRestaurants={topLocalFavoriteRestaurants}
+              scoutTruckInventory={scoutTruckInventoryForFeed}
+              visibleTrucksServingNow={visibleTrucksServingNow}
+              visibleOpenRestaurants={visibleOpenRestaurants}
+              nearbyRestaurants={effectiveRestaurantsForFeed}
+              visibleDeals={visibleDeals}
+              hotDealCandidates={hotDealCandidates}
+              happyHourDeals={happyHourDeals}
+              visibleSceneEvents={visibleSceneEvents}
+              visibleHosts={visibleHosts}
+              localMenuItems={localMenuItemsForFeed}
+              popularDishes={effectivePopularDishesForFeed}
+              trendingPlacesThisWeek={effectiveTrendingPlacesForFeed}
+              newToMealScoutRestaurants={newToMealScoutRestaurantsForFeed}
+              openingLaterRestaurants={openingLaterRestaurants}
+              visibleLocalActivityItems={visibleLocalActivityItems}
+              scoutActivityMode={scoutActivityMode}
+              liveTrucksLoading={liveTrucksLoading}
+              liveTrucksError={liveTrucksError}
+              nearbyRestaurantsLoading={nearbyRestaurantsLoading}
+              locationStatus={locationStatus}
+              currentUserId={currentUserId}
+              isSignedIn={!!user}
+              isAdminFamilyUser={isAdminFamilyUser}
+              isTruckVendorUser={isTruckVendorUser}
+              selectLiveTruck={selectLiveTruck}
+              openScoutMap={openScoutMap}
+              menuPreviewByRestaurantId={menuPreviewByRestaurantId}
+              restaurantRelationships={restaurantRelationships}
+              railSectionClass={railSectionClass}
+              compactRailSectionClass={compactRailSectionClass}
+              truckCardWidth={truckCardWidth}
+              standardCardWidth={standardCardWidth}
+              featureCardWidth={featureCardWidth}
+              laneFoodTrucksTitle={laneFoodTrucksTitle}
+              laneRestaurantsTitle={laneRestaurantsTitle}
+              laneDealsTitle={laneDealsTitle}
+              laneEventsTitle={laneEventsTitle}
+              laneMoreTitle={laneMoreTitle}
+              restaurantsRailSubtitle={restaurantsRailSubtitle}
+              eventsRailSubtitle={eventsRailSubtitle}
+              moreRailSubtitle={moreRailSubtitle}
+              scoutSearchMode={scoutSearchMode}
+              scoutSearchIntent={scoutSearchIntent}
+              onOpenResultsSheet={setResultsSheet}
+              showActivityFallback={showActivityFallback}
+              fallbackSearchQuery={scoutSearchQuery}
+              fallbackHasRelatedResults={fallbackHasRelatedResults}
+              onRequestPlace={openFavoritePlaceRequest}
+            />
+          </ActiveScenePanel>
+        )}
+        <Dialog
+          open={isPlaceRequestOpen}
+          onOpenChange={(open) => {
+            setIsPlaceRequestOpen(open);
+            if (!open) {
+              setPlaceRequestQuery("");
+              setSelectedPlaceRequest(null);
+            }
+          }}
+        >
+          <DialogContent className="border-orange-200/20 bg-[#24140c] text-white sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Request your favorite place</DialogTitle>
+              <DialogDescription className="text-orange-100/65">
+                Find the business, confirm it, and MealScout will add it to the
+                review queue.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3">
+              <PlaceAutocompleteInput
+                id="scout-place-request"
+                value={placeRequestQuery}
+                onChange={(value) => {
+                  setPlaceRequestQuery(value);
+                  setSelectedPlaceRequest(null);
+                }}
+                onSelect={(suggestion) => {
+                  void selectFavoritePlaceRequest(suggestion);
+                }}
+                placeholder="Search the restaurant or food truck"
+                disabled={isLoadingPlaceRequest || isSubmittingPlaceRequest}
+                inputClassName="border-orange-200/20 bg-black/20 text-white placeholder:text-white/40"
+                dataTestId="scout-place-request-input"
+              />
+              {isLoadingPlaceRequest ? (
+                <p className="text-xs font-semibold text-orange-100/60">
+                  Loading that place…
+                </p>
+              ) : null}
+              {selectedPlaceRequest ? (
+                <div className="rounded-xl border border-orange-200/20 bg-black/20 px-3 py-3">
+                  <p className="text-sm font-black text-white">
+                    {selectedPlaceRequest.restaurantName}
+                  </p>
+                  <p className="mt-1 text-xs font-semibold text-orange-100/60">
+                    {selectedPlaceRequest.address}
+                  </p>
+                </div>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => void submitFavoritePlaceRequest()}
+                disabled={
+                  !selectedPlaceRequest ||
+                  isLoadingPlaceRequest ||
+                  isSubmittingPlaceRequest
+                }
+                className="inline-flex w-full items-center justify-center rounded-xl bg-[#ff6b35] px-4 py-3 text-sm font-black text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-45"
+                data-testid="scout-submit-place-request"
+              >
+                {isSubmittingPlaceRequest
+                  ? "Sending request…"
+                  : "Request this place"}
+              </button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {resultsSheet ? (
+          <ScoutResultsSheet
+            data={resultsSheet}
+            onClose={() => setResultsSheet(null)}
+          />
+        ) : null}
+      </main>
+    </>
+  );
+}
+
+/* ============================================================
+   SHARED SECTION HEADER
+   ============================================================ */
+
+function SectionHeader({
+  title,
+  linkHref,
+  subtitle,
+  itemCount,
+  onSeeAll,
+}: {
+  title: string;
+  linkHref: string;
+  subtitle?: string;
+  itemCount?: number;
+  onSeeAll?: () => void;
+}) {
+  const showLink = itemCount === undefined || itemCount > 1;
+  const seeAllClassName =
+    "inline-flex w-fit shrink-0 items-center gap-1.5 rounded-full bg-orange-500/10 px-3 py-1.5 text-xs font-black uppercase tracking-[0.08em] text-orange-100 ring-1 ring-orange-200/20 transition-colors hover:bg-orange-500/16 sm:text-sm sm:normal-case sm:tracking-normal";
+
+  return (
+    <div className="mb-4 pr-5">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between sm:gap-3">
+        <div className="min-w-0">
+          <h2 className="text-xl font-black tracking-tight text-white sm:text-2xl">
+            {title}
+          </h2>
+        </div>
+        {showLink ? (
+          onSeeAll ? (
+            <button
+              type="button"
+              onClick={onSeeAll}
+              className={seeAllClassName}
+            >
+              See All <ChevronRight className="h-4 w-4" aria-hidden="true" />
+            </button>
+          ) : (
+            <Link href={linkHref} className={seeAllClassName}>
+              See All <ChevronRight className="h-4 w-4" aria-hidden="true" />
+            </Link>
+          )
+        ) : null}
+      </div>
+      {subtitle ? (
+        <p className="mt-1.5 text-xs leading-relaxed text-white/58 sm:text-sm">
+          {subtitle}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/* ============================================================
+   SCOUT HERO + FILTERS
+   ============================================================ */
+
+function CravingCompass({
+  mode,
+  daypartCopy,
+  locationStatus,
+  onRefreshLocation,
+}: {
+  mode: ScoutActivityMode;
+  daypartCopy: { title: string; body: string };
+  locationStatus: "idle" | "requesting" | "ready" | "denied";
+  onRefreshLocation: () => void;
+}) {
+  const hasLocation = locationStatus === "ready";
+  const modeLabel =
+    mode === "high_activity"
+      ? "Food happening now"
+      : mode === "medium_activity"
+        ? "Food nearby now"
+        : "Explore local food";
+
+  return (
+    <section
+      className={mode === "high_activity" ? "px-4 pt-3 pb-2" : "px-4 pt-4 pb-3"}
+    >
+      <div
+        className={
+          mode === "high_activity"
+            ? "px-1 py-2"
+            : "overflow-hidden rounded-[1.35rem] bg-[#17100d]/86 ring-1 ring-white/10 shadow-[0_16px_46px_rgba(0,0,0,0.24)]"
+        }
+      >
+        <div className={mode === "high_activity" ? "" : "px-4 py-4"}>
+          <p className="mb-2 text-[10px] font-black uppercase tracking-[0.16em] text-white/38">
+            {modeLabel}
+          </p>
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h2 className="font-sans text-white text-lg font-black leading-tight">
+                Find food near you.
+              </h2>
+              <p className="mt-1 text-white/62 text-xs leading-relaxed">
+                Open restaurants, food trucks, and deals nearby.
+              </p>
+            </div>
+            {!hasLocation ? (
+              <button
+                type="button"
+                onClick={onRefreshLocation}
+                className="shrink-0 rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-black text-stone-900 ring-1 ring-white/40 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
+              >
+                Use location
+              </button>
+            ) : null}
+          </div>
+          <span className="sr-only">{daypartCopy.body}</span>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function SceneOptionsBar({
+  activeSceneLaneId,
+  onSceneLaneSelect,
+}: {
+  activeSceneLaneId: ScoutSceneLaneId;
+  onSceneLaneSelect: (laneId: ScoutSceneLaneId) => void;
+}) {
+  const scrollerRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    scrollerRef.current?.scrollTo({ left: 0, behavior: "auto" });
+  }, []);
+  const getIcon = (icon: ScoutSceneLane["icon"]) => {
+    if (icon === "spark")
+      return <Compass className="h-3.5 w-3.5" aria-hidden="true" />;
+    if (icon === "community")
+      return <Users className="h-3.5 w-3.5" aria-hidden="true" />;
+    if (icon === "nearby")
+      return <Navigation2 className="h-3.5 w-3.5" aria-hidden="true" />;
+    if (icon === "truck")
+      return <Flame className="h-3.5 w-3.5" aria-hidden="true" />;
+    if (icon === "restaurant")
+      return <Utensils className="h-3.5 w-3.5" aria-hidden="true" />;
+    if (icon === "deal")
+      return <Tag className="h-3.5 w-3.5" aria-hidden="true" />;
+    if (icon === "event")
+      return <CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />;
+    if (icon === "menu")
+      return <Bookmark className="h-3.5 w-3.5" aria-hidden="true" />;
+    if (icon === "late")
+      return <CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />;
+    return <Heart className="h-3.5 w-3.5" aria-hidden="true" />;
+  };
+
+  return (
+    <section className="px-4 pb-4">
+      <div
+        ref={scrollerRef}
+        className="overflow-x-auto atmo-hide-scrollbar pl-0.5"
+      >
+        <div className="flex w-max gap-1 pr-2">
+          {SCOUT_SCENE_LANES.map((lane) => {
+            const isActive = lane.id === activeSceneLaneId;
+            return (
+              <button
+                key={lane.id}
+                type="button"
+                onClick={() => onSceneLaneSelect(lane.id)}
+                className={[
+                  "inline-flex min-h-11 min-w-[76px] shrink-0 items-center justify-center gap-1 rounded-2xl px-2 py-2 text-[11px] font-bold ring-1 transition-colors active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/60",
+                  isActive
+                    ? "bg-[#ff7945] text-white ring-white/20 shadow-[0_10px_22px_rgba(255,121,69,0.28)]"
+                    : "bg-[#11131a]/82 text-white/78 ring-white/10 hover:bg-[#171a23] hover:text-white",
+                ].join(" ")}
+                aria-pressed={isActive}
+              >
+                {getIcon(lane.icon)}
+                <span className="whitespace-nowrap">{lane.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ActiveSceneIntro({ laneId }: { laneId: ScoutSceneLaneId }) {
+  const laneCopy: Record<
+    ScoutSceneLaneId,
+    { title: string; subtitle: string }
+  > = {
+    for_you: {
+      title: "For You",
+      subtitle:
+        "Local favorites, open spots, new menus, and places worth finding.",
+    },
+    community: {
+      title: "Community",
+      subtitle: "What locals are saving, sharing, and coming back to.",
+    },
+    nearby_now: {
+      title: "Nearby",
+      subtitle: "Food, drinks, events, and trucks close to you.",
+    },
+    food_trucks: {
+      title: "Food Trucks",
+      subtitle: "Trucks posted up, scheduled, or serving nearby.",
+    },
+    restaurants: {
+      title: "Restaurants",
+      subtitle: "Open tables, local kitchens, and menu highlights.",
+    },
+    deals: {
+      title: "Deals",
+      subtitle: "Active offers from nearby spots.",
+    },
+    events: {
+      title: "Events",
+      subtitle: "Food, music, pop-ups, and things happening around town.",
+    },
+    new_menus: {
+      title: "New Menus",
+      subtitle: "Fresh dishes and menu updates from local spots.",
+    },
+    late_night: {
+      title: "Late Night",
+      subtitle: "Places still serving after hours.",
+    },
+    worth_discovering: {
+      title: "Worth Discovering",
+      subtitle: "New, quiet, or lesser-known spots nearby.",
+    },
+  };
+  const activeCopy = laneCopy[laneId] ?? laneCopy.for_you;
+  return (
+    <section className="px-4 pb-3">
+      <h2 className="font-sans text-2xl font-semibold tracking-tight text-white">
+        {activeCopy.title}
+      </h2>
+      <p className="mt-1.5 text-sm leading-relaxed text-white/62">
+        {activeCopy.subtitle}
+      </p>
+    </section>
+  );
+}
+
+type ScoutRailRenderCard =
+  | {
+      cardType: "truck";
+      cardKind: "food_truck";
+      truck: LiveTruckSummary;
+      viewModel: ScoutResultViewModel;
+    }
+  | {
+      cardType: "restaurant";
+      cardKind: "restaurant" | "community_pick";
+      restaurant: RestaurantSummary;
+      viewModel: ScoutResultViewModel;
+    }
+  | {
+      cardType: "menu_item";
+      cardKind: "menu_item";
+      item: LocalMenuItemFeedItem;
+      position: number;
+      viewModel: ScoutResultViewModel;
+    }
+  | {
+      cardType: "deal";
+      cardKind: "deal" | "happy_hour";
+      deal: DealSummary;
+      viewModel: ScoutResultViewModel;
+    }
+  | {
+      cardType: "event";
+      cardKind: "event";
+      event: EventSummary;
+      viewModel: ScoutResultViewModel;
+    };
+
+function buildTruckResultViewModel(
+  truck: LiveTruckSummary,
+  scope: ScoutDiscoveryScope = "nearby",
+): ScoutResultViewModel {
+  return buildScoutResultViewModel(
+    toScoutDiscoveryResult(truck, {
+      kind: "food_truck",
+      scope,
+      source: isTruckBroadcastLive(truck)
+        ? "live_presence"
+        : scope === "network"
+          ? "network_search"
+          : "local_inventory",
+      href: getTruckProfilePath(truck),
+    }),
+  );
+}
+
+function buildRestaurantResultViewModel(
+  restaurant: RestaurantSummary,
+  scope: ScoutDiscoveryScope = "nearby",
+): ScoutResultViewModel {
+  const normalizedKind = getScoutRestaurantLikeKind(restaurant);
+  return buildScoutResultViewModel(
+    toScoutDiscoveryResult(restaurant, {
+      kind: normalizedKind === "food_truck" ? "food_truck" : "business",
+      scope,
+      source: scope === "network" ? "network_search" : "local_inventory",
+      href: getRestaurantProfilePath(restaurant),
+    }),
+    { variant: normalizedKind === "food_truck" ? "truck" : "place" },
+  );
+}
+
+function buildMenuItemResultViewModel(
+  item: LocalMenuItemFeedItem,
+  scope: ScoutDiscoveryScope = "nearby",
+): ScoutResultViewModel {
+  return buildScoutResultViewModel(
+    toScoutDiscoveryResult(item, {
+      kind: "dish",
+      scope,
+      source: scope === "network" ? "network_search" : "menu",
+      href: getMenuItemProfilePath(item),
+    }),
+  );
+}
+
+function buildDealResultViewModel(
+  deal: DealSummary,
+  scope: ScoutDiscoveryScope = "nearby",
+): ScoutResultViewModel {
+  return buildScoutResultViewModel(
+    toScoutDiscoveryResult(deal, {
+      kind: "deal",
+      scope,
+      source: scope === "network" ? "network_search" : "deal",
+      href: `/deal/${encodeURIComponent(String(deal.id))}`,
+    }),
+  );
+}
+
+function buildEventResultViewModel(
+  event: EventSummary,
+  scope: ScoutDiscoveryScope = "nearby",
+): ScoutResultViewModel {
+  return buildScoutResultViewModel(
+    toScoutDiscoveryResult(event, {
+      kind: "event",
+      scope,
+      source: scope === "network" ? "network_search" : "event",
+      href: `/event/${encodeURIComponent(String(event.id))}`,
+    }),
+  );
+}
+
+type ScoutImmediateDecisionItem =
+  | {
+      sourceRowId: ScoutHorizontalRowId;
+      sectionLabel: string;
+      summary: string;
+      cardType: "truck";
+      truck: LiveTruckSummary;
+      businessKey: string | null;
+    }
+  | {
+      sourceRowId: ScoutHorizontalRowId;
+      sectionLabel: string;
+      summary: string;
+      cardType: "restaurant";
+      restaurant: RestaurantSummary;
+      businessKey: string | null;
+    }
+  | {
+      sourceRowId: ScoutHorizontalRowId;
+      sectionLabel: string;
+      summary: string;
+      cardType: "menu_item";
+      item: LocalMenuItemFeedItem;
+    }
+  | {
+      sourceRowId: ScoutHorizontalRowId;
+      sectionLabel: string;
+      summary: string;
+      cardType: "deal";
+      deal: DealSummary;
+    }
+  | {
+      sourceRowId: ScoutHorizontalRowId;
+      sectionLabel: string;
+      summary: string;
+      cardType: "event";
+      event: EventSummary;
+    }
+  | {
+      sourceRowId: ScoutHorizontalRowId;
+      sectionLabel: string;
+      summary: string;
+      cardType: "host";
+      host: ScoutHostLocation;
+    };
+
+type ScoutHorizontalRailDefinition = {
+  id: ScoutHorizontalRowId;
+  title: string;
+  subtitle?: string;
+  linkHref: string;
+  cards: ScoutRailRenderCard[];
+  className: string;
+  cardWidth: string;
+};
+
+const scoutHorizontalRowMeta = new Map(
+  SCOUT_HORIZONTAL_ROW_REGISTRY.map((row) => [row.id, row]),
+);
+
+function getScoutRailCardKey(card: ScoutRailRenderCard): string {
+  return card.viewModel.key;
+}
+
+function isScoutSearchHref(href: string): boolean {
+  return href === "/search" || href.startsWith("/search?");
+}
+
+function ScoutHorizontalCategoryRail({
+  row,
+  renderCard,
+  onOpenAll,
+}: {
+  row: ScoutHorizontalRailDefinition;
+  renderCard: (card: ScoutRailRenderCard) => ReactNode;
+  onOpenAll?: (row: ScoutHorizontalRailDefinition) => void;
+}) {
+  const rowMeta = scoutHorizontalRowMeta.get(row.id);
+  if (!row.cards.length || !rowMeta?.hideWhenEmpty) return null;
+  return (
+    <section
+      className={`${row.className} relative`}
+      data-scout-row-id={row.id}
+      data-scout-row-priority={rowMeta.priority}
+      data-scout-accepted-kinds={rowMeta.acceptedCardKinds.join(",")}
+      data-scout-dedup-policy={rowMeta.dedupPolicy}
+    >
+      <SectionHeader
+        title={row.title}
+        linkHref={row.linkHref}
+        subtitle={row.subtitle}
+        itemCount={row.cards.length}
+        onSeeAll={
+          onOpenAll && isScoutSearchHref(row.linkHref)
+            ? () => onOpenAll(row)
+            : undefined
+        }
+      />
+      <div
+        className="w-full max-w-full overflow-x-auto overscroll-x-contain atmo-hide-scrollbar -mr-1"
+        data-scout-horizontal-rail="true"
+      >
+        <ul
+          className="flex w-max max-w-none snap-x snap-mandatory gap-3.5 pr-5 sm:gap-4"
+          role="list"
+          aria-label={row.title}
+        >
+          {row.cards.slice(0, rowMeta.maxCards).map((card, index) => (
+            <li
+              key={`${row.id}-${card.cardType}-${getScoutRailCardKey(card)}-${index}`}
+              className={`shrink-0 snap-start ${row.cardWidth}`}
+              data-scout-card-kind={card.cardKind}
+            >
+              {renderCard(card)}
+            </li>
+          ))}
+        </ul>
+      </div>
+      {row.cards.length > 2 ? (
+        <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-20 items-center justify-end bg-gradient-to-l from-[#070609] via-[#070609]/82 to-transparent pr-2 sm:flex">
+          <span className="rounded-full bg-white/10 px-2 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-white/68 ring-1 ring-white/10">
+            Scroll
+          </span>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+/* ============================================================
+   SCOUT RESULTS SHEET — full-screen "See All" overlay.
+   Stays inside Scout instead of navigating to a separate page;
+   reuses whatever data + card renderer the caller already has,
+   just without the horizontal-rail's item cap.
+   ============================================================ */
+
+export type ScoutResultsSheetData = {
+  title: string;
+  subtitle?: string;
+  items: unknown[];
+  renderItem: (item: any, index: number) => ReactNode;
+  getKey?: (item: any, index: number) => string;
+};
+
+function ScoutResultsSheet({
+  data,
+  onClose,
+}: {
+  data: ScoutResultsSheetData;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, []);
+
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
+    <div className="fixed inset-0 z-[60] flex flex-col bg-[#0b0704]">
+      <div className="flex items-center gap-3 border-b border-white/10 px-4 py-3 pt-[calc(env(safe-area-inset-top,0px)+0.75rem)]">
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/8 text-white ring-1 ring-white/10 active:bg-white/12"
+        >
+          <X className="h-4 w-4" aria-hidden="true" />
+        </button>
+        <div className="min-w-0">
+          <h2 className="truncate text-lg font-black text-white">
+            {data.title}
+          </h2>
+          {data.subtitle ? (
+            <p className="truncate text-xs font-semibold text-white/58">
+              {data.subtitle}
+            </p>
+          ) : null}
+        </div>
+      </div>
+      <div className="flex-1 overflow-y-auto px-4 pb-[calc(env(safe-area-inset-bottom,0px)+1rem)] pt-4">
+        {data.items.length === 0 ? (
+          <p className="mt-10 text-center text-sm text-white/50">
+            Nothing here yet.
+          </p>
+        ) : (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {data.items.map((item, index) => (
+              <div key={data.getKey ? data.getKey(item, index) : index}>
+                {data.renderItem(item, index)}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+function ScoutFallbackMarketNotice({
+  query,
+  hasResults,
+  onRequestPlace,
+}: {
+  query: string;
+  hasResults: boolean;
+  onRequestPlace: () => void;
+}) {
+  const normalizedQuery = query.trim();
+  return (
+    <section
+      className="px-4 pt-3"
+      data-testid="scout-fallback-market-notice"
+    >
+      <div className="rounded-[1.1rem] border border-orange-300/30 bg-[#2a180e] px-4 py-3 shadow-[0_12px_28px_rgba(38,18,8,0.24)]">
+        <p className="text-[10px] font-black uppercase tracking-[0.13em] text-orange-300">
+          {normalizedQuery ? "Nothing matched nearby" : "No nearby listings yet"}
+        </p>
+        <div className="mt-1 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <p className="text-sm font-black text-white">
+              {hasResults
+                ? normalizedQuery
+                  ? "Showing related picks from active areas"
+                  : "Showing popular picks from active areas"
+                : `No related “${normalizedQuery}” picks are active right now`}
+            </p>
+            <p className="mt-0.5 text-xs font-semibold leading-relaxed text-orange-100/65">
+              {hasResults
+                ? normalizedQuery
+                  ? `These are farther away, may come from any active MealScout area, and clearly relate to “${normalizedQuery}.”`
+                  : "These are farther away and come from MealScout areas with current activity."
+                : "Scout will not substitute unrelated food. Request your favorite place and we’ll add it to the review queue."}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onRequestPlace}
+            className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-full bg-[#ff6b35] px-3.5 py-2 text-[11px] font-black text-white shadow-sm ring-1 ring-orange-300/30"
+          >
+            <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+            Request your favorite place
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ScoutFirstScreenDecisionStack({
+  items,
+  thinMarket,
+}: {
+  items: ScoutImmediateDecisionItem[];
+  thinMarket: boolean;
+}) {
+  const primary = items[0] ?? null;
+
+  if (!primary) {
+    return (
+      <section
+        className="px-4 pb-3 pt-3"
+        data-scout-first-screen-decision-stack="true"
+        data-scout-first-screen-empty="true"
+      >
+        <div className="rounded-[1.1rem] bg-[#fff7ed]/94 px-4 py-3 text-[#251208] ring-1 ring-orange-200/60 shadow-[0_12px_28px_rgba(92,45,18,0.16)]">
+          <p className="text-[11px] font-black uppercase tracking-[0.12em] text-orange-700">
+            No nearby food yet
+          </p>
+          <p className="mt-1 text-sm font-semibold text-stone-600">
+            Search nearby food or move the map
+          </p>
+          <ScoutRecoveryActions className="mt-3" />
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section
+      className="px-4 pb-3 pt-3"
+      data-scout-first-screen-decision-stack="true"
+      data-scout-decision-source-row={primary.sourceRowId}
+    >
+      <div className="rounded-[1.1rem] bg-[#fff7ed]/94 p-3 text-[#251208] ring-1 ring-orange-200/60 shadow-[0_14px_34px_rgba(92,45,18,0.18)]">
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[11px] font-black uppercase tracking-[0.12em] text-orange-700">
+              {primary.sectionLabel}
+            </p>
+            <p className="mt-0.5 truncate text-xs font-semibold text-stone-600">
+              {primary.summary}
+            </p>
+          </div>
+          <span className="shrink-0 rounded-full bg-orange-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-orange-800 ring-1 ring-orange-200/80">
+            Best now
+          </span>
+        </div>
+        <ScoutImmediateCompactCard item={primary} />
+        {thinMarket ? (
+          <div
+            className="mt-3 rounded-2xl bg-white/70 px-3 py-3 ring-1 ring-orange-200/70"
+            data-testid="scout-thin-market-state"
+          >
+            <p className="text-sm font-black text-[#251208]">
+              Nearby food coverage is still growing, so Scout is showing the
+              closest real place first.
+            </p>
+            <p className="mt-1 text-xs font-semibold leading-relaxed text-stone-600">
+              Browse nearby or open the map while you widen your search.
+            </p>
+            <ScoutRecoveryActions className="mt-3" />
+          </div>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+function ScoutRecoveryActions({ className = "" }: { className?: string }) {
+  return (
+    <div className={`flex flex-wrap gap-2 ${className}`.trim()}>
+      <Link
+        href="/search"
+        className="rounded-full bg-[#ff7945] px-3 py-1.5 text-[11px] font-black text-white ring-1 ring-white/20"
+      >
+        Browse nearby
+      </Link>
+      <Link
+        href="/search"
+        className="rounded-full bg-white/[0.06] px-3 py-1.5 text-[11px] font-black text-white/90 ring-1 ring-white/20"
+      >
+        Search nearby
+      </Link>
+    </div>
+  );
+}
+
+function ScoutImmediateCompactCard({
+  item,
+}: {
+  item: ScoutImmediateDecisionItem;
+}) {
+  if (item.cardType === "truck") {
+    const truck = item.truck;
+    const title = truck.name || "Food truck";
+    const area = getTruckArea(truck);
+    const status = isTruckBroadcastLive(truck)
+      ? "Live now"
+      : isTruckServingNow(truck)
+        ? "Serving now"
+        : "Scheduled";
+    const meta = ["Food truck", status, area].filter(Boolean).join(" / ");
+    const href = getTruckProfilePath(truck);
+    const view = buildScoutResultViewModel(
+      toScoutDiscoveryResult(truck, {
+        kind: "food_truck",
+        scope: "nearby",
+        source: isTruckBroadcastLive(truck) ? "live_presence" : "local_inventory",
+        href,
+      }),
+      { subtitle: meta },
+    );
+    const directionsUrl = buildDirectionsUrl(truck);
+    return (
+      <CompactDecisionCardShell
+        href={view.href}
+        imageUrl={view.imageUrl}
+        imageObjectPosition={view.imageObjectPosition}
+        fallbackIcon={
+          <TruckIcon className="h-4 w-4 text-white/90" aria-hidden="true" />
+        }
+        title={view.title || title}
+        meta={view.subtitle || meta}
+        primaryActionLabel={view.primaryActionLabel}
+        directionsUrl={directionsUrl}
+        categoryPhoto={getDishCategoryPhoto(
+          truck.name,
+          truck.cuisineType,
+          truck.vibe,
+        )}
+        variant="truck"
+      />
+    );
+  }
+
+  if (item.cardType === "restaurant") {
+    const restaurant = item.restaurant;
+    const normalizedKind = getScoutRestaurantLikeKind(restaurant);
+    const typeLabel =
+      normalizedKind === "food_truck"
+        ? "Food truck"
+        : normalizedKind === "restaurant"
+          ? "Restaurant"
+          : "Local food";
+    const openState = getRestaurantOpenState(restaurant);
+    const status =
+      openState === "open"
+        ? "Open now"
+        : openState === "closed"
+          ? "Closed now"
+          : null;
+    const area = getRestaurantArea(restaurant);
+    const meta = [typeLabel, status, area].filter(Boolean).join(" / ");
+    const href = getRestaurantProfilePath(restaurant);
+    const view = buildScoutResultViewModel(
+      toScoutDiscoveryResult(restaurant, {
+        kind: normalizedKind === "food_truck" ? "food_truck" : "business",
+        scope: "nearby",
+        source: "local_inventory",
+        href,
+      }),
+      {
+        subtitle: meta,
+        variant: normalizedKind === "food_truck" ? "truck" : "place",
+      },
+    );
+    const directionsUrl = buildDirectionsUrl(restaurant);
+    return (
+      <CompactDecisionCardShell
+        href={view.href}
+        imageUrl={view.imageUrl}
+        imageObjectPosition={view.imageObjectPosition}
+        fallbackIcon={
+          normalizedKind === "food_truck" ? (
+            <TruckIcon className="h-4 w-4 text-white/90" aria-hidden="true" />
+          ) : (
+            <MapPin className="h-4 w-4 text-white/90" aria-hidden="true" />
+          )
+        }
+        title={view.title}
+        meta={view.subtitle || meta}
+        primaryActionLabel={view.primaryActionLabel}
+        directionsUrl={directionsUrl}
+        categoryPhoto={getDishCategoryPhoto(
+          getRestaurantName(restaurant),
+          restaurant.cuisineType,
+        )}
+        variant={view.variant}
+      />
+    );
+  }
+
+  if (item.cardType === "menu_item") {
+    const menuItem = item.item;
+    const reason = [
+      menuItem.restaurantName || "Local menu",
+      menuItem.cuisineType,
+      typeof menuItem.priceCents === "number" && menuItem.priceCents > 0
+        ? `$${(menuItem.priceCents / 100).toFixed(menuItem.priceCents % 100 === 0 ? 0 : 2)}`
+        : null,
+    ]
+      .filter(Boolean)
+      .join(" / ");
+    const href = getMenuItemProfilePath(menuItem);
+    const view = buildScoutResultViewModel(
+      toScoutDiscoveryResult(menuItem, {
+        kind: "dish",
+        scope: "nearby",
+        source: "menu",
+        href,
+      }),
+      { subtitle: reason || "Popular nearby dish" },
+    );
+    return (
+      <CompactDecisionCardShell
+        href={view.href}
+        imageUrl={view.imageUrl}
+        imageObjectPosition={view.imageObjectPosition}
+        fallbackIcon={
+          <Utensils className="h-4 w-4 text-white/90" aria-hidden="true" />
+        }
+        title={view.title}
+        meta={view.subtitle || "Popular nearby dish"}
+        primaryActionLabel={view.primaryActionLabel}
+        categoryPhoto={getDishCategoryPhoto(
+          menuItem.name,
+          menuItem.cuisineType,
+        )}
+        variant={view.variant}
+      />
+    );
+  }
+
+  if (item.cardType === "deal") {
+    const deal = item.deal;
+    const meta =
+      [deal.restaurantName, deal.discountText || deal.description]
+        .filter(Boolean)
+        .join(" / ") || "Active nearby deal";
+    const href = `/deal/${encodeURIComponent(String(deal.id))}`;
+    const view = buildScoutResultViewModel(
+      toScoutDiscoveryResult(deal, {
+        kind: "deal",
+        scope: "nearby",
+        source: "deal",
+        href,
+      }),
+      { subtitle: meta },
+    );
+    return (
+      <CompactDecisionCardShell
+        href={view.href}
+        imageUrl={view.imageUrl}
+        imageObjectPosition={view.imageObjectPosition}
+        fallbackIcon={
+          <Tag className="h-4 w-4 text-white/90" aria-hidden="true" />
+        }
+        title={view.title}
+        meta={view.subtitle || meta}
+        primaryActionLabel={view.primaryActionLabel}
+        categoryPhoto={getDishCategoryPhoto(
+          deal.title,
+          (deal as any).description,
+        )}
+        variant={view.variant}
+      />
+    );
+  }
+
+  if (item.cardType === "host") {
+    const host = item.host;
+    const hostName = host.businessName || host.name || "Host location";
+    const hostId = String(host.hostId || host.id || "").trim();
+    const area =
+      [host.city, host.state].filter(Boolean).join(", ") ||
+      host.address ||
+      "Nearby location";
+    const directionsUrl = buildDirectionsUrl({
+      lat: readNumberField(host, ["latitude", "lat"]),
+      lng: readNumberField(host, ["longitude", "lng"]),
+    });
+    const href = hostId
+      ? `/events?hostId=${encodeURIComponent(hostId)}`
+      : "/events";
+    const meta = ["Host location", area].filter(Boolean).join(" / ");
+    const view = buildScoutResultViewModel(
+      toScoutDiscoveryResult(
+        { ...host, name: hostName, imageUrl: host.spotImageUrl },
+        {
+          kind: "business",
+          scope: "nearby",
+          source: "event",
+          href,
+        },
+      ),
+      {
+        subtitle: meta,
+        primaryActionLabel: "View host",
+        variant: "host",
+      },
+    );
+    return (
+      <CompactDecisionCardShell
+        href={view.href}
+        imageUrl={view.imageUrl}
+        imageObjectPosition={view.imageObjectPosition}
+        fallbackIcon={
+          <MapPin className="h-4 w-4 text-white/90" aria-hidden="true" />
+        }
+        title={view.title}
+        meta={view.subtitle || meta}
+        primaryActionLabel={view.primaryActionLabel}
+        directionsUrl={directionsUrl}
+        variant={view.variant}
+      />
+    );
+  }
+
+  const event = item.event;
+  const title = event.title || event.name || "Food event";
+  const start = event.startsAt || event.startTime;
+  const startLabel = start
+    ? new Date(start).toLocaleDateString(undefined, {
+        month: "short",
+        day: "numeric",
+      })
+    : null;
+  const meta =
+    [event.venueName || event.locationName, startLabel]
+      .filter(Boolean)
+      .join(" / ") || "Upcoming nearby event";
+  const href = `/events?eventId=${encodeURIComponent(String(event.id))}`;
+  const view = buildScoutResultViewModel(
+    toScoutDiscoveryResult({ ...event, name: title }, {
+      kind: "event",
+      scope: "nearby",
+      source: "event",
+      href,
+    }),
+    { subtitle: meta },
+  );
+  return (
+    <CompactDecisionCardShell
+      href={view.href}
+      imageUrl={view.imageUrl}
+      imageObjectPosition={view.imageObjectPosition}
+      fallbackIcon={
+        <CalendarDays className="h-4 w-4 text-white/90" aria-hidden="true" />
+      }
+      title={view.title}
+      meta={view.subtitle || meta}
+      primaryActionLabel={view.primaryActionLabel}
+      variant={view.variant}
+    />
+  );
+}
+
+type CompactDecisionCardVariant =
+  | "truck"
+  | "place"
+  | "dish"
+  | "deal"
+  | "event"
+  | "host";
+
+function CompactDecisionCardShell({
+  href,
+  imageUrl,
+  imageObjectPosition = "50% 50%",
+  fallbackIcon,
+  title,
+  meta,
+  primaryActionLabel,
+  directionsUrl,
+  categoryPhoto = null,
+  variant = "place",
+}: {
+  href: string;
+  imageUrl?: string | null;
+  imageObjectPosition?: string;
+  fallbackIcon: ReactNode;
+  title: string;
+  meta: string;
+  primaryActionLabel: string;
+  directionsUrl?: string | null;
+  categoryPhoto?: DishCategoryPhoto | null;
+  variant?: CompactDecisionCardVariant;
+}) {
+  const [imageFailed, setImageFailed] = useState(false);
+  useEffect(() => {
+    setImageFailed(false);
+  }, [imageUrl]);
+  const showImage = Boolean(imageUrl) && !imageFailed;
+  const shellClass =
+    variant === "dish"
+      ? "rounded-[0.85rem] bg-[#2c1609]/82 ring-orange-200/25"
+      : variant === "truck"
+        ? "rounded-[1.3rem] bg-[#100806]/84 ring-orange-200/18"
+        : variant === "deal"
+          ? "rounded-[0.95rem] bg-[#12200f]/72 ring-lime-200/20"
+          : variant === "event"
+            ? "rounded-[1rem] bg-[#0d1724]/72 ring-sky-200/20"
+            : variant === "host"
+              ? "rounded-[1rem] bg-[#201407]/78 ring-amber-200/30"
+              : "rounded-[0.95rem] bg-[#0c1714]/78 ring-emerald-200/20";
+  const thumbClass =
+    variant === "dish"
+      ? "rounded-full bg-orange-200/10 ring-orange-100/25"
+      : variant === "truck"
+        ? "rounded-2xl bg-orange-200/8 ring-orange-300/25"
+        : variant === "deal"
+          ? "rounded-lg bg-lime-200/8 ring-lime-200/20"
+          : variant === "event"
+            ? "rounded-lg bg-sky-200/8 ring-sky-200/20"
+            : variant === "host"
+              ? "rounded-xl bg-amber-200/10 ring-amber-200/25"
+              : "rounded-lg bg-emerald-200/8 ring-emerald-200/20";
+  const actionClass =
+    variant === "deal"
+      ? "bg-lime-300 text-[#102006]"
+      : variant === "event"
+        ? "bg-sky-300 text-[#071322]"
+        : variant === "host"
+          ? "bg-amber-300 text-[#1f1204]"
+          : "bg-orange-400 text-[#1a0d08]";
+  return (
+    <div
+      className={`relative flex min-h-[82px] items-center gap-3 overflow-hidden p-2.5 ring-1 ${shellClass}`}
+      data-scout-immediate-compact-card="true"
+    >
+      {variant === "dish" ? (
+        <span
+          className="absolute inset-x-3 bottom-0 border-t border-dashed border-orange-100/20"
+          aria-hidden="true"
+        />
+      ) : null}
+      <div
+        className={`flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden ring-1 ${thumbClass}`}
+      >
+        {showImage ? (
+          <img
+            src={imageUrl || undefined}
+            alt=""
+            className="h-full w-full object-cover"
+            style={{ objectPosition: imageObjectPosition }}
+            loading="lazy"
+            onError={() => setImageFailed(true)}
+          />
+        ) : categoryPhoto ? (
+          <img
+            src={categoryPhoto.image}
+            alt=""
+            className="h-full w-full object-cover"
+            loading="lazy"
+            aria-hidden="true"
+            data-testid="scout-compact-card-image-fallback"
+          />
+        ) : (
+          <div
+            className="relative flex h-full w-full items-center justify-center overflow-hidden bg-[linear-gradient(150deg,#ff8a4c_0%,#ff5a2f_45%,#c2410c_100%)]"
+            data-testid="scout-compact-card-image-fallback"
+          >
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.22),transparent_55%)]" />
+            <div className="relative text-white/90">{fallbackIcon}</div>
+          </div>
+        )}
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-[15px] font-black leading-tight text-white">
+          {title}
+        </p>
+        <p className="mt-1 truncate text-xs font-semibold text-white/58">
+          {meta}
+        </p>
+        <div className="mt-2 flex items-center gap-2">
+          <Link
+            href={href}
+            className={`rounded-full px-3 py-1.5 text-[11px] font-black ${actionClass}`}
+          >
+            {primaryActionLabel}
+          </Link>
+          {directionsUrl ? (
+            <a
+              href={directionsUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-full bg-white/[0.08] px-3 py-1.5 text-[11px] font-black text-white/82 ring-1 ring-white/10"
+            >
+              Directions
+            </a>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ScoutCardMedia({
+  imageUrl,
+  imageObjectPosition = "50% 50%",
+  fallbackIcon,
+  fallbackTestId,
+  imageClassName,
+  fallbackClassName = "",
+  categoryPhoto = null,
+}: {
+  imageUrl?: string | null;
+  imageObjectPosition?: string;
+  fallbackIcon: ReactNode;
+  fallbackTestId: string;
+  imageClassName: string;
+  fallbackClassName?: string;
+  categoryPhoto?: DishCategoryPhoto | null;
+}) {
+  const [imageFailed, setImageFailed] = useState(false);
+  useEffect(() => {
+    setImageFailed(false);
+  }, [imageUrl]);
+  const showImage = Boolean(imageUrl) && !imageFailed;
+
+  if (showImage) {
+    return (
+      <img
+        src={imageUrl || undefined}
+        alt=""
+        className={imageClassName}
+        style={{ objectPosition: imageObjectPosition }}
+        loading="lazy"
+        onError={() => setImageFailed(true)}
+      />
+    );
+  }
+
+  if (categoryPhoto) {
+    return (
+      <div
+        className="absolute inset-0 overflow-hidden"
+        data-testid={fallbackTestId}
+      >
+        <img
+          src={categoryPhoto.image}
+          alt=""
+          className={imageClassName}
+          loading="lazy"
+          aria-hidden="true"
+        />
+        <div
+          className="absolute inset-0"
+          style={{
+            backgroundImage:
+              "linear-gradient(180deg, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.55) 100%)",
+          }}
+          aria-hidden="true"
+        />
+        <span className="absolute bottom-2 right-2 rounded-full bg-black/70 px-2 py-1 text-[9px] font-black uppercase tracking-[0.08em] text-white/85 ring-1 ring-white/25 backdrop-blur-sm">
+          {categoryPhoto.label} · photo coming soon
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className={[
+        "absolute inset-0 flex items-center justify-center overflow-hidden",
+        "bg-[linear-gradient(150deg,#ff8a4c_0%,#ff5a2f_45%,#c2410c_100%)]",
+        fallbackClassName,
+      ].join(" ")}
+      data-testid={fallbackTestId}
+      aria-hidden="true"
+    >
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.22),transparent_55%)]" />
+      <div className="relative flex h-14 w-14 items-center justify-center rounded-2xl bg-white/15 ring-1 ring-white/25 shadow-[0_10px_24px_rgba(0,0,0,0.28)] backdrop-blur-sm">
+        {fallbackIcon}
+      </div>
+    </div>
+  );
+}
+
+function ScoutNetworkScopeBadge({
+  label,
+  position = "bottom-left",
+}: {
+  label?: string | null;
+  position?: "bottom-left" | "top-right";
+}) {
+  if (!label) return null;
+  return (
+    <span
+      className={`absolute z-10 max-w-[calc(100%-1rem)] truncate rounded-full bg-[#2a180e]/92 px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.08em] text-orange-100 ring-1 ring-orange-300/35 backdrop-blur-md ${
+        position === "top-right" ? "right-2 top-2" : "bottom-2 left-2"
+      }`}
+      data-testid="scout-network-scope-label"
+    >
+      {label}
+    </span>
+  );
+}
+
+function ActiveSceneContent({
+  laneId,
+  sceneMixedFeedItems,
+  visibleMoreFoodRestaurants,
+  topLocalFavoriteRestaurants,
+  scoutTruckInventory,
+  visibleTrucksServingNow,
+  visibleOpenRestaurants,
+  nearbyRestaurants,
+  visibleDeals,
+  hotDealCandidates,
+  happyHourDeals,
+  visibleSceneEvents,
+  visibleHosts,
+  localMenuItems,
+  popularDishes,
+  trendingPlacesThisWeek,
+  newToMealScoutRestaurants,
+  openingLaterRestaurants,
+  visibleLocalActivityItems,
+  scoutActivityMode,
+  liveTrucksLoading,
+  liveTrucksError,
+  nearbyRestaurantsLoading,
+  locationStatus,
+  currentUserId,
+  isSignedIn,
+  isAdminFamilyUser,
+  isTruckVendorUser,
+  selectLiveTruck,
+  openScoutMap,
+  menuPreviewByRestaurantId,
+  restaurantRelationships,
+  railSectionClass,
+  compactRailSectionClass,
+  truckCardWidth,
+  standardCardWidth,
+  featureCardWidth,
+  laneFoodTrucksTitle,
+  laneRestaurantsTitle,
+  laneDealsTitle,
+  laneEventsTitle,
+  laneMoreTitle,
+  restaurantsRailSubtitle,
+  eventsRailSubtitle,
+  moreRailSubtitle,
+  scoutSearchMode,
+  scoutSearchIntent,
+  onOpenResultsSheet,
+  showActivityFallback,
+  fallbackSearchQuery,
+  fallbackHasRelatedResults,
+  onRequestPlace,
+}: {
+  laneId: ScoutSceneLaneId;
+  sceneMixedFeedItems: CravingBoardItem[];
+  visibleMoreFoodRestaurants: RestaurantSummary[];
+  topLocalFavoriteRestaurants: RestaurantSummary[];
+  scoutTruckInventory: LiveTruckSummary[];
+  visibleTrucksServingNow: LiveTruckSummary[];
+  visibleOpenRestaurants: RestaurantSummary[];
+  nearbyRestaurants: RestaurantSummary[];
+  visibleDeals: DealSummary[];
+  hotDealCandidates: DealSummary[];
+  happyHourDeals: DealSummary[];
+  visibleSceneEvents: EventSummary[];
+  visibleHosts: ScoutHostLocation[];
+  localMenuItems: LocalMenuItemFeedItem[];
+  popularDishes: TrendingDishSummary[];
+  trendingPlacesThisWeek: TrendingPlaceSummary[];
+  newToMealScoutRestaurants: RestaurantSummary[];
+  openingLaterRestaurants: RestaurantSummary[];
+  visibleLocalActivityItems: LocalActivityItem[];
+  scoutActivityMode: ScoutActivityMode;
+  liveTrucksLoading: boolean;
+  liveTrucksError: boolean;
+  nearbyRestaurantsLoading: boolean;
+  locationStatus: "idle" | "requesting" | "ready" | "denied";
+  currentUserId?: string | null;
+  isSignedIn: boolean;
+  isAdminFamilyUser: boolean;
+  isTruckVendorUser: boolean;
+  selectLiveTruck: (truck: LiveTruckSummary) => void;
+  openScoutMap: () => void;
+  menuPreviewByRestaurantId: Map<string, MenuPreviewItem[]>;
+  restaurantRelationships: RestaurantRelationshipSnapshot;
+  railSectionClass: string;
+  compactRailSectionClass: string;
+  truckCardWidth: string;
+  standardCardWidth: string;
+  featureCardWidth: string;
+  laneFoodTrucksTitle: string;
+  laneRestaurantsTitle: string;
+  laneDealsTitle: string;
+  laneEventsTitle: string;
+  laneMoreTitle: string;
+  restaurantsRailSubtitle?: string;
+  eventsRailSubtitle?: string;
+  moreRailSubtitle: string;
+  scoutSearchMode: boolean;
+  scoutSearchIntent: ScoutSearchIntent;
+  onOpenResultsSheet?: (data: ScoutResultsSheetData) => void;
+  showActivityFallback: boolean;
+  fallbackSearchQuery: string;
+  fallbackHasRelatedResults: boolean;
+  onRequestPlace: () => void;
+}) {
+  const isLowActivityLane = scoutActivityMode === "low_activity";
+  if (laneId === "for_you") {
+    type ScoutBusinessSectionCard =
+      | { cardType: "truck"; truck: LiveTruckSummary }
+      | { cardType: "restaurant"; restaurant: RestaurantSummary };
+
+    const toBusinessKey = (card: ScoutBusinessSectionCard) =>
+      card.cardType === "truck"
+        ? getScoutBusinessCardKey(card.truck, getTruckProfilePath(card.truck))
+        : getScoutBusinessCardKey(
+            card.restaurant,
+            getRestaurantProfilePath(card.restaurant),
+          );
+    const truckCards = (
+      items: LiveTruckSummary[],
+    ): ScoutBusinessSectionCard[] =>
+      items.map((truck) => ({ cardType: "truck", truck }));
+    const restaurantCards = (
+      items: RestaurantSummary[],
+    ): ScoutBusinessSectionCard[] =>
+      items.map((restaurant) => ({ cardType: "restaurant", restaurant }));
+    const extractTrucks = (items: ScoutBusinessSectionCard[] = []) =>
+      items
+        .filter(
+          (item): item is { cardType: "truck"; truck: LiveTruckSummary } =>
+            item.cardType === "truck",
+        )
+        .map((item) => item.truck);
+    const extractRestaurants = (items: ScoutBusinessSectionCard[] = []) =>
+      items
+        .filter(
+          (
+            item,
+          ): item is {
+            cardType: "restaurant";
+            restaurant: RestaurantSummary;
+          } => item.cardType === "restaurant",
+        )
+        .map((item) => item.restaurant);
+
+    const liveTruckCandidates = visibleTrucksServingNow;
+    const foodTrucksTodayCandidates = scoutTruckInventory;
+    const nearbyRestaurantCandidates = nearbyRestaurants;
+    const favoriteRestaurantCandidates = nearbyRestaurantCandidates.filter(
+      (restaurant) =>
+        restaurantRelationships.favoriteIds.has(String(restaurant.id)),
+    );
+    const followedRestaurantCandidates = nearbyRestaurantCandidates.filter(
+      (restaurant) =>
+        restaurantRelationships.followIds.has(String(restaurant.id)),
+    );
+    const orderAgainCandidates: ScoutBusinessSectionCard[] = [];
+    const trendingPlaceCardsRaw: RestaurantSummary[] =
+      trendingPlacesThisWeek.map((place) => ({
+        id: place.id,
+        businessName: place.name,
+        name: place.name,
+        city: place.city ?? null,
+        state: place.state ?? null,
+        cuisineType: place.cuisineType ?? null,
+        coverImageUrl: place.coverImageUrl ?? null,
+        logoUrl: place.logoUrl ?? null,
+        businessType: place.businessType ?? null,
+        isFoodTruck: place.isFoodTruck ?? null,
+      }));
+    const scoutBusinessAssignments =
+      assignScoutBusinessCardsBySection<ScoutBusinessSectionCard>([
+        {
+          id: "live_trucks_now",
+          items: truckCards(liveTruckCandidates),
+          getBusinessKey: toBusinessKey,
+        },
+        {
+          id: "food_trucks_today",
+          items: truckCards(foodTrucksTodayCandidates),
+          getBusinessKey: toBusinessKey,
+        },
+        {
+          id: "open_now_near_you",
+          items: [
+            ...truckCards(liveTruckCandidates),
+            ...restaurantCards(visibleOpenRestaurants),
+          ],
+          getBusinessKey: toBusinessKey,
+        },
+        {
+          id: "saved_favorites",
+          items: restaurantCards(favoriteRestaurantCandidates),
+          getBusinessKey: toBusinessKey,
+        },
+        {
+          id: "following",
+          items: restaurantCards(followedRestaurantCandidates),
+          getBusinessKey: toBusinessKey,
+        },
+        {
+          id: "order_again",
+          items: orderAgainCandidates,
+          getBusinessKey: toBusinessKey,
+        },
+        {
+          id: "nearby_restaurants",
+          items: restaurantCards(
+            nearbyRestaurantCandidates.filter(
+              (restaurant) =>
+                getScoutRestaurantLikeKind(restaurant) === "restaurant",
+            ),
+          ),
+          getBusinessKey: toBusinessKey,
+        },
+        {
+          id: "trending_this_week",
+          items: restaurantCards(trendingPlaceCardsRaw),
+          getBusinessKey: toBusinessKey,
+        },
+        {
+          id: "new_to_mealscout",
+          items: restaurantCards(newToMealScoutRestaurants),
+          getBusinessKey: toBusinessKey,
+        },
+        {
+          id: "community_picks",
+          items: restaurantCards(topLocalFavoriteRestaurants),
+          getBusinessKey: toBusinessKey,
+        },
+        {
+          id: "worth_discovering",
+          items: [
+            ...truckCards(scoutTruckInventory),
+            ...restaurantCards(visibleMoreFoodRestaurants),
+          ],
+          getBusinessKey: toBusinessKey,
+        },
+      ]);
+    const liveTruckCards = extractTrucks(
+      scoutBusinessAssignments.live_trucks_now,
+    );
+    const forYouTruckItems = extractTrucks(
+      scoutBusinessAssignments.food_trucks_today,
+    );
+    const openNowTruckCards = extractTrucks(
+      scoutBusinessAssignments.open_now_near_you,
+    );
+    const openNowRestaurantCards = extractRestaurants(
+      scoutBusinessAssignments.open_now_near_you,
+    );
+    const favoriteCards = extractRestaurants(
+      scoutBusinessAssignments.saved_favorites,
+    );
+    const followingCards = extractRestaurants(
+      scoutBusinessAssignments.following,
+    );
+    const orderAgainCards = scoutBusinessAssignments.order_again ?? [];
+    const nearbyRestaurantCards = extractRestaurants(
+      scoutBusinessAssignments.nearby_restaurants,
+    );
+    const trendingPlaceCards = extractRestaurants(
+      scoutBusinessAssignments.trending_this_week,
+    );
+    const newToMealScoutCards = extractRestaurants(
+      scoutBusinessAssignments.new_to_mealscout,
+    );
+    const communityPickCards = extractRestaurants(
+      scoutBusinessAssignments.community_picks,
+    );
+    const worthDiscoveringCards =
+      scoutBusinessAssignments.worth_discovering ?? [];
+    const knownTruckIds = new Set(
+      scoutTruckInventory.map((truck) => String(truck.id)),
+    );
+    const popularDishCards: LocalMenuItemFeedItem[] =
+      popularDishes.length > 0
+        ? popularDishes.map((item) => ({
+            id: item.id,
+            name: item.name,
+            description: item.description ?? null,
+            imageUrl: item.imageUrl ?? null,
+            priceCents: item.priceCents ?? null,
+            restaurantId: item.restaurantId,
+            restaurantName: item.restaurantName ?? null,
+            restaurantCity: item.restaurantCity ?? null,
+            restaurantState: item.restaurantState ?? null,
+            restaurantLogoUrl: item.restaurantLogoUrl ?? null,
+            restaurantCoverImageUrl: item.restaurantCoverImageUrl ?? null,
+            cuisineType: item.cuisineType ?? null,
+            businessType:
+              item.businessType ??
+              (knownTruckIds.has(String(item.restaurantId))
+                ? "food_truck"
+                : null),
+            isFoodTruck:
+              item.isFoodTruck ?? knownTruckIds.has(String(item.restaurantId)),
+          }))
+        : localMenuItems.slice(0, 8);
+
+    const highPriorityDecisionItems: ScoutImmediateDecisionItem[] = [
+      ...liveTruckCards.map((truck) => ({
+        sourceRowId: "live_trucks_now" as const,
+        sectionLabel: "Now Serving Trucks",
+        summary: formatScoutCount(
+          liveTruckCards.length,
+          "truck serving now",
+          "trucks serving now",
+        ),
+        cardType: "truck" as const,
+        truck,
+        businessKey: getScoutBusinessCardKey(truck, getTruckProfilePath(truck)),
+      })),
+      ...forYouTruckItems.map((truck) => ({
+        sourceRowId: "food_trucks_today" as const,
+        sectionLabel: "Food Trucks Today",
+        summary: formatScoutCount(
+          forYouTruckItems.length,
+          "truck nearby today",
+          "trucks nearby today",
+        ),
+        cardType: "truck" as const,
+        truck,
+        businessKey: getScoutBusinessCardKey(truck, getTruckProfilePath(truck)),
+      })),
+      ...openNowTruckCards.map((truck) => ({
+        sourceRowId: "open_now_near_you" as const,
+        sectionLabel: "Open Now",
+        summary: formatScoutCount(
+          openNowTruckCards.length + openNowRestaurantCards.length,
+          "open nearby",
+          "open nearby",
+        ),
+        cardType: "truck" as const,
+        truck,
+        businessKey: getScoutBusinessCardKey(truck, getTruckProfilePath(truck)),
+      })),
+      ...openNowRestaurantCards.map((restaurant) => ({
+        sourceRowId: "open_now_near_you" as const,
+        sectionLabel: "Open Nearby",
+        summary: formatScoutCount(
+          openNowTruckCards.length + openNowRestaurantCards.length,
+          "open nearby",
+          "open nearby",
+        ),
+        cardType: "restaurant" as const,
+        restaurant,
+        businessKey: getScoutBusinessCardKey(
+          restaurant,
+          getRestaurantProfilePath(restaurant),
+        ),
+      })),
+      ...visibleHosts.map((host) => ({
+        sourceRowId: "host_locations" as const,
+        sectionLabel: "Host Locations",
+        summary: formatScoutCount(
+          visibleHosts.length,
+          "host nearby",
+          "hosts nearby",
+        ),
+        cardType: "host" as const,
+        host,
+      })),
+      ...communityPickCards.map((restaurant) => ({
+        sourceRowId: "community_picks" as const,
+        sectionLabel: "Community Picks",
+        summary: formatScoutCount(
+          communityPickCards.length,
+          "real community pick",
+          "real community picks",
+        ),
+        cardType: "restaurant" as const,
+        restaurant,
+        businessKey: getScoutBusinessCardKey(
+          restaurant,
+          getRestaurantProfilePath(restaurant),
+        ),
+      })),
+      ...trendingPlaceCards.map((restaurant) => ({
+        sourceRowId: "trending_this_week" as const,
+        sectionLabel: "Best Now",
+        summary: formatScoutCount(
+          trendingPlaceCards.length,
+          "popular pick",
+          "popular picks",
+        ),
+        cardType: "restaurant" as const,
+        restaurant,
+        businessKey: getScoutBusinessCardKey(
+          restaurant,
+          getRestaurantProfilePath(restaurant),
+        ),
+      })),
+      ...newToMealScoutCards.map((restaurant) => ({
+        sourceRowId: "new_to_mealscout" as const,
+        sectionLabel: "Newest",
+        summary: formatScoutCount(
+          newToMealScoutCards.length,
+          "new nearby listing",
+          "new nearby listings",
+        ),
+        cardType: "restaurant" as const,
+        restaurant,
+        businessKey: getScoutBusinessCardKey(
+          restaurant,
+          getRestaurantProfilePath(restaurant),
+        ),
+      })),
+      ...popularDishCards.map((item) => ({
+        sourceRowId: "popular_dishes" as const,
+        sectionLabel: "Menu Highlights",
+        summary: formatScoutCount(
+          popularDishCards.length,
+          "popular dish",
+          "popular dishes",
+        ),
+        cardType: "menu_item" as const,
+        item,
+      })),
+      ...hotDealCandidates.map((deal) => ({
+        sourceRowId: "hot_deals" as const,
+        sectionLabel: "Deals",
+        summary: formatScoutCount(
+          hotDealCandidates.length,
+          "active deal",
+          "active deals",
+        ),
+        cardType: "deal" as const,
+        deal,
+      })),
+      ...happyHourDeals.map((deal) => ({
+        sourceRowId: "happy_hours" as const,
+        sectionLabel: "Happy Hours",
+        summary: formatScoutCount(
+          happyHourDeals.length,
+          "happy hour",
+          "happy hours",
+        ),
+        cardType: "deal" as const,
+        deal,
+      })),
+      ...visibleSceneEvents.map((event) => ({
+        sourceRowId: "events_popups" as const,
+        sectionLabel: "Events & Pop-Ups",
+        summary: formatScoutCount(
+          visibleSceneEvents.length,
+          "nearby event",
+          "nearby events",
+        ),
+        cardType: "event" as const,
+        event,
+      })),
+    ];
+    const nearbyOnlyDecisionItems: ScoutImmediateDecisionItem[] =
+      highPriorityDecisionItems.length > 0
+        ? []
+        : nearbyRestaurantCards.map((restaurant) => {
+            const openState = getRestaurantOpenState(restaurant);
+            const summary =
+              openState === "open"
+                ? formatScoutCount(
+                    nearbyRestaurantCards.length,
+                    "open nearby",
+                    "open nearby",
+                  )
+                : formatScoutCount(
+                    nearbyRestaurantCards.length,
+                    "nearby spot",
+                    "nearby spots",
+                  );
+            return {
+              sourceRowId: "nearby_restaurants" as const,
+              sectionLabel: openState === "open" ? "Open Nearby" : "Nearby Now",
+              summary,
+              cardType: "restaurant" as const,
+              restaurant,
+              businessKey: getScoutBusinessCardKey(
+                restaurant,
+                getRestaurantProfilePath(restaurant),
+              ),
+            };
+          });
+    const firstScreenDecisionItems = [
+      ...highPriorityDecisionItems,
+      ...nearbyOnlyDecisionItems,
+    ];
+    const primaryFirstScreenDecision = firstScreenDecisionItems[0] ?? null;
+    const truckFirstScreenLead =
+      primaryFirstScreenDecision?.cardType === "truck" &&
+      (primaryFirstScreenDecision.sourceRowId === "live_trucks_now" ||
+        primaryFirstScreenDecision.sourceRowId === "food_trucks_today" ||
+        primaryFirstScreenDecision.sourceRowId === "open_now_near_you");
+    const popularDishesRailTitle = showActivityFallback
+      ? fallbackSearchQuery.trim()
+        ? "Related dishes beyond your area"
+        : "Popular dishes beyond your area"
+      : primaryFirstScreenDecision?.sourceRowId === "popular_dishes"
+        ? "More Dishes Nearby"
+        : truckFirstScreenLead
+          ? "Food From Nearby Trucks"
+          : DISCOVERY_LAYERS.menuItems.title;
+    const foodTrucksTodayRailTitle =
+      primaryFirstScreenDecision?.sourceRowId === "food_trucks_today"
+        ? "More Trucks Nearby"
+        : "Food Trucks Today";
+    const foodTrucksTodayRailSubtitle =
+      primaryFirstScreenDecision?.sourceRowId === "food_trucks_today"
+        ? "Other scheduled trucks and open-now options nearby."
+        : "Scheduled trucks and open-now options nearby.";
+    const firstScreenSuppressedBusinessKey =
+      primaryFirstScreenDecision?.cardType === "truck" ||
+      primaryFirstScreenDecision?.cardType === "restaurant"
+        ? primaryFirstScreenDecision.businessKey
+        : null;
+    const suppressFirstScreenBusiness = (card: ScoutRailRenderCard) => {
+      if (!firstScreenSuppressedBusinessKey) return false;
+      if (card.cardType === "truck") {
+        return (
+          getScoutBusinessCardKey(
+            card.truck,
+            getTruckProfilePath(card.truck),
+          ) === firstScreenSuppressedBusinessKey
+        );
+      }
+      if (card.cardType === "restaurant") {
+        return (
+          getScoutBusinessCardKey(
+            card.restaurant,
+            getRestaurantProfilePath(card.restaurant),
+          ) === firstScreenSuppressedBusinessKey
+        );
+      }
+      return false;
+    };
+
+    const hasForYouSections =
+      visibleLocalActivityItems.length > 0 ||
+      liveTruckCards.length > 0 ||
+      openNowRestaurantCards.length > 0 ||
+      forYouTruckItems.length > 0 ||
+      favoriteCards.length > 0 ||
+      followingCards.length > 0 ||
+      orderAgainCards.length > 0 ||
+      nearbyRestaurantCards.length > 0 ||
+      trendingPlaceCards.length > 0 ||
+      newToMealScoutCards.length > 0 ||
+      popularDishCards.length > 0 ||
+      hotDealCandidates.length > 0 ||
+      happyHourDeals.length > 0 ||
+      visibleSceneEvents.length > 0 ||
+      visibleHosts.length > 0 ||
+      communityPickCards.length > 0 ||
+      worthDiscoveringCards.length > 0;
+
+    if (!hasForYouSections) {
+      if (showActivityFallback) {
+        return (
+          <ScoutFallbackMarketNotice
+            query={fallbackSearchQuery}
+            hasResults={fallbackHasRelatedResults}
+            onRequestPlace={onRequestPlace}
+          />
+        );
+      }
+      return (
+        <>
+          <ScoutFirstScreenDecisionStack
+            items={firstScreenDecisionItems}
+            thinMarket={
+              isLowActivityLane && firstScreenDecisionItems.length <= 1
+            }
+          />
+          <ScoutSceneEmptyState laneId="for_you" />
+        </>
+      );
+    }
+
+    const truckRailCards = (
+      trucks: LiveTruckSummary[],
+      scope: ScoutDiscoveryScope = "nearby",
+    ): ScoutRailRenderCard[] =>
+      trucks.map((truck) => ({
+        cardType: "truck",
+        cardKind: "food_truck",
+        truck,
+        viewModel: buildTruckResultViewModel(truck, scope),
+      }));
+    const restaurantRailCards = (
+      restaurants: RestaurantSummary[],
+      cardKind: "restaurant" | "community_pick" = "restaurant",
+      scope: ScoutDiscoveryScope = "nearby",
+    ): ScoutRailRenderCard[] =>
+      restaurants.map((restaurant) => {
+        return {
+          cardType: "restaurant",
+          cardKind,
+          restaurant,
+          viewModel: buildRestaurantResultViewModel(restaurant, scope),
+        };
+      });
+    const menuItemRailCards = (
+      items: LocalMenuItemFeedItem[],
+      scope: ScoutDiscoveryScope = "nearby",
+    ): ScoutRailRenderCard[] =>
+      items.map((item, position) => ({
+        cardType: "menu_item",
+        cardKind: "menu_item",
+        item,
+        position,
+        viewModel: buildMenuItemResultViewModel(item, scope),
+      }));
+    const dealRailCards = (
+      deals: DealSummary[],
+      cardKind: "deal" | "happy_hour" = "deal",
+      scope: ScoutDiscoveryScope = "nearby",
+    ): ScoutRailRenderCard[] =>
+      deals.map((deal) => ({
+        cardType: "deal",
+        cardKind,
+        deal,
+        viewModel: buildDealResultViewModel(deal, scope),
+      }));
+    const eventRailCards = (
+      events: EventSummary[],
+      scope: ScoutDiscoveryScope = "nearby",
+    ): ScoutRailRenderCard[] =>
+      events.map((event) => ({
+        cardType: "event",
+        cardKind: "event",
+        event,
+        viewModel: buildEventResultViewModel(event, scope),
+      }));
+    const businessSectionRailCards = (
+      cards: ScoutBusinessSectionCard[],
+    ): ScoutRailRenderCard[] =>
+      cards.map((card) =>
+        card.cardType === "truck"
+          ? truckRailCards([card.truck])[0]!
+          : {
+              ...restaurantRailCards([card.restaurant])[0]!,
+            },
+      );
+
+    const scoutRows = (
+      [
+        {
+          id: "live_trucks_now",
+          title: "Now Serving Trucks",
+          subtitle: "Food trucks currently serving nearby.",
+          linkHref: DISCOVERY_LAYERS.foodTrucks.href,
+          cards: truckRailCards(liveTruckCards),
+          className: railSectionClass,
+          cardWidth: truckCardWidth,
+        },
+        {
+          id: "food_trucks_today",
+          title: foodTrucksTodayRailTitle,
+          subtitle: foodTrucksTodayRailSubtitle,
+          linkHref: DISCOVERY_LAYERS.foodTrucks.href,
+          cards: truckRailCards(forYouTruckItems),
+          className: railSectionClass,
+          cardWidth: truckCardWidth,
+        },
+        {
+          id: "open_now_near_you",
+          title: "Open Now Near You",
+          subtitle: "Open restaurants and serving trucks near your location.",
+          linkHref: DISCOVERY_LAYERS.restaurants.href,
+          cards: [
+            ...truckRailCards(openNowTruckCards),
+            ...restaurantRailCards(openNowRestaurantCards),
+          ],
+          className: railSectionClass,
+          cardWidth: standardCardWidth,
+        },
+        {
+          id: "saved_favorites",
+          title: "Your Favorites",
+          subtitle:
+            "Saved spots near this Scout area that are not already shown above.",
+          linkHref: "/favorites",
+          cards: restaurantRailCards(favoriteCards),
+          className: compactRailSectionClass,
+          cardWidth: standardCardWidth,
+        },
+        {
+          id: "following",
+          title: "Following",
+          subtitle: "Places you follow near this Scout area.",
+          linkHref: "/favorites",
+          cards: restaurantRailCards(followingCards),
+          className: compactRailSectionClass,
+          cardWidth: standardCardWidth,
+        },
+        {
+          id: "order_again",
+          title: "Order Again",
+          subtitle:
+            "Past orders will appear here when real order history is available.",
+          linkHref: "/orders",
+          cards: businessSectionRailCards(orderAgainCards),
+          className: compactRailSectionClass,
+          cardWidth: standardCardWidth,
+        },
+        {
+          id: "popular_dishes",
+          title: popularDishesRailTitle,
+          subtitle: undefined,
+          linkHref: DISCOVERY_LAYERS.menuItems.href,
+          cards: menuItemRailCards(
+            popularDishCards,
+            showActivityFallback ? "network" : "nearby",
+          ),
+          className: railSectionClass,
+          cardWidth: featureCardWidth,
+        },
+        {
+          id: "hot_deals",
+          title: DISCOVERY_LAYERS.deals.title,
+          subtitle: DISCOVERY_LAYERS.deals.subtitle,
+          linkHref: DISCOVERY_LAYERS.deals.href,
+          cards: dealRailCards(hotDealCandidates),
+          className: railSectionClass,
+          cardWidth: featureCardWidth,
+        },
+        {
+          id: "happy_hours",
+          title: "Happy Hours",
+          subtitle: "Deals explicitly marked as happy hour nearby.",
+          linkHref: DISCOVERY_LAYERS.deals.href,
+          cards: dealRailCards(happyHourDeals, "happy_hour"),
+          className: compactRailSectionClass,
+          cardWidth: featureCardWidth,
+        },
+        {
+          id: "events_popups",
+          title: DISCOVERY_LAYERS.events.title,
+          subtitle: "Pop-ups and food events near this Scout area.",
+          linkHref: DISCOVERY_LAYERS.events.href,
+          cards: eventRailCards(visibleSceneEvents),
+          className: railSectionClass,
+          cardWidth: featureCardWidth,
+        },
+        {
+          id: "nearby_restaurants",
+          title: showActivityFallback
+            ? fallbackSearchQuery.trim()
+              ? "Related places beyond your area"
+              : "Popular beyond your area"
+            : DISCOVERY_LAYERS.restaurants.title,
+          subtitle: showActivityFallback
+            ? fallbackSearchQuery.trim()
+              ? "Farther-away places that clearly match the search."
+              : "Farther-away picks shown because nothing matched nearby."
+            : DISCOVERY_LAYERS.restaurants.subtitle,
+          linkHref: DISCOVERY_LAYERS.restaurants.href,
+          cards: restaurantRailCards(
+            nearbyRestaurantCards,
+            "restaurant",
+            showActivityFallback ? "network" : "nearby",
+          ),
+          className: railSectionClass,
+          cardWidth: standardCardWidth,
+        },
+        {
+          id: "trending_this_week",
+          title: showActivityFallback
+            ? fallbackSearchQuery.trim()
+              ? "Related activity beyond your area"
+              : "Trending beyond your area"
+            : "Local Activity",
+          subtitle: showActivityFallback
+            ? fallbackSearchQuery.trim()
+              ? "These farther-away picks match the search."
+              : "These are not nearby; they are fallback discovery picks."
+            : undefined,
+          linkHref: DISCOVERY_LAYERS.trending.href,
+          cards: restaurantRailCards(
+            trendingPlaceCards,
+            "restaurant",
+            showActivityFallback ? "network" : "nearby",
+          ),
+          className: compactRailSectionClass,
+          cardWidth: standardCardWidth,
+        },
+        {
+          id: "new_to_mealscout",
+          title: "Newest on MealScout",
+          subtitle: "Fresh local listings recently added nearby.",
+          linkHref: "/search",
+          cards: restaurantRailCards(newToMealScoutCards),
+          className: compactRailSectionClass,
+          cardWidth: standardCardWidth,
+        },
+        {
+          id: "community_picks",
+          title: DISCOVERY_LAYERS.localBoard.title,
+          subtitle: undefined,
+          linkHref: DISCOVERY_LAYERS.localBoard.href,
+          cards: restaurantRailCards(communityPickCards, "community_pick"),
+          className: compactRailSectionClass,
+          cardWidth: standardCardWidth,
+        },
+        {
+          id: "worth_discovering",
+          title: "Worth Discovering",
+          subtitle:
+            "Quiet nearby food spots not already shown in your top picks.",
+          linkHref: DISCOVERY_LAYERS.restaurants.href,
+          cards: businessSectionRailCards(worthDiscoveringCards),
+          className: compactRailSectionClass,
+          cardWidth: standardCardWidth,
+        },
+      ] satisfies ScoutHorizontalRailDefinition[]
+    )
+      .sort((a, b) => {
+        const restaurantSearchPriority: Partial<
+          Record<ScoutHorizontalRowId, number>
+        > =
+          scoutSearchMode && scoutSearchIntent === "restaurants"
+            ? {
+                live_trucks_now: 1,
+                nearby_restaurants: 2,
+                open_now_near_you: 3,
+              }
+            : {};
+        return (
+          (restaurantSearchPriority[a.id] ??
+            scoutHorizontalRowMeta.get(a.id)?.priority ??
+            999) -
+          (restaurantSearchPriority[b.id] ??
+            scoutHorizontalRowMeta.get(b.id)?.priority ??
+            999)
+        );
+      })
+      .map((row) => ({
+        ...row,
+        cards: row.cards.filter((card) => !suppressFirstScreenBusiness(card)),
+      }));
+
+    const renderScoutRailCard = (card: ScoutRailRenderCard) => {
+      if (card.cardType === "truck") {
+        return card.cardKind === "food_truck" &&
+          isTruckServingNow(card.truck) ? (
+          <LiveTruckCard
+            truck={card.truck}
+            viewModel={card.viewModel}
+            currentUserId={currentUserId}
+            relationshipSnapshot={restaurantRelationships}
+          />
+        ) : (
+          <TruckCard
+            truck={card.truck}
+            viewModel={card.viewModel}
+            currentUserId={currentUserId}
+          />
+        );
+      }
+      if (card.cardType === "restaurant") {
+        return (
+          <NearbyRestaurantCard
+            restaurant={card.restaurant}
+            viewModel={card.viewModel}
+            menuPreview={
+              menuPreviewByRestaurantId.get(String(card.restaurant.id)) ?? []
+            }
+            isSignedIn={isSignedIn}
+            currentUserId={currentUserId}
+            relationshipSnapshot={restaurantRelationships}
+          />
+        );
+      }
+      if (card.cardType === "menu_item") {
+        return (
+          <LocalMenuItemCard
+            item={card.item}
+            viewModel={card.viewModel}
+            position={card.position}
+            currentUserId={currentUserId}
+          />
+        );
+      }
+      if (card.cardType === "deal") {
+        return (
+          <DealCard
+            deal={card.deal}
+            viewModel={card.viewModel}
+            currentUserId={currentUserId}
+          />
+        );
+      }
+      if (card.cardType === "event") {
+        return (
+          <EventCard
+            event={card.event}
+            viewModel={card.viewModel}
+            currentUserId={currentUserId}
+          />
+        );
+      }
+      return null;
+    };
+
+    return (
+      <>
+        {showActivityFallback ? (
+          <ScoutFallbackMarketNotice
+            query={fallbackSearchQuery}
+            hasResults={fallbackHasRelatedResults}
+            onRequestPlace={onRequestPlace}
+          />
+        ) : null}
+        <ScoutFirstScreenDecisionStack
+          items={firstScreenDecisionItems}
+          thinMarket={isLowActivityLane && firstScreenDecisionItems.length <= 1}
+        />
+        {scoutRows.map((row) => (
+          <ScoutHorizontalCategoryRail
+            key={row.id}
+            row={row}
+            renderCard={renderScoutRailCard}
+            onOpenAll={
+              onOpenResultsSheet
+                ? (openedRow) =>
+                    onOpenResultsSheet({
+                      title: openedRow.title,
+                      subtitle: openedRow.subtitle,
+                      items: openedRow.cards,
+                      renderItem: (card: ScoutRailRenderCard) =>
+                        renderScoutRailCard(card),
+                      getKey: (card: ScoutRailRenderCard, index: number) =>
+                        `${card.cardType}-${getScoutRailCardKey(card)}-${index}`,
+                    })
+                : undefined
+            }
+          />
+        ))}
+      </>
+    );
+  }
+
+  if (laneId === "community") {
+    if (topLocalFavoriteRestaurants.length > 0) {
+      return (
+        <section className={compactRailSectionClass}>
+          <SectionHeader
+            title={DISCOVERY_LAYERS.localBoard.title}
+            linkHref={DISCOVERY_LAYERS.localBoard.href}
+            itemCount={topLocalFavoriteRestaurants.length}
+          />
+          <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
+            <ul
+              className="flex gap-4 pr-5"
+              role="list"
+              aria-label="Top local favorites"
+            >
+              {topLocalFavoriteRestaurants.slice(0, 10).map((restaurant) => (
+                <li
+                  key={`local-favorite-${restaurant.id}`}
+                  className={`shrink-0 ${standardCardWidth}`}
+                >
+                  <SavedRestaurantCard restaurant={restaurant} />
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+      );
+    }
+    return <ScoutSceneEmptyState laneId="community" />;
+  }
+
+  return (
+    <>
+      {laneId === "nearby_now" && visibleLocalActivityItems.length > 0 ? (
+        <LocalActivityRail
+          mode={scoutActivityMode}
+          items={visibleLocalActivityItems}
+          onOpenResultsSheet={onOpenResultsSheet}
+        />
+      ) : null}
+
+      {(laneId === "nearby_now" || laneId === "food_trucks") && (
+        <section className={railSectionClass}>
+          <SectionHeader
+            title={laneFoodTrucksTitle}
+            linkHref={DISCOVERY_LAYERS.foodTrucks.href}
+            subtitle={DISCOVERY_LAYERS.foodTrucks.subtitle}
+            itemCount={visibleTrucksServingNow.length}
+            onSeeAll={
+              onOpenResultsSheet
+                ? () =>
+                    onOpenResultsSheet({
+                      title: laneFoodTrucksTitle,
+                      subtitle: DISCOVERY_LAYERS.foodTrucks.subtitle,
+                      items: visibleTrucksServingNow,
+                      renderItem: (t) => (
+                        <TruckCard
+                          truck={t}
+                          onSelect={selectLiveTruck}
+                          currentUserId={currentUserId}
+                        />
+                      ),
+                      getKey: (t) => String(t.id),
+                    })
+                : undefined
+            }
+          />
+          {liveTrucksLoading && visibleTrucksServingNow.length === 0 ? (
+            <HorizontalSkeletonRow count={3} width={200} />
+          ) : (
+            <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
+              <ul
+                className="flex gap-4 pr-5"
+                role="list"
+                aria-label="Food trucks near you"
+              >
+                {visibleTrucksServingNow.slice(0, 12).map((t) => (
+                  <li key={t.id} className={`shrink-0 ${truckCardWidth}`}>
+                    <TruckCard
+                      truck={t}
+                      onSelect={selectLiveTruck}
+                      currentUserId={currentUserId}
+                    />
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </section>
+      )}
+
+      {(laneId === "nearby_now" ||
+        laneId === "restaurants" ||
+        laneId === "late_night") && (
+        <section className={railSectionClass}>
+          <SectionHeader
+            title={laneRestaurantsTitle}
+            linkHref={DISCOVERY_LAYERS.restaurants.href}
+            subtitle={restaurantsRailSubtitle}
+            itemCount={visibleOpenRestaurants.length}
+            onSeeAll={
+              onOpenResultsSheet
+                ? () =>
+                    onOpenResultsSheet({
+                      title: laneRestaurantsTitle,
+                      subtitle: restaurantsRailSubtitle,
+                      items: visibleOpenRestaurants,
+                      renderItem: (r) => (
+                        <NearbyRestaurantCard
+                          restaurant={r}
+                          menuPreview={
+                            menuPreviewByRestaurantId.get(String(r.id)) ?? []
+                          }
+                          isSignedIn={isSignedIn}
+                          currentUserId={currentUserId}
+                          relationshipSnapshot={restaurantRelationships}
+                        />
+                      ),
+                      getKey: (r) => String(r.id),
+                    })
+                : undefined
+            }
+          />
+          {nearbyRestaurantsLoading && visibleOpenRestaurants.length === 0 ? (
+            <HorizontalSkeletonRow count={3} width={200} />
+          ) : (
+            <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
+              <ul
+                className="flex gap-4 pr-5"
+                role="list"
+                aria-label="Restaurants open now"
+              >
+                {visibleOpenRestaurants.slice(0, 10).map((r) => (
+                  <li key={r.id} className={`shrink-0 ${standardCardWidth}`}>
+                    <NearbyRestaurantCard
+                      restaurant={r}
+                      menuPreview={
+                        menuPreviewByRestaurantId.get(String(r.id)) ?? []
+                      }
+                      isSignedIn={isSignedIn}
+                      currentUserId={currentUserId}
+                      relationshipSnapshot={restaurantRelationships}
+                    />
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </section>
+      )}
+
+      {(laneId === "nearby_now" || laneId === "deals") &&
+      visibleDeals.length > 0 ? (
+        <section className={railSectionClass}>
+          <SectionHeader
+            title={laneDealsTitle}
+            linkHref={DISCOVERY_LAYERS.deals.href}
+            subtitle={DISCOVERY_LAYERS.deals.subtitle}
+            itemCount={visibleDeals.length}
+          />
+          <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
+            <ul className="flex gap-4 pr-5" role="list">
+              {visibleDeals.slice(0, 10).map((d) => (
+                <li key={d.id} className={`shrink-0 ${featureCardWidth}`}>
+                  <DealCard deal={d} currentUserId={currentUserId} />
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+      ) : null}
+
+      {(laneId === "nearby_now" || laneId === "events") &&
+      visibleSceneEvents.length > 0 ? (
+        <section className={railSectionClass}>
+          <SectionHeader
+            title={laneEventsTitle}
+            linkHref={DISCOVERY_LAYERS.events.href}
+            subtitle={eventsRailSubtitle}
+            itemCount={visibleSceneEvents.length}
+          />
+          <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
+            <ul className="flex gap-4 pr-5" role="list">
+              {visibleSceneEvents.slice(0, 8).map((e) => (
+                <li key={e.id} className={`shrink-0 ${featureCardWidth}`}>
+                  <EventCard event={e} currentUserId={currentUserId} />
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+      ) : null}
+
+      {laneId === "new_menus" && localMenuItems.length > 0 ? (
+        <section className={railSectionClass}>
+          <SectionHeader
+            title="New Menus"
+            linkHref={DISCOVERY_LAYERS.menuItems.href}
+            subtitle="Fresh menu items and recent local updates."
+            itemCount={localMenuItems.length}
+            onSeeAll={
+              onOpenResultsSheet
+                ? () =>
+                    onOpenResultsSheet({
+                      title: "New Menus",
+                      subtitle: "Fresh menu items and recent local updates.",
+                      items: localMenuItems,
+                      renderItem: (item, index) => (
+                        <LocalMenuItemCard
+                          item={item}
+                          position={index}
+                          currentUserId={currentUserId}
+                        />
+                      ),
+                      getKey: (item) => String(item.id),
+                    })
+                : undefined
+            }
+          />
+          <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
+            <ul className="flex gap-4 pr-5" role="list" aria-label="New menus">
+              {localMenuItems.slice(0, 10).map((item, index) => (
+                <li
+                  key={`menu-item-${item.id}`}
+                  className={`shrink-0 ${featureCardWidth}`}
+                >
+                  <LocalMenuItemCard
+                    item={item}
+                    position={index}
+                    currentUserId={currentUserId}
+                  />
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+      ) : null}
 
       {(laneId === "worth_discovering" || laneId === "late_night") &&
       visibleMoreFoodRestaurants.length > 0 ? (
