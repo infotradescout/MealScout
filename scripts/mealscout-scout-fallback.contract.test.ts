@@ -86,6 +86,26 @@ assert.match(
   /selectedPlaceRequest\.county \|\|[\s\S]*selectedPlaceRequest\.city/,
   "Place requests must prefer the real county over a city fallback",
 );
+assert.match(
+  scout,
+  /const showActivitySupplement =[\s\S]*localSearchContentCount <= 1[\s\S]*supplementHasResults/,
+  "A one-result market must supplement the first screen with active-market discovery",
+);
+assert.match(
+  scout,
+  /Your nearby result stays first\. The picks below are popular in other active MealScout areas\./,
+  "Thin-market supplements must explain that farther-away picks are not nearby",
+);
+assert.match(
+  scout,
+  /restaurantRailCards\([\s\S]*showActivitySupplement \? activitySupplementRestaurants : \[\][\s\S]*"network"/,
+  "Supplemental business cards must preserve network scope labels",
+);
+assert.match(
+  scout,
+  /menuItemRailCards\(supplementalDishCards, "network"\)/,
+  "Supplemental dish cards must preserve network scope labels",
+);
 
 assert.match(
   navigation,

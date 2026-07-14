@@ -4763,6 +4763,26 @@ export default function ExplorePreview() {
     ],
   );
 
+  const activitySupplementRestaurants = useMemo(() => {
+    const localBusinessIds = new Set(
+      nearbyFoodBusinesses.map((restaurant) => String(restaurant.id)),
+    );
+    return activityFallbackRestaurants.filter(
+      (restaurant) => !localBusinessIds.has(String(restaurant.id)),
+    );
+  }, [activityFallbackRestaurants, nearbyFoodBusinesses]);
+
+  const activitySupplementDishes = useMemo(() => {
+    const localDishIds = new Set(
+      [...localMenuItemsForFeed, ...popularDishesForFeed].map((item) =>
+        String(item.id),
+      ),
+    );
+    return activityFallbackDishes.filter(
+      (item) => !localDishIds.has(String(item.id)),
+    );
+  }, [activityFallbackDishes, localMenuItemsForFeed, popularDishesForFeed]);
+
   const trucksServingNow = useMemo(
     () => scoutTruckInventoryForFeed.filter(isTruckServingNow),
     [scoutTruckInventoryForFeed],
@@ -4855,6 +4875,16 @@ export default function ExplorePreview() {
   const fallbackHasRelatedResults =
     activityFallbackRestaurants.length > 0 ||
     activityFallbackDishes.length > 0;
+  const supplementHasResults =
+    activitySupplementRestaurants.length > 0 ||
+    activitySupplementDishes.length > 0;
+  const showActivitySupplement =
+    localDiscoverySettled &&
+    activityFallbackSettled &&
+    scoutSearchQuery.trim().length === 0 &&
+    localSearchContentCount > 0 &&
+    localSearchContentCount <= 1 &&
+    supplementHasResults;
   const nearbyRestaurantsTitle = DISCOVERY_LAYERS.restaurants.title;
   const nearbyRestaurantsSubtitle = DISCOVERY_LAYERS.restaurants.subtitle;
 
@@ -5654,6 +5684,10 @@ export default function ExplorePreview() {
               showActivityFallback={showActivityFallback}
               fallbackSearchQuery={scoutSearchQuery}
               fallbackHasRelatedResults={fallbackHasRelatedResults}
+              showActivitySupplement={showActivitySupplement}
+              activitySupplementRestaurants={activitySupplementRestaurants}
+              activitySupplementDishes={activitySupplementDishes}
+              nearbyResultCount={localSearchContentCount}
               onRequestPlace={openFavoritePlaceRequest}
             />
           </ActiveScenePanel>
@@ -6296,13 +6330,17 @@ function ScoutResultsSheet({
 function ScoutFallbackMarketNotice({
   query,
   hasResults,
+  nearbyResultCount = 0,
   onRequestPlace,
 }: {
   query: string;
   hasResults: boolean;
+  nearbyResultCount?: number;
   onRequestPlace: () => void;
 }) {
   const normalizedQuery = query.trim();
+  const hasOneNearbyResult =
+    !normalizedQuery && nearbyResultCount === 1 && hasResults;
   return (
     <section
       className="px-4 pt-3"
@@ -6310,19 +6348,27 @@ function ScoutFallbackMarketNotice({
     >
       <div className="rounded-[1.1rem] border border-orange-300/30 bg-[#2a180e] px-4 py-3 shadow-[0_12px_28px_rgba(38,18,8,0.24)]">
         <p className="text-[10px] font-black uppercase tracking-[0.13em] text-orange-300">
-          {normalizedQuery ? "Nothing matched nearby" : "No nearby listings yet"}
+          {normalizedQuery
+            ? "Nothing matched nearby"
+            : hasOneNearbyResult
+              ? "Only one nearby spot right now"
+              : "No nearby listings yet"}
         </p>
         <div className="mt-1 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
             <p className="text-sm font-black text-white">
-              {hasResults
+              {hasOneNearbyResult
+                ? "More happening across MealScout"
+                : hasResults
                 ? normalizedQuery
                   ? "Showing related picks from active areas"
                   : "Showing popular picks from active areas"
                 : `No related “${normalizedQuery}” picks are active right now`}
             </p>
             <p className="mt-0.5 text-xs font-semibold leading-relaxed text-orange-100/65">
-              {hasResults
+              {hasOneNearbyResult
+                ? "Your nearby result stays first. The picks below are popular in other active MealScout areas."
+                : hasResults
                 ? normalizedQuery
                   ? `These are farther away, may come from any active MealScout area, and clearly relate to “${normalizedQuery}.”`
                   : "These are farther away and come from MealScout areas with current activity."
@@ -6996,6 +7042,10 @@ function ActiveSceneContent({
   showActivityFallback,
   fallbackSearchQuery,
   fallbackHasRelatedResults,
+  showActivitySupplement,
+  activitySupplementRestaurants,
+  activitySupplementDishes,
+  nearbyResultCount,
   onRequestPlace,
 }: {
   laneId: ScoutSceneLaneId;
@@ -7049,6 +7099,10 @@ function ActiveSceneContent({
   showActivityFallback: boolean;
   fallbackSearchQuery: string;
   fallbackHasRelatedResults: boolean;
+  showActivitySupplement: boolean;
+  activitySupplementRestaurants: RestaurantSummary[];
+  activitySupplementDishes: TrendingDishSummary[];
+  nearbyResultCount: number;
   onRequestPlace: () => void;
 }) {
   const isLowActivityLane = scoutActivityMode === "low_activity";
@@ -7245,6 +7299,25 @@ function ActiveSceneContent({
               item.isFoodTruck ?? knownTruckIds.has(String(item.restaurantId)),
           }))
         : localMenuItems.slice(0, 8);
+    const supplementalDishCards: LocalMenuItemFeedItem[] =
+      showActivitySupplement
+        ? activitySupplementDishes.map((item) => ({
+            id: item.id,
+            name: item.name,
+            description: item.description ?? null,
+            imageUrl: item.imageUrl ?? null,
+            priceCents: item.priceCents ?? null,
+            restaurantId: item.restaurantId,
+            restaurantName: item.restaurantName ?? null,
+            restaurantCity: item.restaurantCity ?? null,
+            restaurantState: item.restaurantState ?? null,
+            restaurantLogoUrl: item.restaurantLogoUrl ?? null,
+            restaurantCoverImageUrl: item.restaurantCoverImageUrl ?? null,
+            cuisineType: item.cuisineType ?? null,
+            businessType: item.businessType ?? null,
+            isFoodTruck: item.isFoodTruck ?? null,
+          }))
+        : [];
 
     const highPriorityDecisionItems: ScoutImmediateDecisionItem[] = [
       ...liveTruckCards.map((truck) => ({
@@ -7442,6 +7515,8 @@ function ActiveSceneContent({
       ? fallbackSearchQuery.trim()
         ? "Related dishes beyond your area"
         : "Popular dishes beyond your area"
+      : showActivitySupplement && popularDishCards.length === 0
+        ? "Popular dishes across MealScout"
       : primaryFirstScreenDecision?.sourceRowId === "popular_dishes"
         ? "More Dishes Nearby"
         : truckFirstScreenLead
@@ -7515,7 +7590,10 @@ function ActiveSceneContent({
           <ScoutFirstScreenDecisionStack
             items={firstScreenDecisionItems}
             thinMarket={
-              isLowActivityLane && firstScreenDecisionItems.length <= 1
+              !showActivityFallback &&
+              !showActivitySupplement &&
+              isLowActivityLane &&
+              firstScreenDecisionItems.length <= 1
             }
           />
           <ScoutSceneEmptyState laneId="for_you" />
@@ -7658,7 +7736,7 @@ function ActiveSceneContent({
           cards: menuItemRailCards(
             popularDishCards,
             showActivityFallback ? "network" : "nearby",
-          ),
+          ).concat(menuItemRailCards(supplementalDishCards, "network")),
           className: railSectionClass,
           cardWidth: featureCardWidth,
         },
@@ -7712,12 +7790,16 @@ function ActiveSceneContent({
         },
         {
           id: "trending_this_week",
-          title: showActivityFallback
+          title: showActivitySupplement
+            ? "Trending across MealScout"
+            : showActivityFallback
             ? fallbackSearchQuery.trim()
               ? "Related activity beyond your area"
               : "Trending beyond your area"
             : "Local Activity",
-          subtitle: showActivityFallback
+          subtitle: showActivitySupplement
+            ? "Outside your area, shown because nearby activity is limited."
+            : showActivityFallback
             ? fallbackSearchQuery.trim()
               ? "These farther-away picks match the search."
               : "These are not nearby; they are fallback discovery picks."
@@ -7727,6 +7809,12 @@ function ActiveSceneContent({
             trendingPlaceCards,
             "restaurant",
             showActivityFallback ? "network" : "nearby",
+          ).concat(
+            restaurantRailCards(
+              showActivitySupplement ? activitySupplementRestaurants : [],
+              "restaurant",
+              "network",
+            ),
           ),
           className: compactRailSectionClass,
           cardWidth: standardCardWidth,
@@ -7855,13 +7943,27 @@ function ActiveSceneContent({
           <ScoutFallbackMarketNotice
             query={fallbackSearchQuery}
             hasResults={fallbackHasRelatedResults}
+            nearbyResultCount={0}
             onRequestPlace={onRequestPlace}
           />
         ) : null}
         <ScoutFirstScreenDecisionStack
           items={firstScreenDecisionItems}
-          thinMarket={isLowActivityLane && firstScreenDecisionItems.length <= 1}
+          thinMarket={
+            !showActivityFallback &&
+            !showActivitySupplement &&
+            isLowActivityLane &&
+            firstScreenDecisionItems.length <= 1
+          }
         />
+        {showActivitySupplement ? (
+          <ScoutFallbackMarketNotice
+            query=""
+            hasResults={true}
+            nearbyResultCount={nearbyResultCount}
+            onRequestPlace={onRequestPlace}
+          />
+        ) : null}
         {scoutRows.map((row) => (
           <ScoutHorizontalCategoryRail
             key={row.id}
