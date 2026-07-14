@@ -661,36 +661,8 @@ function QuickActionRow({
   profile: PublicProfilePayload;
   safeCtas: PublicCta[];
 }) {
-  const preferredOrder: PublicCta["type"][] = [
-    "menu",
-    "map",
-    "order",
-    "external",
-    "social",
-    "phone",
-    "catering",
-    "booking",
-  ];
-  const actionPool = pickActionCtas(profile, safeCtas, 16).filter(
-    (cta) => cta.type !== "share",
-  );
-  const actions = preferredOrder
-    .flatMap((type) => actionPool.filter((cta) => cta.type === type))
-    .reduce((acc, cta) => {
-      if (acc.find((existing) => existing.href === cta.href)) return acc;
-      acc.push(cta);
-      return acc;
-    }, [] as PublicCta[])
-    .concat(
-      actionPool.filter(
-        (cta) => !preferredOrder.includes(cta.type) || cta.type === "external",
-      ),
-    )
-    .reduce((acc, cta) => {
-      if (acc.find((existing) => existing.href === cta.href)) return acc;
-      acc.push(cta);
-      return acc;
-    }, [] as PublicCta[])
+  const actions = pickActionCtas(profile, safeCtas, 16)
+    .filter((cta) => cta.type !== "share" && cta.type !== "internal")
     .slice(0, 7);
   if (actions.length === 0) return null;
   const headerLabel = actions.some(
@@ -732,9 +704,7 @@ function TruckVisitStrip({
     profile as unknown as PublicProfilePayload,
     safeCtas,
     8,
-  ).find((cta) =>
-    ["map", "order", "menu", "phone", "external", "social"].includes(cta.type),
-  );
+  ).find((cta) => cta.type !== "share" && cta.type !== "internal");
   const stop = primary.stop;
   const stopPlace =
     stop?.locationName ||
