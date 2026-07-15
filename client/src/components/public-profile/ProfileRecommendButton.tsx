@@ -135,10 +135,10 @@ export function ProfileRecommendButton({
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="max-h-[86vh] w-[calc(100vw-1rem)] max-w-lg overflow-y-auto border-white/10 bg-[#0f0d0b] text-white">
           <DialogHeader>
-            <DialogTitle className="text-white">Add context</DialogTitle>
+            <DialogTitle className="text-white">Quick review</DialogTitle>
             <DialogDescription className="text-white/55">
-              Closing this keeps your lightweight recommend. Details add more
-              local signal.
+              Rate the basics. No text required - closing this keeps your
+              recommend either way.
             </DialogDescription>
           </DialogHeader>
 
@@ -146,7 +146,7 @@ export function ProfileRecommendButton({
             <Textarea
               value={recommendationText}
               onChange={(event) => setRecommendationText(event.target.value)}
-              placeholder="What should someone know before they go?"
+              placeholder="Optional: what should someone know before they go?"
               className="min-h-24 border-white/15 bg-black/25 text-white placeholder:text-white/35"
             />
 
@@ -211,7 +211,7 @@ export function ProfileRecommendButton({
                 onClick={handleSubmitContext}
                 className="min-h-10 rounded-xl bg-orange-500 px-4 text-sm font-bold text-black hover:bg-orange-400 disabled:opacity-60"
               >
-                {isSubmittingContext ? "Saving..." : "Add weight"}
+                {isSubmittingContext ? "Saving..." : "Share quick review"}
               </button>
             </div>
           </div>

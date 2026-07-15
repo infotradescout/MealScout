@@ -12,6 +12,7 @@ import { validateDocuments, checkRateLimit } from "../documentValidation";
 import { vacEvaluateRestaurantSignup } from "../vacLite";
 import { ensurePremiumTrialForUser } from "../services/premiumTrial";
 import { isPublicBusinessVisible } from "../utils/publicBusinessVisibility";
+import { parseQuickReviewScore } from "../quickReview/parseQuickReviewScore";
 import {
   toPublicRestaurantListing,
   toPublicRestaurantListingArray,
@@ -1136,15 +1137,51 @@ export function registerRestaurantCoreRoutes(
           typeof body.scores === "string"
             ? JSON.parse(body.scores || "{}")
             : body.scores || {};
+
+        const foodResult = parseQuickReviewScore(
+          "food",
+          scoresRaw.food,
+          body.foodScore,
+        );
+        const valueResult = parseQuickReviewScore(
+          "value",
+          scoresRaw.value,
+          body.valueScore,
+        );
+        const speedResult = parseQuickReviewScore(
+          "speed",
+          scoresRaw.speed,
+          body.speedScore,
+        );
+        const vibeResult = parseQuickReviewScore(
+          "vibe",
+          scoresRaw.vibe,
+          body.vibeScore,
+        );
+
+        const invalidScoreFields = [
+          foodResult,
+          valueResult,
+          speedResult,
+          vibeResult,
+        ]
+          .map((result) => result.error)
+          .filter((error): error is string => Boolean(error));
+
+        if (invalidScoreFields.length > 0) {
+          return res.status(400).json({
+            message: `Quick-review scores must be whole numbers from 1 to 100 (invalid: ${invalidScoreFields.join(", ")}).`,
+          });
+        }
+
         const scores = {
-          food: Number(scoresRaw.food ?? body.foodScore ?? 0) || null,
-          value: Number(scoresRaw.value ?? body.valueScore ?? 0) || null,
-          speed: Number(scoresRaw.speed ?? body.speedScore ?? 0) || null,
-          vibe: Number(scoresRaw.vibe ?? body.vibeScore ?? 0) || null,
+          food: foodResult.value,
+          value: valueResult.value,
+          speed: speedResult.value,
+          vibe: vibeResult.value,
         };
         const scoreValues = Object.values(scores).filter(
-          (value): value is number =>
-            typeof value === "number" && Number.isFinite(value) && value > 0,
+          (value): value is number => value !== null,
         );
         const hasContext = Boolean(
           comment || scoreValues.length > 0 || req.file,
@@ -1158,17 +1195,6 @@ export function registerRestaurantCoreRoutes(
             retryAfterSeconds: actionGate.retryAfterSeconds,
           });
         }
-        const averageScore =
-          scoreValues.length > 0
-            ? Math.round(
-                scoreValues.reduce((sum, value) => sum + value, 0) /
-                  scoreValues.length,
-              )
-            : null;
-        const rating = averageScore
-          ? Math.max(1, Math.min(5, Math.round(averageScore / 20)))
-          : null;
-
         const recommendationData =
           insertRestaurantUserRecommendationSchema.parse({
             restaurantId,
@@ -1230,24 +1256,20 @@ export function registerRestaurantCoreRoutes(
           proofPhoto = createdUpload;
         }
 
-        if (hasContext) {
-          const scoreLines =
-            scoreValues.length > 0
-              ? [
-                  scores.food ? `Food: ${scores.food}/100` : null,
-                  scores.value ? `Value: ${scores.value}/100` : null,
-                  scores.speed ? `Speed: ${scores.speed}/100` : null,
-                  scores.vibe ? `Vibe: ${scores.vibe}/100` : null,
-                ]
-                  .filter(Boolean)
-                  .join("\n")
-              : "";
+        if (scoreValues.length > 0 && recommendation?.id) {
+          await storage.setRestaurantUserRecommendationQuickReview(
+            recommendation.id,
+            scores,
+          );
+        }
+
+        if (comment || proofPhoto?.cloudinaryUrl) {
           const photoLine = proofPhoto?.cloudinaryUrl
             ? `Photo proof: ${proofPhoto.cloudinaryUrl}`
             : "";
           const reviewComment =
-            [comment, scoreLines, photoLine].filter(Boolean).join("\n\n") ||
-            "Recommended on MealScout.";
+            [comment, photoLine].filter(Boolean).join("\n\n") ||
+            "Photo proof added on MealScout.";
           await storage.createReview({
             restaurantId,
             userId,
@@ -1294,6 +1316,7 @@ export function registerRestaurantCoreRoutes(
           success: true,
           alreadyExists: !createdRecommendation,
           contextSaved: hasContext,
+          quickReview: scoreValues.length > 0 ? scores : null,
           proofPhoto,
         });
       } catch (error: any) {

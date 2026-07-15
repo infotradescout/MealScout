@@ -584,6 +584,15 @@ export interface IStorage {
     restaurantId: string;
     userId: string;
   }): Promise<any>;
+  setRestaurantUserRecommendationQuickReview(
+    id: string,
+    scores: {
+      food: number | null;
+      value: number | null;
+      speed: number | null;
+      vibe: number | null;
+    },
+  ): Promise<void>;
   getUserRestaurantRecommendations(userId: string): Promise<any[]>;
   getRestaurantFavoritesAnalytics(
     restaurantId: string,
@@ -4672,6 +4681,26 @@ export class DatabaseStorage implements IStorage {
       .values(recommendation)
       .returning();
     return result;
+  }
+
+  async setRestaurantUserRecommendationQuickReview(
+    id: string,
+    scores: {
+      food: number | null;
+      value: number | null;
+      speed: number | null;
+      vibe: number | null;
+    },
+  ): Promise<void> {
+    await db
+      .update(restaurantUserRecommendations)
+      .set({
+        foodScore: scores.food,
+        valueScore: scores.value,
+        speedScore: scores.speed,
+        vibeScore: scores.vibe,
+      })
+      .where(eq(restaurantUserRecommendations.id, id));
   }
 
   async getUserRestaurantRecommendations(
