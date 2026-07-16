@@ -3,8 +3,8 @@
 // full `host` record merged in by storage.getAllUpcomingEvents(); this strips
 // that down to what a consumer needs to find/attend the event, dropping the
 // host's contact phone, internal notes, Stripe Connect state, payout
-// settings, and Parking Pass pricing controls, none of which belong in a
-// response any anonymous caller can fetch.
+// settings, and private Parking Pass controls. Event-level booking prices stay
+// in the response because public callers use them to evaluate an event.
 function toPublicEventHost(host: any): Record<string, unknown> {
   if (!host || typeof host !== "object") return host;
 
