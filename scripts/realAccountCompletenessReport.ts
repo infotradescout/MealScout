@@ -3,13 +3,15 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { sql } from "drizzle-orm";
 import { db } from "../server/db";
 import { isLikelyTestBusiness } from "../server/utils/publicBusinessVisibility";
+import { isTruckBusinessType } from "../shared/businessTypes";
 
 /**
  * Read-only report: which REAL (non-smoke, non-seed, non-test) business
  * accounts are missing pieces of a "stable baseline" profile - verification,
  * a menu, photos, hours, or (for food trucks) an active schedule.
  *
- * This makes no writes of any kind. It is the reporting half of the ~91
+ * This makes no application or database writes. It writes one local,
+ * PII-minimized JSON report under backups/. It is the reporting half of the ~91
  * early-account audit lineage (see 596706fa and
  * scripts/backfillEarlyAccountTrials.ts) - it does not touch, decommission,
  * or flag any account for deletion. That is intentionally a separate,
@@ -75,25 +77,11 @@ type Row = {
   isFoodTruck: boolean;
   isActive: boolean;
   isVerified: boolean;
-  logoUrl: string | null;
-  coverImageUrl: string | null;
-  operatingHours: unknown;
-  address: string | null;
-  cuisineType: string | null;
-  description: string | null;
-  city: string | null;
-  state: string | null;
-  ownerId: string;
-  ownerEmail: string;
-  ownerFirstName: string | null;
-  ownerLastName: string | null;
-  accountSettings: Record<string, unknown> | null;
+  hasPhotos: boolean;
+  hasHours: boolean;
   menuItemCount: number;
   upcomingScheduleCount: number;
   restaurantCreatedAt: string | null;
-  ownerCreatedAt: string | null;
-  ownerTelemetryEventCount: number;
-  ownerLoginEventCount: number;
 };
 
 function hasNonEmptyHours(operatingHours: unknown): boolean {
@@ -124,40 +112,48 @@ async function main() {
       r.description,
       r.city,
       r.state,
-      u.id as owner_id,
       u.email as owner_email,
-      u.first_name as owner_first_name,
-      u.last_name as owner_last_name,
       u.account_settings,
       coalesce(mi.menu_item_count, 0) as menu_item_count,
       coalesce(sched.upcoming_schedule_count, 0) as upcoming_schedule_count,
-      r.created_at as restaurant_created_at,
-      u.created_at as owner_created_at,
-      coalesce(tel.total_events, 0) as owner_telemetry_event_count,
-      coalesce(tel.login_events, 0) as owner_login_event_count
+      r.created_at as restaurant_created_at
     from restaurants r
     join users u on u.id = r.owner_id
     left join (
       select m.restaurant_id, count(mi.id)::int as menu_item_count
       from menus m
-      join menu_items mi on mi.menu_id = m.id
+      join menu_items mi on mi.menu_id = m.id and mi.is_available = true
+      where m.is_active = true
       group by m.restaurant_id
     ) mi on mi.restaurant_id = r.id
     left join (
-      select truck_id, count(*)::int as upcoming_schedule_count
-      from truck_manual_schedules
-      where date >= now() - interval '1 day'
-      group by truck_id
+      select current_schedule.truck_id, count(*)::int as upcoming_schedule_count
+      from (
+        select tms.truck_id, 'manual:' || tms.id as schedule_key
+        from truck_manual_schedules tms
+        where tms.date >= current_date
+          and coalesce(tms.is_public, true) = true
+          and coalesce(tms.live_feed_eligible, true) = true
+          and lower(coalesce(tms.status, 'open')) not in (
+            'archived', 'cancelled', 'canceled', 'closed', 'deleted',
+            'draft', 'expired', 'inactive', 'unavailable'
+          )
+          and (tms.expires_at is null or tms.expires_at >= now())
+
+        union all
+
+        select eb.truck_id, 'booking:' || eb.id as schedule_key
+        from event_bookings eb
+        inner join events e on e.id = eb.event_id
+        where lower(coalesce(eb.status, '')) = 'confirmed'
+          and e.date >= current_date
+          and lower(coalesce(e.status, 'open')) not in (
+            'archived', 'cancelled', 'canceled', 'closed', 'deleted',
+            'draft', 'expired', 'inactive', 'unavailable'
+          )
+      ) current_schedule
+      group by current_schedule.truck_id
     ) sched on sched.truck_id = r.id
-    left join (
-      select
-        user_id,
-        count(*)::int as total_events,
-        count(*) filter (where event_name like 'auth_login%')::int as login_events
-      from telemetry_events
-      where user_id is not null
-      group by user_id
-    ) tel on tel.user_id = u.id
     order by r.name asc
   `);
 
@@ -210,28 +206,15 @@ async function main() {
       restaurantId: String(raw.restaurant_id),
       name: raw.name,
       businessType: raw.business_type,
-      isFoodTruck: Boolean(raw.is_food_truck),
+      isFoodTruck:
+        Boolean(raw.is_food_truck) || isTruckBusinessType(raw.business_type),
       isActive: Boolean(raw.is_active),
       isVerified: Boolean(raw.is_verified),
-      logoUrl: raw.logo_url,
-      coverImageUrl: raw.cover_image_url,
-      operatingHours: raw.operating_hours,
-      address: raw.address,
-      cuisineType: raw.cuisine_type,
-      description: raw.description,
-      city: raw.city,
-      state: raw.state,
-      ownerId: String(raw.owner_id),
-      ownerEmail: raw.owner_email,
-      ownerFirstName: raw.owner_first_name,
-      ownerLastName: raw.owner_last_name,
-      accountSettings,
+      hasPhotos: Boolean(raw.logo_url || raw.cover_image_url),
+      hasHours: hasNonEmptyHours(raw.operating_hours),
       menuItemCount: Number(raw.menu_item_count || 0),
       upcomingScheduleCount: Number(raw.upcoming_schedule_count || 0),
       restaurantCreatedAt: raw.restaurant_created_at,
-      ownerCreatedAt: raw.owner_created_at,
-      ownerTelemetryEventCount: Number(raw.owner_telemetry_event_count || 0),
-      ownerLoginEventCount: Number(raw.owner_login_event_count || 0),
     });
   }
 
@@ -239,8 +222,8 @@ async function main() {
     const missing: string[] = [];
     if (!row.isVerified) missing.push("verified");
     if (row.menuItemCount === 0) missing.push("menu");
-    if (!row.logoUrl && !row.coverImageUrl) missing.push("photos");
-    if (!hasNonEmptyHours(row.operatingHours)) missing.push("hours");
+    if (!row.hasPhotos) missing.push("photos");
+    if (!row.hasHours) missing.push("hours");
     if (row.isFoodTruck && row.upcomingScheduleCount === 0) {
       missing.push("schedule");
     }
@@ -306,26 +289,6 @@ async function main() {
     if (row.missing.length === 0) break;
     console.log(
       `  - ${row.name} (${row.completenessScore}) missing: ${row.missing.join(", ")}`,
-    );
-  }
-
-  const neverLoggedIn = graded.filter((r) => r.ownerLoginEventCount === 0);
-  const neverAnyTelemetry = graded.filter(
-    (r) => r.ownerTelemetryEventCount === 0,
-  );
-  console.log(
-    `\n[real-account-completeness] Engagement signal (PII-free - name only, no owner identity):`,
-  );
-  console.log(
-    `  ${neverLoggedIn.length}/${graded.length} owners have zero recorded auth_login_* telemetry events.`,
-  );
-  console.log(
-    `  ${neverAnyTelemetry.length}/${graded.length} owners have zero telemetry events of any kind.`,
-  );
-  console.log(`  Never-logged-in accounts (by business name):`);
-  for (const row of neverLoggedIn) {
-    console.log(
-      `    - ${row.name} (created ${String(row.restaurantCreatedAt || "").slice(0, 10)}, owner joined ${String(row.ownerCreatedAt || "").slice(0, 10)}, ${row.ownerTelemetryEventCount} total telemetry events)`,
     );
   }
 }

@@ -19,6 +19,39 @@ Before approving any user-facing release, complete the QA evidence gate in
 4. Confirm Critical/High UX defects from QA are fixed or explicitly held outside
    the release.
 
+### Quick-review migration-before-app gate
+
+For any release containing recommendation quick-review context code, complete
+this sequence against the target database **before deploying the application**.
+The new application selects the added columns immediately and is not compatible
+with a database that has only part of this sequence.
+
+1. Take the normal recoverable database backup/snapshot.
+2. Apply or verify the recommendation uniqueness migration:
+   - `npm run -s migrate:sql 090_recommendation_interactions_and_uniques.sql`
+3. Add the structured score columns:
+   - `npm run -s migrate:sql 111_restaurant_recommendation_quick_review_scores.sql`
+4. Run this out-of-range preflight. It must return zero rows; if it does not,
+   stop and investigate the source values rather than silently clamping them:
+
+   ```sql
+   SELECT id, food_score, value_score, speed_score, vibe_score
+   FROM restaurant_user_recommendations
+   WHERE (food_score IS NOT NULL AND food_score NOT BETWEEN 1 AND 100)
+      OR (value_score IS NOT NULL AND value_score NOT BETWEEN 1 AND 100)
+      OR (speed_score IS NOT NULL AND speed_score NOT BETWEEN 1 AND 100)
+      OR (vibe_score IS NOT NULL AND vibe_score NOT BETWEEN 1 AND 100)
+   LIMIT 100;
+   ```
+
+5. Add durable context idempotency, conservatively backfill legacy context, and
+   add score constraints:
+   - `npm run -s migrate:sql 112_restaurant_recommendation_context_idempotency.sql`
+6. Verify the columns `context_review_id`, `context_submitted_at`, and
+   `context_payload_fingerprint` exist, and verify
+   `IDX_restaurant_user_recommendations_unique` is unique.
+7. Only after steps 1–6 pass, continue to the application deploy below.
+
 ## 2. Deploy to Render
 
 1. Deploy latest `main`.

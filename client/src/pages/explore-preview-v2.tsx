@@ -1,6 +1,8 @@
 import {
   DEFAULT_TRUCK_BROADCAST_FRESHNESS_MS,
   deriveTruckPresence,
+  resolveCoordinatePair,
+  resolveTruckCoordinates,
 } from "@shared/consumerEntity";
 import { isBarBusinessType } from "@shared/businessTypes";
 import {
@@ -206,10 +208,12 @@ interface LiveTruckSummary {
   city?: string | null;
   state?: string | null;
   address?: string | null;
-  latitude?: number | null;
-  longitude?: number | null;
-  lat?: number | null;
-  lng?: number | null;
+  latitude?: number | string | null;
+  longitude?: number | string | null;
+  currentLatitude?: number | string | null;
+  currentLongitude?: number | string | null;
+  lat?: number | string | null;
+  lng?: number | string | null;
   distance?: number | null;
   distanceMiles?: number | null;
   waitMinutes?: number | null;
@@ -1024,8 +1028,8 @@ function isTruckBroadcastLive(truck: LiveTruckSummary): boolean {
       {
         mobileOnline: truck.mobileOnline,
         liveBroadcasting: truck.liveBroadcasting,
-        currentLatitude: truck.latitude ?? truck.lat,
-        currentLongitude: truck.longitude ?? truck.lng,
+        currentLatitude: truck.currentLatitude,
+        currentLongitude: truck.currentLongitude,
         lastBroadcastAt: truck.lastBroadcastAt,
         liveUntilAt: truck.liveUntilAt,
         locationSource: readStringField(truck, ["locationSource", "location_source"]),
@@ -1573,15 +1577,16 @@ function getTruckArea(truck: LiveTruckSummary): string | null {
 }
 
 function buildDirectionsUrl(source: {
-  latitude?: number | null;
-  longitude?: number | null;
-  lat?: number | null;
-  lng?: number | null;
+  latitude?: number | string | null;
+  longitude?: number | string | null;
+  lat?: number | string | null;
+  lng?: number | string | null;
 }): string | null {
-  const lat = source.latitude ?? source.lat;
-  const lng = source.longitude ?? source.lng;
-  if (typeof lat !== "number" || typeof lng !== "number") return null;
-  return `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`;
+  const coordinates =
+    resolveCoordinatePair(source.latitude, source.longitude) ??
+    resolveCoordinatePair(source.lat, source.lng);
+  if (!coordinates) return null;
+  return `https://www.google.com/maps/dir/?api=1&destination=${coordinates.latitude},${coordinates.longitude}&travelmode=driving`;
 }
 
 function scoreTextForCraving(text: string, craving: CravingCategory): number {
@@ -2187,10 +2192,11 @@ function getTruckToneDotClass(tone: TruckCardTone): string {
 function getTruckCoords(
   truck: LiveTruckSummary,
 ): { lat: number; lng: number } | null {
-  const lat = truck.latitude ?? truck.lat;
-  const lng = truck.longitude ?? truck.lng;
-  if (typeof lat !== "number" || typeof lng !== "number") return null;
-  return { lat, lng };
+  const coordinates = resolveTruckCoordinates(truck, {
+    freshnessMs: DEFAULT_TRUCK_BROADCAST_FRESHNESS_MS,
+  });
+  if (!coordinates) return null;
+  return { lat: coordinates.latitude, lng: coordinates.longitude };
 }
 
 function formatTruckPlace(truck: LiveTruckSummary): string {
@@ -2959,6 +2965,7 @@ export default function ExplorePreview() {
         ? liveTrucksData.trucks
         : [];
     return raw.filter((truck) => {
+      const truckCoords = getTruckCoords(truck);
       const fallbackKm =
         typeof truck.distanceMiles === "number"
           ? truck.distanceMiles * 1.609344
@@ -2967,8 +2974,8 @@ export default function ExplorePreview() {
             : null;
       return isWithinScoutRadius(
         resolvedScoutCoords,
-        truck.latitude ?? truck.lat,
-        truck.longitude ?? truck.lng,
+        truckCoords?.lat,
+        truckCoords?.lng,
         discoveryRadiusKm,
         fallbackKm,
       );
@@ -3816,16 +3823,15 @@ export default function ExplorePreview() {
   const truckMarkers = useMemo<MapAdapterMarker[]>(() => {
     return scoutTruckInventory
       .map((t) => {
-        const lat = t.latitude ?? t.lat;
-        const lng = t.longitude ?? t.lng;
-        if (typeof lat !== "number" || typeof lng !== "number") return null;
+        const coords = getTruckCoords(t);
+        if (!coords) return null;
         const isServing = isTruckServingNow(t);
         return {
           id: String(t.id),
           sourceId: String(t.id),
           kind: "truck" as const,
-          lat,
-          lng,
+          lat: coords.lat,
+          lng: coords.lng,
           title: t.name,
           subtitle: getMapMarkerSubtitle(t.cuisineType, {
             kind: "truck",
@@ -6503,7 +6509,7 @@ function ScoutImmediateCompactCard({
       }),
       { subtitle: meta },
     );
-    const directionsUrl = buildDirectionsUrl(truck);
+    const directionsUrl = buildTruckDirectionsUrl(truck);
     return (
       <CompactDecisionCardShell
         href={view.href}

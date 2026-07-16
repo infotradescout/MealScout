@@ -12,6 +12,7 @@ import {
   restaurants,
   users,
 } from "@shared/schema";
+import { toPublicRestaurantReviewArray } from "../publicProfiles/toPublicRestaurantReview";
 import {
   isBarBusinessType,
   isTruckBusinessType,
@@ -410,7 +411,7 @@ export function registerDealDiscoveryRoutes(
       const reviews = await storage.getRestaurantReviews(
         req.params.restaurantId,
       );
-      res.json(reviews);
+      res.json(toPublicRestaurantReviewArray(reviews));
     } catch (error) {
       console.error("Error fetching reviews:", error);
       res.status(500).json({ message: "Failed to fetch reviews" });

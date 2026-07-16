@@ -31,6 +31,7 @@ import { isLaunchDegradedMode } from "../launchMode";
 import { resolveCityTimeZoneSync } from "../services/cityTimeZone";
 import { buildSlotDateTimes } from "../services/timeIntent";
 import { getSuppressedLocationResourceIds } from "../services/truckLocationTrust";
+import { toPublicMapLocationsPayload } from "../publicProfiles/toPublicMapLocations";
 import {
   dealClaims,
   deals,
@@ -662,7 +663,7 @@ export function registerPublicMapRoutes(app: Express) {
         "public, max-age=120, stale-while-revalidate=240",
       );
       if (mapLocationsCache && mapLocationsCache.expiresAt > Date.now()) {
-        return res.json(mapLocationsCache.payload);
+        return res.json(toPublicMapLocationsPayload(mapLocationsCache.payload));
       }
 
       const VALID_US_STATE_ABBRS = new Set([
@@ -1540,7 +1541,11 @@ export function registerPublicMapRoutes(app: Express) {
         );
       }
 
-      const payload = { hostLocations, eventLocations, supplierLocations };
+      const payload = toPublicMapLocationsPayload({
+        hostLocations,
+        eventLocations,
+        supplierLocations,
+      });
       mapLocationsCache = {
         payload,
         expiresAt:
@@ -1556,7 +1561,7 @@ export function registerPublicMapRoutes(app: Express) {
       console.error("Error building map locations feed:", error);
       if (mapLocationsLastGood?.payload) {
         res.setHeader("X-MealScout-Stale", "1");
-        return res.json(mapLocationsLastGood.payload);
+        return res.json(toPublicMapLocationsPayload(mapLocationsLastGood.payload));
       }
       res
         .status(200)

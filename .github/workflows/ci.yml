@@ -46,6 +46,18 @@ jobs:
       - name: Public Data Boundary Contract
         run: npm run test:public-data-boundary
 
+      - name: Frozen Cleanup Safety Contract
+        run: npm run test:frozen-cleanup-safety
+
+      - name: Quick Review Score Validation Contract
+        run: npm run test:quick-review-score-validation
+
+      - name: Quick Review Idempotency Contract
+        run: npm run test:quick-review-idempotency
+
+      - name: Recommendation Photo Proof Contract
+        run: npm run test:recommend-photo-only-proof
+
       - name: Build
         run: npm run build
 

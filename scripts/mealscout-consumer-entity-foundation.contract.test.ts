@@ -8,6 +8,8 @@ import {
 import {
   DEFAULT_TRUCK_BROADCAST_FRESHNESS_MS,
   deriveTruckPresence,
+  resolveCoordinatePair,
+  resolveTruckCoordinates,
   visitStatusFromPresence,
 } from "../shared/consumerEntity";
 import { resolveBusinessMedia } from "../client/src/lib/businessMedia";
@@ -25,7 +27,11 @@ assert.equal(toCanonicalFoodBusinessType(" FOOD-TRUCK "), "food_truck");
 assert.equal(toCanonicalFoodBusinessType("brewery"), "bar");
 assert.equal(toCanonicalFoodBusinessType("caterer"), "caterer");
 assert.equal(toCanonicalFoodBusinessType("private_chef"), "private_chef");
-assert.equal(toCanonicalFoodBusinessType("venue"), null);
+assert.equal(
+  toCanonicalFoodBusinessType("venue"),
+  "bar",
+  "legacy food-business venue values must retain their prior bar/nightlife meaning",
+);
 assert.equal(toCanonicalFoodBusinessType("ghost_kitchen"), null);
 assert.equal(getBusinessCapabilities("food_truck")?.liveLocationBroadcast, true);
 assert.equal(getBusinessCapabilities("private_chef")?.recurringHours, false);
@@ -59,6 +65,103 @@ const liveSource = deriveTruckPresence(
   { now, freshnessMs: DEFAULT_TRUCK_BROADCAST_FRESHNESS_MS },
 );
 assert.equal(liveSource.location?.source, "owner_gps");
+
+assert.deepEqual(
+  resolveCoordinatePair(" 30.4213 ", " -87.2169 "),
+  { latitude: 30.4213, longitude: -87.2169 },
+  "Coordinate pairs must accept finite numeric strings",
+);
+assert.equal(resolveCoordinatePair("91", "-87.2169"), null);
+assert.equal(resolveCoordinatePair("30.4213", "-181"), null);
+assert.equal(resolveCoordinatePair(true, -87.2169), null);
+
+const freshLiveCoordinates = resolveTruckCoordinates(
+  {
+    mobileOnline: true,
+    currentLatitude: "31.1001",
+    currentLongitude: "-88.2002",
+    lastBroadcastAt: "2026-07-13T14:58:00.000Z",
+    latitude: "30.4213",
+    longitude: "-87.2169",
+  },
+  { now, freshnessMs: 5 * 60_000 },
+);
+assert.deepEqual(
+  freshLiveCoordinates,
+  { latitude: 31.1001, longitude: -88.2002 },
+  "A complete fresh live pair must take precedence over static profile coordinates",
+);
+
+const staleLiveCoordinates = resolveTruckCoordinates(
+  {
+    mobileOnline: true,
+    currentLatitude: 31.1001,
+    currentLongitude: -88.2002,
+    lastBroadcastAt: "2026-07-13T14:30:00.000Z",
+    latitude: "30.4213",
+    longitude: "-87.2169",
+  },
+  { now, freshnessMs: 5 * 60_000 },
+);
+assert.deepEqual(
+  staleLiveCoordinates,
+  { latitude: 30.4213, longitude: -87.2169 },
+  "Stale live coordinates must fall back to the complete static pair",
+);
+
+const partialLiveCoordinates = resolveTruckCoordinates(
+  {
+    mobileOnline: true,
+    currentLatitude: 31.1001,
+    currentLongitude: null,
+    lastBroadcastAt: "2026-07-13T14:58:00.000Z",
+    latitude: 30.4213,
+    longitude: -87.2169,
+  },
+  { now, freshnessMs: 5 * 60_000 },
+);
+assert.deepEqual(
+  partialLiveCoordinates,
+  { latitude: 30.4213, longitude: -87.2169 },
+  "A partial live pair must never borrow one static axis",
+);
+
+const aliasedStaticCoordinates = resolveTruckCoordinates(
+  {
+    mobileOnline: true,
+    currentLatitude: "not-a-coordinate",
+    currentLongitude: "-88.2002",
+    lastBroadcastAt: "2026-07-13T14:58:00.000Z",
+    latitude: 30.4213,
+    longitude: null,
+    lat: "29.9876",
+    lng: "-86.5432",
+  },
+  { now, freshnessMs: 5 * 60_000 },
+);
+assert.deepEqual(
+  aliasedStaticCoordinates,
+  { latitude: 29.9876, longitude: -86.5432 },
+  "Static coordinate aliases must also resolve as a complete pair",
+);
+
+assert.equal(
+  resolveTruckCoordinates(
+    {
+      mobileOnline: true,
+      currentLatitude: 95,
+      currentLongitude: -88.2002,
+      lastBroadcastAt: "2026-07-13T14:58:00.000Z",
+      latitude: 91,
+      longitude: -87.2169,
+      lat: null,
+      lng: null,
+    },
+    { now, freshnessMs: 5 * 60_000 },
+  ),
+  null,
+  "Out-of-range live and static pairs must be rejected",
+);
 
 const serializedLiveTruck = toPublicRestaurantProfile({
   row: {
@@ -203,6 +306,21 @@ const scoutSource = readFileSync(
   "utf8",
 );
 assert.match(scoutSource, /return isTruckBroadcastLive\(truck\)/);
+assert.match(
+  scoutSource,
+  /currentLatitude: truck\.currentLatitude,\s*currentLongitude: truck\.currentLongitude,/,
+  "Scout presence checks must receive only the current broadcast pair",
+);
+assert.doesNotMatch(
+  scoutSource,
+  /currentLatitude: truck\.currentLatitude \?\?/,
+  "Scout presence checks must never substitute a static latitude",
+);
+assert.match(
+  scoutSource,
+  /resolveTruckCoordinates\(truck,/,
+  "Scout maps, radius checks, and directions must share pairwise coordinate resolution",
+);
 assert.doesNotMatch(
   scoutSource,
   /return truck\.liveBroadcasting === true/,

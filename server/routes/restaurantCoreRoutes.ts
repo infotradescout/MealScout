@@ -14,6 +14,12 @@ import { ensurePremiumTrialForUser } from "../services/premiumTrial";
 import { isPublicBusinessVisible } from "../utils/publicBusinessVisibility";
 import { parseQuickReviewScore } from "../quickReview/parseQuickReviewScore";
 import {
+  buildQuickReviewContextFingerprint,
+  decideQuickReviewContext,
+  mergeQuickReviewScores,
+} from "../quickReview/contextIdempotency";
+import { distributedRateLimit } from "../middleware/distributedRateLimit";
+import {
   toPublicRestaurantListing,
   toPublicRestaurantListingArray,
 } from "../publicProfiles/toPublicRestaurantListing";
@@ -35,8 +41,10 @@ import {
   truckImportListings,
   menuItems,
   restaurants,
+  reviews,
 } from "@shared/schema";
 import {
+  deleteFromCloudinary,
   isCloudinaryConfigured,
   upload as imageUpload,
   uploadToCloudinary,
@@ -47,6 +55,13 @@ import {
 } from "@shared/rankingPolicy";
 
 const ensureTrialForUser = ensurePremiumTrialForUser;
+
+const restaurantRecommendLimiter = distributedRateLimit({
+  scope: "restaurant-recommend",
+  limit: 12,
+  windowMs: 60 * 1000,
+  key: (req) => String((req as any).user?.id || "authenticated"),
+});
 
 const escapeHtml = (value: string) =>
   value
@@ -1120,8 +1135,10 @@ export function registerRestaurantCoreRoutes(
   app.post(
     "/api/restaurants/:restaurantId/recommend",
     isAuthenticated,
+    restaurantRecommendLimiter,
     imageUpload.single("image"),
     async (req: any, res) => {
+      let uploadedProofPublicId: string | null = null;
       try {
         const { restaurantId } = req.params;
         const userId = req.user.id;
@@ -1186,152 +1203,262 @@ export function registerRestaurantCoreRoutes(
         const hasContext = Boolean(
           comment || scoreValues.length > 0 || req.file,
         );
-        const actionGate = consumeEngagementWindow(
-          `${userId}:${restaurantId}:recommend:${hasContext ? "context" : "tap"}`,
-        );
-        if (!actionGate.allowed) {
-          return res.status(429).json({
-            message: "Please wait a moment before trying again.",
-            retryAfterSeconds: actionGate.retryAfterSeconds,
-          });
-        }
+        const contextPayloadFingerprint = hasContext
+          ? buildQuickReviewContextFingerprint({
+              comment,
+              scores,
+              proofBytes: req.file?.buffer || null,
+            })
+          : null;
         const recommendationData =
           insertRestaurantUserRecommendationSchema.parse({
             restaurantId,
             userId,
           });
 
-        let recommendation: any = null;
-        let createdRecommendation = false;
-        try {
-          recommendation =
-            await storage.createRestaurantUserRecommendation(
-              recommendationData,
+        const outcome = await db.transaction(async (tx: any) => {
+          // This database-scoped lock serializes the same user's request for
+          // the same restaurant across every server replica. It turns retries
+          // and concurrent submissions into the same durable operation.
+          await tx.execute(
+            sql`select pg_advisory_xact_lock(hashtext(${`${userId}:${restaurantId}:recommend`}))`,
+          );
+
+          const inserted = await tx
+            .insert(restaurantUserRecommendations)
+            .values(recommendationData)
+            .onConflictDoNothing()
+            .returning();
+          const createdRecommendation = inserted.length > 0;
+          const [recommendation] = createdRecommendation
+            ? inserted
+            : await tx
+                .select()
+                .from(restaurantUserRecommendations)
+                .where(
+                  and(
+                    eq(
+                      restaurantUserRecommendations.restaurantId,
+                      restaurantId,
+                    ),
+                    eq(restaurantUserRecommendations.userId, userId),
+                  ),
+                )
+                .limit(1);
+
+          if (!recommendation) {
+            throw new Error("Unable to create or load recommendation");
+          }
+
+          const contextDecision = decideQuickReviewContext({
+            hasIncomingContext: hasContext,
+            contextSubmittedAt: recommendation.contextSubmittedAt,
+            storedFingerprint: recommendation.contextPayloadFingerprint,
+            incomingFingerprint: contextPayloadFingerprint,
+          });
+          const contextAlreadySaved = Boolean(
+            recommendation.contextSubmittedAt,
+          );
+          if (contextDecision === "conflict") {
+            const error: any = new Error(
+              "Quick review context was already submitted for this recommendation.",
             );
-          createdRecommendation = true;
-        } catch (error: any) {
-          if (error.code !== "23505") throw error;
-          const [existing] = await db
-            .select()
-            .from(restaurantUserRecommendations)
-            .where(
-              and(
-                eq(restaurantUserRecommendations.restaurantId, restaurantId),
-                eq(restaurantUserRecommendations.userId, userId),
-              ),
-            )
-            .limit(1);
-          recommendation = existing;
-        }
+            error.statusCode = 409;
+            throw error;
+          }
+          let createdContext = false;
+          let proofPhoto: any = null;
+          let contextReviewId = recommendation.contextReviewId ?? null;
+
+          if (contextDecision === "create") {
+            if (req.file) {
+              if (!isCloudinaryConfigured()) {
+                const error: any = new Error(
+                  "Image upload service not configured",
+                );
+                error.statusCode = 503;
+                throw error;
+              }
+              const proofToken = crypto
+                .createHash("sha256")
+                .update(`restaurant-recommendation-proof:${recommendation.id}`)
+                .digest("hex")
+                .slice(0, 24);
+              const uploadResult = await uploadToCloudinary(
+                req.file.buffer,
+                "restaurant-recommendation-photos",
+                `proof-${proofToken}`,
+              );
+              uploadedProofPublicId = uploadResult.publicId;
+              const [createdUpload] = await tx
+                .insert(imageUploads)
+                .values({
+                  uploadedByUserId: userId,
+                  imageType: "restaurant_recommendation_photo",
+                  entityId: recommendation.id,
+                  entityType: "restaurant_recommendation",
+                  cloudinaryPublicId: uploadResult.publicId,
+                  cloudinaryUrl: uploadResult.secureUrl,
+                  thumbnailUrl: uploadResult.thumbnailUrl,
+                  width: uploadResult.width,
+                  height: uploadResult.height,
+                  fileSize: uploadResult.bytes,
+                  mimeType: req.file.mimetype,
+                } as any)
+                .returning();
+              proofPhoto = createdUpload;
+            }
+
+            if (comment || proofPhoto?.cloudinaryUrl) {
+              const photoLine = proofPhoto?.cloudinaryUrl
+                ? `Photo proof: ${proofPhoto.cloudinaryUrl}`
+                : "";
+              const reviewComment =
+                [comment, photoLine].filter(Boolean).join("\n\n") ||
+                "Photo proof added on MealScout.";
+              const [createdReview] = await tx
+                .insert(reviews)
+                .values({
+                  restaurantId,
+                  userId,
+                  rating: 0,
+                  comment: reviewComment,
+                })
+                .returning({ id: reviews.id });
+              contextReviewId = createdReview.id;
+            }
+
+            const nextScores = mergeQuickReviewScores(
+              {
+                food: recommendation.foodScore ?? null,
+                value: recommendation.valueScore ?? null,
+                speed: recommendation.speedScore ?? null,
+                vibe: recommendation.vibeScore ?? null,
+              },
+              scores,
+            );
+            const contextSubmittedAt = new Date();
+            await tx
+              .update(restaurantUserRecommendations)
+              .set({
+                foodScore: nextScores.food,
+                valueScore: nextScores.value,
+                speedScore: nextScores.speed,
+                vibeScore: nextScores.vibe,
+                contextReviewId,
+                contextSubmittedAt,
+                contextPayloadFingerprint,
+              })
+              .where(eq(restaurantUserRecommendations.id, recommendation.id));
+            recommendation.foodScore = nextScores.food;
+            recommendation.valueScore = nextScores.value;
+            recommendation.speedScore = nextScores.speed;
+            recommendation.vibeScore = nextScores.vibe;
+            recommendation.contextReviewId = contextReviewId;
+            recommendation.contextSubmittedAt = contextSubmittedAt;
+            recommendation.contextPayloadFingerprint =
+              contextPayloadFingerprint;
+            createdContext = true;
+          }
+
+          const influenceBump = createdRecommendation
+            ? createdContext
+              ? 3
+              : 1
+            : createdContext
+              ? 2
+              : 0;
+          if (createdRecommendation || createdContext) {
+            await tx
+              .update(users)
+              .set({
+                recommendationCount: createdRecommendation
+                  ? sql`${users.recommendationCount} + 1`
+                  : users.recommendationCount,
+                reviewCount: createdContext
+                  ? sql`${users.reviewCount} + 1`
+                  : users.reviewCount,
+                influenceScore:
+                  influenceBump > 0
+                    ? sql`${users.influenceScore} + ${influenceBump}`
+                    : users.influenceScore,
+                updatedAt: new Date(),
+              } as any)
+              .where(eq(users.id, userId));
+          }
+
+          return {
+            recommendation,
+            createdRecommendation,
+            createdContext,
+            contextAlreadySaved,
+            contextReplay: contextDecision === "replay",
+            proofPhoto,
+          };
+        });
+        // From this point forward the database transaction is committed, so a
+        // later response-side error must not delete the persisted proof asset.
+        uploadedProofPublicId = null;
+
         await autoFollowRestaurant(userId, restaurantId);
 
-        let proofPhoto: any = null;
-        if (req.file) {
-          if (!isCloudinaryConfigured()) {
-            return res.status(503).json({
-              message: "Image upload service not configured",
-            });
-          }
-          const uploadResult = await uploadToCloudinary(
-            req.file.buffer,
-            "restaurant-recommendation-photos",
-            `restaurant-recommendation-${restaurantId}-${userId}-${Date.now()}`,
-          );
-          const [createdUpload] = await db
-            .insert(imageUploads)
-            .values({
-              uploadedByUserId: userId,
-              imageType: "restaurant_recommendation_photo",
-              entityId: recommendation?.id || restaurantId,
-              entityType: "restaurant_recommendation",
-              cloudinaryPublicId: uploadResult.publicId,
-              cloudinaryUrl: uploadResult.secureUrl,
-              thumbnailUrl: uploadResult.thumbnailUrl,
-              width: uploadResult.width,
-              height: uploadResult.height,
-              fileSize: uploadResult.bytes,
-              mimeType: req.file.mimetype,
-            } as any)
-            .returning();
-          proofPhoto = createdUpload;
-        }
-
-        if (scoreValues.length > 0 && recommendation?.id) {
-          await storage.setRestaurantUserRecommendationQuickReview(
-            recommendation.id,
-            scores,
-          );
-        }
-
-        if (comment || proofPhoto?.cloudinaryUrl) {
-          const photoLine = proofPhoto?.cloudinaryUrl
-            ? `Photo proof: ${proofPhoto.cloudinaryUrl}`
-            : "";
-          const reviewComment =
-            [comment, photoLine].filter(Boolean).join("\n\n") ||
-            "Photo proof added on MealScout.";
-          await storage.createReview({
-            restaurantId,
+        if (outcome.createdContext) {
+          void trackEngagement(
+            "restaurant_recommend_context_added",
             userId,
-            rating: 0,
-            comment: reviewComment,
-          } as any);
-        }
-
-        const influenceBump = createdRecommendation
-          ? hasContext
-            ? 3
-            : 1
-          : hasContext
-            ? 2
-            : 0;
-        if (createdRecommendation || hasContext) {
-          await db
-            .update(users)
-            .set({
-              recommendationCount: createdRecommendation
-                ? sql`${users.recommendationCount} + 1`
-                : users.recommendationCount,
-              reviewCount: hasContext
-                ? sql`${users.reviewCount} + 1`
-                : users.reviewCount,
-              influenceScore:
-                influenceBump > 0
-                  ? sql`${users.influenceScore} + ${influenceBump}`
-                  : users.influenceScore,
-              updatedAt: new Date(),
-            } as any)
-            .where(eq(users.id, userId));
-        }
-
-        void trackEngagement(
-          hasContext
-            ? "restaurant_recommend_context_added"
-            : "restaurant_recommend_added",
-          userId,
-          restaurantId,
-        );
-        res.json({
-          ...recommendation,
-          success: true,
-          alreadyExists: !createdRecommendation,
-          contextSaved: hasContext,
-          quickReview: scoreValues.length > 0 ? scores : null,
-          proofPhoto,
-        });
-      } catch (error: any) {
-        console.error("Error adding restaurant recommendation:", error);
-        if (error.code === "23505") {
+            restaurantId,
+          );
+        } else if (outcome.createdRecommendation) {
+          void trackEngagement(
+            "restaurant_recommend_added",
+            userId,
+            restaurantId,
+          );
+        } else {
           void trackEngagement(
             "restaurant_recommend_duplicate",
-            req.user?.id,
-            req.params?.restaurantId,
+            userId,
+            restaurantId,
           );
-          return res.status(200).json({
-            success: true,
-            alreadyExists: true,
-            message: "Restaurant already recommended",
-          });
+        }
+
+        const {
+          contextPayloadFingerprint: _contextPayloadFingerprint,
+          ...recommendationResponse
+        } = outcome.recommendation;
+        res.json({
+          ...recommendationResponse,
+          success: true,
+          alreadyExists: !outcome.createdRecommendation,
+          contextSaved:
+            hasContext &&
+            (outcome.createdContext || outcome.contextAlreadySaved),
+          contextAlreadySaved: outcome.contextAlreadySaved,
+          contextReplay: outcome.contextReplay,
+          quickReview: outcome.recommendation.contextSubmittedAt
+            ? {
+                food: outcome.recommendation.foodScore ?? null,
+                value: outcome.recommendation.valueScore ?? null,
+                speed: outcome.recommendation.speedScore ?? null,
+                vibe: outcome.recommendation.vibeScore ?? null,
+              }
+            : null,
+          proofPhoto: outcome.proofPhoto,
+        });
+      } catch (error: any) {
+        if (uploadedProofPublicId) {
+          await deleteFromCloudinary(uploadedProofPublicId).catch(
+            (cleanupError) => {
+              console.warn(
+                "Failed to clean up rolled-back recommendation proof:",
+                cleanupError,
+              );
+            },
+          );
+        }
+        console.error("Error adding restaurant recommendation:", error);
+        if (error?.statusCode === 409 || error?.statusCode === 503) {
+          return res.status(error.statusCode).json({ message: error.message });
         }
         res.status(400).json({
           message: error.message || "Failed to recommend restaurant",
@@ -1495,7 +1622,6 @@ export function registerRestaurantCoreRoutes(
           : [];
         const payload = rows.map((row: any) => ({
           id: String(row.id || ""),
-          userId: String(row.user_id || ""),
           createdAt: row.created_at,
           authorName:
             String(

@@ -9,6 +9,10 @@ import {
   toPublicEventListing,
   toPublicEventListingArray,
 } from "../server/publicProfiles/toPublicEventListing";
+import { toPublicMapLocationsPayload } from "../server/publicProfiles/toPublicMapLocations";
+import { toPublicParkingPassListingArray } from "../server/publicProfiles/toPublicParkingPassListing";
+import { toPublicRestaurantReviewArray } from "../server/publicProfiles/toPublicRestaurantReview";
+import { canExposeAnonymousEventDetail } from "../server/publicProfiles/publicEventDetailAccess";
 
 // --- Runtime: forbidden fields must never survive the DTO ---------------
 
@@ -135,7 +139,12 @@ const rawEvent: Record<string, unknown> = {
     locationType: "bar",
     isVerified: true,
   },
-  series: null,
+  series: {
+    id: "series-1",
+    name: "Friday series",
+    coordinatorUserId: "SECRET_series_coordinator",
+    defaultHostPriceCents: 1234,
+  },
 };
 for (const key of forbiddenEventKeys) {
   rawEvent[key] = `SECRET_${key}`;
@@ -163,6 +172,11 @@ for (const key of forbiddenHostKeys) {
 }
 assert.equal(publicHost.businessName, "Downtown Taproom");
 assert.equal(publicEvent.hostPriceCents, 5000);
+assert.deepEqual(
+  publicEvent.series,
+  { id: "series-1", name: "Friday series" },
+  "toPublicEventListing must preserve only the public series identity",
+);
 
 const publicEventArray = toPublicEventListingArray([rawEvent]);
 assert.equal(publicEventArray.length, 1);
@@ -174,6 +188,240 @@ for (const key of forbiddenHostKeys) {
     `toPublicEventListingArray must strip host.${key}`,
   );
 }
+assert.deepEqual(toPublicEventListingArray([null, [], "invalid"]), [
+  {},
+  {},
+  {},
+]);
+
+assert.equal(
+  canExposeAnonymousEventDetail({
+    requiresPayment: false,
+    status: "open",
+    slotIsPublic: true,
+  }),
+  true,
+  "a current confirmed free event may have an anonymous detail page",
+);
+for (const blockedDetail of [
+  { requiresPayment: true, status: "open", slotIsPublic: true },
+  { requiresPayment: false, status: "open", slotIsPublic: false },
+  { requiresPayment: false, status: "draft", slotIsPublic: true },
+]) {
+  assert.equal(
+    canExposeAnonymousEventDetail(blockedDetail),
+    false,
+    "paid, stale/unconfirmed, and draft event details must stay private",
+  );
+}
+
+const rawMapPayload = {
+  hostLocations: [
+    {
+      id: "host-map-1",
+      type: "host_location",
+      hostId: "host-map-1",
+      name: "Public host",
+      address: "123 Host St",
+      latitude: "30.1",
+      longitude: "-87.2",
+      locationRequestId: "SECRET_request",
+      preferredDates: ["SECRET_date"],
+      userId: "SECRET_userId",
+      contactPhone: "SECRET_contactPhone",
+      notes: "SECRET_notes",
+      expectedFootTraffic: 9000,
+      stripeConnectAccountId: "SECRET_stripe",
+      stripeConnectStatus: "SECRET_status",
+      parkingPassBreakfastPriceCents: 1234,
+    },
+    null,
+    [],
+  ],
+  eventLocations: [
+    {
+      id: "event-map-1",
+      type: "event",
+      name: "Public event",
+      hostId: "host-map-1",
+      hostName: "Public host",
+      stripeProductId: "SECRET_product",
+      stripePriceId: "SECRET_price",
+      coordinatorUserId: "SECRET_coordinator",
+    },
+    "invalid-event-row",
+  ],
+  supplierLocations: [
+    {
+      id: "supplier-map-1",
+      type: "supplier",
+      supplierId: "supplier-map-1",
+      name: "Public supplier",
+      contactEmail: "SECRET_email",
+      contactPhone: "SECRET_phone",
+      stripeConnectAccountId: "SECRET_stripe",
+    },
+    null,
+  ],
+};
+const publicMapPayload = toPublicMapLocationsPayload(rawMapPayload);
+for (const key of [
+  "userId",
+  "contactPhone",
+  "notes",
+  "expectedFootTraffic",
+  "stripeConnectAccountId",
+  "stripeConnectStatus",
+  "parkingPassBreakfastPriceCents",
+  "locationRequestId",
+  "preferredDates",
+]) {
+  assert.equal(
+    Object.prototype.hasOwnProperty.call(publicMapPayload.hostLocations[0], key),
+    false,
+    `/api/map/locations must strip hostLocations.${key}`,
+  );
+}
+assert.deepEqual(publicMapPayload.hostLocations[1], {});
+assert.deepEqual(publicMapPayload.hostLocations[2], {});
+assert.deepEqual(publicMapPayload.eventLocations[1], {});
+assert.deepEqual(publicMapPayload.supplierLocations[1], {});
+for (const key of ["stripeProductId", "stripePriceId", "coordinatorUserId"]) {
+  assert.equal(
+    Object.prototype.hasOwnProperty.call(publicMapPayload.eventLocations[0], key),
+    false,
+    `/api/map/locations must strip eventLocations.${key}`,
+  );
+}
+for (const key of ["contactEmail", "contactPhone", "stripeConnectAccountId"]) {
+  assert.equal(
+    Object.prototype.hasOwnProperty.call(publicMapPayload.supplierLocations[0], key),
+    false,
+    `/api/map/locations must strip supplierLocations.${key}`,
+  );
+}
+
+const publicParkingPass = toPublicParkingPassListingArray([
+  {
+    id: "parking-pass-1",
+    hostId: "host-1",
+    seriesId: "series-1",
+    name: "Lunch parking",
+    date: "2026-07-18T00:00:00.000Z",
+    startTime: "11:00",
+    endTime: "14:00",
+    status: "open",
+    requiresPayment: true,
+    paymentsEnabled: true,
+    breakfastPriceCents: 2500,
+    stripeProductId: "SECRET_product",
+    stripePriceId: "SECRET_price",
+    unbookedNotificationSentAt: "SECRET_notification",
+    coordinatorUserId: "SECRET_coordinator",
+    bookings: [
+      {
+        truckId: "truck-1",
+        truckName: "Public truck",
+        slotType: "lunch",
+        spotNumber: 2,
+        bookingConfirmedAt: "SECRET_confirmation_time",
+        stripePaymentIntentId: "SECRET_payment",
+        userId: "SECRET_user",
+      },
+    ],
+    host: {
+      id: "host-1",
+      businessName: "Public host",
+      address: "123 Host St",
+      city: "Pensacola",
+      state: "FL",
+      latitude: "30.1",
+      longitude: "-87.2",
+      userId: "SECRET_user",
+      contactPhone: "SECRET_phone",
+      notes: "SECRET_notes",
+      expectedFootTraffic: 9000,
+      adminCreated: true,
+      stripeConnectAccountId: "SECRET_stripe",
+      stripeConnectStatus: "SECRET_status",
+      stripeOnboardingCompleted: true,
+      stripeChargesEnabled: true,
+      stripePayoutsEnabled: true,
+      parkingPassBreakfastPriceCents: 2500,
+      parkingPassStartTime: "11:00",
+      parkingPassDaysOfWeek: [1, 2, 3],
+    },
+  },
+]);
+assert.equal(publicParkingPass.length, 1);
+for (const key of forbiddenEventKeys) {
+  assert.equal(
+    Object.prototype.hasOwnProperty.call(publicParkingPass[0], key),
+    false,
+    `/api/parking-pass must strip event.${key}`,
+  );
+}
+const publicParkingHost = publicParkingPass[0].host as Record<string, unknown>;
+for (const key of forbiddenHostKeys) {
+  assert.equal(
+    Object.prototype.hasOwnProperty.call(publicParkingHost, key),
+    false,
+    `/api/parking-pass must strip host.${key}`,
+  );
+}
+const publicParkingBooking = (
+  publicParkingPass[0].bookings as Record<string, unknown>[]
+)[0];
+assert.deepEqual(publicParkingBooking, {
+  truckId: "truck-1",
+  truckName: "Public truck",
+  slotType: "lunch",
+  spotNumber: 2,
+});
+assert.deepEqual(toPublicParkingPassListingArray([null, [], "invalid"]), [
+  {},
+  {},
+  {},
+]);
+assert.equal(toPublicParkingPassListingArray([{ host: [] }])[0].host, null);
+
+const publicReviews = toPublicRestaurantReviewArray([
+  {
+    id: "review-1",
+    restaurantId: "rest-1",
+    userId: "SECRET_user",
+    rating: 0,
+    reviewText: "Worth the trip",
+    createdAt: "2026-07-16T00:00:00.000Z",
+    user: {
+      firstName: "Public",
+      lastName: "Reviewer",
+      profileImageUrl: null,
+      email: "SECRET_email",
+    },
+  },
+]);
+assert.equal(publicReviews.length, 1);
+for (const key of ["userId", "rating"]) {
+  assert.equal(
+    Object.prototype.hasOwnProperty.call(publicReviews[0], key),
+    false,
+    `/api/reviews/restaurant/:restaurantId must strip ${key}`,
+  );
+}
+assert.equal(
+  Object.prototype.hasOwnProperty.call(
+    publicReviews[0].user as Record<string, unknown>,
+    "email",
+  ),
+  false,
+  "public review user projection must strip email",
+);
+assert.deepEqual(toPublicRestaurantReviewArray([null, [], "invalid"]), [
+  {},
+  {},
+  {},
+]);
 
 // --- Source: the public endpoints must actually call the DTOs -----------
 
@@ -215,6 +463,15 @@ assert.match(
   /res\.json\(toPublicRestaurantListingArray\(sorted\.slice/,
   "GET /api/restaurants/public must return sanitized restaurant DTOs",
 );
+assert.doesNotMatch(
+  sliceAfter(
+    restaurantRoutesSource,
+    '"/api/restaurants/:restaurantId/recommendations/public"',
+    5000,
+  ),
+  /userId\s*:/,
+  "GET public restaurant recommendations must not expose raw user ids",
+);
 
 const locationRoutesSource = readSource(
   "server/routes/locationUtilityRoutes.ts",
@@ -250,5 +507,148 @@ assert.match(
   /toPublicEventListingArray/,
   "GET /api/events/upcoming must return sanitized event DTOs",
 );
+const authenticatedEventsRoute = sliceAfter(
+  eventRoutesSource,
+  'app.get("/api/events", isAuthenticated',
+  4500,
+);
+assert.match(
+  authenticatedEventsRoute,
+  /storage\.getHost\(hostIdFilter\)/,
+  "GET /api/events?hostId must load the requested host before returning management data",
+);
+assert.match(
+  authenticatedEventsRoute,
+  /requestedHost\.userId[\s\S]*res\.status\(403\)/,
+  "GET /api/events?hostId must enforce host ownership",
+);
+assert.match(
+  authenticatedEventsRoute,
+  /res\.json\(toPublicEventListingArray\(filtered\)\)/,
+  "GET /api/events without a host filter must sanitize its cross-host feed",
+);
+const publicEventDetailRoute = sliceAfter(
+  eventRoutesSource,
+  'app.get("/api/public/events/:eventId"',
+  8000,
+);
+assert.match(
+  publicEventDetailRoute,
+  /canExposeAnonymousEventDetail/,
+  "public event detail must gate paid and non-public rows",
+);
+assert.match(
+  publicEventDetailRoute,
+  /!isAuthed[\s\S]*res\.status\(404\)/,
+  "public event detail must hide protected rows from anonymous callers",
+);
+assert.match(
+  publicEventDetailRoute,
+  /isAuthed \? "private, no-store" : "public, max-age=60"/,
+  "authenticated event detail must never enter a shared cache",
+);
+assert.match(
+  eventRoutesSource,
+  /toPublicParkingPassListingArray/,
+  "eventRoutes.ts must import the public Parking Pass DTO",
+);
+assert.match(
+  sliceAfter(eventRoutesSource, '"/api/parking-pass",', 6500),
+  /toPublicParkingPassListingArray/,
+  "GET /api/parking-pass must return allowlisted listings",
+);
+assert.match(
+  sliceAfter(eventRoutesSource, '"/api/parking-pass/host-ids"', 7000),
+  /normalizeParkingStatus\(series\?\.status\) === "published"/,
+  "public Parking Pass host ids must require a published series",
+);
+const parkingPassHostStatusSource = sliceAfter(
+  eventRoutesSource,
+  "const buildParkingPassHostStatusPayload",
+  5000,
+);
+assert.match(
+  parkingPassHostStatusSource,
+  /includeDraft: false/,
+  "public Parking Pass host status must exclude draft virtual occurrences",
+);
+assert.match(
+  parkingPassHostStatusSource,
+  /isParkingPassFeedCandidate\(event\)/,
+  "public Parking Pass host status must exclude unavailable legacy rows",
+);
+assert.match(
+  parkingPassHostStatusSource,
+  /publishedParkingPassSeriesIds\.has\(String\(event\.seriesId\)\)/,
+  "public Parking Pass host status must reject legacy rows linked to draft series",
+);
+
+const dealDiscoveryRoutesSource = readSource(
+  "server/routes/dealDiscoveryRoutes.ts",
+);
+assert.match(
+  sliceAfter(
+    dealDiscoveryRoutesSource,
+    'app.get("/api/reviews/restaurant/:restaurantId"',
+    1200,
+  ),
+  /toPublicRestaurantReviewArray/,
+  "GET /api/reviews/restaurant/:restaurantId must return public review DTOs",
+);
+
+const publicMapRoutesSource = readSource("server/routes/publicMapRoutes.ts");
+assert.match(
+  publicMapRoutesSource,
+  /toPublicMapLocationsPayload/,
+  "publicMapRoutes.ts must import the public map locations DTO",
+);
+assert.match(
+  sliceAfter(publicMapRoutesSource, 'app.get("/api/map/locations"', 22000),
+  /toPublicMapLocationsPayload/,
+  "GET /api/map/locations must return sanitized map location DTOs",
+);
+
+const completenessReportSource = readSource(
+  "scripts/realAccountCompletenessReport.ts",
+);
+assert.match(
+  completenessReportSource,
+  /from event_bookings eb[\s\S]*lower\(coalesce\(eb\.status, ''\)\) = 'confirmed'[\s\S]*e\.date >= current_date/,
+  "account completeness must count confirmed current event bookings as schedule",
+);
+assert.doesNotMatch(
+  completenessReportSource,
+  /from telemetry_events|owner_created_at|owner_telemetry_event_count|owner_login_event_count/,
+  "account completeness must not collect owner join/login/telemetry output data",
+);
+assert.match(
+  completenessReportSource,
+  /isLikelyTestBusiness\(\{[\s\S]*address: raw\.address[\s\S]*description: raw\.description/,
+  "account completeness may use business evidence transiently for test-row exclusion",
+);
+const completenessOutputProjection = sliceAfter(
+  completenessReportSource,
+  "realRows.push({",
+  1400,
+);
+for (const forbiddenOutputField of [
+  "ownerCreatedAt",
+  "ownerTelemetryEventCount",
+  "ownerLoginEventCount",
+  "address:",
+  "description:",
+  "cuisineType:",
+  "operatingHours:",
+  "logoUrl:",
+  "coverImageUrl:",
+]) {
+  assert.equal(
+    completenessOutputProjection.includes(forbiddenOutputField),
+    false,
+    `account completeness JSON projection must omit ${forbiddenOutputField}`,
+  );
+}
+assert.match(completenessOutputProjection, /hasPhotos:/);
+assert.match(completenessOutputProjection, /hasHours:/);
 
 console.log("MealScout public data boundary contract: PASS");
