@@ -34,6 +34,7 @@ import {
   truckImportListings,
   menuItems,
   restaurants,
+  reviews,
 } from "@shared/schema";
 import {
   isCloudinaryConfigured,
@@ -1168,6 +1169,18 @@ export function registerRestaurantCoreRoutes(
         const rating = averageScore
           ? Math.max(1, Math.min(5, Math.round(averageScore / 20)))
           : null;
+        const [existingContextReview] = hasContext
+          ? await db
+              .select({ id: reviews.id })
+              .from(reviews)
+              .where(
+                and(
+                  eq(reviews.restaurantId, restaurantId),
+                  eq(reviews.userId, userId),
+                ),
+              )
+              .limit(1)
+          : [];
 
         const recommendationData =
           insertRestaurantUserRecommendationSchema.parse({
@@ -1200,7 +1213,7 @@ export function registerRestaurantCoreRoutes(
         await autoFollowRestaurant(userId, restaurantId);
 
         let proofPhoto: any = null;
-        if (req.file) {
+        if (req.file && !existingContextReview) {
           if (!isCloudinaryConfigured()) {
             return res.status(503).json({
               message: "Image upload service not configured",
@@ -1230,6 +1243,7 @@ export function registerRestaurantCoreRoutes(
           proofPhoto = createdUpload;
         }
 
+        let createdContextReview = false;
         if (hasContext) {
           const scoreLines =
             scoreValues.length > 0
@@ -1248,29 +1262,32 @@ export function registerRestaurantCoreRoutes(
           const reviewComment =
             [comment, scoreLines, photoLine].filter(Boolean).join("\n\n") ||
             "Recommended on MealScout.";
-          await storage.createReview({
-            restaurantId,
-            userId,
-            rating: 0,
-            comment: reviewComment,
-          } as any);
+          if (!existingContextReview) {
+            await storage.createReview({
+              restaurantId,
+              userId,
+              rating: 0,
+              comment: reviewComment,
+            } as any);
+            createdContextReview = true;
+          }
         }
 
         const influenceBump = createdRecommendation
-          ? hasContext
+          ? createdContextReview
             ? 3
             : 1
-          : hasContext
+          : createdContextReview
             ? 2
             : 0;
-        if (createdRecommendation || hasContext) {
+        if (createdRecommendation || createdContextReview) {
           await db
             .update(users)
             .set({
               recommendationCount: createdRecommendation
                 ? sql`${users.recommendationCount} + 1`
                 : users.recommendationCount,
-              reviewCount: hasContext
+              reviewCount: createdContextReview
                 ? sql`${users.reviewCount} + 1`
                 : users.reviewCount,
               influenceScore:
@@ -1293,7 +1310,7 @@ export function registerRestaurantCoreRoutes(
           ...recommendation,
           success: true,
           alreadyExists: !createdRecommendation,
-          contextSaved: hasContext,
+          contextSaved: createdContextReview,
           proofPhoto,
         });
       } catch (error: any) {

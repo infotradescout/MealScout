@@ -9,6 +9,7 @@ import {
   toPublicEventListing,
   toPublicEventListingArray,
 } from "../server/publicProfiles/toPublicEventListing";
+import { toPublicMapLocationsPayload } from "../server/publicProfiles/toPublicMapLocations";
 
 // --- Runtime: forbidden fields must never survive the DTO ---------------
 
@@ -175,6 +176,80 @@ for (const key of forbiddenHostKeys) {
   );
 }
 
+const rawMapPayload = {
+  hostLocations: [
+    {
+      id: "host-map-1",
+      type: "host_location",
+      hostId: "host-map-1",
+      name: "Public host",
+      address: "123 Host St",
+      latitude: "30.1",
+      longitude: "-87.2",
+      userId: "SECRET_userId",
+      contactPhone: "SECRET_contactPhone",
+      notes: "SECRET_notes",
+      expectedFootTraffic: 9000,
+      stripeConnectAccountId: "SECRET_stripe",
+      stripeConnectStatus: "SECRET_status",
+      parkingPassBreakfastPriceCents: 1234,
+    },
+  ],
+  eventLocations: [
+    {
+      id: "event-map-1",
+      type: "event",
+      name: "Public event",
+      hostId: "host-map-1",
+      hostName: "Public host",
+      stripeProductId: "SECRET_product",
+      stripePriceId: "SECRET_price",
+      coordinatorUserId: "SECRET_coordinator",
+    },
+  ],
+  supplierLocations: [
+    {
+      id: "supplier-map-1",
+      type: "supplier",
+      supplierId: "supplier-map-1",
+      name: "Public supplier",
+      contactEmail: "SECRET_email",
+      contactPhone: "SECRET_phone",
+      stripeConnectAccountId: "SECRET_stripe",
+    },
+  ],
+};
+const publicMapPayload = toPublicMapLocationsPayload(rawMapPayload);
+for (const key of [
+  "userId",
+  "contactPhone",
+  "notes",
+  "expectedFootTraffic",
+  "stripeConnectAccountId",
+  "stripeConnectStatus",
+  "parkingPassBreakfastPriceCents",
+]) {
+  assert.equal(
+    Object.prototype.hasOwnProperty.call(publicMapPayload.hostLocations[0], key),
+    false,
+    `/api/map/locations must strip hostLocations.${key}`,
+  );
+}
+for (const key of ["stripeProductId", "stripePriceId", "coordinatorUserId"]) {
+  assert.equal(
+    Object.prototype.hasOwnProperty.call(publicMapPayload.eventLocations[0], key),
+    false,
+    `/api/map/locations must strip eventLocations.${key}`,
+  );
+}
+for (const key of ["contactEmail", "contactPhone", "stripeConnectAccountId"]) {
+  assert.equal(
+    Object.prototype.hasOwnProperty.call(publicMapPayload.supplierLocations[0], key),
+    false,
+    `/api/map/locations must strip supplierLocations.${key}`,
+  );
+}
+
 // --- Source: the public endpoints must actually call the DTOs -----------
 
 const readSource = (path: string) =>
@@ -249,6 +324,18 @@ assert.match(
   sliceAfter(eventRoutesSource, 'app.get("/api/events/upcoming"'),
   /toPublicEventListingArray/,
   "GET /api/events/upcoming must return sanitized event DTOs",
+);
+
+const publicMapRoutesSource = readSource("server/routes/publicMapRoutes.ts");
+assert.match(
+  publicMapRoutesSource,
+  /toPublicMapLocationsPayload/,
+  "publicMapRoutes.ts must import the public map locations DTO",
+);
+assert.match(
+  sliceAfter(publicMapRoutesSource, 'app.get("/api/map/locations"', 22000),
+  /toPublicMapLocationsPayload/,
+  "GET /api/map/locations must return sanitized map location DTOs",
 );
 
 console.log("MealScout public data boundary contract: PASS");

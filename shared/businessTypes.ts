@@ -20,8 +20,21 @@ export type BusinessCapabilities = {
   hostLocations: boolean;
 };
 
-const BAR_ALIASES = new Set(["bar", "brewery", "taproom", "nightlife"]);
-const TRUCK_ALIASES = new Set(["food_truck", "truck", "food-truck", "foodtruck"]);
+const BAR_ALIASES = new Set([
+  "bar",
+  "brewery",
+  "taproom",
+  "brewery_taproom",
+  "nightlife",
+]);
+const TRUCK_ALIASES = new Set([
+  "food_truck",
+  "truck",
+  "food-truck",
+  "foodtruck",
+  "mobile_food_vendor",
+]);
+const RESTAURANT_ALIASES = new Set(["restaurant", "venue"]);
 
 const CAPABILITIES: Record<FoodBusinessType, BusinessCapabilities> = {
   restaurant: {
@@ -91,11 +104,8 @@ export function toCanonicalFoodBusinessType(
   const normalized = normalizeBusinessType(value);
   if (BAR_ALIASES.has(normalized)) return "bar";
   if (TRUCK_ALIASES.has(normalized)) return "food_truck";
-  if (
-    normalized === "restaurant" ||
-    normalized === "caterer" ||
-    normalized === "private_chef"
-  ) {
+  if (RESTAURANT_ALIASES.has(normalized)) return "restaurant";
+  if (normalized === "caterer" || normalized === "private_chef") {
     return normalized;
   }
   return null;

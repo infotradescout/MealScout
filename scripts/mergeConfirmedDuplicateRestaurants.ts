@@ -29,7 +29,13 @@ import { restaurants, truckClaimRequests } from "../shared/schema";
  * Usage:
  *   npx tsx scripts/mergeConfirmedDuplicateRestaurants.ts --dry-run
  *   npx tsx scripts/mergeConfirmedDuplicateRestaurants.ts --apply
+ *
+ * Frozen after the July 2026 production-hold audit: do not run this script
+ * again until a replacement merge tool reassigns dependencies, preserves
+ * discarded fields, and writes durable execution receipts.
  */
+
+const FREEZE_OVERRIDE = "MEALSCOUT_ALLOW_FROZEN_CLEANUP_SCRIPT";
 
 const TARGETS = [
   {
@@ -75,6 +81,11 @@ const parseArgs = () => {
 
 async function main() {
   const { apply, dryRun } = parseArgs();
+  if (process.env[FREEZE_OVERRIDE] !== "true") {
+    throw new Error(
+      `[merge-duplicate-restaurants] Frozen by production-hold audit. Set ${FREEZE_OVERRIDE}=true only after transactional revalidation.`,
+    );
+  }
   console.log(
     `[merge-duplicate-restaurants] Starting (${dryRun ? "DRY RUN - no writes" : "APPLY"})...`,
   );

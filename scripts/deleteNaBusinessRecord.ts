@@ -14,8 +14,11 @@ import { restaurants, menus } from "@shared/schema";
  * follows, recommendations, subscriptions, food truck sessions/locations,
  * business staff memberships/invites, event bookings, verification
  * requests, truck claim requests, reviews, manual schedules, parking
- * reports, or credit redemptions. Its one menu has zero menu items. The
- * owner (Shannon Potter) has no other restaurant row and never logged in.
+ * reports, or credit redemptions. Its one menu has zero menu items.
+ *
+ * Frozen after the July 2026 production-hold audit: do not run this script
+ * again until a replacement cleanup tool provides complete dependency checks,
+ * transactional receipts, and PII-free backups.
  *
  * Usage:
  *   npx tsx scripts/deleteNaBusinessRecord.ts --dry-run
@@ -23,6 +26,7 @@ import { restaurants, menus } from "@shared/schema";
  */
 
 const RESTAURANT_ID = "e48278f1-afe5-49be-b763-c76c2fe3d55e";
+const FREEZE_OVERRIDE = "MEALSCOUT_ALLOW_FROZEN_CLEANUP_SCRIPT";
 
 const parseArgs = () => {
   const args = new Set(process.argv.slice(2));
@@ -31,6 +35,11 @@ const parseArgs = () => {
 
 async function main() {
   const { apply, dryRun } = parseArgs();
+  if (process.env[FREEZE_OVERRIDE] !== "true") {
+    throw new Error(
+      `[delete-na-business-record] Frozen by production-hold audit. Set ${FREEZE_OVERRIDE}=true only after transactional revalidation.`,
+    );
+  }
   console.log(
     `[delete-na-business-record] Starting (${dryRun ? "DRY RUN - no writes" : "APPLY"})...`,
   );

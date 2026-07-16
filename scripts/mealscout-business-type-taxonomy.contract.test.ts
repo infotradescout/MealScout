@@ -10,6 +10,9 @@ import {
 
 assert.equal(toCanonicalFoodBusinessType(" FOOD-TRUCK "), "food_truck");
 assert.equal(toCanonicalFoodBusinessType("brewery"), "bar");
+assert.equal(toCanonicalFoodBusinessType("brewery_taproom"), "bar");
+assert.equal(toCanonicalFoodBusinessType("venue"), "restaurant");
+assert.equal(toCanonicalFoodBusinessType("mobile_food_vendor"), "food_truck");
 assert.equal(isTruckBusinessType("truck"), true);
 assert.equal(isBarBusinessType("taproom"), true);
 assert.equal(isRestaurantLikeBusinessType("nightlife"), true);

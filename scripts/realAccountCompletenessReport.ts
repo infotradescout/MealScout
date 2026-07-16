@@ -83,10 +83,7 @@ type Row = {
   description: string | null;
   city: string | null;
   state: string | null;
-  ownerId: string;
-  ownerEmail: string;
-  ownerFirstName: string | null;
-  ownerLastName: string | null;
+  ownerDomain: string | null;
   accountSettings: Record<string, unknown> | null;
   menuItemCount: number;
   upcomingScheduleCount: number;
@@ -101,6 +98,12 @@ function hasNonEmptyHours(operatingHours: unknown): boolean {
   return Object.values(operatingHours as Record<string, unknown>).some(
     (day) => Array.isArray(day) && day.length > 0,
   );
+}
+
+function emailDomain(value: unknown): string | null {
+  const email = String(value || "").trim().toLowerCase();
+  const at = email.lastIndexOf("@");
+  return at > 0 ? email.slice(at + 1) : null;
 }
 
 async function main() {
@@ -221,10 +224,7 @@ async function main() {
       description: raw.description,
       city: raw.city,
       state: raw.state,
-      ownerId: String(raw.owner_id),
-      ownerEmail: raw.owner_email,
-      ownerFirstName: raw.owner_first_name,
-      ownerLastName: raw.owner_last_name,
+      ownerDomain: emailDomain(raw.owner_email),
       accountSettings,
       menuItemCount: Number(raw.menu_item_count || 0),
       upcomingScheduleCount: Number(raw.upcoming_schedule_count || 0),

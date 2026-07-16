@@ -208,6 +208,8 @@ interface LiveTruckSummary {
   address?: string | null;
   latitude?: number | null;
   longitude?: number | null;
+  currentLatitude?: number | string | null;
+  currentLongitude?: number | string | null;
   lat?: number | null;
   lng?: number | null;
   distance?: number | null;
@@ -1024,8 +1026,8 @@ function isTruckBroadcastLive(truck: LiveTruckSummary): boolean {
       {
         mobileOnline: truck.mobileOnline,
         liveBroadcasting: truck.liveBroadcasting,
-        currentLatitude: truck.latitude ?? truck.lat,
-        currentLongitude: truck.longitude ?? truck.lng,
+        currentLatitude: truck.currentLatitude ?? truck.latitude ?? truck.lat,
+        currentLongitude: truck.currentLongitude ?? truck.longitude ?? truck.lng,
         lastBroadcastAt: truck.lastBroadcastAt,
         liveUntilAt: truck.liveUntilAt,
         locationSource: readStringField(truck, ["locationSource", "location_source"]),
@@ -2187,9 +2189,9 @@ function getTruckToneDotClass(tone: TruckCardTone): string {
 function getTruckCoords(
   truck: LiveTruckSummary,
 ): { lat: number; lng: number } | null {
-  const lat = truck.latitude ?? truck.lat;
-  const lng = truck.longitude ?? truck.lng;
-  if (typeof lat !== "number" || typeof lng !== "number") return null;
+  const lat = toScoutNumber(truck.currentLatitude ?? truck.latitude ?? truck.lat);
+  const lng = toScoutNumber(truck.currentLongitude ?? truck.longitude ?? truck.lng);
+  if (lat === null || lng === null) return null;
   return { lat, lng };
 }
 

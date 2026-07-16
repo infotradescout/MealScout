@@ -138,8 +138,8 @@ export function buildScoutResultViewModel(
     locationLabel: locationLabelFor(result),
     scopeLabel: isNetworkResult
       ? result.location.label
-        ? `Popular in ${result.location.label}`
-        : "Popular on MealScout"
+        ? `More options in ${result.location.label}`
+        : "More options on MealScout"
       : null,
     variant: options.variant || defaultVariant(result),
   };
