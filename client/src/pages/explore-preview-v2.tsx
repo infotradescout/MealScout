@@ -80,6 +80,12 @@ import {
 import { MapErrorBoundary } from "@/components/maps/map-error-boundary";
 import { GOOGLE_MAPS_WEB_API_KEY } from "@/lib/mapProvider";
 import { apiUrl } from "@/lib/api";
+import {
+  getEventCalendarDay,
+  getRestaurantOpenState,
+  getScoutRecenterDecision,
+  shouldShowRestaurantMarker,
+} from "@/lib/scoutMapTruth";
 import { toast } from "@/hooks/use-toast";
 import { buildPublicProfilePath } from "@/lib/public-profile-path";
 import {
@@ -253,6 +259,7 @@ interface EventSummary {
   title?: string | null;
   name?: string | null;
   startsAt?: string | null;
+  date?: string | null;
   startTime?: string | null;
   venueName?: string | null;
   locationName?: string | null;
@@ -264,6 +271,11 @@ interface EventSummary {
   lng?: number | null;
   venueLat?: number | null;
   venueLng?: number | null;
+  host?: {
+    businessName?: string | null;
+    latitude?: number | string | null;
+    longitude?: number | string | null;
+  } | null;
 }
 
 type EventsResponse = { events?: EventSummary[] } | EventSummary[] | null;
@@ -1061,32 +1073,6 @@ function isTruckServingNow(truck: LiveTruckSummary): boolean {
   return isTruckBroadcastLive(truck);
 }
 
-function getRestaurantOpenState(
-  restaurant: RestaurantSummary,
-): "open" | "closed" | "unknown" {
-  const explicit = readBooleanField(restaurant, [
-    "isOpen",
-    "openNow",
-    "currentlyOpen",
-    "isCurrentlyOpen",
-  ]);
-  if (explicit === true) return "open";
-  if (explicit === false) return "closed";
-  const status = readStringField(restaurant, [
-    "openStatus",
-    "status",
-    "hoursStatus",
-    "businessStatus",
-  ]);
-  if (status) {
-    const normalized = status.toLowerCase();
-    if (normalized.includes("open")) return "open";
-    if (normalized.includes("closed") || normalized.includes("not open"))
-      return "closed";
-  }
-  return "unknown";
-}
-
 function getKnownTimestamp(
   meta: FreshnessMeta,
 ): { value: string; type: "updated" | "confirmed" } | null {
@@ -1125,6 +1111,15 @@ function formatFreshnessTime(
 
 function isTodayDate(value?: string | null): boolean {
   if (!value) return false;
+  const dateOnly = value.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (dateOnly) {
+    const today = new Date();
+    return (
+      Number(dateOnly[1]) === today.getFullYear() &&
+      Number(dateOnly[2]) === today.getMonth() + 1 &&
+      Number(dateOnly[3]) === today.getDate()
+    );
+  }
   const time = new Date(value).getTime();
   if (!Number.isFinite(time)) return false;
   const date = new Date(time);
@@ -2199,6 +2194,18 @@ function getTruckCoords(
   return { lat: coordinates.latitude, lng: coordinates.longitude };
 }
 
+function getEventCoords(
+  event: EventSummary,
+): { lat: number; lng: number } | null {
+  const coordinates =
+    resolveCoordinatePair(event.latitude, event.longitude) ??
+    resolveCoordinatePair(event.lat, event.lng) ??
+    resolveCoordinatePair(event.venueLat, event.venueLng) ??
+    resolveCoordinatePair(event.host?.latitude, event.host?.longitude);
+  if (!coordinates) return null;
+  return { lat: coordinates.latitude, lng: coordinates.longitude };
+}
+
 function formatTruckPlace(truck: LiveTruckSummary): string {
   return (
     [truck.address, truck.city, truck.state].filter(Boolean).join(", ") ||
@@ -2735,7 +2742,6 @@ export default function ExplorePreview() {
   const resolvedScoutLocation = useMemo(() => {
     if (previewLocation) return previewLocation;
     if (manualSelectedLocation) return manualSelectedLocation;
-    if (savedLocation) return savedLocation;
     if (deviceCoords) {
       return {
         label: deviceLocationName || "Your area",
@@ -2744,6 +2750,7 @@ export default function ExplorePreview() {
         source: "device" as const,
       };
     }
+    if (savedLocation) return savedLocation;
     return fallbackLocation;
   }, [deviceCoords, deviceLocationName, previewLocation, savedLocation]);
   const resolvedScoutCoords = useMemo(
@@ -2752,6 +2759,11 @@ export default function ExplorePreview() {
         ? { lat: resolvedScoutLocation.lat, lng: resolvedScoutLocation.lng }
         : null,
     [resolvedScoutLocation],
+  );
+  const verifiedMapUserLocation = useMemo(
+    () =>
+      resolvedScoutLocation?.source === "device" ? resolvedScoutCoords : null,
+    [resolvedScoutCoords, resolvedScoutLocation?.source],
   );
   const showScoutPreviewDebug =
     isScoutPreviewEligible && scoutPreviewCity.length > 0;
@@ -3028,14 +3040,15 @@ export default function ExplorePreview() {
   }, [eventsData]);
 
   const visibleEvents = useMemo<EventSummary[]>(() => {
-    return events.filter((event) =>
-      isWithinScoutRadius(
+    return events.filter((event) => {
+      const coords = getEventCoords(event);
+      return isWithinScoutRadius(
         resolvedScoutCoords,
-        event.latitude ?? event.lat ?? event.venueLat,
-        event.longitude ?? event.lng ?? event.venueLng,
+        coords?.lat,
+        coords?.lng,
         discoveryRadiusKm,
-      ),
-    );
+      );
+    });
   }, [resolvedScoutCoords, discoveryRadiusKm, events]);
 
   const mapBoundsForScout = useMemo(
@@ -3074,7 +3087,9 @@ export default function ExplorePreview() {
         },
       );
       recordScoutSourceStatus("mapLocations", response.status);
-      if (!response.ok) return { hostLocations: [] };
+      if (!response.ok) {
+        throw new Error(`Map locations request failed (${response.status})`);
+      }
       return response.json();
     },
     staleTime: 45_000,
@@ -3099,33 +3114,22 @@ export default function ExplorePreview() {
     );
   }, [allScoutHostLocations, discoveryRadiusKm, resolvedScoutCoords]);
 
-  const mapHostLocations = useMemo<ScoutHostLocation[]>(() => {
-    const rows = allScoutHostLocations.filter(
-      (host) =>
-        readNumberField(host, ["latitude", "lat"]) !== null &&
-        readNumberField(host, ["longitude", "lng"]) !== null,
-    );
-    const nearbyHosts = rows.filter((host) =>
-      isWithinScoutRadius(
-        resolvedScoutCoords,
-        readNumberField(host, ["latitude", "lat"]),
-        readNumberField(host, ["longitude", "lng"]),
-        discoveryRadiusKm,
-      ),
-    );
-    return nearbyHosts.length > 0 ? nearbyHosts : rows;
-  }, [allScoutHostLocations, discoveryRadiusKm, resolvedScoutCoords]);
+  // An empty local result is truthful. Never replace it with global hosts.
+  const mapHostLocations = visibleHosts;
 
   const visibleMapEventLocations = useMemo<ScoutMapEventLocation[]>(() => {
     const rows = Array.isArray(mapLocationsData?.eventLocations)
       ? mapLocationsData.eventLocations
       : [];
-    return rows.filter(
-      (host) =>
-        readNumberField(host, ["hostLatitude", "latitude", "lat"]) !== null &&
-        readNumberField(host, ["hostLongitude", "longitude", "lng"]) !== null,
+    return rows.filter((event) =>
+      isWithinScoutRadius(
+        resolvedScoutCoords,
+        readNumberField(event, ["hostLatitude", "latitude", "lat"]),
+        readNumberField(event, ["hostLongitude", "longitude", "lng"]),
+        discoveryRadiusKm,
+      ),
     );
-  }, [mapLocationsData]);
+  }, [discoveryRadiusKm, mapLocationsData, resolvedScoutCoords]);
 
   const { data: parkingPassData } = useQuery<ScoutParkingPassListing[]>({
     queryKey: ["/api/parking-pass", "scout-map"],
@@ -3148,9 +3152,14 @@ export default function ExplorePreview() {
       const host = listing.host;
       if (!host) return false;
       if (!isScoutMapWindowActiveNow(listing)) return false;
-      return true;
+      return isWithinScoutRadius(
+        resolvedScoutCoords,
+        readNumberField(host, ["latitude", "lat"]),
+        readNumberField(host, ["longitude", "lng"]),
+        discoveryRadiusKm,
+      );
     });
-  }, [parkingPassData]);
+  }, [discoveryRadiusKm, parkingPassData, resolvedScoutCoords]);
 
   const parkedTrucksByHostKey = useMemo(() => {
     const byHost = new Map<
@@ -3822,6 +3831,7 @@ export default function ExplorePreview() {
 
   const truckMarkers = useMemo<MapAdapterMarker[]>(() => {
     return scoutTruckInventory
+      .filter(isTruckBroadcastLive)
       .map((t) => {
         const coords = getTruckCoords(t);
         if (!coords) return null;
@@ -3860,9 +3870,13 @@ export default function ExplorePreview() {
   const restaurantMarkers = useMemo<MapAdapterMarker[]>(() => {
     return nearbyRestaurants
       .map((r) => {
-        const lat = r.latitude ?? r.lat;
-        const lng = r.longitude ?? r.lng;
-        if (typeof lat !== "number" || typeof lng !== "number") return null;
+        const coordinates =
+          resolveCoordinatePair(r.latitude, r.longitude) ??
+          resolveCoordinatePair(r.lat, r.lng);
+        if (!coordinates) return null;
+        const lat = coordinates.latitude;
+        const lng = coordinates.longitude;
+        const openState = getRestaurantOpenState(r);
         const dealCount = Number(r.activeDealsCount || r.activeDealCount || 0);
         const hasCommunityUpdate =
           Number(r.communityActivityCount || 0) > 0 ||
@@ -3875,7 +3889,7 @@ export default function ExplorePreview() {
           hasDeal: dealCount > 0,
           hasCommunityUpdate,
           hasDistance: Boolean(getRestaurantDistance(r)),
-          isOpen: true,
+          isOpen: openState === "open",
         };
         return {
           id: `restaurant-${r.id}`,
@@ -3894,13 +3908,13 @@ export default function ExplorePreview() {
 
   const eventMarkers = useMemo<MapAdapterMarker[]>(() => {
     return visibleEvents
+      .filter((event) => isTodayDate(getEventCalendarDay(event)))
       .map((e) => {
-        const lat = e.latitude ?? e.lat ?? e.venueLat;
-        const lng = e.longitude ?? e.lng ?? e.venueLng;
-        if (typeof lat !== "number" || typeof lng !== "number") return null;
+        const coords = getEventCoords(e);
+        if (!coords) return null;
         const freshnessMeta: FreshnessMeta = {
           kind: "event",
-          startsAt: e.startsAt,
+          startsAt: getEventCalendarDay(e),
           startTime: e.startTime,
           updatedAt: readStringField(e, ["updatedAt", "lastUpdatedAt"]),
           confirmedAt: readStringField(e, ["confirmedAt", "lastConfirmedAt"]),
@@ -3909,11 +3923,11 @@ export default function ExplorePreview() {
           id: `event-${e.id}`,
           sourceId: String(e.id),
           kind: "event" as const,
-          lat,
-          lng,
+          lat: coords.lat,
+          lng: coords.lng,
           title: e.title ?? e.name ?? undefined,
           subtitle: getMapMarkerSubtitle(
-            e.venueName ?? e.locationName,
+            e.venueName ?? e.locationName ?? e.host?.businessName,
             freshnessMeta,
           ),
           color: getMapMarkerColor(freshnessMeta),
@@ -3963,7 +3977,7 @@ export default function ExplorePreview() {
           address,
           spotImageUrl: host.spotImageUrl || null,
           parkedTrucks,
-          parkingStatus: parkedTrucks.length > 0 ? "occupied" : "available",
+          parkingStatus: parkedTrucks.length > 0 ? "occupied" : null,
         } as MapAdapterMarker;
       })
       .filter((m): m is MapAdapterMarker => Boolean(m && m.sourceId));
@@ -4103,8 +4117,8 @@ export default function ExplorePreview() {
       if (marker.kind === "parking") {
         const hasParkedTruck = Boolean(marker.parkedTrucks?.length);
         layerAllowed =
-          activeMapLayers.happeningToday ||
-          (hasParkedTruck && activeMapLayers.foodTrucks);
+          hasParkedTruck &&
+          (activeMapLayers.happeningToday || activeMapLayers.foodTrucks);
       }
       if (marker.kind === "deal") layerAllowed = activeMapLayers.deals;
       if (marker.kind === "restaurant") {
@@ -4113,13 +4127,19 @@ export default function ExplorePreview() {
         );
         const hasDeal = Boolean(
           restaurant &&
-          Number(
-            restaurant.activeDealsCount || restaurant.activeDealCount || 0,
-          ) > 0,
+            Number(
+              restaurant.activeDealsCount || restaurant.activeDealCount || 0,
+            ) > 0,
         );
-        layerAllowed =
-          activeMapLayers.openNow || (hasDeal && activeMapLayers.deals);
-        if (hasDeal && !activeMapLayers.deals) layerAllowed = false;
+        const openState = restaurant
+          ? getRestaurantOpenState(restaurant)
+          : "unknown";
+        layerAllowed = shouldShowRestaurantMarker({
+          openState,
+          hasDeal,
+          showOpenNow: activeMapLayers.openNow,
+          showDeals: activeMapLayers.deals,
+        });
       }
       if (!layerAllowed) return false;
       if (scoutSearchMode) {
@@ -4186,6 +4206,25 @@ export default function ExplorePreview() {
     return filteredMapMarkers;
   }, [activeSceneLaneId, filteredMapMarkers]);
 
+  const sceneMapMarkerCounts = useMemo(
+    () => ({
+      pinCount: sceneFilteredMapMarkers.length,
+      liveTruckCount: sceneFilteredMapMarkers.filter(
+        (marker) => marker.kind === "truck",
+      ).length,
+      restaurantCount: sceneFilteredMapMarkers.filter(
+        (marker) => marker.kind === "restaurant",
+      ).length,
+      dealCount: sceneFilteredMapMarkers.filter(
+        (marker) => marker.kind === "deal",
+      ).length,
+      eventCount: sceneFilteredMapMarkers.filter(
+        (marker) => marker.kind === "event",
+      ).length,
+    }),
+    [sceneFilteredMapMarkers],
+  );
+
   const toggleMapLayer = useCallback((layer: MapLayerId) => {
     setActiveMapLayers((current) => ({
       ...current,
@@ -4247,6 +4286,7 @@ export default function ExplorePreview() {
     lng: number;
   } | null>(null);
   const userPushedMapRef = useRef(false);
+  const lastCenteredScoutSourceRef = useRef<string | null>(null);
   const [sheetState, setSheetState] = useState<"default" | "fullMap">(
     "default",
   );
@@ -4255,10 +4295,6 @@ export default function ExplorePreview() {
   const [selectedMapMarker, setSelectedMapMarker] =
     useState<MapAdapterMarker | null>(null);
   const [mapBounds, setMapBounds] = useState<MapBoundsLike | null>(null);
-  // Once the full map has been opened once, keep GoogleMapSurface mounted
-  // (just hidden) so it doesn't re-initialize on every collapse/expand.
-  // Using state (not ref) so React re-renders when the map should first mount.
-  const [hasOpenedFullMap, setHasOpenedFullMap] = useState(false);
   const googleMapContainerRef = useRef<HTMLDivElement | null>(null);
   const [googleMapFailed, setGoogleMapFailed] = useState(false);
   const { data: mapRuntime } = useQuery<MapRuntimeResponse>({
@@ -4296,7 +4332,6 @@ export default function ExplorePreview() {
     if (resolvedScoutCoords) {
       setMapCenter(resolvedScoutCoords);
     }
-    setHasOpenedFullMap(true);
     setGoogleMapFailed(false);
     setSheetState("fullMap");
   }, [resolvedScoutCoords]);
@@ -4345,7 +4380,15 @@ export default function ExplorePreview() {
 
   // When we first get coords, set the map center to the right-quadrant offset.
   useEffect(() => {
-    if (!resolvedScoutCoords || userPushedMapRef.current) return;
+    const source = resolvedScoutLocation?.source || null;
+    const { freshDeviceLocation, shouldRecenter } = getScoutRecenterDecision({
+      source,
+      lastCenteredSource: lastCenteredScoutSourceRef.current,
+      userPushedMap: userPushedMapRef.current,
+    });
+    lastCenteredScoutSourceRef.current = source;
+    if (!resolvedScoutCoords || !shouldRecenter) return;
+    if (freshDeviceLocation) userPushedMapRef.current = false;
     setMapCenter(
       shiftCenterForRightQuadrant(
         resolvedScoutCoords.lat,
@@ -4353,7 +4396,7 @@ export default function ExplorePreview() {
         HERO_ZOOM,
       ),
     );
-  }, [resolvedScoutCoords]);
+  }, [resolvedScoutCoords, resolvedScoutLocation?.source]);
 
   const handleMapBoundsChanged = useCallback((bounds: MapBoundsLike) => {
     setMapBounds(bounds);
@@ -4379,7 +4422,6 @@ export default function ExplorePreview() {
       } else if (resolvedScoutCoords) {
         setMapCenter(resolvedScoutCoords);
       }
-      setHasOpenedFullMap(true);
       setGoogleMapFailed(false);
       setSheetState("fullMap");
     },
@@ -4411,7 +4453,6 @@ export default function ExplorePreview() {
   );
   const handlePreviewMarkerTap = useCallback(
     (marker: MapAdapterMarker) => {
-      setHasOpenedFullMap(true);
       setGoogleMapFailed(false);
       setSheetState("fullMap");
       handleMarkerTap(marker);
@@ -4421,13 +4462,11 @@ export default function ExplorePreview() {
 
   /* --------- pull-down-to-fullscreen sheet --------- */
 
-  // When sheetState transitions to fullMap:
-  // 1. Set hasOpenedFullMap so GoogleMapSurface mounts for the first time.
-  // 2. After the 320ms CSS height transition completes, fire a resize event
+  // When sheetState transitions to fullMap, after the 320ms CSS height
+  // transition completes, fire a resize event
   //    so Google Maps re-tiles to the full 100dvh container dimensions.
   useEffect(() => {
     if (sheetState === "fullMap") {
-      setHasOpenedFullMap(true);
       const timer = setTimeout(() => {
         // Dispatch a native resize event on the window — Google Maps listens
         // for this and re-tiles automatically.
@@ -5339,37 +5378,53 @@ export default function ExplorePreview() {
                 data-testid="scout-map-preview"
                 className="absolute inset-0"
                 style={{
-                  visibility: "visible",
+                  visibility: sheetState === "fullMap" ? "hidden" : "visible",
                   pointerEvents: sheetState === "fullMap" ? "none" : "auto",
                   zIndex: 0,
                 }}
               >
-                {resolvedScoutCoords ? (
-                  // The collapsed/compact preview is always the stylized dark
-                  // map with photo pins, regardless of Google Maps
-                  // availability - it's a decorative teaser, not the
-                  // functional map (that's the "fullMap" surface below, which
-                  // still uses real Google Maps when available). Production
-                  // having a working Maps key meant this preview almost never
-                  // showed the intended redesigned look before this change.
-                  <Suspense fallback={<HeroMapFallback reason="loading" />}>
-                    <ThemedScoutMap
-                      userLocation={resolvedScoutCoords}
-                      markers={sceneFilteredMapMarkers}
-                      zoom={13}
-                      onMarkerTap={handlePreviewMarkerTap}
-                    />
-                  </Suspense>
-                ) : (
+                {sheetState === "default" && resolvedScoutCoords ? (
+                  hasMapKey && !googleMapFailed && mapCenter ? (
+                    <MapErrorBoundary>
+                      <GoogleMapSurface
+                        apiKey={effectiveGoogleMapsApiKey}
+                        mapId={effectiveGoogleMapsMapId || undefined}
+                        center={mapCenter}
+                        zoom={mapZoom}
+                        markers={sceneFilteredMapMarkers}
+                        showRoadTrafficLayer={false}
+                        userLocation={verifiedMapUserLocation}
+                        isNightTheme={false}
+                        useNativeMapStyle={true}
+                        showZoomControls={false}
+                        onBoundsChanged={handleMapBoundsChanged}
+                        onZoomChanged={handleMapZoomChanged}
+                        onCenterChanged={handleMapCenterChanged}
+                        onMarkerTap={handlePreviewMarkerTap}
+                        onFatalError={() => setGoogleMapFailed(true)}
+                      />
+                    </MapErrorBoundary>
+                  ) : (
+                    <Suspense fallback={<HeroMapFallback reason="loading" />}>
+                      <ThemedScoutMap
+                        userLocation={resolvedScoutCoords}
+                        showUserLocation={Boolean(verifiedMapUserLocation)}
+                        markers={sceneFilteredMapMarkers}
+                        zoom={13}
+                        onMarkerTap={handlePreviewMarkerTap}
+                      />
+                    </Suspense>
+                  )
+                ) : sheetState === "default" ? (
                   <HeroMapFallback
                     reason={locationStatus === "denied" ? "denied" : "loading"}
                   />
-                )}
+                ) : null}
               </div>
 
               {/* GoogleMapSurface:
-                - Used for full interactive pan/zoom/tap-pin exploration.
-                - Collapsed preview uses the same styled map family above.
+                - Used for compact and full interactive exploration.
+                - The local tile surface is only a no-key/error fallback.
             */}
               {sheetState === "fullMap" &&
               hasMapKey &&
@@ -5394,8 +5449,11 @@ export default function ExplorePreview() {
                       zoom={mapZoom}
                       markers={sceneFilteredMapMarkers}
                       showRoadTrafficLayer={false}
-                      userLocation={resolvedScoutCoords}
-                      isNightTheme={true}
+                      userLocation={verifiedMapUserLocation}
+                        isNightTheme={false}
+                        useNativeMapStyle={true}
+                        showZoomControls={true}
+                        zoomControlsPosition="below-header"
                       onBoundsChanged={handleMapBoundsChanged}
                       onZoomChanged={handleMapZoomChanged}
                       onCenterChanged={handleMapCenterChanged}
@@ -5419,6 +5477,7 @@ export default function ExplorePreview() {
                       <Suspense fallback={<HeroMapFallback reason="loading" />}>
                         <ThemedScoutMap
                           userLocation={resolvedScoutCoords}
+                          showUserLocation={Boolean(verifiedMapUserLocation)}
                           markers={sceneFilteredMapMarkers}
                           zoom={13}
                           interactive={true}
@@ -5442,23 +5501,6 @@ export default function ExplorePreview() {
                 </div>
               ) : null}
             </div>
-
-            {/* Premium overlay frame:
-              - Soft top vignette so the controls read cleanly without
-                covering important map labels.
-              - Subtle warm radial center keeps the surface feeling
-                MealScout, not raw Google.
-              - Light edge glow ties the frame together. */}
-            {sheetState !== "fullMap" && (
-              <div
-                aria-hidden="true"
-                className="absolute inset-0 pointer-events-none"
-                style={{
-                  backgroundImage:
-                    "linear-gradient(180deg, rgba(11,8,6,0.62) 0%, rgba(10,7,5,0.22) 26%, rgba(8,6,10,0.04) 54%, rgba(8,6,10,0.58) 100%), radial-gradient(110% 64% at 50% 42%, rgba(255,136,70,0.18), rgba(255,136,70,0.00) 60%), radial-gradient(100% 50% at 50% -8%, rgba(255,111,46,0.12), rgba(255,111,46,0) 56%)",
-                }}
-              />
-            )}
 
             {sheetState === "fullMap" && (
               <MapLayerToggles
@@ -5487,11 +5529,11 @@ export default function ExplorePreview() {
               <ScoutMapHud
                 locationLabel={shortLocation}
                 marketEyebrow={scoutMarketEyebrow}
-                liveTruckCount={liveTrucks.length}
-                restaurantCount={nearbyRestaurants.length}
-                eventCount={visibleEvents.length + visibleHosts.length}
-                dealCount={allDeals.length}
-                localActivityCount={localActivityCount}
+                pinCount={sceneMapMarkerCounts.pinCount}
+                liveTruckCount={sceneMapMarkerCounts.liveTruckCount}
+                restaurantCount={sceneMapMarkerCounts.restaurantCount}
+                eventCount={sceneMapMarkerCounts.eventCount}
+                dealCount={sceneMapMarkerCounts.dealCount}
                 discoveryRadiusKm={discoveryRadiusKm}
                 onRadiusChange={updateDiscoveryRadiusKm}
                 onRecenter={() => {
@@ -5582,10 +5624,10 @@ export default function ExplorePreview() {
 
                 <MapActivityPips
                   mode={scoutActivityMode}
-                  truckCount={trucksServingNow.length}
-                  restaurantCount={restaurantsOpenNow.length}
-                  dealCount={allDeals.length}
-                  eventCount={visibleEvents.length + visibleHosts.length}
+                  truckCount={sceneMapMarkerCounts.liveTruckCount}
+                  restaurantCount={sceneMapMarkerCounts.restaurantCount}
+                  dealCount={sceneMapMarkerCounts.dealCount}
+                  eventCount={sceneMapMarkerCounts.eventCount}
                 />
 
                 {/* Bottom gradient */}
@@ -5594,7 +5636,7 @@ export default function ExplorePreview() {
                   className="pointer-events-none absolute inset-x-0 bottom-0 h-[52%]"
                   style={{
                     background:
-                      "linear-gradient(180deg, rgba(8,5,2,0) 0%, rgba(8,5,2,0.55) 60%, rgba(8,5,2,0.82) 100%)",
+                      "linear-gradient(180deg, rgba(8,5,2,0) 0%, rgba(8,5,2,0.10) 60%, rgba(8,5,2,0.32) 100%)",
                   }}
                 />
 
@@ -11024,7 +11066,7 @@ function MapActivityPips({
       ? { label: "Food trucks", value: truckCount, className: "bg-orange-300" }
       : null,
     restaurantCount > 0
-      ? { label: "Open places", value: restaurantCount, className: "bg-emerald-300" }
+      ? { label: "Food places", value: restaurantCount, className: "bg-emerald-300" }
       : null,
     dealCount > 0
       ? { label: "Deals", value: dealCount, className: "bg-lime-300" }
@@ -11134,33 +11176,38 @@ function MapLayerToggles({
 function ScoutMapHud({
   locationLabel,
   marketEyebrow,
+  pinCount,
   liveTruckCount,
   restaurantCount,
   eventCount,
   dealCount,
-  localActivityCount,
   discoveryRadiusKm,
   onRadiusChange,
   onRecenter,
 }: {
   locationLabel: string;
   marketEyebrow: string;
+  pinCount: number;
   liveTruckCount: number;
   restaurantCount: number;
   eventCount: number;
   dealCount: number;
-  localActivityCount: number;
   discoveryRadiusKm: number;
   onRadiusChange: (value: number) => void;
   onRecenter: () => void;
 }) {
   const radiusOptions = [5, 12, 25, 40];
   const [isExpanded, setIsExpanded] = useState(false);
-  const totalPins = liveTruckCount + restaurantCount + eventCount;
+  const sceneCounts = [
+    liveTruckCount > 0 ? `${liveTruckCount} trucks` : null,
+    restaurantCount > 0 ? `${restaurantCount} food` : null,
+    dealCount > 0 ? `${dealCount} deals` : null,
+    eventCount > 0 ? `${eventCount} events` : null,
+  ].filter((value): value is string => Boolean(value));
   const sceneLine =
-    totalPins > 0
-      ? `${liveTruckCount} trucks • ${dealCount} deals • ${eventCount} events`
-      : "No nearby spots yet - pan the map or widen radius";
+    pinCount > 0
+      ? sceneCounts.join(" • ") || `${pinCount} nearby places`
+      : "No nearby spots yet - widen the radius or try another location";
 
   return (
     <div className="pointer-events-none absolute left-3 right-3 top-[calc(env(safe-area-inset-top)+4.25rem)] z-20 sm:left-4 sm:right-auto sm:w-[360px]">
@@ -11191,7 +11238,7 @@ function ScoutMapHud({
             </div>
           </div>
           <span className="rounded-full bg-orange-500/16 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-orange-100 ring-1 ring-orange-200/25">
-            Live map
+            Nearby map
           </span>
         </div>
         <div className="flex items-center justify-between gap-2">
@@ -11219,7 +11266,7 @@ function ScoutMapHud({
               type="button"
               onClick={onRecenter}
               className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-[#ff5a2f] text-[#160904] ring-1 ring-orange-200/40 shadow-[0_0_18px_rgba(255,90,47,0.32)]"
-              aria-label="Recenter map on your location"
+              aria-label="Recenter map"
             >
               <Navigation2 className="h-4 w-4" aria-hidden="true" />
             </button>
@@ -11273,10 +11320,10 @@ function ScoutMapHud({
           </div>
         </div>
 
-        {isExpanded && localActivityCount === 0 ? (
+        {isExpanded && pinCount === 0 ? (
           <div className="mt-3 rounded-2xl bg-white/7 px-3 py-2 text-xs text-white/72 ring-1 ring-white/10">
-            No nearby spots right here yet. Pan the map or widen discovery from
-            the picks below.
+            No nearby spots right here yet. Widen the radius or try another
+            location.
           </div>
         ) : null}
       </div>

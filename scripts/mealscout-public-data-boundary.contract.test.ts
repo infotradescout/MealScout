@@ -599,12 +599,12 @@ assert.match(
 const publicMapRoutesSource = readSource("server/routes/publicMapRoutes.ts");
 assert.match(
   publicMapRoutesSource,
-  /toPublicMapLocationsPayload/,
+  /to(?:Bounded)?PublicMapLocationsPayload/,
   "publicMapRoutes.ts must import the public map locations DTO",
 );
 assert.match(
   sliceAfter(publicMapRoutesSource, 'app.get("/api/map/locations"', 22000),
-  /toPublicMapLocationsPayload/,
+  /toBoundedPublicMapLocationsPayload/,
   "GET /api/map/locations must return sanitized map location DTOs",
 );
 
