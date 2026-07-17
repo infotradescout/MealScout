@@ -179,11 +179,30 @@ export function PublicProfileDecisionBar({
   return (
     <section
       aria-label="Profile decision summary"
-      className="rounded-2xl border border-white/10 bg-[#100d0b] p-3 shadow-[0_18px_50px_rgba(0,0,0,0.24)]"
+      className="profile-surface rounded-[1.5rem] p-4 sm:p-5"
       data-public-profile-decision-bar="true"
       data-profile-kind={profile.profileType}
     >
-      <div className="grid gap-2 md:grid-cols-4">
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="profile-section-label">At a glance</p>
+        </div>
+        {action ? (
+          <a
+            href={action.href}
+            target={action.type === "external" || action.type === "map" ? "_blank" : undefined}
+            rel={action.type === "external" || action.type === "map" ? "noopener noreferrer" : undefined}
+            data-analytics-action="decision_bar_cta"
+            data-analytics-target-type={action.type}
+            className="profile-action-primary hidden min-h-11 items-center justify-center gap-2 rounded-xl px-4 text-sm font-bold md:inline-flex md:min-w-36"
+          >
+            <ActionIcon className="h-4 w-4" />
+            <span className="truncate">{action.label}</span>
+          </a>
+        ) : null}
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
         {tiles.map((tile) => (
           <DecisionTile
             key={`${tile!.label}:${tile!.value}`}
@@ -193,24 +212,6 @@ export function PublicProfileDecisionBar({
             detail={tile!.detail}
           />
         ))}
-        {action ? (
-          <div className="rounded-xl border border-orange-300/25 bg-orange-500/10 p-3">
-            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-orange-100/70">
-              Best action
-            </p>
-            <a
-              href={action.href}
-              target={action.type === "external" || action.type === "map" ? "_blank" : undefined}
-              rel={action.type === "external" || action.type === "map" ? "noopener noreferrer" : undefined}
-              data-analytics-action="decision_bar_cta"
-              data-analytics-target-type={action.type}
-              className="mt-2 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg bg-orange-500 px-3 text-sm font-bold text-black hover:bg-orange-400"
-            >
-              <ActionIcon className="h-4 w-4" />
-              <span className="truncate">{action.label}</span>
-            </a>
-          </div>
-        ) : null}
       </div>
     </section>
   );
@@ -228,18 +229,18 @@ function DecisionTile({
   detail?: string | null;
 }) {
   return (
-    <div className="min-w-0 rounded-xl border border-white/10 bg-black/20 p-3">
+    <div className="min-w-0 rounded-xl border border-[color:var(--profile-border)] bg-[color:var(--profile-surface-soft)] p-3">
       <div className="flex items-center gap-2">
-        <Icon className="h-4 w-4 flex-none text-orange-200/70" />
-        <p className="truncate text-[10px] font-bold uppercase tracking-[0.18em] text-white/40">
+        <Icon className="h-4 w-4 flex-none text-[color:var(--profile-accent)]" />
+        <p className="truncate text-[10px] font-bold uppercase tracking-[0.18em] text-[color:var(--profile-muted)]">
           {label}
         </p>
       </div>
-      <p className="mt-2 line-clamp-2 text-sm font-semibold leading-snug text-white">
+      <p className="mt-2 line-clamp-2 text-sm font-bold leading-snug text-[color:var(--profile-ink)]">
         {value}
       </p>
       {detail ? (
-        <p className="mt-1 line-clamp-2 text-xs leading-snug text-white/55">{detail}</p>
+        <p className="mt-1 line-clamp-2 text-xs leading-snug text-[color:var(--profile-muted)]">{detail}</p>
       ) : null}
     </div>
   );

@@ -6,9 +6,10 @@
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useParams, useLocation } from "wouter";
-import Navigation from "@/components/navigation";
 import { SEOHead } from "@/components/seo-head";
+import { PublicOrderingTopBar } from "@/components/public-ordering/PublicOrderingTopBar";
 import { buildPublicProfilePath } from "@/lib/public-profile-path";
+import { getDishCategoryPhoto } from "@/lib/dishCategoryPhoto";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -36,9 +37,6 @@ import {
   Minus,
   Loader2,
   AlertCircle,
-  Clock,
-  Leaf,
-  Wheat,
   ChevronRight,
   ArrowLeft,
   MapPin,
@@ -237,91 +235,116 @@ export default function MenuPage() {
 
   if (menusQuery.isLoading) {
     return (
-      <div className="min-h-screen">
-        <Navigation />
-        <div className="flex items-center justify-center py-32">
-          <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
-        </div>
+      <div
+        className="mealscout-public-profile min-h-screen bg-[color:var(--profile-page)]"
+        data-public-menu-shell="warm-food-led"
+      >
+        <PublicOrderingTopBar secondaryHref={publicProfileHref} />
+        <main className="mx-auto flex min-h-[70vh] w-full max-w-5xl items-center justify-center px-4 py-20">
+          <div className="profile-surface flex items-center gap-3 rounded-3xl px-6 py-5 text-[color:var(--profile-ink-soft)]">
+            <Loader2 className="h-5 w-5 animate-spin text-[color:var(--profile-accent)]" />
+            <span className="font-bold">Loading menu</span>
+          </div>
+        </main>
       </div>
     );
   }
 
   if (menusQuery.isError || activeMenus.length === 0) {
     return (
-      <div className="min-h-screen">
-        <Navigation />
-        <div className="flex flex-col items-center justify-center py-32 gap-3">
-          <AlertCircle className="w-10 h-10 text-muted-foreground" />
-          <p className="text-muted-foreground">
-            {menusQuery.isError
-              ? "Menu could not be loaded."
-              : "This location has no active online menu."}
-          </p>
-        </div>
+      <div
+        className="mealscout-public-profile min-h-screen bg-[color:var(--profile-page)]"
+        data-public-menu-shell="warm-food-led"
+      >
+        <PublicOrderingTopBar secondaryHref={publicProfileHref} />
+        <main className="mx-auto flex min-h-[70vh] w-full max-w-2xl items-center justify-center px-4 py-20">
+          <section className="profile-surface w-full rounded-[2rem] p-7 text-center sm:p-10">
+            <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[color:var(--profile-surface-strong)] text-[color:var(--profile-accent)]">
+              <AlertCircle className="h-6 w-6" />
+            </span>
+            <h1 className="mt-4 text-2xl font-black tracking-tight text-[color:var(--profile-ink)]">
+              {menusQuery.isError ? "This menu is taking a break" : "Menu coming soon"}
+            </h1>
+            <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[color:var(--profile-muted)]">
+              {menusQuery.isError
+                ? "We could not load the menu right now. The business profile may still have hours, location, and contact details."
+                : "This business has not published an active menu yet. Check the profile for current details."}
+            </p>
+            <div className="mt-6 flex flex-wrap justify-center gap-3">
+              <Link
+                href={publicProfileHref}
+                className="profile-action-secondary inline-flex min-h-11 items-center rounded-full px-5 text-sm font-black"
+              >
+                View profile
+              </Link>
+              <Link
+                href="/scout"
+                className="profile-action-primary inline-flex min-h-11 items-center rounded-full px-5 text-sm font-black"
+              >
+                Scout
+              </Link>
+            </div>
+          </section>
+        </main>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background pb-24">
+    <div
+      className="mealscout-public-profile min-h-screen bg-[color:var(--profile-page)] pb-24 text-[color:var(--profile-ink)]"
+      data-public-menu-shell="warm-food-led"
+    >
       <SEOHead
         title={seoTitle}
         description={seoDescription}
         ogType="website"
       />
-      <Navigation />
+      <PublicOrderingTopBar secondaryHref={publicProfileHref} />
 
-      <div className="max-w-3xl mx-auto px-4 py-6">
-        <header className="mb-6 overflow-hidden rounded-[1.75rem] border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] shadow-[var(--shadow-card)]">
+      <main className="mx-auto w-full max-w-5xl px-4 py-5 sm:py-7">
+        <header className="profile-surface mb-6 overflow-hidden rounded-[2rem]">
           <div className="p-5 sm:p-6">
             <Link
               href={publicProfileHref}
-              className="mb-5 inline-flex min-h-10 items-center gap-2 rounded-full bg-[var(--bg-surface-muted)] px-3 text-sm font-bold text-[color:var(--text-secondary)] transition-colors hover:text-[color:var(--text-primary)]"
+              className="mb-5 inline-flex min-h-10 items-center gap-2 rounded-full bg-[color:var(--profile-surface-soft)] px-3 text-sm font-black text-[color:var(--profile-ink-soft)] transition-colors hover:text-[color:var(--profile-accent)]"
             >
               <ArrowLeft className="h-4 w-4" aria-hidden="true" />
               Back to profile
             </Link>
 
-            <p className="text-xs font-black uppercase tracking-[0.16em] text-primary">
+            <p className="profile-section-label">
               {entityType} menu
             </p>
-            <h1 className="mt-2 text-3xl font-black tracking-tight text-[color:var(--text-primary)] sm:text-4xl">
+            <h1 className="mt-2 text-3xl font-black tracking-tight text-[color:var(--profile-ink)] sm:text-4xl">
               {restaurantName || "Menu"}
             </h1>
 
             {(restaurantCity || cuisineType) && (
-              <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm font-medium text-[color:var(--text-muted)]">
+              <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm font-bold text-[color:var(--profile-muted)]">
                 {restaurantCity ? (
                   <span className="inline-flex items-center gap-1.5">
-                    <MapPin className="h-4 w-4 text-primary" aria-hidden="true" />
+                    <MapPin className="h-4 w-4 text-[color:var(--profile-accent)]" aria-hidden="true" />
                     {restaurantCity}
                   </span>
                 ) : null}
                 {cuisineType ? <span>{cuisineType}</span> : null}
               </div>
             )}
-
-            <Link
-              href={publicProfileHref}
-              className="mt-5 inline-flex items-center gap-1 text-sm font-black text-primary hover:underline"
-            >
-              View profile
-              <ChevronRight className="h-4 w-4" aria-hidden="true" />
-            </Link>
           </div>
         </header>
 
         {/* Menu selector tabs if multiple menus */}
         {activeMenus.length > 1 && (
-          <div className="flex gap-2 mb-5 overflow-x-auto pb-1">
+          <div className="mb-5 flex gap-2 overflow-x-auto pb-1" aria-label="Choose a menu">
             {activeMenus.map((menu) => (
               <button
                 key={menu.id}
                 onClick={() => setSelectedMenuId(menu.id)}
-                className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap border transition-colors ${
+                className={`min-h-10 whitespace-nowrap rounded-full border px-4 text-sm font-black transition-colors ${
                   selectedMenuId === menu.id
-                    ? "bg-primary text-primary-foreground border-primary"
-                    : "bg-card hover:bg-muted border-border"
+                    ? "border-[color:var(--profile-accent)] bg-[color:var(--profile-accent)] text-white"
+                    : "border-[color:var(--profile-border)] bg-white text-[color:var(--profile-ink-soft)] hover:border-[color:var(--profile-accent)]"
                 }`}
               >
                 {menu.name}
@@ -333,20 +356,18 @@ export default function MenuPage() {
         {selectedMenu && (
           <>
             {!orderingEnabled && (
-              <div className="mb-4 flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
-                <AlertCircle className="w-4 h-4 shrink-0" />
+              <div className="mb-5 flex items-start gap-3 rounded-2xl border border-[#efc37b] bg-[#fff4d9] px-4 py-3 text-sm text-[#70470f]">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
                 <div>
-                  <p>
-                    Menu browsing is always free. Online ordering is not ready yet.
-                  </p>
-                  <p className="mt-1 text-xs">
-                    You can still browse the menu and order directly from this {entityType.toLowerCase()}.
+                  <p className="font-black">Browse the menu</p>
+                  <p className="mt-0.5 text-xs leading-5">
+                    Online ordering is not available here yet. Contact this {entityType.toLowerCase()} directly to order.
                   </p>
                 </div>
               </div>
             )}
             {!selectedMenu.hidePlatformFee && orderingEnabled && (
-              <p className="text-xs text-muted-foreground mb-4 text-center">
+              <p className="mb-4 text-center text-xs text-[color:var(--profile-muted)]">
                 Processing plus a $1.00 MealScout fee is added at checkout.
                 {selectedMenu.acceptsCash && " Cash payments accepted."}
               </p>
@@ -354,49 +375,89 @@ export default function MenuPage() {
             {selectedMenu.hidePlatformFee &&
               orderingEnabled &&
               selectedMenu.acceptsCash && (
-                <p className="text-xs text-muted-foreground mb-4 text-center">
+                <p className="mb-4 text-center text-xs text-[color:var(--profile-muted)]">
                   Cash payments accepted.
                 </p>
               )}
 
+            {selectedMenu.categories.length > 1 && (
+              <nav
+                className="mb-6 flex gap-2 overflow-x-auto pb-1"
+                aria-label="Menu categories"
+              >
+                {selectedMenu.categories.map((category) => (
+                  <a
+                    key={category.id}
+                    href={`#menu-category-${category.id}`}
+                    className="inline-flex min-h-9 items-center whitespace-nowrap rounded-full border border-[color:var(--profile-border)] bg-white px-3 text-xs font-black text-[color:var(--profile-ink-soft)] hover:border-[color:var(--profile-accent)] hover:text-[color:var(--profile-accent)]"
+                  >
+                    {category.name}
+                  </a>
+                ))}
+              </nav>
+            )}
+
             {/* Category + items */}
             {selectedMenu.categories.map((cat) => {
-              const visibleItems = cat.items.filter((i) => i.isAvailable);
-              if (visibleItems.length === 0) return null;
               return (
-                <div key={cat.id} className="mb-8">
-                  <h2 className="text-lg font-semibold border-b pb-2 mb-3">
-                    {cat.name}
-                  </h2>
-                  {cat.description && (
-                    <p className="text-sm text-muted-foreground mb-3">
-                      {cat.description}
-                    </p>
-                  )}
-                  <div className="divide-y">
-                    {visibleItems.map((item) => (
-                      <MenuItemCard
-                        key={item.id}
-                        item={item}
-                        onAdd={
-                          orderingEnabled ? () => setAddingItem(item) : () => {}
-                        }
-                        orderingEnabled={orderingEnabled}
-                      />
-                    ))}
+                <section
+                  key={cat.id}
+                  id={`menu-category-${cat.id}`}
+                  className="mb-9 scroll-mt-24"
+                >
+                  <div className="mb-4 border-b border-[color:var(--profile-border)] pb-3">
+                    <h2 className="text-xl font-black tracking-tight text-[color:var(--profile-ink)]">
+                      {cat.name}
+                    </h2>
+                    {cat.description && (
+                      <p className="mt-1 text-sm leading-6 text-[color:var(--profile-muted)]">
+                        {cat.description}
+                      </p>
+                    )}
                   </div>
-                </div>
+                  {cat.items.length > 0 ? (
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {cat.items.map((item) => (
+                        <MenuItemCard
+                          key={item.id}
+                          item={item}
+                          onAdd={() => setAddingItem(item)}
+                          orderingEnabled={orderingEnabled && item.isAvailable}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="profile-surface rounded-2xl px-4 py-5 text-sm font-bold text-[color:var(--profile-muted)]">
+                      No items have been added to this category yet.
+                    </div>
+                  )}
+                </section>
               );
             })}
+
+            <section className="profile-surface mt-10 flex flex-col items-start justify-between gap-4 rounded-[2rem] p-5 sm:flex-row sm:items-center sm:p-6">
+              <div>
+                <p className="profile-section-label">Still deciding?</p>
+                <h2 className="mt-1 text-xl font-black tracking-tight text-[color:var(--profile-ink)]">
+                  Find another local favorite
+                </h2>
+              </div>
+              <Link
+                href="/scout"
+                className="profile-action-primary inline-flex min-h-11 items-center rounded-full px-5 text-sm font-black"
+              >
+                Scout
+              </Link>
+            </section>
           </>
         )}
-      </div>
+      </main>
 
       {/* Floating cart button */}
       {cartItemCount > 0 && orderingEnabled && (
         <div className="fixed bottom-4 inset-x-4 md:inset-x-auto md:left-1/2 md:-translate-x-1/2 md:w-96 z-50">
           <Button
-            className="w-full h-12 text-base shadow-lg"
+            className="h-12 w-full rounded-full bg-[#d84a12] text-base font-black text-white shadow-[0_16px_35px_rgba(149,58,18,0.24)] hover:bg-[#b83a0a]"
             onClick={() => setCartOpen(true)}
           >
             <ShoppingCart className="w-5 h-5 mr-2" />
@@ -423,9 +484,9 @@ export default function MenuPage() {
 
       {/* Cart sheet */}
       <Sheet open={cartOpen} onOpenChange={setCartOpen}>
-        <SheetContent side="right" className="w-full sm:max-w-lg">
+        <SheetContent side="right" className="w-full border-l border-[#ead7c7] bg-[#fffaf4] text-[#2c1c14] sm:max-w-lg">
           <SheetHeader>
-            <SheetTitle>Your Cart</SheetTitle>
+            <SheetTitle className="text-[#2c1c14]">Your cart</SheetTitle>
           </SheetHeader>
           <div className="flex-1 overflow-y-auto py-4 space-y-3">
             {restaurantCart.length === 0 && (
@@ -438,7 +499,7 @@ export default function MenuPage() {
               return (
                 <div
                   key={idx}
-                  className="flex gap-3 p-3 bg-muted/50 rounded-lg"
+                  className="flex gap-3 rounded-2xl border border-[#ead7c7] bg-white p-3"
                 >
                   <div className="flex-1">
                     <div className="font-medium">{item.itemName}</div>
@@ -486,7 +547,7 @@ export default function MenuPage() {
               );
             })}
           </div>
-          <SheetFooter className="border-t pt-4">
+          <SheetFooter className="border-t border-[#ead7c7] pt-4">
             <div className="w-full space-y-3">
               <div className="flex justify-between font-medium">
                 <span>Subtotal</span>
@@ -501,7 +562,7 @@ export default function MenuPage() {
                   </div>
                 )}
               <Button
-                className="w-full"
+                className="w-full rounded-full bg-[#d84a12] font-black text-white hover:bg-[#b83a0a]"
                 size="lg"
                 onClick={() => {
                   setCartOpen(false);
@@ -530,57 +591,100 @@ function MenuItemCard({
   onAdd: () => void;
   orderingEnabled?: boolean;
 }) {
+  const categoryPhoto = getDishCategoryPhoto(item.name, item.description);
+  const hasPrimaryImage = Boolean(item.imageUrl?.trim());
+  const [imageMode, setImageMode] = useState<"primary" | "category" | "none">(
+    () => (hasPrimaryImage ? "primary" : categoryPhoto ? "category" : "none"),
+  );
+  const imageSrc =
+    imageMode === "primary"
+      ? item.imageUrl
+      : imageMode === "category"
+        ? categoryPhoto?.image
+        : null;
+
   return (
-    <div
-      className={`flex gap-3 py-3 px-1 rounded transition-colors ${
-        orderingEnabled
-          ? "cursor-pointer hover:bg-muted/30"
-          : "cursor-default opacity-80"
-      }`}
-      onClick={orderingEnabled ? onAdd : undefined}
-    >
-      <div className="flex-1">
-        <div className="flex items-center gap-2">
-          <div className="font-medium">{item.name}</div>
+    <article className="profile-surface grid min-h-36 grid-cols-[minmax(0,1fr)_7rem] gap-3 overflow-hidden rounded-3xl p-3 sm:min-h-40 sm:grid-cols-[minmax(0,1fr)_8rem]">
+      <div className="flex min-w-0 flex-col p-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <h3 className="font-black leading-tight text-[color:var(--profile-ink)]">
+            {item.name}
+          </h3>
           {item.itemType === "merchandise" && (
-            <Badge variant="outline" className="text-xs">
+            <Badge
+              variant="outline"
+              className="border-[color:var(--profile-border)] bg-white text-[10px] font-black text-[color:var(--profile-ink-soft)]"
+            >
               Merch
+            </Badge>
+          )}
+          {!item.isAvailable && (
+            <Badge className="border-0 bg-[#efe3da] text-[10px] font-black text-[#795e4d] hover:bg-[#efe3da]">
+              Unavailable
             </Badge>
           )}
         </div>
         {item.description && (
-          <p className="text-sm text-muted-foreground mt-0.5 line-clamp-2">
+          <p className="mt-1 line-clamp-3 text-sm leading-5 text-[color:var(--profile-muted)]">
             {item.description}
           </p>
         )}
-        <div className="flex gap-2 flex-wrap mt-1">
-          <span className="text-sm font-semibold">
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <span className="text-sm font-black text-[color:var(--profile-ink)]">
             {formatMoney(item.priceCents)}
           </span>
           {item.itemType !== "merchandise" && item.calories && (
-            <span className="text-xs text-muted-foreground">
+            <span className="text-xs font-bold text-[color:var(--profile-muted)]">
               {item.calories} cal
             </span>
           )}
           {item.itemType !== "merchandise" && (item.dietaryTags ?? []).map((tag) => (
             <Badge
               key={tag}
-              variant="secondary"
-              className="text-xs px-1.5 py-0"
+              className="border-0 bg-[#e8f4e8] px-1.5 py-0 text-[10px] font-black text-[#35633b] hover:bg-[#e8f4e8]"
             >
               {tag}
             </Badge>
           ))}
         </div>
+        {orderingEnabled ? (
+          <button
+            type="button"
+            onClick={onAdd}
+            className="mt-auto inline-flex min-h-9 w-fit items-center rounded-full bg-[color:var(--profile-accent)] px-4 text-xs font-black text-white transition-colors hover:bg-[color:var(--profile-accent-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--profile-accent)] focus-visible:ring-offset-2"
+            aria-label={`Add ${item.name} to cart`}
+          >
+            Add
+          </button>
+        ) : null}
       </div>
-      {item.imageUrl && (
-        <img
-          src={item.imageUrl}
-          alt={item.name}
-          className="w-20 h-20 object-cover rounded-lg shrink-0"
-        />
-      )}
-    </div>
+
+      <div className="relative min-h-28 overflow-hidden rounded-2xl bg-[color:var(--profile-surface-soft)]">
+        {imageSrc ? (
+          <>
+            <img
+              src={imageSrc}
+              alt={imageMode === "primary" ? item.name : ""}
+              className="h-full w-full object-cover"
+              onError={() =>
+                setImageMode((current) =>
+                  current === "primary" && categoryPhoto ? "category" : "none",
+                )
+              }
+            />
+            {imageMode === "category" ? (
+              <span className="absolute inset-x-1.5 bottom-1.5 rounded-full bg-[#2c1c14]/80 px-2 py-1 text-center text-[9px] font-black uppercase tracking-wide text-white backdrop-blur-sm">
+                Photo coming soon
+              </span>
+            ) : null}
+          </>
+        ) : (
+          <div className="flex h-full min-h-28 items-center justify-center bg-[linear-gradient(145deg,#ffe5cf,#fff3e5)] px-3 text-center text-[10px] font-black uppercase tracking-[0.12em] text-[#8a5b3f]">
+            Photo coming soon
+          </div>
+        )}
+      </div>
+    </article>
   );
 }
 
@@ -678,16 +782,16 @@ function AddItemDialog({
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto border-[#ead7c7] bg-[#fffaf4] text-[#2c1c14] shadow-[0_24px_80px_rgba(90,43,17,0.22)]">
         <DialogHeader>
-          <DialogTitle>{item.name}</DialogTitle>
+          <DialogTitle className="text-[#2c1c14]">{item.name}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-2">
           {item.description && (
-            <p className="text-sm text-muted-foreground">{item.description}</p>
+            <p className="text-sm leading-6 text-[#806657]">{item.description}</p>
           )}
           {item.itemType !== "merchandise" && item.calories && (
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs font-bold text-[#806657]">
               {item.calories} calories
             </p>
           )}
@@ -700,7 +804,7 @@ function AddItemDialog({
           {/* Variants */}
           {item.variants.length > 0 && (
             <div>
-              <Label className="font-semibold">Size / Option</Label>
+              <Label className="font-black text-[#2c1c14]">Size / Option</Label>
               <RadioGroup
                 value={selectedVariantId ?? ""}
                 onValueChange={setSelectedVariantId}
@@ -709,7 +813,7 @@ function AddItemDialog({
                 {item.variants.map((v) => (
                   <div
                     key={v.id}
-                    className="flex items-center justify-between bg-muted/50 px-3 py-2 rounded"
+                    className="flex items-center justify-between rounded-xl border border-[#ead7c7] bg-white px-3 py-2"
                   >
                     <div className="flex items-center gap-2">
                       <RadioGroupItem value={v.id} id={`var-${v.id}`} />
@@ -721,7 +825,7 @@ function AddItemDialog({
                       </Label>
                     </div>
                     {v.additionalCents > 0 && (
-                      <span className="text-sm text-muted-foreground">
+                      <span className="text-sm text-[#806657]">
                         +{formatMoney(v.additionalCents)}
                       </span>
                     )}
@@ -738,7 +842,7 @@ function AddItemDialog({
             return (
               <div key={groupName}>
                 <div className="flex items-center gap-2 mb-2">
-                  <Label className="font-semibold">{groupName}</Label>
+                  <Label className="font-black text-[#2c1c14]">{groupName}</Label>
                   {required ? (
                     <Badge
                       variant="destructive"
@@ -756,7 +860,7 @@ function AddItemDialog({
                   {mods.map((m) => (
                     <div
                       key={m.id}
-                      className="flex items-center justify-between bg-muted/50 px-3 py-2 rounded"
+                      className="flex items-center justify-between rounded-xl border border-[#ead7c7] bg-white px-3 py-2"
                     >
                       <div className="flex items-center gap-2">
                         <Checkbox
@@ -774,7 +878,7 @@ function AddItemDialog({
                         </Label>
                       </div>
                       {m.additionalCents > 0 && (
-                        <span className="text-sm text-muted-foreground">
+                        <span className="text-sm text-[#806657]">
                           +{formatMoney(m.additionalCents)}
                         </span>
                       )}
@@ -787,23 +891,24 @@ function AddItemDialog({
 
           {/* Special instructions */}
           <div>
-            <Label>Special Instructions</Label>
+            <Label className="font-black text-[#2c1c14]">Special instructions</Label>
             <Textarea
               value={specialInstructions}
               onChange={(e) => setSpecialInstructions(e.target.value)}
               placeholder="Any allergies or special requests?"
+              className="mt-2 border-[#d8bda8] bg-white text-[#2c1c14] placeholder:text-[#9b8172]"
               rows={2}
             />
           </div>
 
           {/* Quantity */}
           <div className="flex items-center justify-between">
-            <Label>Quantity</Label>
+            <Label className="font-black text-[#2c1c14]">Quantity</Label>
             <div className="flex items-center gap-2">
               <Button
                 variant="outline"
                 size="sm"
-                className="h-8 w-8 p-0"
+                className="h-8 w-8 border-[#d8bda8] bg-white p-0 text-[#2c1c14] hover:bg-[#fff2e5]"
                 onClick={() => setQty((q) => Math.max(1, q - 1))}
               >
                 <Minus className="w-3 h-3" />
@@ -812,7 +917,7 @@ function AddItemDialog({
               <Button
                 variant="outline"
                 size="sm"
-                className="h-8 w-8 p-0"
+                className="h-8 w-8 border-[#d8bda8] bg-white p-0 text-[#2c1c14] hover:bg-[#fff2e5]"
                 onClick={() => setQty((q) => q + 1)}
               >
                 <Plus className="w-3 h-3" />
@@ -822,10 +927,17 @@ function AddItemDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
+          <Button
+            variant="outline"
+            className="rounded-full border-[#d8bda8] bg-white font-black text-[#2c1c14] hover:bg-[#fff2e5]"
+            onClick={onClose}
+          >
             Cancel
           </Button>
-          <Button onClick={handleAdd}>
+          <Button
+            className="rounded-full bg-[#d84a12] font-black text-white hover:bg-[#b83a0a]"
+            onClick={handleAdd}
+          >
             Add to Cart — {formatMoney(lineTotal)}
           </Button>
         </DialogFooter>

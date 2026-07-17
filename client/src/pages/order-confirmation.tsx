@@ -3,8 +3,8 @@
  * Shows live order status with auto-polling.
  */
 import { useEffect, useState } from "react";
-import { useParams } from "wouter";
-import Navigation from "@/components/navigation";
+import { Link, useParams } from "wouter";
+import { PublicOrderingTopBar } from "@/components/public-ordering/PublicOrderingTopBar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,7 +16,6 @@ import {
   Package,
   XCircle,
 } from "lucide-react";
-import { Link } from "wouter";
 
 const formatMoney = (cents: number) =>
   `$${(Number(cents || 0) / 100).toFixed(2)}`;
@@ -152,23 +151,45 @@ export default function OrderConfirmationPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen">
-        <Navigation />
-        <div className="flex items-center justify-center py-32">
-          <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
-        </div>
+      <div
+        className="mealscout-public-profile min-h-screen bg-[color:var(--profile-page)]"
+        data-public-order-status-shell="warm-food-led"
+      >
+        <PublicOrderingTopBar />
+        <main className="mx-auto flex min-h-[70vh] w-full max-w-2xl items-center justify-center px-4 py-20">
+          <div className="profile-surface flex items-center gap-3 rounded-3xl px-6 py-5 text-[color:var(--profile-ink-soft)]">
+            <Loader2 className="h-5 w-5 animate-spin text-[color:var(--profile-accent)]" />
+            <span className="font-bold">Loading order status</span>
+          </div>
+        </main>
       </div>
     );
   }
 
   if (error || !order) {
     return (
-      <div className="min-h-screen">
-        <Navigation />
-        <div className="flex flex-col items-center justify-center py-32 gap-3">
-          <XCircle className="w-10 h-10 text-destructive" />
-          <p className="text-muted-foreground">{error ?? "Order not found."}</p>
-        </div>
+      <div
+        className="mealscout-public-profile min-h-screen bg-[color:var(--profile-page)]"
+        data-public-order-status-shell="warm-food-led"
+      >
+        <PublicOrderingTopBar />
+        <main className="mx-auto flex min-h-[70vh] w-full max-w-2xl items-center justify-center px-4 py-20">
+          <section className="profile-surface w-full rounded-[2rem] p-7 text-center sm:p-10">
+            <XCircle className="mx-auto h-11 w-11 text-[#b33122]" />
+            <h1 className="mt-4 text-2xl font-black tracking-tight text-[color:var(--profile-ink)]">
+              Order status unavailable
+            </h1>
+            <p className="mt-2 text-sm text-[color:var(--profile-muted)]">
+              {error ?? "Order not found."}
+            </p>
+            <Link
+              href="/scout"
+              className="profile-action-primary mt-6 inline-flex min-h-11 items-center rounded-full px-5 text-sm font-black"
+            >
+              Scout
+            </Link>
+          </section>
+        </main>
       </div>
     );
   }
@@ -179,15 +200,22 @@ export default function OrderConfirmationPage() {
   const isTerminal = ["completed", "cancelled"].includes(order.status);
 
   return (
-    <div className="min-h-screen bg-background">
-      <Navigation />
-      <div className="max-w-lg mx-auto px-4 py-8">
+    <div
+      className="mealscout-public-profile min-h-screen bg-[color:var(--profile-page)] pb-12 text-[color:var(--profile-ink)]"
+      data-public-order-status-shell="warm-food-led"
+    >
+      <PublicOrderingTopBar />
+      <main className="mx-auto w-full max-w-2xl px-4 py-6 sm:py-8">
         {/* Status hero */}
-        <div className="text-center mb-8">
-          <StatusIcon className={`w-16 h-16 mx-auto mb-3 ${config.color}`} />
-          <h1 className="text-2xl font-bold">{config.label}</h1>
-          <p className="text-muted-foreground mt-1">{config.description}</p>
-          <p className="font-mono text-sm mt-2 text-muted-foreground">
+        <div className="profile-surface mb-8 rounded-[2rem] p-6 text-center sm:p-8">
+          <StatusIcon className={`mx-auto mb-3 h-16 w-16 ${config.color}`} />
+          <h1 className="text-2xl font-black tracking-tight text-[color:var(--profile-ink)]">
+            {config.label}
+          </h1>
+          <p className="mt-1 text-sm leading-6 text-[color:var(--profile-muted)]">
+            {config.description}
+          </p>
+          <p className="mt-2 font-mono text-sm text-[color:var(--profile-muted)]">
             Order #{orderNum}
           </p>
         </div>
@@ -226,9 +254,11 @@ export default function OrderConfirmationPage() {
         )}
 
         {/* Order details */}
-        <Card className="mb-4">
+        <Card className="profile-surface mb-4 rounded-3xl">
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">Order Details</CardTitle>
+            <CardTitle className="text-base font-black text-[color:var(--profile-ink)]">
+              Order details
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
             {order.items.map((item) => (
@@ -245,7 +275,7 @@ export default function OrderConfirmationPage() {
                 <span>{formatMoney(item.lineTotalCents)}</span>
               </div>
             ))}
-            <div className="border-t pt-2 mt-2 space-y-1">
+            <div className="mt-2 space-y-1 border-t border-[color:var(--profile-border)] pt-2">
               <div className="flex justify-between text-sm text-muted-foreground">
                 <span>Subtotal</span>
                 <span>{formatMoney(order.subtotalCents)}</span>
@@ -256,7 +286,7 @@ export default function OrderConfirmationPage() {
                   <span>{formatMoney(order.platformFeeCents)}</span>
                 </div>
               )}
-              <div className="flex justify-between font-semibold">
+              <div className="flex justify-between font-black">
                 <span>Total</span>
                 <span>{formatMoney(order.totalCents)}</span>
               </div>
@@ -278,9 +308,9 @@ export default function OrderConfirmationPage() {
         )}
 
         <div className="flex gap-3">
-          <Link href="/" className="flex-1">
-            <Button variant="outline" className="w-full">
-              Back to Home
+          <Link href="/scout" className="flex-1">
+            <Button className="w-full rounded-full bg-[#d84a12] font-black text-white hover:bg-[#b83a0a]">
+              Scout
             </Button>
           </Link>
           {!isTerminal && (
@@ -290,7 +320,7 @@ export default function OrderConfirmationPage() {
             </Button>
           )}
         </div>
-      </div>
+      </main>
     </div>
   );
 }

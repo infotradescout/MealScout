@@ -10,6 +10,7 @@
  */
 import type { PublicMenuSection, PublicMenuItem } from "@shared/publicProfiles";
 import { Heart } from "lucide-react";
+import { getDishCategoryPhoto } from "@/lib/dishCategoryPhoto";
 
 type MenuHighlightsRailProps = {
   menuSections: PublicMenuSection[];
@@ -69,7 +70,7 @@ export function MenuHighlightsRail({
   return (
     <section aria-label="Menu highlights" className="space-y-3">
       <div className="flex items-center justify-between px-0">
-        <p className="text-xs font-bold uppercase tracking-[0.18em] text-white/45">
+        <p className="profile-section-label">
           Menu highlights
         </p>
       </div>
@@ -79,14 +80,17 @@ export function MenuHighlightsRail({
         {ranked.map((item, i) => {
           const isUserFav = userFavNamesNorm.has(item.name.toLowerCase().trim());
           const isFeatured = item.featured || featuredNames.has(item.name.toLowerCase().trim());
+          const categoryPhoto = item.imageUrl
+            ? null
+            : getDishCategoryPhoto(item.name, item.description);
 
           return (
             <div
               key={`${item.name}:${i}`}
-              className="flex-none w-36 rounded-2xl border border-white/10 bg-[#0f0d0b] overflow-hidden"
+              className="profile-surface flex-none w-40 overflow-hidden rounded-2xl"
             >
               {/* Image or gradient placeholder */}
-              <div className="relative h-24 w-full overflow-hidden bg-gradient-to-br from-[#1d110a] to-[#0d0a08]">
+              <div className="relative h-28 w-full overflow-hidden bg-gradient-to-br from-orange-100 to-amber-50">
                 {item.imageUrl ? (
                   <img
                     src={item.imageUrl}
@@ -95,8 +99,17 @@ export function MenuHighlightsRail({
                     decoding="async"
                     className="h-full w-full object-cover"
                   />
+                ) : categoryPhoto ? (
+                  <img
+                    src={categoryPhoto.image}
+                    alt=""
+                    loading="lazy"
+                    decoding="async"
+                    aria-hidden="true"
+                    className="h-full w-full object-cover"
+                  />
                 ) : (
-                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_40%,rgba(251,146,60,0.18),transparent_55%)]" />
+                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_40%,rgba(244,81,44,0.22),transparent_55%)]" />
                 )}
                 {/* Badges */}
                 <div className="absolute top-1.5 left-1.5 flex flex-col gap-1">
@@ -107,7 +120,7 @@ export function MenuHighlightsRail({
                     </span>
                   )}
                   {!isUserFav && isFeatured && (
-                    <span className="inline-flex rounded-full bg-white/15 px-1.5 py-0.5 text-[9px] font-semibold text-white/90">
+                    <span className="inline-flex rounded-full bg-white/90 px-1.5 py-0.5 text-[9px] font-semibold text-[#4a2719] shadow-sm">
                       Featured
                     </span>
                   )}
@@ -116,14 +129,14 @@ export function MenuHighlightsRail({
 
               {/* Info */}
               <div className="p-2.5 space-y-0.5">
-                <p className="text-xs font-semibold leading-snug text-white line-clamp-2">
+                <p className="line-clamp-2 text-xs font-bold leading-snug text-[color:var(--profile-ink)]">
                   {item.name}
                 </p>
                 {item.priceLabel ? (
-                  <p className="text-[11px] font-bold text-orange-200">{item.priceLabel}</p>
+                  <p className="text-[11px] font-bold text-[#b93619]">{item.priceLabel}</p>
                 ) : null}
                 {item.description && !item.priceLabel ? (
-                  <p className="text-[10px] text-white/50 line-clamp-2">{item.description}</p>
+                  <p className="line-clamp-2 text-[10px] text-[color:var(--profile-muted)]">{item.description}</p>
                 ) : null}
               </div>
             </div>

@@ -79,6 +79,160 @@
   --radius: 18px;
 }
 
+/* Public business profiles use a bright, food-led palette even when the rest
+   of the app is following the evening theme. The scoped compatibility rules
+   keep older profile sections visually coherent while they are moved onto the
+   shared profile components. */
+.mealscout-public-profile {
+  --profile-page: #fff8ef;
+  --profile-page-deep: #ffe9d7;
+  --profile-surface: rgba(255, 255, 255, 0.96);
+  --profile-surface-soft: #fff2e5;
+  --profile-surface-strong: #ffe4cf;
+  --profile-ink: #2b160d;
+  --profile-ink-soft: #5f4435;
+  --profile-muted: #806657;
+  --profile-border: rgba(104, 58, 31, 0.16);
+  --profile-border-strong: rgba(104, 58, 31, 0.25);
+  --profile-accent: #f4512c;
+  --profile-accent-hover: #dc3f1e;
+  --profile-accent-soft: #fff0e8;
+  --profile-success: #167447;
+  --profile-warning: #a8520a;
+  min-height: 100vh;
+  color: var(--profile-ink);
+  background:
+    radial-gradient(circle at 8% 2%, rgba(255, 170, 105, 0.26), transparent 28rem),
+    radial-gradient(circle at 92% 12%, rgba(255, 218, 121, 0.2), transparent 24rem),
+    linear-gradient(180deg, var(--profile-page) 0%, #fffdf9 48%, #fff7ed 100%);
+}
+
+.mealscout-public-profile .profile-surface {
+  border: 1px solid var(--profile-border);
+  background: var(--profile-surface);
+  box-shadow: 0 22px 60px rgba(102, 50, 21, 0.09);
+}
+
+.mealscout-public-profile .profile-section-label {
+  color: var(--profile-muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+.mealscout-public-profile .profile-action-primary {
+  color: #fff;
+  background: var(--profile-accent);
+  box-shadow: 0 10px 26px rgba(244, 81, 44, 0.24);
+}
+
+.mealscout-public-profile .profile-action-primary:hover {
+  background: var(--profile-accent-hover);
+}
+
+.mealscout-public-profile .profile-action-secondary {
+  color: var(--profile-ink);
+  border: 1px solid var(--profile-border-strong);
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.mealscout-public-profile .profile-action-secondary:hover {
+  background: var(--profile-surface-soft);
+}
+
+/* Compatibility palette for the still-shared host, supplier, menu, deal and
+   event blocks rendered inside the public-profile route. */
+.mealscout-public-profile [class~="bg-[#0f0d0b]"],
+.mealscout-public-profile [class~="bg-[#100d0b]"],
+.mealscout-public-profile [class~="bg-[#0b0908]"],
+.mealscout-public-profile [class~="bg-[#1b120d]"] {
+  background: var(--profile-surface);
+}
+
+.mealscout-public-profile [class~="bg-black/10"],
+.mealscout-public-profile [class~="bg-black/15"],
+.mealscout-public-profile [class~="bg-black/20"],
+.mealscout-public-profile [class~="bg-black/25"],
+.mealscout-public-profile [class~="bg-black/30"],
+.mealscout-public-profile [class~="bg-black/40"],
+.mealscout-public-profile [class~="bg-white/5"] {
+  background: var(--profile-surface-soft);
+}
+
+.mealscout-public-profile [class~="border-white/6"],
+.mealscout-public-profile [class~="border-white/8"],
+.mealscout-public-profile [class~="border-white/10"],
+.mealscout-public-profile [class~="border-white/15"],
+.mealscout-public-profile [class~="border-white/20"] {
+  border-color: var(--profile-border);
+}
+
+.mealscout-public-profile [class~="divide-white/6"] > :not([hidden]) ~ :not([hidden]),
+.mealscout-public-profile [class~="divide-white/8"] > :not([hidden]) ~ :not([hidden]) {
+  border-color: var(--profile-border);
+}
+
+.mealscout-public-profile [class~="text-white"],
+.mealscout-public-profile [class~="text-white/90"],
+.mealscout-public-profile [class~="text-white/85"],
+.mealscout-public-profile [class~="text-white/80"],
+.mealscout-public-profile [class~="text-white/78"] {
+  color: var(--profile-ink);
+}
+
+.mealscout-public-profile [class~="text-white/75"],
+.mealscout-public-profile [class~="text-white/70"],
+.mealscout-public-profile [class~="text-white/65"],
+.mealscout-public-profile [class~="text-white/60"],
+.mealscout-public-profile [class~="text-white/58"],
+.mealscout-public-profile [class~="text-white/55"],
+.mealscout-public-profile [class~="text-white/50"],
+.mealscout-public-profile [class~="text-white/45"],
+.mealscout-public-profile [class~="text-white/40"],
+.mealscout-public-profile [class~="text-white/35"],
+.mealscout-public-profile [class~="text-white/30"] {
+  color: var(--profile-muted);
+}
+
+.mealscout-public-profile [class~="text-orange-100"],
+.mealscout-public-profile [class~="text-orange-100/70"],
+.mealscout-public-profile [class~="text-orange-100/80"],
+.mealscout-public-profile [class~="text-orange-100/85"],
+.mealscout-public-profile [class~="text-orange-200"],
+.mealscout-public-profile [class~="text-orange-200/60"],
+.mealscout-public-profile [class~="text-orange-200/70"],
+.mealscout-public-profile [class~="text-orange-200/80"],
+.mealscout-public-profile [class~="text-orange-300"] {
+  color: #b93619;
+}
+
+.mealscout-public-profile [class~="text-emerald-100"],
+.mealscout-public-profile [class~="text-emerald-200"],
+.mealscout-public-profile [class~="text-emerald-200/80"],
+.mealscout-public-profile [class~="text-emerald-300"] {
+  color: var(--profile-success);
+}
+
+.mealscout-public-profile [class~="text-amber-100"],
+.mealscout-public-profile [class~="text-amber-200"],
+.mealscout-public-profile [class~="text-amber-300"] {
+  color: var(--profile-warning);
+}
+
+.mealscout-public-profile [class~="text-sky-100"],
+.mealscout-public-profile [class~="text-sky-300"] {
+  color: #17638a;
+}
+
+/* Image overlays intentionally retain inverse text. */
+.mealscout-public-profile [data-profile-hero-media="true"] [class~="text-white"],
+.mealscout-public-profile [data-profile-hero-media="true"] [class~="text-white/85"],
+.mealscout-public-profile [data-profile-hero-media="true"] [class~="text-orange-100"],
+.mealscout-public-profile [data-profile-hero-media="true"] [class~="text-orange-100/60"] {
+  color: #fff;
+}
+
 .theme-day {
   /* Shadcn/Tailwind system vars should be light in day mode */
   --background: 24 20% 98%;

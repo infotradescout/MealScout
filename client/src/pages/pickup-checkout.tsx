@@ -3,7 +3,7 @@
  * Customer fills in contact info, chooses card/cash, and pays via Stripe.
  */
 import { useState, useEffect } from "react";
-import { useParams, useLocation } from "wouter";
+import { Link, useParams, useLocation } from "wouter";
 import {
   Elements,
   PaymentElement,
@@ -11,11 +11,10 @@ import {
   useElements,
 } from "@stripe/react-stripe-js";
 import { loadStripe } from "@stripe/stripe-js";
-import Navigation from "@/components/navigation";
+import { PublicOrderingTopBar } from "@/components/public-ordering/PublicOrderingTopBar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
@@ -24,6 +23,7 @@ import {
   AlertCircle,
   CreditCard,
   Banknote,
+  ArrowLeft,
 } from "lucide-react";
 import type { CartItem } from "./online-menu";
 import PaymentBrowserGate from "@/components/payment-browser-gate";
@@ -152,18 +152,41 @@ export default function CheckoutPage() {
 
   if (cart.length === 0) {
     return (
-      <div className="min-h-screen">
-        <Navigation />
-        <div className="max-w-lg mx-auto px-4 py-20 text-center">
-          <ShoppingCart className="w-12 h-12 mx-auto mb-3 text-muted-foreground" />
-          <p className="text-muted-foreground">Your cart is empty.</p>
-          <Button
-            className="mt-4"
-            onClick={() => navigate(`/menu/${restaurantId}`)}
-          >
-            Back to Menu
-          </Button>
-        </div>
+      <div
+        className="mealscout-public-profile min-h-screen bg-[color:var(--profile-page)]"
+        data-public-checkout-shell="warm-food-led"
+      >
+        <PublicOrderingTopBar
+          secondaryHref={`/menu/${restaurantId}`}
+          secondaryLabel="Menu"
+        />
+        <main className="mx-auto flex min-h-[70vh] w-full max-w-2xl items-center justify-center px-4 py-20">
+          <section className="profile-surface w-full rounded-[2rem] p-7 text-center sm:p-10">
+            <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[color:var(--profile-surface-strong)] text-[color:var(--profile-accent)]">
+              <ShoppingCart className="h-6 w-6" />
+            </span>
+            <h1 className="mt-4 text-2xl font-black tracking-tight text-[color:var(--profile-ink)]">
+              Your cart is empty
+            </h1>
+            <p className="mt-2 text-sm text-[color:var(--profile-muted)]">
+              Add something from the menu when online ordering is available.
+            </p>
+            <div className="mt-6 flex flex-wrap justify-center gap-3">
+              <Link
+                href={`/menu/${restaurantId}`}
+                className="profile-action-secondary inline-flex min-h-11 items-center rounded-full px-5 text-sm font-black"
+              >
+                Return to menu
+              </Link>
+              <Link
+                href="/scout"
+                className="profile-action-primary inline-flex min-h-11 items-center rounded-full px-5 text-sm font-black"
+              >
+                Scout
+              </Link>
+            </div>
+          </section>
+        </main>
       </div>
     );
   }
@@ -254,10 +277,19 @@ export default function CheckoutPage() {
   // If we have a clientSecret, render the Stripe Elements form
   if (clientSecret && orderId && stripePromise) {
     return (
-      <div className="min-h-screen bg-background">
-        <Navigation />
-        <div className="max-w-lg mx-auto px-4 py-8">
-          <h1 className="text-2xl font-bold mb-6">Payment</h1>
+      <div
+        className="mealscout-public-profile min-h-screen bg-[color:var(--profile-page)]"
+        data-public-checkout-shell="warm-food-led"
+      >
+        <PublicOrderingTopBar
+          secondaryHref={`/menu/${restaurantId}`}
+          secondaryLabel="Menu"
+        />
+        <main className="mx-auto w-full max-w-2xl px-4 py-6 sm:py-8">
+          <p className="profile-section-label">Pickup order</p>
+          <h1 className="mb-6 mt-1 text-3xl font-black tracking-tight text-[color:var(--profile-ink)]">
+            Payment
+          </h1>
           {hostileBrowser ? (
             <div className="mb-4">
               <PaymentBrowserGate
@@ -267,7 +299,7 @@ export default function CheckoutPage() {
               />
             </div>
           ) : null}
-          <Card className="mb-4">
+          <Card className="profile-surface mb-4 rounded-3xl">
             <CardContent className="pt-4 pb-3">
               <div className="flex justify-between text-sm mb-1">
                 <span className="text-muted-foreground">Subtotal</span>
@@ -279,7 +311,7 @@ export default function CheckoutPage() {
                   <span>{formatMoney(displayedFee)}</span>
                 </div>
               )}
-              <div className="flex justify-between font-semibold border-t pt-2 mt-2">
+              <div className="mt-2 flex justify-between border-t border-[#ead7c7] pt-2 font-black">
                 <span>Total</span>
                 <span>{formatMoney(displayedTotal)}</span>
               </div>
@@ -298,24 +330,38 @@ export default function CheckoutPage() {
               }}
             />
           </Elements>
-        </div>
+        </main>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <Navigation />
-      <div className="max-w-lg mx-auto px-4 py-8">
-        <h1 className="text-2xl font-bold mb-6">Checkout</h1>
+    <div
+      className="mealscout-public-profile min-h-screen bg-[color:var(--profile-page)] pb-12 text-[color:var(--profile-ink)]"
+      data-public-checkout-shell="warm-food-led"
+    >
+      <PublicOrderingTopBar
+        secondaryHref={`/menu/${restaurantId}`}
+        secondaryLabel="Menu"
+      />
+      <main className="mx-auto w-full max-w-2xl px-4 py-6 sm:py-8">
+        <Link
+          href={`/menu/${restaurantId}`}
+          className="mb-5 inline-flex min-h-10 items-center gap-2 rounded-full bg-[color:var(--profile-surface-soft)] px-3 text-sm font-black text-[color:var(--profile-ink-soft)] transition-colors hover:text-[color:var(--profile-accent)]"
+        >
+          <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+          Return to menu
+        </Link>
+        <p className="profile-section-label">Pickup order</p>
+        <h1 className="mb-6 mt-1 text-3xl font-black tracking-tight text-[color:var(--profile-ink)]">
+          Checkout
+        </h1>
 
         {!orderingEnabled && (
-          <div className="flex items-start gap-2 text-amber-800 text-sm bg-amber-50 px-4 py-3 rounded-lg mb-4 border border-amber-200">
-            <AlertCircle className="w-4 h-4 shrink-0" />
+          <div className="mb-4 flex items-start gap-3 rounded-2xl border border-[#efc37b] bg-[#fff4d9] px-4 py-3 text-sm text-[#70470f]">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
             <div>
-              <p>
-                Menu browsing is always free. Online ordering is not ready yet.
-              </p>
+              <p className="font-black">Online ordering is not available</p>
               {readiness?.blockingReasons?.length ? (
                 <p className="mt-1 text-xs">
                   Waiting on: {readiness.blockingReasons.join(", ")}.
@@ -330,9 +376,11 @@ export default function CheckoutPage() {
         )}
 
         {/* Order summary */}
-        <Card className="mb-6">
+        <Card className="profile-surface mb-6 rounded-3xl">
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">Order Summary</CardTitle>
+            <CardTitle className="text-base font-black text-[color:var(--profile-ink)]">
+              Order summary
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
             {cart.map((item, idx) => (
@@ -349,7 +397,7 @@ export default function CheckoutPage() {
                 <span>{formatMoney(item.lineTotalCents)}</span>
               </div>
             ))}
-            <div className="border-t pt-2 mt-2 space-y-1">
+            <div className="mt-2 space-y-1 border-t border-[color:var(--profile-border)] pt-2">
               <div className="flex justify-between text-sm text-muted-foreground">
                 <span>Subtotal</span>
                 <span>{formatMoney(subtotal)}</span>
@@ -360,7 +408,7 @@ export default function CheckoutPage() {
                   <span>{formatMoney(platformFee)}</span>
                 </div>
               )}
-              <div className="flex justify-between font-semibold text-base pt-1">
+              <div className="flex justify-between pt-1 text-base font-black">
                 <span>Total</span>
                 <span>{formatMoney(total)}</span>
               </div>
@@ -369,23 +417,26 @@ export default function CheckoutPage() {
         </Card>
 
         {/* Contact info */}
-        <Card className="mb-4">
+        <Card className="profile-surface mb-4 rounded-3xl">
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">Your Info</CardTitle>
+            <CardTitle className="text-base font-black text-[color:var(--profile-ink)]">
+              Your details
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <div>
-              <Label>Name *</Label>
+              <Label className="font-black text-[color:var(--profile-ink)]">Name *</Label>
               <Input
                 value={contact.name}
                 onChange={(e) =>
                   setContact((c) => ({ ...c, name: e.target.value }))
                 }
                 placeholder="Your name"
+                className="mt-1 border-[#d8bda8] bg-white"
               />
             </div>
             <div>
-              <Label>
+              <Label className="font-black text-[color:var(--profile-ink)]">
                 Email{" "}
                 <span className="text-muted-foreground text-xs">
                   (for confirmation)
@@ -398,10 +449,11 @@ export default function CheckoutPage() {
                   setContact((c) => ({ ...c, email: e.target.value }))
                 }
                 placeholder="you@email.com"
+                className="mt-1 border-[#d8bda8] bg-white"
               />
             </div>
             <div>
-              <Label>
+              <Label className="font-black text-[color:var(--profile-ink)]">
                 Phone{" "}
                 <span className="text-muted-foreground text-xs">
                   (for SMS when ready)
@@ -414,15 +466,18 @@ export default function CheckoutPage() {
                   setContact((c) => ({ ...c, phone: e.target.value }))
                 }
                 placeholder="(555) 000-0000"
+                className="mt-1 border-[#d8bda8] bg-white"
               />
             </div>
           </CardContent>
         </Card>
 
         {/* Order type */}
-        <Card className="mb-4">
+        <Card className="profile-surface mb-4 rounded-3xl">
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">Order Type</CardTitle>
+            <CardTitle className="text-base font-black text-[color:var(--profile-ink)]">
+              Order type
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <RadioGroup
@@ -453,9 +508,11 @@ export default function CheckoutPage() {
         </Card>
 
         {/* Payment method */}
-        <Card className="mb-6">
+        <Card className="profile-surface mb-6 rounded-3xl">
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">Payment Method</CardTitle>
+            <CardTitle className="text-base font-black text-[color:var(--profile-ink)]">
+              Payment method
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <RadioGroup
@@ -502,7 +559,7 @@ export default function CheckoutPage() {
         )}
 
         <Button
-          className="w-full h-12 text-base"
+          className="h-12 w-full rounded-full bg-[#d84a12] text-base font-black text-white shadow-[0_16px_35px_rgba(149,58,18,0.2)] hover:bg-[#b83a0a]"
           onClick={createOrder}
           disabled={
             isCreating ||
@@ -516,7 +573,7 @@ export default function CheckoutPage() {
             ? "Place Order (Cash)"
             : `Pay ${formatMoney(total)}`}
         </Button>
-      </div>
+      </main>
     </div>
   );
 }
@@ -577,7 +634,7 @@ function StripePaymentForm({
       )}
       <Button
         type="submit"
-        className="w-full h-12 text-base"
+        className="h-12 w-full rounded-full bg-[#d84a12] text-base font-black text-white hover:bg-[#b83a0a]"
         disabled={!stripe || isProcessing}
       >
         {isProcessing && <Loader2 className="w-5 h-5 mr-2 animate-spin" />}

@@ -13,6 +13,10 @@ const elevatedProfileHero = readFileSync(
   "client/src/components/public-profile/ElevatedProfileHero.tsx",
   "utf8",
 ).replace(/\r\n/g, "\n");
+const actionPolicy = readFileSync(
+  "client/src/components/public-profile/profileActionPolicy.ts",
+  "utf8",
+).replace(/\r\n/g, "\n");
 
 const requireIncludes = (source_: string, snippet: string, message: string) => {
   if (!source_.includes(snippet)) {
@@ -64,9 +68,14 @@ requireIncludes(
   "Public profile must expose a single business-critical action rail.",
 );
 requireIncludes(
-  source,
-  'const preferredOrder: PublicCta["type"][] = [\n    "menu",\n    "map",\n    "order",\n    "external",\n    "social",\n    "phone",\n    "catering",\n    "booking",\n  ];',
-  "Action rail must prioritize menu, directions, order, and other CTAs before secondary ones.",
+  actionPolicy,
+  "const ACTION_ORDER",
+  "Public profile action priority must live in the shared entity-aware policy.",
+);
+requireIncludes(
+  actionPolicy,
+  'truck: [\n    "map",\n    "order",\n    "menu",\n    "phone"',
+  "Truck actions must prioritize location, ordering, menu, and phone actions.",
 );
 requireIncludes(
   source,
@@ -75,8 +84,8 @@ requireIncludes(
 );
 requireIncludes(
   source,
-  "Explore more food in {data.city}",
-  "Related discovery must be redesigned as consumer-facing nearby exploration.",
+  'data-public-profile-details-grid="menu-and-visit"',
+  "Profile content must keep menu and visit information in one responsive hierarchy.",
 );
 
 // Real current render-order anchors, confirmed present in

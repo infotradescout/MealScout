@@ -65,17 +65,17 @@ export function PersonalizedRelatedRail({
   });
 
   return (
-    <section aria-label="Discover more nearby" className="space-y-3">
+    <section aria-label="Continue with Scout" className="space-y-3">
       <div className="flex items-center justify-between">
-        <p className="text-xs font-bold uppercase tracking-[0.18em] text-white/45">
+        <p className="profile-section-label">
           {city ? `More in ${city}` : "Discover more"}
         </p>
-        {citySlug ? (
+        {citySlug && sorted.length > 0 ? (
           <a
-            href={`/food-trucks-today/${encodeURIComponent(citySlug)}`}
-            className="text-xs font-semibold text-orange-300 hover:text-orange-200"
+            href="/scout"
+            className="text-xs font-bold text-[#b93619] hover:text-[#8f2a14]"
           >
-            See all →
+            Scout →
           </a>
         ) : null}
       </div>
@@ -96,7 +96,7 @@ export function PersonalizedRelatedRail({
                 className="flex-none w-28 space-y-1.5 group"
               >
                 {/* Avatar */}
-                <div className="relative h-20 w-full overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-[#1d110a] to-[#0d0a08]">
+                <div className="relative h-20 w-full overflow-hidden rounded-2xl border border-[color:var(--profile-border)] bg-gradient-to-br from-orange-100 to-amber-50 shadow-sm">
                   {imgSrc ? (
                     <img
                       src={imgSrc}
@@ -107,7 +107,7 @@ export function PersonalizedRelatedRail({
                     />
                   ) : (
                     <div className="flex h-full w-full items-center justify-center">
-                      <span className="text-lg font-black text-orange-100/60">
+                      <span className="text-lg font-black text-orange-800/70">
                         {initialsFor(biz.name)}
                       </span>
                     </div>
@@ -119,11 +119,11 @@ export function PersonalizedRelatedRail({
 
                 {/* Name + type */}
                 <div>
-                  <p className="text-xs font-semibold text-white/85 line-clamp-2 leading-snug">
+                  <p className="line-clamp-2 text-xs font-semibold leading-snug text-[color:var(--profile-ink)]">
                     {biz.name}
                   </p>
                   {biz.profileType ? (
-                    <p className="text-[10px] text-white/40">
+                    <p className="text-[10px] text-[color:var(--profile-muted)]">
                       {typeLabel(biz.profileType)}
                     </p>
                   ) : null}
@@ -133,33 +133,23 @@ export function PersonalizedRelatedRail({
           })}
         </div>
       ) : (
-        /* Fallback: city-level discovery links */
-        <div className="grid grid-cols-2 gap-2">
+        /* Fallback: one clear return to the primary discovery action. */
+        <div className="rounded-[1.5rem] border border-orange-200 bg-[linear-gradient(135deg,#fff1e6_0%,#fff9ef_58%,#fff0d0_100%)] p-4 sm:flex sm:items-center sm:justify-between sm:gap-4">
+          <div>
+            <p className="text-base font-black text-[color:var(--profile-ink)]">
+              Find your next meal
+            </p>
+            {city ? (
+              <p className="mt-1 text-sm text-[color:var(--profile-muted)]">
+                Keep exploring food in {city}.
+              </p>
+            ) : null}
+          </div>
           <a
             href="/scout"
-            className="rounded-xl border border-white/10 bg-[#0f0d0b] px-3 py-2.5 text-sm text-white/80 hover:bg-white/5"
+            className="profile-action-primary mt-3 inline-flex min-h-11 items-center justify-center rounded-xl px-5 text-sm font-black sm:mt-0"
           >
             Scout
-          </a>
-          {citySlug ? (
-            <a
-              href={`/food-trucks-today/${encodeURIComponent(citySlug)}`}
-              className="rounded-xl border border-white/10 bg-[#0f0d0b] px-3 py-2.5 text-sm text-white/80 hover:bg-white/5"
-            >
-              Food trucks today
-            </a>
-          ) : null}
-          <a
-            href="/claim-business"
-            className="rounded-xl border border-white/10 bg-[#0f0d0b] px-3 py-2.5 text-sm text-white/80 hover:bg-white/5"
-          >
-            Claim a business
-          </a>
-          <a
-            href="/restaurant-signup?businessType=food_truck"
-            className="rounded-xl border border-white/10 bg-[#0f0d0b] px-3 py-2.5 text-sm text-white/80 hover:bg-white/5"
-          >
-            List a truck
           </a>
         </div>
       )}

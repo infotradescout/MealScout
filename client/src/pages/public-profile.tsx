@@ -30,10 +30,8 @@ import {
   ProfileHeroMedia,
   buildPublicProfileHeroAssets,
 } from "@/components/public-profile/ProfileHeroMedia";
-import { TruckHero } from "@/components/public-profile/TruckHero";
 import { ElevatedTruckHero } from "@/components/public-profile/ElevatedTruckHero";
 import { ElevatedProfileHero } from "@/components/public-profile/ElevatedProfileHero";
-import { WhyGoNowPanel } from "@/components/public-profile/WhyGoNowPanel";
 import { MobileActionDock } from "@/components/public-profile/MobileActionDock";
 import { rankPublicCtas } from "@/components/public-profile/profileActionPolicy";
 import { MenuHighlightsRail } from "@/components/public-profile/MenuHighlightsRail";
@@ -85,7 +83,7 @@ import {
 
 type PublicProfilePayload =
   | (PublicRestaurantProfile & {
-      entity: "restaurant";
+      entity: "restaurant" | "truck" | "bar";
       title: string;
       subtitle: string | null;
       imageUrl: string | null;
@@ -210,8 +208,10 @@ const normalizePublicProfileEntity = (value: string | null | undefined) => {
   return normalized;
 };
 
-const isRestaurantLikeEntity = (entity: string | null | undefined) =>
-  entity === "restaurant" || entity === "truck";
+const isRestaurantLikeEntity = (entity: string | null | undefined) => {
+  const normalized = normalizePublicProfileEntity(entity);
+  return normalized === "restaurant" || normalized === "truck" || normalized === "bar";
+};
 
 type LocationDiscoveryTruck = {
   id: string;
@@ -578,14 +578,14 @@ function PublicProfileShareControls({
   return (
     <section
       aria-label="Share public profile"
-      className="flex flex-col gap-2 rounded-xl border border-white/10 bg-[#0f0d0b] px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between"
+      className="profile-surface flex flex-col gap-2 rounded-2xl px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
     >
-      <p className="text-xs font-medium text-white/58">Share this profile</p>
+      <p className="text-xs font-bold text-[color:var(--profile-muted)]">Share this profile</p>
       <div className="flex flex-wrap items-center gap-2">
         <Button
           type="button"
           onClick={handleShare}
-          className="bg-orange-500 text-black hover:bg-orange-400"
+          className="profile-action-primary"
           data-testid="button-public-profile-share"
         >
           <Share2 className="mr-2 h-4 w-4" />
@@ -595,7 +595,7 @@ function PublicProfileShareControls({
           type="button"
           variant="outline"
           onClick={handleCopy}
-          className="border-white/20 text-white hover:bg-white/10"
+          className="profile-action-secondary"
           data-testid="button-public-profile-copy-link"
         >
           {copied ? (
@@ -1434,9 +1434,15 @@ function AboutFoodStyle({ profile }: { profile: PublicRestaurantProfile }) {
   const normalizedServiceType = normalizeBusinessTypeLabel(
     profile.serviceType || "",
   );
+  const seenTags = new Set<string>();
   const tags = [...profile.cuisineTags, normalizedServiceType || ""]
     .map((value) => String(value || "").trim())
-    .filter(Boolean)
+    .filter((value) => {
+      const key = value.toLowerCase();
+      if (!key || seenTags.has(key)) return false;
+      seenTags.add(key);
+      return true;
+    })
     .slice(0, 10);
   const hasAbout = Boolean(profile.description) || tags.length > 0;
   if (!hasAbout) return null;
@@ -1499,6 +1505,10 @@ function MenuSection({
       menuVariants.find((variant) => String(variant.id) === selectedMenuId)) ||
     menuVariants[0] ||
     null;
+  const internalMenuHref =
+    profile.id && (profile.activeMenuId || activeVariant?.id)
+      ? `/menu/${encodeURIComponent(profile.id)}`
+      : null;
   const menuCta = safeCtas.find(
     (cta) =>
       cta.type === "menu" ||
@@ -1634,10 +1644,20 @@ function MenuSection({
 
   return (
     <Card className="border-white/10 bg-[#0f0d0b]">
-      <CardHeader>
+      <CardHeader className="flex flex-row items-center justify-between gap-3">
         <CardTitle className="text-xl text-white">
           {shouldCompactThinMenu ? "Menu preview" : "Menu"}
         </CardTitle>
+        {internalMenuHref ? (
+          <Link
+            href={internalMenuHref}
+            data-analytics-action="menu_click"
+            data-analytics-target-type="menu"
+            className="profile-action-secondary inline-flex min-h-9 shrink-0 items-center gap-1 rounded-full px-3 text-xs font-black"
+          >
+            Full menu <MenuSquare className="h-3.5 w-3.5" />
+          </Link>
+        ) : null}
       </CardHeader>
       <CardContent className="space-y-4">
         {menuStateLabel ? (
@@ -1878,9 +1898,9 @@ function MenuSection({
             </div>
           </div>
         ) : null}
-        {menuCta ? (
+        {!internalMenuHref && menuCta ? (
           renderCtaButton(menuCta, "default", "menu-cta")
-        ) : fallbackMenuLink ? (
+        ) : !internalMenuHref && fallbackMenuLink ? (
           <a
             href={fallbackMenuLink}
             data-analytics-action="menu_click"
@@ -2225,6 +2245,44 @@ function ProofSection({ profile }: { profile: PublicRestaurantProfile }) {
   );
 }
 
+function PublicProfileGalleryTile({
+  image,
+  profileName,
+  index,
+  label,
+}: {
+  image: PublicRestaurantProfile["galleryImages"][number];
+  profileName: string;
+  index: number;
+  label: string;
+}) {
+  const [failed, setFailed] = useState(false);
+
+  return (
+    <div className="relative h-28 w-44 flex-none overflow-hidden rounded-xl border border-[color:var(--profile-border)] bg-[color:var(--profile-surface-soft)]">
+      {failed ? (
+        <div className="flex h-full items-center justify-center px-3 text-center text-xs font-semibold text-[color:var(--profile-muted)]">
+          Photo unavailable
+        </div>
+      ) : (
+        <img
+          src={image.url}
+          alt={`${profileName} ${index + 1}`}
+          loading="lazy"
+          decoding="async"
+          className="h-full w-full object-cover"
+          onError={() => setFailed(true)}
+        />
+      )}
+      {!failed ? (
+        <span className="absolute bottom-1.5 left-1.5 rounded-full bg-black/65 px-2 py-0.5 text-[10px] font-bold text-[#fff]">
+          {label}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
 function GalleryStrip({ profile }: { profile: PublicRestaurantProfile }) {
   if (
     !Array.isArray(profile.galleryImages) ||
@@ -2270,20 +2328,13 @@ function GalleryStrip({ profile }: { profile: PublicRestaurantProfile }) {
       <CardContent>
         <div className="flex gap-2.5 overflow-x-auto pb-1">
           {images.map((image, idx) => (
-            <div
+            <PublicProfileGalleryTile
               key={`${image.url}-${idx}`}
-              className="relative h-24 w-36 flex-none overflow-hidden rounded-md border border-white/10"
-            >
-              <img
-                src={image.url}
-                alt={`${profile.displayName} ${idx + 1}`}
-                loading="lazy"
-                className="h-full w-full object-cover"
-              />
-              <span className="absolute bottom-1 left-1 rounded bg-black/65 px-1.5 py-0.5 text-[10px] font-medium text-white/90">
-                {imageTypeLabel(image.source)}
-              </span>
-            </div>
+              image={image}
+              profileName={profile.displayName}
+              index={idx}
+              label={imageTypeLabel(image.source)}
+            />
           ))}
         </div>
       </CardContent>
@@ -2480,7 +2531,7 @@ function RestaurantSocial({
         !/instagram|facebook|x\.com|twitter/i.test(String(cta.href || "")),
     ),
     follow: safeCtas.filter(
-      (cta) => cta.type === "social" || cta.type === "share",
+      (cta) => cta.type === "social",
     ),
   };
   const unique = (ctas: PublicCta[]) =>
@@ -2885,18 +2936,35 @@ export default function PublicProfilePage() {
 
   if ((isLoading || cleanBusinessLoading) && !invalidRestaurantRoute) {
     return (
-      <div className="mx-auto max-w-4xl px-4 py-10">Loading profile...</div>
+      <div className="mealscout-public-profile flex min-h-screen items-center justify-center px-4">
+        <div className="profile-surface w-full max-w-md rounded-[1.75rem] p-6">
+          <div className="h-40 animate-pulse rounded-2xl bg-orange-100" />
+          <div className="mt-5 h-7 w-2/3 animate-pulse rounded-lg bg-orange-100" />
+          <div className="mt-3 h-4 w-full animate-pulse rounded bg-orange-50" />
+          <p className="mt-5 text-sm font-semibold text-[color:var(--profile-muted)]">
+            Loading profile…
+          </p>
+        </div>
+      </div>
     );
   }
 
   if (!data) {
     return (
-      <div className="mx-auto max-w-4xl px-4 py-10">
-        <h1 className="text-2xl font-semibold">Profile not found</h1>
-        <div className="mt-4">
-          <Link href="/">
-            <Button variant="outline">Back to home</Button>
-          </Link>
+      <div className="mealscout-public-profile flex min-h-screen items-center justify-center px-4">
+        <div className="profile-surface w-full max-w-lg rounded-[1.75rem] p-6 text-center sm:p-8">
+          <p className="profile-section-label">MealScout</p>
+          <h1 className="mt-2 text-3xl font-black tracking-tight text-[color:var(--profile-ink)]">
+            Profile not found
+          </h1>
+          <p className="mt-2 text-sm text-[color:var(--profile-muted)]">
+            This listing may have moved or is no longer public.
+          </p>
+          <div className="mt-5">
+            <Link href="/scout">
+              <Button className="profile-action-primary">Scout</Button>
+            </Link>
+          </div>
         </div>
       </div>
     );
@@ -2920,6 +2988,14 @@ export default function PublicProfilePage() {
   const restaurantProfile = isRestaurantLikeEntity(data.entity)
     ? (data as PublicRestaurantProfile)
     : null;
+  const restaurantHasMenuSurface = Boolean(
+    restaurantProfile &&
+      (restaurantProfile.profileType === "truck" ||
+        hasStructuredPublicMenu(data) ||
+        restaurantProfile.menuUrl ||
+        restaurantProfile.menuImageUrl ||
+        restaurantProfile.menuPdfUrl),
+  );
   const ogImage =
     data.seo?.ogImageUrl ||
     (data.entity === "host"
@@ -2937,7 +3013,7 @@ export default function PublicProfilePage() {
     DEFAULT_IMAGE;
 
   return (
-    <div className="min-h-screen bg-[#070605]">
+    <div className="mealscout-public-profile" data-public-profile-shell="warm-food-led">
       <SEOHead
         title={title}
         description={description}
@@ -2946,21 +3022,24 @@ export default function PublicProfilePage() {
         ogImage={ogImage}
       />
 
-      <header className="border-b border-white/10 bg-[#0b0908]/95">
+      <header className="sticky top-0 z-40 border-b border-[color:var(--profile-border)] bg-[#fffaf4]/92 backdrop-blur-xl">
         <div className="mx-auto flex w-full max-w-5xl items-center justify-between px-4 py-3">
           <Link
             href="/"
-            className="text-base font-semibold tracking-tight text-white"
+            className="text-base font-black tracking-tight text-[color:var(--profile-ink)]"
           >
             MealScout
           </Link>
-          <div className="flex items-center gap-3 text-xs sm:text-sm">
-            <Link href="/scout" className="text-white/75 hover:text-white">
+          <div className="flex items-center gap-2 text-xs sm:text-sm">
+            <Link
+              href="/scout"
+              className="profile-action-primary inline-flex min-h-9 items-center rounded-full px-4 font-black"
+            >
               Scout
             </Link>
             <Link
               href="/claim-business"
-              className="text-orange-200 hover:text-orange-100"
+              className="hidden font-bold text-[color:var(--profile-ink-soft)] hover:text-[color:var(--profile-accent)] sm:inline"
             >
               Claim or update
             </Link>
@@ -2978,7 +3057,7 @@ export default function PublicProfilePage() {
         }
       >
         <main
-          className="mx-auto max-w-5xl space-y-6 px-4 pb-28 pt-6 sm:pb-32 sm:pt-8 md:pb-8"
+          className="mx-auto max-w-5xl space-y-6 px-4 pb-28 pt-5 sm:pb-32 sm:pt-7 md:pb-10"
           onClickCapture={(event) => {
             const target = event.target as HTMLElement | null;
             const anchor = target?.closest(
@@ -2994,93 +3073,24 @@ export default function PublicProfilePage() {
             );
           }}
         >
-          {/* ── TRUCK PROFILE LAYOUT ── */}
-          {restaurantProfile?.profileType === "truck" ? (
+          {/* Restaurant, bar, and food-truck profiles share one decision flow.
+              Entity differences stay in the hero and visit-information panel. */}
+          {restaurantProfile ? (
             <>
-              {/* Elevated truck hero — answers "what truck, where, when" */}
-              <ElevatedTruckHero
-                profile={restaurantProfile as any}
-                isAuthenticated={isAuthenticated}
-                isFavorited={isCurrentProfileFavorited}
-              />
-
-              {/* Thin profile state — graceful when data is sparse. Skips the
-                  decision bar / quick actions stack below, which otherwise
-                  spells out "not posted yet" for nearly every field on a
-                  profile that has almost no data. */}
-              {isThinProfile(restaurantProfile) ? (
-                <ThinProfileState
-                  profile={restaurantProfile}
-                  safeCtas={safeCtas}
-                  initials={restaurantProfile.displayName
-                    .split(" ")
-                    .map((p: string) => p[0] || "")
-                    .join("")
-                    .slice(0, 2)
-                    .toUpperCase()}
+              {restaurantProfile.profileType === "truck" ? (
+                <ElevatedTruckHero
+                  profile={restaurantProfile as any}
                   isAuthenticated={isAuthenticated}
+                  isFavorited={isCurrentProfileFavorited}
                 />
               ) : (
-                <>
-                  <TruckVisitStrip
-                    profile={restaurantProfile}
-                    safeCtas={safeCtas}
-                  />
-
-                  <TruckMenuShelf profile={restaurantProfile} />
-
-                  <FullMenuSection
-                    profile={restaurantProfile}
-                    safeCtas={safeCtas}
-                  />
-
-                  {/* Why go now — time-sensitive signals */}
-                  <WhyGoNowPanel profile={restaurantProfile} />
-
-                  {/* Quick actions — desktop in-flow */}
-                  <div className="hidden md:block">
-                    <QuickActionRow profile={data} safeCtas={safeCtas} />
-                  </div>
-
-                  {/* Plan your visit — base area/contact/directions when public */}
-                  <PlanYourVisitPanel profile={restaurantProfile} />
-
-                  {/* Deals */}
-                  <DealsSection profile={restaurantProfile} />
-
-                  {/* Events */}
-                  <EventsSection profile={restaurantProfile} />
-
-                  {/* About / food style */}
-                  <AboutFoodStyle profile={restaurantProfile} />
-
-                  {/* Gallery */}
-                  <GalleryStrip profile={restaurantProfile} />
-
-                  {/* Community proof */}
-                  <ProofSection profile={restaurantProfile} />
-
-                  {/* Social links */}
-                  <RestaurantSocial
-                    profile={restaurantProfile}
-                    safeCtas={safeCtas}
-                  />
-                </>
+                <ElevatedProfileHero
+                  profile={restaurantProfile as any}
+                  isAuthenticated={isAuthenticated}
+                  isFavorited={isCurrentProfileFavorited}
+                />
               )}
-            </>
-          ) : restaurantProfile ? (
-            /* ── RESTAURANT / BAR PROFILE LAYOUT ── */
-            <>
-              {/* Elevated restaurant hero — answers "what place, is it open, where" */}
-              <ElevatedProfileHero
-                profile={restaurantProfile as any}
-                isAuthenticated={isAuthenticated}
-                isFavorited={isCurrentProfileFavorited}
-              />
 
-              {/* Thin profile state — skips the decision bar / quick actions
-                  stack below, which otherwise spells out "not posted yet"
-                  for nearly every field on a profile that has almost no data. */}
               {isThinProfile(restaurantProfile) ? (
                 <ThinProfileState
                   profile={restaurantProfile}
@@ -3100,59 +3110,68 @@ export default function PublicProfilePage() {
                     safeCtas={safeCtas}
                   />
 
-                  {/* Why go now — deals, events, open status */}
-                  <WhyGoNowPanel profile={restaurantProfile} />
+                  {restaurantHasMenuSurface ? (
+                    <div
+                      className="grid gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(18rem,0.85fr)] lg:items-start"
+                      data-public-profile-details-grid="menu-and-visit"
+                    >
+                      <div
+                        className={`space-y-6 ${
+                          restaurantProfile.profileType === "truck"
+                            ? "order-2 lg:order-1"
+                            : "order-1"
+                        }`}
+                      >
+                        {restaurantProfile.menuSections?.length > 0 ||
+                        (restaurantProfile.menuVariants?.[0]?.menuSections
+                          ?.length ?? 0) > 0 ? (
+                          <MenuHighlightsRail
+                            menuSections={
+                              restaurantProfile.menuVariants?.[0]
+                                ?.menuSections ?? restaurantProfile.menuSections
+                            }
+                            featuredMenuItems={restaurantProfile.featuredMenuItems}
+                            userFavoriteItemNames={new Set()}
+                          />
+                        ) : null}
 
-                  {/* Quick actions — desktop in-flow */}
-                  <div className="hidden md:block">
-                    <QuickActionRow profile={data} safeCtas={safeCtas} />
-                  </div>
+                        <FullMenuSection
+                          profile={restaurantProfile}
+                          safeCtas={safeCtas}
+                        />
+                      </div>
 
-                  {/* Menu highlights rail */}
-                  {restaurantProfile.menuSections?.length > 0 ||
-                  (restaurantProfile.menuVariants?.[0]?.menuSections?.length ??
-                    0) > 0 ? (
-                    <MenuHighlightsRail
-                      menuSections={
-                        restaurantProfile.menuVariants?.[0]?.menuSections ??
-                        restaurantProfile.menuSections
-                      }
-                      featuredMenuItems={restaurantProfile.featuredMenuItems}
-                      userFavoriteItemNames={new Set()}
-                    />
-                  ) : null}
+                      <aside
+                        className={`space-y-6 lg:sticky lg:top-24 ${
+                          restaurantProfile.profileType === "truck"
+                            ? "order-1 lg:order-2"
+                            : "order-2"
+                        }`}
+                      >
+                        {restaurantProfile.profileType === "truck" ? (
+                          <TruckSchedulePanel profile={restaurantProfile} />
+                        ) : (
+                          <RestaurantHoursPanel profile={restaurantProfile} />
+                        )}
+                        <PlanYourVisitPanel profile={restaurantProfile} />
+                      </aside>
+                    </div>
+                  ) : (
+                    <div
+                      className="grid gap-6 md:grid-cols-2"
+                      data-public-profile-details-grid="visit-only"
+                    >
+                      <RestaurantHoursPanel profile={restaurantProfile} />
+                      <PlanYourVisitPanel profile={restaurantProfile} />
+                    </div>
+                  )}
 
-                  {/* Full menu */}
-                  <FullMenuSection
-                    profile={restaurantProfile}
-                    safeCtas={safeCtas}
-                  />
-
-                  {/* Hours */}
-                  <RestaurantHoursPanel profile={restaurantProfile} />
-
-                  {/* Deals */}
                   <DealsSection profile={restaurantProfile} />
-
-                  {/* Events */}
                   <EventsSection profile={restaurantProfile} />
-
-                  {/* Plan your visit — address, phone, website, social */}
-                  <PlanYourVisitPanel profile={restaurantProfile} />
-
-                  {/* About / food style */}
-                  <AboutFoodStyle profile={restaurantProfile} />
-
-                  {/* Gallery */}
                   <GalleryStrip profile={restaurantProfile} />
-
-                  {/* Featured bartenders (bars) */}
+                  <AboutFoodStyle profile={restaurantProfile} />
                   <FeaturedBartendersSection profile={restaurantProfile} />
-
-                  {/* Community proof */}
                   <ProofSection profile={restaurantProfile} />
-
-                  {/* Social links */}
                   <RestaurantSocial
                     profile={restaurantProfile}
                     safeCtas={safeCtas}
@@ -3209,17 +3228,11 @@ export default function PublicProfilePage() {
 
           {/* Personalized related discovery rail */}
           {restaurantProfile ? (
-            <>
-              <RelatedScoutRail
-                profile={restaurantProfile}
-                citySlug={citySlug}
-                userFavoriteIds={userFavoriteIds}
-              />
-              <PublicProfileRelatedDiscoveryLinks
-                data={data}
-                citySlug={citySlug}
-              />
-            </>
+            <RelatedScoutRail
+              profile={restaurantProfile}
+              citySlug={citySlug}
+              userFavoriteIds={userFavoriteIds}
+            />
           ) : (
             <PublicProfileRelatedDiscoveryLinks
               data={data}
@@ -3239,14 +3252,14 @@ export default function PublicProfilePage() {
         </main>
       </ProfileErrorBoundary>
 
-      <footer className="mt-8 border-t border-white/10 bg-[#0b0908] pb-28 sm:pb-32 md:pb-0">
-        <div className="mx-auto flex w-full max-w-5xl flex-col gap-2 px-4 py-5 text-sm text-white/70 sm:flex-row sm:items-center sm:justify-between">
-          <p>MealScout</p>
+      <footer className="mt-8 border-t border-[color:var(--profile-border)] bg-white/70 pb-28 sm:pb-32 md:pb-0">
+        <div className="mx-auto flex w-full max-w-5xl flex-col gap-2 px-4 py-5 text-sm text-[color:var(--profile-muted)] sm:flex-row sm:items-center sm:justify-between">
+          <p className="font-black text-[color:var(--profile-ink)]">MealScout</p>
           <div className="flex items-center gap-4">
-            <Link href="/scout" className="hover:text-white">
+            <Link href="/scout" className="font-bold hover:text-[color:var(--profile-accent)]">
               Scout
             </Link>
-            <Link href="/claim-business" className="hover:text-white">
+            <Link href="/claim-business" className="hover:text-[color:var(--profile-accent)]">
               Business owner?
             </Link>
           </div>

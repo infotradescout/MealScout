@@ -21,7 +21,7 @@ assert.match(background, /appearance = "day"/);
 assert.match(background, /root\.classList\.add\([\s\S]*"theme-night" : "theme-day"/);
 assert.match(
   app,
-  /if \(isPublicProfilePath\)[\s\S]*<TimeOfDayBackground appearance="night"/,
+  /if \(usesSelfContainedConsumerShell\)[\s\S]*<TimeOfDayBackground appearance="day"/,
 );
 assert.match(app, /function GuestProtectedRoutes\(\)/);
 assert.match(

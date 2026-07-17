@@ -640,6 +640,11 @@ function App() {
     /^\/(restaurant|truck|bar|location|supplier)\/[^/]+(?:\/[^/]+)?$/i.test(
       currentPath,
     );
+  const usesSelfContainedConsumerShell =
+    isPublicProfilePath ||
+    currentPath.startsWith("/menu/") ||
+    currentPath.startsWith("/checkout/") ||
+    currentPath.startsWith("/order-confirmation/");
   const usesCinematicBackground =
     currentPath === "/" ||
     currentPath === "/food-truck-rush" ||
@@ -669,12 +674,12 @@ function App() {
     );
   }
 
-  if (isPublicProfilePath) {
+  if (usesSelfContainedConsumerShell) {
     return (
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
-          <TimeOfDayBackground appearance="night" />
-          <div className="relative z-10 min-h-screen bg-[#070605] text-white">
+          <TimeOfDayBackground appearance="day" />
+          <div className="relative z-10 min-h-screen">
             <Toaster />
             <Router />
           </div>

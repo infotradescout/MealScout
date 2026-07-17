@@ -43,15 +43,15 @@ function openStatusStyle(openStatus: string | null): {
   bg: string;
   border: string;
 } {
-  if (!openStatus) return { dot: "bg-white/30", text: "text-white/60", bg: "bg-white/5", border: "border-white/10" };
+  if (!openStatus) return { dot: "bg-stone-300", text: "text-[color:var(--profile-muted)]", bg: "bg-stone-50", border: "border-stone-200" };
   const lower = openStatus.toLowerCase();
   if (/open/i.test(lower) && !/closed/i.test(lower)) {
-    return { dot: "bg-emerald-400", text: "text-emerald-200", bg: "bg-emerald-500/10", border: "border-emerald-400/25" };
+    return { dot: "bg-emerald-500", text: "text-emerald-800", bg: "bg-emerald-50", border: "border-emerald-200" };
   }
   if (/closed/i.test(lower)) {
-    return { dot: "bg-white/25", text: "text-white/55", bg: "bg-white/5", border: "border-white/10" };
+    return { dot: "bg-stone-400", text: "text-stone-600", bg: "bg-stone-50", border: "border-stone-200" };
   }
-  return { dot: "bg-amber-400", text: "text-amber-200", bg: "bg-amber-500/10", border: "border-amber-400/25" };
+  return { dot: "bg-amber-500", text: "text-amber-800", bg: "bg-amber-50", border: "border-amber-200" };
 }
 
 export function ElevatedProfileHero({
@@ -86,14 +86,18 @@ export function ElevatedProfileHero({
 
   const statusStyle = openStatusStyle(profile.openStatus);
 
-  const locationLine = [profile.addressPublicLabel, profile.city, profile.state]
-    .filter(Boolean)
-    .join(", ");
+  // addressPublicLabel is already the server's display-safe, locality-aware
+  // address. Appending city/state again produces repetitions such as
+  // "Milton, FL, Milton, FL" on real profiles.
+  const locationLine =
+    String(profile.addressPublicLabel || "").trim() ||
+    [profile.city, profile.state].filter(Boolean).join(", ");
 
   return (
     <section
       aria-label={`${profile.displayName} profile hero`}
-      className="overflow-hidden rounded-2xl border border-white/10 bg-[#0f0d0b]"
+      className="profile-surface overflow-hidden rounded-[1.75rem]"
+      data-public-profile-hero="fixed-location"
     >
       {/* Cover + logo */}
       <ProfileHeroMedia
@@ -102,7 +106,7 @@ export function ElevatedProfileHero({
         logoImageUrl={heroAssets.logoImageUrl}
         categoryPhoto={categoryPhoto}
         theme="default"
-        heightClassName="h-36 md:h-52"
+        heightClassName="h-48 md:h-72"
         badge={
           <ProfileFavoriteButton
             restaurantId={profile.id}
@@ -117,16 +121,16 @@ export function ElevatedProfileHero({
       <div className="space-y-3 p-4 sm:p-5">
         {/* Type badge + open status */}
         <div className="flex flex-wrap items-center gap-2">
-          <span className="rounded-full border border-orange-400/30 bg-orange-500/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.18em] text-orange-200">
+          <span className="rounded-full border border-orange-200 bg-orange-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-orange-800">
             {typeLabel}
           </span>
           {profile.verifiedProfile ? (
-            <span className="rounded-full border border-white/15 px-2 py-0.5 text-[10px] font-semibold text-white/55">
+            <span className="rounded-full border border-[color:var(--profile-border)] bg-white px-2.5 py-1 text-[10px] font-semibold text-[color:var(--profile-muted)]">
               Verified
             </span>
           ) : null}
           {profile.locallyOwned ? (
-            <span className="rounded-full border border-emerald-400/20 bg-emerald-500/8 px-2 py-0.5 text-[10px] font-semibold text-emerald-200/80">
+            <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-semibold text-emerald-800">
               Locally owned
             </span>
           ) : null}
@@ -141,26 +145,26 @@ export function ElevatedProfileHero({
         </div>
 
         {/* Name */}
-        <h1 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
+        <h1 className="text-3xl font-black tracking-tight text-[color:var(--profile-ink)] sm:text-4xl">
           {profile.displayName}
         </h1>
 
         {/* Cuisine / service type */}
         {cuisineSummary ? (
-          <p className="text-sm font-medium text-orange-100/80">{cuisineSummary}</p>
+          <p className="text-sm font-bold text-[#ad3a20]">{cuisineSummary}</p>
         ) : null}
 
         {/* Location + hours inline */}
-        <div className="space-y-1.5 text-sm text-white/70">
+        <div className="space-y-1.5 text-sm text-[color:var(--profile-ink-soft)]">
           {locationLine ? (
             <p className="flex items-start gap-2">
-              <MapPin className="mt-0.5 h-4 w-4 flex-none text-orange-200/60" />
+              <MapPin className="mt-0.5 h-4 w-4 flex-none text-[color:var(--profile-accent)]" />
               <span>{locationLine}</span>
             </p>
           ) : null}
           {profile.operatingHoursSummary ? (
             <p className="flex items-start gap-2">
-              <Clock3 className="mt-0.5 h-4 w-4 flex-none text-orange-200/60" />
+              <Clock3 className="mt-0.5 h-4 w-4 flex-none text-[color:var(--profile-accent)]" />
               <span className="line-clamp-2">
                 {profile.operatingHoursSummary}
               </span>
@@ -170,7 +174,7 @@ export function ElevatedProfileHero({
 
         {/* Description */}
         {profile.description ? (
-          <p className="line-clamp-3 text-sm leading-6 text-white/65">
+          <p className="line-clamp-3 text-sm leading-6 text-[color:var(--profile-muted)]">
             {profile.description}
           </p>
         ) : null}

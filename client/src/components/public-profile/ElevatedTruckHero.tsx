@@ -26,6 +26,7 @@ import {
   buildPublicProfileHeroAssets,
 } from "./ProfileHeroMedia";
 import { getDishCategoryPhoto } from "@/lib/dishCategoryPhoto";
+import { ProfileFavoriteButton } from "./ProfileFavoriteButton";
 import { ProfileRecommendButton } from "./ProfileRecommendButton";
 import { getTruckSchedulePrimaryStop } from "./truckScheduleTruth";
 import { MapPin } from "lucide-react";
@@ -100,6 +101,7 @@ const isGenericTruckDescription = (
 export function ElevatedTruckHero({
   profile,
   isAuthenticated = false,
+  isFavorited = false,
 }: ElevatedTruckHeroProps) {
   const heroAssets = buildPublicProfileHeroAssets({
     entity: "truck",
@@ -124,7 +126,8 @@ export function ElevatedTruckHero({
   return (
     <section
       aria-label={`${profile.displayName} food truck profile`}
-      className="overflow-hidden rounded-2xl border border-white/10 bg-[#0f0d0b]"
+      className="profile-surface overflow-hidden rounded-[1.75rem]"
+      data-public-profile-hero="truck"
     >
       {/* Cover + logo */}
       <ProfileHeroMedia
@@ -133,23 +136,31 @@ export function ElevatedTruckHero({
         logoImageUrl={heroAssets.logoImageUrl}
         categoryPhoto={categoryPhoto}
         theme="truck"
-        heightClassName="h-28 md:h-40"
+        heightClassName="h-44 md:h-64"
+        badge={
+          <ProfileFavoriteButton
+            restaurantId={profile.id}
+            isAuthenticated={isAuthenticated}
+            initialIsFavorited={isFavorited}
+            profilePath={profile.profilePath}
+          />
+        }
       />
 
       {/* Info block */}
       <div className="space-y-2.5 p-4 sm:p-5">
         {/* Type badge + live status */}
         <div className="flex flex-wrap items-center gap-2">
-          <span className="rounded-full border border-orange-400/30 bg-orange-500/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.18em] text-orange-200">
+          <span className="rounded-full border border-orange-200 bg-orange-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-orange-800">
             Food truck
           </span>
           {profile.verifiedProfile ? (
-            <span className="rounded-full border border-white/15 px-2 py-0.5 text-[10px] font-semibold text-white/55">
+            <span className="rounded-full border border-[color:var(--profile-border)] bg-white px-2.5 py-1 text-[10px] font-semibold text-[color:var(--profile-muted)]">
               Verified
             </span>
           ) : null}
           {profile.locallyOwned ? (
-            <span className="rounded-full border border-emerald-400/20 bg-emerald-500/8 px-2 py-0.5 text-[10px] font-semibold text-emerald-200/80">
+            <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-semibold text-emerald-800">
               Locally owned
             </span>
           ) : null}
@@ -157,20 +168,20 @@ export function ElevatedTruckHero({
         </div>
 
         {/* Name */}
-        <h1 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
+        <h1 className="text-3xl font-black tracking-tight text-[color:var(--profile-ink)] sm:text-4xl">
           {profile.displayName}
         </h1>
 
         {/* Cuisine */}
         {cuisineSummary ? (
-          <p className="text-sm font-medium text-orange-100/80">
+          <p className="text-sm font-bold text-[#ad3a20]">
             {cuisineSummary}
           </p>
         ) : null}
 
         {/* Description */}
         {description ? (
-          <p className="line-clamp-3 text-sm leading-6 text-white/65">
+          <p className="line-clamp-3 text-sm leading-6 text-[color:var(--profile-muted)]">
             {description}
           </p>
         ) : null}

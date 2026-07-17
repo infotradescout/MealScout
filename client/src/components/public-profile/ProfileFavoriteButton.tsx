@@ -67,8 +67,8 @@ export function ProfileFavoriteButton({
       onClick={handleToggle}
       className={`flex h-9 w-9 items-center justify-center rounded-full border transition-colors ${
         isFavorited
-          ? "border-rose-400/50 bg-rose-500/15 text-rose-300"
-          : "border-white/15 bg-black/20 text-white/50 hover:border-white/25 hover:text-white/80"
+          ? "border-rose-200 bg-rose-50 text-rose-600 shadow-sm"
+          : "border-white/70 bg-white/90 text-[#6b4030] shadow-sm backdrop-blur hover:bg-white hover:text-[#d93f24]"
       } ${isPending ? "opacity-60 cursor-not-allowed" : ""}`}
     >
       <Heart
