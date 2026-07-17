@@ -6270,7 +6270,6 @@ type ScoutImmediateDecisionItem =
       summary: string;
       cardType: "menu_item";
       item: LocalMenuItemFeedItem;
-      businessKey: string | null;
     }
   | {
       sourceRowId: ScoutHorizontalRowId;
@@ -7700,7 +7699,6 @@ function ActiveSceneContent({
         ),
         cardType: "menu_item" as const,
         item,
-        businessKey: getScoutMenuItemBusinessKey(item),
       })),
       ...hotDealCandidates.map((deal) => ({
         sourceRowId: "hot_deals" as const,
@@ -7796,8 +7794,7 @@ function ActiveSceneContent({
         : "Scheduled trucks and open-now options nearby.";
     const firstScreenSuppressedBusinessKey =
       primaryFirstScreenDecision?.cardType === "truck" ||
-      primaryFirstScreenDecision?.cardType === "restaurant" ||
-      primaryFirstScreenDecision?.cardType === "menu_item"
+      primaryFirstScreenDecision?.cardType === "restaurant"
         ? primaryFirstScreenDecision.businessKey
         : null;
     const suppressFirstScreenBusiness = (card: ScoutRailRenderCard) => {
@@ -7816,12 +7813,6 @@ function ActiveSceneContent({
             card.restaurant,
             getRestaurantProfilePath(card.restaurant),
           ) === firstScreenSuppressedBusinessKey
-        );
-      }
-      if (card.cardType === "menu_item") {
-        return (
-          getScoutMenuItemBusinessKey(card.item) ===
-          firstScreenSuppressedBusinessKey
         );
       }
       return false;
