@@ -4,6 +4,7 @@ const ownerDashboard = readFileSync(
   "client/src/pages/restaurant-owner-dashboard.tsx",
   "utf8",
 );
+const normalizedOwnerDashboard = ownerDashboard.replace(/\s+/g, " ");
 const ownerAttributionClient = readFileSync(
   "client/src/lib/owner-value-attribution-client.ts",
   "utf8",
@@ -54,7 +55,7 @@ const requiredUiSnippets = [
 ];
 
 for (const snippet of requiredUiSnippets) {
-  if (!ownerDashboard.includes(snippet)) {
+  if (!normalizedOwnerDashboard.includes(snippet)) {
     throw new Error(`Owner attribution UI contract missing: ${snippet}`);
   }
 }
@@ -65,8 +66,13 @@ if (!ownerAttributionClient.includes("/api/owner/value-attribution?window=")) {
   );
 }
 
-if (ownerDashboard.includes("/api/restaurants/") && ownerDashboard.includes("owner-value-dashboard")) {
-  throw new Error("Owner dashboard must consume /api/owner/value-attribution for PDA-2.3");
+if (
+  ownerDashboard.includes("/api/restaurants/") &&
+  ownerDashboard.includes("owner-value-dashboard")
+) {
+  throw new Error(
+    "Owner dashboard must consume /api/owner/value-attribution for PDA-2.3",
+  );
 }
 
 console.log("owner-value-attribution-ui.contract: PASS");
