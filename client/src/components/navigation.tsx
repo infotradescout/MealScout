@@ -233,7 +233,9 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     currentPath === "/scout" || currentPath.startsWith("/scout/");
   const isBusinessWorkspaceRoute =
     currentPath === "/restaurant-owner-dashboard" ||
-    currentPath === "/menu-builder";
+    currentPath === "/menu-builder" ||
+    currentPath === "/deal-creation" ||
+    currentPath.startsWith("/deal-edit/");
   const disableScoutHelpBubbles = isScoutRoute;
 
   const lane:

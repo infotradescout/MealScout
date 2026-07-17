@@ -57,6 +57,12 @@ type DealManagementRouteDependencies = {
   }) => Promise<void>;
 };
 
+const isStaffOrAdminUserType = (userType?: string | null) =>
+  userType === "staff" ||
+  userType === "admin" ||
+  userType === "duper_admin" ||
+  userType === "super_admin";
+
 export function registerDealManagementRoutes(
   app: Express,
   {
@@ -80,11 +86,13 @@ export function registerDealManagementRoutes(
           return res.status(404).json({ message: "Business not found" });
         }
 
-        const canManageDeals = await hasBusinessPermissionForRestaurant(
-          req.user.id,
-          restaurantId,
-          "manageDeals",
-        );
+        const canManageDeals =
+          isStaffOrAdminUserType(req.user?.userType) ||
+          (await hasBusinessPermissionForRestaurant(
+            req.user.id,
+            restaurantId,
+            "manageDeals",
+          ));
         if (!canManageDeals) {
           return res.status(403).json({ message: "Unauthorized" });
         }

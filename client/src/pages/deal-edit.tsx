@@ -516,7 +516,7 @@ export default function DealEdit() {
 
         <div className="flex flex-col gap-8 lg:flex-row">
         {/* Edit Form */}
-        <div className="flex-1 max-w-2xl">
+        <div className={showPreview ? "flex-1 max-w-2xl" : "flex-1 max-w-4xl"}>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
               {/* Basic Information */}
@@ -915,7 +915,7 @@ export default function DealEdit() {
               </Card>
 
               {/* Actions */}
-              <div className="flex space-x-4 sticky bottom-6 bg-background py-4">
+              <div className="sticky bottom-[calc(var(--scout-nav-height,58px)+env(safe-area-inset-bottom,0px))] z-30 flex space-x-4 bg-background py-4 lg:bottom-6">
                 <Button
                   type="submit"
                   disabled={updateDealMutation.isPending || !isDirty}

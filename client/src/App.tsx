@@ -653,7 +653,9 @@ function App() {
     currentPath.startsWith("/directory/");
   const usesBusinessWorkspace =
     currentPath === "/restaurant-owner-dashboard" ||
-    currentPath === "/menu-builder";
+    currentPath === "/menu-builder" ||
+    currentPath === "/deal-creation" ||
+    currentPath.startsWith("/deal-edit/");
 
   if (isShellNotFound) {
     return (

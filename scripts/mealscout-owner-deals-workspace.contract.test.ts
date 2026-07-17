@@ -11,6 +11,8 @@ const managementRoutes = read("server/routes/dealManagementRoutes.ts");
 const dealDetail = read("client/src/pages/deal-detail.tsx");
 const scoutAdapters = read("client/src/features/scout/scoutAdapters.ts");
 const dealDependencies = read("server/routes/dealRouteDependencies.ts");
+const app = read("client/src/App.tsx");
+const navigation = read("client/src/components/navigation.tsx");
 
 const ownerRouteStart = managementRoutes.indexOf(
   '"/api/owner/restaurants/:restaurantId/deals"',
@@ -23,6 +25,7 @@ assert.ok(ownerRouteStart >= 0, "owner all-deals route must exist");
 assert.ok(ownerRouteEnd > ownerRouteStart, "owner all-deals route must be bounded");
 const ownerRoute = managementRoutes.slice(ownerRouteStart, ownerRouteEnd);
 assert.match(ownerRoute, /isAuthenticated/);
+assert.match(ownerRoute, /isStaffOrAdminUserType/);
 assert.match(ownerRoute, /hasBusinessPermissionForRestaurant/);
 assert.match(ownerRoute, /"manageDeals"/);
 assert.match(ownerRoute, /storage\.getDealsByRestaurant\(restaurantId\)/);
@@ -70,7 +73,22 @@ assert.match(edit, /formData\.isOngoing \? null/);
 assert.match(edit, /formData\.availableDuringBusinessHours \? null/);
 assert.match(edit, /activeModule="deals"/);
 assert.match(edit, /workspace=deals&restaurantId=/);
+assert.match(edit, /showPreview \? "flex-1 max-w-2xl" : "flex-1 max-w-4xl"/);
+assert.match(
+  edit,
+  /bottom-\[calc\(var\(--scout-nav-height,58px\)\+env\(safe-area-inset-bottom,0px\)\)\]/,
+);
 assert.doesNotMatch(edit, /restaurantId: restaurants\[0\]\.id/);
+
+for (const source of [app, navigation]) {
+  assert.match(source, /currentPath === "\/deal-creation"/);
+  assert.match(source, /currentPath\.startsWith\("\/deal-edit\/"\)/);
+}
+
+assert.match(
+  owner,
+  /hasPublishingAccess=\{Boolean\([\s\S]*?isAdmin \|\|[\s\S]*?isStaff \|\|[\s\S]*?subscription/,
+);
 
 assert.match(dealDetail, /https:\/\/www\.mealscout\.us\/deal\/\$\{dealId\}/);
 assert.match(scoutAdapters, /`\/deal\/\$\{deal\.id\}`/);

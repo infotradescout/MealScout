@@ -4360,7 +4360,9 @@ export default function RestaurantOwnerDashboard() {
             businessName={currentRestaurant.name}
             canManageDeals={canManageDeals}
             hasPublishingAccess={Boolean(
-              (subscription as any)?.status === "active" ||
+              isAdmin ||
+                isStaff ||
+                (subscription as any)?.status === "active" ||
                 (subscription as any)?.hasAccess === true,
             )}
             stats={stats}
