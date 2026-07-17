@@ -34,7 +34,7 @@ import { ElevatedTruckHero } from "@/components/public-profile/ElevatedTruckHero
 import { ElevatedProfileHero } from "@/components/public-profile/ElevatedProfileHero";
 import { MobileActionDock } from "@/components/public-profile/MobileActionDock";
 import { rankPublicCtas } from "@/components/public-profile/profileActionPolicy";
-import { MenuHighlightsRail } from "@/components/public-profile/MenuHighlightsRail";
+import { PublicProfileMenu } from "@/components/public-profile/PublicProfileMenu";
 import { TruckSchedulePanel } from "@/components/public-profile/TruckSchedulePanel";
 import { RestaurantHoursPanel } from "@/components/public-profile/RestaurantHoursPanel";
 import { PlanYourVisitPanel } from "@/components/public-profile/PlanYourVisitPanel";
@@ -3116,26 +3116,13 @@ export default function PublicProfilePage() {
                       data-public-profile-details-grid="menu-and-visit"
                     >
                       <div
-                        className={`min-w-0 space-y-6 ${
+                        className={`min-w-0 ${
                           restaurantProfile.profileType === "truck"
                             ? "order-2 lg:order-1"
                             : "order-1"
                         }`}
                       >
-                        {restaurantProfile.menuSections?.length > 0 ||
-                        (restaurantProfile.menuVariants?.[0]?.menuSections
-                          ?.length ?? 0) > 0 ? (
-                          <MenuHighlightsRail
-                            menuSections={
-                              restaurantProfile.menuVariants?.[0]
-                                ?.menuSections ?? restaurantProfile.menuSections
-                            }
-                            featuredMenuItems={restaurantProfile.featuredMenuItems}
-                            userFavoriteItemNames={new Set()}
-                          />
-                        ) : null}
-
-                        <FullMenuSection
+                        <PublicProfileMenu
                           profile={restaurantProfile}
                           safeCtas={safeCtas}
                         />

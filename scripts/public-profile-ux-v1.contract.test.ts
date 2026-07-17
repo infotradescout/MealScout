@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 const publicProfilePage = readFileSync("client/src/pages/public-profile.tsx", "utf8");
 const elevatedTruckHero = readFileSync("client/src/components/public-profile/ElevatedTruckHero.tsx", "utf8");
 const elevatedProfileHero = readFileSync("client/src/components/public-profile/ElevatedProfileHero.tsx", "utf8");
-const menuHighlights = readFileSync("client/src/components/public-profile/MenuHighlightsRail.tsx", "utf8");
+const publicMenu = readFileSync("client/src/components/public-profile/PublicProfileMenu.tsx", "utf8");
 const truckSchedule = readFileSync("client/src/components/public-profile/TruckSchedulePanel.tsx", "utf8");
 const restaurantHours = readFileSync("client/src/components/public-profile/RestaurantHoursPanel.tsx", "utf8");
 const planYourVisit = readFileSync("client/src/components/public-profile/PlanYourVisitPanel.tsx", "utf8");
@@ -17,7 +17,7 @@ const relatedScoutRail = readFileSync("client/src/components/public-profile/Rela
 for (const snippet of [
   "ElevatedTruckHero",
   "ElevatedProfileHero",
-  "MenuHighlightsRail",
+  "PublicProfileMenu",
   "TruckSchedulePanel",
   "RestaurantHoursPanel",
   "PlanYourVisitPanel",
@@ -25,7 +25,6 @@ for (const snippet of [
   "PublicProfileDecisionBar",
   "RelatedScoutRail",
   "MobileActionDock",
-  "FullMenuSection",
 ]) {
   assert.ok(publicProfilePage.includes(snippet), `Public profile page missing elevated UX component: ${snippet}`);
 }
@@ -66,9 +65,9 @@ for (const snippet of [
 
 assert.ok(
   publicProfilePage.includes("<PublicProfileDecisionBar") &&
-    publicProfilePage.includes("<FullMenuSection") &&
+    publicProfilePage.includes("<PublicProfileMenu") &&
     publicProfilePage.includes("<RelatedScoutRail"),
-  "Public profile page must render the decision bar, full menu section, and related Scout rail at runtime.",
+  "Public profile page must render the decision bar, organized menu, and related Scout rail at runtime.",
 );
 
 assert.ok(
@@ -87,7 +86,11 @@ assert.ok(
   !publicProfilePage.includes("<WhyGoNowPanel"),
   "Profile flow must not repeat hours, schedule, deals, and events in a second signal panel.",
 );
-assert.ok(menuHighlights.includes("overflow-x-auto"), "Menu highlights must render as a horizontal rail.");
+assert.ok(
+  publicMenu.includes('data-public-profile-menu="organized"') &&
+    publicMenu.includes('data-public-menu-items="true"'),
+  "Public profiles must render one organized menu surface.",
+);
 assert.ok(truckSchedule.includes("Current stop") || truckSchedule.includes("Today"), "Truck schedule panel must answer stop/today context.");
 assert.ok(restaurantHours.includes("Hours"), "Restaurant hours panel must preserve hours context.");
 assert.ok(planYourVisit.includes("Plan your visit"), "Plan Your Visit panel must preserve action context.");

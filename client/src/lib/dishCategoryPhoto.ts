@@ -69,7 +69,7 @@ const DISH_CATEGORY_PHOTO_RULES: Array<{
     label: "Tacos",
   },
   {
-    match: /pizza|slice|calzone/i,
+    match: /pizza|\bpizza slice\b|\bslice of pizza\b|calzone/i,
     image: "/atmospheric/craving-pizza.jpg",
     label: "Pizza",
   },

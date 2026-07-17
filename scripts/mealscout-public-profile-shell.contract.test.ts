@@ -13,8 +13,8 @@ const decisionBar = read(
 const truckHero = read(
   "client/src/components/public-profile/ElevatedTruckHero.tsx",
 );
-const menuHighlights = read(
-  "client/src/components/public-profile/MenuHighlightsRail.tsx",
+const publicMenu = read(
+  "client/src/components/public-profile/PublicProfileMenu.tsx",
 );
 const relatedRail = read(
   "client/src/components/public-profile/PersonalizedRelatedRail.tsx",
@@ -34,7 +34,7 @@ test("public profiles use the bright shared MealScout shell", () => {
 test("restaurants, bars, and food trucks share the canonical profile flow", () => {
   assert.match(
     page,
-    /normalized === "restaurant" \|\| normalized === "truck" \|\| normalized === "bar"/,
+    /normalized === "restaurant"\s*\|\|\s*normalized === "truck"\s*\|\|\s*normalized === "bar"/,
   );
   assert.match(page, /<ElevatedTruckHero/);
   assert.match(page, /<ElevatedProfileHero/);
@@ -58,8 +58,8 @@ test("mobile and desktop expose one primary action layer each", () => {
 });
 
 test("food imagery and failed gallery assets remain decision-safe", () => {
-  assert.match(menuHighlights, /getDishCategoryPhoto\(item\.name, item\.description\)/);
-  assert.match(menuHighlights, /categoryPhoto\.image/);
+  assert.match(publicMenu, /getDishCategoryPhoto\(item\.name, item\.description\)/);
+  assert.match(publicMenu, /categoryPhotoImage/);
   assert.match(truckHero, /<ProfileFavoriteButton/);
   assert.match(gallerySlice, /onError=\{\(\) => setFailed\(true\)\}/);
   assert.match(gallerySlice, /Photo unavailable/);
@@ -70,12 +70,13 @@ test("published menus connect the public profile to the public menu route", () =
     page,
     /`\/menu\/\$\{encodeURIComponent\(profile\.id\)\}`/,
   );
-  assert.match(page, />\s*Full menu\s*<MenuSquare/);
+  assert.match(publicMenu, />\s*View full menu\s*<MenuSquare/);
 });
 
-test("menu rails stay constrained inside the mobile profile grid", () => {
+test("the organized menu stays constrained inside the mobile profile grid", () => {
   assert.match(page, /className="grid min-w-0 gap-6/);
-  assert.match(page, /className=\{`min-w-0 space-y-6 \$\{/);
+  assert.match(page, /className=\{`min-w-0 \$\{/);
+  assert.match(publicMenu, /className="min-w-0 scroll-mt-24 space-y-3"/);
   assert.match(page, /className=\{`min-w-0 space-y-6 lg:sticky/);
 });
 
