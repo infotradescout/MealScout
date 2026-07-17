@@ -8,6 +8,7 @@ import {
   Image,
   LayoutDashboard,
   MapPin,
+  MoreHorizontal,
   Radio,
   Settings,
   ShoppingBag,
@@ -19,6 +20,14 @@ import {
 } from "lucide-react";
 import { toCanonicalFoodBusinessType } from "@shared/businessTypes";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 export type BusinessWorkspaceModuleId =
   | "overview"
@@ -225,6 +234,21 @@ export default function BusinessWorkspaceShell({
     },
   ];
   const modules = allModules.filter((module) => module.visible);
+  const mobilePrimaryModuleIds = new Set<BusinessWorkspaceModuleId>([
+    "overview",
+    "profile",
+    "menu",
+    "availability",
+  ]);
+  const mobilePrimaryModules = modules.filter((module) =>
+    mobilePrimaryModuleIds.has(module.id),
+  );
+  const mobileSecondaryModules = modules.filter(
+    (module) => !mobilePrimaryModuleIds.has(module.id),
+  );
+  const isMobileSecondaryActive = mobileSecondaryModules.some(
+    (module) => module.id === activeModule,
+  );
 
   const active =
     modules.find((module) => module.id === activeModule) || modules[0];
@@ -361,7 +385,7 @@ export default function BusinessWorkspaceShell({
         </div>
       </aside>
 
-      <section className="min-w-0">
+      <section className="min-w-0 pb-[calc(var(--scout-nav-height,58px)+env(safe-area-inset-bottom,0px))] lg:pb-0">
         <div className="sticky top-0 z-50 border-b border-[color:var(--border-subtle)] bg-[var(--bg-popup)]/95 px-4 py-3 backdrop-blur lg:hidden">
           {identityControl}
           <div className="mt-3 flex items-center justify-between gap-2">
@@ -375,31 +399,6 @@ export default function BusinessWorkspaceShell({
               {headerActions}
             </div>
           ) : null}
-          <nav
-            data-workspace-mobile-switcher="true"
-            aria-label="Business workspace sections"
-            className="-mx-4 mt-3 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-          >
-            {modules.map((module) => {
-              const Icon = module.icon;
-              const isActive = module.id === activeModule;
-              return (
-                <Link
-                  key={module.id}
-                  href={module.href}
-                  aria-current={isActive ? "page" : undefined}
-                  className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold ${
-                    isActive
-                      ? "border-orange-300 bg-orange-100 text-orange-950"
-                      : "border-[color:var(--border-subtle)] bg-[var(--bg-surface)] text-[color:var(--text-secondary)]"
-                  }`}
-                >
-                  <Icon className="h-3.5 w-3.5" aria-hidden="true" />
-                  {module.label}
-                </Link>
-              );
-            })}
-          </nav>
         </div>
 
         <header className="sticky top-0 z-40 hidden min-h-20 items-center justify-between gap-4 border-b border-[color:var(--border-subtle)] bg-[var(--bg-popup)]/95 px-6 py-3 backdrop-blur lg:flex">
@@ -422,6 +421,102 @@ export default function BusinessWorkspaceShell({
 
         <main className="min-w-0">{children}</main>
       </section>
+
+      <nav
+        data-workspace-mobile-switcher="true"
+        aria-label="Business workspace"
+        className="fixed inset-x-0 bottom-0 z-[1100] border-t border-[color:var(--border-subtle)] bg-[var(--bg-popup)] lg:hidden"
+      >
+        <div
+          className="flex items-stretch px-1 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_22px_rgba(36,18,8,0.10)]"
+          style={{ height: "var(--scout-nav-height, 58px)" }}
+        >
+          {mobilePrimaryModules.map((module) => {
+            const Icon = module.icon;
+            const isActive = module.id === activeModule;
+            const mobileLabel =
+              module.id === "profile"
+                ? "Profile"
+                : module.id === "availability" && isFoodTruck
+                  ? "Schedule"
+                  : module.label;
+            return (
+              <Link
+                key={module.id}
+                href={module.href}
+                aria-current={isActive ? "page" : undefined}
+                className={`flex min-w-0 flex-1 flex-col items-center justify-center gap-1 px-1 transition-colors ${
+                  isActive
+                    ? "text-orange-700"
+                    : "text-[color:var(--text-muted)]"
+                }`}
+                data-testid={`workspace-mobile-nav-${module.id}`}
+              >
+                <Icon className="h-[18px] w-[18px]" aria-hidden="true" />
+                <span className="max-w-full truncate text-[10px] font-semibold leading-none">
+                  {mobileLabel}
+                </span>
+              </Link>
+            );
+          })}
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className={`flex min-w-0 flex-1 flex-col items-center justify-center gap-1 px-1 transition-colors ${
+                  isMobileSecondaryActive
+                    ? "text-orange-700"
+                    : "text-[color:var(--text-muted)]"
+                }`}
+                aria-label="More business tools"
+                aria-current={isMobileSecondaryActive ? "page" : undefined}
+                data-testid="workspace-mobile-nav-more"
+              >
+                <MoreHorizontal className="h-[18px] w-[18px]" aria-hidden="true" />
+                <span className="text-[10px] font-semibold leading-none">More</span>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              side="top"
+              align="end"
+              sideOffset={10}
+              className="mb-[env(safe-area-inset-bottom)] w-72 rounded-2xl p-2"
+            >
+              <DropdownMenuLabel className="px-3 py-2 text-xs uppercase tracking-[0.12em] text-[color:var(--text-muted)]">
+                Business tools
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {mobileSecondaryModules.map((module) => {
+                const Icon = module.icon;
+                const isActive = module.id === activeModule;
+                return (
+                  <DropdownMenuItem key={module.id} asChild>
+                    <Link
+                      href={module.href}
+                      aria-current={isActive ? "page" : undefined}
+                      className={`flex min-h-12 items-center gap-3 rounded-xl px-3 py-2 ${
+                        isActive ? "bg-orange-50 text-orange-950" : ""
+                      }`}
+                      data-testid={`workspace-mobile-more-${module.id}`}
+                    >
+                      <Icon className="h-4 w-4" aria-hidden="true" />
+                      <span className="min-w-0">
+                        <span className="block text-sm font-bold">
+                          {module.label}
+                        </span>
+                        <span className="block truncate text-xs text-[color:var(--text-muted)]">
+                          {module.description}
+                        </span>
+                      </span>
+                    </Link>
+                  </DropdownMenuItem>
+                );
+              })}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </nav>
     </div>
   );
 }

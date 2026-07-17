@@ -25,7 +25,7 @@ assert.equal(toCanonicalFoodBusinessType(" FOOD-TRUCK "), "food_truck");
 assert.equal(toCanonicalFoodBusinessType("brewery"), "bar");
 assert.equal(toCanonicalFoodBusinessType("caterer"), "caterer");
 assert.equal(toCanonicalFoodBusinessType("private_chef"), "private_chef");
-assert.equal(toCanonicalFoodBusinessType("venue"), null);
+assert.equal(toCanonicalFoodBusinessType("venue"), "restaurant");
 assert.equal(toCanonicalFoodBusinessType("ghost_kitchen"), null);
 assert.equal(getBusinessCapabilities("food_truck")?.liveLocationBroadcast, true);
 assert.equal(getBusinessCapabilities("private_chef")?.recurringHours, false);
