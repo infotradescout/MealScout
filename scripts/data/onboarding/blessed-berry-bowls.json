@@ -1,0 +1,13 @@
+{
+  "restaurantId": "e77ac77a-c432-42d0-ac0f-22c48b6306c9",
+  "slug": "blessed-berry-bowls",
+  "description": "Blessed Berry Bowls — a Pensacola-based mobile food vendor specializing in handcrafted açaí bowls, smoothies, Dubai chocolate-covered strawberries, and fresh fruit.",
+  "phone": "(256) 479-6490",
+  "address": "1922 Creighton Rd, Ferry Pass, FL 32504",
+  "city": "Ferry Pass",
+  "state": "FL",
+  "facebookPageUrl": "https://www.facebook.com/p/Blessed-Berry-Bowls-61561713173410/",
+  "operatingHours": {
+    "wed": [{ "open": "12:00", "close": "17:00" }]
+  }
+}

@@ -76,6 +76,7 @@ import OwnerProfileWorkspace, {
   type OwnerProfileDraft,
   type OwnerProfileMediaItem,
 } from "@/components/owner-profile-workspace";
+import OwnerDealsWorkspace from "@/components/owner-deals-workspace";
 import RestaurantCreditRedemptionForm from "@/components/RestaurantCreditRedemptionForm";
 import { format, subDays, startOfMonth, endOfMonth } from "date-fns";
 import { useFoodTruckSocket } from "@/hooks/useFoodTruckSocket";
@@ -94,7 +95,7 @@ import {
   Cell,
 } from "recharts";
 import { z } from "zod";
-import type { Deal, Restaurant } from "@shared/schema";
+import type { Restaurant } from "@shared/schema";
 import type { PublicRestaurantProfile } from "@shared/publicProfiles";
 import { computeProfileCompletionStatus } from "@shared/profileCompletionStatus";
 import { SEOHead } from "@/components/seo-head";
@@ -381,12 +382,6 @@ export default function RestaurantOwnerDashboard() {
       },
       enabled: !!selectedRestaurant && hasAnalyticsAccess,
     });
-
-  // Fetch deals for selected restaurant
-  const { data: deals = [], isLoading: loadingDeals } = useQuery<Deal[]>({
-    queryKey: [`/api/deals/restaurant/${selectedRestaurant}`],
-    enabled: !!selectedRestaurant && canManageDeals,
-  });
 
   const { data: truckBookings = [], isLoading: loadingTruckBookings } =
     useQuery<TruckBookingItem[]>({
@@ -1582,68 +1577,6 @@ export default function RestaurantOwnerDashboard() {
     });
   };
 
-  // Toggle deal status
-  const toggleDealMutation = useMutation({
-    mutationFn: async ({
-      dealId,
-      isActive,
-    }: {
-      dealId: string;
-      isActive: boolean;
-    }) => {
-      return await apiRequest("PATCH", `/api/deals/${dealId}`, {
-        isActive: !isActive,
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: [`/api/deals/restaurant/${selectedRestaurant}`],
-      });
-      toast({
-        title: "Deal Updated",
-        description: "Deal status has been updated successfully.",
-      });
-    },
-  });
-
-  // Delete deal
-  const deleteDealMutation = useMutation({
-    mutationFn: async (dealId: string) => {
-      return await apiRequest("DELETE", `/api/deals/${dealId}`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: [`/api/deals/restaurant/${selectedRestaurant}`],
-      });
-      toast({
-        title: "Deal Deleted",
-        description: "Deal has been deleted successfully.",
-      });
-    },
-  });
-
-  // Update deal
-  const updateDealMutation = useMutation({
-    mutationFn: async ({
-      dealId,
-      updates,
-    }: {
-      dealId: string;
-      updates: any;
-    }) => {
-      return await apiRequest("PATCH", `/api/deals/${dealId}`, updates);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: [`/api/deals/restaurant/${selectedRestaurant}`],
-      });
-      toast({
-        title: "Deal Updated",
-        description: "Deal has been updated successfully.",
-      });
-    },
-  });
-
   // Food truck mutations
   const startFoodTruckSessionMutation = useMutation({
     mutationFn: async (location: { lat: number; lng: number }) => {
@@ -2003,19 +1936,6 @@ export default function RestaurantOwnerDashboard() {
     return `${displayHour}:${minutes} ${ampm}`;
   };
 
-  const getDealTypeColor = (type: string) => {
-    switch (type) {
-      case "breakfast":
-        return "bg-yellow-100 text-yellow-800";
-      case "lunch":
-        return "bg-[color:var(--accent-text)]/12 text-[color:var(--accent-text)]";
-      case "dinner":
-        return "bg-purple-100 text-purple-800";
-      default:
-        return "bg-[var(--bg-surface-muted)] text-[color:var(--text-secondary)]";
-    }
-  };
-
   const bookingCancelMutation = useMutation({
     mutationFn: async (bookingId: string) => {
       const response = await fetch(`/api/bookings/${bookingId}/cancel`, {
@@ -2050,15 +1970,12 @@ export default function RestaurantOwnerDashboard() {
     },
   });
   const availableTabs = [
-    ...(canManageDeals ? (["active", "inactive"] as const) : []),
     ...(canViewAnalytics ? (["analytics"] as const) : []),
     ...(canManageBilling ? (["credits"] as const) : []),
     ...(canManageParkingPass ? (["bookings", "foodtruck"] as const) : []),
   ];
   const requestedDefaultTab =
-    workspaceMode === "deals"
-      ? "active"
-      : workspaceMode === "audience"
+    workspaceMode === "audience"
         ? "analytics"
         : setupMode === "schedule" || dashboardParams.get("truck") === "1"
           ? "foodtruck"
@@ -2120,28 +2037,6 @@ export default function RestaurantOwnerDashboard() {
   };
   const ownerHeaderActions = (
     <div className="flex flex-nowrap items-center gap-2">
-      {activeWorkspaceModule === "deals" && canManageDeals ? (
-        (subscription as any)?.status === "active" ||
-        (subscription as any)?.hasAccess === true ? (
-          <Link href={buildOwnerToolHref("/deal-creation")}>
-            <LongPressHelp description="Create a new deal that appears on your public MealScout profile.">
-              <Button size="sm" data-testid="button-create-deal">
-                <Plus className="mr-1.5 h-4 w-4" />
-                New special
-              </Button>
-            </LongPressHelp>
-          </Link>
-        ) : (
-          <Link href="/subscribe?next=/deal-creation&reason=create_deals">
-            <LongPressHelp description="Unlock deal publishing so customers can discover your specials.">
-              <Button size="sm" data-testid="button-subscribe">
-                <CreditCard className="mr-1.5 h-4 w-4" />
-                Unlock deals
-              </Button>
-            </LongPressHelp>
-          </Link>
-        )
-      ) : null}
       {activeWorkspaceModule === "overview" && canManageBilling ? (
         <Link href={buildOwnerToolHref("/subscribe")}>
           <Button
@@ -4459,8 +4354,21 @@ export default function RestaurantOwnerDashboard() {
           })()}
 
         {/* Stats Cards */}
+        {activeWorkspaceModule === "deals" ? (
+          <OwnerDealsWorkspace
+            restaurantId={selectedRestaurant}
+            businessName={currentRestaurant.name}
+            canManageDeals={canManageDeals}
+            hasPublishingAccess={Boolean(
+              (subscription as any)?.status === "active" ||
+                (subscription as any)?.hasAccess === true,
+            )}
+            stats={stats}
+          />
+        ) : null}
+
+        {/* Stats Cards */}
         {(activeWorkspaceModule === "overview" ||
-          activeWorkspaceModule === "deals" ||
           activeWorkspaceModule === "audience") &&
           (canManageDeals || canViewAnalytics) && (
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
@@ -4514,9 +4422,10 @@ export default function RestaurantOwnerDashboard() {
             </div>
           )}
 
-        {/* Deals Management */}
+        {/* Business operations */}
         {activeWorkspaceModule !== "profile" &&
-        activeWorkspaceModule !== "media" ? (
+        activeWorkspaceModule !== "media" &&
+        activeWorkspaceModule !== "deals" ? (
           <Tabs
             id="owner-workspace-operations"
             key={defaultTab}
@@ -4526,12 +4435,6 @@ export default function RestaurantOwnerDashboard() {
             <TabsList
               className={setupMode === "schedule" ? "hidden" : "w-full"}
             >
-              {canManageDeals ? (
-                <TabsTrigger value="active">Active Specials</TabsTrigger>
-              ) : null}
-              {canManageDeals ? (
-                <TabsTrigger value="inactive">Inactive Specials</TabsTrigger>
-              ) : null}
               {canViewAnalytics ? (
                 <TabsTrigger value="analytics">Analytics</TabsTrigger>
               ) : null}
@@ -4555,205 +4458,6 @@ export default function RestaurantOwnerDashboard() {
                 </TabsTrigger>
               ) : null}
             </TabsList>
-
-            {canManageDeals ? (
-              <TabsContent value="active" className="space-y-4">
-                {loadingDeals ? (
-                  <Card>
-                    <CardContent className="flex items-center justify-center py-12">
-                      <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
-                    </CardContent>
-                  </Card>
-                ) : (
-                  deals
-                    .filter((deal) => deal.isActive)
-                    .map((deal) => (
-                      <Card key={deal.id}>
-                        <CardContent className="p-6">
-                          <div className="flex justify-between items-start">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-3 mb-2">
-                                <h3 className="text-lg font-semibold">
-                                  {deal.title}
-                                </h3>
-                                <Badge
-                                  className={getDealTypeColor(deal.dealType)}
-                                >
-                                  {deal.dealType}
-                                </Badge>
-                              </div>
-
-                              <p className="text-muted-foreground mb-3">
-                                {deal.description}
-                              </p>
-
-                              <div className="flex flex-wrap gap-4 text-sm">
-                                <div className="flex items-center gap-1">
-                                  <DollarSign className="h-4 w-4" />
-                                  <span className="font-medium">
-                                    {deal.discountValue}
-                                  </span>
-                                </div>
-                                <div className="flex items-center gap-1">
-                                  <Clock className="h-4 w-4" />
-                                  <span>
-                                    {deal.availableDuringBusinessHours
-                                      ? "During business hours"
-                                      : deal.startTime && deal.endTime
-                                        ? `${formatTime(deal.startTime)} - ${formatTime(
-                                            deal.endTime,
-                                          )}`
-                                        : "All day"}
-                                  </span>
-                                </div>
-                                {deal.totalUsesLimit && (
-                                  <div className="flex items-center gap-1">
-                                    <Users className="h-4 w-4" />
-                                    <span>
-                                      {deal.currentUses || 0} /{" "}
-                                      {deal.totalUsesLimit} claimed
-                                    </span>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-
-                            <div className="flex gap-2">
-                              <Link href={`/deal/${deal.id}`}>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  data-testid={`button-view-${deal.id}`}
-                                >
-                                  <Eye className="h-4 w-4 mr-1" />
-                                  View
-                                </Button>
-                              </Link>
-                              <Link href={`/deal-edit/${deal.id}`}>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  data-testid={`button-edit-${deal.id}`}
-                                >
-                                  <Edit className="h-4 w-4 mr-1" />
-                                  Edit
-                                </Button>
-                              </Link>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() =>
-                                  toggleDealMutation.mutate({
-                                    dealId: deal.id,
-                                    isActive: Boolean(deal.isActive),
-                                  })
-                                }
-                                data-testid={`button-deactivate-${deal.id}`}
-                              >
-                                {deal.isActive ? "Pause" : "Activate"}
-                              </Button>
-                              <Button
-                                variant="destructive"
-                                size="sm"
-                                onClick={() => {
-                                  if (
-                                    confirm(
-                                      `Are you sure you want to delete "${deal.title}"? This cannot be undone.`,
-                                    )
-                                  ) {
-                                    deleteDealMutation.mutate(deal.id);
-                                  }
-                                }}
-                                data-testid={`button-delete-${deal.id}`}
-                              >
-                                Delete
-                              </Button>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))
-                )}
-
-                {deals.filter((deal) => deal.isActive).length === 0 &&
-                  !loadingDeals && (
-                    <Card>
-                      <CardContent className="text-center py-12">
-                        <p className="text-muted-foreground mb-4">
-                          No active specials
-                        </p>
-                        <Link href="/deal-creation">
-                          <Button data-testid="button-create-first-deal">
-                            <Plus className="h-4 w-4 mr-2" />
-                            Create Your First Special
-                          </Button>
-                        </Link>
-                      </CardContent>
-                    </Card>
-                  )}
-              </TabsContent>
-            ) : null}
-
-            {canManageDeals ? (
-              <TabsContent value="inactive" className="space-y-4">
-                {deals
-                  .filter((deal) => !deal.isActive)
-                  .map((deal) => (
-                    <Card key={deal.id} className="opacity-75">
-                      <CardContent className="p-6">
-                        <div className="flex justify-between items-start">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-3 mb-2">
-                              <h3 className="text-lg font-semibold">
-                                {deal.title}
-                              </h3>
-                              <Badge variant="secondary">Inactive</Badge>
-                            </div>
-                            <p className="text-muted-foreground mb-3">
-                              {deal.description}
-                            </p>
-                          </div>
-
-                          <div className="flex gap-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() =>
-                                toggleDealMutation.mutate({
-                                  dealId: deal.id,
-                                  isActive: Boolean(deal.isActive),
-                                })
-                              }
-                              data-testid={`button-activate-${deal.id}`}
-                            >
-                              Activate
-                            </Button>
-                            <Button
-                              variant="destructive"
-                              size="sm"
-                              onClick={() => deleteDealMutation.mutate(deal.id)}
-                              data-testid={`button-delete-inactive-${deal.id}`}
-                            >
-                              Delete
-                            </Button>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-
-                {deals.filter((deal) => !deal.isActive).length === 0 &&
-                  !loadingDeals && (
-                    <Card>
-                      <CardContent className="text-center py-12">
-                        <p className="text-muted-foreground">
-                          No inactive specials
-                        </p>
-                      </CardContent>
-                    </Card>
-                  )}
-              </TabsContent>
-            ) : null}
 
             {canViewAnalytics ? (
               <TabsContent value="analytics">
