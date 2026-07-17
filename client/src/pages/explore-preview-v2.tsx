@@ -68,7 +68,10 @@ import { SEOHead } from "@/components/seo-head";
 import { ScoutMapHero } from "@/components/scout/ScoutMapHero";
 import { PlaceAutocompleteInput } from "@/components/maps/place-autocomplete-input";
 import { ActiveScenePanel } from "@/components/scout/ActiveScenePanel";
-import type { ScoutSearchFilterId } from "@/components/scout/ScoutSearchDock";
+import {
+  ScoutSearchDock,
+  type ScoutSearchFilterId,
+} from "@/components/scout/ScoutSearchDock";
 import { useScoutNavSearch } from "@/components/scout/ScoutNavSearchContext";
 import { ScoutEmptyState as ScoutSceneEmptyState } from "@/components/scout/ScoutEmptyState";
 import {
@@ -2597,6 +2600,7 @@ export default function ExplorePreview() {
     searchMode: scoutSearchMode,
     query: scoutSearchQuery,
     activeFilter: scoutSearchFilter,
+    openSearch: openScoutSearch,
     closeSearch: closeScoutSearch,
     setQuery: setScoutSearchQuery,
     setActiveFilter: setScoutSearchFilter,
@@ -5292,12 +5296,35 @@ export default function ExplorePreview() {
       />
 
       <main
-        className={`relative z-10 overflow-x-hidden md:-mt-16 ${
+        className={`relative z-10 overflow-x-hidden ${
           sheetState === "fullMap"
             ? ""
             : "pb-[calc(8.5rem+env(safe-area-inset-bottom,0px))] md:mx-auto md:max-w-[1120px] md:px-4 md:pb-8 xl:max-w-[1280px]"
         }`}
       >
+        {sheetState !== "fullMap" ? (
+          <div
+            className="relative z-30 bg-[#1c130c] pt-3 md:pt-4"
+            data-scout-search-surface="top"
+          >
+            <ScoutSearchDock
+              placement="inline"
+              searchMode={scoutSearchMode}
+              query={scoutSearchQuery}
+              activeFilter={scoutSearchFilter}
+              resultSummary={
+                scoutSearchMode
+                  ? `${localSearchContentCount} local result${localSearchContentCount === 1 ? "" : "s"} near ${shortLocation}`
+                  : `Search near ${shortLocation}`
+              }
+              onOpen={openScoutSearch}
+              onClose={closeScoutSearch}
+              onQueryChange={setScoutSearchQuery}
+              onFilterChange={setScoutSearchFilter}
+            />
+          </div>
+        ) : null}
+
         {/* ============================================================
              SCOUT SURFACE
              Default: compact map accessory.

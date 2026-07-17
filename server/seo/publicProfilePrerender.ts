@@ -492,7 +492,7 @@ async function restaurantPage(baseUrl: string, restaurantId: string) {
         ? [{ label: "Catering", href: `${canonicalPath}?service=catering` }]
         : []),
       { label: "Find food nearby", href: "/search" },
-      { label: "Open Scout", href: "/scout" },
+      { label: "Scout", href: "/scout" },
     ],
     body: [
       row.cuisineType ? `Cuisine: ${row.cuisineType}` : "",

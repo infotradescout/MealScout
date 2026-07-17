@@ -8,6 +8,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import Navigation from "@/components/navigation";
+import BusinessWorkspaceShell from "@/components/business-workspace-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -56,7 +57,10 @@ import {
   EyeOff,
   Settings,
 } from "lucide-react";
-import { Link } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
+import type { Restaurant } from "@shared/schema";
+import { isBarBusinessType, isTruckBusinessType } from "@shared/businessTypes";
+import { buildPublicProfilePath } from "@/lib/public-profile-path";
 
 const formatMoney = (cents: number) =>
   `$${(Number(cents || 0) / 100).toFixed(2)}`;
@@ -141,8 +145,9 @@ interface OrderingReadiness {
 // ──────────────────────────────── helpers ─────────────────────────────────────
 function useRestaurantId(): string | null {
   const { user } = useAuth();
+  const search = useSearch();
   if (typeof window !== "undefined") {
-    const params = new URLSearchParams(window.location.search);
+    const params = new URLSearchParams(search);
     const queryRestaurantId = String(params.get("restaurantId") || "").trim();
     if (queryRestaurantId) return queryRestaurantId;
   }
@@ -214,6 +219,8 @@ function normalizeFullMenusPayload(payload: unknown): FullMenu[] {
 // ──────────────────────────────── main page ───────────────────────────────────
 export default function MenuBuilderPage() {
   const restaurantId = useRestaurantId();
+  const { user } = useAuth();
+  const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [selectedMenuId, setSelectedMenuId] = useState<string | null>(null);
   const [showNewMenuDialog, setShowNewMenuDialog] = useState(false);
@@ -229,6 +236,63 @@ export default function MenuBuilderPage() {
   const [posNotes, setPosNotes] = useState("");
   const [externalJson, setExternalJson] = useState("");
   const [isRequestingPosSync, setIsRequestingPosSync] = useState(false);
+
+  const { data: businesses = [], isLoading: loadingBusinesses } = useQuery<
+    Restaurant[]
+  >({
+    queryKey: ["/api/restaurants/my-restaurants"],
+    enabled: !!user,
+  });
+  const { data: businessAccess } = useQuery<{
+    hasAnyAccess: boolean;
+    permissions: {
+      manageDeals: boolean;
+      viewAnalytics: boolean;
+    };
+  }>({
+    queryKey: ["/api/business-access/me"],
+    enabled: !!user,
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+  const currentBusiness =
+    businesses.find((business) => business.id === restaurantId) || null;
+  const isOwnerRole =
+    user?.userType === "restaurant_owner" ||
+    user?.userType === "food_truck" ||
+    user?.userType === "admin" ||
+    user?.userType === "duper_admin" ||
+    user?.userType === "super_admin" ||
+    user?.userType === "staff";
+  const currentEntityType =
+    currentBusiness?.isFoodTruck ||
+    isTruckBusinessType(currentBusiness?.businessType)
+      ? "truck"
+      : isBarBusinessType(currentBusiness?.businessType)
+        ? "bar"
+        : "restaurant";
+  const publicProfileHref = currentBusiness
+    ? buildPublicProfilePath({
+        entityType: currentEntityType,
+        id: currentBusiness.id,
+        name: currentBusiness.name,
+      })
+    : null;
+  const scheduleHref = restaurantId
+    ? `/restaurant-owner-dashboard?${new URLSearchParams({
+        restaurantId,
+        setup: "schedule",
+        ...(currentEntityType === "truck" ? { truck: "1" } : {}),
+      }).toString()}`
+    : "/restaurant-owner-dashboard?setup=schedule";
+
+  const handleWorkspaceBusinessChange = (businessId: string) => {
+    setSelectedMenuId(null);
+    const params = new URLSearchParams(window.location.search);
+    params.set("restaurantId", businessId);
+    const query = params.toString();
+    setLocation(`/menu-builder${query ? `?${query}` : ""}`);
+  };
 
   useEffect(() => {
     if (!menuSourceUrl.trim()) return;
@@ -455,48 +519,74 @@ export default function MenuBuilderPage() {
     );
   }
 
+  if (loadingBusinesses) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[var(--bg-layered)]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!currentBusiness) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[var(--bg-layered)] px-4">
+        <Card className="w-full max-w-md">
+          <CardContent className="p-6 text-center">
+            <h1 className="text-lg font-bold">Business unavailable</h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              This menu is not linked to a business you can manage.
+            </p>
+            <Button asChild className="mt-4">
+              <Link href="/dashboard">Back to overview</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   const menus = toArray<Menu>(menusQuery.data);
   const selectedMenu = normalizeFullMenu(fullMenuQuery.data);
 
   return (
-    <div className="min-h-screen bg-background">
-      <Navigation />
-      <div className="max-w-6xl mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2">
-              <UtensilsCrossed className="w-6 h-6" />
-              Menu Builder
-            </h1>
-            <p className="text-muted-foreground text-sm mt-1">
-              Create and manage your online menus for pickup &amp; dine-in
-              ordering.
-            </p>
-          </div>
-          <div className="flex gap-2">
-            {selectedMenuId && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowImportDialog(true)}
-              >
-                <Upload className="w-4 h-4 mr-2" />
-                Import Items
-              </Button>
-            )}
-            <Button size="sm" onClick={() => setShowNewMenuDialog(true)}>
-              <Plus className="w-4 h-4 mr-2" />
-              New Menu
+    <BusinessWorkspaceShell
+      activeModule="menu"
+      business={currentBusiness}
+      businesses={businesses}
+      onBusinessChange={handleWorkspaceBusinessChange}
+      publicProfileHref={publicProfileHref}
+      capabilities={{
+        deals: isOwnerRole || businessAccess?.permissions?.manageDeals === true,
+        audience:
+          isOwnerRole || businessAccess?.permissions?.viewAnalytics === true,
+        team: isOwnerRole,
+        payments: isOwnerRole,
+      }}
+      headerActions={
+        <div className="flex flex-nowrap items-center gap-2">
+          {selectedMenuId ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowImportDialog(true)}
+            >
+              <Upload className="mr-1.5 h-4 w-4" />
+              Import items
             </Button>
-          </div>
+          ) : null}
+          <Button size="sm" onClick={() => setShowNewMenuDialog(true)}>
+            <Plus className="mr-1.5 h-4 w-4" />
+            New menu
+          </Button>
         </div>
-
-        <Card className="mb-6 border-amber-300/30 bg-amber-50/70 dark:bg-amber-950/20">
+      }
+    >
+      <div className="mx-auto min-h-screen max-w-7xl px-4 py-6 lg:px-6 lg:py-8">
+        <Card className="mb-6 border-orange-200 bg-orange-50/70">
           <CardHeader className="pb-3">
             <CardTitle className="text-lg">Menu setup</CardTitle>
             <CardDescription>
-              Import what you already have, then review it before publishing to Scout.
+              Import what you already have, then review it before publishing to MealScout.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -542,7 +632,7 @@ export default function MenuBuilderPage() {
                   </Button>
                 </Link>
               ) : null}
-              <Link href="/restaurant-owner-dashboard?src=menu-builder&setup=schedule">
+              <Link href={scheduleHref}>
                 <Button type="button" variant="outline">
                   Schedule and hours
                 </Button>
@@ -890,7 +980,7 @@ export default function MenuBuilderPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </BusinessWorkspaceShell>
   );
 }
 

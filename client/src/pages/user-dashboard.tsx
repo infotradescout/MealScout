@@ -167,7 +167,7 @@ export default function UserDashboard() {
 
     if (nearbyNow.length === 0) {
       return {
-        title: "Open Scout to refresh nearby options",
+        title: "Scout to refresh your options",
         description: "Deals you use will appear here as soon as nearby spots load.",
         ctaLabel: "Check nearby food now",
         ctaHref: "/scout",
@@ -177,7 +177,7 @@ export default function UserDashboard() {
     return {
       title: "What would you like to try next?",
       description: "Open one spot now and decide whether to go, call, or order.",
-      ctaLabel: "Open Scout",
+      ctaLabel: "Scout",
       ctaHref: "/scout",
     };
   }, [favoriteRestaurants.length, nearbyNow.length, recentPlaces.length]);
@@ -266,7 +266,7 @@ export default function UserDashboard() {
             className="bg-primary text-black font-bold uppercase tracking-[0.2em] text-[10px] rounded-xl h-12"
           >
             <Link href="/scout">
-              Open Scout
+              Scout
               <ArrowRight className="h-4 w-4 ml-2" />
             </Link>
           </Button>
@@ -320,7 +320,7 @@ export default function UserDashboard() {
               <Heart className="h-8 w-8 text-white/25 mx-auto mb-3" />
               <p className="text-sm font-bold text-white">Save places you want to try</p>
               <p className="text-xs text-white/45 mt-2">
-                Open Scout, explore once, and save your favorites for next time.
+                Scout, explore what looks good, and save your favorites for next time.
               </p>
             </div>
           )}
@@ -403,7 +403,7 @@ export default function UserDashboard() {
                 No nearby deals yet
               </p>
               <p className="text-xs text-white/45 mt-2">
-                Check back soon or open Scout to scan the neighborhood.
+                Check back soon or scout the neighborhood again.
               </p>
             </div>
           )}

@@ -79,7 +79,7 @@ const DISH_CATEGORY_PHOTO_RULES: Array<{
     label: "Noodles",
   },
   {
-    match: /ice cream|dessert|cake|cookie|donut|pastry|sweet|churro/i,
+    match: /ice cream|dessert|\bcake\b|cookie|donut|pastry|churro/i,
     image: "/atmospheric/craving-dessert.jpg",
     label: "Desserts",
   },

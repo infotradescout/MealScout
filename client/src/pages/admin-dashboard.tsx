@@ -12919,7 +12919,7 @@ export default function AdminDashboard() {
                     <div className="flex flex-wrap items-center gap-2">
                       <Link href="/scout">
                         <Button size="sm" variant="outline">
-                          Open Scout Discovery
+                          Scout as a diner
                         </Button>
                       </Link>
                       <p className="text-xs text-muted-foreground">

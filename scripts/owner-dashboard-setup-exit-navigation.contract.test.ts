@@ -15,10 +15,10 @@ const requiredPageSnippets = [
 ];
 
 const requiredNonSetupLinks = [
-  "<Link href=\"/deal-creation\">",
+  "<Link href={buildOwnerToolHref(\"/deal-creation\")}>",
   "<Link href=\"/events\">",
-  "<Link href=\"/hiring?tab=owner\">",
-  "<Link href=\"/subscribe\">",
+  "<Link href={buildOwnerToolHref(\"/hiring?tab=owner\")}>",
+  "<Link href={buildOwnerToolHref(\"/subscribe\")}>",
 ];
 
 const forbiddenSnippets = [

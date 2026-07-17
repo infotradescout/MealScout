@@ -14,10 +14,10 @@ const guestRoutes = appSource.slice(guestRoutesStart, guestRoutesEnd);
 // /user-dashboard used to be duplicated inline in both the guest and
 // authenticated route blocks; a route-consolidation refactor moved it
 // (once) into a shared SharedPublicRoutes() component that both blocks
-// render via <SharedPublicRoutes />, so it's no longer a literal <Route>
+// expand via SharedPublicRoutes(), so it's no longer a literal <Route>
 // tag inside this slice -- check for the shared-component reference and
 // that /user-dashboard is actually defined inside that component instead.
-const sharedRoutesIndex = guestRoutes.indexOf("<SharedPublicRoutes />");
+const sharedRoutesIndex = guestRoutes.indexOf("{SharedPublicRoutes()}");
 const guestBusinessCatchallIndex = guestRoutes.indexOf(
   '<Route path="/:businessSlug" component={CleanPublicProfileRoute} />',
 );

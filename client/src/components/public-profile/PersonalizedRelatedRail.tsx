@@ -139,7 +139,7 @@ export function PersonalizedRelatedRail({
             href="/scout"
             className="rounded-xl border border-white/10 bg-[#0f0d0b] px-3 py-2.5 text-sm text-white/80 hover:bg-white/5"
           >
-            Open Scout
+            Scout
           </a>
           {citySlug ? (
             <a

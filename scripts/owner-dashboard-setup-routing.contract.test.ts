@@ -7,10 +7,11 @@ const requiredSnippets = [
   'href={buildOwnerSetupHref("profile")}',
   'href={buildOwnerSetupHref("menu")}',
   'href={buildOwnerSetupHref("profile-media")}',
-  'href={buildOwnerSetupHref("schedule", isFoodTruck ? { truck: "1" } : undefined)}',
+  'href={buildOwnerSetupHref("schedule", currentIsTruckBusiness ? { truck: "1" } : undefined)}',
   'setupMode === "profile" || setupMode === "profile-media"',
   'setupMode === "menu" ? (',
   'setupMode === "schedule" ? (',
+  '.getElementById("owner-workspace-operations")',
   "setupPanelRef.current.scrollIntoView",
 ];
 
