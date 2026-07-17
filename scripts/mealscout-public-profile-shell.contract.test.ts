@@ -73,6 +73,12 @@ test("published menus connect the public profile to the public menu route", () =
   assert.match(page, />\s*Full menu\s*<MenuSquare/);
 });
 
+test("menu rails stay constrained inside the mobile profile grid", () => {
+  assert.match(page, /className="grid min-w-0 gap-6/);
+  assert.match(page, /className=\{`min-w-0 space-y-6 \$\{/);
+  assert.match(page, /className=\{`min-w-0 space-y-6 lg:sticky/);
+});
+
 test("fixed-location heroes do not append locality to a display-ready address", () => {
   const hero = read(
     "client/src/components/public-profile/ElevatedProfileHero.tsx",

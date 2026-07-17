@@ -3112,11 +3112,11 @@ export default function PublicProfilePage() {
 
                   {restaurantHasMenuSurface ? (
                     <div
-                      className="grid gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(18rem,0.85fr)] lg:items-start"
+                      className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(18rem,0.85fr)] lg:items-start"
                       data-public-profile-details-grid="menu-and-visit"
                     >
                       <div
-                        className={`space-y-6 ${
+                        className={`min-w-0 space-y-6 ${
                           restaurantProfile.profileType === "truck"
                             ? "order-2 lg:order-1"
                             : "order-1"
@@ -3142,7 +3142,7 @@ export default function PublicProfilePage() {
                       </div>
 
                       <aside
-                        className={`space-y-6 lg:sticky lg:top-24 ${
+                        className={`min-w-0 space-y-6 lg:sticky lg:top-24 ${
                           restaurantProfile.profileType === "truck"
                             ? "order-1 lg:order-2"
                             : "order-2"
