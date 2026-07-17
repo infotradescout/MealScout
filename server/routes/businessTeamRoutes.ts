@@ -1,5 +1,5 @@
 import type { Express } from "express";
-import { and, desc, eq, gte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import { createHash, randomBytes } from "crypto";
 import { z } from "zod";
 
@@ -200,7 +200,49 @@ export function registerBusinessTeamRoutes(app: Express) {
   app.get("/api/business/team", isAuthenticated, async (req: any, res) => {
     try {
       const context = await getBusinessAccessContext(req.user.id);
-      const accessibleRestaurantIds = context.restaurants
+      const requestedRestaurantId = String(req.query.restaurantId || "").trim();
+      let scopedRestaurants = context.restaurants;
+
+      if (requestedRestaurantId) {
+        const [requestedRestaurant] = await db
+          .select({
+            id: restaurants.id,
+            name: restaurants.name,
+            businessType: restaurants.businessType,
+            ownerId: restaurants.ownerId,
+          })
+          .from(restaurants)
+          .where(eq(restaurants.id, requestedRestaurantId))
+          .limit(1);
+
+        if (!requestedRestaurant) {
+          return res.status(404).json({ message: "Business not found" });
+        }
+
+        const contextRestaurant = context.restaurants.find(
+          (restaurant) => restaurant.id === requestedRestaurantId,
+        );
+        if (!isElevated(req.user) && !contextRestaurant?.isOwner) {
+          return res.status(403).json({
+            message: "Only business owners can manage team access.",
+          });
+        }
+
+        scopedRestaurants = [
+          contextRestaurant || {
+            ...requestedRestaurant,
+            isOwner: false,
+            permissions: {
+              manageDeals: true,
+              manageParkingPass: true,
+              viewAnalytics: true,
+              manageProfile: true,
+            },
+          },
+        ];
+      }
+
+      const accessibleRestaurantIds = scopedRestaurants
         .filter((r) => r.isOwner || isElevated(req.user))
         .map((r) => r.id);
 
@@ -208,7 +250,7 @@ export function registerBusinessTeamRoutes(app: Express) {
         return res.json({
           members: [],
           invites: [],
-          restaurants: context.restaurants,
+          restaurants: scopedRestaurants,
         });
       }
 
@@ -226,12 +268,16 @@ export function registerBusinessTeamRoutes(app: Express) {
         })
         .from(businessStaffMemberships)
         .innerJoin(users, eq(users.id, businessStaffMemberships.userId))
-        .where(eq(businessStaffMemberships.status, "active"))
+        .where(
+          and(
+            eq(businessStaffMemberships.status, "active"),
+            inArray(
+              businessStaffMemberships.restaurantId,
+              accessibleRestaurantIds,
+            ),
+          ),
+        )
         .orderBy(desc(businessStaffMemberships.createdAt));
-
-      const scopedMembers = members.filter((m: { restaurantId: string }) =>
-        accessibleRestaurantIds.includes(m.restaurantId),
-      );
 
       const invites = await db
         .select({
@@ -245,16 +291,15 @@ export function registerBusinessTeamRoutes(app: Express) {
           acceptedAt: businessStaffInvites.acceptedAt,
         })
         .from(businessStaffInvites)
+        .where(
+          inArray(businessStaffInvites.restaurantId, accessibleRestaurantIds),
+        )
         .orderBy(desc(businessStaffInvites.createdAt));
 
-      const scopedInvites = invites.filter((invite: { restaurantId: string }) =>
-        accessibleRestaurantIds.includes(invite.restaurantId),
-      );
-
       res.json({
-        members: scopedMembers,
-        invites: scopedInvites,
-        restaurants: context.restaurants,
+        members,
+        invites,
+        restaurants: scopedRestaurants,
       });
     } catch (error) {
       console.error("Error loading business team:", error);
