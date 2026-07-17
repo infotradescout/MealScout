@@ -127,12 +127,15 @@ assert.match(
 );
 
 const immediateStackStart = scoutPage.indexOf("function ScoutFirstScreenDecisionStack(");
-const activeSceneStart = scoutPage.indexOf("function ActiveSceneContent(");
-assert.ok(
-  immediateStackStart >= 0 && activeSceneStart > immediateStackStart,
-  "Scout first-screen decision stack must be defined before the full rail runtime.",
+const immediateStackEnd = scoutPage.indexOf(
+  "function ScoutNetworkScopeBadge(",
+  immediateStackStart,
 );
-const immediateStackSource = scoutPage.slice(immediateStackStart, activeSceneStart);
+assert.ok(
+  immediateStackStart >= 0 && immediateStackEnd > immediateStackStart,
+  "Scout first-screen decision stack must have an explicit component boundary.",
+);
+const immediateStackSource = scoutPage.slice(immediateStackStart, immediateStackEnd);
 assert.ok(
   !immediateStackSource.includes("NearbyRestaurantCard"),
   "Immediate decision stack must use compact cards instead of the full NearbyRestaurantCard rail layout.",

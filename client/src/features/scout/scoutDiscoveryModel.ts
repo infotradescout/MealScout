@@ -331,6 +331,42 @@ export function getScoutBusinessKey(source: unknown, route?: string | null): str
   return normalizedName ? `name:${normalizedName}` : null;
 }
 
+function hashScoutRotationSeed(seedKey: string): number {
+  let hash = 2166136261;
+  for (let index = 0; index < seedKey.length; index += 1) {
+    hash ^= seedKey.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+export function rotateScoutSpots<T>(
+  items: readonly T[],
+  seedKey: string,
+  getKey: (item: T) => string | null,
+  limit = 8,
+): T[] {
+  const normalizedLimit = Math.max(0, Math.floor(limit));
+  if (normalizedLimit === 0 || items.length === 0) return [];
+
+  const seenKeys = new Set<string>();
+  const uniqueItems: T[] = [];
+  items.forEach((item, index) => {
+    const key = getKey(item) || `unkeyed:${index}`;
+    if (seenKeys.has(key)) return;
+    seenKeys.add(key);
+    uniqueItems.push(item);
+  });
+
+  if (uniqueItems.length <= 1) return uniqueItems.slice(0, normalizedLimit);
+
+  const offset = hashScoutRotationSeed(seedKey) % uniqueItems.length;
+  return uniqueItems
+    .slice(offset)
+    .concat(uniqueItems.slice(0, offset))
+    .slice(0, normalizedLimit);
+}
+
 export function filterUniqueScoutBusinessCards<T>(
   items: T[],
   getBusinessKey: (item: T) => string | null,
