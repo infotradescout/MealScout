@@ -102,10 +102,12 @@ import type {
 import mealScoutIcon from "@assets/meal-scout-icon.png";
 import {
   SCOUT_HORIZONTAL_ROW_REGISTRY,
+  SCOUT_MIN_MENU_BUSINESS_DIVERSITY,
   assignScoutBusinessCardsBySection,
-  getScoutBusinessKey,
+  getScoutCanonicalBusinessKey,
   normalizeScoutBusinessKind,
   rotateScoutSpots,
+  selectDistinctScoutMenuBusinesses,
   type ScoutHorizontalRowId,
   type ScoutNormalizedCardKind,
 } from "@/features/scout/scoutDiscoveryModel";
@@ -971,7 +973,7 @@ function getScoutBusinessCardKey(
   source: RestaurantSummary | LiveTruckSummary | TrendingPlaceSummary,
   route?: string | null,
 ): string | null {
-  return getScoutBusinessKey(source, route);
+  return getScoutCanonicalBusinessKey(source, route);
 }
 
 function getTruckProfilePath(truck: LiveTruckSummary): string {
@@ -993,6 +995,12 @@ function getMenuItemProfilePath(item: LocalMenuItemFeedItem): string {
       name: item.restaurantName,
     }) || `/restaurant/${encodeURIComponent(String(item.restaurantId))}`
   );
+}
+
+function getScoutMenuItemBusinessKey(
+  item: LocalMenuItemFeedItem,
+): string | null {
+  return getScoutCanonicalBusinessKey(item, getMenuItemProfilePath(item));
 }
 
 function getTrendingPlaceProfilePath(place: TrendingPlaceSummary): string {
@@ -6262,6 +6270,7 @@ type ScoutImmediateDecisionItem =
       summary: string;
       cardType: "menu_item";
       item: LocalMenuItemFeedItem;
+      businessKey: string | null;
     }
   | {
       sourceRowId: ScoutHorizontalRowId;
@@ -6316,7 +6325,7 @@ const scoutRotatingRowFallbackCopy: Partial<
   popular_dishes: {
     title: "Scout These Spots",
     subtitle:
-      "No menu highlights are posted right now. These food spots rotate in instead.",
+      "More menu variety is on the way. These food spots rotate in instead.",
   },
   hot_deals: {
     title: "Scout These Spots",
@@ -7334,6 +7343,14 @@ function ActiveSceneContent({
     networkRotatingSpotCandidates,
     spotRotationBucket,
   ]);
+  const distinctNewMenuItems = useMemo(
+    () => selectDistinctScoutMenuBusinesses(localMenuItems, 10),
+    [localMenuItems],
+  );
+  const hasNewMenuBusinessDiversity =
+    distinctNewMenuItems.length >= SCOUT_MIN_MENU_BUSINESS_DIVERSITY;
+  const newMenuFallbackSpots = rotatingSpots.slice(0, 4);
+
   if (laneId === "for_you") {
     type ScoutBusinessSectionCard =
       | { cardType: "truck"; truck: LiveTruckSummary }
@@ -7503,31 +7520,35 @@ function ActiveSceneContent({
     const knownTruckIds = new Set(
       scoutTruckInventory.map((truck) => String(truck.id)),
     );
-    const popularDishCards: LocalMenuItemFeedItem[] =
-      popularDishes.length > 0
-        ? popularDishes.map((item) => ({
-            id: item.id,
-            name: item.name,
-            description: item.description ?? null,
-            imageUrl: item.imageUrl ?? null,
-            priceCents: item.priceCents ?? null,
-            restaurantId: item.restaurantId,
-            restaurantName: item.restaurantName ?? null,
-            restaurantCity: item.restaurantCity ?? null,
-            restaurantState: item.restaurantState ?? null,
-            restaurantLogoUrl: item.restaurantLogoUrl ?? null,
-            restaurantCoverImageUrl: item.restaurantCoverImageUrl ?? null,
-            cuisineType: item.cuisineType ?? null,
-            businessType:
-              item.businessType ??
-              (knownTruckIds.has(String(item.restaurantId))
-                ? "food_truck"
-                : null),
-            isFoodTruck:
-              item.isFoodTruck ?? knownTruckIds.has(String(item.restaurantId)),
-          }))
-        : localMenuItems.slice(0, 8);
-    const supplementalDishCards: LocalMenuItemFeedItem[] =
+    const rankedPopularDishCandidates: LocalMenuItemFeedItem[] =
+      popularDishes.map((item) => ({
+        id: item.id,
+        name: item.name,
+        description: item.description ?? null,
+        imageUrl: item.imageUrl ?? null,
+        priceCents: item.priceCents ?? null,
+        restaurantId: item.restaurantId,
+        restaurantName: item.restaurantName ?? null,
+        restaurantCity: item.restaurantCity ?? null,
+        restaurantState: item.restaurantState ?? null,
+        restaurantLogoUrl: item.restaurantLogoUrl ?? null,
+        restaurantCoverImageUrl: item.restaurantCoverImageUrl ?? null,
+        cuisineType: item.cuisineType ?? null,
+        businessType:
+          item.businessType ??
+          (knownTruckIds.has(String(item.restaurantId))
+            ? "food_truck"
+            : null),
+        isFoodTruck:
+          item.isFoodTruck ?? knownTruckIds.has(String(item.restaurantId)),
+      }));
+    const claimedMenuHighlightBusinessKeys = new Set<string>();
+    const distinctPrimaryDishCards = selectDistinctScoutMenuBusinesses(
+      [...rankedPopularDishCandidates, ...localMenuItems],
+      8,
+      claimedMenuHighlightBusinessKeys,
+    );
+    const supplementalDishCandidates: LocalMenuItemFeedItem[] =
       showActivitySupplement
         ? activitySupplementDishes.map((item) => ({
             id: item.id,
@@ -7546,6 +7567,20 @@ function ActiveSceneContent({
             isFoodTruck: item.isFoodTruck ?? null,
           }))
         : [];
+    const distinctSupplementalDishCards = selectDistinctScoutMenuBusinesses(
+      supplementalDishCandidates,
+      Math.max(0, 8 - distinctPrimaryDishCards.length),
+      claimedMenuHighlightBusinessKeys,
+    );
+    const hasMenuHighlightBusinessDiversity =
+      claimedMenuHighlightBusinessKeys.size >=
+      SCOUT_MIN_MENU_BUSINESS_DIVERSITY;
+    const popularDishCards = hasMenuHighlightBusinessDiversity
+      ? distinctPrimaryDishCards
+      : [];
+    const supplementalDishCards = hasMenuHighlightBusinessDiversity
+      ? distinctSupplementalDishCards
+      : [];
 
     const highPriorityDecisionItems: ScoutImmediateDecisionItem[] = [
       ...liveTruckCards.map((truck) => ({
@@ -7665,6 +7700,7 @@ function ActiveSceneContent({
         ),
         cardType: "menu_item" as const,
         item,
+        businessKey: getScoutMenuItemBusinessKey(item),
       })),
       ...hotDealCandidates.map((deal) => ({
         sourceRowId: "hot_deals" as const,
@@ -7760,7 +7796,8 @@ function ActiveSceneContent({
         : "Scheduled trucks and open-now options nearby.";
     const firstScreenSuppressedBusinessKey =
       primaryFirstScreenDecision?.cardType === "truck" ||
-      primaryFirstScreenDecision?.cardType === "restaurant"
+      primaryFirstScreenDecision?.cardType === "restaurant" ||
+      primaryFirstScreenDecision?.cardType === "menu_item"
         ? primaryFirstScreenDecision.businessKey
         : null;
     const suppressFirstScreenBusiness = (card: ScoutRailRenderCard) => {
@@ -7779,6 +7816,12 @@ function ActiveSceneContent({
             card.restaurant,
             getRestaurantProfilePath(card.restaurant),
           ) === firstScreenSuppressedBusinessKey
+        );
+      }
+      if (card.cardType === "menu_item") {
+        return (
+          getScoutMenuItemBusinessKey(card.item) ===
+          firstScreenSuppressedBusinessKey
         );
       }
       return false;
@@ -7801,7 +7844,8 @@ function ActiveSceneContent({
       visibleSceneEvents.length > 0 ||
       visibleHosts.length > 0 ||
       communityPickCards.length > 0 ||
-      worthDiscoveringCards.length > 0;
+      worthDiscoveringCards.length > 0 ||
+      rotatingSpots.length > 0;
 
     if (!hasForYouSections) {
       if (showActivityFallback) {
@@ -8096,7 +8140,8 @@ function ActiveSceneContent({
           return;
         }
         if (card.cardType === "menu_item") {
-          claimedFallbackBusinessKeys.add(`business:${card.item.restaurantId}`);
+          const key = getScoutMenuItemBusinessKey(card.item);
+          if (key) claimedFallbackBusinessKeys.add(key);
         }
       });
     });
@@ -8522,20 +8567,20 @@ function ActiveSceneContent({
         </section>
       ) : null}
 
-      {laneId === "new_menus" && localMenuItems.length > 0 ? (
+      {laneId === "new_menus" && hasNewMenuBusinessDiversity ? (
         <section className={railSectionClass}>
           <SectionHeader
             title="New Menus"
             linkHref={DISCOVERY_LAYERS.menuItems.href}
             subtitle="Fresh menu items and recent local updates."
-            itemCount={localMenuItems.length}
+            itemCount={distinctNewMenuItems.length}
             onSeeAll={
               onOpenResultsSheet
                 ? () =>
                     onOpenResultsSheet({
                       title: "New Menus",
                       subtitle: "Fresh menu items and recent local updates.",
-                      items: localMenuItems,
+                      items: distinctNewMenuItems,
                       renderItem: (item, index) => (
                         <LocalMenuItemCard
                           item={item}
@@ -8550,7 +8595,7 @@ function ActiveSceneContent({
           />
           <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
             <ul className="flex gap-4 pr-5" role="list" aria-label="New menus">
-              {localMenuItems.slice(0, 10).map((item, index) => (
+              {distinctNewMenuItems.map((item, index) => (
                 <li
                   key={`menu-item-${item.id}`}
                   className={`shrink-0 ${featureCardWidth}`}
@@ -8559,6 +8604,57 @@ function ActiveSceneContent({
                     item={item}
                     position={index}
                     currentUserId={currentUserId}
+                  />
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+      ) : null}
+
+      {laneId === "new_menus" &&
+      !hasNewMenuBusinessDiversity &&
+      newMenuFallbackSpots.length > 0 ? (
+        <section
+          className={railSectionClass}
+          data-scout-row-fallback="new_menus"
+        >
+          <SectionHeader
+            title="Scout These Spots"
+            linkHref="/search"
+            subtitle="More local menus are on the way. These food spots rotate in instead."
+            itemCount={newMenuFallbackSpots.length}
+          />
+          <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
+            <ul
+              className="flex gap-4 pr-5"
+              role="list"
+              aria-label="Rotating food spots"
+            >
+              {newMenuFallbackSpots.map((spot) => (
+                <li
+                  key={`new-menu-fallback-${
+                    getScoutBusinessCardKey(
+                      spot.restaurant,
+                      getRestaurantProfilePath(spot.restaurant),
+                    ) || spot.restaurant.id
+                  }`}
+                  className={`shrink-0 ${standardCardWidth}`}
+                >
+                  <NearbyRestaurantCard
+                    restaurant={spot.restaurant}
+                    viewModel={buildRestaurantResultViewModel(
+                      spot.restaurant,
+                      spot.scope,
+                    )}
+                    menuPreview={
+                      menuPreviewByRestaurantId.get(
+                        String(spot.restaurant.id),
+                      ) ?? []
+                    }
+                    isSignedIn={isSignedIn}
+                    currentUserId={currentUserId}
+                    relationshipSnapshot={restaurantRelationships}
                   />
                 </li>
               ))}
@@ -8653,7 +8749,9 @@ function ActiveSceneContent({
       (laneId === "events" &&
         visibleSceneEvents.length === 0 &&
         visibleHosts.length === 0) ||
-      (laneId === "new_menus" && localMenuItems.length === 0) ||
+      (laneId === "new_menus" &&
+        !hasNewMenuBusinessDiversity &&
+        newMenuFallbackSpots.length === 0) ||
       (laneId === "late_night" &&
         visibleOpenRestaurants.length === 0 &&
         visibleMoreFoodRestaurants.length === 0) ||
