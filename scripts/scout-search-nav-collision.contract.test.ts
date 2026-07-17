@@ -21,7 +21,10 @@ for (const snippet of requiredScoutSnippets) {
   }
 }
 
-if (!navigation.includes('className="fixed inset-x-0 bottom-0 z-[1100] border-t border-[color:var(--border-subtle)] lg:hidden"')) {
+if (
+  !navigation.includes('isBusinessWorkspaceRoute ? "hidden" : "fixed"') ||
+  !navigation.includes("inset-x-0 bottom-0 z-[1100] border-t border-[color:var(--border-subtle)] lg:hidden")
+) {
   throw new Error("Global mobile nav z-index contract missing (expected z-[1100]).");
 }
 

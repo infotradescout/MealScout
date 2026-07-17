@@ -27,7 +27,6 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Separator } from "@/components/ui/separator";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { resolveCanonicalShareUrl, resolveCanonicalShareUrlSync } from "@/lib/share";
 import { useToast } from "@/hooks/use-toast";
@@ -56,27 +55,20 @@ import {
   Calendar as CalendarIcon,
   RefreshCw,
   Truck,
-  Navigation as NavigationIcon,
   Radio,
-  Power,
-  PowerOff,
-  Wifi,
   WifiOff,
-  Activity,
   AlertCircle,
   CheckCircle,
   Play,
   Square,
   Loader2,
   Zap,
-  Smartphone,
-  Satellite,
   Save,
   RotateCcw,
+  Trash2,
   QrCode,
   Copy,
 } from "lucide-react";
-import Navigation from "@/components/navigation";
 import BusinessWorkspaceShell, {
   type BusinessWorkspaceModuleId,
 } from "@/components/business-workspace-shell";
@@ -258,7 +250,6 @@ export default function RestaurantOwnerDashboard() {
   const [locationError, setLocationError] = useState<string | null>(null);
   const [gpsWatchId, setGpsWatchId] = useState<number | null>(null);
   const [lastBroadcast, setLastBroadcast] = useState<Date | null>(null);
-  const [broadcastCount, setBroadcastCount] = useState(0);
   const [connectionStatus, setConnectionStatus] = useState<
     "connected" | "disconnected" | "connecting"
   >("disconnected");
@@ -341,8 +332,6 @@ export default function RestaurantOwnerDashboard() {
 
   // WebSocket integration for real-time updates
   const {
-    isConnected,
-    connectionError: wsError,
     subscribeToRestaurant,
     connect: connectWS,
     disconnect: disconnectWS,
@@ -355,7 +344,7 @@ export default function RestaurantOwnerDashboard() {
       console.log("Received status update:", status);
       // Handle status updates from server
     },
-    autoConnect: true,
+    autoConnect: false,
   });
 
   // Fetch user's restaurants
@@ -580,7 +569,6 @@ export default function RestaurantOwnerDashboard() {
       );
     },
     onSuccess: () => {
-      setBroadcastCount((prev) => prev + 1);
       setLastBroadcast(new Date());
     },
     onError: (error: any) => {
@@ -612,14 +600,14 @@ export default function RestaurantOwnerDashboard() {
         setGpsWatchId(null);
       }
       toast({
-        title: "Broadcasting Stopped",
-        description: "Your food truck is no longer visible to customers.",
+        title: "Live location stopped",
+        description: "Customers will now see your saved location instead.",
       });
     },
     onError: (error: any) => {
       toast({
-        title: "Error Stopping Broadcast",
-        description: error.message || "Failed to stop broadcasting.",
+        title: "Could not stop live location",
+        description: error.message || "Please try again.",
         variant: "destructive",
       });
     },
@@ -640,17 +628,13 @@ export default function RestaurantOwnerDashboard() {
   }, [requestedRestaurantId, restaurants, selectedRestaurant]);
 
   useEffect(() => {
-    if (!setupMode) return;
+    if (!setupMode || setupMode === "schedule") return;
     const hasCurrentRestaurant = restaurants.some(
       (restaurant) => restaurant.id === selectedRestaurant,
     );
     if (!hasCurrentRestaurant) return;
     const frame = window.requestAnimationFrame(() => {
-      if (setupMode === "schedule") {
-        document
-          .getElementById("owner-workspace-operations")
-          ?.scrollIntoView({ behavior: "smooth", block: "start" });
-      } else if (setupPanelRef.current) {
+      if (setupPanelRef.current) {
         setupPanelRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
       }
     });
@@ -1038,14 +1022,14 @@ export default function RestaurantOwnerDashboard() {
   const visibleTruckBookings = truckBookings.filter(
     (booking) => !selectedRestaurant || booking.truckId === selectedRestaurant,
   );
-  const liveShareUrl = selectedRestaurant
-    ? `/restaurant/${selectedRestaurant}?live=1`
+  const liveShareUrl = currentPublicProfileHref
+    ? `${currentPublicProfileHref}?live=1`
     : "/scout";
   const liveShareTitle = currentRestaurant?.name
     ? `${currentRestaurant.name} is live on MealScout`
     : "We are live on MealScout";
   const liveShareDescription =
-    "Find us live right now on the MealScout local dashboard.";
+    "See our current location and profile on MealScout.";
 
   // GPS fallback function using IP geolocation
   const tryFallbackLocation = async (): Promise<{
@@ -1090,8 +1074,8 @@ export default function RestaurantOwnerDashboard() {
     hasWarnedFallbackAccuracyRef.current = true;
     const accuracyMiles = accuracyMeters / 1609;
     toast({
-      title: "Broadcasting an approximate location",
-      description: `GPS isn't available, so customers may see your truck up to ${accuracyMiles.toFixed(1)} miles from where you actually are. Enable location access for an exact pin.`,
+      title: "Using an approximate location",
+      description: `Customers may see your truck up to ${accuracyMiles.toFixed(1)} miles from where you are. Allow precise location access for a better pin.`,
       variant: "destructive",
     });
   };
@@ -1432,8 +1416,8 @@ export default function RestaurantOwnerDashboard() {
 
     if (!navigator.geolocation) {
       toast({
-        title: "GPS Not Available",
-        description: "Your device doesn't support GPS location.",
+        title: "Location unavailable",
+        description: "This device cannot share its current location.",
         variant: "destructive",
       });
       return;
@@ -1461,9 +1445,9 @@ export default function RestaurantOwnerDashboard() {
         setLocationError(error.message);
         setConnectionStatus("disconnected");
         toast({
-          title: "Location Error",
+          title: "Location unavailable",
           description:
-            "Unable to get your current location. Please check your GPS settings.",
+            "Allow location access for MealScout, then try again.",
           variant: "destructive",
         });
       },
@@ -1494,8 +1478,8 @@ export default function RestaurantOwnerDashboard() {
 
     if (!navigator.geolocation) {
       toast({
-        title: "GPS Not Available",
-        description: "Your device doesn't support GPS location.",
+        title: "Location unavailable",
+        description: "This device cannot share its current location.",
         variant: "destructive",
       });
       return;
@@ -1517,9 +1501,9 @@ export default function RestaurantOwnerDashboard() {
         setLocationUpdateError(error.message);
         setIsUpdatingLocation(false);
         toast({
-          title: "Location Error",
+          title: "Location unavailable",
           description:
-            "Unable to get your current location. Please check your GPS settings.",
+            "Allow location access for MealScout, then try again.",
           variant: "destructive",
         });
       },
@@ -1543,7 +1527,10 @@ export default function RestaurantOwnerDashboard() {
       operatingHoursForm.setValue(day, [
         ...currentSlots,
         { open: "09:00", close: "17:00" },
-      ]);
+      ], {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
     }
   };
 
@@ -1551,7 +1538,10 @@ export default function RestaurantOwnerDashboard() {
   const removeTimeSlot = (day: keyof OperatingHoursFormData, index: number) => {
     const currentSlots = operatingHoursForm.getValues(day) || [];
     const newSlots = currentSlots.filter((_, i) => i !== index);
-    operatingHoursForm.setValue(day, newSlots);
+    operatingHoursForm.setValue(day, newSlots, {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
   };
 
   // Toggle deal status
@@ -1641,14 +1631,14 @@ export default function RestaurantOwnerDashboard() {
       }, 1000);
 
       toast({
-        title: "Broadcasting Started",
-        description: "Your food truck is now visible to customers nearby.",
+        title: "Your truck is live",
+        description: "Customers can now see your current location on MealScout.",
       });
     },
     onError: (error: any) => {
       toast({
-        title: "Failed to Start Broadcasting",
-        description: error.message || "Unable to start food truck session.",
+        title: "Could not share your location",
+        description: error.message || "Check location access and try again.",
         variant: "destructive",
       });
     },
@@ -1669,8 +1659,8 @@ export default function RestaurantOwnerDashboard() {
         queryKey: ["/api/restaurants/my-restaurants"],
       });
       toast({
-        title: "Restaurant Updated",
-        description: "Food truck settings have been saved.",
+        title: "Business type updated",
+        description: "The matching location and schedule tools are now available.",
       });
     },
   });
@@ -1691,16 +1681,18 @@ export default function RestaurantOwnerDashboard() {
       setLocationUpdateError(null);
       setIsUpdatingLocation(false);
       toast({
-        title: "Location Updated",
-        description: "Your restaurant location has been updated successfully.",
+        title: currentIsTruckBusiness
+          ? "Saved location updated"
+          : "Restaurant location updated",
+        description: "The map pin on your public profile has been refreshed.",
       });
     },
     onError: (error: any) => {
       setLocationUpdateError(error.message || "Failed to update location");
       setIsUpdatingLocation(false);
       toast({
-        title: "Error Updating Location",
-        description: error.message || "Failed to update restaurant location.",
+        title: "Could not update location",
+        description: error.message || "Check location access and try again.",
         variant: "destructive",
       });
     },
@@ -1722,15 +1714,18 @@ export default function RestaurantOwnerDashboard() {
         queryKey: ["/api/restaurants/my-restaurants"],
       });
       toast({
-        title: "Operating Hours Updated",
-        description:
-          "Your restaurant operating hours have been updated successfully.",
+        title: currentIsTruckBusiness ? "Schedule saved" : "Hours saved",
+        description: currentIsTruckBusiness
+          ? "Customers will see these weekly service hours on your profile."
+          : "Customers will see these hours on your profile.",
       });
     },
     onError: (error: any) => {
       toast({
-        title: "Error Updating Operating Hours",
-        description: error.message || "Failed to update operating hours.",
+        title: currentIsTruckBusiness
+          ? "Could not save schedule"
+          : "Could not save hours",
+        description: error.message || "Please try again.",
         variant: "destructive",
       });
     },
@@ -2019,7 +2014,7 @@ export default function RestaurantOwnerDashboard() {
   };
   const ownerHeaderActions = (
     <div className="flex flex-nowrap items-center gap-2">
-      {canManageDeals ? (
+      {activeWorkspaceModule === "deals" && canManageDeals ? (
         (subscription as any)?.status === "active" ||
         (subscription as any)?.hasAccess === true ? (
           <Link href={buildOwnerToolHref("/deal-creation")}>
@@ -2041,7 +2036,7 @@ export default function RestaurantOwnerDashboard() {
           </Link>
         )
       ) : null}
-      {canManageBilling ? (
+      {activeWorkspaceModule === "overview" && canManageBilling ? (
         <Link href={buildOwnerToolHref("/subscribe")}>
           <Button
             size="sm"
@@ -2052,7 +2047,7 @@ export default function RestaurantOwnerDashboard() {
           </Button>
         </Link>
       ) : null}
-      {canManageDeals ? (
+      {activeWorkspaceModule === "overview" && canManageDeals ? (
         <Link href={buildOwnerToolHref("/hiring?tab=owner")}>
           <Button
             size="sm"
@@ -2124,7 +2119,7 @@ export default function RestaurantOwnerDashboard() {
           canonicalUrl="https://www.mealscout.us/restaurant-owner-dashboard"
           noIndex={true}
         />
-      {currentRestaurant && (() => {
+      {currentRestaurant && activeWorkspaceModule === "overview" && (() => {
         // The full completion checklist lives further down the page, under
         // "Profile value" analytics. Owners were landing here with no
         // first-screen signal of what's missing before they go live, so
@@ -2184,7 +2179,9 @@ export default function RestaurantOwnerDashboard() {
         );
       })()}
 
-      {currentRestaurant && menuApprovalRequired ? (
+      {currentRestaurant &&
+      activeWorkspaceModule === "overview" &&
+      menuApprovalRequired ? (
         <Card
           className="mb-6 border-amber-300 bg-amber-50"
           data-testid="truck-menu-owner-approval-task"
@@ -2241,7 +2238,7 @@ export default function RestaurantOwnerDashboard() {
         </Card>
       ) : null}
 
-      {currentRestaurant && setupMode && (
+      {currentRestaurant && setupMode && setupMode !== "schedule" && (
         <div className="mb-6 rounded-2xl border border-orange-200 bg-orange-50 p-4 shadow-clean">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
@@ -3693,49 +3690,13 @@ export default function RestaurantOwnerDashboard() {
                 </Link>
               </div>
             </div>
-          ) : setupMode === "schedule" ? (
-            <div
-              ref={setupPanelRef}
-              className="mt-4 scroll-mt-64 rounded-xl border border-orange-200 bg-white p-4 lg:scroll-mt-6"
-            >
-              <h3 className="text-sm font-black uppercase tracking-[0.14em] text-orange-800">
-                {currentRestaurant?.isFoodTruck
-                  ? "Schedule and live workspace"
-                  : "Hours workspace"}
-              </h3>
-              <p className="mt-1 text-xs text-orange-900/75">
-                {currentRestaurant?.isFoodTruck
-                  ? "Set operating windows and manage the live location customers use to find your truck."
-                  : "Set the opening and closing hours customers see on your public profile."}
-              </p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() =>
-                    document
-                      .querySelector('[data-testid="tab-food-truck"]')
-                      ?.scrollIntoView({ behavior: "smooth", block: "center" })
-                  }
-                >
-                  {currentRestaurant?.isFoodTruck
-                    ? "Jump to schedule and live tools"
-                    : "Jump to hours"}
-                </Button>
-                {currentRestaurant?.isFoodTruck ? (
-                  <Link href="/parking-pass-manage">
-                    <Button variant="outline">
-                      Open parking pass schedule manager
-                    </Button>
-                  </Link>
-                ) : null}
-              </div>
-            </div>
           ) : null}
         </div>
       )}
 
       {/* Post-Upgrade Onboarding Checklist — shown to subscribed users until all items are complete */}
-      {subscription?.hasAccess &&
+      {activeWorkspaceModule === "overview" &&
+        subscription?.hasAccess &&
         currentRestaurant &&
         (() => {
           const hasBasics = Boolean(
@@ -4305,7 +4266,10 @@ export default function RestaurantOwnerDashboard() {
         })()}
 
       {/* Stats Cards */}
-      {(canManageDeals || canViewAnalytics) && (
+      {(activeWorkspaceModule === "overview" ||
+        activeWorkspaceModule === "deals" ||
+        activeWorkspaceModule === "audience") &&
+        (canManageDeals || canViewAnalytics) && (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
           <Card>
             <CardHeader className="pb-2">
@@ -5441,336 +5405,206 @@ export default function RestaurantOwnerDashboard() {
 
         {canManageParkingPass ? (
           <TabsContent value="foodtruck" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  {currentRestaurant?.isFoodTruck ? (
-                    <Truck className="h-5 w-5" />
-                  ) : (
-                    <Clock className="h-5 w-5" />
-                  )}
-                  {currentRestaurant?.isFoodTruck
-                    ? "Schedule & live location"
-                    : "Business hours"}
-                </CardTitle>
-                <CardDescription>
-                  {currentRestaurant?.isFoodTruck
-                    ? "Manage operating windows and broadcast your current location to customers."
-                    : "Manage the hours customers see across MealScout."}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                {/* Food Truck Toggle */}
-                <details className="rounded-lg border p-4">
-                  <summary className="cursor-pointer text-sm font-semibold text-[color:var(--text-secondary)]">
-                    Business type settings
-                  </summary>
-                  <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="flex items-center space-x-3">
-                      <Truck className="h-6 w-6" />
-                      <div>
-                        <h3 className="font-medium">This is a Food Truck</h3>
-                        <p className="text-sm text-muted-foreground">
-                          Enable mobile location broadcasting for customers to
-                          find you
-                        </p>
-                      </div>
-                    </div>
-                    <Button
-                      variant={
-                        currentRestaurant?.isFoodTruck ? "default" : "outline"
-                      }
-                      onClick={() =>
-                        toggleFoodTruckMutation.mutate(
-                          !currentRestaurant?.isFoodTruck,
-                        )
-                      }
-                      className="w-full sm:w-auto"
-                      data-testid="button-toggle-food-truck"
-                    >
-                      {currentRestaurant?.isFoodTruck ? "Enabled" : "Enable"}
-                    </Button>
+            <Card
+              className="overflow-hidden border-orange-100 bg-white/95 shadow-clean"
+              data-testid="owner-availability-workspace"
+            >
+              <CardHeader className="border-b border-orange-100 bg-gradient-to-br from-orange-50 via-amber-50/70 to-white">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <CardTitle className="flex items-center gap-2 text-xl">
+                      {currentRestaurant?.isFoodTruck ? (
+                        <Truck className="h-5 w-5 text-orange-700" />
+                      ) : (
+                        <Clock className="h-5 w-5 text-orange-700" />
+                      )}
+                      {currentRestaurant?.isFoodTruck
+                        ? "Schedule & live"
+                        : "Hours & location"}
+                    </CardTitle>
+                    <CardDescription className="mt-1 max-w-2xl">
+                      {currentRestaurant?.isFoodTruck
+                        ? "Keep your weekly service hours, saved location, and live pin current."
+                        : "Keep the hours and map location on your public profile current."}
+                    </CardDescription>
                   </div>
-                </details>
+                  <Badge variant="outline" className="border-orange-200 bg-white text-orange-900">
+                    {currentRestaurant?.isFoodTruck ? "Food truck" : "Restaurant"}
+                  </Badge>
+                </div>
+              </CardHeader>
 
-                {/* Broadcasting Controls */}
-                {currentRestaurant?.isFoodTruck && (
-                  <div className="space-y-4">
-                    <div className="p-4 border rounded-lg">
-                      <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                        <div className="flex items-center space-x-3">
-                          <div
-                            className={`p-2 rounded-lg ${
-                              connectionStatus === "connected"
-                                ? "bg-[color:var(--status-success)]/12"
+              <CardContent className="space-y-5 p-4 sm:p-6">
+                <div className="grid gap-4 lg:grid-cols-2">
+                  {currentRestaurant?.isFoodTruck ? (
+                    <section
+                      className="rounded-2xl border border-orange-100 bg-orange-50/45 p-4 sm:p-5"
+                      data-testid="owner-live-location-panel"
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="flex min-w-0 items-start gap-3">
+                          <span
+                            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ${
+                              isBroadcasting
+                                ? "bg-emerald-100 text-emerald-700"
                                 : connectionStatus === "connecting"
-                                  ? "bg-yellow-100"
-                                  : "bg-[var(--bg-surface-muted)]"
+                                  ? "bg-amber-100 text-amber-700"
+                                  : "bg-white text-orange-700 ring-1 ring-orange-100"
                             }`}
                           >
-                            {connectionStatus === "connected" ? (
-                              <Radio className="h-5 w-5 text-[color:var(--status-success)]" />
-                            ) : connectionStatus === "connecting" ? (
-                              <Loader2 className="h-5 w-5 text-yellow-600 animate-spin" />
+                            {connectionStatus === "connecting" ? (
+                              <Loader2 className="h-5 w-5 animate-spin" />
+                            ) : isBroadcasting ? (
+                              <Radio className="h-5 w-5" />
                             ) : (
-                              <WifiOff className="h-5 w-5 text-[color:var(--text-secondary)]" />
+                              <WifiOff className="h-5 w-5" />
                             )}
-                          </div>
-                          <div>
-                            <h3 className="font-medium">
-                              Live Location Broadcasting
-                            </h3>
-                            <p className="text-sm text-muted-foreground">
-                              {connectionStatus === "connected"
-                                ? "Broadcasting your location to customers"
-                                : connectionStatus === "connecting"
-                                  ? "Connecting to GPS..."
-                                  : "Start broadcasting to appear on customer maps"}
+                          </span>
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h3 className="font-black text-[color:var(--text-primary)]">
+                                Live location
+                              </h3>
+                              <Badge
+                                className={
+                                  isBroadcasting
+                                    ? "bg-emerald-600 text-white"
+                                    : connectionStatus === "connecting"
+                                      ? "bg-amber-500 text-white"
+                                      : "bg-stone-200 text-stone-800"
+                                }
+                                data-testid="text-connection-status"
+                              >
+                                {connectionStatus === "connecting"
+                                  ? "Finding location"
+                                  : isBroadcasting
+                                    ? "Live"
+                                    : "Not live"}
+                              </Badge>
+                            </div>
+                            <p className="mt-1 text-sm text-[color:var(--text-muted)]">
+                              {connectionStatus === "connecting"
+                                ? "Keep this page open while MealScout finds your current stop."
+                                : isBroadcasting
+                                  ? "Customers can see your current truck location."
+                                  : "Share your current stop while you are serving."}
                             </p>
                           </div>
                         </div>
-                        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
-                          {!isBroadcasting ? (
-                            <Button
-                              onClick={handleStartBroadcasting}
-                              disabled={
-                                startFoodTruckSessionMutation.isPending ||
-                                !hasPremiumLocationTools
-                              }
-                              className="w-full bg-[color:var(--status-success)] hover:bg-[color:var(--status-success)] sm:w-auto"
-                              data-testid="button-start-broadcasting"
-                            >
-                              {startFoodTruckSessionMutation.isPending ? (
-                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                              ) : (
-                                <Play className="h-4 w-4 mr-2" />
-                              )}
-                              Start Broadcasting
-                            </Button>
-                          ) : (
-                            <Button
-                              onClick={handleStopBroadcasting}
-                              disabled={stopFoodTruckSessionMutation.isPending}
-                              variant="destructive"
-                              className="w-full sm:w-auto"
-                              data-testid="button-stop-broadcasting"
-                            >
-                              {stopFoodTruckSessionMutation.isPending ? (
-                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                              ) : (
-                                <Square className="h-4 w-4 mr-2" />
-                              )}
-                              Stop Broadcasting
-                            </Button>
-                          )}
+                      </div>
+
+                      <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                        {!isBroadcasting ? (
+                          <Button
+                            onClick={handleStartBroadcasting}
+                            disabled={startFoodTruckSessionMutation.isPending}
+                            className="min-h-11 flex-1 bg-emerald-600 text-white hover:bg-emerald-700"
+                            data-testid="button-start-broadcasting"
+                          >
+                            {startFoodTruckSessionMutation.isPending ? (
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            ) : (
+                              <Play className="mr-2 h-4 w-4" />
+                            )}
+                            {hasPremiumLocationTools ? "Go live" : "Upgrade to go live"}
+                          </Button>
+                        ) : (
+                          <Button
+                            onClick={handleStopBroadcasting}
+                            disabled={stopFoodTruckSessionMutation.isPending}
+                            variant="destructive"
+                            className="min-h-11 flex-1"
+                            data-testid="button-stop-broadcasting"
+                          >
+                            {stopFoodTruckSessionMutation.isPending ? (
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            ) : (
+                              <Square className="mr-2 h-4 w-4" />
+                            )}
+                            Stop sharing
+                          </Button>
+                        )}
+                        {isBroadcasting ? (
                           <ShareButton
                             url={liveShareUrl}
                             title={liveShareTitle}
                             description={liveShareDescription}
                             variant="outline"
                             size="sm"
-                            className="w-full sm:w-auto"
+                            className="min-h-11 flex-1 sm:flex-none"
                           />
-                        </div>
+                        ) : null}
                       </div>
 
-                      {/* Status Indicators */}
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div className="text-center p-3 bg-muted/50 rounded-lg">
-                          <div className="flex items-center justify-center mb-1">
-                            {connectionStatus === "connected" && isConnected ? (
-                              <Wifi className="h-4 w-4 text-[color:var(--status-success)]" />
-                            ) : connectionStatus === "connected" &&
-                              !isConnected ? (
-                              <Zap className="h-4 w-4 text-yellow-500" />
-                            ) : (
-                              <WifiOff className="h-4 w-4 text-[color:var(--status-error)]" />
-                            )}
+                      {currentLocation ? (
+                        <div className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-emerald-100 bg-white p-3">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <MapPin className="h-4 w-4 shrink-0 text-emerald-700" />
+                            <div className="min-w-0">
+                              <p className="text-sm font-bold">Current pin captured</p>
+                              <p
+                                className="text-xs text-[color:var(--text-muted)]"
+                                data-testid="text-last-broadcast"
+                              >
+                                {lastBroadcast
+                                  ? `Updated ${format(lastBroadcast, "p")}`
+                                  : "Ready to send when sharing starts"}
+                              </p>
+                            </div>
                           </div>
-                          <p className="text-xs text-muted-foreground">
-                            Connection
-                          </p>
-                          <p
-                            className="text-sm font-medium capitalize"
-                            data-testid="text-connection-status"
-                          >
-                            {connectionStatus === "connected" && isConnected
-                              ? "Real-time"
-                              : connectionStatus === "connected" && !isConnected
-                                ? "GPS Only"
-                                : connectionStatus}
-                          </p>
-                          {wsError && (
-                            <p className="text-xs text-[color:var(--status-error)] mt-1">
-                              WS: {wsError}
-                            </p>
-                          )}
+                          {gpsAccuracy ? (
+                            <Badge variant="outline" className="shrink-0 bg-white">
+                              {gpsAccuracy > 1000 ? "Approximate pin" : "Precise pin"}
+                            </Badge>
+                          ) : null}
                         </div>
+                      ) : null}
 
-                        <div className="text-center p-3 bg-muted/50 rounded-lg">
-                          <div className="flex items-center justify-center mb-1">
-                            <Activity className="h-4 w-4 text-[color:var(--accent-text)]" />
-                          </div>
-                          <p className="text-xs text-muted-foreground">
-                            Updates Sent
-                          </p>
-                          <p
-                            className="text-sm font-medium"
-                            data-testid="text-broadcast-count"
-                          >
-                            {broadcastCount}
-                          </p>
-                        </div>
-
-                        <div className="text-center p-3 bg-muted/50 rounded-lg">
-                          <div className="flex items-center justify-center mb-1">
-                            <Satellite className="h-4 w-4 text-orange-500" />
-                          </div>
-                          <p className="text-xs text-muted-foreground">
-                            GPS Accuracy
-                          </p>
-                          <p
-                            className="text-sm font-medium"
-                            data-testid="text-gps-accuracy"
-                          >
-                            {gpsAccuracy
-                              ? `${Math.round(gpsAccuracy)}m`
-                              : "N/A"}
-                          </p>
-                        </div>
-
-                        <div className="text-center p-3 bg-muted/50 rounded-lg">
-                          <div className="flex items-center justify-center mb-1">
-                            <Clock className="h-4 w-4 text-purple-500" />
-                          </div>
-                          <p className="text-xs text-muted-foreground">
-                            Last Update
-                          </p>
-                          <p
-                            className="text-sm font-medium"
-                            data-testid="text-last-broadcast"
-                          >
-                            {lastBroadcast
-                              ? format(lastBroadcast, "HH:mm:ss")
-                              : "Never"}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Current Location Display */}
-                    {currentLocation && (
-                      <div className="p-4 border rounded-lg">
-                        <div className="flex items-center justify-between mb-3">
-                          <h3 className="font-medium flex items-center gap-2">
-                            <MapPin className="h-4 w-4" />
-                            Current Location
-                          </h3>
-                          <div className="flex items-center text-xs text-muted-foreground">
-                            <NavigationIcon className="h-3 w-3 mr-1" />
-                            Live GPS
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4 text-sm">
-                          <div>
-                            <span className="text-muted-foreground">
-                              Latitude:
-                            </span>
+                      {locationError ? (
+                        <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3">
+                          <div className="flex items-start gap-2">
+                            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-700" />
                             <p
-                              className="font-mono"
-                              data-testid="text-current-lat"
+                              className="text-sm text-red-900"
+                              data-testid="text-location-error"
                             >
-                              {currentLocation.lat.toFixed(6)}
-                            </p>
-                          </div>
-                          <div>
-                            <span className="text-muted-foreground">
-                              Longitude:
-                            </span>
-                            <p
-                              className="font-mono"
-                              data-testid="text-current-lng"
-                            >
-                              {currentLocation.lng.toFixed(6)}
+                              {/approximate/i.test(locationError)
+                                ? "MealScout is using an approximate pin. Turn on precise location for a better result."
+                                : /denied|permission/i.test(locationError)
+                                  ? "Location access is off. Allow location access for MealScout and try again."
+                                  : "MealScout could not refresh your live pin. Check location access and your connection, then try again."}
                             </p>
                           </div>
                         </div>
-                        {currentLocation.timestamp && (
-                          <p className="text-xs text-muted-foreground mt-2">
-                            Recorded:{" "}
-                            {format(
-                              new Date(currentLocation.timestamp),
-                              "PPpp",
-                            )}
-                          </p>
-                        )}
-                      </div>
-                    )}
+                      ) : null}
 
-                    {/* Error Display */}
-                    {locationError && (
-                      <div className="p-4 border border-[color:var(--status-error)]/30 bg-[color:var(--status-error)]/10 rounded-lg">
-                        <div className="flex items-center gap-2">
-                          <AlertCircle className="h-4 w-4 text-[color:var(--status-error)]" />
-                          <span className="text-sm font-medium text-[color:var(--status-error)]">
-                            Location Error
-                          </span>
-                        </div>
-                        <p
-                          className="text-sm text-[color:var(--status-error)] mt-1"
-                          data-testid="text-location-error"
-                        >
-                          {locationError}
-                        </p>
-                      </div>
-                    )}
+                      <p className="mt-4 text-xs leading-5 text-[color:var(--text-muted)]">
+                        Keep this page open while you are live. MealScout stops sharing when location updates stop.
+                      </p>
+                    </section>
+                  ) : null}
 
-                    {/* Tips and Information */}
-                    <div className="p-4 bg-[color:var(--accent-text)]/10 border border-[color:var(--border-subtle)] rounded-lg">
-                      <h4 className="font-medium text-[color:var(--accent-text)] mb-2 flex items-center gap-2">
-                        <Smartphone className="h-4 w-4" />
-                        Broadcasting Tips
-                      </h4>
-                      <ul className="text-sm text-[color:var(--accent-text)] space-y-1">
-                        <li>
-                          • Keep GPS enabled for accurate location tracking
-                        </li>
-                        <li>
-                          • Location updates every 30 seconds or when you move
-                          50+ meters
-                        </li>
-                        <li>
-                          • Sessions auto-stop after 2 minutes of inactivity
-                        </li>
-                        <li>
-                          • Customers can see your live location and active
-                          specials
-                        </li>
-                        <li>• Works best with mobile internet connection</li>
-                      </ul>
-                    </div>
-                  </div>
-                )}
-
-                {/* Restaurant Location Update */}
-                <Separator />
-                <div className="space-y-4">
-                  <div className="p-4 border rounded-lg">
-                    <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="flex items-center space-x-3">
-                        <div className="p-2 rounded-lg bg-[color:var(--accent-text)]/12">
-                          <MapPin className="h-5 w-5 text-[color:var(--accent-text)]" />
-                        </div>
-                        <div>
-                          <h3 className="font-medium">
+                  <section
+                    className={`rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-4 sm:p-5 ${
+                      currentRestaurant?.isFoodTruck ? "" : "lg:col-span-2"
+                    }`}
+                    data-testid="owner-saved-location-panel"
+                  >
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="flex min-w-0 items-start gap-3">
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-orange-100 text-orange-700">
+                          <MapPin className="h-5 w-5" />
+                        </span>
+                        <div className="min-w-0">
+                          <h3 className="font-black text-[color:var(--text-primary)]">
                             {currentRestaurant?.isFoodTruck
-                              ? "Update base location"
-                              : "Update restaurant location"}
+                              ? "Saved location"
+                              : "Restaurant location"}
                           </h3>
-                          <p className="text-sm text-muted-foreground">
+                          <p className="mt-1 text-sm text-[color:var(--text-muted)]">
                             {currentRestaurant?.isFoodTruck
-                              ? "Set the address used when your truck is not broadcasting live."
-                              : "Use GPS to update your restaurant's permanent address."}
+                              ? "Customers see this location whenever your truck is not live."
+                              : "Use your device to refresh the map pin for this address."}
                           </p>
                         </div>
                       </div>
@@ -5778,92 +5612,96 @@ export default function RestaurantOwnerDashboard() {
                         onClick={handleUpdateRestaurantLocation}
                         disabled={
                           isUpdatingLocation ||
-                          updateRestaurantLocationMutation.isPending ||
-                          !hasPremiumLocationTools
+                          updateRestaurantLocationMutation.isPending
                         }
                         variant="outline"
-                        className="w-full sm:w-auto"
+                        className="min-h-11 w-full sm:w-auto"
                         data-testid="button-update-location"
                       >
                         {isUpdatingLocation ||
                         updateRestaurantLocationMutation.isPending ? (
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                         ) : (
-                          <RefreshCw className="h-4 w-4 mr-2" />
+                          <RefreshCw className="mr-2 h-4 w-4" />
                         )}
-                        Update Location
+                        {hasPremiumLocationTools
+                          ? "Use current location"
+                          : "Upgrade location tools"}
                       </Button>
                     </div>
 
-                    {/* Current Restaurant Location */}
-                    {(currentRestaurant?.city || currentRestaurant?.state) && (
-                      <div className="text-sm">
-                        <span className="text-muted-foreground">
-                          Current Location:
-                        </span>
-                        <p
-                          className="font-medium"
-                          data-testid="text-restaurant-location"
-                        >
-                          {currentRestaurant.city || "Unknown Location"}
-                          {currentRestaurant.state
-                            ? `, ${currentRestaurant.state}`
-                            : ""}
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Location Update Error */}
-                    {locationUpdateError && (
-                      <div className="mt-3 p-3 border border-[color:var(--status-error)]/30 bg-[color:var(--status-error)]/10 rounded-lg">
-                        <div className="flex items-center gap-2">
-                          <AlertCircle className="h-4 w-4 text-[color:var(--status-error)]" />
-                          <span className="text-sm font-medium text-[color:var(--status-error)]">
-                            Update Error
-                          </span>
-                        </div>
-                        <p
-                          className="text-sm text-[color:var(--status-error)] mt-1"
-                          data-testid="text-location-update-error"
-                        >
-                          {locationUpdateError}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Operating Hours Management */}
-                <Separator />
-                <div className="space-y-4">
-                  <div className="p-4 border rounded-lg">
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center space-x-3">
-                        <div className="p-2 rounded-lg bg-[color:var(--status-success)]/12">
-                          <Clock className="h-5 w-5 text-[color:var(--status-success)]" />
-                        </div>
-                        <div>
-                          <h3 className="font-medium">
-                            {currentRestaurant?.isFoodTruck
-                              ? "Operating windows"
-                              : "Operating hours"}
-                          </h3>
-                          <p className="text-sm text-muted-foreground">
-                            {currentRestaurant?.isFoodTruck
-                              ? "Set the days and times customers can find your truck."
-                              : "Set your restaurant's opening and closing hours for each day."}
-                          </p>
-                        </div>
-                      </div>
+                    <div className="mt-4 rounded-xl bg-[var(--bg-surface-muted)] p-3">
+                      <p className="text-xs font-bold uppercase tracking-[0.1em] text-[color:var(--text-muted)]">
+                        Saved on profile
+                      </p>
+                      <p
+                        className="mt-1 text-sm font-bold text-[color:var(--text-primary)]"
+                        data-testid="text-restaurant-location"
+                      >
+                        {[currentRestaurant?.city, currentRestaurant?.state]
+                          .filter(Boolean)
+                          .join(", ") || "No saved city or state"}
+                      </p>
                     </div>
 
-                    <Form {...operatingHoursForm}>
-                      <form
-                        onSubmit={operatingHoursForm.handleSubmit(
-                          handleOperatingHoursSubmit,
-                        )}
-                        className="space-y-4"
-                      >
+                    {locationUpdateError ? (
+                      <div className="mt-3 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-3">
+                        <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-700" />
+                        <p
+                          className="text-sm text-red-900"
+                          data-testid="text-location-update-error"
+                        >
+                          {/denied|permission/i.test(locationUpdateError)
+                            ? "Location access is off. Allow location access for MealScout and try again."
+                            : "MealScout could not update this location. Check location access and try again."}
+                        </p>
+                      </div>
+                    ) : null}
+
+                    {currentRestaurant?.isFoodTruck ? (
+                      <div className="mt-4 border-t border-[color:var(--border-subtle)] pt-4">
+                        <p className="text-sm font-bold">Booked stops</p>
+                        <p className="mt-1 text-xs text-[color:var(--text-muted)]">
+                          Manage host bookings and scheduled parking separately from your weekly service hours.
+                        </p>
+                        <Button asChild variant="ghost" className="mt-2 px-0 text-orange-800">
+                          <Link href="/parking-pass-manage">Manage booked stops</Link>
+                        </Button>
+                      </div>
+                    ) : null}
+                  </section>
+                </div>
+
+                <section
+                  className="rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-4 sm:p-5"
+                  data-testid="owner-weekly-hours-panel"
+                >
+                  <div className="mb-4 flex items-start gap-3">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700">
+                      <Clock className="h-5 w-5" />
+                    </span>
+                    <div>
+                      <h3 className="font-black text-[color:var(--text-primary)]">
+                        {currentRestaurant?.isFoodTruck
+                          ? "Weekly service hours"
+                          : "Weekly hours"}
+                      </h3>
+                      <p className="mt-1 text-sm text-[color:var(--text-muted)]">
+                        {currentRestaurant?.isFoodTruck
+                          ? "Set the usual days and times customers can find your truck."
+                          : "Set the opening and closing hours shown on your public profile."}
+                      </p>
+                    </div>
+                  </div>
+
+                  <Form {...operatingHoursForm}>
+                    <form
+                      onSubmit={operatingHoursForm.handleSubmit(
+                        handleOperatingHoursSubmit,
+                      )}
+                      className="space-y-4"
+                    >
+                      <div className="grid gap-3 lg:grid-cols-2">
                         {["mon", "tue", "wed", "thu", "fri", "sat", "sun"].map(
                           (day) => {
                             const dayName = {
@@ -5875,16 +5713,18 @@ export default function RestaurantOwnerDashboard() {
                               sat: "Saturday",
                               sun: "Sunday",
                             }[day];
-
                             const timeSlots =
                               operatingHoursForm.watch(
                                 day as keyof OperatingHoursFormData,
                               ) || [];
 
                             return (
-                              <div key={day} className="space-y-2">
-                                <div className="flex items-center justify-between">
-                                  <FormLabel className="text-sm font-medium">
+                              <div
+                                key={day}
+                                className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)]/55 p-3"
+                              >
+                                <div className="flex min-h-9 items-center justify-between gap-3">
+                                  <FormLabel className="text-sm font-black">
                                     {dayName}
                                   </FormLabel>
                                   <Button
@@ -5899,35 +5739,35 @@ export default function RestaurantOwnerDashboard() {
                                     disabled={timeSlots.length >= 3}
                                     data-testid={`button-add-${day}-hours`}
                                   >
-                                    <Plus className="h-4 w-4 mr-1" />
-                                    Add Hours
+                                    <Plus className="mr-1 h-4 w-4" />
+                                    Add time
                                   </Button>
                                 </div>
 
                                 {timeSlots.length === 0 ? (
                                   <p
-                                    className="text-sm text-muted-foreground pl-2"
+                                    className="mt-2 text-sm text-[color:var(--text-muted)]"
                                     data-testid={`text-${day}-closed`}
                                   >
                                     Closed
                                   </p>
                                 ) : (
-                                  <div className="space-y-2">
+                                  <div className="mt-2 space-y-2">
                                     {timeSlots.map((slot, index) => (
                                       <div
                                         key={index}
-                                        className="flex items-center gap-2"
+                                        className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto] items-start gap-2"
                                       >
                                         <FormField
                                           control={operatingHoursForm.control}
                                           name={`${day}.${index}.open` as any}
                                           render={({ field }) => (
-                                            <FormItem className="flex-1">
+                                            <FormItem>
                                               <FormControl>
                                                 <Input
                                                   {...field}
                                                   type="time"
-                                                  placeholder="09:00"
+                                                  aria-label={`${dayName} opening time`}
                                                   data-testid={`input-${day}-${index}-open`}
                                                 />
                                               </FormControl>
@@ -5935,19 +5775,19 @@ export default function RestaurantOwnerDashboard() {
                                             </FormItem>
                                           )}
                                         />
-                                        <span className="text-sm text-muted-foreground">
+                                        <span className="pt-2 text-sm text-[color:var(--text-muted)]">
                                           to
                                         </span>
                                         <FormField
                                           control={operatingHoursForm.control}
                                           name={`${day}.${index}.close` as any}
                                           render={({ field }) => (
-                                            <FormItem className="flex-1">
+                                            <FormItem>
                                               <FormControl>
                                                 <Input
                                                   {...field}
                                                   type="time"
-                                                  placeholder="17:00"
+                                                  aria-label={`${dayName} closing time`}
                                                   data-testid={`input-${day}-${index}-close`}
                                                 />
                                               </FormControl>
@@ -5958,7 +5798,9 @@ export default function RestaurantOwnerDashboard() {
                                         <Button
                                           type="button"
                                           variant="ghost"
-                                          size="sm"
+                                          size="icon"
+                                          className="h-10 w-10"
+                                          aria-label={`Remove ${dayName} time`}
                                           onClick={() =>
                                             removeTimeSlot(
                                               day as keyof OperatingHoursFormData,
@@ -5967,7 +5809,7 @@ export default function RestaurantOwnerDashboard() {
                                           }
                                           data-testid={`button-remove-${day}-${index}-hours`}
                                         >
-                                          <RotateCcw className="h-4 w-4" />
+                                          <Trash2 className="h-4 w-4" />
                                         </Button>
                                       </div>
                                     ))}
@@ -5977,46 +5819,80 @@ export default function RestaurantOwnerDashboard() {
                             );
                           },
                         )}
+                      </div>
 
-                        <div className="flex flex-col gap-3 pt-4 sm:flex-row sm:items-center">
-                          <Button
-                            type="submit"
-                            disabled={updateOperatingHoursMutation.isPending}
-                            className="w-full sm:w-auto"
-                            data-testid="button-save-operating-hours"
-                          >
-                            {updateOperatingHoursMutation.isPending ? (
-                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                            ) : (
-                              <Save className="h-4 w-4 mr-2" />
-                            )}
-                            {currentRestaurant?.isFoodTruck
-                              ? "Save Operating Windows"
-                              : "Save Operating Hours"}
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => operatingHoursForm.reset()}
-                            className="w-full sm:w-auto"
-                            data-testid="button-reset-operating-hours"
-                          >
-                            <RotateCcw className="h-4 w-4 mr-2" />
-                            Reset
-                          </Button>
-                        </div>
-                      </form>
-                    </Form>
+                      <div className="flex flex-col gap-3 border-t border-[color:var(--border-subtle)] pt-4 sm:flex-row sm:items-center">
+                        <Button
+                          type="submit"
+                          disabled={updateOperatingHoursMutation.isPending}
+                          className="min-h-11 w-full sm:w-auto"
+                          data-testid="button-save-operating-hours"
+                        >
+                          {updateOperatingHoursMutation.isPending ? (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          ) : (
+                            <Save className="mr-2 h-4 w-4" />
+                          )}
+                          {currentRestaurant?.isFoodTruck
+                            ? "Save schedule"
+                            : "Save hours"}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => operatingHoursForm.reset()}
+                          className="min-h-11 w-full sm:w-auto"
+                          data-testid="button-reset-operating-hours"
+                        >
+                          <RotateCcw className="mr-2 h-4 w-4" />
+                          Discard changes
+                        </Button>
+                      </div>
+                    </form>
+                  </Form>
+                </section>
+
+                <details className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)]/45 p-4">
+                  <summary className="cursor-pointer text-sm font-bold text-[color:var(--text-secondary)]">
+                    Business type
+                  </summary>
+                  <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-start gap-3">
+                      <Truck className="mt-0.5 h-5 w-5 shrink-0 text-orange-700" />
+                      <div>
+                        <p className="text-sm font-bold">
+                          {currentRestaurant?.isFoodTruck
+                            ? "Food-truck tools are enabled"
+                            : "Restaurant tools are enabled"}
+                        </p>
+                        <p className="mt-1 text-xs text-[color:var(--text-muted)]">
+                          Change this only if the business type is incorrect.
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      variant="outline"
+                      onClick={() =>
+                        toggleFoodTruckMutation.mutate(
+                          !currentRestaurant?.isFoodTruck,
+                        )
+                      }
+                      disabled={toggleFoodTruckMutation.isPending}
+                      className="min-h-11 w-full sm:w-auto"
+                      data-testid="button-toggle-food-truck"
+                    >
+                      {currentRestaurant?.isFoodTruck
+                        ? "Use restaurant tools"
+                        : "Use food-truck tools"}
+                    </Button>
                   </div>
-                </div>
+                </details>
               </CardContent>
             </Card>
           </TabsContent>
         ) : null}
       </Tabs>
 
-      {/* Bottom Navigation */}
-      <Navigation />
       </div>
     </BusinessWorkspaceShell>
   );

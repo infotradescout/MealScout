@@ -17,9 +17,11 @@ const businessTypes = readFileSync("shared/businessTypes.ts", "utf8");
 
 const requiredScout = [
   'import { buildPublicProfilePath } from "@/lib/public-profile-path";',
+  "function getRestaurantEntityType(",
+  "isBarBusinessType(",
   '.toLowerCase() === "bar"',
   'return "bar";',
-  'explicitType === "bar"',
+  'entityType: entityType === "unknown" ? "restaurant" : entityType',
 ];
 
 const requiredAdmin = [

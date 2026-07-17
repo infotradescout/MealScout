@@ -618,7 +618,9 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
 
       <nav
         aria-label="Primary navigation"
-        className="fixed inset-x-0 bottom-0 z-[1100] border-t border-[color:var(--border-subtle)] lg:hidden"
+        className={`${
+          isBusinessWorkspaceRoute ? "hidden" : "fixed"
+        } inset-x-0 bottom-0 z-[1100] border-t border-[color:var(--border-subtle)] lg:hidden`}
         style={{ bottom: 0 }}
       >
         <div
@@ -696,7 +698,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
         </div>
       </nav>
 
-      {moreOpen && (
+      {moreOpen && !isBusinessWorkspaceRoute && (
         <div
           className="fixed inset-0 z-[1090]"
           aria-modal="true"
