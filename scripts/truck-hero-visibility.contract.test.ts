@@ -39,7 +39,7 @@ requireIncludes(
 );
 requireIncludes(
   publicProfile,
-  "<FullMenuSection",
+  "<PublicProfileMenu",
   "Restaurant menu rendering must remain present after the hero branch.",
 );
 requireIncludes(
@@ -54,7 +54,7 @@ requireExcludes(
 );
 
 const truckHeroIndex = publicProfile.indexOf("<ElevatedTruckHero");
-const menuIndex = publicProfile.indexOf("<FullMenuSection");
+const menuIndex = publicProfile.indexOf("<PublicProfileMenu");
 const aboutIndex = publicProfile.indexOf("<AboutFoodStyle profile={restaurantProfile} />");
 const galleryIndex = publicProfile.indexOf("<GalleryStrip profile={restaurantProfile} />");
 if (truckHeroIndex < 0 || menuIndex < 0 || aboutIndex < 0 || galleryIndex < 0) {

@@ -1,7 +1,7 @@
 // Public profile component barrel — import from here for clean imports
 export { WhyGoNowPanel } from "./WhyGoNowPanel";
 export { MobileActionDock } from "./MobileActionDock";
-export { MenuHighlightsRail } from "./MenuHighlightsRail";
+export { PublicProfileMenu } from "./PublicProfileMenu";
 export { TruckSchedulePanel } from "./TruckSchedulePanel";
 export { RestaurantHoursPanel } from "./RestaurantHoursPanel";
 export { PlanYourVisitPanel } from "./PlanYourVisitPanel";

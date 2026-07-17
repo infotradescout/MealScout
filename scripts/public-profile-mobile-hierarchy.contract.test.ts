@@ -96,7 +96,7 @@ requireIncludes(
 // page hierarchy using first-occurrence position in the source text.
 const mainOrder = [
   "<ElevatedTruckHero",
-  "<FullMenuSection",
+  "<PublicProfileMenu",
   "<GalleryStrip",
   "<RestaurantSocial",
   "<RelatedScoutRail",
