@@ -227,8 +227,8 @@ export default function BusinessWorkspaceShell({
     {
       id: "settings",
       label: "Settings",
-      description: "Account and workspace settings",
-      href: "/profile/settings",
+      description: "Account access, visibility, and help",
+      href: buildWorkspaceHref("/profile/settings", business.id),
       icon: Settings,
       visible: true,
     },

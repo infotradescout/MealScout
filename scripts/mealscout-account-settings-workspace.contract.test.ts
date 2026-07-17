@@ -1,0 +1,103 @@
+import { readFileSync } from "node:fs";
+
+const settings = readFileSync(
+  "client/src/pages/profile/settings.tsx",
+  "utf8",
+);
+const shell = readFileSync(
+  "client/src/components/business-workspace-shell.tsx",
+  "utf8",
+);
+const accountRoutes = readFileSync(
+  "server/routes/authAccountRoutes.ts",
+  "utf8",
+);
+const publicRoutes = readFileSync(
+  "server/routes/publicDiscoveryRoutes.ts",
+  "utf8",
+);
+
+for (const snippet of [
+  "<BusinessWorkspaceShell",
+  'activeModule="settings"',
+  'params.get("restaurantId")',
+  'queryKey: ["/api/restaurants/my-restaurants"]',
+  "onBusinessChange={handleBusinessChange}",
+  'queryKey: ["/api/settings/me"]',
+  'method: "PATCH"',
+  "publicProfileSettings: {",
+  "showAddress,",
+  "showContact,",
+  "<NotificationSettings />",
+  "Public contact visibility",
+  "These two settings apply to every public profile owned by this account.",
+  "Business-specific details and photos remain in each business workspace.",
+  "Profiles affected",
+  "Business presentation",
+  'setup: "profile"',
+  'setup: "profile-media"',
+  'buildBusinessHref("/business-team")',
+  'buildBusinessHref("/subscribe")',
+]) {
+  if (!settings.includes(snippet)) {
+    throw new Error(`Account settings workspace contract missing: ${snippet}`);
+  }
+}
+
+for (const presentationOnlySurface of [
+  "Public Profile Studio",
+  "templatePreset",
+  "heroLayout",
+  "heroTitle",
+  "heroSubtitle",
+  "accentColor",
+  "fontFamily",
+  "featuredLinks",
+  "galleryUrls",
+  "/api/settings/public-profile/gallery",
+  "/api/settings/custom-domain/verify",
+  "customDomainHost",
+  "Language & Region",
+  "Currency",
+  "<Navigation",
+]) {
+  if (settings.includes(presentationOnlySurface)) {
+    throw new Error(
+      `Presentation-only or duplicate settings surface remains: ${presentationOnlySurface}`,
+    );
+  }
+}
+
+for (const snippet of [
+  'label: "Settings"',
+  'description: "Account access, visibility, and help"',
+  'href: buildWorkspaceHref("/profile/settings", business.id)',
+]) {
+  if (!shell.includes(snippet)) {
+    throw new Error(`Business shell Settings contract missing: ${snippet}`);
+  }
+}
+
+for (const snippet of [
+  'app.get("/api/settings/me", isAuthenticated',
+  'app.patch("/api/settings/me", isAuthenticated',
+  "...(current.publicProfileSettings || {})",
+  "...(parsed.publicProfileSettings || {})",
+  '"/api/settings/public-profile/gallery"',
+  '"/api/settings/custom-domain/verify"',
+]) {
+  if (!accountRoutes.includes(snippet)) {
+    throw new Error(`Account settings route behavior changed or missing: ${snippet}`);
+  }
+}
+
+for (const snippet of [
+  "const showAddress = profileSettings.showAddress !== false",
+  "const showContact = profileSettings.showContact !== false",
+]) {
+  if (!publicRoutes.includes(snippet)) {
+    throw new Error(`Live public visibility behavior missing: ${snippet}`);
+  }
+}
+
+console.log("mealscout-account-settings-workspace.contract: PASS");
