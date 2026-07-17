@@ -1393,6 +1393,73 @@ export function registerMenuRoutes(app: Express) {
   );
 
   /**
+   * GET /api/owner/menus/:menuId/details
+   * Returns the complete editable menu for an authorized operator. Unlike the
+   * public menu endpoint, unavailable items remain visible here so an owner can
+   * restore them later.
+   */
+  app.get(
+    "/api/owner/menus/:menuId/details",
+    isAuthenticated,
+    canManageMenu,
+    wrap(async (req, res) => {
+      const { menuId } = req.params;
+      const menu = await assertOwnsMenu(req.user, menuId);
+
+      const [categories, items] = (await Promise.all([
+        db
+          .select()
+          .from(menuCategories)
+          .where(eq(menuCategories.menuId, menuId))
+          .orderBy(asc(menuCategories.sortOrder)),
+        db
+          .select()
+          .from(menuItems)
+          .where(eq(menuItems.menuId, menuId))
+          .orderBy(asc(menuItems.sortOrder)),
+      ])) as [MenuCategory[], MenuItem[]];
+
+      const itemIds = items.map((item) => item.id);
+      const [variants, modifiers]: [MenuItemVariant[], MenuItemModifier[]] =
+        itemIds.length
+          ? ((await Promise.all([
+            db
+              .select()
+              .from(menuItemVariants)
+              .where(inArray(menuItemVariants.menuItemId, itemIds))
+              .orderBy(asc(menuItemVariants.sortOrder)),
+            db
+              .select()
+              .from(menuItemModifiers)
+              .where(inArray(menuItemModifiers.menuItemId, itemIds))
+              .orderBy(asc(menuItemModifiers.sortOrder)),
+            ])) as [MenuItemVariant[], MenuItemModifier[]])
+          : [[], []];
+
+      const enrichedItems = items.map((item) => ({
+        ...item,
+        variants: variants.filter((variant) => variant.menuItemId === item.id),
+        modifiers: modifiers.filter(
+          (modifier) => modifier.menuItemId === item.id,
+        ),
+      }));
+
+      res.json({
+        menu: {
+          ...menu,
+          categories: categories.map((category) => ({
+            ...category,
+            items: enrichedItems.filter(
+              (item) => item.categoryId === category.id,
+            ),
+          })),
+          uncategorizedItems: enrichedItems.filter((item) => !item.categoryId),
+        },
+      });
+    }),
+  );
+
+  /**
    * POST /api/owner/menus
    * Create a new menu for a restaurant.
    */

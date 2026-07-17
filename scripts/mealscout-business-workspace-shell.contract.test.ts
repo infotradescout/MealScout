@@ -44,8 +44,11 @@ assert.match(owner, /\/operating-hours/);
 assert.match(menu, /<BusinessWorkspaceShell/);
 assert.match(menu, /activeModule="menu"/);
 assert.match(menu, /queryKey: \["\/api\/owner\/menus", restaurantId\]/);
-assert.match(menu, /queryKey: \["\/api\/menus", selectedMenuId\]/);
-assert.match(menu, /scheduleHref/);
+assert.match(
+  menu,
+  /queryKey: \["\/api\/owner\/menus", selectedMenuId, "details"\]/,
+);
+assert.match(menu, /data-testid="owner-menu-workspace"/);
 
 assert.match(app, /const usesBusinessWorkspace =/);
 assert.match(app, /usesBusinessWorkspace \? "lg:pt-0" : "lg:pt-16"/);
