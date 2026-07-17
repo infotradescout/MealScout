@@ -105,4 +105,21 @@ assert.match(
   "New Menus must also rotate distinct businesses when menu diversity is too thin.",
 );
 
+const firstScreenSuppressionStart = scoutPage.indexOf(
+  "const suppressFirstScreenBusiness =",
+);
+const firstScreenSuppressionEnd = scoutPage.indexOf(
+  "const hasForYouSections =",
+  firstScreenSuppressionStart,
+);
+assert.ok(
+  firstScreenSuppressionStart >= 0 &&
+    firstScreenSuppressionEnd > firstScreenSuppressionStart,
+);
+assert.doesNotMatch(
+  scoutPage.slice(firstScreenSuppressionStart, firstScreenSuppressionEnd),
+  /card\.cardType === "menu_item"/,
+  "A menu business may remain visible when the same business leads a different category.",
+);
+
 console.log("scout-menu-business-diversity.contract: PASS");
