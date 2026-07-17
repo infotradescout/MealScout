@@ -22,6 +22,7 @@ import {
 import { buildSlotDateTimes } from "../services/timeIntent";
 import { dateKeyInZone } from "../services/dateKeys";
 import Stripe from "stripe";
+import { isInternalTeamUserType } from "../roleAccess";
 
 const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
@@ -312,18 +313,32 @@ export function registerBookingRoutes(
   app.get("/api/bookings/my-truck", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.id;
+      const requestedTruckId = String(req.query?.truckId || "").trim();
 
-      // Get user's restaurants (trucks)
-      const userTrucks = await db
-        .select()
-        .from(restaurants)
-        .where(eq(restaurants.ownerId, userId));
-
-      if (userTrucks.length === 0) {
-        return res.json([]);
+      let truckIds: string[] = [];
+      if (requestedTruckId) {
+        const authorized =
+          isInternalTeamUserType(req.user?.userType) ||
+          (await storage.verifyRestaurantOwnership(
+            requestedTruckId,
+            userId,
+            "manageParkingPass",
+          ));
+        if (!authorized) {
+          return res.status(403).json({ message: "Not authorized" });
+        }
+        truckIds = [requestedTruckId];
+      } else {
+        // Preserve the existing account-wide response for callers that do not
+        // select a truck explicitly.
+        const userTrucks = await db
+          .select({ id: restaurants.id })
+          .from(restaurants)
+          .where(eq(restaurants.ownerId, userId));
+        truckIds = userTrucks.map((truck: (typeof userTrucks)[number]) => truck.id);
       }
 
-      const truckIds = userTrucks.map((t: (typeof userTrucks)[number]) => t.id);
+      if (truckIds.length === 0) return res.json([]);
 
       // Get all bookings for these trucks
       const bookings = await db

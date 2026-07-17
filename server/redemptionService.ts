@@ -10,7 +10,17 @@
 
 import { db } from './db';
 import { restaurantCreditRedemptions, creditLedger, restaurants, users } from '@shared/schema';
-import { eq, sum } from 'drizzle-orm';
+import { desc, eq, sql, sum } from 'drizzle-orm';
+
+export class InsufficientCreditsError extends Error {
+  constructor(
+    public readonly available: number,
+    public readonly requested: number,
+  ) {
+    super("Insufficient user credits");
+    this.name = "InsufficientCreditsError";
+  }
+}
 
 /**
  * Process credit redemption at a restaurant
@@ -32,65 +42,92 @@ export async function redeemCreditAtRestaurant(
   creditEntry: any;
 }> {
   try {
-    // Verify restaurant exists
-    const restaurant = (await db
-      .select()
-      .from(restaurants)
-      .where(eq(restaurants.id, restaurantId))
-      .limit(1))[0];
+    const normalizedCreditAmount = Math.round(creditAmount * 100) / 100;
+    const { redemption, creditEntry, disputeUntilDate } = await db.transaction(
+      async (tx: any) => {
+        // Serialize all balance-changing work for this user. The redemption and
+        // debit then commit together, so two operators cannot spend the same
+        // credits concurrently or leave a redemption without its ledger entry.
+        await tx.execute(
+          sql`SELECT pg_advisory_xact_lock(hashtext(${`credit_balance:${userId}`}))`,
+        );
 
-    if (!restaurant) {
-      throw new Error('Restaurant not found');
-    }
+        const [restaurant] = await tx
+          .select({ id: restaurants.id })
+          .from(restaurants)
+          .where(eq(restaurants.id, restaurantId))
+          .limit(1);
+        if (!restaurant) {
+          throw new Error("Restaurant not found");
+        }
 
-    // Verify user has sufficient credits
-    const userCredits = await db
-      .select({ total: sum(creditLedger.amount) })
-      .from(creditLedger)
-      .where(eq(creditLedger.userId, userId));
+        const [user] = await tx
+          .select({ id: users.id })
+          .from(users)
+          .where(eq(users.id, userId))
+          .limit(1);
+        if (!user) {
+          throw new Error("User not found");
+        }
 
-    const balance = userCredits[0]?.total
-      ? parseFloat(userCredits[0].total.toString())
-      : 0;
+        const [userCredits] = await tx
+          .select({ total: sum(creditLedger.amount) })
+          .from(creditLedger)
+          .where(eq(creditLedger.userId, userId));
+        const balance = userCredits?.total
+          ? Number.parseFloat(userCredits.total.toString())
+          : 0;
+        const balanceInCents = Math.round(balance * 100);
+        const requestedInCents = Math.round(normalizedCreditAmount * 100);
+        if (balanceInCents < requestedInCents) {
+          throw new InsufficientCreditsError(
+            balanceInCents / 100,
+            requestedInCents / 100,
+          );
+        }
 
-    if (balance < creditAmount) {
-      throw new Error(`Insufficient credits. Available: $${balance}, Requested: $${creditAmount}`);
-    }
+        const disputeUntilDate = new Date();
+        disputeUntilDate.setDate(disputeUntilDate.getDate() + 7);
 
-    // Create redemption record (immutable)
-    const disputeUntilDate = new Date();
-    disputeUntilDate.setDate(disputeUntilDate.getDate() + 7); // 7-day dispute window
+        const [redemption] = await tx
+          .insert(restaurantCreditRedemptions)
+          .values({
+            restaurantId,
+            userId,
+            creditAmount: normalizedCreditAmount.toFixed(2),
+            orderReference: orderReference || undefined,
+            notes: notes || undefined,
+            disputeUntil: disputeUntilDate,
+          })
+          .returning();
 
-    const redemption = await db.insert(restaurantCreditRedemptions).values({
-      restaurantId,
-      userId,
-      creditAmount: creditAmount.toString(),
-      orderReference: orderReference || undefined,
-      notes: notes || undefined,
-      disputeUntil: disputeUntilDate,
-    }).returning();
+        const [creditEntry] = await tx
+          .insert(creditLedger)
+          .values({
+            userId,
+            amount: (-normalizedCreditAmount).toFixed(2),
+            sourceType: "redemption",
+            sourceId: redemption.id,
+            redeemedAt: new Date(),
+            redeemedFor: "restaurant",
+          })
+          .returning();
 
-    // Create credit ledger debit entry (immutable)
-    const creditEntry = await db.insert(creditLedger).values({
-      userId,
-      amount: (-creditAmount).toString(),
-      sourceType: 'redemption',
-      sourceId: redemption[0].id,
-      redeemedAt: new Date(),
-      redeemedFor: 'restaurant',
-    }).returning();
+        return { redemption, creditEntry, disputeUntilDate };
+      },
+    );
 
     console.log('[Phase R1] Credit redeemed at restaurant:', {
-      redemptionId: redemption[0].id,
+      redemptionId: redemption.id,
       restaurantId,
       userId,
-      amount: creditAmount,
+      amount: normalizedCreditAmount,
       disputeUntil: disputeUntilDate,
     });
 
     return {
-      redemption: redemption[0],
-      creditEntry: creditEntry[0],
+      redemption,
+      creditEntry,
     };
   } catch (error) {
     console.error('[redemptionService] Error redeeming credit:', error);
@@ -172,6 +209,7 @@ export async function getRedemptionHistory(
       .select()
       .from(restaurantCreditRedemptions)
       .where(eq(restaurantCreditRedemptions.restaurantId, restaurantId))
+      .orderBy(desc(restaurantCreditRedemptions.redeemedAt))
       .limit(limit)
       .offset(offset);
 
@@ -195,6 +233,17 @@ export async function getRedemptionHistory(
     console.error('[redemptionService] Error getting history:', error);
     throw error;
   }
+}
+
+export async function getRedemptionRestaurantId(
+  redemptionId: string,
+): Promise<string | null> {
+  const [redemption] = await db
+    .select({ restaurantId: restaurantCreditRedemptions.restaurantId })
+    .from(restaurantCreditRedemptions)
+    .where(eq(restaurantCreditRedemptions.id, redemptionId))
+    .limit(1);
+  return redemption?.restaurantId || null;
 }
 
 /**
@@ -247,4 +296,5 @@ export default {
   getRestaurantCreditSummary,
   getRedemptionHistory,
   flagRedemptionForDispute,
+  getRedemptionRestaurantId,
 };

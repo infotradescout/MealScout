@@ -16,6 +16,16 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Form,
   FormControl,
   FormField,
@@ -78,7 +88,6 @@ import OwnerProfileWorkspace, {
 } from "@/components/owner-profile-workspace";
 import OwnerDealsWorkspace from "@/components/owner-deals-workspace";
 import OwnerAudienceWorkspace from "@/components/owner-audience-workspace";
-import RestaurantCreditRedemptionForm from "@/components/RestaurantCreditRedemptionForm";
 import { format, subDays, startOfMonth, endOfMonth } from "date-fns";
 import { useFoodTruckSocket } from "@/hooks/useFoodTruckSocket";
 import {
@@ -223,6 +232,8 @@ export default function RestaurantOwnerDashboard() {
   >("disconnected");
   const [gpsAccuracy, setGpsAccuracy] = useState<number | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [bookingToCancel, setBookingToCancel] =
+    useState<TruckBookingItem | null>(null);
   const hasWarnedFallbackAccuracyRef = useRef(false);
 
   const isRestaurantOwner = user?.userType === "restaurant_owner";
@@ -389,10 +400,24 @@ export default function RestaurantOwnerDashboard() {
         legacyAnalyticsEnabled && !!selectedRestaurant && hasAnalyticsAccess,
     });
 
-  const { data: truckBookings = [], isLoading: loadingTruckBookings } =
-    useQuery<TruckBookingItem[]>({
-      queryKey: ["/api/bookings/my-truck"],
-      enabled: !!user && canManageParkingPass,
+  const {
+    data: truckBookings = [],
+    isLoading: loadingTruckBookings,
+    isError: truckBookingsFailed,
+  } = useQuery<TruckBookingItem[]>({
+      queryKey: ["/api/bookings/my-truck", selectedRestaurant],
+      queryFn: async () => {
+        const response = await fetch(
+          `/api/bookings/my-truck?truckId=${encodeURIComponent(selectedRestaurant)}`,
+          { credentials: "include" },
+        );
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(payload?.message || "Failed to load booked stops");
+        }
+        return Array.isArray(payload) ? payload : [];
+      },
+      enabled: !!user && !!selectedRestaurant && canManageParkingPass,
     });
 
   // Fetch dashboard stats
@@ -653,7 +678,7 @@ export default function RestaurantOwnerDashboard() {
       ? "profile"
       : setupMode === "profile-media"
         ? "media"
-        : setupMode === "schedule"
+        : setupMode === "schedule" || setupMode === "bookings"
           ? "availability"
           : setupMode === "menu"
             ? "menu"
@@ -1063,9 +1088,7 @@ export default function RestaurantOwnerDashboard() {
       coverImageUrl: String(row?.coverImageUrl || ""),
     });
   }, [currentRestaurant?.id]);
-  const visibleTruckBookings = truckBookings.filter(
-    (booking) => !selectedRestaurant || booking.truckId === selectedRestaurant,
-  );
+  const visibleTruckBookings = truckBookings;
   const liveShareUrl = currentPublicProfileHref
     ? `${currentPublicProfileHref}?live=1`
     : "/scout";
@@ -1966,6 +1989,7 @@ export default function RestaurantOwnerDashboard() {
       await queryClient.invalidateQueries({
         queryKey: ["/api/bookings/my-truck"],
       });
+      setBookingToCancel(null);
       toast({
         title: "Booking cancelled",
         description: "Your booking was cancelled. No refund was issued.",
@@ -1980,8 +2004,10 @@ export default function RestaurantOwnerDashboard() {
     },
   });
   const availableTabs = [
-    ...(canManageBilling ? (["credits"] as const) : []),
-    ...(canManageParkingPass ? (["bookings", "foodtruck"] as const) : []),
+    ...(canManageParkingPass ? (["foodtruck"] as const) : []),
+    ...(canManageParkingPass && currentIsTruckBusiness
+      ? (["bookings"] as const)
+      : []),
   ];
   const requestedDefaultTab =
     setupMode === "schedule" || dashboardParams.get("truck") === "1"
@@ -1992,7 +2018,7 @@ export default function RestaurantOwnerDashboard() {
   const defaultTab =
     requestedDefaultTab && availableTabs.includes(requestedDefaultTab as any)
       ? requestedDefaultTab
-      : (availableTabs[0] ?? "credits");
+      : (availableTabs[0] ?? "foodtruck");
   const buildOwnerToolHref = (
     destination: string,
     extras?: Record<string, string>,
@@ -2260,7 +2286,9 @@ export default function RestaurantOwnerDashboard() {
           </Card>
         ) : null}
 
-        {currentRestaurant && setupMode && setupMode !== "schedule" && (
+        {currentRestaurant &&
+          setupMode &&
+          !["schedule", "bookings"].includes(setupMode) && (
           <div
             className={
               setupMode === "menu"
@@ -4439,10 +4467,7 @@ export default function RestaurantOwnerDashboard() {
           )}
 
         {/* Business operations */}
-        {activeWorkspaceModule !== "profile" &&
-        activeWorkspaceModule !== "media" &&
-        activeWorkspaceModule !== "deals" &&
-        activeWorkspaceModule !== "audience" &&
+        {activeWorkspaceModule === "availability" &&
         availableTabs.length > 0 ? (
           <Tabs
             id="owner-workspace-operations"
@@ -4450,29 +4475,23 @@ export default function RestaurantOwnerDashboard() {
             defaultValue={defaultTab}
             className="scroll-mt-64 space-y-4 lg:scroll-mt-24"
           >
-            <TabsList
-              className={setupMode === "schedule" ? "hidden" : "w-full"}
-            >
-              {canManageBilling ? (
-                <TabsTrigger value="credits">
-                  <CreditCard className="mr-1 hidden h-4 w-4 sm:block" />
-                  MealScout Credits
-                </TabsTrigger>
-              ) : null}
-              {canManageParkingPass ? (
-                <TabsTrigger value="bookings">Bookings</TabsTrigger>
-              ) : null}
-              {canManageParkingPass ? (
-                <TabsTrigger value="foodtruck" data-testid="tab-food-truck">
-                  {currentRestaurant?.isFoodTruck ? (
-                    <Truck className="mr-1 hidden h-4 w-4 sm:block" />
-                  ) : (
-                    <Clock className="mr-1 hidden h-4 w-4 sm:block" />
-                  )}
-                  {currentRestaurant?.isFoodTruck ? "Schedule & live" : "Hours"}
-                </TabsTrigger>
-              ) : null}
-            </TabsList>
+            {currentIsTruckBusiness ? (
+              <TabsList className="grid w-full grid-cols-2 rounded-2xl bg-orange-50 p-1 sm:max-w-md">
+                {canManageParkingPass ? (
+                  <TabsTrigger value="foodtruck" data-testid="tab-food-truck">
+                    {currentRestaurant?.isFoodTruck ? (
+                      <Truck className="mr-1 hidden h-4 w-4 sm:block" />
+                    ) : (
+                      <Clock className="mr-1 hidden h-4 w-4 sm:block" />
+                    )}
+                    Schedule &amp; live
+                  </TabsTrigger>
+                ) : null}
+                {canManageParkingPass ? (
+                  <TabsTrigger value="bookings">Booked stops</TabsTrigger>
+                ) : null}
+              </TabsList>
+            ) : null}
 
             {canViewAnalytics ? (
               <TabsContent value="analytics">
@@ -5146,66 +5165,37 @@ export default function RestaurantOwnerDashboard() {
               </TabsContent>
             ) : null}
 
-            {/* PHASE R1: MealScout Credits Redemption */}
-            {canManageBilling ? (
-              <TabsContent value="credits" className="space-y-6">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <CreditCard className="h-5 w-5" />
-                      Accept MealScout Credits
-                    </CardTitle>
-                    <CardDescription>
-                      Accept MealScout credits from users as payment. Credits
-                      are settled weekly via Stripe.
-                    </CardDescription>
-                  </CardHeader>
-                </Card>
-
-                {selectedRestaurant && (
-                  <RestaurantCreditRedemptionForm
-                    restaurantId={selectedRestaurant}
-                    onSuccess={(redemption) => {
-                      toast({
-                        title: "Success",
-                        description: `Credit redeemed successfully! Redemption ID: ${redemption.redemption?.id}`,
-                      });
-                      // Optionally refresh data or update UI
-                    }}
-                  />
-                )}
-              </TabsContent>
-            ) : null}
-
-            {canManageParkingPass ? (
+            {canManageParkingPass && currentIsTruckBusiness ? (
               <TabsContent value="bookings" className="space-y-6">
-                <Card>
-                  <CardHeader>
+                <Card
+                  className="overflow-hidden border-orange-100 bg-white/95 shadow-clean"
+                  data-testid="owner-booked-stops-workspace"
+                >
+                  <CardHeader className="border-b border-orange-100 bg-gradient-to-br from-orange-50 via-amber-50/70 to-white">
                     <CardTitle className="flex items-center gap-2">
-                      <Calendar className="h-5 w-5" />
-                      Event Bookings
+                      <Calendar className="h-5 w-5 text-orange-700" />
+                      Booked stops
                     </CardTitle>
-                    <CardDescription>
-                      Track upcoming paid event bookings for your selected truck
-                      and cancel when needed. Confirmed cancellations do not
-                      issue refunds.
+                    <CardDescription className="max-w-2xl">
+                      Review the paid host stops tied to this truck. Cancelling
+                      releases the stop but does not issue a refund.
                     </CardDescription>
                   </CardHeader>
-                  <CardContent className="space-y-4">
+                  <CardContent className="space-y-5 p-4 sm:p-6">
                     <div className="grid gap-3 md:grid-cols-3">
-                      <div className="rounded-lg border p-4">
-                        <p className="text-sm text-muted-foreground">
-                          Total bookings
+                      <div className="rounded-2xl border border-orange-100 bg-orange-50/45 p-4">
+                        <p className="text-xs font-bold uppercase tracking-wide text-orange-800">
+                          All stops
                         </p>
-                        <p className="mt-1 text-2xl font-semibold">
+                        <p className="mt-2 text-2xl font-black text-stone-950">
                           {visibleTruckBookings.length}
                         </p>
                       </div>
-                      <div className="rounded-lg border p-4">
-                        <p className="text-sm text-muted-foreground">
+                      <div className="rounded-2xl border border-emerald-100 bg-emerald-50/60 p-4">
+                        <p className="text-xs font-bold uppercase tracking-wide text-emerald-800">
                           Confirmed
                         </p>
-                        <p className="mt-1 text-2xl font-semibold">
+                        <p className="mt-2 text-2xl font-black text-stone-950">
                           {
                             visibleTruckBookings.filter(
                               (booking) => booking.status === "confirmed",
@@ -5213,11 +5203,11 @@ export default function RestaurantOwnerDashboard() {
                           }
                         </p>
                       </div>
-                      <div className="rounded-lg border p-4">
-                        <p className="text-sm text-muted-foreground">
+                      <div className="rounded-2xl border border-amber-100 bg-amber-50/60 p-4">
+                        <p className="text-xs font-bold uppercase tracking-wide text-amber-800">
                           Upcoming spend
                         </p>
-                        <p className="mt-1 text-2xl font-semibold">
+                        <p className="mt-2 text-2xl font-black text-stone-950">
                           $
                           {(
                             visibleTruckBookings
@@ -5237,12 +5227,24 @@ export default function RestaurantOwnerDashboard() {
                     </div>
 
                     {loadingTruckBookings ? (
-                      <div className="flex items-center justify-center py-10 text-sm text-muted-foreground">
-                        Loading bookings...
+                      <div className="flex items-center justify-center rounded-2xl border border-orange-100 bg-orange-50/30 py-10 text-sm text-stone-600">
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Loading booked stops…
+                      </div>
+                    ) : truckBookingsFailed ? (
+                      <div className="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-900">
+                        Booked stops could not be loaded. Your schedule and live
+                        status are unaffected.
                       </div>
                     ) : visibleTruckBookings.length === 0 ? (
-                      <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-                        No event bookings yet for this truck.
+                      <div className="rounded-2xl border border-dashed border-orange-200 bg-orange-50/25 p-8 text-center">
+                        <Calendar className="mx-auto h-8 w-8 text-orange-500" />
+                        <p className="mt-3 font-black text-stone-950">
+                          No booked stops yet
+                        </p>
+                        <p className="mt-1 text-sm text-stone-600">
+                          Paid host stops for this truck will appear here.
+                        </p>
                       </div>
                     ) : (
                       <div className="space-y-3">
@@ -5257,12 +5259,12 @@ export default function RestaurantOwnerDashboard() {
                           return (
                             <div
                               key={booking.id}
-                              className="rounded-lg border p-4"
+                              className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm"
                             >
                               <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                                 <div className="space-y-2">
                                   <div className="flex flex-wrap items-center gap-2">
-                                    <p className="font-semibold">
+                                    <p className="font-black text-stone-950">
                                       {booking.event?.host?.businessName ||
                                         "Host venue"}
                                     </p>
@@ -5279,13 +5281,13 @@ export default function RestaurantOwnerDashboard() {
                                     </Badge>
                                   </div>
                                   {booking.event?.host?.address ? (
-                                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                    <div className="flex items-center gap-2 text-sm text-stone-600">
                                       <MapPin className="h-4 w-4" />
                                       <span>{booking.event.host.address}</span>
                                     </div>
                                   ) : null}
                                   {eventDate ? (
-                                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                    <div className="flex items-center gap-2 text-sm text-stone-600">
                                       <Clock className="h-4 w-4" />
                                       <span>
                                         {format(eventDate, "EEE, MMM d")}
@@ -5301,14 +5303,14 @@ export default function RestaurantOwnerDashboard() {
                                 </div>
 
                                 <div className="space-y-2 text-sm lg:text-right">
-                                  <p className="font-semibold">
+                                  <p className="font-black text-stone-950">
                                     $
                                     {(
                                       Number(booking.totalCents || 0) / 100
                                     ).toFixed(2)}{" "}
                                     total
                                   </p>
-                                  <p className="text-muted-foreground">
+                                  <p className="text-stone-500">
                                     Host fee $
                                     {(
                                       Number(booking.hostPriceCents || 0) / 100
@@ -5324,19 +5326,9 @@ export default function RestaurantOwnerDashboard() {
                                       variant="outline"
                                       size="sm"
                                       disabled={bookingCancelMutation.isPending}
-                                      onClick={() => {
-                                        if (
-                                          confirm(
-                                            "Cancel this booking? No refund will be issued.",
-                                          )
-                                        ) {
-                                          bookingCancelMutation.mutate(
-                                            booking.id,
-                                          );
-                                        }
-                                      }}
+                                      onClick={() => setBookingToCancel(booking)}
                                     >
-                                      Cancel Booking
+                                      Cancel stop
                                     </Button>
                                   ) : null}
                                 </div>
@@ -5348,6 +5340,44 @@ export default function RestaurantOwnerDashboard() {
                     )}
                   </CardContent>
                 </Card>
+
+                <AlertDialog
+                  open={Boolean(bookingToCancel)}
+                  onOpenChange={(open) => {
+                    if (!open && !bookingCancelMutation.isPending) {
+                      setBookingToCancel(null);
+                    }
+                  }}
+                >
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Cancel this booked stop?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This releases the stop at {bookingToCancel?.event?.host?.businessName || "the host venue"}.
+                        The booking payment will not be refunded.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel disabled={bookingCancelMutation.isPending}>
+                        Keep stop
+                      </AlertDialogCancel>
+                      <AlertDialogAction
+                        disabled={bookingCancelMutation.isPending || !bookingToCancel}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          if (bookingToCancel) {
+                            bookingCancelMutation.mutate(bookingToCancel.id);
+                          }
+                        }}
+                        className="bg-red-700 text-white hover:bg-red-800"
+                      >
+                        {bookingCancelMutation.isPending
+                          ? "Cancelling…"
+                          : "Cancel without refund"}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </TabsContent>
             ) : null}
 

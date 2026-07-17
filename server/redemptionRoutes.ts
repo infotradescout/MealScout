@@ -12,12 +12,14 @@ import { Router, Request, Response } from 'express';
 import { isAuthenticated } from './unifiedAuth';
 import {
   redeemCreditAtRestaurant,
-  getRestaurantRedemptions,
   getRestaurantCreditSummary,
   getRedemptionHistory,
   flagRedemptionForDispute,
+  getRedemptionRestaurantId,
+  InsufficientCreditsError,
 } from './redemptionService';
 import { getUserCreditBalance } from './creditService';
+import { canManageBusinessFinancials } from './businessFinancialAccess';
 import { z } from 'zod';
 
 const router = Router();
@@ -25,9 +27,12 @@ const router = Router();
 // Validation schemas
 const acceptCreditsSchema = z.object({
   userId: z.string().uuid('Invalid user ID'),
-  creditAmount: z.number().positive('Credit amount must be positive'),
-  orderReference: z.string().optional(),
-  notes: z.string().optional(),
+  creditAmount: z
+    .number()
+    .positive('Credit amount must be positive')
+    .multipleOf(0.01, 'Credit amount must use cents'),
+  orderReference: z.string().trim().max(120).optional(),
+  notes: z.string().trim().max(500).optional(),
 });
 
 const disputeSchema = z.object({
@@ -40,12 +45,25 @@ const disputeSchema = z.object({
  * Restaurant submits credit redemption form
  * Creates immutable ledger entries for credit deduction
  */
-router.get('/users/:userId/balance', async (req: Request, res: Response) => {
+router.get('/users/:userId/balance', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const { userId } = req.params;
+    const restaurantId = String(req.query.restaurantId || '').trim();
+    if (!restaurantId) {
+      return res.status(400).json({ error: 'Business ID required' });
+    }
+    const authorized = await canManageBusinessFinancials({
+      restaurantId,
+      userId: String(req.user?.id || ''),
+      userType: (req.user as any)?.userType,
+    });
+    if (!authorized) {
+      return res.status(403).json({ error: 'Financial access required' });
+    }
 
     const balance = await getUserCreditBalance(userId);
 
+    res.set('Cache-Control', 'no-store');
     res.json({
       userId,
       balance,
@@ -68,6 +86,14 @@ router.get('/users/:userId/balance', async (req: Request, res: Response) => {
 router.post('/:restaurantId/accept-credits', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const { restaurantId } = req.params;
+    const authorized = await canManageBusinessFinancials({
+      restaurantId,
+      userId: String(req.user?.id || ''),
+      userType: (req.user as any)?.userType,
+    });
+    if (!authorized) {
+      return res.status(403).json({ error: 'Financial access required' });
+    }
     const validation = acceptCreditsSchema.safeParse(req.body);
 
     if (!validation.success) {
@@ -79,22 +105,8 @@ router.post('/:restaurantId/accept-credits', isAuthenticated, async (req: Reques
 
     const { userId, creditAmount, orderReference, notes } = validation.data;
 
-    // Verify restaurant ownership (simple check)
-    const restaurantOwnerId = req.user?.id; // Assuming middleware sets req.user
-    // In production: verify restaurantOwnerId matches req.user.id via restaurant ownership check
-
-    // Get user's current balance
-    const userBalance = await getUserCreditBalance(userId);
-
-    if (userBalance < creditAmount) {
-      return res.status(400).json({
-        error: 'Insufficient user credits',
-        available: userBalance,
-        requested: creditAmount,
-      });
-    }
-
-    // Create redemption
+    // The service rechecks the balance under an advisory lock and commits the
+    // redemption and debit together.
     const { redemption, creditEntry } = await redeemCreditAtRestaurant(
       restaurantId,
       userId,
@@ -125,7 +137,7 @@ router.post('/:restaurantId/accept-credits', isAuthenticated, async (req: Reques
         source: 'redemption',
       },
       userBalance: {
-        previous: userBalance,
+        previous: updatedBalance + creditAmount,
         updated: updatedBalance,
       },
       message: 'Credit redeemed successfully. User balance updated.',
@@ -138,6 +150,16 @@ router.post('/:restaurantId/accept-credits', isAuthenticated, async (req: Reques
     });
   } catch (error) {
     console.error('[redemptionRoutes] Error accepting credits:', error);
+    if (error instanceof InsufficientCreditsError) {
+      return res.status(400).json({
+        error: error.message,
+        available: error.available,
+        requested: error.requested,
+      });
+    }
+    if (error instanceof Error && error.message === 'User not found') {
+      return res.status(404).json({ error: error.message });
+    }
     res.status(500).json({
       error: 'Failed to redeem credit',
       message: error instanceof Error ? error.message : 'Unknown error',
@@ -155,6 +177,14 @@ router.get('/:restaurantId/redemptions', isAuthenticated, async (req: Request, r
   try {
     const { restaurantId } = req.params;
     const { status } = req.query as { status?: 'pending' | 'queued' | 'paid' };
+    const authorized = await canManageBusinessFinancials({
+      restaurantId,
+      userId: String(req.user?.id || ''),
+      userType: (req.user as any)?.userType,
+    });
+    if (!authorized) {
+      return res.status(403).json({ error: 'Financial access required' });
+    }
 
     const redemptions = await getRedemptionHistory(restaurantId);
 
@@ -163,6 +193,7 @@ router.get('/:restaurantId/redemptions', isAuthenticated, async (req: Request, r
       ? redemptions.filter((r) => r.settlementStatus === status)
       : redemptions;
 
+    res.set('Cache-Control', 'no-store');
     res.json({
       restaurantId,
       count: filtered.length,
@@ -195,19 +226,28 @@ router.get('/:restaurantId/redemptions', isAuthenticated, async (req: Request, r
 router.get('/:restaurantId/credit-summary', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const { restaurantId } = req.params;
+    const authorized = await canManageBusinessFinancials({
+      restaurantId,
+      userId: String(req.user?.id || ''),
+      userType: (req.user as any)?.userType,
+    });
+    if (!authorized) {
+      return res.status(403).json({ error: 'Financial access required' });
+    }
 
     const summary = await getRestaurantCreditSummary(restaurantId);
 
+    res.set('Cache-Control', 'no-store');
     res.json({
       restaurantId,
       summary: {
         pending: {
           amount: summary.pendingCredits,
-          description: 'Credits redeemed, awaiting weekly settlement',
+          description: 'Credits redeemed and awaiting settlement',
         },
         queued: {
           amount: summary.queuedForSettlement,
-          description: 'Queued for this week\'s settlement batch',
+          description: 'Credits assigned to a settlement batch',
         },
         paid: {
           amount: summary.alreadyPaid,
@@ -218,7 +258,7 @@ router.get('/:restaurantId/credit-summary', isAuthenticated, async (req: Request
           transactionCount: summary.transactionCount,
         },
       },
-      nextSettlement: 'Every Sunday UTC (Phase R2)',
+      nextSettlement: null,
     });
   } catch (error) {
     console.error('[redemptionRoutes] Error fetching credit summary:', error);
@@ -238,6 +278,18 @@ router.get('/:restaurantId/credit-summary', isAuthenticated, async (req: Request
 router.post('/:redemptionId/dispute', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const { redemptionId } = req.params;
+    const restaurantId = await getRedemptionRestaurantId(redemptionId);
+    if (!restaurantId) {
+      return res.status(404).json({ error: 'Redemption not found' });
+    }
+    const authorized = await canManageBusinessFinancials({
+      restaurantId,
+      userId: String(req.user?.id || ''),
+      userType: (req.user as any)?.userType,
+    });
+    if (!authorized) {
+      return res.status(403).json({ error: 'Financial access required' });
+    }
     const validation = disputeSchema.safeParse(req.body);
 
     if (!validation.success) {

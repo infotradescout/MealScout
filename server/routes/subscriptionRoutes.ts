@@ -584,6 +584,7 @@ export function registerSubscriptionRoutes(
               "subscription_credit",
               balanceTx.id,
               "subscription",
+              { externalValueAlreadyCommitted: true },
             );
           }
         }

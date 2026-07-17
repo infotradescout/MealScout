@@ -2720,8 +2720,12 @@ export function registerEventRoutes(
         }
 
         // Authorization: truck owner, host, or staff/admin
-        const isAdmin =
-          req.user?.role === "admin" || req.user?.role === "staff";
+        const isAdmin = [
+          "admin",
+          "duper_admin",
+          "super_admin",
+          "staff",
+        ].includes(String(req.user?.userType || ""));
         const ownsTruck = await storage.verifyRestaurantOwnership(
           booking.truckId,
           req.user.id,

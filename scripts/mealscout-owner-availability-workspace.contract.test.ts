@@ -29,14 +29,16 @@ assert.match(
 // Schedule URLs remain compatible, but the route renders the actual workflow
 // immediately instead of onboarding copy, analytics cards, and a jump button.
 assert.match(owner, /setupMode === "schedule"[\s\S]*"availability"/);
+assert.match(owner, /setupMode === "bookings"[\s\S]*"availability"/);
 assert.match(
   owner,
-  /currentRestaurant && setupMode && setupMode !== "schedule"/,
+  /!\["schedule", "bookings"\]\.includes\(setupMode\)/,
 );
 assert.match(owner, /data-testid="owner-availability-workspace"/);
 assert.match(owner, /data-testid="owner-live-location-panel"/);
 assert.match(owner, /data-testid="owner-saved-location-panel"/);
 assert.match(owner, /data-testid="owner-weekly-hours-panel"/);
+assert.match(owner, /data-testid="owner-booked-stops-workspace"/);
 assert.doesNotMatch(owner, /Jump to schedule and live tools|Jump to hours/);
 
 // Restaurant and truck differences share one pattern without exposing truck

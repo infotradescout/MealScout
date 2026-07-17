@@ -11,7 +11,7 @@ const audienceWorkspace = readFileSync(
 );
 
 const requiredSnippets = [
-  "currentRestaurant && setupMode && setupMode !== \"schedule\"",
+  '!["schedule", "bookings"].includes(setupMode)',
   "Business onboarding",
   "id=\"owner-workspace-operations\"",
   "key={defaultTab}",
@@ -20,12 +20,14 @@ const requiredSnippets = [
   "<OwnerAudienceWorkspace",
   'activeWorkspaceModule === "deals"',
   'activeWorkspaceModule === "audience"',
+  'activeWorkspaceModule === "availability"',
   "TabsTrigger value=\"bookings\"",
   "TabsTrigger value=\"foodtruck\"",
   "Open menu builder",
   "data-testid=\"owner-availability-workspace\"",
   "data-testid=\"owner-live-location-panel\"",
   "data-testid=\"owner-weekly-hours-panel\"",
+  "data-testid=\"owner-booked-stops-workspace\"",
 ];
 
 for (const snippet of requiredSnippets) {
