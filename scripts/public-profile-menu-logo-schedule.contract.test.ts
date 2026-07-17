@@ -8,12 +8,12 @@ const truckScheduleTruth = readFileSync(
   "utf8",
 );
 
-if (!page.includes('entity === "restaurant" || entity === "truck"')) {
-  throw new Error("Public profile must treat truck entity as restaurant-like for render routing");
+if (!page.includes('normalized === "restaurant" || normalized === "truck" || normalized === "bar"')) {
+  throw new Error("Public profile must treat restaurants, trucks, and bars as one profile family for render routing");
 }
 
-if (!page.includes(") : restaurantProfile ? (")) {
-  throw new Error("Public profile restaurant render branch must include truck entity");
+if (!page.includes("{restaurantProfile ? (")) {
+  throw new Error("Public profile must use the unified restaurant-like render branch");
 }
 
 if (

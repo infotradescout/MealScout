@@ -75,7 +75,7 @@ export function ThinProfileState({
           }
           data-analytics-action="thin_profile_cta"
           data-analytics-target-type={bestCta.type}
-          className="inline-flex items-center gap-2 rounded-xl bg-orange-500 px-5 py-2.5 text-sm font-bold text-black hover:bg-orange-400"
+          className="profile-action-primary inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold"
         >
           {bestCta.type === "map" && <MapPin className="h-4 w-4" />}
           {bestCta.type === "phone" && <Phone className="h-4 w-4" />}
@@ -89,16 +89,16 @@ export function ThinProfileState({
       ) : null}
 
       {/* Owner claim CTA */}
-      <div className="rounded-2xl border border-white/10 bg-[#0f0d0b] px-4 py-4 text-center space-y-1 w-full max-w-xs">
-        <p className="text-sm font-semibold text-white/80">
+      <div className="profile-surface w-full max-w-sm space-y-1 rounded-2xl px-5 py-5 text-center">
+        <p className="text-sm font-semibold text-[color:var(--profile-ink)]">
           Is this your {typeLabel.toLowerCase()}?
         </p>
-        <p className="text-xs text-white/50">
+        <p className="text-xs text-[color:var(--profile-muted)]">
           Add your menu, hours, and photos to make this profile shine.
         </p>
         <a
           href={claimHref}
-          className="mt-2 inline-block text-sm font-bold text-orange-300 hover:text-orange-200"
+          className="mt-2 inline-block text-sm font-bold text-[#b93619] hover:text-[#8f2a14]"
         >
           Claim or update this profile →
         </a>

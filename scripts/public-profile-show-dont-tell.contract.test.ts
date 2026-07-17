@@ -2,18 +2,29 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 const page = readFileSync("client/src/pages/public-profile.tsx", "utf8");
-const truckHero = readFileSync("client/src/components/public-profile/TruckHero.tsx", "utf8");
-
-assert(
-  page.includes('"social"') &&
-    page.includes('const actionPool = pickActionCtas(profile, safeCtas, 16).filter(') &&
-    page.includes('(cta) => cta.type !== "share"'),
-  "Quick actions must be able to surface social links while keeping share controls separate",
+const truckHero = readFileSync("client/src/components/public-profile/ElevatedTruckHero.tsx", "utf8");
+const actionPolicy = readFileSync(
+  "client/src/components/public-profile/profileActionPolicy.ts",
+  "utf8",
+);
+const mobileDock = readFileSync(
+  "client/src/components/public-profile/MobileActionDock.tsx",
+  "utf8",
 );
 
 assert(
-  truckHero.includes("profile.description ? ("),
-  "Truck hero must show existing confirmed description text directly when available",
+  actionPolicy.includes('"social"') &&
+    page.includes('(cta) => cta.type === "social"') &&
+    mobileDock.includes('cta.type !== "share"') &&
+    mobileDock.includes('cta.type !== "social"'),
+  "Social links must remain available while profile sharing and primary actions stay separate",
+);
+
+assert(
+  truckHero.includes("isGenericTruckDescription") &&
+    truckHero.includes("description ? (") &&
+    truckHero.includes("{description}"),
+  "Truck hero must show useful confirmed description text while suppressing taxonomy placeholders",
 );
 
 assert(

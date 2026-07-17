@@ -122,8 +122,8 @@ export function ProfileRecommendButton({
         onClick={handleRecommend}
         className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-2 text-sm font-bold transition-colors ${
           isRecommended
-            ? "border-orange-400/50 bg-orange-500/15 text-orange-300"
-            : "border-white/15 bg-black/20 text-white/70 hover:border-white/25 hover:text-white"
+            ? "border-orange-200 bg-orange-50 text-orange-800"
+            : "border-[color:var(--profile-border-strong)] bg-white text-[color:var(--profile-ink-soft)] hover:border-orange-300 hover:bg-orange-50 hover:text-orange-800"
         } ${isPending ? "cursor-not-allowed opacity-60" : ""}`}
       >
         <ThumbsUp
@@ -133,10 +133,10 @@ export function ProfileRecommendButton({
       </button>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-h-[86vh] w-[calc(100vw-1rem)] max-w-lg overflow-y-auto border-white/10 bg-[#0f0d0b] text-white">
+        <DialogContent className="max-h-[86vh] w-[calc(100vw-1rem)] max-w-lg overflow-y-auto border-[#ead9cc] bg-white text-[#2b160d]">
           <DialogHeader>
-            <DialogTitle className="text-white">Add context</DialogTitle>
-            <DialogDescription className="text-white/55">
+            <DialogTitle className="text-[#2b160d]">Add context</DialogTitle>
+            <DialogDescription className="text-[#806657]">
               Closing this keeps your lightweight recommend. Details add more
               local signal.
             </DialogDescription>
@@ -147,11 +147,11 @@ export function ProfileRecommendButton({
               value={recommendationText}
               onChange={(event) => setRecommendationText(event.target.value)}
               placeholder="What should someone know before they go?"
-              className="min-h-24 border-white/15 bg-black/25 text-white placeholder:text-white/35"
+              className="min-h-24 border-[#ead9cc] bg-[#fffaf5] text-[#2b160d] placeholder:text-[#806657]"
             />
 
-            <label className="block rounded-xl border border-white/10 bg-black/20 p-3">
-              <span className="text-xs font-bold uppercase tracking-[0.14em] text-white/45">
+            <label className="block rounded-xl border border-[#ead9cc] bg-[#fff8f1] p-3">
+              <span className="text-xs font-bold uppercase tracking-[0.14em] text-[#806657]">
                 Photo proof
               </span>
               <input
@@ -160,7 +160,7 @@ export function ProfileRecommendButton({
                 onChange={(event) =>
                   setProofImage(event.target.files?.[0] || null)
                 }
-                className="mt-2 block w-full text-xs text-white/65 file:mr-3 file:rounded-lg file:border-0 file:bg-white/10 file:px-3 file:py-2 file:text-xs file:font-bold file:text-white hover:file:bg-white/15"
+                className="mt-2 block w-full text-xs text-[#806657] file:mr-3 file:rounded-lg file:border-0 file:bg-orange-100 file:px-3 file:py-2 file:text-xs file:font-bold file:text-orange-900 hover:file:bg-orange-200"
               />
               {proofImage ? (
                 <span className="mt-2 block truncate text-xs text-orange-200">
@@ -179,7 +179,7 @@ export function ProfileRecommendButton({
                 ] as const
               ).map(([key, label]) => (
                 <label key={key} className="block">
-                  <div className="mb-1 flex items-center justify-between text-xs font-semibold text-white/70">
+                  <div className="mb-1 flex items-center justify-between text-xs font-semibold text-[#5f4435]">
                     <span>{label}</span>
                     <span>{scores[key]}</span>
                   </div>
@@ -201,7 +201,7 @@ export function ProfileRecommendButton({
               <button
                 type="button"
                 onClick={() => setIsDialogOpen(false)}
-                className="min-h-10 rounded-xl border border-white/15 px-4 text-sm font-bold text-white/75 hover:bg-white/8"
+                className="min-h-10 rounded-xl border border-[#d8c2b3] bg-white px-4 text-sm font-bold text-[#2b160d] hover:bg-orange-50"
               >
                 Done
               </button>
@@ -209,7 +209,7 @@ export function ProfileRecommendButton({
                 type="button"
                 disabled={isSubmittingContext}
                 onClick={handleSubmitContext}
-                className="min-h-10 rounded-xl bg-orange-500 px-4 text-sm font-bold text-black hover:bg-orange-400 disabled:opacity-60"
+                className="min-h-10 rounded-xl bg-[#f4512c] px-4 text-sm font-bold text-white hover:bg-[#dc3f1e] disabled:opacity-60"
               >
                 {isSubmittingContext ? "Saving..." : "Add weight"}
               </button>

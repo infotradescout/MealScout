@@ -84,21 +84,21 @@ export function PlanYourVisitPanel({ profile }: PlanYourVisitPanelProps) {
 
   return (
     <section aria-label="Plan your visit" className="space-y-3">
-      <p className="text-xs font-bold uppercase tracking-[0.18em] text-white/45">
+      <p className="profile-section-label">
         Plan your visit
       </p>
 
-      <div className="rounded-2xl border border-white/10 bg-[#0f0d0b] divide-y divide-white/6 overflow-hidden">
+      <div className="profile-surface divide-y divide-[color:var(--profile-border)] overflow-hidden rounded-2xl">
         {rows.map((row, i) => {
           const Icon = row.icon;
           const inner = (
             <div className="flex items-start gap-3 px-4 py-3">
-              <Icon className="mt-0.5 h-4 w-4 flex-none text-orange-200/60" />
-              <p className="text-sm text-white/80 leading-snug min-w-0 break-words">
+              <Icon className="mt-0.5 h-4 w-4 flex-none text-[color:var(--profile-accent)]" />
+              <p className="min-w-0 break-words text-sm leading-snug text-[color:var(--profile-ink-soft)]">
                 {row.label}
               </p>
               {row.href && row.external ? (
-                <ExternalLink className="ml-auto mt-0.5 h-3.5 w-3.5 flex-none text-white/30" />
+                <ExternalLink className="ml-auto mt-0.5 h-3.5 w-3.5 flex-none text-[color:var(--profile-muted)]" />
               ) : null}
             </div>
           );
@@ -111,7 +111,7 @@ export function PlanYourVisitPanel({ profile }: PlanYourVisitPanelProps) {
               rel={row.external ? "noopener noreferrer" : undefined}
               data-analytics-action={row.icon === MapPin ? "directions_click" : "contact_click"}
               data-analytics-target-type={row.icon === MapPin ? "map" : "contact"}
-              className="block hover:bg-white/5 transition-colors"
+              className="block transition-colors hover:bg-orange-50"
             >
               {inner}
             </a>
@@ -130,7 +130,7 @@ export function PlanYourVisitPanel({ profile }: PlanYourVisitPanelProps) {
                 rel="noopener noreferrer"
                 data-analytics-action="social_click"
                 data-analytics-target-type="social"
-                className="rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-semibold text-white/75 hover:bg-white/10 hover:text-white"
+                className="rounded-full border border-[color:var(--profile-border)] bg-white px-3 py-1 text-xs font-semibold text-[color:var(--profile-ink-soft)] hover:border-orange-200 hover:bg-orange-50 hover:text-orange-800"
               >
                 {s.label}
               </a>
