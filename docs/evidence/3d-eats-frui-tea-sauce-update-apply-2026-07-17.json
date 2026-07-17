@@ -1,0 +1,39 @@
+{
+  "lane": "3d_eats_frui_tea_bbq_sauce_update",
+  "mode": "apply",
+  "appliedAt": "2026-07-17T20:58:44.232Z",
+  "target": {
+    "id": "95c4e656-f3cc-46ab-ae18-53f549cecfd1",
+    "name": "3D Eats & Tea",
+    "slug": "3d-eats-tea"
+  },
+  "sourceArtifact": "docs/evidence/3d-eats-frui-tea-sauce-update-2026-07-17.json",
+  "before": {
+    "description": "American Food Truck",
+    "cuisineType": "American, Burgers"
+  },
+  "after": {
+    "description": "American Food Truck. Features a small-batch FRUI-TEA BBQ sauce lineup in seven distinct flavors, available through the MessHaul Bus.",
+    "cuisineType": "American, Burgers, BBQ Sauces",
+    "productCategory": "Sauces & Add-ons",
+    "classification": "sauce_not_drink"
+  },
+  "safeguards": {
+    "menuRowsCreated": 0,
+    "scheduleRowsCreated": 0,
+    "imageRowsCreated": 0,
+    "transactionLock": "restaurant advisory lock"
+  },
+  "publicVerification": {
+    "endpoint": "https://mealscout.onrender.com/api/public/profiles/truck/95c4e656-f3cc-46ab-ae18-53f549cecfd1",
+    "descriptionMatches": true,
+    "cuisineTags": [
+      "American",
+      "Burgers",
+      "BBQ Sauces"
+    ],
+    "scheduleStatus": "No schedule posted",
+    "existingMenuPreserved": true
+  },
+  "productionApplied": true
+}

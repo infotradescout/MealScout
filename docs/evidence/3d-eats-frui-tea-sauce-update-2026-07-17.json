@@ -1,0 +1,63 @@
+{
+  "business": {
+    "id": "95c4e656-f3cc-46ab-ae18-53f549cecfd1",
+    "name": "3D Eats & Tea",
+    "slug": "3d-eats-tea"
+  },
+  "capturedAt": "2026-07-17T15:48:30-05:00",
+  "source": {
+    "type": "user_supplied_facebook_screenshots",
+    "files": [
+      {
+        "name": "codex-clipboard-ca2cf0b3-db32-4e3f-be18-a1b2e6224013.jpg",
+        "sha256": "aa83ad45e523375b8e840c6bddd0a7161cde855244dee6589351fd01aad36b09"
+      },
+      {
+        "name": "codex-clipboard-5b79ab33-c5be-4474-b307-9e82c94f7774.jpg",
+        "sha256": "71ee53eb306ace20b59d9a920928f7328818298dd184d5a2d2c63bc3df69dba7"
+      }
+    ],
+    "postRelativeAgeAtCapture": "1d",
+    "classificationCorrection": {
+      "confirmedByUser": true,
+      "value": "sauce_not_drink"
+    }
+  },
+  "productLine": {
+    "name": "FRUI-TEA BBQ Sauces",
+    "category": "Sauces & Add-ons",
+    "productType": "BBQ sauce",
+    "flavorCount": 7,
+    "productionDescription": "Small-batch FRUI-TEA BBQ sauce lineup in seven distinct flavors, available through the MessHaul Bus.",
+    "confirmedFlavorNames": [
+      "Pineapple Punch",
+      "Watermelon Wow",
+      "Strawberry Sriracha",
+      "OG Tea",
+      "Cornucopia"
+    ],
+    "labelsRequiringExactNameConfirmation": [
+      "Peach-labeled flavor",
+      "Purple-labeled flavor"
+    ],
+    "availability": "MessHaul Bus",
+    "priceEvidence": null
+  },
+  "scheduleEvidence": {
+    "sourceText": [
+      "Thursday",
+      "Escambia County Jail 11-2",
+      "Jennings Place Subdivision 5-7ish"
+    ],
+    "handling": "historical_evidence_only",
+    "reasonNotPublishedAsCurrent": "The post was already one day old when captured and did not provide an absolute date or recurring-week confirmation."
+  },
+  "applyDecision": {
+    "profileDescription": "append_product_line",
+    "cuisineType": "append_BBQ_Sauces",
+    "rawData": "append_structured_product_evidence",
+    "menuItems": "not_created_without_price_or_exact_remaining_flavor_names",
+    "scheduleRows": "not_created_from_expired_or_ambiguous_relative_date",
+    "publicImage": "not_published_because_the_supplied_images_include_social_interface_and_personal_comment_content"
+  }
+}
