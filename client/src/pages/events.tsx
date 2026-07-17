@@ -1,484 +1,190 @@
-import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Calendar, MapPin, Users, Clock } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import {
+  ArrowRight,
+  CalendarDays,
+  Clock,
+  MapPin,
+} from "lucide-react";
+import { Link } from "wouter";
+import {
+  CollectionLoadingState,
+  CollectionState,
+  ConsumerCollectionShell,
+} from "@/components/consumer-collection-shell";
 import { SEOHead } from "@/components/seo-head";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
-import { useAuth } from "@/hooks/useAuth";
-import { useToast } from "@/hooks/use-toast";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+
+type PublicEvent = {
+  id: string;
+  name?: string | null;
+  description?: string | null;
+  date?: string | null;
+  startTime?: string | null;
+  endTime?: string | null;
+  eventType?: string | null;
+  host?: {
+    businessName?: string | null;
+    address?: string | null;
+    city?: string | null;
+    state?: string | null;
+    spotImageUrl?: string | null;
+  } | null;
+  series?: {
+    name?: string | null;
+  } | null;
+};
+
+const formatEventDate = (value?: string | null) => {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
+};
+
+const formatEventTime = (value?: string | null) => {
+  if (!value) return null;
+  const [hours, minutes] = value.split(":");
+  const hour = Number(hours);
+  if (!Number.isFinite(hour)) return value;
+  const suffix = hour >= 12 ? "PM" : "AM";
+  return `${hour % 12 || 12}:${minutes || "00"} ${suffix}`;
+};
+
+const getLocationLabel = (event: PublicEvent) => {
+  const cityState = [event.host?.city, event.host?.state]
+    .filter(Boolean)
+    .join(", ");
+  return event.host?.businessName || cityState || event.host?.address || null;
+};
 
 export default function EventsPage() {
-  const { user, isAuthenticated } = useAuth();
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
-  const isEventCoordinator =
-    isAuthenticated && user?.userType === "event_coordinator";
-  const { data: subscription } = useQuery<{
-    status: string;
-    hasAccess: boolean;
-  }>({
-    queryKey: ["/api/subscription/status"],
-    enabled: isEventCoordinator,
-    retry: false,
-    refetchOnWindowFocus: false,
-  });
-  const canUsePaidEvents =
-    !isEventCoordinator || Boolean(subscription?.hasAccess);
-  const [showCreateForm, setShowCreateForm] = useState(false);
-  const [formData, setFormData] = useState({
-    organizationName: "",
-    address: "",
-    city: "",
-    state: "",
-    contactPhone: "",
-    eventName: "",
-    description: "",
-    date: "",
-    startTime: "",
-    endTime: "",
-    maxTrucks: 1,
-  });
-
-  const { data: events = [], isLoading } = useQuery<any[]>({
+  const {
+    data: events = [],
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery<PublicEvent[]>({
     queryKey: ["/api/events/upcoming"],
   });
 
-  const createEvent = useMutation({
-    mutationFn: async () => {
-      const res = await fetch("/api/event-coordinator/events", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          businessName: formData.organizationName,
-          address: formData.address,
-          city: formData.city,
-          state: formData.state,
-          contactPhone: formData.contactPhone,
-          name: formData.eventName,
-          description: formData.description,
-          date: formData.date,
-          startTime: formData.startTime,
-          endTime: formData.endTime,
-          maxTrucks: Number(formData.maxTrucks),
-        }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.message || "Failed to create event");
-      }
-    },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: ["/api/events/upcoming"],
-      });
-      setShowCreateForm(false);
-      setFormData({
-        organizationName: "",
-        address: "",
-        city: "",
-        state: "",
-        contactPhone: "",
-        eventName: "",
-        description: "",
-        date: "",
-        startTime: "",
-        endTime: "",
-        maxTrucks: 1,
-      });
-      toast({
-        title: "Event posted",
-        description: "Your event is now available on the Events page.",
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Failed to post event",
-        description: error.message || "Please try again.",
-        variant: "destructive",
-      });
-    },
-  });
-
-  const handleCreateEvent = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!createEvent.isPending) {
-      createEvent.mutate();
-    }
-  };
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-[var(--bg-layered)] p-4">
-        <div className="max-w-6xl mx-auto space-y-6">
-          <div className="space-y-2">
-            <Skeleton className="h-10 w-64" />
-            <Skeleton className="h-6 w-96" />
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {[1, 2, 3, 4, 5, 6].map((i) => (
-              <Skeleton key={i} className="h-64" />
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-[var(--bg-layered)]">
+    <ConsumerCollectionShell
+      section="events"
+      title="Events"
+      description="Markets, festivals, and pop-ups where local food is part of the plan."
+      icon={CalendarDays}
+      countLabel={
+        isLoading
+          ? null
+          : `${events.length} upcoming ${events.length === 1 ? "event" : "events"}`
+      }
+    >
       <SEOHead
-        title="Food Truck Events & Open Calls | MealScout"
-        description="Browse upcoming food truck events and open calls near you. Find events looking for food trucks, or discover local food festivals and pop-ups on MealScout."
+        title="Local Food Events | MealScout"
+        description="Browse upcoming markets, festivals, pop-ups, and local food events on MealScout."
         ogType="website"
       />
-      <div className="max-w-6xl mx-auto p-4 space-y-6">
-        {/* Header */}
-        <div className="space-y-4">
-          <h1 className="text-4xl font-bold text-[color:var(--text-primary)] flex items-center gap-3">
-            <Calendar className="w-10 h-10 text-[color:var(--accent-text)]" />
-            Find Food Trucks at Events
-          </h1>
-          <div className="bg-[color:var(--accent-text)]/10 border border-[color:var(--border-subtle)] rounded-lg p-4">
-            <p className="text-base text-[color:var(--text-secondary)] mb-2">
-              <strong>What are these events?</strong>
-            </p>
-            <p className="text-sm text-[color:var(--text-secondary)] mb-1">
-              These are high-volume events (festivals, markets, corporate
-              gatherings) coordinated by event organizers to help you find food
-              trucks.
-            </p>
-          </div>
 
-          {isEventCoordinator && canUsePaidEvents && (
-            <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between gap-3">
-                  <CardTitle className="text-lg">Event Coordinator</CardTitle>
-                  <Button
-                    variant={showCreateForm ? "outline" : "default"}
-                    onClick={() => setShowCreateForm((value) => !value)}
-                    data-testid="button-toggle-create-event"
-                  >
-                    {showCreateForm ? "Cancel" : "Post Event"}
-                  </Button>
-                </div>
-              </CardHeader>
-              {showCreateForm && (
-                <CardContent>
-                  <form onSubmit={handleCreateEvent} className="space-y-4">
-                    <div className="grid md:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="organizationName">
-                          Organization Name
-                        </Label>
-                        <Input
-                          id="organizationName"
-                          required
-                          value={formData.organizationName}
-                          onChange={(e) =>
-                            setFormData((prev) => ({
-                              ...prev,
-                              organizationName: e.target.value,
-                            }))
-                          }
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="contactPhone">Contact Phone</Label>
-                        <Input
-                          id="contactPhone"
-                          required
-                          value={formData.contactPhone}
-                          onChange={(e) =>
-                            setFormData((prev) => ({
-                              ...prev,
-                              contactPhone: e.target.value,
-                            }))
-                          }
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid md:grid-cols-4 gap-4">
-                      <div className="md:col-span-2 space-y-2">
-                        <Label htmlFor="address">Address</Label>
-                        <Input
-                          id="address"
-                          required
-                          value={formData.address}
-                          onChange={(e) =>
-                            setFormData((prev) => ({
-                              ...prev,
-                              address: e.target.value,
-                            }))
-                          }
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="city">City</Label>
-                        <Input
-                          id="city"
-                          required
-                          value={formData.city}
-                          onChange={(e) =>
-                            setFormData((prev) => ({
-                              ...prev,
-                              city: e.target.value,
-                            }))
-                          }
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="state">State</Label>
-                        <Input
-                          id="state"
-                          required
-                          value={formData.state}
-                          onChange={(e) =>
-                            setFormData((prev) => ({
-                              ...prev,
-                              state: e.target.value,
-                            }))
-                          }
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid md:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="eventName">Event Name</Label>
-                        <Input
-                          id="eventName"
-                          required
-                          value={formData.eventName}
-                          onChange={(e) =>
-                            setFormData((prev) => ({
-                              ...prev,
-                              eventName: e.target.value,
-                            }))
-                          }
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="maxTrucks">Trucks Needed</Label>
-                        <Input
-                          id="maxTrucks"
-                          type="number"
-                          min={1}
-                          max={50}
-                          required
-                          value={formData.maxTrucks}
-                          onChange={(e) =>
-                            setFormData((prev) => ({
-                              ...prev,
-                              maxTrucks: Math.max(
-                                1,
-                                Number(e.target.value || 1),
-                              ),
-                            }))
-                          }
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid md:grid-cols-3 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="date">Date</Label>
-                        <Input
-                          id="date"
-                          type="date"
-                          required
-                          value={formData.date}
-                          onChange={(e) =>
-                            setFormData((prev) => ({
-                              ...prev,
-                              date: e.target.value,
-                            }))
-                          }
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="startTime">Start Time</Label>
-                        <Input
-                          id="startTime"
-                          type="time"
-                          required
-                          value={formData.startTime}
-                          onChange={(e) =>
-                            setFormData((prev) => ({
-                              ...prev,
-                              startTime: e.target.value,
-                            }))
-                          }
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="endTime">End Time</Label>
-                        <Input
-                          id="endTime"
-                          type="time"
-                          required
-                          value={formData.endTime}
-                          onChange={(e) =>
-                            setFormData((prev) => ({
-                              ...prev,
-                              endTime: e.target.value,
-                            }))
-                          }
-                        />
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="description">Description</Label>
-                      <Textarea
-                        id="description"
-                        rows={3}
-                        value={formData.description}
-                        onChange={(e) =>
-                          setFormData((prev) => ({
-                            ...prev,
-                            description: e.target.value,
-                          }))
-                        }
+      {isLoading ? (
+        <CollectionLoadingState label="Loading events" />
+      ) : isError ? (
+        <CollectionState
+          icon={CalendarDays}
+          title="Events are unavailable"
+          description="We could not load the current event list. Try again in a moment."
+          onRetry={() => void refetch()}
+        />
+      ) : events.length === 0 ? (
+        <CollectionState
+          icon={CalendarDays}
+          title="No upcoming events listed"
+          description="Scout local menus, schedules, and food businesses while the next events are being added."
+          actionHref="/scout"
+          actionLabel="Scout"
+        />
+      ) : (
+        <section aria-labelledby="upcoming-events-heading">
+          <h2 id="upcoming-events-heading" className="sr-only">
+            Upcoming food events
+          </h2>
+          <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+            {events.map((event) => {
+              const dateLabel = formatEventDate(event.date);
+              const startTime = formatEventTime(event.startTime);
+              const endTime = formatEventTime(event.endTime);
+              const locationLabel = getLocationLabel(event);
+              const eventImage =
+                event.host?.spotImageUrl || "/backgrounds/food-truck-day.jpg";
+              return (
+                <Link
+                  key={event.id}
+                  href={`/event/${encodeURIComponent(String(event.id))}`}
+                  className="group overflow-hidden rounded-[1.75rem] border border-[#683a1f]/15 bg-white/[0.92] shadow-[0_18px_45px_rgba(102,50,21,0.07)] transition hover:-translate-y-0.5 hover:border-[#f4512c]/35 hover:shadow-[0_22px_50px_rgba(102,50,21,0.12)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f4512c] focus-visible:ring-offset-2"
+                >
+                  <div className="relative h-44 overflow-hidden bg-[#f2dfd2]">
+                    <img
+                      src={eventImage}
+                      alt=""
+                      className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+                      loading="lazy"
+                      decoding="async"
+                      onError={(imageEvent) => {
+                        imageEvent.currentTarget.src =
+                          "/backgrounds/food-truck-day.jpg";
+                      }}
+                    />
+                    {dateLabel ? (
+                      <span className="absolute left-3 top-3 rounded-full bg-white/[0.94] px-3 py-1.5 text-xs font-black text-[#2b160d] shadow-sm">
+                        {dateLabel}
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="p-5">
+                    {event.series?.name || event.eventType ? (
+                      <p className="text-[0.68rem] font-black uppercase tracking-[0.15em] text-[#9a4c31]">
+                        {event.series?.name || event.eventType}
+                      </p>
+                    ) : null}
+                    <div className="mt-1 flex items-start justify-between gap-3">
+                      <h3 className="text-lg font-black leading-tight text-[#2b160d]">
+                        {event.name || "Local food event"}
+                      </h3>
+                      <ArrowRight
+                        className="mt-0.5 h-5 w-5 shrink-0 text-[#b79a89] transition group-hover:translate-x-0.5 group-hover:text-[#f4512c]"
+                        aria-hidden="true"
                       />
                     </div>
-
-                    <Button
-                      type="submit"
-                      disabled={createEvent.isPending}
-                      data-testid="button-submit-create-event"
-                    >
-                      {createEvent.isPending ? "Posting..." : "Post Event"}
-                    </Button>
-                  </form>
-                </CardContent>
-              )}
-            </Card>
-          )}
-
-          {isEventCoordinator && !canUsePaidEvents && (
-            <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">
-              <CardContent className="p-6 space-y-3">
-                <h2 className="text-lg font-semibold">Premium Required</h2>
-                <p className="text-sm text-[color:var(--text-secondary)]">
-                  Upgrade to post events, manage truck interest, and run event
-                  workflows.
-                </p>
-                <Button
-                  onClick={() => (window.location.href = "/subscribe")}
-                >
-                  View subscription
-                </Button>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-
-        {/* Events Grid */}
-        {events.length === 0 ? (
-          <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">
-            <CardContent className="p-12 text-center">
-              <Calendar className="w-16 h-16 text-[color:var(--text-muted)] mx-auto mb-4" />
-              <h3 className="text-xl font-semibold text-[color:var(--text-secondary)] mb-2">
-                No Upcoming Events
-              </h3>
-              <p className="text-[color:var(--text-muted)] mb-3">
-                No high-volume events are currently listed.
-              </p>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {events.map((event) => (
-              <Card
-                key={event.id}
-                className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean hover:shadow-clean-lg transition-shadow cursor-pointer"
-              >
-                <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <CardTitle className="text-lg line-clamp-2">
-                      {event.name || "Food Truck Event"}
-                    </CardTitle>
-                    {event.status === "published" && (
-                      <Badge variant="default">Open</Badge>
-                    )}
-                    {event.status === "draft" && (
-                      <Badge variant="outline">Draft</Badge>
-                    )}
+                    {startTime ? (
+                      <p className="mt-3 flex items-center gap-2 text-sm font-bold text-[#5f4435]">
+                        <Clock className="h-4 w-4 text-[#f4512c]" aria-hidden="true" />
+                        {startTime}
+                        {endTime ? ` – ${endTime}` : ""}
+                      </p>
+                    ) : null}
+                    {locationLabel ? (
+                      <p className="mt-2 flex items-start gap-2 text-sm leading-5 text-[#6b5041]">
+                        <MapPin
+                          className="mt-0.5 h-4 w-4 shrink-0 text-[#f4512c]"
+                          aria-hidden="true"
+                        />
+                        <span className="line-clamp-2">{locationLabel}</span>
+                      </p>
+                    ) : null}
+                    {event.description ? (
+                      <p className="mt-3 line-clamp-2 text-sm leading-6 text-[#806657]">
+                        {event.description}
+                      </p>
+                    ) : null}
                   </div>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {/* Date & Time */}
-                  {event.date && (
-                    <div className="flex items-center gap-2 text-sm text-[color:var(--text-secondary)]">
-                      <Clock className="w-4 h-4" />
-                      <span>
-                        {new Date(event.date).toLocaleDateString("en-US", {
-                          weekday: "short",
-                          month: "short",
-                          day: "numeric",
-                        })}
-                      </span>
-                    </div>
-                  )}
-
-                  {/* Location */}
-                  {event.host?.businessName && (
-                    <div className="flex items-center gap-2 text-sm text-[color:var(--text-secondary)]">
-                      <MapPin className="w-4 h-4" />
-                      <span className="line-clamp-1">
-                        {event.host.businessName}
-                      </span>
-                    </div>
-                  )}
-
-                  {/* Capacity */}
-                  {event.maxTrucks && (
-                    <div className="flex items-center gap-2 text-sm text-[color:var(--text-secondary)]">
-                      <Users className="w-4 h-4" />
-                      <span>Up to {event.maxTrucks} trucks</span>
-                    </div>
-                  )}
-
-                  {event.requiresPayment && event.hostPriceCents ? (
-                    <div className="flex items-center gap-2 text-sm text-[color:var(--text-secondary)]">
-                      <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-[color:var(--accent-text)]/10 text-[10px] font-bold text-[color:var(--accent-text)]">
-                        $
-                      </span>
-                      <span>
-                        ${(Number(event.hostPriceCents) / 100).toFixed(2)} host
-                        fee + $10 platform fee
-                      </span>
-                    </div>
-                  ) : null}
-
-                  {/* Description */}
-                  {event.description && (
-                    <p className="text-sm text-[color:var(--text-muted)] line-clamp-3">
-                      {event.description}
-                    </p>
-                  )}
-
-                  {/* Series Info */}
-                  {event.series && (
-                    <Badge variant="secondary" className="text-xs">
-                      {event.series.name}
-                    </Badge>
-                  )}
-                </CardContent>
-              </Card>
-            ))}
+                </Link>
+              );
+            })}
           </div>
-        )}
-      </div>
-    </div>
+        </section>
+      )}
+    </ConsumerCollectionShell>
   );
 }

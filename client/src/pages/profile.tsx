@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { Link } from "wouter";
-import Navigation from "@/components/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -107,10 +106,10 @@ export default function ProfilePage() {
                   Icon: Store,
                 }
               : {
-                  href: "/user-dashboard",
-                  title: "My Dashboard",
-                  description: "Saved places, recommendations, deals, and activity.",
-                  Icon: User,
+                  href: "/favorites",
+                  title: "Saved",
+                  description: "Return to the food businesses you want to remember.",
+                  Icon: Heart,
                 };
   const dashboardShortcuts = [
     primaryDashboard,
@@ -288,7 +287,6 @@ export default function ProfilePage() {
           </Button>
         </div>
 
-        <Navigation />
       </div>
     );
   }
@@ -813,7 +811,6 @@ export default function ProfilePage() {
         </Card>
       </div>
 
-      <Navigation />
     </div>
   );
 }

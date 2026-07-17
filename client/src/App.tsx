@@ -540,8 +540,6 @@ function Router() {
               path="/restaurant/dashboard"
               component={RestaurantOwnerDashboard}
             />
-            <Route path="/dashboard" component={DashboardRouter} />
-            <Route path="/user-dashboard" component={UserDashboard} />
             <Route path="/host/dashboard" component={HostDashboard} />
             <Route
               path="/event-coordinator/dashboard"
