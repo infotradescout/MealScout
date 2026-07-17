@@ -81,7 +81,11 @@ export function ScoutSearchDock({
         }}
         className={formClassName}
       >
-        <div className="flex min-h-12 w-full items-center gap-2 px-3">
+        <div
+          className={`flex w-full items-center gap-2 px-3 ${
+            isNavigationPlacement ? "min-h-[42px]" : "min-h-12"
+          }`}
+        >
           <Search
             className={`h-4 w-4 shrink-0 ${
               isNavigationPlacement ? "text-primary" : "text-orange-600"
@@ -95,7 +99,9 @@ export function ScoutSearchDock({
               onOpen();
               onQueryChange(event.target.value);
             }}
-            className={`h-12 min-w-0 flex-1 bg-transparent text-[13px] font-semibold outline-none ${
+            className={`${
+              isNavigationPlacement ? "h-[42px]" : "h-12"
+            } min-w-0 flex-1 bg-transparent text-[13px] font-semibold outline-none ${
               isNavigationPlacement
                 ? "text-[color:var(--text-primary)] placeholder:text-[color:var(--text-muted)]"
                 : "text-[#241208] placeholder:text-stone-500"

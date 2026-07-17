@@ -75,7 +75,7 @@ const googleTags = scout.match(/<GoogleMapSurface[\s\S]*?\/>/g) || [];
 assert.equal(googleTags.length, 2, "Scout must have compact and full Google maps.");
 for (const tag of googleTags) {
   assert.match(tag, /useNativeMapStyle=\{false\}/);
-  assert.match(tag, /isNightTheme=\{false\}/);
+  assert.match(tag, /isNightTheme=\{true\}/);
 }
 assert.match(googleTags[0], /showZoomControls=\{false\}/);
 assert.match(googleTags[1], /showZoomControls=\{true\}/);

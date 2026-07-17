@@ -1339,7 +1339,11 @@ export function GoogleMapSurface({
   };
 
   return (
-    <div className="relative h-full w-full bg-[#f7ead0]">
+    <div
+      className={`relative h-full w-full ${
+        isNightTheme ? "bg-[#17110d]" : "bg-[#f7ead0]"
+      }`}
+    >
       <div className="h-full w-full">
         <div
           ref={mapContainerRef}
@@ -1351,16 +1355,36 @@ export function GoogleMapSurface({
 
       {!mapVisualReady && !loadError ? (
         <div
-          className="pointer-events-none absolute inset-0 z-[2] overflow-hidden bg-[#f7ead0]"
+          className={`pointer-events-none absolute inset-0 z-[2] overflow-hidden ${
+            isNightTheme ? "bg-[#17110d]" : "bg-[#f7ead0]"
+          }`}
           data-google-map-loading="true"
           role="status"
           aria-label="Loading map"
         >
-          <div className="absolute -left-10 top-[30%] h-2 w-[72%] -rotate-6 rounded-full bg-white/80" />
-          <div className="absolute -right-16 top-[58%] h-2 w-[78%] rotate-12 rounded-full bg-white/75" />
-          <div className="absolute left-[34%] -top-12 h-[82%] w-2 rotate-[24deg] rounded-full bg-white/70" />
+          <div
+            className={`absolute -left-10 top-[30%] h-2 w-[72%] -rotate-6 rounded-full ${
+              isNightTheme ? "bg-white/10" : "bg-white/80"
+            }`}
+          />
+          <div
+            className={`absolute -right-16 top-[58%] h-2 w-[78%] rotate-12 rounded-full ${
+              isNightTheme ? "bg-white/10" : "bg-white/75"
+            }`}
+          />
+          <div
+            className={`absolute left-[34%] -top-12 h-[82%] w-2 rotate-[24deg] rounded-full ${
+              isNightTheme ? "bg-white/10" : "bg-white/70"
+            }`}
+          />
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_68%_25%,rgba(255,185,94,0.28),transparent_32%),radial-gradient(circle_at_20%_78%,rgba(103,190,151,0.22),transparent_30%)]" />
-          <div className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center gap-2 rounded-full bg-white/90 px-3 py-2 text-xs font-black text-[#4a2917] shadow-sm ring-1 ring-orange-200/70">
+          <div
+            className={`absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center gap-2 rounded-full px-3 py-2 text-xs font-black shadow-sm ring-1 ${
+              isNightTheme
+                ? "bg-[#211710]/92 text-orange-50 ring-white/12"
+                : "bg-white/90 text-[#4a2917] ring-orange-200/70"
+            }`}
+          >
             <span className="h-2 w-2 animate-pulse rounded-full bg-orange-500" />
             Loading map
           </div>

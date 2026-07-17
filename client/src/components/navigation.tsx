@@ -685,7 +685,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
           }
           className={
             isScoutRoute
-              ? "mx-3 mb-2 overflow-hidden rounded-[1.35rem] border border-[color:var(--border-subtle)] shadow-[0_-10px_30px_rgba(65,29,10,0.20)] backdrop-blur-xl"
+              ? "mx-2 mb-2 overflow-hidden rounded-[1.1rem] border border-white/10 shadow-[0_-12px_34px_rgba(0,0,0,0.38)] backdrop-blur-xl"
               : "w-full"
           }
           style={{ backgroundColor: "var(--bg-popup)" }}
@@ -700,7 +700,11 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
           >
             <div
               className="relative flex items-stretch justify-around gap-1 px-2 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_22px_rgba(36,18,8,0.10)]"
-              style={{ height: "var(--scout-nav-height, 58px)" }}
+              style={{
+                height: isScoutRoute
+                  ? "52px"
+                  : "var(--scout-nav-height, 58px)",
+              }}
             >
               {primaryNav.map((item, index) => {
                 const active = item.path
@@ -792,7 +796,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
             ref={sheetRef}
             className={`absolute left-0 right-0 mx-4 overflow-hidden rounded-3xl border border-[color:var(--border-subtle)] bg-[var(--bg-popup)]/95 shadow-[0_-16px_48px_rgba(36,18,8,0.24)] backdrop-blur-2xl ${
               isScoutRoute
-                ? "bottom-[calc(env(safe-area-inset-bottom)+8.75rem)]"
+                ? "bottom-[calc(env(safe-area-inset-bottom)+7rem)]"
                 : "bottom-[calc(env(safe-area-inset-bottom)+5.5rem)]"
             }`}
           >

@@ -645,7 +645,12 @@ function App() {
     currentPath.startsWith("/order-confirmation/");
   const usesCinematicBackground =
     currentPath === "/" ||
-    currentPath === "/food-truck-rush";
+    currentPath === "/food-truck-rush" ||
+    currentPath === "/scout" ||
+    currentPath.startsWith("/scout/") ||
+    currentPath === "/scout-v2" ||
+    currentPath === "/directory" ||
+    currentPath.startsWith("/directory/");
   const usesBusinessWorkspace =
     currentPath === "/restaurant-owner-dashboard" ||
     currentPath === "/menu-builder" ||

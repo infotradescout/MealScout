@@ -111,7 +111,7 @@ for (const snippet of [
   "overflow-x-hidden",
   'data-scout-mobile-thirds-map="true"',
   "const compactMapHeight = isThinScoutViewport",
-  '"clamp(250px, 32dvh, 310px)"',
+  '"clamp(176px, 22dvh, 208px)"',
   "scoutSearchMode",
   "scoutSearchIntent",
   "restaurantSearchPriority",
@@ -200,18 +200,18 @@ assert.ok(!searchDock.includes("bg-[#0f0a07]/94"), "Scout search dock must not r
 const truck = { id: "truck-1", businessType: "food_truck", isFoodTruck: true };
 const restaurant = { id: "restaurant-1", businessType: "restaurant", isFoodTruck: false };
 const assignments = assignScoutBusinessCardsBySection([
-  { id: "live_trucks_now", items: [truck], getBusinessKey: (item) => getScoutBusinessKey(item) },
-  { id: "food_trucks_today", items: [truck], getBusinessKey: (item) => getScoutBusinessKey(item) },
-  { id: "open_now_near_you", items: [truck, restaurant], getBusinessKey: (item) => getScoutBusinessKey(item) },
+  { id: "live_trucks_now", items: [truck, truck], getBusinessKey: (item) => getScoutBusinessKey(item) },
+  { id: "food_trucks_today", items: [], getBusinessKey: (item) => getScoutBusinessKey(item) },
+  { id: "open_now_near_you", items: [truck, restaurant, restaurant], getBusinessKey: (item) => getScoutBusinessKey(item) },
   { id: "nearby_restaurants", items: [restaurant], getBusinessKey: (item) => getScoutBusinessKey(item) },
   { id: "worth_discovering", items: [truck, restaurant], getBusinessKey: (item) => getScoutBusinessKey(item) },
 ]);
 
 assert.deepEqual(assignments.live_trucks_now?.map((item) => item.id), ["truck-1"]);
 assert.deepEqual(assignments.food_trucks_today, []);
-assert.deepEqual(assignments.open_now_near_you?.map((item) => item.id), ["restaurant-1"]);
-assert.deepEqual(assignments.nearby_restaurants, []);
-assert.deepEqual(assignments.worth_discovering, []);
+assert.deepEqual(assignments.open_now_near_you?.map((item) => item.id), ["truck-1", "restaurant-1"]);
+assert.deepEqual(assignments.nearby_restaurants?.map((item) => item.id), ["restaurant-1"]);
+assert.deepEqual(assignments.worth_discovering?.map((item) => item.id), ["truck-1", "restaurant-1"]);
 
 assert.equal(normalizeScoutBusinessKind({ businessType: "food_cart_collective" }, "restaurant"), "local_activity");
 

@@ -58,9 +58,10 @@ assert.match(navigation, /isScoutRoute[\s\S]*\? "customer"[\s\S]*: "guest"/);
 
 assert.doesNotMatch(scout, /data-scout-search-surface="top"/);
 assert.doesNotMatch(scout, /<ScoutSearchDock[\s\S]*placement="inline"/);
-assert.doesNotMatch(
+assert.match(
   app,
-  /currentPath === "\/scout"[\s\S]*usesCinematicBackground/,
+  /const usesCinematicBackground =[\s\S]*currentPath === "\/scout"[\s\S]*currentPath\.startsWith\("\/directory\/"\)/,
+  "Scout and its aliases must retain the warm night application theme.",
 );
 
 assert.match(menu, /const publicProfileHref =/);

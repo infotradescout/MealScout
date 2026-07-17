@@ -444,7 +444,6 @@ export function assignScoutBusinessCardsBySection<T>(
     getBusinessKey: (item: T) => string | null;
   }>,
 ): Partial<Record<ScoutPrimarySectionId, T[]>> {
-  const claimedBusinessKeys = new Set<string>();
   const priority = new Map(
     SCOUT_PRIMARY_SECTION_PRIORITY.map((sectionId, index) => [sectionId, index]),
   );
@@ -453,10 +452,13 @@ export function assignScoutBusinessCardsBySection<T>(
   for (const section of [...sections].sort(
     (a, b) => (priority.get(a.id) ?? 999) - (priority.get(b.id) ?? 999),
   )) {
+    // Keep one card per business inside a category. The same business may
+    // legitimately appear in another category (for example, a restaurant
+    // with both a popular dish and an active deal).
     assigned[section.id] = filterUniqueScoutBusinessCards(
       section.items,
       section.getBusinessKey,
-      claimedBusinessKeys,
+      new Set<string>(),
     );
   }
 

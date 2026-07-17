@@ -61,7 +61,6 @@ for (const requiredSnippet of [
   "localRotatingSpotCandidatesForFeed",
   "networkRotatingSpotCandidates={activityFallbackRestaurants}",
   "rotateScoutSpots(",
-  'title: "Food Trucks to Explore"',
   'data-scout-row-fallback={',
   "scoutRotatingRowFallbackCopy",
   "emptyRowsEligibleForRotation",
@@ -82,6 +81,11 @@ assert.match(
   scoutPage,
   /if \(laneId === "food_trucks"\) return \[\];/,
   "The live-truck lane must never prepare rotating fallback spots.",
+);
+assert.match(
+  scoutPage,
+  /rowId === "food_trucks_today" \? \[\] : rotatingSpots/,
+  "Food Trucks Today must never substitute ordinary profiles for live truck truth.",
 );
 assert.match(
   scoutPage,
@@ -113,8 +117,8 @@ const rowFallbackCopyEnd = scoutPage.indexOf(
 assert.ok(rowFallbackCopyStart >= 0 && rowFallbackCopyEnd > rowFallbackCopyStart);
 assert.doesNotMatch(
   scoutPage.slice(rowFallbackCopyStart, rowFallbackCopyEnd),
-  /live_trucks_now/,
-  "Now Serving Trucks must remain live-only and never accept a rotating fallback.",
+  /live_trucks_now|food_trucks_today/,
+  "Live and today truck rows must remain operational-truth-only and never accept rotating profiles.",
 );
 assert.ok(emptyState.includes('"No live trucks right now."'));
 assert.ok(
