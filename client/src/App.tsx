@@ -174,6 +174,21 @@ const RedirectToScout = () => {
   return <PageLoader />;
 };
 
+const RedirectToLogin = () => {
+  const [location, setLocation] = useLocation();
+
+  useEffect(() => {
+    const redirect = encodeURIComponent(location || "/dashboard");
+    setLocation(`/login?redirect=${redirect}`);
+  }, [location, setLocation]);
+
+  return (
+    <main className="flex min-h-screen items-center justify-center px-4 text-center">
+      <p className="text-sm text-muted-foreground">Opening sign in...</p>
+    </main>
+  );
+};
+
 const CleanPublicProfileRoute = () => {
   const [location] = useLocation();
   const currentPath = location.split("?")[0];
@@ -274,6 +289,37 @@ function DashboardSwitcherPage() {
   const urlParams = new URLSearchParams(window.location.search);
   const view = urlParams.get("view") as "admin" | "user" | "restaurant" | null;
   return <DashboardSwitcher defaultView={view || "admin"} />;
+}
+
+function GuestProtectedRoutes() {
+  return (
+    <>
+      <Route path="/favorites" component={RedirectToLogin} />
+      <Route path="/restaurant-owner-dashboard" component={RedirectToLogin} />
+      <Route path="/restaurant/dashboard" component={RedirectToLogin} />
+      <Route path="/deal-edit/:dealId" component={RedirectToLogin} />
+      <Route path="/subscribe" component={RedirectToLogin} />
+      <Route path="/host/dashboard" component={RedirectToLogin} />
+      <Route path="/event-coordinator/dashboard" component={RedirectToLogin} />
+      <Route path="/truck-discovery" component={RedirectToLogin} />
+      <Route path="/supply/orders" component={RedirectToLogin} />
+      <Route path="/orders" component={RedirectToLogin} />
+      <Route path="/profile" component={RedirectToLogin} />
+      <Route path="/profile/notifications" component={RedirectToLogin} />
+      <Route path="/profile/settings" component={RedirectToLogin} />
+      <Route path="/settings" component={RedirectToLogin} />
+      <Route path="/profile/addresses" component={RedirectToLogin} />
+      <Route path="/profile/payment" component={RedirectToLogin} />
+      <Route path="/profile/help" component={RedirectToLogin} />
+      <Route path="/profile/reporter-reputation" component={RedirectToLogin} />
+      <Route path="/supplier/dashboard" component={RedirectToLogin} />
+      <Route path="/affiliate/earnings" component={RedirectToLogin} />
+      <Route path="/parking-pass-manage" component={RedirectToLogin} />
+      <Route path="/business-team" component={RedirectToLogin} />
+      <Route path="/menu-builder" component={RedirectToLogin} />
+      <Route path="/kitchen" component={RedirectToLogin} />
+    </>
+  );
 }
 
 function SharedPublicRoutes() {
@@ -453,10 +499,11 @@ function Router() {
             <Route path="/claim-truck/:refTag" component={ClaimTruckPage} />
             <Route path="/deal-creation" component={DealCreation} />
             <Route path="/deal/:id" component={DealDetail} />
-            <SharedPublicRoutes />
+            {SharedPublicRoutes()}
             <Route path="/admin" component={AdminLogin} />
             <Route path="/admin/login" component={AdminLogin} />
             <Route path="/admin/dashboard" component={AdminLogin} />
+            {GuestProtectedRoutes()}
             <Route
               path="/:businessSlug/:refTag"
               component={CleanPublicProfileRoute}
@@ -565,7 +612,7 @@ function Router() {
               path="/restaurant/:restaurantId/reviews"
               component={ReviewsPage}
             />
-            <SharedPublicRoutes />
+            {SharedPublicRoutes()}
             <Route path="/admin/login" component={AdminLogin} />
             <Route path="/parking-pass-manage" component={ParkingPassManage} />
             <Route path="/business-team" component={BusinessTeamPage} />
@@ -593,14 +640,25 @@ function App() {
     /^\/(restaurant|truck|bar|location|supplier)\/[^/]+(?:\/[^/]+)?$/i.test(
       currentPath,
     );
+  const usesCinematicBackground =
+    currentPath === "/" ||
+    currentPath === "/food-truck-rush" ||
+    currentPath === "/scout" ||
+    currentPath.startsWith("/scout/") ||
+    currentPath === "/scout-v2" ||
+    currentPath === "/directory" ||
+    currentPath.startsWith("/directory/");
+  const usesBusinessWorkspace =
+    currentPath === "/restaurant-owner-dashboard" ||
+    currentPath === "/menu-builder";
 
   if (isShellNotFound) {
     return (
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
           <ScoutNavSearchProvider>
-            <TimeOfDayBackground />
-            <div className="desktop-full-width app-background app-content min-h-screen md:pt-16 relative z-10">
+            <TimeOfDayBackground appearance="day" />
+            <div className="app-background app-content min-h-screen pb-[calc(var(--scout-nav-height,58px)+env(safe-area-inset-bottom,0px))] lg:pb-0 lg:pt-16 relative z-10">
               <Toaster />
               <NotFound />
               <Navigation scope="global" />
@@ -615,7 +673,8 @@ function App() {
     return (
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
-          <div className="min-h-screen bg-[#070605] text-white">
+          <TimeOfDayBackground appearance="night" />
+          <div className="relative z-10 min-h-screen bg-[#070605] text-white">
             <Toaster />
             <Router />
           </div>
@@ -628,8 +687,13 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <ScoutNavSearchProvider>
-          <TimeOfDayBackground />
-          <div className="desktop-full-width app-background app-content min-h-screen md:pt-16 relative z-10">
+          <TimeOfDayBackground
+            appearance={usesCinematicBackground ? "night" : "day"}
+          />
+          <div
+            data-app-surface={usesCinematicBackground ? "cinematic" : "day"}
+            className={`app-background app-content min-h-screen pb-[calc(var(--scout-nav-height,58px)+env(safe-area-inset-bottom,0px))] lg:pb-0 relative z-10 ${usesBusinessWorkspace ? "lg:pt-0" : "lg:pt-16"}`}
+          >
             <Toaster />
             <Router />
             <Navigation scope="global" />

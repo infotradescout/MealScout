@@ -3645,7 +3645,7 @@ export default function MapPage() {
   const mapExploreLinks = [
     {
       href: "/scout",
-      title: "Open Scout",
+      title: "Scout",
       description: "Browse what's open, new, and worth trying nearby.",
     },
     {
@@ -3801,7 +3801,7 @@ export default function MapPage() {
                 : "Use my location"}
           </Button>
           <Button asChild variant="outline" size="sm">
-            <Link href="/scout">Open Scout</Link>
+            <Link href="/scout">Scout</Link>
           </Button>
           {activityPins > 0 ? (
             <Button
@@ -4175,11 +4175,11 @@ export default function MapPage() {
                     No nearby food is pinned in this part of the map yet
                   </p>
                   <p className="text-xs text-muted-foreground mb-3">
-                    Pan or zoom out to check another area, or open Scout for more food options nearby.
+                    Pan or zoom out to check another area, or scout for more food options.
                   </p>
                   <div className="flex flex-wrap justify-center gap-2">
                     <Button asChild size="sm">
-                      <Link href="/scout">Open Scout</Link>
+                      <Link href="/scout">Scout</Link>
                     </Button>
                     <Button
                       size="sm"

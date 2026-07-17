@@ -5,13 +5,16 @@ const dashboard = readFileSync("client/src/pages/restaurant-owner-dashboard.tsx"
 const requiredSnippets = [
   "currentRestaurant && setupMode",
   "Business onboarding",
-  "<Tabs defaultValue={defaultTab} className=\"space-y-4\">",
+  "id=\"owner-workspace-operations\"",
+  "key={defaultTab}",
+  "defaultValue={defaultTab}",
   "TabsTrigger value=\"active\"",
   "TabsTrigger value=\"analytics\"",
   "TabsTrigger value=\"bookings\"",
   "TabsTrigger value=\"foodtruck\"",
   "Open menu builder",
-  "Jump to schedule/live tools",
+  "Jump to schedule and live tools",
+  "Jump to hours",
 ];
 
 for (const snippet of requiredSnippets) {

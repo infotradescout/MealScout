@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiUrl } from "@/lib/api";
+import { getDishCategoryPhoto } from "@/lib/dishCategoryPhoto";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "wouter";
 import type {
@@ -1028,7 +1029,11 @@ function MenuItemSideRail({ items }: { items: PublicMenuItem[] }) {
   if (items.length === 0) return null;
   return (
     <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-1 scrollbar-none">
-      {items.map((item, index) => (
+      {items.map((item, index) => {
+        const categoryPhoto = item.imageUrl
+          ? null
+          : getDishCategoryPhoto(item.name, item.description);
+        return (
         <article
           key={`${item.name}:${index}`}
           className="w-40 shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-[#0f0d0b]"
@@ -1038,6 +1043,14 @@ function MenuItemSideRail({ items }: { items: PublicMenuItem[] }) {
               <img
                 src={item.imageUrl}
                 alt={item.name}
+                loading="lazy"
+                decoding="async"
+                className="h-full w-full object-cover"
+              />
+            ) : categoryPhoto ? (
+              <img
+                src={categoryPhoto.image}
+                alt=""
                 loading="lazy"
                 decoding="async"
                 className="h-full w-full object-cover"
@@ -1062,7 +1075,8 @@ function MenuItemSideRail({ items }: { items: PublicMenuItem[] }) {
             ) : null}
           </div>
         </article>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -2553,7 +2567,7 @@ function PublicProfileRelatedDiscoveryLinks({
           href="/scout"
           className="rounded-md border border-white/10 px-3 py-2 text-white/85 hover:bg-white/10"
         >
-          Open Scout
+          Scout
         </a>
         <a
           href="/claim-business"
@@ -2942,7 +2956,7 @@ export default function PublicProfilePage() {
           </Link>
           <div className="flex items-center gap-3 text-xs sm:text-sm">
             <Link href="/scout" className="text-white/75 hover:text-white">
-              Open Scout
+              Scout
             </Link>
             <Link
               href="/claim-business"
@@ -3230,7 +3244,7 @@ export default function PublicProfilePage() {
           <p>MealScout</p>
           <div className="flex items-center gap-4">
             <Link href="/scout" className="hover:text-white">
-              Open Scout
+              Scout
             </Link>
             <Link href="/claim-business" className="hover:text-white">
               Business owner?

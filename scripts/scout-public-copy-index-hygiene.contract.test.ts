@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 
 const indexHtml = readFileSync("client/index.html", "utf8");
 const scoutPage = readFileSync("client/src/pages/explore-preview-v2.tsx", "utf8");
+const publicProfile = readFileSync("client/src/pages/public-profile.tsx", "utf8");
 const prerender = readFileSync("server/seo/publicProfilePrerender.ts", "utf8");
 const publicDiscoveryRoutes = readFileSync(
   "server/routes/publicDiscoveryRoutes.ts",
@@ -35,8 +36,13 @@ assert(
 );
 
 assert(
-  prerender.includes('{ label: "Open Scout", href: "/scout" }'),
-  'Public profile CTA should say "Open Scout", not internal dashboard copy.',
+  prerender.includes('{ label: "Scout", href: "/scout" }'),
+  'Public profile CTA should label the action "Scout".',
+);
+assert(
+  publicProfile.includes("Scout") &&
+    !/Open Scout|Scout nearby|Keep scouting/i.test(publicProfile),
+  'Public profiles should label the discovery action "Scout" without modifiers.',
 );
 assert(
   !prerender.includes("Scout local dashboard"),

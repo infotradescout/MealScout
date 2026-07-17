@@ -30,7 +30,6 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useI18n } from "@/lib/i18n";
 import LongPressHelp from "@/components/long-press-help";
-import { useScoutNavSearch } from "@/components/scout/ScoutNavSearchContext";
 
 type NavItem = {
   path?: string;
@@ -45,7 +44,13 @@ type NavigationProps = {
 };
 
 const NAV_HELP: Record<string, string> = {
-  Scout: "Find food trucks and local food near you.",
+  Scout: "Discover local food or see MealScout as a customer.",
+  Saved: "Return to food and places you saved.",
+  Account: "Open your MealScout account and settings.",
+  Overview: "See the current state of your business workspace.",
+  Work: "Open the orders, requests, or bookings that need attention.",
+  Manage: "Manage your public business presence and offerings.",
+  Search: "Search dishes, places, trucks, deals, and events.",
   Map: "Open the local food map for nearby places and trucks.",
   Truck: "List a food truck on MealScout.",
   Claim: "Claim or update a food truck profile.",
@@ -71,13 +76,6 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
   const [isReporting, setIsReporting] = useState(false);
   const { t } = useI18n();
   const sheetRef = useRef<HTMLDivElement>(null);
-  const {
-    searchMode,
-    query: scoutSearchQuery,
-    openSearch,
-    closeSearch,
-    setQuery: setScoutSearchQuery,
-  } = useScoutNavSearch();
 
   useEffect(() => {
     if (isGlobalScope) {
@@ -182,9 +180,6 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
   });
 
   const hasBusinessTeamAccess = Boolean(businessAccess?.hasAnyAccess);
-  const isBusinessOperator =
-    isFoodTruck || isRestaurantOwner || hasBusinessTeamAccess;
-
   const [isHost, setIsHost] = useState(false);
   useEffect(() => {
     if (!user) {
@@ -236,12 +231,12 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
   if (isWheelPage || isDocFullscreen || isScoutMapFullscreen) return null;
   if (!isGlobalScope && !showLocalNav) return null;
 
-  const dashboardPath = !user ? "/customer-signup" : "/dashboard";
+  const dashboardPath = "/dashboard";
   const isScoutRoute =
     currentPath === "/scout" || currentPath.startsWith("/scout/");
-  const desktopNavPositionClass = isScoutRoute
-    ? "left-1/2 right-auto -translate-x-1/2"
-    : "right-6";
+  const isBusinessWorkspaceRoute =
+    currentPath === "/restaurant-owner-dashboard" ||
+    currentPath === "/menu-builder";
   const disableScoutHelpBubbles = isScoutRoute;
 
   const lane:
@@ -275,73 +270,63 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
   const hasSecondaryHostLink =
     isHost && (lane === "restaurant" || lane === "food_truck");
 
-  const primarySlotsByLane: Record<typeof lane, NavItem[]> = {
+  const primaryNavigationByLane: Record<typeof lane, NavItem[]> = {
     guest: [
-      {
-        path: "/restaurant-signup?businessType=food_truck",
-        icon: Store,
-        label: "Truck",
-      },
-      { path: "/login", icon: User, label: "Login" },
+      { path: "/scout", icon: Compass, label: "Scout" },
+      { path: "/favorites", icon: Heart, label: "Saved" },
+      { path: "/login", icon: User, label: "Account" },
     ],
     customer: [
-      { path: "/video", icon: Clapperboard, label: "Video" },
-      { path: "/events", icon: Calendar, label: "Events" },
-      // Not "Dashboard": for a plain customer, /dashboard's role router
-      // falls through to /scout itself (no dedicated customer dashboard
-      // exists), so that slot was a dead loop back to the tab it's on.
+      { path: "/scout", icon: Compass, label: "Scout" },
       { path: "/favorites", icon: Heart, label: "Saved" },
+      { path: "/profile", icon: User, label: "Account" },
     ],
-    food_truck: [
-      businessOnboardingRequired
-        ? { path: businessOnboardingPath, icon: Store, label: "Set Up" }
-        : { path: "/parking-pass", icon: ParkingSquare, label: "Parking Pass" },
-      businessOnboardingRequired
-        ? { path: businessOnboardingPath, icon: UserPlus, label: "Claim" }
-        : { path: "/orders", icon: ShoppingCart, label: "Orders" },
-      businessOnboardingRequired
-        ? { path: businessOnboardingPath, icon: Truck, label: "Truck" }
-        : { path: "/kitchen", icon: ChefHat, label: "Kitchen" },
-    ],
-    restaurant: [
-      businessOnboardingRequired
-        ? { path: businessOnboardingPath, icon: Store, label: "Set Up" }
-        : isRestaurantHostCapable
-          ? {
-              path: "/parking-pass",
-              icon: ParkingSquare,
-              label: "Parking Pass",
-            }
-          : { path: "/orders", icon: ShoppingCart, label: "Orders" },
-      businessOnboardingRequired
-        ? { path: businessOnboardingPath, icon: UserPlus, label: "Claim" }
-        : { path: "/kitchen", icon: ChefHat, label: "Kitchen" },
-      businessOnboardingRequired
-        ? {
-            path: businessOnboardingPath,
-            icon: LayoutDashboard,
-            label: "Finish",
-          }
-        : { path: dashboardPath, icon: LayoutDashboard, label: "Dashboard" },
-    ],
+    food_truck: businessOnboardingRequired
+      ? [
+          { path: businessOnboardingPath, icon: Store, label: "Set Up" },
+          { path: "/profile", icon: User, label: "Account" },
+        ]
+      : [
+          { path: dashboardPath, icon: LayoutDashboard, label: "Overview" },
+          { path: "/orders", icon: ShoppingCart, label: "Work" },
+          {
+            path: "/restaurant-owner-dashboard",
+            icon: Store,
+            label: "Manage",
+          },
+        ],
+    restaurant: businessOnboardingRequired
+      ? [
+          { path: businessOnboardingPath, icon: Store, label: "Set Up" },
+          { path: "/profile", icon: User, label: "Account" },
+        ]
+      : [
+          { path: dashboardPath, icon: LayoutDashboard, label: "Overview" },
+          { path: "/orders", icon: ShoppingCart, label: "Work" },
+          {
+            path: "/restaurant-owner-dashboard",
+            icon: Store,
+            label: "Manage",
+          },
+        ],
     host: [
-      { path: "/parking-pass", icon: ParkingSquare, label: "Parking Pass" },
-      { path: "/video", icon: Clapperboard, label: "Video" },
-      { path: dashboardPath, icon: LayoutDashboard, label: "Dashboard" },
+      { path: dashboardPath, icon: LayoutDashboard, label: "Overview" },
+      { path: "/parking-pass", icon: ParkingSquare, label: "Work" },
+      { path: "/host/dashboard", icon: Store, label: "Manage" },
     ],
     event: [
-      { path: "/events", icon: Calendar, label: "Events" },
+      { path: dashboardPath, icon: LayoutDashboard, label: "Overview" },
       {
         path: "/event-coordinator/dashboard?tab=requests",
         icon: Package,
-        label: "Requests",
+        label: "Work",
       },
-      { path: dashboardPath, icon: LayoutDashboard, label: "Dashboard" },
+      { path: "/events", icon: Calendar, label: "Manage" },
     ],
     supplier: [
-      { path: "/supply/orders", icon: ShoppingCart, label: "Orders" },
-      { path: "/suppliers", icon: Package, label: "Products" },
-      { path: dashboardPath, icon: LayoutDashboard, label: "Dashboard" },
+      { path: dashboardPath, icon: LayoutDashboard, label: "Overview" },
+      { path: "/supply/orders", icon: ShoppingCart, label: "Work" },
+      { path: "/suppliers", icon: Package, label: "Manage" },
     ],
     admin_staff: [
       { path: dashboardPath, icon: LayoutDashboard, label: "Dashboard" },
@@ -354,15 +339,8 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     ],
   };
 
-  const basePrimary = primarySlotsByLane[lane];
-  const sixSlotNav: NavItem[] = [
-    { path: "/scout", icon: Compass, label: "Scout" },
-    basePrimary[0],
-    basePrimary[1],
-    basePrimary[2],
-    lane === "guest"
-      ? { path: "/claim-business", icon: Truck, label: "Claim" }
-      : { path: "/share-hub", icon: Share2, label: "Share" },
+  const primaryNav: NavItem[] = [
+    ...primaryNavigationByLane[lane],
     {
       icon: MoreHorizontal,
       label: "More",
@@ -385,22 +363,36 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
 
     if (lane === "guest") {
       items.push(
-        { path: "/login", icon: User, label: "Login" },
+        { path: "/search", icon: Search, label: "Search" },
+        { path: "/events", icon: Calendar, label: "Events" },
+        { path: "/deals", icon: Tag, label: "Deals" },
         {
           path: "/restaurant-signup?businessType=food_truck",
           icon: Store,
-          label: "Truck",
+          label: "List a Truck",
         },
-        { path: "/claim-business", icon: Truck, label: "Claim" },
+        { path: "/claim-business", icon: Truck, label: "Claim Business" },
       );
     } else if (lane === "customer") {
-      items.push({ path: "/profile", icon: User, label: "Profile" });
+      items.push(
+        { path: "/search", icon: Search, label: "Search" },
+        { path: "/events", icon: Calendar, label: "Events" },
+        { path: "/deals", icon: Tag, label: "Deals" },
+        { path: "/video", icon: Clapperboard, label: "Video" },
+        { path: "/share-hub", icon: Share2, label: "Share" },
+      );
     } else if (lane === "food_truck") {
       items.push(
+        { path: "/scout", icon: Compass, label: "Scout" },
         { path: dashboardPath, icon: LayoutDashboard, label: "Dashboard" },
         { path: "/parking-pass", icon: ParkingSquare, label: "Schedule" },
+        { path: "/menu-builder", icon: ChefHat, label: "Menu" },
+        { path: "/kitchen", icon: ChefHat, label: "Kitchen" },
+        { path: "/deal-creation", icon: Tag, label: "Deals" },
         { path: "/events", icon: Calendar, label: "Events" },
         { path: "/suppliers", icon: Truck, label: "Suppliers" },
+        { path: "/business-team", icon: Users, label: "Team" },
+        { path: "/share-hub", icon: Share2, label: "Share" },
         { path: "/subscribe", icon: BarChart3, label: "Subscription" },
         {
           path: "/restaurant-owner-dashboard",
@@ -420,6 +412,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
       );
     } else if (lane === "restaurant") {
       items.push(
+        { path: "/scout", icon: Compass, label: "Scout" },
         ...(isRestaurantHostCapable
           ? [
               {
@@ -429,8 +422,13 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
               } as NavItem,
             ]
           : []),
+        { path: "/menu-builder", icon: ChefHat, label: "Menu" },
+        { path: "/kitchen", icon: ChefHat, label: "Kitchen" },
+        { path: "/deal-creation", icon: Tag, label: "Deals" },
         { path: "/events", icon: Calendar, label: "Events" },
         { path: "/suppliers", icon: Truck, label: "Suppliers" },
+        { path: "/business-team", icon: Users, label: "Team" },
+        { path: "/share-hub", icon: Share2, label: "Share" },
         { path: "/subscribe", icon: BarChart3, label: "Subscription" },
         {
           path: "/restaurant-owner-dashboard",
@@ -450,18 +448,24 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
       );
     } else if (lane === "host") {
       items.push(
+        { path: "/scout", icon: Compass, label: "Scout" },
         { path: "/events", icon: Calendar, label: "Events" },
+        { path: "/share-hub", icon: Share2, label: "Share" },
         { path: "/profile", icon: User, label: "Profile" },
       );
     } else if (lane === "event") {
       items.push(
+        { path: "/scout", icon: Compass, label: "Scout" },
         { path: "/video", icon: Clapperboard, label: "Video" },
+        { path: "/share-hub", icon: Share2, label: "Share" },
         { path: "/profile", icon: User, label: "Profile" },
       );
     } else if (lane === "supplier") {
       items.push(
+        { path: "/scout", icon: Compass, label: "Scout" },
         { path: "/events", icon: Calendar, label: "Events" },
         { path: "/supplier/dashboard", icon: BarChart3, label: "Reports" },
+        { path: "/share-hub", icon: Share2, label: "Share" },
         { path: "/profile", icon: User, label: "Profile" },
       );
     } else {
@@ -497,6 +501,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
         { path: "/parking-pass", icon: ParkingSquare, label: "Parking Pass" },
         { path: "/deal-creation", icon: Tag, label: "Deals" },
         { path: "/orders", icon: ShoppingCart, label: "Orders" },
+        { path: "/share-hub", icon: Share2, label: "Share" },
         { path: "/admin/dashboard?tab=users", icon: UserPlus, label: "Users" },
         {
           path: "/admin/giveaway-wheel",
@@ -518,10 +523,13 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
   };
 
   const moreItems = buildMoreItems();
-  const isActive = (path: string) =>
-    location === path ||
-    location.startsWith(`${path}/`) ||
-    location.startsWith(`${path}?`);
+  const isActive = (path: string) => {
+    const pathOnly = path.split("?")[0];
+    return (
+      currentPath === pathOnly ||
+      currentPath.startsWith(`${pathOnly}/`)
+    );
+  };
 
   const buildOwnerToolHref = (destination: string) => {
     try {
@@ -540,50 +548,26 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     }
   };
 
-  const scoutNavSearch = isScoutRoute ? (
-    <form
-      role="search"
-      data-scout-nav-search="true"
-      onSubmit={(event) => {
-        event.preventDefault();
-        openSearch();
-      }}
-      className="flex min-h-11 items-center gap-2 px-3"
-    >
-      <Search className="h-4 w-4 shrink-0 text-orange-400" aria-hidden="true" />
-      <input
-        value={scoutSearchQuery}
-        onFocus={openSearch}
-        onChange={(event) => {
-          openSearch();
-          setScoutSearchQuery(event.target.value);
-        }}
-        className="h-11 min-w-0 flex-1 bg-transparent text-[13px] font-semibold text-white outline-none placeholder:text-white/45"
-        placeholder="Search dishes, cravings, places, trucks, or events"
-        aria-label="Search dishes, cravings, places, trucks, and events"
-      />
-      {searchMode ? (
-        <button
-          type="button"
-          onClick={closeSearch}
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white/60 hover:bg-white/5 hover:text-white"
-          aria-label="Clear and close Scout search"
-        >
-          <X className="h-4 w-4" aria-hidden="true" />
-        </button>
-      ) : null}
-    </form>
-  ) : null;
-
   return (
     <>
-      <div
+      <header
         data-nav-root={scope}
-        className={`hidden lg:block fixed top-6 z-50 ${desktopNavPositionClass}`}
+        className={`fixed inset-x-0 top-0 z-[1100] hidden border-b border-[color:var(--border-subtle)] ${isBusinessWorkspaceRoute ? "" : "lg:block"}`}
+        style={{ backgroundColor: "var(--bg-popup)" }}
       >
-        <div className="overflow-hidden rounded-2xl border border-white/10 bg-[var(--bg-popup)]/[0.88] shadow-[0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-xl">
-          <div className="flex items-center gap-1 p-2">
-            {sixSlotNav.map((item, idx) =>
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-5 xl:px-8">
+          <Link
+            href="/scout"
+            aria-label="Open MealScout"
+            className="inline-flex items-center gap-2 text-[color:var(--text-primary)]"
+          >
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+              <Compass className="h-4 w-4" aria-hidden="true" />
+            </span>
+            <span className="text-base font-black tracking-tight">MealScout</span>
+          </Link>
+          <nav aria-label="Primary navigation" className="flex items-center gap-1">
+            {primaryNav.map((item, idx) =>
               item.path ? (
                 <LongPressHelp
                   disabled={disableScoutHelpBubbles}
@@ -596,13 +580,14 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
                     href={buildOwnerToolHref(item.path)}
                     className={`inline-flex h-11 items-center gap-2 rounded-xl px-3 text-sm font-bold transition-all ${
                       isActive(item.path)
-                        ? "bg-primary text-[#1a0d08] shadow-[0_0_20px_rgba(255,90,47,0.4)]"
-                        : "text-white/60 hover:text-white hover:bg-white/5"
+                        ? "bg-primary text-primary-foreground shadow-sm"
+                        : "text-[color:var(--text-muted)] hover:bg-[var(--bg-surface-muted)] hover:text-[color:var(--text-primary)]"
                     }`}
                     aria-label={item.label}
+                    aria-current={isActive(item.path) ? "page" : undefined}
                   >
                     <item.icon className="h-4 w-4" />
-                    <span className="hidden lg:inline uppercase tracking-wider text-[11px]">
+                    <span className="text-[12px] font-bold">
                       {item.label}
                     </span>
                   </Link>
@@ -620,57 +605,39 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
                     onClick={item.onClick}
                     className={`inline-flex h-11 items-center gap-2 rounded-xl px-3 text-sm font-bold transition-all ${
                       item.label === "More" && moreOpen
-                        ? "bg-primary text-[#1a0d08] shadow-[0_0_20px_rgba(255,90,47,0.4)]"
-                        : "text-white/60 hover:text-white hover:bg-white/5"
+                        ? "bg-primary text-primary-foreground shadow-sm"
+                        : "text-[color:var(--text-muted)] hover:bg-[var(--bg-surface-muted)] hover:text-[color:var(--text-primary)]"
                     }`}
                   >
                     <item.icon className="h-4 w-4" />
-                    <span className="hidden lg:inline uppercase tracking-wider text-[11px]">
+                    <span className="text-[12px] font-bold">
                       {item.label}
                     </span>
                   </button>
                 </LongPressHelp>
               ),
             )}
-          </div>
-          <div className="border-t border-orange-200/15">
-            {scoutNavSearch}
-          </div>
+          </nav>
         </div>
-      </div>
+      </header>
 
       <nav
         aria-label="Primary navigation"
-        className="fixed left-0 right-0 z-[1100] lg:hidden"
+        className="fixed inset-x-0 bottom-0 z-[1100] border-t border-[color:var(--border-subtle)] lg:hidden"
         style={{ bottom: 0 }}
       >
         <div
-          data-scout-mobile-nav-shell={isScoutRoute ? "stacked" : undefined}
-          className={
-            isScoutRoute
-              ? "mx-3 mb-2 overflow-hidden rounded-[1.35rem] border border-orange-200/20 bg-[#1b100b]/[0.96] shadow-[0_-10px_28px_rgba(65,29,10,0.4)] backdrop-blur-xl"
-              : "w-full px-0"
+          data-scout-mobile-nav-shell={
+            isScoutRoute ? "navigation-only" : undefined
           }
+          className="w-full"
+          style={{ backgroundColor: "var(--bg-popup)" }}
         >
-          {isScoutRoute ? scoutNavSearch : null}
           <div
-            className={
-              isScoutRoute ? "border-t border-orange-200/15" : undefined
-            }
+            className="relative flex items-stretch justify-around gap-1 px-2 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_22px_rgba(36,18,8,0.10)]"
+            style={{ height: "var(--scout-nav-height, 58px)" }}
           >
-            <div
-              className={`relative flex items-end justify-between gap-1 px-1.5 rounded-none bg-[var(--bg-popup)] pb-[env(safe-area-inset-bottom)] ${
-                isScoutRoute
-                  ? "bg-transparent"
-                  : "border-t border-orange-500/20"
-              }`}
-              style={{
-                height: "var(--scout-nav-height, 58px)",
-                boxShadow: "0 -8px 22px rgba(0,0,0,0.42)",
-              }}
-            >
-            {sixSlotNav.map((item, index) => {
-              const isPrimary = index === 0;
+            {primaryNav.map((item, index) => {
               const active = item.path
                 ? isActive(item.path)
                 : item.label === "More"
@@ -690,27 +657,14 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
                       href={buildOwnerToolHref(item.path)}
                       aria-label={item.label}
                       aria-current={active ? "page" : undefined}
-                      className={`flex flex-col items-center justify-end gap-0.5 flex-1 min-w-0 h-full transition-colors ${isPrimary ? "pb-0.5" : "pb-1"} ${
+                      className={`flex h-full min-w-0 flex-1 flex-col items-center justify-center gap-1 transition-colors ${
                         active
-                          ? "text-orange-300"
-                          : "text-white/70 hover:text-white"
+                          ? "text-primary"
+                          : "text-[color:var(--text-muted)] hover:text-[color:var(--text-primary)]"
                       }`}
                     >
-                      {isPrimary ? (
-                        <span
-                          className="flex h-8.5 w-8.5 items-center justify-center rounded-full bg-[var(--bg-popup)]/70 ring-[1.5px] ring-orange-500/90 -mt-3"
-                          style={{
-                            boxShadow:
-                              "0 0 0 2px rgba(255,90,47,0.13), 0 0 12px rgba(255,90,47,0.26)",
-                          }}
-                          aria-hidden="true"
-                        >
-                          <item.icon className="h-4.5 w-4.5 text-orange-300" />
-                        </span>
-                      ) : (
-                        <item.icon className="h-4.5 w-4.5" aria-hidden="true" />
-                      )}
-                      <span className="text-[9px] font-medium truncate max-w-full leading-none">
+                      <item.icon className="h-[18px] w-[18px]" aria-hidden="true" />
+                      <span className="max-w-full truncate text-[10px] font-semibold leading-none">
                         {item.label}
                       </span>
                     </Link>
@@ -729,21 +683,20 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
                     aria-label={item.label}
                     aria-expanded={item.label === "More" ? moreOpen : undefined}
                     onClick={item.onClick}
-                    className={`flex flex-col items-center justify-end gap-0.5 flex-1 min-w-0 h-full pb-1 transition-colors ${
+                    className={`flex h-full min-w-0 flex-1 flex-col items-center justify-center gap-1 transition-colors ${
                       active
-                        ? "text-orange-300"
-                        : "text-white/70 hover:text-white"
+                        ? "text-primary"
+                        : "text-[color:var(--text-muted)] hover:text-[color:var(--text-primary)]"
                     }`}
                   >
-                    <item.icon className="h-4.5 w-4.5" aria-hidden="true" />
-                    <span className="text-[9px] font-medium leading-none">
+                    <item.icon className="h-[18px] w-[18px]" aria-hidden="true" />
+                    <span className="text-[10px] font-semibold leading-none">
                       {item.label}
                     </span>
                   </button>
                 </LongPressHelp>
               );
-              })}
-            </div>
+            })}
           </div>
         </div>
       </nav>
@@ -756,22 +709,22 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
           aria-label="More options"
         >
           <div
-            className="absolute inset-0 bg-[var(--bg-popup)]/60 backdrop-blur-sm"
+            className="absolute inset-0 bg-black/30 backdrop-blur-sm"
             onClick={() => setMoreOpen(false)}
           />
           <div
             ref={sheetRef}
-            className="absolute left-0 right-0 bottom-[calc(env(safe-area-inset-bottom)+5.5rem)] mx-4 rounded-3xl bg-[var(--bg-popup)]/80 backdrop-blur-2xl border border-white/10 shadow-[0_-16px_48px_rgba(0,0,0,0.7)] overflow-hidden"
+            className="absolute bottom-[calc(env(safe-area-inset-bottom)+5.5rem)] left-0 right-0 mx-4 overflow-hidden rounded-3xl border border-[color:var(--border-subtle)] bg-[var(--bg-popup)]/95 shadow-[0_-16px_48px_rgba(36,18,8,0.24)] backdrop-blur-2xl"
           >
             <div className="flex items-center justify-between px-5 pt-4 pb-2">
-              <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-white/40">
+              <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-[color:var(--text-muted)]">
                 More
               </span>
               <button
                 type="button"
                 onClick={() => setMoreOpen(false)}
                 aria-label="Close"
-                className="text-white/40 hover:text-white transition-colors p-1"
+                className="p-1 text-[color:var(--text-muted)] transition-colors hover:text-[color:var(--text-primary)]"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -787,23 +740,25 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
                           ? "bg-primary/20 ring-1 ring-primary/40"
                           : item.isBug
                             ? "bg-primary/10"
-                            : "bg-white/5"
+                            : "bg-[var(--bg-surface-muted)]"
                       }`}
                       aria-hidden="true"
                     >
                       <item.icon
                         className={`h-5 w-5 ${
                           active
-                            ? "text-orange-300"
+                            ? "text-primary"
                             : item.isBug
                               ? "text-primary animate-pulse"
-                              : "text-white/70"
+                              : "text-[color:var(--text-muted)]"
                         }`}
                       />
                     </span>
                     <span
                       className={`text-[10px] font-medium text-center leading-tight ${
-                        active ? "text-orange-300" : "text-white/60"
+                        active
+                          ? "text-primary"
+                          : "text-[color:var(--text-muted)]"
                       }`}
                     >
                       {item.label}
@@ -817,7 +772,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
                     href={buildOwnerToolHref(item.path)}
                     aria-label={item.label}
                     aria-current={active ? "page" : undefined}
-                    className="flex flex-col items-center justify-start pt-3 px-1 rounded-2xl hover:bg-white/5 transition-colors"
+                    className="flex flex-col items-center justify-start rounded-2xl px-1 pt-3 transition-colors hover:bg-[var(--bg-surface-muted)]"
                     onClick={() => setMoreOpen(false)}
                   >
                     {inner}
@@ -832,7 +787,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
                     }}
                     disabled={isReporting}
                     aria-label={item.label}
-                    className="flex flex-col items-center justify-start pt-3 px-1 rounded-2xl hover:bg-white/5 transition-colors disabled:opacity-60"
+                    className="flex flex-col items-center justify-start rounded-2xl px-1 pt-3 transition-colors hover:bg-[var(--bg-surface-muted)] disabled:opacity-60"
                   >
                     {inner}
                   </button>

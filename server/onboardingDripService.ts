@@ -172,9 +172,9 @@ export class OnboardingDripService {
       <h2 style="color:#ff6b35;font-size:24px;margin:0 0 16px;">Fresh deals are waiting this week 🔥</h2>
       <p>Hey ${name}!</p>
       <p>You've been with MealScout for a few days now. New restaurants and food trucks post limited-time deals throughout the week.</p>
-      <p>Open Scout to see what is active near you right now, or jump straight into search to browse current offers.</p>
+      <p>Scout to see what is active right now, or jump straight into search to browse current offers.</p>
       <div style="text-align:center;margin:30px 0;">
-        <a href="${scoutUrl}" style="background:linear-gradient(135deg,#ff6b35 0%,#f7931e 100%);color:white;padding:14px 32px;text-decoration:none;border-radius:6px;font-weight:600;">Open Scout</a>
+        <a href="${scoutUrl}" style="background:linear-gradient(135deg,#ff6b35 0%,#f7931e 100%);color:white;padding:14px 32px;text-decoration:none;border-radius:6px;font-weight:600;">Scout</a>
       </div>
       <p style="text-align:center;margin-top:0;">
         <a href="${dealsUrl}" style="color:#ff6b35;text-decoration:underline;">Browse all current deals</a>
@@ -187,7 +187,7 @@ export class OnboardingDripService {
   </div>
 </body>
 </html>`;
-    const text = `Hey ${name}! Fresh deals are posted all week on MealScout. Open Scout: ${scoutUrl} or browse deals: ${dealsUrl}`;
+    const text = `Hey ${name}! Fresh deals are posted all week on MealScout. Scout: ${scoutUrl} or browse deals: ${dealsUrl}`;
     return emailService.sendBasicEmail(
       to,
       "🍽️ Fresh MealScout deals this week",
@@ -241,7 +241,7 @@ export class OnboardingDripService {
       <div style="text-align:center;margin:30px 0;">
         <a href="${searchUrl}" style="background:linear-gradient(135deg,#ff6b35 0%,#f7931e 100%);color:white;padding:14px 32px;text-decoration:none;border-radius:6px;font-weight:600;">Find Deals Near Me</a>
       </div>
-      <p>You can also <a href="https://www.mealscout.us/scout" style="color:#ff6b35;">open Scout</a> to see active food trucks, menus, deals, and local food activity near you.</p>
+      <p>You can also <a href="https://www.mealscout.us/scout" style="color:#ff6b35;">scout</a> to see active food trucks, menus, deals, and local food activity.</p>
       <p style="font-size:13px;color:#999;">To unsubscribe, update your <a href="https://www.mealscout.us/profile" style="color:#ff6b35;">notification settings</a>.</p>
     </div>
     <div style="background:#f8f9fa;padding:20px 40px;text-align:center;border-top:1px solid #e9ecef;font-size:13px;color:#666;">
@@ -250,7 +250,7 @@ export class OnboardingDripService {
   </div>
 </body>
 </html>`;
-    const text = `Hey ${name}! New deals in ${cityLabel} this week. Find them: ${searchUrl} — or open Scout: https://www.mealscout.us/scout`;
+    const text = `Hey ${name}! New deals in ${cityLabel} this week. Find them: ${searchUrl} — or scout: https://www.mealscout.us/scout`;
     return emailService.sendBasicEmail(
       to,
       `🔥 New deals in ${cityLabel} this week`,

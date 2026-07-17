@@ -5,9 +5,10 @@
  */
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useParams, useLocation } from "wouter";
+import { Link, useParams, useLocation } from "wouter";
 import Navigation from "@/components/navigation";
 import { SEOHead } from "@/components/seo-head";
+import { buildPublicProfilePath } from "@/lib/public-profile-path";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -39,6 +40,8 @@ import {
   Leaf,
   Wheat,
   ChevronRight,
+  ArrowLeft,
+  MapPin,
 } from "lucide-react";
 
 const formatMoney = (cents: number) =>
@@ -164,19 +167,24 @@ export default function MenuPage() {
 
   const menus = menusQuery.data?.menus ?? [];
   const orderingEnabled = menusQuery.data?.orderingEnabled ?? false;
-  const readiness = menusQuery.data?.readiness ?? null;
   const activeMenus = menus.filter((m) => m.isActive);
   const restaurantName = menusQuery.data?.restaurantName ?? null;
   const restaurantCity = menusQuery.data?.restaurantCity ?? null;
   const isFoodTruck = menusQuery.data?.isFoodTruck ?? false;
   const cuisineType = menusQuery.data?.cuisineType ?? null;
   const entityType = isFoodTruck ? "Food Truck" : "Restaurant";
+  const publicProfileHref =
+    buildPublicProfilePath({
+      entityType: isFoodTruck ? "truck" : "restaurant",
+      id: restaurantId,
+      name: restaurantName,
+    }) ?? "/scout";
   const seoTitle = restaurantName
     ? `${restaurantName} Menu${restaurantCity ? ` - ${restaurantCity}` : ""} | MealScout`
     : `Online Menu | MealScout`;
   const seoDescription = restaurantName
-    ? `Order online from ${restaurantName}${restaurantCity ? ` in ${restaurantCity}` : ""}. Browse the full menu${cuisineType ? ` — ${cuisineType}` : ""} and place a pickup order on MealScout.`
-    : `Browse the full menu and place a pickup order on MealScout.`;
+    ? `Browse the menu from ${restaurantName}${restaurantCity ? ` in ${restaurantCity}` : ""}${cuisineType ? ` — ${cuisineType}` : ""}. Order for pickup when available on MealScout.`
+    : `Browse the full menu and order for pickup when available on MealScout.`;
 
   useEffect(() => {
     if (activeMenus.length > 0 && !selectedMenuId) {
@@ -264,6 +272,45 @@ export default function MenuPage() {
       <Navigation />
 
       <div className="max-w-3xl mx-auto px-4 py-6">
+        <header className="mb-6 overflow-hidden rounded-[1.75rem] border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] shadow-[var(--shadow-card)]">
+          <div className="p-5 sm:p-6">
+            <Link
+              href={publicProfileHref}
+              className="mb-5 inline-flex min-h-10 items-center gap-2 rounded-full bg-[var(--bg-surface-muted)] px-3 text-sm font-bold text-[color:var(--text-secondary)] transition-colors hover:text-[color:var(--text-primary)]"
+            >
+              <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+              Back to profile
+            </Link>
+
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-primary">
+              {entityType} menu
+            </p>
+            <h1 className="mt-2 text-3xl font-black tracking-tight text-[color:var(--text-primary)] sm:text-4xl">
+              {restaurantName || "Menu"}
+            </h1>
+
+            {(restaurantCity || cuisineType) && (
+              <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm font-medium text-[color:var(--text-muted)]">
+                {restaurantCity ? (
+                  <span className="inline-flex items-center gap-1.5">
+                    <MapPin className="h-4 w-4 text-primary" aria-hidden="true" />
+                    {restaurantCity}
+                  </span>
+                ) : null}
+                {cuisineType ? <span>{cuisineType}</span> : null}
+              </div>
+            )}
+
+            <Link
+              href={publicProfileHref}
+              className="mt-5 inline-flex items-center gap-1 text-sm font-black text-primary hover:underline"
+            >
+              View profile
+              <ChevronRight className="h-4 w-4" aria-hidden="true" />
+            </Link>
+          </div>
+        </header>
+
         {/* Menu selector tabs if multiple menus */}
         {activeMenus.length > 1 && (
           <div className="flex gap-2 mb-5 overflow-x-auto pb-1">
@@ -292,15 +339,9 @@ export default function MenuPage() {
                   <p>
                     Menu browsing is always free. Online ordering is not ready yet.
                   </p>
-                  {readiness?.blockingReasons?.length ? (
-                    <p className="mt-1 text-xs">
-                      Waiting on: {readiness.blockingReasons.join(", ")}.
-                    </p>
-                  ) : (
-                    <p className="mt-1 text-xs">
-                      You can still browse the menu and order in person.
-                    </p>
-                  )}
+                  <p className="mt-1 text-xs">
+                    You can still browse the menu and order directly from this {entityType.toLowerCase()}.
+                  </p>
                 </div>
               </div>
             )}

@@ -33,9 +33,12 @@ assert.ok(
 );
 
 assert.ok(
-  navigation.includes('const desktopNavPositionClass = isScoutRoute') &&
-    navigation.includes('"left-1/2 right-auto -translate-x-1/2"'),
-  "Scout desktop nav should anchor with the content instead of floating off to the right.",
+  navigation.includes(
+    "fixed inset-x-0 top-0 z-[1100] hidden border-b border-[color:var(--border-subtle)]",
+  ) &&
+    navigation.includes('${isBusinessWorkspaceRoute ? "" : "lg:block"}') &&
+    navigation.includes("max-w-7xl"),
+  "Scout desktop navigation must use the shared full-width application header.",
 );
 
 console.log("scout-market-label.contract: PASS");

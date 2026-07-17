@@ -517,7 +517,7 @@ export default function CategoryPage() {
             </Link>
             <Link href="/scout">
               <Button variant="outline" size="sm">
-                Open Scout
+                Scout
               </Button>
             </Link>
             <Link href="/food-trucks/new-york">

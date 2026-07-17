@@ -34,7 +34,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Link, useLocation } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
 import ShareButton from "@/components/share-button";
 import {
   Store,
@@ -77,6 +77,9 @@ import {
   Copy,
 } from "lucide-react";
 import Navigation from "@/components/navigation";
+import BusinessWorkspaceShell, {
+  type BusinessWorkspaceModuleId,
+} from "@/components/business-workspace-shell";
 import RestaurantCreditRedemptionForm from "@/components/RestaurantCreditRedemptionForm";
 import { format, subDays, startOfMonth, endOfMonth } from "date-fns";
 import { useFoodTruckSocket } from "@/hooks/useFoodTruckSocket";
@@ -98,8 +101,8 @@ import { z } from "zod";
 import type { Deal, Restaurant } from "@shared/schema";
 import type { PublicRestaurantProfile } from "@shared/publicProfiles";
 import { computeProfileCompletionStatus } from "@shared/profileCompletionStatus";
-import { BackHeader } from "@/components/back-header";
 import { SEOHead } from "@/components/seo-head";
+import { buildPublicProfilePath } from "@/lib/public-profile-path";
 import {
   fetchOwnerValueAttribution,
   type OwnerValueAttributionEntity,
@@ -199,14 +202,13 @@ type PublicProfileQrPayload = Pick<
 export default function RestaurantOwnerDashboard() {
   const { user } = useAuth();
   const [, setLocation] = useLocation();
+  const dashboardSearch = useSearch();
   const { toast } = useToast();
   const [selectedRestaurant, setSelectedRestaurant] = useState<string>("");
-  const dashboardParams =
-    typeof window !== "undefined"
-      ? new URLSearchParams(window.location.search)
-      : new URLSearchParams();
+  const dashboardParams = new URLSearchParams(dashboardSearch);
   const requestedRestaurantId = dashboardParams.get("restaurantId");
   const setupMode = dashboardParams.get("setup");
+  const workspaceMode = dashboardParams.get("workspace");
   const [analyticsDateRange, setAnalyticsDateRange] = useState({
     start: format(subDays(new Date(), 30), "yyyy-MM-dd"),
     end: format(new Date(), "yyyy-MM-dd"),
@@ -643,10 +645,27 @@ export default function RestaurantOwnerDashboard() {
       (restaurant) => restaurant.id === selectedRestaurant,
     );
     if (!hasCurrentRestaurant) return;
-    if (setupPanelRef.current) {
-      setupPanelRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
+    const frame = window.requestAnimationFrame(() => {
+      if (setupMode === "schedule") {
+        document
+          .getElementById("owner-workspace-operations")
+          ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      } else if (setupPanelRef.current) {
+        setupPanelRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    });
+    return () => window.cancelAnimationFrame(frame);
   }, [setupMode, restaurants, selectedRestaurant]);
+
+  useEffect(() => {
+    if (workspaceMode !== "deals" && workspaceMode !== "audience") return;
+    const frame = window.requestAnimationFrame(() => {
+      document
+        .getElementById("owner-workspace-operations")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [workspaceMode, selectedRestaurant]);
 
   // Get current restaurant data
   const currentRestaurant = restaurants.find(
@@ -665,6 +684,27 @@ export default function RestaurantOwnerDashboard() {
       : currentIsBarBusiness
         ? "bar"
         : "restaurant";
+  const currentPublicProfileHref = currentRestaurant
+    ? buildPublicProfilePath({
+        entityType: currentPublicEntityType,
+        id: currentRestaurant.id,
+        name: currentRestaurant.name,
+      })
+    : null;
+  const activeWorkspaceModule: BusinessWorkspaceModuleId =
+    setupMode === "profile"
+      ? "profile"
+      : setupMode === "profile-media"
+        ? "media"
+        : setupMode === "schedule"
+          ? "availability"
+          : setupMode === "menu"
+            ? "menu"
+            : workspaceMode === "deals"
+              ? "deals"
+              : workspaceMode === "audience"
+                ? "audience"
+                : "overview";
   const currentMenuApproval = (currentRestaurant as any)?.menuApproval || null;
   const menuApprovalRequired = Boolean(
     currentMenuApproval?.ownerApprovalRequired &&
@@ -1915,13 +1955,17 @@ export default function RestaurantOwnerDashboard() {
     ...(canManageParkingPass ? (["bookings", "foodtruck"] as const) : []),
   ];
   const requestedDefaultTab =
-    setupMode === "schedule" || dashboardParams.get("truck") === "1"
-      ? "foodtruck"
-      : setupMode === "bookings"
-        ? "bookings"
-        : setupMode === "analytics"
-          ? "analytics"
-          : null;
+    workspaceMode === "deals"
+      ? "active"
+      : workspaceMode === "audience"
+        ? "analytics"
+        : setupMode === "schedule" || dashboardParams.get("truck") === "1"
+          ? "foodtruck"
+          : setupMode === "bookings"
+            ? "bookings"
+            : setupMode === "analytics"
+              ? "analytics"
+              : null;
   const defaultTab =
     requestedDefaultTab && availableTabs.includes(requestedDefaultTab as any)
       ? requestedDefaultTab
@@ -1966,6 +2010,61 @@ export default function RestaurantOwnerDashboard() {
   const menuBuilderHref = (() => {
     return buildOwnerToolHref("/menu-builder", { src: "onboarding" });
   })();
+  const handleWorkspaceBusinessChange = (businessId: string) => {
+    setSelectedRestaurant(businessId);
+    const params = new URLSearchParams(window.location.search);
+    params.set("restaurantId", businessId);
+    const query = params.toString();
+    setLocation(`${window.location.pathname}${query ? `?${query}` : ""}`);
+  };
+  const ownerHeaderActions = (
+    <div className="flex flex-nowrap items-center gap-2">
+      {canManageDeals ? (
+        (subscription as any)?.status === "active" ||
+        (subscription as any)?.hasAccess === true ? (
+          <Link href={buildOwnerToolHref("/deal-creation")}>
+            <LongPressHelp description="Create a new deal that appears on your public MealScout profile.">
+              <Button size="sm" data-testid="button-create-deal">
+                <Plus className="mr-1.5 h-4 w-4" />
+                New special
+              </Button>
+            </LongPressHelp>
+          </Link>
+        ) : (
+          <Link href="/subscribe?next=/deal-creation&reason=create_deals">
+            <LongPressHelp description="Unlock deal publishing so customers can discover your specials.">
+              <Button size="sm" data-testid="button-subscribe">
+                <CreditCard className="mr-1.5 h-4 w-4" />
+                Unlock deals
+              </Button>
+            </LongPressHelp>
+          </Link>
+        )
+      ) : null}
+      {canManageBilling ? (
+        <Link href={buildOwnerToolHref("/subscribe")}>
+          <Button
+            size="sm"
+            variant="outline"
+            data-testid="button-manage-subscription"
+          >
+            Plan
+          </Button>
+        </Link>
+      ) : null}
+      {canManageDeals ? (
+        <Link href={buildOwnerToolHref("/hiring?tab=owner")}>
+          <Button
+            size="sm"
+            variant="outline"
+            data-testid="button-hiring-marketplace"
+          >
+            Hiring
+          </Button>
+        </Link>
+      ) : null}
+    </div>
+  );
 
   if (loadingRestaurants) {
     return (
@@ -1994,96 +2093,37 @@ export default function RestaurantOwnerDashboard() {
     );
   }
 
+  if (!currentRestaurant) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[var(--bg-layered)]">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+      </div>
+    );
+  }
+
   return (
-    <div className="container mx-auto px-4 py-8 bg-[var(--bg-layered)] min-h-screen">
-      <SEOHead
-        title="Restaurant Dashboard - MealScout | Manage Your Specials"
-        description="Manage your restaurant specials, view analytics, track performance, and engage with customers. Access insights on special claims, views, conversion rates, and customer feedback."
-        keywords="restaurant dashboard, manage specials, restaurant analytics, special performance, customer insights"
-        canonicalUrl="https://www.mealscout.us/restaurant-owner-dashboard"
-        noIndex={true}
-      />
-      {/* Header with Back Button */}
-      <BackHeader
-        title="Restaurant Dashboard"
-        fallbackHref="/"
-        icon={Store}
-        rightActions={
-          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
-            {canManageDeals ? (
-              (subscription as any)?.status === "active" ||
-              (subscription as any)?.hasAccess === true ? (
-                <Link href="/deal-creation">
-                  <LongPressHelp description="Create a new deal that appears on your public MealScout profile.">
-                    <Button
-                      data-testid="button-create-deal"
-                      className="w-full sm:w-auto"
-                    >
-                      <Plus className="mr-2 h-4 w-4" />
-                      Create New Special
-                    </Button>
-                  </LongPressHelp>
-                </Link>
-              ) : (
-                <Link href="/subscribe?next=/deal-creation&reason=create_deals">
-                  <LongPressHelp description="Unlock deal publishing so customers can discover your specials.">
-                    <Button
-                      variant="default"
-                      data-testid="button-subscribe"
-                      className="w-full sm:w-auto"
-                    >
-                      <CreditCard className="mr-2 h-4 w-4" />
-                      Subscribe to Create Specials
-                    </Button>
-                  </LongPressHelp>
-                </Link>
-              )
-            ) : null}
-            {canManageBilling ? (
-              <Link href="/subscribe">
-                <LongPressHelp description="Review billing status and manage your MealScout plan.">
-                  <Button
-                    variant="outline"
-                    data-testid="button-manage-subscription"
-                    className="w-full sm:w-auto"
-                  >
-                    <Settings className="mr-2 h-4 w-4" />
-                    Manage Subscription
-                  </Button>
-                </LongPressHelp>
-              </Link>
-            ) : null}
-            {canManageDeals ? (
-              <Link href="/hiring?tab=owner">
-                <Button
-                  variant="outline"
-                  data-testid="button-hiring-marketplace"
-                  className="w-full sm:w-auto"
-                >
-                  <Users className="mr-2 h-4 w-4" />
-                  Hiring
-                </Button>
-              </Link>
-            ) : null}
-          </div>
-        }
-        className="bg-[var(--bg-card)] border-b border-border mb-8"
-      />
-
-      <Card className="mb-6 border-[color:var(--border-subtle)] bg-[var(--bg-card)]">
-        <CardContent className="p-4 space-y-1">
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[color:var(--text-muted)]">
-            Owner workspace
-          </p>
-          <p className="text-sm text-[color:var(--text-primary)]">
-            Manage your profile, menu visibility, deals, and booking readiness in one place.
-          </p>
-          <p className="text-xs text-[color:var(--text-muted)]">
-            Start with profile basics, then publish specials and monitor performance.
-          </p>
-        </CardContent>
-      </Card>
-
+    <BusinessWorkspaceShell
+      activeModule={activeWorkspaceModule}
+      business={currentRestaurant}
+      businesses={restaurants}
+      onBusinessChange={handleWorkspaceBusinessChange}
+      publicProfileHref={currentPublicProfileHref}
+      capabilities={{
+        deals: canManageDeals,
+        audience: canViewAnalytics,
+        team: canManageBilling,
+        payments: canManageBilling,
+      }}
+      headerActions={ownerHeaderActions}
+    >
+      <div className="mx-auto min-h-screen max-w-7xl px-4 py-6 lg:px-6 lg:py-8">
+        <SEOHead
+          title="Restaurant Dashboard - MealScout | Manage Your Specials"
+          description="Manage your restaurant specials, view analytics, track performance, and engage with customers. Access insights on special claims, views, conversion rates, and customer feedback."
+          keywords="restaurant dashboard, manage specials, restaurant analytics, special performance, customer insights"
+          canonicalUrl="https://www.mealscout.us/restaurant-owner-dashboard"
+          noIndex={true}
+        />
       {currentRestaurant && (() => {
         // The full completion checklist lives further down the page, under
         // "Profile value" analytics. Owners were landing here with no
@@ -2201,27 +2241,6 @@ export default function RestaurantOwnerDashboard() {
         </Card>
       ) : null}
 
-      {/* Restaurant Selector */}
-      {restaurants.length > 1 && (
-        <div className="mb-6">
-          <label className="block text-sm font-medium text-[color:var(--text-secondary)] mb-2">
-            Select Restaurant
-          </label>
-          <select
-            value={selectedRestaurant}
-            onChange={(e) => setSelectedRestaurant(e.target.value)}
-            className="px-3 py-2 border rounded-lg"
-            data-testid="select-restaurant"
-          >
-            {restaurants.map((restaurant) => (
-              <option key={restaurant.id} value={restaurant.id}>
-                {restaurant.name}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
-
       {currentRestaurant && setupMode && (
         <div className="mb-6 rounded-2xl border border-orange-200 bg-orange-50 p-4 shadow-clean">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -2303,7 +2322,7 @@ export default function RestaurantOwnerDashboard() {
           {setupMode === "profile" || setupMode === "profile-media" ? (
             <div
               ref={setupPanelRef}
-              className="mt-4 rounded-xl border border-orange-200 bg-white p-4"
+              className="mt-4 scroll-mt-64 rounded-xl border border-orange-200 bg-white p-4 lg:scroll-mt-6"
             >
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <div>
@@ -3657,7 +3676,7 @@ export default function RestaurantOwnerDashboard() {
           ) : setupMode === "menu" ? (
             <div
               ref={setupPanelRef}
-              className="mt-4 rounded-xl border border-orange-200 bg-white p-4"
+              className="mt-4 scroll-mt-64 rounded-xl border border-orange-200 bg-white p-4 lg:scroll-mt-6"
             >
               <h3 className="text-sm font-black uppercase tracking-[0.14em] text-orange-800">
                 MealScout menu builder
@@ -3677,13 +3696,17 @@ export default function RestaurantOwnerDashboard() {
           ) : setupMode === "schedule" ? (
             <div
               ref={setupPanelRef}
-              className="mt-4 rounded-xl border border-orange-200 bg-white p-4"
+              className="mt-4 scroll-mt-64 rounded-xl border border-orange-200 bg-white p-4 lg:scroll-mt-6"
             >
               <h3 className="text-sm font-black uppercase tracking-[0.14em] text-orange-800">
-                Schedule and live workspace
+                {currentRestaurant?.isFoodTruck
+                  ? "Schedule and live workspace"
+                  : "Hours workspace"}
               </h3>
               <p className="mt-1 text-xs text-orange-900/75">
-                Use MealScout schedule tools to set operating windows with date, start/end times, and location/service area.
+                {currentRestaurant?.isFoodTruck
+                  ? "Set operating windows and manage the live location customers use to find your truck."
+                  : "Set the opening and closing hours customers see on your public profile."}
               </p>
               <div className="mt-3 flex flex-wrap gap-2">
                 <Button
@@ -3694,11 +3717,17 @@ export default function RestaurantOwnerDashboard() {
                       ?.scrollIntoView({ behavior: "smooth", block: "center" })
                   }
                 >
-                  Jump to schedule/live tools
+                  {currentRestaurant?.isFoodTruck
+                    ? "Jump to schedule and live tools"
+                    : "Jump to hours"}
                 </Button>
-                <Link href="/parking-pass-manage">
-                  <Button variant="outline">Open parking pass schedule manager</Button>
-                </Link>
+                {currentRestaurant?.isFoodTruck ? (
+                  <Link href="/parking-pass-manage">
+                    <Button variant="outline">
+                      Open parking pass schedule manager
+                    </Button>
+                  </Link>
+                ) : null}
               </div>
             </div>
           ) : null}
@@ -4329,8 +4358,13 @@ export default function RestaurantOwnerDashboard() {
       )}
 
       {/* Deals Management */}
-      <Tabs defaultValue={defaultTab} className="space-y-4">
-        <TabsList className="w-full">
+      <Tabs
+        id="owner-workspace-operations"
+        key={defaultTab}
+        defaultValue={defaultTab}
+        className="scroll-mt-64 space-y-4 lg:scroll-mt-24"
+      >
+        <TabsList className={setupMode === "schedule" ? "hidden" : "w-full"}>
           {canManageDeals ? (
             <TabsTrigger value="active">Active Specials</TabsTrigger>
           ) : null}
@@ -4351,8 +4385,12 @@ export default function RestaurantOwnerDashboard() {
           ) : null}
           {canManageParkingPass ? (
             <TabsTrigger value="foodtruck" data-testid="tab-food-truck">
-              <Truck className="mr-1 hidden h-4 w-4 sm:block" />
-              Food Truck
+              {currentRestaurant?.isFoodTruck ? (
+                <Truck className="mr-1 hidden h-4 w-4 sm:block" />
+              ) : (
+                <Clock className="mr-1 hidden h-4 w-4 sm:block" />
+              )}
+              {currentRestaurant?.isFoodTruck ? "Schedule & live" : "Hours"}
             </TabsTrigger>
           ) : null}
         </TabsList>
@@ -5406,47 +5444,60 @@ export default function RestaurantOwnerDashboard() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Truck className="h-5 w-5" />
-                  Food Truck Management
+                  {currentRestaurant?.isFoodTruck ? (
+                    <Truck className="h-5 w-5" />
+                  ) : (
+                    <Clock className="h-5 w-5" />
+                  )}
+                  {currentRestaurant?.isFoodTruck
+                    ? "Schedule & live location"
+                    : "Business hours"}
                 </CardTitle>
                 <CardDescription>
-                  Manage your mobile restaurant and broadcast live location to
-                  customers
+                  {currentRestaurant?.isFoodTruck
+                    ? "Manage operating windows and broadcast your current location to customers."
+                    : "Manage the hours customers see across MealScout."}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 {/* Food Truck Toggle */}
-                <div className="flex items-center justify-between p-4 border rounded-lg">
-                  <div className="flex items-center space-x-3">
-                    <Truck className="h-6 w-6" />
-                    <div>
-                      <h3 className="font-medium">This is a Food Truck</h3>
-                      <p className="text-sm text-muted-foreground">
-                        Enable mobile location broadcasting for customers to
-                        find you
-                      </p>
+                <details className="rounded-lg border p-4">
+                  <summary className="cursor-pointer text-sm font-semibold text-[color:var(--text-secondary)]">
+                    Business type settings
+                  </summary>
+                  <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-center space-x-3">
+                      <Truck className="h-6 w-6" />
+                      <div>
+                        <h3 className="font-medium">This is a Food Truck</h3>
+                        <p className="text-sm text-muted-foreground">
+                          Enable mobile location broadcasting for customers to
+                          find you
+                        </p>
+                      </div>
                     </div>
+                    <Button
+                      variant={
+                        currentRestaurant?.isFoodTruck ? "default" : "outline"
+                      }
+                      onClick={() =>
+                        toggleFoodTruckMutation.mutate(
+                          !currentRestaurant?.isFoodTruck,
+                        )
+                      }
+                      className="w-full sm:w-auto"
+                      data-testid="button-toggle-food-truck"
+                    >
+                      {currentRestaurant?.isFoodTruck ? "Enabled" : "Enable"}
+                    </Button>
                   </div>
-                  <Button
-                    variant={
-                      currentRestaurant?.isFoodTruck ? "default" : "outline"
-                    }
-                    onClick={() =>
-                      toggleFoodTruckMutation.mutate(
-                        !currentRestaurant?.isFoodTruck,
-                      )
-                    }
-                    data-testid="button-toggle-food-truck"
-                  >
-                    {currentRestaurant?.isFoodTruck ? "Enabled" : "Enable"}
-                  </Button>
-                </div>
+                </details>
 
                 {/* Broadcasting Controls */}
                 {currentRestaurant?.isFoodTruck && (
                   <div className="space-y-4">
                     <div className="p-4 border rounded-lg">
-                      <div className="flex items-center justify-between mb-4">
+                      <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                         <div className="flex items-center space-x-3">
                           <div
                             className={`p-2 rounded-lg ${
@@ -5478,7 +5529,7 @@ export default function RestaurantOwnerDashboard() {
                             </p>
                           </div>
                         </div>
-                        <div className="flex items-center space-x-2">
+                        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
                           {!isBroadcasting ? (
                             <Button
                               onClick={handleStartBroadcasting}
@@ -5486,7 +5537,7 @@ export default function RestaurantOwnerDashboard() {
                                 startFoodTruckSessionMutation.isPending ||
                                 !hasPremiumLocationTools
                               }
-                              className="bg-[color:var(--status-success)] hover:bg-[color:var(--status-success)]"
+                              className="w-full bg-[color:var(--status-success)] hover:bg-[color:var(--status-success)] sm:w-auto"
                               data-testid="button-start-broadcasting"
                             >
                               {startFoodTruckSessionMutation.isPending ? (
@@ -5501,6 +5552,7 @@ export default function RestaurantOwnerDashboard() {
                               onClick={handleStopBroadcasting}
                               disabled={stopFoodTruckSessionMutation.isPending}
                               variant="destructive"
+                              className="w-full sm:w-auto"
                               data-testid="button-stop-broadcasting"
                             >
                               {stopFoodTruckSessionMutation.isPending ? (
@@ -5517,6 +5569,7 @@ export default function RestaurantOwnerDashboard() {
                             description={liveShareDescription}
                             variant="outline"
                             size="sm"
+                            className="w-full sm:w-auto"
                           />
                         </div>
                       </div>
@@ -5703,18 +5756,21 @@ export default function RestaurantOwnerDashboard() {
                 <Separator />
                 <div className="space-y-4">
                   <div className="p-4 border rounded-lg">
-                    <div className="flex items-center justify-between mb-4">
+                    <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                       <div className="flex items-center space-x-3">
                         <div className="p-2 rounded-lg bg-[color:var(--accent-text)]/12">
                           <MapPin className="h-5 w-5 text-[color:var(--accent-text)]" />
                         </div>
                         <div>
                           <h3 className="font-medium">
-                            Update Restaurant Location
+                            {currentRestaurant?.isFoodTruck
+                              ? "Update base location"
+                              : "Update restaurant location"}
                           </h3>
                           <p className="text-sm text-muted-foreground">
-                            Update your restaurant's permanent address location
-                            using GPS
+                            {currentRestaurant?.isFoodTruck
+                              ? "Set the address used when your truck is not broadcasting live."
+                              : "Use GPS to update your restaurant's permanent address."}
                           </p>
                         </div>
                       </div>
@@ -5726,6 +5782,7 @@ export default function RestaurantOwnerDashboard() {
                           !hasPremiumLocationTools
                         }
                         variant="outline"
+                        className="w-full sm:w-auto"
                         data-testid="button-update-location"
                       >
                         {isUpdatingLocation ||
@@ -5786,10 +5843,15 @@ export default function RestaurantOwnerDashboard() {
                           <Clock className="h-5 w-5 text-[color:var(--status-success)]" />
                         </div>
                         <div>
-                          <h3 className="font-medium">Operating Hours</h3>
+                          <h3 className="font-medium">
+                            {currentRestaurant?.isFoodTruck
+                              ? "Operating windows"
+                              : "Operating hours"}
+                          </h3>
                           <p className="text-sm text-muted-foreground">
-                            Set your restaurant's opening and closing hours for
-                            each day
+                            {currentRestaurant?.isFoodTruck
+                              ? "Set the days and times customers can find your truck."
+                              : "Set your restaurant's opening and closing hours for each day."}
                           </p>
                         </div>
                       </div>
@@ -5916,10 +5978,11 @@ export default function RestaurantOwnerDashboard() {
                           },
                         )}
 
-                        <div className="flex items-center gap-3 pt-4">
+                        <div className="flex flex-col gap-3 pt-4 sm:flex-row sm:items-center">
                           <Button
                             type="submit"
                             disabled={updateOperatingHoursMutation.isPending}
+                            className="w-full sm:w-auto"
                             data-testid="button-save-operating-hours"
                           >
                             {updateOperatingHoursMutation.isPending ? (
@@ -5927,12 +5990,15 @@ export default function RestaurantOwnerDashboard() {
                             ) : (
                               <Save className="h-4 w-4 mr-2" />
                             )}
-                            Save Operating Hours
+                            {currentRestaurant?.isFoodTruck
+                              ? "Save Operating Windows"
+                              : "Save Operating Hours"}
                           </Button>
                           <Button
                             type="button"
                             variant="outline"
                             onClick={() => operatingHoursForm.reset()}
+                            className="w-full sm:w-auto"
                             data-testid="button-reset-operating-hours"
                           >
                             <RotateCcw className="h-4 w-4 mr-2" />
@@ -5951,6 +6017,7 @@ export default function RestaurantOwnerDashboard() {
 
       {/* Bottom Navigation */}
       <Navigation />
-    </div>
+      </div>
+    </BusinessWorkspaceShell>
   );
 }

@@ -1865,7 +1865,7 @@ export default function ScoutPrototype() {
             type="button"
             onClick={() => setSearchOpen(true)}
             className="text-white/70 hover:text-white transition-colors"
-            aria-label="Open Scout search"
+            aria-label="Show search while scouting"
           >
             <Search size={22} />
           </button>
