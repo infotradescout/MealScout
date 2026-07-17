@@ -1,7 +1,15 @@
 import { readFileSync } from "node:fs";
 
-const ownerDashboard = readFileSync("client/src/pages/restaurant-owner-dashboard.tsx", "utf8");
-const discoveryGate = readFileSync("server/routes/locationUtilityRoutes.ts", "utf8");
+const ownerDashboard = readFileSync(
+  "client/src/pages/restaurant-owner-dashboard.tsx",
+  "utf8",
+);
+const discoveryGate = readFileSync(
+  "server/routes/locationUtilityRoutes.ts",
+  "utf8",
+);
+const normalizedOwnerDashboard = ownerDashboard.replace(/\s+/g, " ");
+const normalizedDiscoveryGate = discoveryGate.replace(/\s+/g, " ");
 
 const requiredOwnerSnippets = [
   "const isMenuGatedFromScoutDiscoverability = canonicalMenuItemCount <= 0;",
@@ -10,13 +18,21 @@ const requiredOwnerSnippets = [
 ];
 
 for (const snippet of requiredOwnerSnippets) {
-  if (!ownerDashboard.includes(snippet)) {
-    throw new Error(`Missing owner discoverability messaging snippet: ${snippet}`);
+  if (!normalizedOwnerDashboard.includes(snippet)) {
+    throw new Error(
+      `Missing owner discoverability messaging snippet: ${snippet}`,
+    );
   }
 }
 
-if (!discoveryGate.includes("const discoverableRestaurants = restaurants.filter")) {
-  throw new Error("Scout discovery menu gating must remain in customer-facing discovery.");
+if (
+  !normalizedDiscoveryGate.includes(
+    "const discoverableRestaurants = restaurants.filter",
+  )
+) {
+  throw new Error(
+    "Scout discovery menu gating must remain in customer-facing discovery.",
+  );
 }
 
 console.log("owner-discoverability-menu-state.contract: PASS");

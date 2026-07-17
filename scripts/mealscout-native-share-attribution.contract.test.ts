@@ -6,10 +6,19 @@ const mapPage = readFileSync("client/src/pages/map.tsx", "utf8");
 const cityLanding = readFileSync("client/src/pages/city-landing.tsx", "utf8");
 const dealsCity = readFileSync("client/src/pages/deals-city.tsx", "utf8");
 const dealDetail = readFileSync("client/src/pages/deal-detail.tsx", "utf8");
-const publicProfile = readFileSync("client/src/pages/public-profile.tsx", "utf8");
+const publicProfile = readFileSync(
+  "client/src/pages/public-profile.tsx",
+  "utf8",
+);
 const shareHub = readFileSync("client/src/components/share-hub.tsx", "utf8");
-const shareButton = readFileSync("client/src/components/share-button.tsx", "utf8");
-const shareButtonCaps = readFileSync("client/src/components/ShareButton.tsx", "utf8");
+const shareButton = readFileSync(
+  "client/src/components/share-button.tsx",
+  "utf8",
+);
+const shareButtonCaps = readFileSync(
+  "client/src/components/ShareButton.tsx",
+  "utf8",
+);
 const ownerDashboard = readFileSync(
   "client/src/pages/restaurant-owner-dashboard.tsx",
   "utf8",
@@ -24,7 +33,13 @@ assert(
   "Share library must centralize canonical tracked URL resolution for native share/copy/QR payloads.",
 );
 
-for (const file of [mapPage, cityLanding, dealsCity, dealDetail, publicProfile]) {
+for (const file of [
+  mapPage,
+  cityLanding,
+  dealsCity,
+  dealDetail,
+  publicProfile,
+]) {
   assert(
     file.includes("resolveCanonicalShareUrl"),
     "Native share call sites must resolve final URL via canonical share resolver.",
@@ -39,7 +54,9 @@ assert(
 );
 
 assert(
-  publicProfile.includes("const resolveShareUrl = async () => resolveCanonicalShareUrl(targetPath)") &&
+  publicProfile.includes(
+    "const resolveShareUrl = async () => resolveCanonicalShareUrl(targetPath)",
+  ) &&
     publicProfile.includes("await navigator.share({") &&
     publicProfile.includes("url: shareUrl") &&
     publicProfile.includes("await navigator.clipboard.writeText(shareUrl)"),
@@ -53,10 +70,16 @@ assert(
 );
 
 assert(
-  ownerDashboard.includes("await resolveCanonicalShareUrl(publicProfilePath)") &&
-    ownerDashboard.includes("await navigator.clipboard.writeText(shareUrl)") &&
+  /await\s+resolveCanonicalShareUrl\(\s*publicProfilePath,?\s*\)/m.test(
+    ownerDashboard,
+  ) &&
+    /await\s+navigator\.clipboard\.writeText\(\s*shareUrl,?\s*\)/m.test(
+      ownerDashboard,
+    ) &&
     !ownerDashboard.includes("navigator.clipboard.writeText(fullUrl)") &&
-    !ownerDashboard.includes("const fullUrl = `${window.location.origin}${publicProfilePath}`;"),
+    !ownerDashboard.includes(
+      "const fullUrl = `${window.location.origin}${publicProfilePath}`;",
+    ),
   "Owner dashboard public-profile copy action must resolve canonical attributed URL before copying and must not regress to raw fullUrl clipboard writes.",
 );
 
@@ -68,7 +91,8 @@ assert(
 
 for (const file of [cityLanding, dealsCity, dealDetail]) {
   assert(
-    !file.includes("window.location.origin}/") || file.includes("resolveCanonicalShareUrl"),
+    !file.includes("window.location.origin}/") ||
+      file.includes("resolveCanonicalShareUrl"),
     "Share payload must not be manually constructed as final output when canonical resolver is available.",
   );
 }
@@ -86,7 +110,9 @@ const finalShareSurfaces = [
 ].join("\n");
 
 assert.equal(
-  /navigator\.share\([\s\S]*url:\s*window\.location\.href/m.test(finalShareSurfaces),
+  /navigator\.share\([\s\S]*url:\s*window\.location\.href/m.test(
+    finalShareSurfaces,
+  ),
   false,
   "navigator.share must not receive raw window.location.href directly.",
 );
@@ -98,7 +124,9 @@ assert.equal(
 );
 
 assert.equal(
-  /clipboard\.writeText\(\s*window\.location\.href\s*\)/m.test(finalShareSurfaces),
+  /clipboard\.writeText\(\s*window\.location\.href\s*\)/m.test(
+    finalShareSurfaces,
+  ),
   false,
   "clipboard.writeText must not receive raw window.location.href directly.",
 );
@@ -110,7 +138,9 @@ assert.equal(
 );
 
 assert.equal(
-  /navigator\.share\([\s\S]*url:\s*[^\n]*\/p\/location\//m.test(finalShareSurfaces),
+  /navigator\.share\([\s\S]*url:\s*[^\n]*\/p\/location\//m.test(
+    finalShareSurfaces,
+  ),
   false,
   "Native share must not pass raw /p/location/ URL as final payload.",
 );
@@ -121,7 +151,13 @@ assert.equal(
   "Clipboard share must not pass raw /p/location/ URL as final payload.",
 );
 
-for (const legacyFragment of ["/p/restaurant/", "/p/truck/", "/p/bar/", "/p/location/", "/p/supplier/"]) {
+for (const legacyFragment of [
+  "/p/restaurant/",
+  "/p/truck/",
+  "/p/bar/",
+  "/p/location/",
+  "/p/supplier/",
+]) {
   assert.equal(
     finalShareSurfaces.includes(legacyFragment),
     false,

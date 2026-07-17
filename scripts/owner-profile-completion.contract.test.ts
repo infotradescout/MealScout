@@ -4,6 +4,7 @@ const ownerDashboard = readFileSync(
   "client/src/pages/restaurant-owner-dashboard.tsx",
   "utf8",
 );
+const normalizedOwnerDashboard = ownerDashboard.replace(/\s+/g, " ");
 
 const requiredSnippets = [
   "Profile completion loop",
@@ -22,7 +23,7 @@ const requiredSnippets = [
 ];
 
 for (const snippet of requiredSnippets) {
-  if (!ownerDashboard.includes(snippet)) {
+  if (!normalizedOwnerDashboard.includes(snippet)) {
     throw new Error(`PDA-2.6 owner completion contract missing: ${snippet}`);
   }
 }

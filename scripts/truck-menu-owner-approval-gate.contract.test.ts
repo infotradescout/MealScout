@@ -1,19 +1,28 @@
 import { readFileSync } from "node:fs";
 
-const readText = (path: string) => readFileSync(path, "utf8").replace(/\r\n/g, "\n");
+const readText = (path: string) =>
+  readFileSync(path, "utf8").replace(/\r\n/g, "\n");
 
 const restaurantOps = readText("server/routes/restaurantOperationsRoutes.ts");
-const publicProfileMapper = readText("server/publicProfiles/toPublicRestaurantProfile.ts");
+const publicProfileMapper = readText(
+  "server/publicProfiles/toPublicRestaurantProfile.ts",
+);
 const publicProfilePage = readText("client/src/pages/public-profile.tsx");
-const ownerDashboard = readText("client/src/pages/restaurant-owner-dashboard.tsx");
+const ownerDashboard = readText(
+  "client/src/pages/restaurant-owner-dashboard.tsx",
+);
 const sweetLoveApply = readText("scripts/applySweetLovePartialMenu.ts");
+const normalizeWhitespace = (value: string) =>
+  value.replace(/\s+/g, " ").trim();
 
 const requireIncludes = (source: string, snippet: string, message: string) => {
-  if (!source.includes(snippet)) throw new Error(message);
+  if (!normalizeWhitespace(source).includes(normalizeWhitespace(snippet)))
+    throw new Error(message);
 };
 
 const requireExcludes = (source: string, snippet: string, message: string) => {
-  if (source.includes(snippet)) throw new Error(message);
+  if (normalizeWhitespace(source).includes(normalizeWhitespace(snippet)))
+    throw new Error(message);
 };
 
 requireIncludes(
@@ -53,7 +62,7 @@ requireIncludes(
 );
 requireIncludes(
   restaurantOps,
-  "ownerApprovalRequired: body.action === \"skip\"",
+  'ownerApprovalRequired: body.action === "skip"',
   "Skipping review must keep approval required instead of approving the menu.",
 );
 

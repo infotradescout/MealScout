@@ -1,8 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import {
-  isBarBusinessType,
-  isTruckBusinessType,
-} from "@shared/businessTypes";
+import { isBarBusinessType, isTruckBusinessType } from "@shared/businessTypes";
 import {
   DEFAULT_TRUCK_BROADCAST_FRESHNESS_MS,
   deriveTruckPresence,
@@ -28,7 +25,10 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { resolveCanonicalShareUrl, resolveCanonicalShareUrlSync } from "@/lib/share";
+import {
+  resolveCanonicalShareUrl,
+  resolveCanonicalShareUrlSync,
+} from "@/lib/share";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useForm } from "react-hook-form";
@@ -72,6 +72,10 @@ import {
 import BusinessWorkspaceShell, {
   type BusinessWorkspaceModuleId,
 } from "@/components/business-workspace-shell";
+import OwnerProfileWorkspace, {
+  type OwnerProfileDraft,
+  type OwnerProfileMediaItem,
+} from "@/components/owner-profile-workspace";
 import RestaurantCreditRedemptionForm from "@/components/RestaurantCreditRedemptionForm";
 import { format, subDays, startOfMonth, endOfMonth } from "date-fns";
 import { useFoodTruckSocket } from "@/hooks/useFoodTruckSocket";
@@ -148,44 +152,6 @@ interface TruckBookingItem {
   } | null;
 }
 
-interface ProfileCompletionDraft {
-  name: string;
-  description: string;
-  cuisineType: string;
-  businessType: string;
-  address: string;
-  city: string;
-  state: string;
-  phone: string;
-  websiteUrl: string;
-  facebookPageUrl: string;
-  instagramUrl: string;
-  xUrl: string;
-  menuUrl: string;
-  onlineOrderingUrl: string;
-  deliveryUrl: string;
-  doordashUrl: string;
-  uberEatsUrl: string;
-  toastUrl: string;
-  squareUrl: string;
-  chowNowUrl: string;
-  grubhubUrl: string;
-  cateringInquiryUrl: string;
-  truckBookingInquiryUrl: string;
-  logoUrl: string;
-  coverImageUrl: string;
-}
-
-interface ProfileMediaItem {
-  id: string;
-  url: string;
-  source?: string | null;
-  category?: string | null;
-  publicApproved?: boolean;
-  uploadedAt?: string | null;
-  lastVerifiedAt?: string | null;
-}
-
 type PublicProfileQrPayload = Pick<
   PublicRestaurantProfile,
   "seo" | "menuSections" | "menuUrl" | "menuPdfUrl" | "menuImageUrl" | "deals"
@@ -209,7 +175,7 @@ export default function RestaurantOwnerDashboard() {
   const [comparisonPeriod, setComparisonPeriod] = useState<
     "week" | "month" | "quarter"
   >("month");
-  const [profileDraft, setProfileDraft] = useState<ProfileCompletionDraft>({
+  const [profileDraft, setProfileDraft] = useState<OwnerProfileDraft>({
     name: "",
     description: "",
     cuisineType: "",
@@ -628,14 +594,17 @@ export default function RestaurantOwnerDashboard() {
   }, [requestedRestaurantId, restaurants, selectedRestaurant]);
 
   useEffect(() => {
-    if (!setupMode || setupMode === "schedule") return;
+    if (setupMode !== "menu") return;
     const hasCurrentRestaurant = restaurants.some(
       (restaurant) => restaurant.id === selectedRestaurant,
     );
     if (!hasCurrentRestaurant) return;
     const frame = window.requestAnimationFrame(() => {
       if (setupPanelRef.current) {
-        setupPanelRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+        setupPanelRef.current.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
       }
     });
     return () => window.cancelAnimationFrame(frame);
@@ -657,17 +626,16 @@ export default function RestaurantOwnerDashboard() {
   );
   const currentIsTruckBusiness = Boolean(
     currentRestaurant?.isFoodTruck ||
-      isTruckBusinessType(currentRestaurant?.businessType),
+    isTruckBusinessType(currentRestaurant?.businessType),
   );
   const currentIsBarBusiness = isBarBusinessType(
     currentRestaurant?.businessType,
   );
-  const currentPublicEntityType =
-    currentIsTruckBusiness
-      ? "truck"
-      : currentIsBarBusiness
-        ? "bar"
-        : "restaurant";
+  const currentPublicEntityType = currentIsTruckBusiness
+    ? "truck"
+    : currentIsBarBusiness
+      ? "bar"
+      : "restaurant";
   const currentPublicProfileHref = currentRestaurant
     ? buildPublicProfilePath({
         entityType: currentPublicEntityType,
@@ -691,11 +659,15 @@ export default function RestaurantOwnerDashboard() {
                 : "overview";
   const currentMenuApproval = (currentRestaurant as any)?.menuApproval || null;
   const menuApprovalRequired = Boolean(
-    currentMenuApproval?.ownerApprovalRequired &&
-      currentIsTruckBusiness,
+    currentMenuApproval?.ownerApprovalRequired && currentIsTruckBusiness,
   );
   const { data: publicProfileForQr } = useQuery<PublicProfileQrPayload | null>({
-    queryKey: ["/api/public/profiles", currentPublicEntityType, selectedRestaurant, "qr-kit"],
+    queryKey: [
+      "/api/public/profiles",
+      currentPublicEntityType,
+      selectedRestaurant,
+      "qr-kit",
+    ],
     enabled: Boolean(selectedRestaurant),
     queryFn: async () => {
       const response = await fetch(
@@ -754,7 +726,9 @@ export default function RestaurantOwnerDashboard() {
     filename: string;
   }) => {
     const qrUrl = buildQrImageUrl(options.targetUrl);
-    const businessName = String(currentRestaurant?.name || "MealScout Business");
+    const businessName = String(
+      currentRestaurant?.name || "MealScout Business",
+    );
     try {
       const qrImage = await new Promise<HTMLImageElement>((resolve, reject) => {
         const img = new Image();
@@ -770,7 +744,12 @@ export default function RestaurantOwnerDashboard() {
       const ctx = canvas.getContext("2d");
       if (!ctx) throw new Error("Canvas unavailable.");
 
-      const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+      const gradient = ctx.createLinearGradient(
+        0,
+        0,
+        canvas.width,
+        canvas.height,
+      );
       gradient.addColorStop(0, "#0f0d0b");
       gradient.addColorStop(1, "#1a120d");
       ctx.fillStyle = gradient;
@@ -807,7 +786,13 @@ export default function RestaurantOwnerDashboard() {
       ctx.beginPath();
       ctx.roundRect(qrFrameX, qrFrameY, qrFrameSize, qrFrameSize, 30);
       ctx.fill();
-      ctx.drawImage(qrImage, qrFrameX + 48, qrFrameY + 48, qrFrameSize - 96, qrFrameSize - 96);
+      ctx.drawImage(
+        qrImage,
+        qrFrameX + 48,
+        qrFrameY + 48,
+        qrFrameSize - 96,
+        qrFrameSize - 96,
+      );
 
       ctx.fillStyle = "#ffffff";
       ctx.font = "800 54px Inter, Arial, sans-serif";
@@ -815,7 +800,11 @@ export default function RestaurantOwnerDashboard() {
       ctx.fillStyle = "#fcd9be";
       ctx.font = "500 30px Inter, Arial, sans-serif";
       ctx.fillText("Open your camera and scan", canvas.width / 2, 1230);
-      ctx.fillText("Profile, menu, specials, and local discovery", canvas.width / 2, 1274);
+      ctx.fillText(
+        "Profile, menu, specials, and local discovery",
+        canvas.width / 2,
+        1274,
+      );
 
       const pngUrl = canvas.toDataURL("image/png");
       const link = document.createElement("a");
@@ -827,7 +816,8 @@ export default function RestaurantOwnerDashboard() {
     } catch (error: any) {
       toast({
         title: "Asset download failed",
-        description: error?.message || "Unable to generate branded print asset.",
+        description:
+          error?.message || "Unable to generate branded print asset.",
         variant: "destructive",
       });
     }
@@ -867,7 +857,9 @@ export default function RestaurantOwnerDashboard() {
     format: "square" | "story" | "portrait";
   }) => {
     const qrUrl = buildQrImageUrl(options.targetUrl);
-    const businessName = String(currentRestaurant?.name || "MealScout Business");
+    const businessName = String(
+      currentRestaurant?.name || "MealScout Business",
+    );
     const sizeByFormat: Record<
       "square" | "story" | "portrait",
       { width: number; height: number; tag: string }
@@ -893,7 +885,12 @@ export default function RestaurantOwnerDashboard() {
       const ctx = canvas.getContext("2d");
       if (!ctx) throw new Error("Canvas unavailable.");
 
-      const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+      const gradient = ctx.createLinearGradient(
+        0,
+        0,
+        canvas.width,
+        canvas.height,
+      );
       gradient.addColorStop(0, "#0f0d0b");
       gradient.addColorStop(1, "#1a120d");
       ctx.fillStyle = gradient;
@@ -908,21 +905,39 @@ export default function RestaurantOwnerDashboard() {
       ctx.strokeStyle = "rgba(249,115,22,0.36)";
       ctx.lineWidth = Math.max(3, Math.round(canvas.width * 0.0035));
       ctx.beginPath();
-      ctx.roundRect(cardX, cardY, cardW, cardH, Math.round(canvas.width * 0.04));
+      ctx.roundRect(
+        cardX,
+        cardY,
+        cardW,
+        cardH,
+        Math.round(canvas.width * 0.04),
+      );
       ctx.fill();
       ctx.stroke();
 
       ctx.textAlign = "center";
       ctx.fillStyle = "#fb923c";
       ctx.font = `800 ${Math.round(canvas.width * 0.048)}px Inter, Arial, sans-serif`;
-      ctx.fillText("MealScout", canvas.width / 2, cardY + Math.round(canvas.height * 0.1));
+      ctx.fillText(
+        "MealScout",
+        canvas.width / 2,
+        cardY + Math.round(canvas.height * 0.1),
+      );
 
       ctx.fillStyle = "#ffffff";
       ctx.font = `900 ${Math.round(canvas.width * 0.058)}px Inter, Arial, sans-serif`;
-      ctx.fillText(options.title, canvas.width / 2, cardY + Math.round(canvas.height * 0.155));
+      ctx.fillText(
+        options.title,
+        canvas.width / 2,
+        cardY + Math.round(canvas.height * 0.155),
+      );
       ctx.fillStyle = "#fcd9be";
       ctx.font = `600 ${Math.round(canvas.width * 0.03)}px Inter, Arial, sans-serif`;
-      ctx.fillText(options.subtitle, canvas.width / 2, cardY + Math.round(canvas.height * 0.195));
+      ctx.fillText(
+        options.subtitle,
+        canvas.width / 2,
+        cardY + Math.round(canvas.height * 0.195),
+      );
 
       const qrFrame = Math.round(Math.min(canvas.width, canvas.height) * 0.48);
       const qrFrameX = Math.round((canvas.width - qrFrame) / 2);
@@ -932,10 +947,22 @@ export default function RestaurantOwnerDashboard() {
           : Math.round(canvas.height * 0.29);
       ctx.fillStyle = "#ffffff";
       ctx.beginPath();
-      ctx.roundRect(qrFrameX, qrFrameY, qrFrame, qrFrame, Math.round(canvas.width * 0.025));
+      ctx.roundRect(
+        qrFrameX,
+        qrFrameY,
+        qrFrame,
+        qrFrame,
+        Math.round(canvas.width * 0.025),
+      );
       ctx.fill();
       const qrPad = Math.round(qrFrame * 0.09);
-      ctx.drawImage(qrImage, qrFrameX + qrPad, qrFrameY + qrPad, qrFrame - qrPad * 2, qrFrame - qrPad * 2);
+      ctx.drawImage(
+        qrImage,
+        qrFrameX + qrPad,
+        qrFrameY + qrPad,
+        qrFrame - qrPad * 2,
+        qrFrame - qrPad * 2,
+      );
 
       const footerY =
         options.format === "story"
@@ -946,10 +973,18 @@ export default function RestaurantOwnerDashboard() {
       ctx.fillText(businessName, canvas.width / 2, footerY);
       ctx.fillStyle = "#fcd9be";
       ctx.font = `600 ${Math.round(canvas.width * 0.032)}px Inter, Arial, sans-serif`;
-      ctx.fillText(options.cta, canvas.width / 2, footerY + Math.round(canvas.height * 0.048));
+      ctx.fillText(
+        options.cta,
+        canvas.width / 2,
+        footerY + Math.round(canvas.height * 0.048),
+      );
       ctx.fillStyle = "#fb923c";
       ctx.font = `700 ${Math.round(canvas.width * 0.022)}px Inter, Arial, sans-serif`;
-      ctx.fillText(size.tag, canvas.width / 2, footerY + Math.round(canvas.height * 0.085));
+      ctx.fillText(
+        size.tag,
+        canvas.width / 2,
+        footerY + Math.round(canvas.height * 0.085),
+      );
 
       const pngUrl = canvas.toDataURL("image/png");
       const link = document.createElement("a");
@@ -1001,7 +1036,9 @@ export default function RestaurantOwnerDashboard() {
       instagramUrl: String(row?.instagramUrl || ""),
       xUrl: String(row?.xUrl || ""),
       menuUrl: String(row?.menuUrl || ""),
-      onlineOrderingUrl: String(row?.onlineOrderingUrl || actionLinks?.onlineOrderingUrl || ""),
+      onlineOrderingUrl: String(
+        row?.onlineOrderingUrl || actionLinks?.onlineOrderingUrl || "",
+      ),
       deliveryUrl: String(row?.deliveryUrl || actionLinks?.deliveryUrl || ""),
       doordashUrl: String(row?.doordashUrl || actionLinks?.doordashUrl || ""),
       uberEatsUrl: String(row?.uberEatsUrl || actionLinks?.uberEatsUrl || ""),
@@ -1013,7 +1050,9 @@ export default function RestaurantOwnerDashboard() {
         row?.cateringInquiryUrl || actionLinks?.cateringInquiryUrl || "",
       ),
       truckBookingInquiryUrl: String(
-        row?.truckBookingInquiryUrl || actionLinks?.truckBookingInquiryUrl || "",
+        row?.truckBookingInquiryUrl ||
+          actionLinks?.truckBookingInquiryUrl ||
+          "",
       ),
       logoUrl: String(row?.logoUrl || ""),
       coverImageUrl: String(row?.coverImageUrl || ""),
@@ -1446,8 +1485,7 @@ export default function RestaurantOwnerDashboard() {
         setConnectionStatus("disconnected");
         toast({
           title: "Location unavailable",
-          description:
-            "Allow location access for MealScout, then try again.",
+          description: "Allow location access for MealScout, then try again.",
           variant: "destructive",
         });
       },
@@ -1502,8 +1540,7 @@ export default function RestaurantOwnerDashboard() {
         setIsUpdatingLocation(false);
         toast({
           title: "Location unavailable",
-          description:
-            "Allow location access for MealScout, then try again.",
+          description: "Allow location access for MealScout, then try again.",
           variant: "destructive",
         });
       },
@@ -1524,13 +1561,14 @@ export default function RestaurantOwnerDashboard() {
   const addTimeSlot = (day: keyof OperatingHoursFormData) => {
     const currentSlots = operatingHoursForm.getValues(day) || [];
     if (currentSlots.length < 3) {
-      operatingHoursForm.setValue(day, [
-        ...currentSlots,
-        { open: "09:00", close: "17:00" },
-      ], {
-        shouldDirty: true,
-        shouldValidate: true,
-      });
+      operatingHoursForm.setValue(
+        day,
+        [...currentSlots, { open: "09:00", close: "17:00" }],
+        {
+          shouldDirty: true,
+          shouldValidate: true,
+        },
+      );
     }
   };
 
@@ -1632,7 +1670,8 @@ export default function RestaurantOwnerDashboard() {
 
       toast({
         title: "Your truck is live",
-        description: "Customers can now see your current location on MealScout.",
+        description:
+          "Customers can now see your current location on MealScout.",
       });
     },
     onError: (error: any) => {
@@ -1660,7 +1699,8 @@ export default function RestaurantOwnerDashboard() {
       });
       toast({
         title: "Business type updated",
-        description: "The matching location and schedule tools are now available.",
+        description:
+          "The matching location and schedule tools are now available.",
       });
     },
   });
@@ -1732,11 +1772,18 @@ export default function RestaurantOwnerDashboard() {
   });
 
   const updateProfileBasicsMutation = useMutation({
-    mutationFn: async (payload: ProfileCompletionDraft) => {
+    mutationFn: async (payload: OwnerProfileDraft) => {
+      // Media uploads persist through their dedicated endpoints. Never send
+      // a possibly stale image URL with a later profile-text save.
+      const {
+        logoUrl: _logoUrl,
+        coverImageUrl: _coverImageUrl,
+        ...profileBasics
+      } = payload;
       return await apiRequest(
         "PATCH",
         `/api/restaurants/${selectedRestaurant}/profile-basics`,
-        payload,
+        profileBasics,
       );
     },
     onSuccess: () => {
@@ -1770,7 +1817,12 @@ export default function RestaurantOwnerDashboard() {
         queryKey: ["/api/restaurants/my-restaurants"],
       });
       queryClient.invalidateQueries({
-        queryKey: ["/api/public/profiles", currentPublicEntityType, selectedRestaurant, "qr-kit"],
+        queryKey: [
+          "/api/public/profiles",
+          currentPublicEntityType,
+          selectedRestaurant,
+          "qr-kit",
+        ],
       });
       toast({
         title:
@@ -1823,26 +1875,80 @@ export default function RestaurantOwnerDashboard() {
       }
       return body;
     },
-    onSuccess: (payload, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: ["/api/restaurants/my-restaurants"],
-      });
-      // profileDraft only re-syncs from the fetched restaurant when the
-      // restaurant id changes (see the effect above), so without this it
-      // stays stale after an upload. Clicking Save afterward would PATCH
-      // profile-basics with the old logoUrl/coverImageUrl and silently
-      // revert the image that was just uploaded.
+    onSuccess: async (payload, variables) => {
+      queryClient.setQueryData<Restaurant[]>(
+        ["/api/restaurants/my-restaurants"],
+        (current = []) =>
+          current.map((restaurant) => {
+            if (String(restaurant.id) !== String(selectedRestaurant)) {
+              return restaurant;
+            }
+            if (variables.kind === "logo" && payload?.url) {
+              return { ...restaurant, logoUrl: String(payload.url) };
+            }
+            if (variables.kind === "cover" && payload?.url) {
+              return { ...restaurant, coverImageUrl: String(payload.url) };
+            }
+            if (variables.kind === "gallery" && payload?.media) {
+              const currentSettings =
+                restaurant.socialAutopostSettings &&
+                typeof restaurant.socialAutopostSettings === "object"
+                  ? {
+                      ...(restaurant.socialAutopostSettings as Record<
+                        string,
+                        unknown
+                      >),
+                    }
+                  : {};
+              const currentGallery = Array.isArray(
+                (currentSettings as any).publicGalleryImages,
+              )
+                ? ([...(currentSettings as any).publicGalleryImages] as any[])
+                : [];
+              const nextMediaId = String(payload.media.id || "");
+              const nextGallery = currentGallery.some(
+                (media) => String(media?.id || "") === nextMediaId,
+              )
+                ? currentGallery
+                : [...currentGallery, payload.media];
+              return {
+                ...restaurant,
+                socialAutopostSettings: {
+                  ...currentSettings,
+                  publicGalleryImages: nextGallery,
+                },
+              } as Restaurant;
+            }
+            return restaurant;
+          }),
+      );
+      // Keep the local preview in sync immediately; the profile-text mutation
+      // deliberately omits these URLs, while the query invalidation below
+      // reconciles the persisted business record from the database.
       if (variables.kind === "logo" && payload?.url) {
         setProfileDraft((prev) => ({ ...prev, logoUrl: String(payload.url) }));
       } else if (variables.kind === "cover" && payload?.url) {
-        setProfileDraft((prev) => ({ ...prev, coverImageUrl: String(payload.url) }));
+        setProfileDraft((prev) => ({
+          ...prev,
+          coverImageUrl: String(payload.url),
+        }));
       }
       toast({
-        title: "Media uploaded",
+        title:
+          variables.kind === "gallery"
+            ? "Photo added"
+            : variables.kind === "cover"
+              ? "Cover photo updated"
+              : "Logo updated",
         description:
           variables.kind === "gallery"
-            ? "Gallery image uploaded. Admin/staff approval may be required before it appears publicly."
-            : "Profile media uploaded successfully.",
+            ? payload?.approvalStatus === "pending"
+              ? "The upload is saved and waiting for approval before customers see it."
+              : "The upload is saved and visible on your business profile."
+            : "The new image is saved to your business profile.",
+      });
+      await queryClient.invalidateQueries({
+        queryKey: ["/api/restaurants/my-restaurants"],
       });
     },
     onError: (error: any) => {
@@ -1964,7 +2070,7 @@ export default function RestaurantOwnerDashboard() {
   const defaultTab =
     requestedDefaultTab && availableTabs.includes(requestedDefaultTab as any)
       ? requestedDefaultTab
-      : availableTabs[0] ?? "analytics";
+      : (availableTabs[0] ?? "analytics");
   const buildOwnerToolHref = (
     destination: string,
     extras?: Record<string, string>,
@@ -2119,1644 +2225,1683 @@ export default function RestaurantOwnerDashboard() {
           canonicalUrl="https://www.mealscout.us/restaurant-owner-dashboard"
           noIndex={true}
         />
-      {currentRestaurant && activeWorkspaceModule === "overview" && (() => {
-        // The full completion checklist lives further down the page, under
-        // "Profile value" analytics. Owners were landing here with no
-        // first-screen signal of what's missing before they go live, so
-        // this gives a compact summary up top that links straight to it.
-        const topCompletionStatus = computeProfileCompletionStatus(currentRestaurant as any, {
-          hasActiveDeal: Number(stats?.activeDeals || 0) > 0,
-        });
-        const topCompletionKeys = [
-          "menu",
-          "photos",
-          "hours",
-          "service-area",
-          "contact",
-          "social",
-          "catering-events",
-          "deal",
-        ] as const;
-        const topCompletionDoneCount = topCompletionKeys.filter((key) =>
-          Boolean((topCompletionStatus as any)[key]),
-        ).length;
-        const topCompletionTotal = topCompletionKeys.length;
-        const isComplete = topCompletionDoneCount === topCompletionTotal;
+        {currentRestaurant &&
+          activeWorkspaceModule === "overview" &&
+          (() => {
+            // The full completion checklist lives further down the page, under
+            // "Profile value" analytics. Owners were landing here with no
+            // first-screen signal of what's missing before they go live, so
+            // this gives a compact summary up top that links straight to it.
+            const topCompletionStatus = computeProfileCompletionStatus(
+              currentRestaurant as any,
+              {
+                hasActiveDeal: Number(stats?.activeDeals || 0) > 0,
+              },
+            );
+            const topCompletionKeys = [
+              "menu",
+              "photos",
+              "hours",
+              "service-area",
+              "contact",
+              "social",
+              "catering-events",
+              "deal",
+            ] as const;
+            const topCompletionDoneCount = topCompletionKeys.filter((key) =>
+              Boolean((topCompletionStatus as any)[key]),
+            ).length;
+            const topCompletionTotal = topCompletionKeys.length;
+            const isComplete = topCompletionDoneCount === topCompletionTotal;
 
-        return (
-          <Card
-            className={`mb-6 ${isComplete ? "border-[color:var(--status-success)]/30 bg-[color:var(--status-success)]/5" : "border-amber-300 bg-amber-50"}`}
-            data-testid="card-top-profile-completion"
-          >
-            <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
-              <div>
-                <p
-                  className={`text-sm font-semibold ${isComplete ? "text-[color:var(--status-success)]" : "text-amber-900"}`}
-                >
-                  {isComplete
-                    ? "Your profile is ready to go live"
-                    : `Profile setup: ${topCompletionDoneCount}/${topCompletionTotal} complete`}
-                </p>
-                <p
-                  className={`mt-1 text-xs ${isComplete ? "text-[color:var(--status-success)]/80" : "text-amber-900/80"}`}
-                >
-                  {isComplete
-                    ? "Keep details current as your business changes."
-                    : "Missing menu, photos, hours, or contact info means customers see an incomplete profile. See what's left below."}
-                </p>
-              </div>
-              {!isComplete && (
-                <a
-                  href="#profile-completion-details"
-                  className="rounded-md border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100"
-                  data-testid="link-jump-to-completion-details"
-                >
-                  See what's missing
-                </a>
-              )}
-            </CardContent>
-          </Card>
-        );
-      })()}
-
-      {currentRestaurant &&
-      activeWorkspaceModule === "overview" &&
-      menuApprovalRequired ? (
-        <Card
-          className="mb-6 border-amber-300 bg-amber-50"
-          data-testid="truck-menu-owner-approval-task"
-        >
-          <CardHeader>
-            <CardTitle className="text-base text-amber-950">
-              Review your public menu
-            </CardTitle>
-            <CardDescription className="text-amber-900/80">
-              This truck has menu details visible on MealScout, but they still need owner confirmation before we call them owner-approved.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <p className="text-sm text-amber-950">
-              Public label now: {String(currentMenuApproval?.label || "Needs owner confirmation")}
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                size="sm"
-                onClick={() => updateMenuApprovalMutation.mutate({ action: "approve" })}
-                disabled={updateMenuApprovalMutation.isPending}
+            return (
+              <Card
+                className={`mb-6 ${isComplete ? "border-[color:var(--status-success)]/30 bg-[color:var(--status-success)]/5" : "border-amber-300 bg-amber-50"}`}
+                data-testid="card-top-profile-completion"
               >
-                Approve menu as current
-              </Button>
-              <Link href={menuBuilderHref}>
-                <Button type="button" size="sm" variant="outline">
-                  Edit menu items/prices
-                </Button>
-              </Link>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => updateMenuApprovalMutation.mutate({ action: "reject" })}
-                disabled={updateMenuApprovalMutation.isPending}
-              >
-                Mark menu not current
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                onClick={() => updateMenuApprovalMutation.mutate({ action: "skip" })}
-                disabled={updateMenuApprovalMutation.isPending}
-              >
-                Skip for now
-              </Button>
-            </div>
-            <p className="text-xs text-amber-900/75">
-              Skipping keeps this reminder active. Viewing this page never approves the menu automatically.
-            </p>
-          </CardContent>
-        </Card>
-      ) : null}
-
-      {currentRestaurant && setupMode && setupMode !== "schedule" && (
-        <div className="mb-6 rounded-2xl border border-orange-200 bg-orange-50 p-4 shadow-clean">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <p className="text-xs font-black uppercase tracking-[0.18em] text-orange-700">
-                Business onboarding
-              </p>
-              <h2 className="mt-1 text-lg font-black text-orange-950">
-                Finish {currentRestaurant.name || "your business"} setup
-              </h2>
-              <p className="mt-1 text-sm text-orange-900/75">
-                Your personal account is active. Now complete the business pieces
-                customers actually use: profile, menu, schedule/live status, and
-                bookings.
-              </p>
-            </div>
-            <Badge className="w-fit bg-orange-600 text-white">
-              {currentIsTruckBusiness
-                ? "Truck setup workspace"
-                : currentIsBarBusiness
-                  ? "Bar setup workspace"
-                  : "Business setup workspace"}
-            </Badge>
-          </div>
-
-          <div className="mt-4 grid gap-2 sm:grid-cols-4">
-            <Link href={buildOwnerSetupHref("profile")}>
-              <div className="flex w-full items-center gap-2 rounded-md border border-orange-200 bg-white px-3 py-2 text-orange-900 hover:bg-orange-100">
-                <Store className="h-4 w-4 text-orange-900" />
-                <span className="text-sm font-semibold text-orange-900">
-                  {currentIsBarBusiness
-                    ? "Complete bar profile"
-                    : currentIsTruckBusiness
-                      ? "Complete truck profile"
-                      : "Complete business profile"}
-                </span>
-              </div>
-            </Link>
-            <Link href={buildOwnerSetupHref("menu")}>
-              <div className="flex w-full items-center gap-2 rounded-md border border-orange-200 bg-white px-3 py-2 text-orange-900 hover:bg-orange-100">
-                <ShoppingCart className="h-4 w-4 text-orange-900" />
-                <span className="text-sm font-semibold text-orange-900">
-                  Open menu builder
-                </span>
-              </div>
-            </Link>
-            <Link
-              href={buildOwnerSetupHref(
-                "schedule",
-                currentIsTruckBusiness ? { truck: "1" } : undefined,
-              )}
-            >
-              <div className="flex w-full items-center gap-2 rounded-md border border-orange-200 bg-white px-3 py-2 text-orange-900 hover:bg-orange-100">
-                <Clock className="h-4 w-4 text-orange-900" />
-                <span className="text-sm font-semibold text-orange-900">
-                  Set schedule/live status
-                </span>
-              </div>
-            </Link>
-            <Link href={buildOwnerSetupHref("profile-media")}>
-              <div className="flex w-full items-center gap-2 rounded-md border border-orange-200 bg-white px-3 py-2 text-orange-900 hover:bg-orange-100">
-                <Calendar className="h-4 w-4 text-orange-900" />
-                <span className="text-sm font-semibold text-orange-900">
-                  Add photos or logo
-                </span>
-              </div>
-            </Link>
-          </div>
-          {setupMode ? (
-            <div className="mt-3 flex items-center justify-end">
-              <Link href={buildDashboardHref()}>
-                <Button variant="outline" data-testid="button-exit-setup-mode">
-                  Exit setup
-                </Button>
-              </Link>
-            </div>
-          ) : null}
-
-          {setupMode === "profile" || setupMode === "profile-media" ? (
-            <div
-              ref={setupPanelRef}
-              className="mt-4 scroll-mt-64 rounded-xl border border-orange-200 bg-white p-4 lg:scroll-mt-6"
-            >
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <h3 className="text-sm font-black uppercase tracking-[0.14em] text-orange-800">
-                    {setupMode === "profile-media" ? "Media workspace" : "Profile basics workspace"}
-                  </h3>
-                  <p className="text-xs text-orange-900/75">
-                    {setupMode === "profile-media"
-                      ? "Upload logo, cover, and truck/food photos. External platform links stay optional."
-                      : "Complete MealScout profile basics first. External links are optional and not required for setup completion."}
-                  </p>
-                </div>
-                {isAdmin || isStaff ? (
-                  <Badge className="bg-orange-600 text-white">
-                    Admin assist mode
-                  </Badge>
-                ) : null}
-              </div>
-
-              {setupMode === "profile" ? (
-                <div className="grid gap-3 sm:grid-cols-2">
-                <Input
-                  value={profileDraft.name}
-                  onChange={(e) =>
-                    setProfileDraft((prev) => ({ ...prev, name: e.target.value }))
-                  }
-                  placeholder="Business name"
-                />
-                <Input
-                  value={profileDraft.cuisineType}
-                  onChange={(e) =>
-                    setProfileDraft((prev) => ({
-                      ...prev,
-                      cuisineType: e.target.value,
-                    }))
-                  }
-                  placeholder="Cuisine or type"
-                />
-                <Input
-                  value={profileDraft.businessType}
-                  onChange={(e) =>
-                    setProfileDraft((prev) => ({
-                      ...prev,
-                      businessType: e.target.value,
-                    }))
-                  }
-                  placeholder="Service type"
-                />
-                <Input
-                  value={profileDraft.phone}
-                  onChange={(e) =>
-                    setProfileDraft((prev) => ({ ...prev, phone: e.target.value }))
-                  }
-                  placeholder="Public phone"
-                />
-                <Input
-                  value={profileDraft.address}
-                  onChange={(e) =>
-                    setProfileDraft((prev) => ({ ...prev, address: e.target.value }))
-                  }
-                  placeholder="Address or service area"
-                  className="sm:col-span-2"
-                />
-                <Input
-                  value={profileDraft.city}
-                  onChange={(e) =>
-                    setProfileDraft((prev) => ({ ...prev, city: e.target.value }))
-                  }
-                  placeholder="City"
-                />
-                <Input
-                  value={profileDraft.state}
-                  onChange={(e) =>
-                    setProfileDraft((prev) => ({ ...prev, state: e.target.value }))
-                  }
-                  placeholder="State"
-                />
-                <Input
-                  value={profileDraft.facebookPageUrl}
-                  onChange={(e) =>
-                    setProfileDraft((prev) => ({
-                      ...prev,
-                      facebookPageUrl: e.target.value,
-                    }))
-                  }
-                  placeholder="Facebook URL"
-                />
-                <Input
-                  value={profileDraft.instagramUrl}
-                  onChange={(e) =>
-                    setProfileDraft((prev) => ({
-                      ...prev,
-                      instagramUrl: e.target.value,
-                    }))
-                  }
-                  placeholder="Instagram URL"
-                />
-                <Input
-                  value={profileDraft.xUrl}
-                  onChange={(e) =>
-                    setProfileDraft((prev) => ({ ...prev, xUrl: e.target.value }))
-                  }
-                  placeholder="X URL"
-                />
-                <Input
-                  value={profileDraft.logoUrl}
-                  onChange={(e) =>
-                    setProfileDraft((prev) => ({ ...prev, logoUrl: e.target.value }))
-                  }
-                  placeholder="Logo image URL"
-                />
-                <Input
-                  value={profileDraft.coverImageUrl}
-                  onChange={(e) =>
-                    setProfileDraft((prev) => ({
-                      ...prev,
-                      coverImageUrl: e.target.value,
-                    }))
-                  }
-                  placeholder="Cover image URL"
-                  className="sm:col-span-2"
-                />
-                <textarea
-                  value={profileDraft.description}
-                  onChange={(e) =>
-                    setProfileDraft((prev) => ({
-                      ...prev,
-                      description: e.target.value,
-                    }))
-                  }
-                  placeholder="Description"
-                  className="sm:col-span-2 min-h-[96px] rounded-md border border-input bg-background px-3 py-2 text-sm"
-                />
-                </div>
-              ) : null}
-
-              {setupMode === "profile" ? (
-                <details className="mt-4 rounded-lg border border-orange-200 bg-orange-50/50 p-3">
-                  <summary className="cursor-pointer text-xs font-black uppercase tracking-[0.12em] text-orange-800">
-                    External links (optional)
-                  </summary>
-                  <p className="mt-2 text-xs text-orange-900/75">
-                    These links are optional secondary fields. They are not required to complete MealScout setup.
-                  </p>
-                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                    <Input value={profileDraft.websiteUrl} onChange={(e) => setProfileDraft((prev) => ({ ...prev, websiteUrl: e.target.value }))} placeholder="Website URL (optional)" />
-                    <Input value={profileDraft.menuUrl} onChange={(e) => setProfileDraft((prev) => ({ ...prev, menuUrl: e.target.value }))} placeholder="Menu URL (optional)" />
-                    <Input value={profileDraft.onlineOrderingUrl} onChange={(e) => setProfileDraft((prev) => ({ ...prev, onlineOrderingUrl: e.target.value }))} placeholder="Online ordering URL (optional)" />
-                    <Input value={profileDraft.deliveryUrl} onChange={(e) => setProfileDraft((prev) => ({ ...prev, deliveryUrl: e.target.value }))} placeholder="Delivery URL (optional)" />
-                    <Input value={profileDraft.doordashUrl} onChange={(e) => setProfileDraft((prev) => ({ ...prev, doordashUrl: e.target.value }))} placeholder="DoorDash URL (optional)" />
-                    <Input value={profileDraft.uberEatsUrl} onChange={(e) => setProfileDraft((prev) => ({ ...prev, uberEatsUrl: e.target.value }))} placeholder="Uber Eats URL (optional)" />
-                    <Input value={profileDraft.toastUrl} onChange={(e) => setProfileDraft((prev) => ({ ...prev, toastUrl: e.target.value }))} placeholder="Toast URL (optional)" />
-                    <Input value={profileDraft.squareUrl} onChange={(e) => setProfileDraft((prev) => ({ ...prev, squareUrl: e.target.value }))} placeholder="Square URL (optional)" />
-                    <Input value={profileDraft.chowNowUrl} onChange={(e) => setProfileDraft((prev) => ({ ...prev, chowNowUrl: e.target.value }))} placeholder="ChowNow URL (optional)" />
-                    <Input value={profileDraft.grubhubUrl} onChange={(e) => setProfileDraft((prev) => ({ ...prev, grubhubUrl: e.target.value }))} placeholder="Grubhub URL (optional)" />
-                    <Input value={profileDraft.cateringInquiryUrl} onChange={(e) => setProfileDraft((prev) => ({ ...prev, cateringInquiryUrl: e.target.value }))} placeholder="Catering inquiry URL (optional)" />
-                    <Input value={profileDraft.truckBookingInquiryUrl} onChange={(e) => setProfileDraft((prev) => ({ ...prev, truckBookingInquiryUrl: e.target.value }))} placeholder="Truck booking inquiry URL (optional)" />
-                  </div>
-                </details>
-              ) : null}
-
-              {setupMode === "profile-media" ? (
-              <div className="mt-4 rounded-lg border border-orange-200 bg-orange-50/50 p-3">
-                <h4 className="text-xs font-black uppercase tracking-[0.12em] text-orange-800">
-                  Media manager
-                </h4>
-                <p className="mt-1 text-xs text-orange-900/75">
-                  Upload logo, cover, and gallery images. Public profiles only render approved media.
-                </p>
-                <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                  <label className="rounded-md border border-orange-200 bg-white px-3 py-2 text-xs font-medium text-orange-900">
-                    Upload logo
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="mt-2 block w-full text-xs"
-                      onChange={(event) => {
-                        const file = event.target.files?.[0];
-                        if (!file) return;
-                        uploadProfileMediaMutation.mutate({ file, kind: "logo" });
-                        event.currentTarget.value = "";
-                      }}
-                    />
-                  </label>
-                  <label className="rounded-md border border-orange-200 bg-white px-3 py-2 text-xs font-medium text-orange-900">
-                    Upload cover
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="mt-2 block w-full text-xs"
-                      onChange={(event) => {
-                        const file = event.target.files?.[0];
-                        if (!file) return;
-                        uploadProfileMediaMutation.mutate({ file, kind: "cover" });
-                        event.currentTarget.value = "";
-                      }}
-                    />
-                  </label>
-                  <div className="rounded-md border border-orange-200 bg-white px-3 py-2 text-xs font-medium text-orange-900">
-                    Gallery category
-                    <select
-                      className="mt-2 w-full rounded border border-orange-200 bg-white px-2 py-1 text-xs"
-                      value={mediaCategory}
-                      onChange={(event) => setMediaCategory(event.target.value)}
-                    >
-                      <option value="food">Food</option>
-                      <option value="menu">Menu</option>
-                      <option value="storefront">Storefront</option>
-                      <option value="truck">Truck</option>
-                      <option value="atmosphere">Atmosphere</option>
-                      <option value="owner_staff">Owner/staff</option>
-                      <option value="other">Other</option>
-                    </select>
-                  </div>
-                </div>
-                <label className="mt-2 block rounded-md border border-orange-200 bg-white px-3 py-2 text-xs font-medium text-orange-900">
-                  Upload gallery image
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="mt-2 block w-full text-xs"
-                    onChange={(event) => {
-                      const file = event.target.files?.[0];
-                      if (!file) return;
-                      uploadProfileMediaMutation.mutate({
-                        file,
-                        kind: "gallery",
-                        category: mediaCategory,
-                      });
-                      event.currentTarget.value = "";
-                    }}
-                  />
-                </label>
-                {(() => {
-                  const restaurant = currentRestaurant as any;
-                  const settings =
-                    restaurant &&
-                    typeof restaurant.socialAutopostSettings === "object"
-                      ? restaurant.socialAutopostSettings
-                      : {};
-                  const gallery = Array.isArray(settings?.publicGalleryImages)
-                    ? (settings.publicGalleryImages as ProfileMediaItem[])
-                    : [];
-                  if (!gallery.length) return null;
-                  return (
-                    <div className="mt-3 space-y-2">
-                      {gallery.slice(-8).reverse().map((media) => (
-                        <div
-                          key={media.id || media.url}
-                          className="flex items-center justify-between gap-2 rounded-md border border-orange-200 bg-white px-2 py-2"
-                        >
-                          <div className="flex items-center gap-2 min-w-0">
-                            <img
-                              src={media.url}
-                              alt="Business media"
-                              className="h-10 w-10 rounded object-cover"
-                            />
-                            <div className="min-w-0">
-                              <p className="truncate text-xs font-medium text-slate-900">
-                                {media.category || "gallery"} ·{" "}
-                                {media.publicApproved ? "Approved" : "Pending"}
-                              </p>
-                              <p className="truncate text-[11px] text-slate-600">
-                                {media.url}
-                              </p>
-                            </div>
-                          </div>
-                          {isAdmin || isStaff ? (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() =>
-                                approveProfileMediaMutation.mutate({
-                                  mediaId: String(media.id || ""),
-                                  approved: !Boolean(media.publicApproved),
-                                })
-                              }
-                              disabled={
-                                approveProfileMediaMutation.isPending || !media.id
-                              }
-                            >
-                              {media.publicApproved ? "Set pending" : "Approve"}
-                            </Button>
-                          ) : null}
-                        </div>
-                      ))}
-                    </div>
-                  );
-                })()}
-              </div>
-              ) : null}
-
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <Button
-                  onClick={() => updateProfileBasicsMutation.mutate(profileDraft)}
-                  disabled={updateProfileBasicsMutation.isPending}
-                >
-                  {updateProfileBasicsMutation.isPending ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <Save className="mr-2 h-4 w-4" />
-                  )}
-                  Save profile basics
-                </Button>
-                <Link href={menuBuilderHref}>
-                  <Button variant="outline">Open menu builder</Button>
-                </Link>
-                <Link href={buildOwnerSetupHref("schedule", currentIsTruckBusiness ? { truck: "1" } : undefined)}>
-                  <Button variant="outline">Open schedule/live tools</Button>
-                </Link>
-                <Link href="/deal-creation">
-                  <Button variant="outline">Add deal</Button>
-                </Link>
-                <Link href="/events">
-                  <Button variant="outline">Add event</Button>
-                </Link>
-                <Link href={buildDashboardHref()}>
-                  <Button
-                    variant="secondary"
-                    data-testid="button-back-to-dashboard-from-setup"
-                  >
-                    Back to dashboard
-                  </Button>
-                </Link>
-              </div>
-
-              {publicProfileForQr?.seo?.canonicalUrl ? (
-                <div className="mt-4 rounded-lg border border-orange-200 bg-orange-50/60 p-4">
-                  <div className="mb-2 flex items-center gap-2">
-                    <QrCode className="h-4 w-4 text-orange-700" />
-                    <h4 className="text-sm font-black uppercase tracking-[0.12em] text-orange-800">
-                      QR Kit
-                    </h4>
-                  </div>
-                  <p className="mb-3 text-xs text-orange-900/80">
-                    Print or share these QR codes for profile, menu, and specials.
-                  </p>
-                  {(() => {
-                    const shareBaseTarget =
-                      String((publicProfileForQr as any)?.cleanBusinessPath || "").trim() ||
-                      publicProfileForQr.seo.canonicalUrl;
-                    const canonicalUrl = resolveCanonicalShareUrlSync(
-                      shareBaseTarget,
-                    );
-                    const hasStructuredMenu = Array.isArray(publicProfileForQr.menuSections)
-                      ? publicProfileForQr.menuSections.some(
-                          (section) =>
-                            section &&
-                            Array.isArray(section.items) &&
-                            section.items.length > 0,
-                        )
-                      : false;
-                    const hasMenuFallback = Boolean(
-                      publicProfileForQr.menuUrl ||
-                        publicProfileForQr.menuPdfUrl ||
-                        publicProfileForQr.menuImageUrl,
-                    );
-                    const menuTarget =
-                      publicProfileForQr.menuUrl ||
-                      publicProfileForQr.menuPdfUrl ||
-                      publicProfileForQr.menuImageUrl ||
-                      (hasStructuredMenu ? `${canonicalUrl}#menu` : null);
-                    const specialsTarget =
-                      Number(publicProfileForQr.deals?.totalActive || 0) > 0
-                        ? `${canonicalUrl}#deals`
-                        : null;
-                    const isTruckProfile = currentIsTruckBusiness;
-
-                    const options: Array<{
-                      id: string;
-                      label: string;
-                      target: string | null;
-                      note: string;
-                    }> = [
-                      {
-                        id: "profile",
-                        label: "Profile QR",
-                        target: canonicalUrl,
-                        note: "Scan to view your full MealScout profile.",
-                      },
-                      {
-                        id: "menu",
-                        label: "Menu QR",
-                        target: hasStructuredMenu || hasMenuFallback ? menuTarget : null,
-                        note: "Scan for menu and featured items.",
-                      },
-                      {
-                        id: "specials",
-                        label: "Specials QR",
-                        target: specialsTarget,
-                        note: "Scan for active deals and specials.",
-                      },
-                    ];
-
-                    const batchMarketingAssets: Array<{
-                      id: string;
-                      title: string;
-                      subtitle: string;
-                      targetUrl: string;
-                      filename: string;
-                    }> = [
-                      {
-                        id: "window",
-                        title: "Find us on MealScout",
-                        subtitle: "Scan to view profile and updates",
-                        targetUrl: canonicalUrl,
-                        filename: `window-sticker-${selectedRestaurant}.png`,
-                      },
-                      ...(menuTarget
-                        ? [
-                            {
-                              id: "menu",
-                              title: "Scan for menu",
-                              subtitle: "See featured items and latest menu",
-                              targetUrl: String(menuTarget),
-                              filename: `table-tent-menu-${selectedRestaurant}.png`,
-                            },
-                          ]
-                        : []),
-                      ...(specialsTarget
-                        ? [
-                            {
-                              id: "specials",
-                              title: "Today's specials",
-                              subtitle: "Active deals and limited-time offers",
-                              targetUrl: String(specialsTarget),
-                              filename: `specials-asset-${selectedRestaurant}.png`,
-                            },
-                          ]
-                        : []),
-                      ...(isTruckProfile
-                        ? [
-                            {
-                              id: "truck",
-                              title: "Schedule + menu",
-                              subtitle: "Find stops, hours, and food updates",
-                              targetUrl: String(menuTarget || canonicalUrl),
-                              filename: `truck-asset-${selectedRestaurant}.png`,
-                            },
-                          ]
-                        : []),
-                    ];
-                    const socialTargets: Array<{
-                      id: string;
-                      label: string;
-                      targetUrl: string;
-                      title: string;
-                      subtitle: string;
-                      cta: string;
-                    }> = [
-                      {
-                        id: "profile",
-                        label: "Profile",
-                        targetUrl: canonicalUrl,
-                        title: "Find us on MealScout",
-                        subtitle: "Local updates, hours, and highlights",
-                        cta: "Find us on MealScout",
-                      },
-                      ...(menuTarget
-                        ? [
-                            {
-                              id: "menu",
-                              label: "Menu",
-                              targetUrl: String(menuTarget),
-                              title: "Scan for menu",
-                              subtitle: "See featured items and latest menu",
-                              cta: "Scan for menu",
-                            },
-                          ]
-                        : []),
-                      ...(specialsTarget
-                        ? [
-                            {
-                              id: "specials",
-                              label: "Specials",
-                              targetUrl: String(specialsTarget),
-                              title: "Today's specials",
-                              subtitle: "Active deals and limited-time offers",
-                              cta: "Scan for today's specials",
-                            },
-                          ]
-                        : []),
-                      ...(isTruckProfile
-                        ? [
-                            {
-                              id: "truck",
-                              label: "Truck schedule",
-                              targetUrl: String(menuTarget || canonicalUrl),
-                              title: "Schedule + menu",
-                              subtitle: "Find stops, hours, and food updates",
-                              cta: "Scan for schedule + menu",
-                            },
-                          ]
-                        : []),
-                    ];
-
-                    return (
-                      <div className="space-y-3">
-                        <div className="grid gap-3 sm:grid-cols-3">
-                          {options
-                            .filter((option) => Boolean(option.target))
-                            .map((option) => (
-                              <div
-                                key={option.id}
-                                className="rounded-lg border border-orange-200 bg-white p-3"
-                              >
-                                <p className="text-xs font-bold uppercase tracking-[0.08em] text-orange-800">
-                                  {option.label}
-                                </p>
-                                <img
-                                  src={buildQrImageUrl(String(option.target))}
-                                  alt={`${option.label} code`}
-                                  className="my-2 h-28 w-28 rounded border border-orange-100 bg-white object-contain"
-                                  loading="lazy"
-                                />
-                                <p className="mb-2 text-[11px] text-orange-900/75">
-                                  {option.note}
-                                </p>
-                                <div className="flex flex-wrap gap-2">
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() =>
-                                      downloadQrPng(
-                                        String(option.target),
-                                        `${option.id}-qr-${selectedRestaurant}.png`,
-                                      )
-                                    }
-                                  >
-                                    Download PNG
-                                  </Button>
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() =>
-                                      copyQrLink(String(option.target), option.label)
-                                    }
-                                  >
-                                    <Copy className="mr-1 h-3.5 w-3.5" />
-                                    Copy link
-                                  </Button>
-                                </div>
-                              </div>
-                            ))}
-                        </div>
-
-                        <div className="rounded-lg border border-orange-200 bg-white p-3">
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <h5 className="text-xs font-black uppercase tracking-[0.12em] text-orange-800">
-                              Marketing kit
-                            </h5>
-                            {batchMarketingAssets.length > 0 ? (
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                onClick={() =>
-                                  downloadAllBrandedQrAssets(batchMarketingAssets)
-                                }
-                              >
-                                <Download className="mr-1 h-3.5 w-3.5" />
-                                Download {batchMarketingAssets.length} assets
-                              </Button>
-                            ) : null}
-                          </div>
-                          <p className="mt-1 text-[11px] text-orange-900/75">
-                            Branded templates for counter cards, windows, and truck-side signage.
-                          </p>
-                          <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                            <div className="rounded-md border border-orange-100 bg-orange-50/40 p-2">
-                              <p className="text-[11px] font-bold text-orange-900">
-                                Window sticker
-                              </p>
-                              <p className="text-[11px] text-orange-900/70">
-                                Find us on MealScout
-                              </p>
-                              <div className="mt-2 inline-flex items-center gap-2 rounded-md border border-orange-100 bg-white px-2 py-1">
-                                <img
-                                  src={buildQrImageUrl(String(canonicalUrl))}
-                                  alt="Window sticker QR preview"
-                                  className="h-10 w-10 rounded border border-orange-100 bg-white object-contain"
-                                  loading="lazy"
-                                />
-                                <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-orange-800">
-                                  Preview asset
-                                </span>
-                              </div>
-                              <div className="mt-2 flex gap-2">
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() =>
-                                    downloadBrandedQrAsset({
-                                      title: "Find us on MealScout",
-                                      subtitle: "Scan to view profile and updates",
-                                      targetUrl: canonicalUrl,
-                                      filename: `window-sticker-${selectedRestaurant}.png`,
-                                    })
-                                  }
-                                >
-                                  <Download className="mr-1 h-3.5 w-3.5" />
-                                  Download
-                                </Button>
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => copyQrLink(canonicalUrl, "Profile")}
-                                >
-                                  <Copy className="mr-1 h-3.5 w-3.5" />
-                                  Copy
-                                </Button>
-                              </div>
-                            </div>
-
-                            {menuTarget ? (
-                              <div className="rounded-md border border-orange-100 bg-orange-50/40 p-2">
-                                <p className="text-[11px] font-bold text-orange-900">
-                                  Table tent / menu card
-                                </p>
-                                <p className="text-[11px] text-orange-900/70">
-                                  Scan for menu
-                                </p>
-                                <div className="mt-2 inline-flex items-center gap-2 rounded-md border border-orange-100 bg-white px-2 py-1">
-                                  <img
-                                    src={buildQrImageUrl(String(menuTarget))}
-                                    alt="Menu card QR preview"
-                                    className="h-10 w-10 rounded border border-orange-100 bg-white object-contain"
-                                    loading="lazy"
-                                  />
-                                  <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-orange-800">
-                                    Preview asset
-                                  </span>
-                                </div>
-                                <div className="mt-2 flex gap-2">
-                                  <Button
-                                    type="button"
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() =>
-                                      downloadBrandedQrAsset({
-                                        title: "Scan for menu",
-                                        subtitle: "See featured items and latest menu",
-                                        targetUrl: String(menuTarget),
-                                        filename: `table-tent-menu-${selectedRestaurant}.png`,
-                                      })
-                                    }
-                                  >
-                                    <Download className="mr-1 h-3.5 w-3.5" />
-                                    Download
-                                  </Button>
-                                  <Button
-                                    type="button"
-                                    size="sm"
-                                    variant="ghost"
-                                    onClick={() => copyQrLink(String(menuTarget), "Menu")}
-                                  >
-                                    <Copy className="mr-1 h-3.5 w-3.5" />
-                                    Copy
-                                  </Button>
-                                </div>
-                              </div>
-                            ) : null}
-
-                            {specialsTarget ? (
-                              <div className="rounded-md border border-orange-100 bg-orange-50/40 p-2">
-                                <p className="text-[11px] font-bold text-orange-900">
-                                  Specials card
-                                </p>
-                                <p className="text-[11px] text-orange-900/70">
-                                  Scan for today&apos;s specials
-                                </p>
-                                <div className="mt-2 inline-flex items-center gap-2 rounded-md border border-orange-100 bg-white px-2 py-1">
-                                  <img
-                                    src={buildQrImageUrl(String(specialsTarget))}
-                                    alt="Specials card QR preview"
-                                    className="h-10 w-10 rounded border border-orange-100 bg-white object-contain"
-                                    loading="lazy"
-                                  />
-                                  <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-orange-800">
-                                    Preview asset
-                                  </span>
-                                </div>
-                                <div className="mt-2 flex gap-2">
-                                  <Button
-                                    type="button"
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() =>
-                                      downloadBrandedQrAsset({
-                                        title: "Today's specials",
-                                        subtitle: "Active deals and limited-time offers",
-                                        targetUrl: String(specialsTarget),
-                                        filename: `specials-asset-${selectedRestaurant}.png`,
-                                      })
-                                    }
-                                  >
-                                    <Download className="mr-1 h-3.5 w-3.5" />
-                                    Download
-                                  </Button>
-                                  <Button
-                                    type="button"
-                                    size="sm"
-                                    variant="ghost"
-                                    onClick={() =>
-                                      copyQrLink(String(specialsTarget), "Specials")
-                                    }
-                                  >
-                                    <Copy className="mr-1 h-3.5 w-3.5" />
-                                    Copy
-                                  </Button>
-                                </div>
-                              </div>
-                            ) : null}
-
-                            {isTruckProfile ? (
-                              <div className="rounded-md border border-orange-100 bg-orange-50/40 p-2">
-                                <p className="text-[11px] font-bold text-orange-900">
-                                  Food truck counter card
-                                </p>
-                                <p className="text-[11px] text-orange-900/70">
-                                  Scan for schedule + menu
-                                </p>
-                                <div className="mt-2 inline-flex items-center gap-2 rounded-md border border-orange-100 bg-white px-2 py-1">
-                                  <img
-                                    src={buildQrImageUrl(String(menuTarget || canonicalUrl))}
-                                    alt="Food truck card QR preview"
-                                    className="h-10 w-10 rounded border border-orange-100 bg-white object-contain"
-                                    loading="lazy"
-                                  />
-                                  <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-orange-800">
-                                    Preview asset
-                                  </span>
-                                </div>
-                                <div className="mt-2 flex gap-2">
-                                  <Button
-                                    type="button"
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() =>
-                                      downloadBrandedQrAsset({
-                                        title: "Schedule + menu",
-                                        subtitle: "Find stops, hours, and food updates",
-                                        targetUrl: String(menuTarget || canonicalUrl),
-                                        filename: `truck-asset-${selectedRestaurant}.png`,
-                                      })
-                                    }
-                                  >
-                                    <Download className="mr-1 h-3.5 w-3.5" />
-                                    Download
-                                  </Button>
-                                  <Button
-                                    type="button"
-                                    size="sm"
-                                    variant="ghost"
-                                    onClick={() =>
-                                      copyQrLink(String(menuTarget || canonicalUrl), "Truck")
-                                    }
-                                  >
-                                    <Copy className="mr-1 h-3.5 w-3.5" />
-                                    Copy
-                                  </Button>
-                                </div>
-                              </div>
-                            ) : null}
-                          </div>
-
-                          {socialTargets.length > 0 ? (
-                            <div className="mt-4 rounded-md border border-orange-100 bg-orange-50/40 p-2.5">
-                              <h6 className="text-[11px] font-black uppercase tracking-[0.1em] text-orange-800">
-                                Social graphics
-                              </h6>
-                              <p className="mt-1 text-[11px] text-orange-900/70">
-                                Ready-to-post assets sized for square and story formats.
-                              </p>
-                              <div className="mt-2 space-y-2">
-                                {socialTargets.map((target) => (
-                                  <div
-                                    key={`social-${target.id}`}
-                                    className="rounded-md border border-orange-100 bg-white p-2"
-                                  >
-                                    <div className="flex flex-wrap items-center justify-between gap-2">
-                                      <p className="text-[11px] font-semibold text-orange-900">
-                                        {target.label}
-                                      </p>
-                                      <Button
-                                        type="button"
-                                        size="sm"
-                                        variant="ghost"
-                                        onClick={() => copyQrLink(target.targetUrl, `${target.label} social`)}
-                                      >
-                                        <Copy className="mr-1 h-3.5 w-3.5" />
-                                        Copy link
-                                      </Button>
-                                    </div>
-                                    <div className="mt-2 flex flex-wrap gap-2">
-                                      <Button
-                                        type="button"
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() =>
-                                          downloadSocialQrGraphic({
-                                            title: target.title,
-                                            subtitle: target.subtitle,
-                                            cta: target.cta,
-                                            targetUrl: target.targetUrl,
-                                            filename: `${target.id}-social-square-${selectedRestaurant}.png`,
-                                            format: "square",
-                                          })
-                                        }
-                                      >
-                                        <Download className="mr-1 h-3.5 w-3.5" />
-                                        Download Square
-                                      </Button>
-                                      <Button
-                                        type="button"
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() =>
-                                          downloadSocialQrGraphic({
-                                            title: target.title,
-                                            subtitle: target.subtitle,
-                                            cta: target.cta,
-                                            targetUrl: target.targetUrl,
-                                            filename: `${target.id}-social-story-${selectedRestaurant}.png`,
-                                            format: "story",
-                                          })
-                                        }
-                                      >
-                                        <Download className="mr-1 h-3.5 w-3.5" />
-                                        Download Story
-                                      </Button>
-                                      <Button
-                                        type="button"
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() =>
-                                          downloadSocialQrGraphic({
-                                            title: target.title,
-                                            subtitle: target.subtitle,
-                                            cta: target.cta,
-                                            targetUrl: target.targetUrl,
-                                            filename: `${target.id}-social-portrait-${selectedRestaurant}.png`,
-                                            format: "portrait",
-                                          })
-                                        }
-                                      >
-                                        <Download className="mr-1 h-3.5 w-3.5" />
-                                        Download Portrait
-                                      </Button>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          ) : null}
-                        </div>
-                      </div>
-                    );
-                  })()}
-                  <p className="mt-3 text-[11px] text-orange-900/75">
-                    Print guidance: use Profile QR for window signage, Menu QR for table tents, Specials QR for daily promos, and the truck card at your counter or service window.
-                  </p>
-                </div>
-              ) : null}
-
-              <div
-                id="profile-completion-details"
-                className="rounded-lg border border-border p-4 scroll-mt-24"
-              >
-                <div className="flex flex-wrap items-start justify-between gap-3">
+                <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
                   <div>
-                    <p className="text-sm font-semibold">Profile value</p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Real customer actions from your public MealScout profile.
+                    <p
+                      className={`text-sm font-semibold ${isComplete ? "text-[color:var(--status-success)]" : "text-amber-900"}`}
+                    >
+                      {isComplete
+                        ? "Your profile is ready to go live"
+                        : `Profile setup: ${topCompletionDoneCount}/${topCompletionTotal} complete`}
+                    </p>
+                    <p
+                      className={`mt-1 text-xs ${isComplete ? "text-[color:var(--status-success)]/80" : "text-amber-900/80"}`}
+                    >
+                      {isComplete
+                        ? "Keep details current as your business changes."
+                        : "Missing menu, photos, hours, or contact info means customers see an incomplete profile. See what's left below."}
                     </p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant={ownerValueWindow === "7d" ? "default" : "outline"}
-                      onClick={() => setOwnerValueWindow("7d")}
+                  {!isComplete && (
+                    <a
+                      href="#profile-completion-details"
+                      className="rounded-md border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100"
+                      data-testid="link-jump-to-completion-details"
                     >
-                      7 days
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant={ownerValueWindow === "30d" ? "default" : "outline"}
-                      onClick={() => setOwnerValueWindow("30d")}
-                    >
-                      30 days
-                    </Button>
-                  </div>
-                </div>
-                <p className="mt-2 text-[11px] text-muted-foreground">
-                  {ownerValueAttribution?.generatedAt
-                    ? `Last updated ${new Date(ownerValueAttribution.generatedAt).toLocaleString()}`
-                    : "Last updated just now"}
-                </p>
+                      See what's missing
+                    </a>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })()}
 
-                {(() => {
-                  if (loadingOwnerValueAttribution) {
-                    return (
-                      <div className="mt-3 rounded-md border border-border p-4">
-                        <p className="text-sm text-muted-foreground">Loading owner analytics...</p>
-                      </div>
-                    );
+        {currentRestaurant &&
+        activeWorkspaceModule === "overview" &&
+        menuApprovalRequired ? (
+          <Card
+            className="mb-6 border-amber-300 bg-amber-50"
+            data-testid="truck-menu-owner-approval-task"
+          >
+            <CardHeader>
+              <CardTitle className="text-base text-amber-950">
+                Review your public menu
+              </CardTitle>
+              <CardDescription className="text-amber-900/80">
+                This truck has menu details visible on MealScout, but they still
+                need owner confirmation before we call them owner-approved.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-sm text-amber-950">
+                Public label now:{" "}
+                {String(
+                  currentMenuApproval?.label || "Needs owner confirmation",
+                )}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() =>
+                    updateMenuApprovalMutation.mutate({ action: "approve" })
                   }
-                  if (ownerValueAttributionError) {
-                    return (
-                      <div className="mt-3 rounded-md border border-border p-4">
-                        <p className="text-sm font-medium">
-                          Owner analytics could not be loaded right now.
-                        </p>
-                      </div>
-                    );
+                  disabled={updateMenuApprovalMutation.isPending}
+                >
+                  Approve menu as current
+                </Button>
+                <Link href={menuBuilderHref}>
+                  <Button type="button" size="sm" variant="outline">
+                    Edit menu items/prices
+                  </Button>
+                </Link>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    updateMenuApprovalMutation.mutate({ action: "reject" })
                   }
-                  const entities = Array.isArray(ownerValueAttribution?.entities)
-                    ? ownerValueAttribution.entities
-                    : [];
-                  const selectedEntity = entities.find(
-                    (item) => String(item.entityId) === String(selectedRestaurant),
-                  ) as OwnerValueAttributionEntity | undefined;
-                  const fallbackEntity = entities[0] as OwnerValueAttributionEntity | undefined;
-                  const entity = selectedEntity || fallbackEntity;
-                  const totals = entity || {
-                    profileViews: 0,
-                    discoveryImpressions: 0,
-                    ctaClicks: 0,
-                    shareOpens: 0,
-                    highIntentActions: 0,
-                    topSources: [],
-                    lastActivityAt: null,
-                    entityType: currentPublicEntityType,
-                    entityId: selectedRestaurant,
-                  };
-                  const hasAnyData =
-                    Number(totals.profileViews || 0) > 0 ||
-                    Number(totals.discoveryImpressions || 0) > 0 ||
-                    Number(totals.ctaClicks || 0) > 0 ||
-                    Number(totals.shareOpens || 0) > 0 ||
-                    Number(totals.highIntentActions || 0) > 0;
-                  const completionStatus = computeProfileCompletionStatus(currentRestaurant as any, {
-                    hasActiveDeal: Number(stats?.activeDeals || 0) > 0,
-                  });
-                  const canonicalMenuItemCount = Math.max(
-                    Number((currentRestaurant as any)?.menuItemCount || 0),
-                    Number((currentRestaurant as any)?.publicMenuItemCount || 0),
-                  );
-                  const isMenuGatedFromScoutDiscoverability = canonicalMenuItemCount <= 0;
-                  const completionItems = [
-                    {
-                      id: "menu",
-                      label: "Menu missing",
-                      why: "Customers need a menu to decide quickly.",
-                      done: Boolean(completionStatus.menu),
-                      href: `/menu-builder?restaurantId=${encodeURIComponent(String(selectedRestaurant))}`,
-                    },
-                    {
-                      id: "photos",
-                      label: "Photos missing",
-                      why: "Photos help people trust what they are choosing.",
-                      done: Boolean(completionStatus.photos),
-                      href: `/restaurant-owner-dashboard?setup=profile&restaurantId=${encodeURIComponent(String(selectedRestaurant))}`,
-                    },
-                    {
-                      id: "hours",
-                      label: "Business hours missing",
-                      why: "People act faster when they know if you are open.",
-                      done: Boolean(completionStatus.hours),
-                      href: `/restaurant-owner-dashboard?setup=schedule&restaurantId=${encodeURIComponent(String(selectedRestaurant))}`,
-                    },
-                    {
-                      id: "service-area",
-                      label: "Service area missing",
-                      why: "A clear location helps direction and pickup decisions.",
-                      done: Boolean(completionStatus["service-area"]),
-                      href: `/restaurant-owner-dashboard?setup=profile&restaurantId=${encodeURIComponent(String(selectedRestaurant))}`,
-                    },
-                    {
-                      id: "contact",
-                      label: "Contact method missing",
-                      why: "Calls and direct actions need an obvious contact path.",
-                      done: Boolean(completionStatus.contact),
-                      href: `/restaurant-owner-dashboard?setup=profile&restaurantId=${encodeURIComponent(String(selectedRestaurant))}`,
-                    },
-                    {
-                      id: "social",
-                      label: "Social link missing",
-                      why: "Social links help discovery visitors follow and return.",
-                      done: Boolean(completionStatus.social),
-                      href: `/restaurant-owner-dashboard?setup=profile&restaurantId=${encodeURIComponent(String(selectedRestaurant))}`,
-                    },
-                    {
-                      id: "catering-events",
-                      label: "Catering/private event info missing",
-                      why: "Private event details create another high-intent action path.",
-                      done: Boolean(completionStatus["catering-events"]),
-                      href: "/events",
-                    },
-                    {
-                      id: "deal",
-                      label: "Deal/special missing",
-                      why: "Current offers give people a reason to choose you today.",
-                      done: Boolean(completionStatus.deal),
-                      href: "/deal-creation",
-                    },
-                  ];
-                  const profileStrength = completionItems.filter((item) => item.done).length;
-                  const missingCompletionItems = completionItems.filter((item) => !item.done);
-                  const nextCompletionCta = missingCompletionItems[0]?.href ||
-                    `/restaurant-owner-dashboard?setup=profile&restaurantId=${encodeURIComponent(String(selectedRestaurant))}`;
-                  const completionActionLabels: Record<string, string> = {
-                    menu: "Menu update clicked",
-                    photos: "Photos update clicked",
-                    hours: "Hours update clicked",
-                    "service-area": "Service area update clicked",
-                    contact: "Contact method update clicked",
-                    social: "Social link update clicked",
-                    "catering-events": "Catering/events update clicked",
-                    deal: "Deal/special update clicked",
-                  };
-                  const completionActions = Array.isArray((totals as any).completionActions)
-                    ? ((totals as any).completionActions as Array<{ missingItemKey: string; count: number }>)
-                    : [];
-                  const completionReconciliation = Array.isArray((totals as any).completionActionReconciliation)
-                    ? ((totals as any).completionActionReconciliation as Array<{
-                        missingItemKey: string;
-                        clicked: number;
-                        nowComplete: number;
-                        stillMissing: number;
-                      }>)
-                    : [];
-                  if (!hasAnyData) {
-                    const publicProfilePath = (() => {
-                      const canonicalUrl = String(
-                        publicProfileForQr?.seo?.canonicalUrl || "",
-                      ).trim();
-                      if (!canonicalUrl) return null;
-                      try {
-                        const url = new URL(canonicalUrl, window.location.origin);
-                        const path = `${url.pathname}${url.search}${url.hash}`;
-                        return path.startsWith("/p/") ? path : null;
-                      } catch {
-                        return canonicalUrl.startsWith("/p/") ? canonicalUrl : null;
-                      }
-                    })();
-                    const hasPublicProfile = Boolean(publicProfilePath);
-                    return (
-                      <div className="mt-3 rounded-md border border-dashed border-border p-4">
-                        <p className="text-sm font-medium">
-                          No discovery activity yet.
-                        </p>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          Your profile is ready to receive views, clicks, and shares as people find you through MealScout.
-                        </p>
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          <Link
-                            href={`/restaurant-owner-dashboard?setup=profile&restaurantId=${encodeURIComponent(String(selectedRestaurant))}`}
-                          >
-                            <Button type="button" size="sm">
-                              Open QR Kit
-                            </Button>
-                          </Link>
-                          {hasPublicProfile ? (
+                  disabled={updateMenuApprovalMutation.isPending}
+                >
+                  Mark menu not current
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() =>
+                    updateMenuApprovalMutation.mutate({ action: "skip" })
+                  }
+                  disabled={updateMenuApprovalMutation.isPending}
+                >
+                  Skip for now
+                </Button>
+              </div>
+              <p className="text-xs text-amber-900/75">
+                Skipping keeps this reminder active. Viewing this page never
+                approves the menu automatically.
+              </p>
+            </CardContent>
+          </Card>
+        ) : null}
+
+        {currentRestaurant && setupMode && setupMode !== "schedule" && (
+          <div
+            className={
+              setupMode === "menu"
+                ? "mb-6 rounded-2xl border border-orange-200 bg-orange-50 p-4 shadow-clean"
+                : "mb-6"
+            }
+          >
+            {setupMode === "menu" ? (
+              <>
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-[0.18em] text-orange-700">
+                      Business onboarding
+                    </p>
+                    <h2 className="mt-1 text-lg font-black text-orange-950">
+                      Finish {currentRestaurant.name || "your business"} setup
+                    </h2>
+                    <p className="mt-1 text-sm text-orange-900/75">
+                      Your personal account is active. Now complete the business
+                      pieces customers actually use: profile, menu,
+                      schedule/live status, and bookings.
+                    </p>
+                  </div>
+                  <Badge className="w-fit bg-orange-600 text-white">
+                    {currentIsTruckBusiness
+                      ? "Truck setup workspace"
+                      : currentIsBarBusiness
+                        ? "Bar setup workspace"
+                        : "Business setup workspace"}
+                  </Badge>
+                </div>
+
+                <div className="mt-4 grid gap-2 sm:grid-cols-4">
+                  <Link href={buildOwnerSetupHref("profile")}>
+                    <div className="flex w-full items-center gap-2 rounded-md border border-orange-200 bg-white px-3 py-2 text-orange-900 hover:bg-orange-100">
+                      <Store className="h-4 w-4 text-orange-900" />
+                      <span className="text-sm font-semibold text-orange-900">
+                        {currentIsBarBusiness
+                          ? "Complete bar profile"
+                          : currentIsTruckBusiness
+                            ? "Complete truck profile"
+                            : "Complete business profile"}
+                      </span>
+                    </div>
+                  </Link>
+                  <Link href={buildOwnerSetupHref("menu")}>
+                    <div className="flex w-full items-center gap-2 rounded-md border border-orange-200 bg-white px-3 py-2 text-orange-900 hover:bg-orange-100">
+                      <ShoppingCart className="h-4 w-4 text-orange-900" />
+                      <span className="text-sm font-semibold text-orange-900">
+                        Open menu builder
+                      </span>
+                    </div>
+                  </Link>
+                  <Link
+                    href={buildOwnerSetupHref(
+                      "schedule",
+                      currentIsTruckBusiness ? { truck: "1" } : undefined,
+                    )}
+                  >
+                    <div className="flex w-full items-center gap-2 rounded-md border border-orange-200 bg-white px-3 py-2 text-orange-900 hover:bg-orange-100">
+                      <Clock className="h-4 w-4 text-orange-900" />
+                      <span className="text-sm font-semibold text-orange-900">
+                        Set schedule/live status
+                      </span>
+                    </div>
+                  </Link>
+                  <Link href={buildOwnerSetupHref("profile-media")}>
+                    <div className="flex w-full items-center gap-2 rounded-md border border-orange-200 bg-white px-3 py-2 text-orange-900 hover:bg-orange-100">
+                      <Calendar className="h-4 w-4 text-orange-900" />
+                      <span className="text-sm font-semibold text-orange-900">
+                        Add photos or logo
+                      </span>
+                    </div>
+                  </Link>
+                </div>
+                {setupMode ? (
+                  <div className="mt-3 flex items-center justify-end">
+                    <Link href={buildDashboardHref()}>
+                      <Button
+                        variant="outline"
+                        data-testid="button-exit-setup-mode"
+                      >
+                        Exit setup
+                      </Button>
+                    </Link>
+                  </div>
+                ) : null}
+              </>
+            ) : null}
+
+            {setupMode === "profile" || setupMode === "profile-media" ? (
+              <div ref={setupPanelRef} className="scroll-mt-24">
+                <OwnerProfileWorkspace
+                  mode={setupMode === "profile-media" ? "media" : "profile"}
+                  draft={profileDraft}
+                  onDraftChange={setProfileDraft}
+                  onSave={() =>
+                    updateProfileBasicsMutation.mutate(profileDraft)
+                  }
+                  isSaving={updateProfileBasicsMutation.isPending}
+                  gallery={(() => {
+                    const settings =
+                      currentRestaurant &&
+                      typeof currentRestaurant.socialAutopostSettings ===
+                        "object"
+                        ? currentRestaurant.socialAutopostSettings
+                        : {};
+                    return Array.isArray((settings as any)?.publicGalleryImages)
+                      ? ((settings as any)
+                          .publicGalleryImages as OwnerProfileMediaItem[])
+                      : [];
+                  })()}
+                  mediaCategory={mediaCategory}
+                  onMediaCategoryChange={setMediaCategory}
+                  onUpload={(file, kind, category) =>
+                    uploadProfileMediaMutation.mutate({ file, kind, category })
+                  }
+                  isUploading={uploadProfileMediaMutation.isPending}
+                  uploadingKind={uploadProfileMediaMutation.variables?.kind}
+                  canModerate={isAdmin || isStaff}
+                  onApprovalChange={(mediaId, approved) =>
+                    approveProfileMediaMutation.mutate({ mediaId, approved })
+                  }
+                  isUpdatingApproval={approveProfileMediaMutation.isPending}
+                  publicProfileHref={currentPublicProfileHref}
+                  photosHref={buildOwnerSetupHref("profile-media")}
+                  isFoodTruck={currentIsTruckBusiness}
+                />
+
+                {setupMode === "profile" ? (
+                  <details
+                    className="mt-6 rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-4 sm:p-5"
+                    data-testid="owner-profile-tools"
+                  >
+                    <summary className="cursor-pointer font-black text-[color:var(--text-primary)]">
+                      QR assets and profile activity
+                    </summary>
+                    <p className="mt-2 text-sm text-[color:var(--text-muted)]">
+                      Open these tools when you need printed QR assets or
+                      profile performance details.
+                    </p>
+                    <div className="mt-4 space-y-4">
+                      {publicProfileForQr?.seo?.canonicalUrl ? (
+                        <div className="mt-4 rounded-lg border border-orange-200 bg-orange-50/60 p-4">
+                          <div className="mb-2 flex items-center gap-2">
+                            <QrCode className="h-4 w-4 text-orange-700" />
+                            <h4 className="text-sm font-black uppercase tracking-[0.12em] text-orange-800">
+                              QR Kit
+                            </h4>
+                          </div>
+                          <p className="mb-3 text-xs text-orange-900/80">
+                            Print or share these QR codes for profile, menu, and
+                            specials.
+                          </p>
+                          {(() => {
+                            const shareBaseTarget =
+                              String(
+                                (publicProfileForQr as any)
+                                  ?.cleanBusinessPath || "",
+                              ).trim() || publicProfileForQr.seo.canonicalUrl;
+                            const canonicalUrl =
+                              resolveCanonicalShareUrlSync(shareBaseTarget);
+                            const hasStructuredMenu = Array.isArray(
+                              publicProfileForQr.menuSections,
+                            )
+                              ? publicProfileForQr.menuSections.some(
+                                  (section) =>
+                                    section &&
+                                    Array.isArray(section.items) &&
+                                    section.items.length > 0,
+                                )
+                              : false;
+                            const hasMenuFallback = Boolean(
+                              publicProfileForQr.menuUrl ||
+                              publicProfileForQr.menuPdfUrl ||
+                              publicProfileForQr.menuImageUrl,
+                            );
+                            const menuTarget =
+                              publicProfileForQr.menuUrl ||
+                              publicProfileForQr.menuPdfUrl ||
+                              publicProfileForQr.menuImageUrl ||
+                              (hasStructuredMenu
+                                ? `${canonicalUrl}#menu`
+                                : null);
+                            const specialsTarget =
+                              Number(
+                                publicProfileForQr.deals?.totalActive || 0,
+                              ) > 0
+                                ? `${canonicalUrl}#deals`
+                                : null;
+                            const isTruckProfile = currentIsTruckBusiness;
+
+                            const options: Array<{
+                              id: string;
+                              label: string;
+                              target: string | null;
+                              note: string;
+                            }> = [
+                              {
+                                id: "profile",
+                                label: "Profile QR",
+                                target: canonicalUrl,
+                                note: "Scan to view your full MealScout profile.",
+                              },
+                              {
+                                id: "menu",
+                                label: "Menu QR",
+                                target:
+                                  hasStructuredMenu || hasMenuFallback
+                                    ? menuTarget
+                                    : null,
+                                note: "Scan for menu and featured items.",
+                              },
+                              {
+                                id: "specials",
+                                label: "Specials QR",
+                                target: specialsTarget,
+                                note: "Scan for active deals and specials.",
+                              },
+                            ];
+
+                            const batchMarketingAssets: Array<{
+                              id: string;
+                              title: string;
+                              subtitle: string;
+                              targetUrl: string;
+                              filename: string;
+                            }> = [
+                              {
+                                id: "window",
+                                title: "Find us on MealScout",
+                                subtitle: "Scan to view profile and updates",
+                                targetUrl: canonicalUrl,
+                                filename: `window-sticker-${selectedRestaurant}.png`,
+                              },
+                              ...(menuTarget
+                                ? [
+                                    {
+                                      id: "menu",
+                                      title: "Scan for menu",
+                                      subtitle:
+                                        "See featured items and latest menu",
+                                      targetUrl: String(menuTarget),
+                                      filename: `table-tent-menu-${selectedRestaurant}.png`,
+                                    },
+                                  ]
+                                : []),
+                              ...(specialsTarget
+                                ? [
+                                    {
+                                      id: "specials",
+                                      title: "Today's specials",
+                                      subtitle:
+                                        "Active deals and limited-time offers",
+                                      targetUrl: String(specialsTarget),
+                                      filename: `specials-asset-${selectedRestaurant}.png`,
+                                    },
+                                  ]
+                                : []),
+                              ...(isTruckProfile
+                                ? [
+                                    {
+                                      id: "truck",
+                                      title: "Schedule + menu",
+                                      subtitle:
+                                        "Find stops, hours, and food updates",
+                                      targetUrl: String(
+                                        menuTarget || canonicalUrl,
+                                      ),
+                                      filename: `truck-asset-${selectedRestaurant}.png`,
+                                    },
+                                  ]
+                                : []),
+                            ];
+                            const socialTargets: Array<{
+                              id: string;
+                              label: string;
+                              targetUrl: string;
+                              title: string;
+                              subtitle: string;
+                              cta: string;
+                            }> = [
+                              {
+                                id: "profile",
+                                label: "Profile",
+                                targetUrl: canonicalUrl,
+                                title: "Find us on MealScout",
+                                subtitle:
+                                  "Local updates, hours, and highlights",
+                                cta: "Find us on MealScout",
+                              },
+                              ...(menuTarget
+                                ? [
+                                    {
+                                      id: "menu",
+                                      label: "Menu",
+                                      targetUrl: String(menuTarget),
+                                      title: "Scan for menu",
+                                      subtitle:
+                                        "See featured items and latest menu",
+                                      cta: "Scan for menu",
+                                    },
+                                  ]
+                                : []),
+                              ...(specialsTarget
+                                ? [
+                                    {
+                                      id: "specials",
+                                      label: "Specials",
+                                      targetUrl: String(specialsTarget),
+                                      title: "Today's specials",
+                                      subtitle:
+                                        "Active deals and limited-time offers",
+                                      cta: "Scan for today's specials",
+                                    },
+                                  ]
+                                : []),
+                              ...(isTruckProfile
+                                ? [
+                                    {
+                                      id: "truck",
+                                      label: "Truck schedule",
+                                      targetUrl: String(
+                                        menuTarget || canonicalUrl,
+                                      ),
+                                      title: "Schedule + menu",
+                                      subtitle:
+                                        "Find stops, hours, and food updates",
+                                      cta: "Scan for schedule + menu",
+                                    },
+                                  ]
+                                : []),
+                            ];
+
+                            return (
+                              <div className="space-y-3">
+                                <div className="grid gap-3 sm:grid-cols-3">
+                                  {options
+                                    .filter((option) => Boolean(option.target))
+                                    .map((option) => (
+                                      <div
+                                        key={option.id}
+                                        className="rounded-lg border border-orange-200 bg-white p-3"
+                                      >
+                                        <p className="text-xs font-bold uppercase tracking-[0.08em] text-orange-800">
+                                          {option.label}
+                                        </p>
+                                        <img
+                                          src={buildQrImageUrl(
+                                            String(option.target),
+                                          )}
+                                          alt={`${option.label} code`}
+                                          className="my-2 h-28 w-28 rounded border border-orange-100 bg-white object-contain"
+                                          loading="lazy"
+                                        />
+                                        <p className="mb-2 text-[11px] text-orange-900/75">
+                                          {option.note}
+                                        </p>
+                                        <div className="flex flex-wrap gap-2">
+                                          <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() =>
+                                              downloadQrPng(
+                                                String(option.target),
+                                                `${option.id}-qr-${selectedRestaurant}.png`,
+                                              )
+                                            }
+                                          >
+                                            Download PNG
+                                          </Button>
+                                          <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() =>
+                                              copyQrLink(
+                                                String(option.target),
+                                                option.label,
+                                              )
+                                            }
+                                          >
+                                            <Copy className="mr-1 h-3.5 w-3.5" />
+                                            Copy link
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    ))}
+                                </div>
+
+                                <div className="rounded-lg border border-orange-200 bg-white p-3">
+                                  <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <h5 className="text-xs font-black uppercase tracking-[0.12em] text-orange-800">
+                                      Marketing kit
+                                    </h5>
+                                    {batchMarketingAssets.length > 0 ? (
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() =>
+                                          downloadAllBrandedQrAssets(
+                                            batchMarketingAssets,
+                                          )
+                                        }
+                                      >
+                                        <Download className="mr-1 h-3.5 w-3.5" />
+                                        Download {batchMarketingAssets.length}{" "}
+                                        assets
+                                      </Button>
+                                    ) : null}
+                                  </div>
+                                  <p className="mt-1 text-[11px] text-orange-900/75">
+                                    Branded templates for counter cards,
+                                    windows, and truck-side signage.
+                                  </p>
+                                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                                    <div className="rounded-md border border-orange-100 bg-orange-50/40 p-2">
+                                      <p className="text-[11px] font-bold text-orange-900">
+                                        Window sticker
+                                      </p>
+                                      <p className="text-[11px] text-orange-900/70">
+                                        Find us on MealScout
+                                      </p>
+                                      <div className="mt-2 inline-flex items-center gap-2 rounded-md border border-orange-100 bg-white px-2 py-1">
+                                        <img
+                                          src={buildQrImageUrl(
+                                            String(canonicalUrl),
+                                          )}
+                                          alt="Window sticker QR preview"
+                                          className="h-10 w-10 rounded border border-orange-100 bg-white object-contain"
+                                          loading="lazy"
+                                        />
+                                        <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-orange-800">
+                                          Preview asset
+                                        </span>
+                                      </div>
+                                      <div className="mt-2 flex gap-2">
+                                        <Button
+                                          type="button"
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() =>
+                                            downloadBrandedQrAsset({
+                                              title: "Find us on MealScout",
+                                              subtitle:
+                                                "Scan to view profile and updates",
+                                              targetUrl: canonicalUrl,
+                                              filename: `window-sticker-${selectedRestaurant}.png`,
+                                            })
+                                          }
+                                        >
+                                          <Download className="mr-1 h-3.5 w-3.5" />
+                                          Download
+                                        </Button>
+                                        <Button
+                                          type="button"
+                                          size="sm"
+                                          variant="ghost"
+                                          onClick={() =>
+                                            copyQrLink(canonicalUrl, "Profile")
+                                          }
+                                        >
+                                          <Copy className="mr-1 h-3.5 w-3.5" />
+                                          Copy
+                                        </Button>
+                                      </div>
+                                    </div>
+
+                                    {menuTarget ? (
+                                      <div className="rounded-md border border-orange-100 bg-orange-50/40 p-2">
+                                        <p className="text-[11px] font-bold text-orange-900">
+                                          Table tent / menu card
+                                        </p>
+                                        <p className="text-[11px] text-orange-900/70">
+                                          Scan for menu
+                                        </p>
+                                        <div className="mt-2 inline-flex items-center gap-2 rounded-md border border-orange-100 bg-white px-2 py-1">
+                                          <img
+                                            src={buildQrImageUrl(
+                                              String(menuTarget),
+                                            )}
+                                            alt="Menu card QR preview"
+                                            className="h-10 w-10 rounded border border-orange-100 bg-white object-contain"
+                                            loading="lazy"
+                                          />
+                                          <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-orange-800">
+                                            Preview asset
+                                          </span>
+                                        </div>
+                                        <div className="mt-2 flex gap-2">
+                                          <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() =>
+                                              downloadBrandedQrAsset({
+                                                title: "Scan for menu",
+                                                subtitle:
+                                                  "See featured items and latest menu",
+                                                targetUrl: String(menuTarget),
+                                                filename: `table-tent-menu-${selectedRestaurant}.png`,
+                                              })
+                                            }
+                                          >
+                                            <Download className="mr-1 h-3.5 w-3.5" />
+                                            Download
+                                          </Button>
+                                          <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="ghost"
+                                            onClick={() =>
+                                              copyQrLink(
+                                                String(menuTarget),
+                                                "Menu",
+                                              )
+                                            }
+                                          >
+                                            <Copy className="mr-1 h-3.5 w-3.5" />
+                                            Copy
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    ) : null}
+
+                                    {specialsTarget ? (
+                                      <div className="rounded-md border border-orange-100 bg-orange-50/40 p-2">
+                                        <p className="text-[11px] font-bold text-orange-900">
+                                          Specials card
+                                        </p>
+                                        <p className="text-[11px] text-orange-900/70">
+                                          Scan for today&apos;s specials
+                                        </p>
+                                        <div className="mt-2 inline-flex items-center gap-2 rounded-md border border-orange-100 bg-white px-2 py-1">
+                                          <img
+                                            src={buildQrImageUrl(
+                                              String(specialsTarget),
+                                            )}
+                                            alt="Specials card QR preview"
+                                            className="h-10 w-10 rounded border border-orange-100 bg-white object-contain"
+                                            loading="lazy"
+                                          />
+                                          <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-orange-800">
+                                            Preview asset
+                                          </span>
+                                        </div>
+                                        <div className="mt-2 flex gap-2">
+                                          <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() =>
+                                              downloadBrandedQrAsset({
+                                                title: "Today's specials",
+                                                subtitle:
+                                                  "Active deals and limited-time offers",
+                                                targetUrl:
+                                                  String(specialsTarget),
+                                                filename: `specials-asset-${selectedRestaurant}.png`,
+                                              })
+                                            }
+                                          >
+                                            <Download className="mr-1 h-3.5 w-3.5" />
+                                            Download
+                                          </Button>
+                                          <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="ghost"
+                                            onClick={() =>
+                                              copyQrLink(
+                                                String(specialsTarget),
+                                                "Specials",
+                                              )
+                                            }
+                                          >
+                                            <Copy className="mr-1 h-3.5 w-3.5" />
+                                            Copy
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    ) : null}
+
+                                    {isTruckProfile ? (
+                                      <div className="rounded-md border border-orange-100 bg-orange-50/40 p-2">
+                                        <p className="text-[11px] font-bold text-orange-900">
+                                          Food truck counter card
+                                        </p>
+                                        <p className="text-[11px] text-orange-900/70">
+                                          Scan for schedule + menu
+                                        </p>
+                                        <div className="mt-2 inline-flex items-center gap-2 rounded-md border border-orange-100 bg-white px-2 py-1">
+                                          <img
+                                            src={buildQrImageUrl(
+                                              String(
+                                                menuTarget || canonicalUrl,
+                                              ),
+                                            )}
+                                            alt="Food truck card QR preview"
+                                            className="h-10 w-10 rounded border border-orange-100 bg-white object-contain"
+                                            loading="lazy"
+                                          />
+                                          <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-orange-800">
+                                            Preview asset
+                                          </span>
+                                        </div>
+                                        <div className="mt-2 flex gap-2">
+                                          <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() =>
+                                              downloadBrandedQrAsset({
+                                                title: "Schedule + menu",
+                                                subtitle:
+                                                  "Find stops, hours, and food updates",
+                                                targetUrl: String(
+                                                  menuTarget || canonicalUrl,
+                                                ),
+                                                filename: `truck-asset-${selectedRestaurant}.png`,
+                                              })
+                                            }
+                                          >
+                                            <Download className="mr-1 h-3.5 w-3.5" />
+                                            Download
+                                          </Button>
+                                          <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="ghost"
+                                            onClick={() =>
+                                              copyQrLink(
+                                                String(
+                                                  menuTarget || canonicalUrl,
+                                                ),
+                                                "Truck",
+                                              )
+                                            }
+                                          >
+                                            <Copy className="mr-1 h-3.5 w-3.5" />
+                                            Copy
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    ) : null}
+                                  </div>
+
+                                  {socialTargets.length > 0 ? (
+                                    <div className="mt-4 rounded-md border border-orange-100 bg-orange-50/40 p-2.5">
+                                      <h6 className="text-[11px] font-black uppercase tracking-[0.1em] text-orange-800">
+                                        Social graphics
+                                      </h6>
+                                      <p className="mt-1 text-[11px] text-orange-900/70">
+                                        Ready-to-post assets sized for square
+                                        and story formats.
+                                      </p>
+                                      <div className="mt-2 space-y-2">
+                                        {socialTargets.map((target) => (
+                                          <div
+                                            key={`social-${target.id}`}
+                                            className="rounded-md border border-orange-100 bg-white p-2"
+                                          >
+                                            <div className="flex flex-wrap items-center justify-between gap-2">
+                                              <p className="text-[11px] font-semibold text-orange-900">
+                                                {target.label}
+                                              </p>
+                                              <Button
+                                                type="button"
+                                                size="sm"
+                                                variant="ghost"
+                                                onClick={() =>
+                                                  copyQrLink(
+                                                    target.targetUrl,
+                                                    `${target.label} social`,
+                                                  )
+                                                }
+                                              >
+                                                <Copy className="mr-1 h-3.5 w-3.5" />
+                                                Copy link
+                                              </Button>
+                                            </div>
+                                            <div className="mt-2 flex flex-wrap gap-2">
+                                              <Button
+                                                type="button"
+                                                size="sm"
+                                                variant="outline"
+                                                onClick={() =>
+                                                  downloadSocialQrGraphic({
+                                                    title: target.title,
+                                                    subtitle: target.subtitle,
+                                                    cta: target.cta,
+                                                    targetUrl: target.targetUrl,
+                                                    filename: `${target.id}-social-square-${selectedRestaurant}.png`,
+                                                    format: "square",
+                                                  })
+                                                }
+                                              >
+                                                <Download className="mr-1 h-3.5 w-3.5" />
+                                                Download Square
+                                              </Button>
+                                              <Button
+                                                type="button"
+                                                size="sm"
+                                                variant="outline"
+                                                onClick={() =>
+                                                  downloadSocialQrGraphic({
+                                                    title: target.title,
+                                                    subtitle: target.subtitle,
+                                                    cta: target.cta,
+                                                    targetUrl: target.targetUrl,
+                                                    filename: `${target.id}-social-story-${selectedRestaurant}.png`,
+                                                    format: "story",
+                                                  })
+                                                }
+                                              >
+                                                <Download className="mr-1 h-3.5 w-3.5" />
+                                                Download Story
+                                              </Button>
+                                              <Button
+                                                type="button"
+                                                size="sm"
+                                                variant="outline"
+                                                onClick={() =>
+                                                  downloadSocialQrGraphic({
+                                                    title: target.title,
+                                                    subtitle: target.subtitle,
+                                                    cta: target.cta,
+                                                    targetUrl: target.targetUrl,
+                                                    filename: `${target.id}-social-portrait-${selectedRestaurant}.png`,
+                                                    format: "portrait",
+                                                  })
+                                                }
+                                              >
+                                                <Download className="mr-1 h-3.5 w-3.5" />
+                                                Download Portrait
+                                              </Button>
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  ) : null}
+                                </div>
+                              </div>
+                            );
+                          })()}
+                          <p className="mt-3 text-[11px] text-orange-900/75">
+                            Print guidance: use Profile QR for window signage,
+                            Menu QR for table tents, Specials QR for daily
+                            promos, and the truck card at your counter or
+                            service window.
+                          </p>
+                        </div>
+                      ) : null}
+
+                      <div
+                        id="profile-completion-details"
+                        className="rounded-lg border border-border p-4 scroll-mt-24"
+                      >
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-semibold">
+                              Profile value
+                            </p>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              Real customer actions from your public MealScout
+                              profile.
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2">
                             <Button
                               type="button"
                               size="sm"
-                              variant="outline"
-                              onClick={async () => {
-                                if (!publicProfilePath) return;
-                                const shareUrl =
-                                  await resolveCanonicalShareUrl(publicProfilePath);
-                                await navigator.clipboard.writeText(shareUrl);
-                                toast({
-                                  title: "Profile link copied",
-                                  description: "Canonical public profile link copied to clipboard.",
-                                });
-                              }}
+                              variant={
+                                ownerValueWindow === "7d"
+                                  ? "default"
+                                  : "outline"
+                              }
+                              onClick={() => setOwnerValueWindow("7d")}
                             >
-                              Copy public profile link
+                              7 days
                             </Button>
-                          ) : (
-                            <Button type="button" size="sm" variant="outline" disabled>
-                              No public profile yet
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant={
+                                ownerValueWindow === "30d"
+                                  ? "default"
+                                  : "outline"
+                              }
+                              onClick={() => setOwnerValueWindow("30d")}
+                            >
+                              30 days
                             </Button>
-                          )}
-                        </div>
-                        <div className="mt-4 rounded-md border border-border bg-background p-3">
-                          <p className="text-sm font-semibold">Profile completion loop</p>
-                          {isMenuGatedFromScoutDiscoverability ? (
-                            <div className="mt-2 rounded-md border border-amber-300 bg-amber-50 p-2">
-                              <p className="text-xs font-semibold text-amber-900">
-                                Not discoverable in Scout yet.
-                              </p>
-                              <p className="mt-1 text-xs text-amber-800">
-                                Add at least one menu item so customers can discover your business.
-                              </p>
-                            </div>
-                          ) : null}
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            Complete profiles are easier for people to evaluate when they find you through MealScout.
-                          </p>
-                          <p className="mt-2 text-xs text-muted-foreground">
-                            Profile strength: {profileStrength}/{completionItems.length}
-                          </p>
-                          {missingCompletionItems.length ? (
-                            <div className="mt-2 space-y-2">
-                              {missingCompletionItems.slice(0, 4).map((item) => (
-                                <div key={item.id} className="rounded border border-border p-2">
-                                  <p className="text-sm font-medium">{item.label}</p>
-                                  <p className="text-xs text-muted-foreground">{item.why}</p>
-                                </div>
-                              ))}
-                              <Link href={nextCompletionCta}>
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  className="mt-1"
-                                  onClick={() =>
-                                    void trackOwnerCompletionAction({
-                                      entityId: String(selectedRestaurant),
-                                      entityType: currentPublicEntityType as "restaurant" | "truck" | "bar",
-                                      missingItemKey: String(missingCompletionItems[0]?.id || "menu"),
-                                    })
-                                  }
-                                >
-                                  Update next missing item
-                                </Button>
-                              </Link>
-                            </div>
-                          ) : (
-                            <p className="mt-2 text-xs text-muted-foreground">
-                              Profile completion looks strong. Keep details current as your business updates.
-                            </p>
-                          )}
-                          <div className="mt-3 rounded border border-border p-2">
-                            <p className="text-xs font-semibold">Profile actions taken</p>
-                            {(completionActions || []).length ? (
-                              <div className="mt-1 space-y-1 text-xs text-muted-foreground">
-                                {completionActions.slice(0, 3).map((action) => (
-                                  <p key={`completion-empty-${action.missingItemKey}`}>
-                                    {completionActionLabels[action.missingItemKey] || `${action.missingItemKey} update clicked`} — {Number(action.count || 0)}
-                                  </p>
-                                ))}
-                              </div>
-                            ) : (
-                              <p className="mt-1 text-xs text-muted-foreground">
-                                No completion actions recorded yet.
-                              </p>
-                            )}
-                          </div>
-                          <div className="mt-3 rounded border border-border p-2">
-                            <p className="text-xs font-semibold">Completion outcomes after clicks</p>
-                            {(completionReconciliation || []).length ? (
-                              <div className="mt-1 space-y-1 text-xs text-muted-foreground">
-                                {completionReconciliation.slice(0, 3).map((action) => (
-                                  <p key={`completion-outcome-empty-${action.missingItemKey}`}>
-                                    {String(action.missingItemKey)}: clicked {Number(action.clicked || 0)} • now complete {Number(action.nowComplete || 0)} • still missing {Number(action.stillMissing || 0)}
-                                  </p>
-                                ))}
-                              </div>
-                            ) : (
-                              <p className="mt-1 text-xs text-muted-foreground">
-                                No completion outcomes recorded yet.
-                              </p>
-                            )}
                           </div>
                         </div>
-                      </div>
-                    );
-                  }
-
-                  return (
-                    <>
-                      <div className="mt-3 rounded-md border border-border p-2.5">
-                        <p className="text-[11px] text-muted-foreground">Entity</p>
-                        <p className="text-base font-semibold">
-                          {currentRestaurant?.name || "Owned profile"}
+                        <p className="mt-2 text-[11px] text-muted-foreground">
+                          {ownerValueAttribution?.generatedAt
+                            ? `Last updated ${new Date(ownerValueAttribution.generatedAt).toLocaleString()}`
+                            : "Last updated just now"}
                         </p>
-                        <p className="mt-0.5 text-[11px] text-muted-foreground">
-                          {String(totals.entityType || currentPublicEntityType)}
-                        </p>
-                      </div>
-                      <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                        {[
-                          ["Profile views", Number(totals.profileViews || 0)],
-                          ["Discovery impressions", Number(totals.discoveryImpressions || 0)],
-                          ["CTA clicks", Number(totals.ctaClicks || 0)],
-                          ["Share opens", Number(totals.shareOpens || 0)],
-                          ["High-intent actions", Number(totals.highIntentActions || 0)],
-                        ].map(([label, count]) => (
-                          <div key={String(label)} className="rounded-md border border-border p-2.5">
-                            <p className="text-[11px] text-muted-foreground">{String(label)}</p>
-                            <p className="text-base font-semibold">{Number(count)}</p>
-                          </div>
-                        ))}
-                        <div className="rounded-md border border-border p-2.5">
-                          <p className="text-[11px] text-muted-foreground">Last activity</p>
-                          <p className="text-base font-semibold">
-                            {totals.lastActivityAt
-                              ? new Date(totals.lastActivityAt).toLocaleString()
-                              : "No activity yet"}
-                          </p>
-                        </div>
-                      </div>
 
-                      <div className="mt-3 grid gap-3 lg:grid-cols-2">
-                        <div className="rounded-md border border-border p-3">
-                          <p className="text-sm font-semibold">Top sources</p>
-                          <div className="mt-2 space-y-1.5 text-sm">
-                            {(totals.topSources || []).length ? (
-                              (totals.topSources || []).map(
-                                (item: any, idx: number) => (
-                                  <p key={`${item.source}-${idx}`}>
-                                    {idx + 1}. {String(item.source || "unknown")} - {Number(item.count || 0)}
-                                  </p>
-                                ),
-                              )
-                            ) : (
-                              <p className="text-muted-foreground">No top sources yet.</p>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="rounded-md border border-border p-3">
-                          <p className="text-sm font-semibold">Attribution summary</p>
-                          <div className="mt-2 space-y-2">
-                            <p className="text-sm text-muted-foreground">
-                              Discovery traffic and profile actions are shown from real activity only.
-                            </p>
-                            <p className="text-sm text-muted-foreground">
-                              Completing your menu, photos, and action links helps people take the next step when they discover your profile.
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              Window: {ownerValueWindow === "7d" ? "Last 7 days" : "Last 30 days"}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              Use this panel weekly to track what changed and decide your next profile update.
-                            </p>
-                          </div>
-                          <div className="mt-3 flex flex-wrap gap-2">
-                            <Link
-                              href={`/restaurant-owner-dashboard?setup=profile&restaurantId=${encodeURIComponent(String(selectedRestaurant))}`}
-                            >
-                              <Button type="button" size="sm">
-                                Complete profile basics
-                              </Button>
-                            </Link>
-                            <Link
-                              href={`/restaurant-owner-dashboard?setup=menu&restaurantId=${encodeURIComponent(String(selectedRestaurant))}`}
-                            >
-                              <Button type="button" size="sm" variant="outline">
-                                Update menu and links
-                              </Button>
-                            </Link>
-                          </div>
-                        </div>
-                        <div className="rounded-md border border-border p-3">
-                          <p className="text-sm font-semibold">Profile completion loop</p>
-                          {isMenuGatedFromScoutDiscoverability ? (
-                            <div className="mt-2 rounded-md border border-amber-300 bg-amber-50 p-2">
-                              <p className="text-xs font-semibold text-amber-900">
-                                Not discoverable in Scout yet.
-                              </p>
-                              <p className="mt-1 text-xs text-amber-800">
-                                Add at least one menu item so customers can discover your business.
-                              </p>
-                            </div>
-                          ) : null}
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            Complete profiles are easier for people to evaluate when they find you through MealScout.
-                          </p>
-                          <p className="mt-2 text-xs text-muted-foreground">
-                            Profile strength: {profileStrength}/{completionItems.length}
-                          </p>
-                          {missingCompletionItems.length ? (
-                            <div className="mt-2 space-y-2">
-                              {missingCompletionItems.slice(0, 5).map((item) => (
-                                <div key={item.id} className="rounded border border-border p-2">
-                                  <p className="text-sm font-medium">{item.label}</p>
-                                  <p className="text-xs text-muted-foreground">{item.why}</p>
+                        {(() => {
+                          if (loadingOwnerValueAttribution) {
+                            return (
+                              <div className="mt-3 rounded-md border border-border p-4">
+                                <p className="text-sm text-muted-foreground">
+                                  Loading owner analytics...
+                                </p>
+                              </div>
+                            );
+                          }
+                          if (ownerValueAttributionError) {
+                            return (
+                              <div className="mt-3 rounded-md border border-border p-4">
+                                <p className="text-sm font-medium">
+                                  Owner analytics could not be loaded right now.
+                                </p>
+                              </div>
+                            );
+                          }
+                          const entities = Array.isArray(
+                            ownerValueAttribution?.entities,
+                          )
+                            ? ownerValueAttribution.entities
+                            : [];
+                          const selectedEntity = entities.find(
+                            (item) =>
+                              String(item.entityId) ===
+                              String(selectedRestaurant),
+                          ) as OwnerValueAttributionEntity | undefined;
+                          const fallbackEntity = entities[0] as
+                            OwnerValueAttributionEntity | undefined;
+                          const entity = selectedEntity || fallbackEntity;
+                          const totals = entity || {
+                            profileViews: 0,
+                            discoveryImpressions: 0,
+                            ctaClicks: 0,
+                            shareOpens: 0,
+                            highIntentActions: 0,
+                            topSources: [],
+                            lastActivityAt: null,
+                            entityType: currentPublicEntityType,
+                            entityId: selectedRestaurant,
+                          };
+                          const hasAnyData =
+                            Number(totals.profileViews || 0) > 0 ||
+                            Number(totals.discoveryImpressions || 0) > 0 ||
+                            Number(totals.ctaClicks || 0) > 0 ||
+                            Number(totals.shareOpens || 0) > 0 ||
+                            Number(totals.highIntentActions || 0) > 0;
+                          const completionStatus =
+                            computeProfileCompletionStatus(
+                              currentRestaurant as any,
+                              {
+                                hasActiveDeal:
+                                  Number(stats?.activeDeals || 0) > 0,
+                              },
+                            );
+                          const canonicalMenuItemCount = Math.max(
+                            Number(
+                              (currentRestaurant as any)?.menuItemCount || 0,
+                            ),
+                            Number(
+                              (currentRestaurant as any)?.publicMenuItemCount ||
+                                0,
+                            ),
+                          );
+                          const isMenuGatedFromScoutDiscoverability =
+                            canonicalMenuItemCount <= 0;
+                          const completionItems = [
+                            {
+                              id: "menu",
+                              label: "Menu missing",
+                              why: "Customers need a menu to decide quickly.",
+                              done: Boolean(completionStatus.menu),
+                              href: `/menu-builder?restaurantId=${encodeURIComponent(String(selectedRestaurant))}`,
+                            },
+                            {
+                              id: "photos",
+                              label: "Photos missing",
+                              why: "Photos help people trust what they are choosing.",
+                              done: Boolean(completionStatus.photos),
+                              href: `/restaurant-owner-dashboard?setup=profile-media&restaurantId=${encodeURIComponent(String(selectedRestaurant))}`,
+                            },
+                            {
+                              id: "hours",
+                              label: "Business hours missing",
+                              why: "People act faster when they know if you are open.",
+                              done: Boolean(completionStatus.hours),
+                              href: `/restaurant-owner-dashboard?setup=schedule&restaurantId=${encodeURIComponent(String(selectedRestaurant))}`,
+                            },
+                            {
+                              id: "service-area",
+                              label: "Service area missing",
+                              why: "A clear location helps direction and pickup decisions.",
+                              done: Boolean(completionStatus["service-area"]),
+                              href: `/restaurant-owner-dashboard?setup=profile&restaurantId=${encodeURIComponent(String(selectedRestaurant))}`,
+                            },
+                            {
+                              id: "contact",
+                              label: "Contact method missing",
+                              why: "Calls and direct actions need an obvious contact path.",
+                              done: Boolean(completionStatus.contact),
+                              href: `/restaurant-owner-dashboard?setup=profile&restaurantId=${encodeURIComponent(String(selectedRestaurant))}`,
+                            },
+                            {
+                              id: "social",
+                              label: "Social link missing",
+                              why: "Social links help discovery visitors follow and return.",
+                              done: Boolean(completionStatus.social),
+                              href: `/restaurant-owner-dashboard?setup=profile&restaurantId=${encodeURIComponent(String(selectedRestaurant))}`,
+                            },
+                            {
+                              id: "catering-events",
+                              label: "Catering/private event info missing",
+                              why: "Private event details create another high-intent action path.",
+                              done: Boolean(
+                                completionStatus["catering-events"],
+                              ),
+                              href: "/events",
+                            },
+                            {
+                              id: "deal",
+                              label: "Deal/special missing",
+                              why: "Current offers give people a reason to choose you today.",
+                              done: Boolean(completionStatus.deal),
+                              href: "/deal-creation",
+                            },
+                          ];
+                          const profileStrength = completionItems.filter(
+                            (item) => item.done,
+                          ).length;
+                          const missingCompletionItems = completionItems.filter(
+                            (item) => !item.done,
+                          );
+                          const nextCompletionCta =
+                            missingCompletionItems[0]?.href ||
+                            `/restaurant-owner-dashboard?setup=profile&restaurantId=${encodeURIComponent(String(selectedRestaurant))}`;
+                          const completionActionLabels: Record<string, string> =
+                            {
+                              menu: "Menu update clicked",
+                              photos: "Photos update clicked",
+                              hours: "Hours update clicked",
+                              "service-area": "Service area update clicked",
+                              contact: "Contact method update clicked",
+                              social: "Social link update clicked",
+                              "catering-events":
+                                "Catering/events update clicked",
+                              deal: "Deal/special update clicked",
+                            };
+                          const completionActions = Array.isArray(
+                            (totals as any).completionActions,
+                          )
+                            ? ((totals as any).completionActions as Array<{
+                                missingItemKey: string;
+                                count: number;
+                              }>)
+                            : [];
+                          const completionReconciliation = Array.isArray(
+                            (totals as any).completionActionReconciliation,
+                          )
+                            ? ((totals as any)
+                                .completionActionReconciliation as Array<{
+                                missingItemKey: string;
+                                clicked: number;
+                                nowComplete: number;
+                                stillMissing: number;
+                              }>)
+                            : [];
+                          if (!hasAnyData) {
+                            const publicProfilePath = (() => {
+                              const canonicalUrl = String(
+                                publicProfileForQr?.seo?.canonicalUrl || "",
+                              ).trim();
+                              if (!canonicalUrl) return null;
+                              try {
+                                const url = new URL(
+                                  canonicalUrl,
+                                  window.location.origin,
+                                );
+                                const path = `${url.pathname}${url.search}${url.hash}`;
+                                return path.startsWith("/p/") ? path : null;
+                              } catch {
+                                return canonicalUrl.startsWith("/p/")
+                                  ? canonicalUrl
+                                  : null;
+                              }
+                            })();
+                            const hasPublicProfile = Boolean(publicProfilePath);
+                            return (
+                              <div className="mt-3 rounded-md border border-dashed border-border p-4">
+                                <p className="text-sm font-medium">
+                                  No discovery activity yet.
+                                </p>
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                  Your profile is ready to receive views,
+                                  clicks, and shares as people find you through
+                                  MealScout.
+                                </p>
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                  <Link
+                                    href={`/restaurant-owner-dashboard?setup=profile&restaurantId=${encodeURIComponent(String(selectedRestaurant))}`}
+                                  >
+                                    <Button type="button" size="sm">
+                                      Open QR Kit
+                                    </Button>
+                                  </Link>
+                                  {hasPublicProfile ? (
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={async () => {
+                                        if (!publicProfilePath) return;
+                                        const shareUrl =
+                                          await resolveCanonicalShareUrl(
+                                            publicProfilePath,
+                                          );
+                                        await navigator.clipboard.writeText(
+                                          shareUrl,
+                                        );
+                                        toast({
+                                          title: "Profile link copied",
+                                          description:
+                                            "Canonical public profile link copied to clipboard.",
+                                        });
+                                      }}
+                                    >
+                                      Copy public profile link
+                                    </Button>
+                                  ) : (
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      variant="outline"
+                                      disabled
+                                    >
+                                      No public profile yet
+                                    </Button>
+                                  )}
                                 </div>
-                              ))}
-                              <Link href={nextCompletionCta}>
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  className="mt-1"
-                                  onClick={() =>
-                                    void trackOwnerCompletionAction({
-                                      entityId: String(selectedRestaurant),
-                                      entityType: currentPublicEntityType as "restaurant" | "truck" | "bar",
-                                      missingItemKey: String(missingCompletionItems[0]?.id || "menu"),
-                                    })
-                                  }
-                                >
-                                  Update next missing item
-                                </Button>
-                              </Link>
-                            </div>
-                          ) : (
-                            <p className="mt-2 text-xs text-muted-foreground">
-                              Profile completion looks strong. Keep details current as your business updates.
-                            </p>
-                          )}
-                          <div className="mt-3 rounded border border-border p-2">
-                            <p className="text-xs font-semibold">Profile actions taken</p>
-                            {(completionActions || []).length ? (
-                              <div className="mt-1 space-y-1 text-xs text-muted-foreground">
-                                {completionActions.slice(0, 5).map((action) => (
-                                  <p key={`completion-data-${action.missingItemKey}`}>
-                                    {completionActionLabels[action.missingItemKey] || `${action.missingItemKey} update clicked`} — {Number(action.count || 0)}
+                                <div className="mt-4 rounded-md border border-border bg-background p-3">
+                                  <p className="text-sm font-semibold">
+                                    Profile completion loop
                                   </p>
-                                ))}
-                              </div>
-                            ) : (
-                              <p className="mt-1 text-xs text-muted-foreground">
-                                No completion actions recorded yet.
-                              </p>
-                            )}
-                          </div>
-                          <div className="mt-3 rounded border border-border p-2">
-                            <p className="text-xs font-semibold">Completion outcomes after clicks</p>
-                            {(completionReconciliation || []).length ? (
-                              <div className="mt-1 space-y-1 text-xs text-muted-foreground">
-                                {completionReconciliation.slice(0, 5).map((action) => (
-                                  <p key={`completion-outcome-data-${action.missingItemKey}`}>
-                                    {String(action.missingItemKey)}: clicked {Number(action.clicked || 0)} • now complete {Number(action.nowComplete || 0)} • still missing {Number(action.stillMissing || 0)}
+                                  {isMenuGatedFromScoutDiscoverability ? (
+                                    <div className="mt-2 rounded-md border border-amber-300 bg-amber-50 p-2">
+                                      <p className="text-xs font-semibold text-amber-900">
+                                        Not discoverable in Scout yet.
+                                      </p>
+                                      <p className="mt-1 text-xs text-amber-800">
+                                        Add at least one menu item so customers
+                                        can discover your business.
+                                      </p>
+                                    </div>
+                                  ) : null}
+                                  <p className="mt-1 text-xs text-muted-foreground">
+                                    Complete profiles are easier for people to
+                                    evaluate when they find you through
+                                    MealScout.
                                   </p>
-                                ))}
+                                  <p className="mt-2 text-xs text-muted-foreground">
+                                    Profile strength: {profileStrength}/
+                                    {completionItems.length}
+                                  </p>
+                                  {missingCompletionItems.length ? (
+                                    <div className="mt-2 space-y-2">
+                                      {missingCompletionItems
+                                        .slice(0, 4)
+                                        .map((item) => (
+                                          <div
+                                            key={item.id}
+                                            className="rounded border border-border p-2"
+                                          >
+                                            <p className="text-sm font-medium">
+                                              {item.label}
+                                            </p>
+                                            <p className="text-xs text-muted-foreground">
+                                              {item.why}
+                                            </p>
+                                          </div>
+                                        ))}
+                                      <Link href={nextCompletionCta}>
+                                        <Button
+                                          type="button"
+                                          size="sm"
+                                          className="mt-1"
+                                          onClick={() =>
+                                            void trackOwnerCompletionAction({
+                                              entityId:
+                                                String(selectedRestaurant),
+                                              entityType:
+                                                currentPublicEntityType as
+                                                  | "restaurant"
+                                                  | "truck"
+                                                  | "bar",
+                                              missingItemKey: String(
+                                                missingCompletionItems[0]?.id ||
+                                                  "menu",
+                                              ),
+                                            })
+                                          }
+                                        >
+                                          Update next missing item
+                                        </Button>
+                                      </Link>
+                                    </div>
+                                  ) : (
+                                    <p className="mt-2 text-xs text-muted-foreground">
+                                      Profile completion looks strong. Keep
+                                      details current as your business updates.
+                                    </p>
+                                  )}
+                                  <div className="mt-3 rounded border border-border p-2">
+                                    <p className="text-xs font-semibold">
+                                      Profile actions taken
+                                    </p>
+                                    {(completionActions || []).length ? (
+                                      <div className="mt-1 space-y-1 text-xs text-muted-foreground">
+                                        {completionActions
+                                          .slice(0, 3)
+                                          .map((action) => (
+                                            <p
+                                              key={`completion-empty-${action.missingItemKey}`}
+                                            >
+                                              {completionActionLabels[
+                                                action.missingItemKey
+                                              ] ||
+                                                `${action.missingItemKey} update clicked`}{" "}
+                                              — {Number(action.count || 0)}
+                                            </p>
+                                          ))}
+                                      </div>
+                                    ) : (
+                                      <p className="mt-1 text-xs text-muted-foreground">
+                                        No completion actions recorded yet.
+                                      </p>
+                                    )}
+                                  </div>
+                                  <div className="mt-3 rounded border border-border p-2">
+                                    <p className="text-xs font-semibold">
+                                      Completion outcomes after clicks
+                                    </p>
+                                    {(completionReconciliation || []).length ? (
+                                      <div className="mt-1 space-y-1 text-xs text-muted-foreground">
+                                        {completionReconciliation
+                                          .slice(0, 3)
+                                          .map((action) => (
+                                            <p
+                                              key={`completion-outcome-empty-${action.missingItemKey}`}
+                                            >
+                                              {String(action.missingItemKey)}:
+                                              clicked{" "}
+                                              {Number(action.clicked || 0)} •
+                                              now complete{" "}
+                                              {Number(action.nowComplete || 0)}{" "}
+                                              • still missing{" "}
+                                              {Number(action.stillMissing || 0)}
+                                            </p>
+                                          ))}
+                                      </div>
+                                    ) : (
+                                      <p className="mt-1 text-xs text-muted-foreground">
+                                        No completion outcomes recorded yet.
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
                               </div>
-                            ) : (
-                              <p className="mt-1 text-xs text-muted-foreground">
-                                No completion outcomes recorded yet.
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </>
-                  );
-                })()}
-              </div>
-            </div>
-          ) : setupMode === "menu" ? (
-            <div
-              ref={setupPanelRef}
-              className="mt-4 scroll-mt-64 rounded-xl border border-orange-200 bg-white p-4 lg:scroll-mt-6"
-            >
-              <h3 className="text-sm font-black uppercase tracking-[0.14em] text-orange-800">
-                MealScout menu builder
-              </h3>
-              <p className="mt-1 text-xs text-orange-900/75">
-                Add menu items directly in MealScout. External menu URLs are optional and do not replace this setup step.
-              </p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <Link href={menuBuilderHref}>
-                  <Button>Open menu builder</Button>
-                </Link>
-                <Link href={buildOwnerSetupHref("profile")}>
-                  <Button variant="outline">Back to profile basics</Button>
-                </Link>
-              </div>
-            </div>
-          ) : null}
-        </div>
-      )}
+                            );
+                          }
 
-      {/* Post-Upgrade Onboarding Checklist — shown to subscribed users until all items are complete */}
-      {activeWorkspaceModule === "overview" &&
-        subscription?.hasAccess &&
-        currentRestaurant &&
-        (() => {
-          const hasBasics = Boolean(
-            (currentRestaurant as any).name &&
+                          return (
+                            <>
+                              <div className="mt-3 rounded-md border border-border p-2.5">
+                                <p className="text-[11px] text-muted-foreground">
+                                  Entity
+                                </p>
+                                <p className="text-base font-semibold">
+                                  {currentRestaurant?.name || "Owned profile"}
+                                </p>
+                                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                                  {String(
+                                    totals.entityType ||
+                                      currentPublicEntityType,
+                                  )}
+                                </p>
+                              </div>
+                              <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                                {[
+                                  [
+                                    "Profile views",
+                                    Number(totals.profileViews || 0),
+                                  ],
+                                  [
+                                    "Discovery impressions",
+                                    Number(totals.discoveryImpressions || 0),
+                                  ],
+                                  ["CTA clicks", Number(totals.ctaClicks || 0)],
+                                  [
+                                    "Share opens",
+                                    Number(totals.shareOpens || 0),
+                                  ],
+                                  [
+                                    "High-intent actions",
+                                    Number(totals.highIntentActions || 0),
+                                  ],
+                                ].map(([label, count]) => (
+                                  <div
+                                    key={String(label)}
+                                    className="rounded-md border border-border p-2.5"
+                                  >
+                                    <p className="text-[11px] text-muted-foreground">
+                                      {String(label)}
+                                    </p>
+                                    <p className="text-base font-semibold">
+                                      {Number(count)}
+                                    </p>
+                                  </div>
+                                ))}
+                                <div className="rounded-md border border-border p-2.5">
+                                  <p className="text-[11px] text-muted-foreground">
+                                    Last activity
+                                  </p>
+                                  <p className="text-base font-semibold">
+                                    {totals.lastActivityAt
+                                      ? new Date(
+                                          totals.lastActivityAt,
+                                        ).toLocaleString()
+                                      : "No activity yet"}
+                                  </p>
+                                </div>
+                              </div>
+
+                              <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                                <div className="rounded-md border border-border p-3">
+                                  <p className="text-sm font-semibold">
+                                    Top sources
+                                  </p>
+                                  <div className="mt-2 space-y-1.5 text-sm">
+                                    {(totals.topSources || []).length ? (
+                                      (totals.topSources || []).map(
+                                        (item: any, idx: number) => (
+                                          <p key={`${item.source}-${idx}`}>
+                                            {idx + 1}.{" "}
+                                            {String(item.source || "unknown")} -{" "}
+                                            {Number(item.count || 0)}
+                                          </p>
+                                        ),
+                                      )
+                                    ) : (
+                                      <p className="text-muted-foreground">
+                                        No top sources yet.
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div className="rounded-md border border-border p-3">
+                                  <p className="text-sm font-semibold">
+                                    Attribution summary
+                                  </p>
+                                  <div className="mt-2 space-y-2">
+                                    <p className="text-sm text-muted-foreground">
+                                      Discovery traffic and profile actions are
+                                      shown from real activity only.
+                                    </p>
+                                    <p className="text-sm text-muted-foreground">
+                                      Completing your menu, photos, and action
+                                      links helps people take the next step when
+                                      they discover your profile.
+                                    </p>
+                                    <p className="text-xs text-muted-foreground">
+                                      Window:{" "}
+                                      {ownerValueWindow === "7d"
+                                        ? "Last 7 days"
+                                        : "Last 30 days"}
+                                    </p>
+                                    <p className="text-xs text-muted-foreground">
+                                      Use this panel weekly to track what
+                                      changed and decide your next profile
+                                      update.
+                                    </p>
+                                  </div>
+                                  <div className="mt-3 flex flex-wrap gap-2">
+                                    <Link
+                                      href={`/restaurant-owner-dashboard?setup=profile&restaurantId=${encodeURIComponent(String(selectedRestaurant))}`}
+                                    >
+                                      <Button type="button" size="sm">
+                                        Complete profile basics
+                                      </Button>
+                                    </Link>
+                                    <Link
+                                      href={`/restaurant-owner-dashboard?setup=menu&restaurantId=${encodeURIComponent(String(selectedRestaurant))}`}
+                                    >
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                      >
+                                        Update menu and links
+                                      </Button>
+                                    </Link>
+                                  </div>
+                                </div>
+                                <div className="rounded-md border border-border p-3">
+                                  <p className="text-sm font-semibold">
+                                    Profile completion loop
+                                  </p>
+                                  {isMenuGatedFromScoutDiscoverability ? (
+                                    <div className="mt-2 rounded-md border border-amber-300 bg-amber-50 p-2">
+                                      <p className="text-xs font-semibold text-amber-900">
+                                        Not discoverable in Scout yet.
+                                      </p>
+                                      <p className="mt-1 text-xs text-amber-800">
+                                        Add at least one menu item so customers
+                                        can discover your business.
+                                      </p>
+                                    </div>
+                                  ) : null}
+                                  <p className="mt-1 text-xs text-muted-foreground">
+                                    Complete profiles are easier for people to
+                                    evaluate when they find you through
+                                    MealScout.
+                                  </p>
+                                  <p className="mt-2 text-xs text-muted-foreground">
+                                    Profile strength: {profileStrength}/
+                                    {completionItems.length}
+                                  </p>
+                                  {missingCompletionItems.length ? (
+                                    <div className="mt-2 space-y-2">
+                                      {missingCompletionItems
+                                        .slice(0, 5)
+                                        .map((item) => (
+                                          <div
+                                            key={item.id}
+                                            className="rounded border border-border p-2"
+                                          >
+                                            <p className="text-sm font-medium">
+                                              {item.label}
+                                            </p>
+                                            <p className="text-xs text-muted-foreground">
+                                              {item.why}
+                                            </p>
+                                          </div>
+                                        ))}
+                                      <Link href={nextCompletionCta}>
+                                        <Button
+                                          type="button"
+                                          size="sm"
+                                          className="mt-1"
+                                          onClick={() =>
+                                            void trackOwnerCompletionAction({
+                                              entityId:
+                                                String(selectedRestaurant),
+                                              entityType:
+                                                currentPublicEntityType as
+                                                  | "restaurant"
+                                                  | "truck"
+                                                  | "bar",
+                                              missingItemKey: String(
+                                                missingCompletionItems[0]?.id ||
+                                                  "menu",
+                                              ),
+                                            })
+                                          }
+                                        >
+                                          Update next missing item
+                                        </Button>
+                                      </Link>
+                                    </div>
+                                  ) : (
+                                    <p className="mt-2 text-xs text-muted-foreground">
+                                      Profile completion looks strong. Keep
+                                      details current as your business updates.
+                                    </p>
+                                  )}
+                                  <div className="mt-3 rounded border border-border p-2">
+                                    <p className="text-xs font-semibold">
+                                      Profile actions taken
+                                    </p>
+                                    {(completionActions || []).length ? (
+                                      <div className="mt-1 space-y-1 text-xs text-muted-foreground">
+                                        {completionActions
+                                          .slice(0, 5)
+                                          .map((action) => (
+                                            <p
+                                              key={`completion-data-${action.missingItemKey}`}
+                                            >
+                                              {completionActionLabels[
+                                                action.missingItemKey
+                                              ] ||
+                                                `${action.missingItemKey} update clicked`}{" "}
+                                              — {Number(action.count || 0)}
+                                            </p>
+                                          ))}
+                                      </div>
+                                    ) : (
+                                      <p className="mt-1 text-xs text-muted-foreground">
+                                        No completion actions recorded yet.
+                                      </p>
+                                    )}
+                                  </div>
+                                  <div className="mt-3 rounded border border-border p-2">
+                                    <p className="text-xs font-semibold">
+                                      Completion outcomes after clicks
+                                    </p>
+                                    {(completionReconciliation || []).length ? (
+                                      <div className="mt-1 space-y-1 text-xs text-muted-foreground">
+                                        {completionReconciliation
+                                          .slice(0, 5)
+                                          .map((action) => (
+                                            <p
+                                              key={`completion-outcome-data-${action.missingItemKey}`}
+                                            >
+                                              {String(action.missingItemKey)}:
+                                              clicked{" "}
+                                              {Number(action.clicked || 0)} •
+                                              now complete{" "}
+                                              {Number(action.nowComplete || 0)}{" "}
+                                              • still missing{" "}
+                                              {Number(action.stillMissing || 0)}
+                                            </p>
+                                          ))}
+                                      </div>
+                                    ) : (
+                                      <p className="mt-1 text-xs text-muted-foreground">
+                                        No completion outcomes recorded yet.
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </>
+                          );
+                        })()}
+                      </div>
+                    </div>
+                  </details>
+                ) : null}
+              </div>
+            ) : setupMode === "menu" ? (
+              <div
+                ref={setupPanelRef}
+                className="mt-4 scroll-mt-64 rounded-xl border border-orange-200 bg-white p-4 lg:scroll-mt-6"
+              >
+                <h3 className="text-sm font-black uppercase tracking-[0.14em] text-orange-800">
+                  MealScout menu builder
+                </h3>
+                <p className="mt-1 text-xs text-orange-900/75">
+                  Add menu items directly in MealScout. External menu URLs are
+                  optional and do not replace this setup step.
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Link href={menuBuilderHref}>
+                    <Button>Open menu builder</Button>
+                  </Link>
+                  <Link href={buildOwnerSetupHref("profile")}>
+                    <Button variant="outline">Back to profile basics</Button>
+                  </Link>
+                </div>
+              </div>
+            ) : null}
+          </div>
+        )}
+
+        {/* Post-Upgrade Onboarding Checklist — shown to subscribed users until all items are complete */}
+        {activeWorkspaceModule === "overview" &&
+          subscription?.hasAccess &&
+          currentRestaurant &&
+          (() => {
+            const hasBasics = Boolean(
+              (currentRestaurant as any).name &&
               ((currentRestaurant as any).description ||
                 (currentRestaurant as any).cuisineType ||
                 (currentRestaurant as any).businessType),
-          );
-          const hasPhoto = Boolean(
-            (currentRestaurant as any).imageUrl ||
+            );
+            const hasPhoto = Boolean(
+              (currentRestaurant as any).imageUrl ||
               (currentRestaurant as any).logoUrl ||
               (currentRestaurant as any).coverImageUrl ||
-              (((currentRestaurant as any)?.socialAutopostSettings &&
+              (
+                ((currentRestaurant as any)?.socialAutopostSettings &&
                 Array.isArray(
                   (currentRestaurant as any).socialAutopostSettings
                     .publicGalleryImages,
                 )
-                ? (currentRestaurant as any).socialAutopostSettings
-                    .publicGalleryImages
-                : []) as any[]).some((image: any) => {
+                  ? (currentRestaurant as any).socialAutopostSettings
+                      .publicGalleryImages
+                  : []) as any[]
+              ).some((image: any) => {
                 if (!image) return false;
                 const approved = Boolean(image.publicApproved);
                 return approved && Boolean(String(image.url || "").trim());
               }) ||
-              ((currentRestaurant as any).galleryImages || []).some((image: any) => {
-                if (!image) return false;
-                if (typeof image === "string") return Boolean(image.trim());
-                const approved =
-                  image.publicApproved === undefined
-                    ? true
-                    : Boolean(image.publicApproved);
-                return approved && Boolean(String(image.url || image.imageUrl || "").trim());
-              }),
-          );
-          const hasMenu = Boolean(
-            (currentRestaurant as any).menuUrl ||
-            (currentRestaurant as any).hasMenu ||
-            (currentRestaurant as any).menuImageUrl ||
-            (currentRestaurant as any).menuPdfUrl ||
-            (currentRestaurant as any).featuredMenuItems?.length ||
-            Number((currentRestaurant as any).menuItemCount || 0) > 0 ||
-            Number((currentRestaurant as any).publicMenuItemCount || 0) > 0,
-          );
-          const hasAddress = Boolean(
-            (currentRestaurant as any).address ||
-            (currentRestaurant as any).city,
-          );
-          const hasPhone = Boolean(
-            (currentRestaurant as any).phone ||
-            (currentRestaurant as any).contactPhone,
-          );
-          const profileActionLinks =
-            (currentRestaurant as any)?.socialAutopostSettings &&
-            typeof (currentRestaurant as any).socialAutopostSettings === "object" &&
-            typeof (currentRestaurant as any).socialAutopostSettings.publicActionLinks ===
-              "object"
-              ? (currentRestaurant as any).socialAutopostSettings.publicActionLinks
-              : {};
-          const hasActionLinks = Boolean(
-            (currentRestaurant as any).onlineOrderingUrl ||
+              ((currentRestaurant as any).galleryImages || []).some(
+                (image: any) => {
+                  if (!image) return false;
+                  if (typeof image === "string") return Boolean(image.trim());
+                  const approved =
+                    image.publicApproved === undefined
+                      ? true
+                      : Boolean(image.publicApproved);
+                  return (
+                    approved &&
+                    Boolean(String(image.url || image.imageUrl || "").trim())
+                  );
+                },
+              ),
+            );
+            const hasMenu = Boolean(
+              (currentRestaurant as any).menuUrl ||
+              (currentRestaurant as any).hasMenu ||
+              (currentRestaurant as any).menuImageUrl ||
+              (currentRestaurant as any).menuPdfUrl ||
+              (currentRestaurant as any).featuredMenuItems?.length ||
+              Number((currentRestaurant as any).menuItemCount || 0) > 0 ||
+              Number((currentRestaurant as any).publicMenuItemCount || 0) > 0,
+            );
+            const hasAddress = Boolean(
+              (currentRestaurant as any).address ||
+              (currentRestaurant as any).city,
+            );
+            const hasPhone = Boolean(
+              (currentRestaurant as any).phone ||
+              (currentRestaurant as any).contactPhone,
+            );
+            const profileActionLinks =
+              (currentRestaurant as any)?.socialAutopostSettings &&
+              typeof (currentRestaurant as any).socialAutopostSettings ===
+                "object" &&
+              typeof (currentRestaurant as any).socialAutopostSettings
+                .publicActionLinks === "object"
+                ? (currentRestaurant as any).socialAutopostSettings
+                    .publicActionLinks
+                : {};
+            const hasActionLinks = Boolean(
+              (currentRestaurant as any).onlineOrderingUrl ||
               (currentRestaurant as any).deliveryUrl ||
               (currentRestaurant as any).doordashUrl ||
               (currentRestaurant as any).uberEatsUrl ||
@@ -3776,2123 +3921,2242 @@ export default function RestaurantOwnerDashboard() {
               profileActionLinks.grubhubUrl ||
               profileActionLinks.cateringInquiryUrl ||
               profileActionLinks.truckBookingInquiryUrl,
-          );
-          const hasContact = Boolean(
-            hasPhone ||
+            );
+            const hasContact = Boolean(
+              hasPhone ||
               (currentRestaurant as any).websiteUrl ||
               (currentRestaurant as any).facebookPageUrl ||
               (currentRestaurant as any).instagramUrl ||
               hasActionLinks,
-          );
-          const isBarBusiness = currentIsBarBusiness;
-          const hasSchedule = Boolean(
-            (currentRestaurant as any).operatingHours ||
-            (currentRestaurant as any).businessHours ||
-            (currentRestaurant as any).hours ||
-            (currentRestaurant as any).schedulePublished,
-          );
-          const servesFood = Boolean(
-            (currentRestaurant as any).servesFood ??
+            );
+            const isBarBusiness = currentIsBarBusiness;
+            const hasSchedule = Boolean(
+              (currentRestaurant as any).operatingHours ||
+              (currentRestaurant as any).businessHours ||
+              (currentRestaurant as any).hours ||
+              (currentRestaurant as any).schedulePublished,
+            );
+            const servesFood = Boolean(
+              (currentRestaurant as any).servesFood ??
               (currentRestaurant as any).hasKitchen ??
               (currentRestaurant as any).hasMenu,
-          );
-          const hostsFoodTrucks = Boolean(
-            (currentRestaurant as any).hostsFoodTrucks ??
-              (currentRestaurant as any).wantsFoodTrucks,
-          );
-          const parseDateCandidate = (value: unknown) => {
-            if (!value) return null;
-            const parsed = new Date(String(value));
-            return Number.isNaN(parsed.getTime()) ? null : parsed;
-          };
-          const parseTimeToMinutes = (value: unknown) => {
-            const text = String(value || "").trim();
-            if (!text) return null;
-            const match = text.match(/^(\d{1,2}):(\d{2})/);
-            if (!match) return null;
-            const hours = Number(match[1]);
-            const minutes = Number(match[2]);
-            if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null;
-            if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null;
-            return hours * 60 + minutes;
-          };
-          const weekdayToIndex = (value: unknown) => {
-            const day = String(value || "").trim().toLowerCase();
-            const map: Record<string, number> = {
-              sun: 0,
-              sunday: 0,
-              mon: 1,
-              monday: 1,
-              tue: 2,
-              tues: 2,
-              tuesday: 2,
-              wed: 3,
-              weds: 3,
-              wednesday: 3,
-              thu: 4,
-              thur: 4,
-              thurs: 4,
-              thursday: 4,
-              fri: 5,
-              friday: 5,
-              sat: 6,
-              saturday: 6,
-            };
-            return Number.isFinite(map[day]) ? map[day] : null;
-          };
-          const resolveNextDateForDay = (value: unknown) => {
-            const weekday = weekdayToIndex(value);
-            if (weekday == null) return null;
-            const now = new Date();
-            const candidate = new Date(now);
-            candidate.setHours(0, 0, 0, 0);
-            const delta = (weekday - candidate.getDay() + 7) % 7;
-            candidate.setDate(candidate.getDate() + delta);
-            return candidate;
-          };
-          const getScheduleDate = (entry: any) =>
-            parseDateCandidate(entry?.date || entry?.startDate || entry?.dayDate) ||
-            resolveNextDateForDay(entry?.day || entry?.weekday || entry?.dayOfWeek);
-          const scheduleStatusAllows = (value: unknown) => {
-            const normalized = String(value || "scheduled").trim().toLowerCase();
-            if (!normalized) return true;
-            return !["cancelled", "canceled", "closed", "inactive"].includes(normalized);
-          };
-          const hasScheduleLocation = (entry: any) =>
-            Boolean(
-              String(
-                entry?.locationName ||
-                  entry?.location ||
-                  entry?.address ||
-                  entry?.serviceArea ||
-                  entry?.city ||
-                  entry?.label ||
-                  "",
-              ).trim(),
             );
-          const collectTruckScheduleEntries = () => {
-            const truckSchedule = (currentRestaurant as any).truckSchedule || {};
-            const pool = [
-              ...(Array.isArray((currentRestaurant as any).upcomingStops)
-                ? (currentRestaurant as any).upcomingStops
-                : []),
-              ...(Array.isArray((currentRestaurant as any).schedules)
-                ? (currentRestaurant as any).schedules
-                : []),
-              ...(Array.isArray((currentRestaurant as any).truckSchedules)
-                ? (currentRestaurant as any).truckSchedules
-                : []),
-              ...(Array.isArray(truckSchedule?.upcomingStops)
-                ? truckSchedule.upcomingStops
-                : []),
-            ];
-            for (const single of [
-              (currentRestaurant as any).todayStop,
-              (currentRestaurant as any).currentStop,
-              (currentRestaurant as any).nextStop,
-              truckSchedule?.todayStop,
-              truckSchedule?.currentStop,
-              truckSchedule?.nextStop,
-            ]) {
-              if (single && typeof single === "object") {
-                pool.push(single);
+            const hostsFoodTrucks = Boolean(
+              (currentRestaurant as any).hostsFoodTrucks ??
+              (currentRestaurant as any).wantsFoodTrucks,
+            );
+            const parseDateCandidate = (value: unknown) => {
+              if (!value) return null;
+              const parsed = new Date(String(value));
+              return Number.isNaN(parsed.getTime()) ? null : parsed;
+            };
+            const parseTimeToMinutes = (value: unknown) => {
+              const text = String(value || "").trim();
+              if (!text) return null;
+              const match = text.match(/^(\d{1,2}):(\d{2})/);
+              if (!match) return null;
+              const hours = Number(match[1]);
+              const minutes = Number(match[2]);
+              if (!Number.isFinite(hours) || !Number.isFinite(minutes))
+                return null;
+              if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59)
+                return null;
+              return hours * 60 + minutes;
+            };
+            const weekdayToIndex = (value: unknown) => {
+              const day = String(value || "")
+                .trim()
+                .toLowerCase();
+              const map: Record<string, number> = {
+                sun: 0,
+                sunday: 0,
+                mon: 1,
+                monday: 1,
+                tue: 2,
+                tues: 2,
+                tuesday: 2,
+                wed: 3,
+                weds: 3,
+                wednesday: 3,
+                thu: 4,
+                thur: 4,
+                thurs: 4,
+                thursday: 4,
+                fri: 5,
+                friday: 5,
+                sat: 6,
+                saturday: 6,
+              };
+              return Number.isFinite(map[day]) ? map[day] : null;
+            };
+            const resolveNextDateForDay = (value: unknown) => {
+              const weekday = weekdayToIndex(value);
+              if (weekday == null) return null;
+              const now = new Date();
+              const candidate = new Date(now);
+              candidate.setHours(0, 0, 0, 0);
+              const delta = (weekday - candidate.getDay() + 7) % 7;
+              candidate.setDate(candidate.getDate() + delta);
+              return candidate;
+            };
+            const getScheduleDate = (entry: any) =>
+              parseDateCandidate(
+                entry?.date || entry?.startDate || entry?.dayDate,
+              ) ||
+              resolveNextDateForDay(
+                entry?.day || entry?.weekday || entry?.dayOfWeek,
+              );
+            const scheduleStatusAllows = (value: unknown) => {
+              const normalized = String(value || "scheduled")
+                .trim()
+                .toLowerCase();
+              if (!normalized) return true;
+              return !["cancelled", "canceled", "closed", "inactive"].includes(
+                normalized,
+              );
+            };
+            const hasScheduleLocation = (entry: any) =>
+              Boolean(
+                String(
+                  entry?.locationName ||
+                    entry?.location ||
+                    entry?.address ||
+                    entry?.serviceArea ||
+                    entry?.city ||
+                    entry?.label ||
+                    "",
+                ).trim(),
+              );
+            const collectTruckScheduleEntries = () => {
+              const truckSchedule =
+                (currentRestaurant as any).truckSchedule || {};
+              const pool = [
+                ...(Array.isArray((currentRestaurant as any).upcomingStops)
+                  ? (currentRestaurant as any).upcomingStops
+                  : []),
+                ...(Array.isArray((currentRestaurant as any).schedules)
+                  ? (currentRestaurant as any).schedules
+                  : []),
+                ...(Array.isArray((currentRestaurant as any).truckSchedules)
+                  ? (currentRestaurant as any).truckSchedules
+                  : []),
+                ...(Array.isArray(truckSchedule?.upcomingStops)
+                  ? truckSchedule.upcomingStops
+                  : []),
+              ];
+              for (const single of [
+                (currentRestaurant as any).todayStop,
+                (currentRestaurant as any).currentStop,
+                (currentRestaurant as any).nextStop,
+                truckSchedule?.todayStop,
+                truckSchedule?.currentStop,
+                truckSchedule?.nextStop,
+              ]) {
+                if (single && typeof single === "object") {
+                  pool.push(single);
+                }
               }
-            }
-            return pool;
-          };
-          const hasValidTruckOperatingWindow = (entries: any[]) => {
-            const now = new Date();
-            const weekAhead = new Date(now);
-            weekAhead.setDate(weekAhead.getDate() + 7);
-            return entries.some((entry) => {
-              if (!scheduleStatusAllows(entry?.status)) return false;
-              const date = getScheduleDate(entry);
-              if (!date) return false;
-              const startMinutes = parseTimeToMinutes(
-                entry?.startTime || entry?.start || entry?.opensAt,
-              );
-              const endMinutes = parseTimeToMinutes(
-                entry?.endTime || entry?.end || entry?.closesAt,
-              );
-              if (startMinutes == null || endMinutes == null) return false;
-              if (!hasScheduleLocation(entry)) return false;
-              const startAt = new Date(date);
-              startAt.setHours(Math.floor(startMinutes / 60), startMinutes % 60, 0, 0);
-              const endAt = new Date(date);
-              endAt.setHours(Math.floor(endMinutes / 60), endMinutes % 60, 0, 0);
-              if (!(endAt > startAt)) return false;
-              return startAt >= now && startAt <= weekAhead;
-            });
-          };
-          const isTruckServingByScheduleNow = (entries: any[]) => {
-            const now = new Date();
-            return entries.some((entry) => {
-              if (!scheduleStatusAllows(entry?.status)) return false;
-              const date = getScheduleDate(entry);
-              if (!date) return false;
-              const startMinutes = parseTimeToMinutes(
-                entry?.startTime || entry?.start || entry?.opensAt,
-              );
-              const endMinutes = parseTimeToMinutes(
-                entry?.endTime || entry?.end || entry?.closesAt,
-              );
-              if (startMinutes == null || endMinutes == null) return false;
-              if (!hasScheduleLocation(entry)) return false;
-              const startAt = new Date(date);
-              startAt.setHours(Math.floor(startMinutes / 60), startMinutes % 60, 0, 0);
-              const endAt = new Date(date);
-              endAt.setHours(Math.floor(endMinutes / 60), endMinutes % 60, 0, 0);
-              if (!(endAt > startAt)) return false;
-              return now >= startAt && now <= endAt;
-            });
-          };
-          const daysSince = (date: Date) =>
-            Math.floor((Date.now() - date.getTime()) / (1000 * 60 * 60 * 24));
-          const scheduleFreshnessDays = 7;
-          const truckMenuWarningDays = 14;
-          const truckMenuStaleDays = 30;
-          const restaurantMenuWarningDays = 60;
-          const restaurantMenuStaleDays = 90;
-          const truckScheduleEntries = collectTruckScheduleEntries();
-          const hasValidTruckScheduleWindow =
-            hasValidTruckOperatingWindow(truckScheduleEntries);
-          const servingByTruckScheduleNow =
-            isTruckServingByScheduleNow(truckScheduleEntries);
-          const serverTruckPresence = deriveTruckPresence(
-            {
-              mobileOnline: (currentRestaurant as any).mobileOnline,
-              liveBroadcasting: (currentRestaurant as any).liveBroadcasting,
-              currentLatitude: (currentRestaurant as any).currentLatitude,
-              currentLongitude: (currentRestaurant as any).currentLongitude,
-              lastBroadcastAt: (currentRestaurant as any).lastBroadcastAt,
-              liveUntilAt: (currentRestaurant as any).liveUntilAt,
-              locationSource:
-                (currentRestaurant as any).locationSource || "owner_gps",
-              gpsAccuracy: (currentRestaurant as any).gpsAccuracy,
-            },
-            { freshnessMs: DEFAULT_TRUCK_BROADCAST_FRESHNESS_MS },
-          );
-          const liveByMobileSignal =
-            serverTruckPresence.broadcastState === "live";
-          const operatingUpdatedAtCandidate = [
-            (currentRestaurant as any).truckScheduleUpdatedAt,
-            (currentRestaurant as any).scheduleUpdatedAt,
-            (currentRestaurant as any).operatingHoursUpdatedAt,
-            (currentRestaurant as any).updatedAt,
-          ]
-            .map(parseDateCandidate)
-            .find(Boolean) as Date | null;
-          const scheduleUpdatedRecently = Boolean(
-            operatingUpdatedAtCandidate &&
+              return pool;
+            };
+            const hasValidTruckOperatingWindow = (entries: any[]) => {
+              const now = new Date();
+              const weekAhead = new Date(now);
+              weekAhead.setDate(weekAhead.getDate() + 7);
+              return entries.some((entry) => {
+                if (!scheduleStatusAllows(entry?.status)) return false;
+                const date = getScheduleDate(entry);
+                if (!date) return false;
+                const startMinutes = parseTimeToMinutes(
+                  entry?.startTime || entry?.start || entry?.opensAt,
+                );
+                const endMinutes = parseTimeToMinutes(
+                  entry?.endTime || entry?.end || entry?.closesAt,
+                );
+                if (startMinutes == null || endMinutes == null) return false;
+                if (!hasScheduleLocation(entry)) return false;
+                const startAt = new Date(date);
+                startAt.setHours(
+                  Math.floor(startMinutes / 60),
+                  startMinutes % 60,
+                  0,
+                  0,
+                );
+                const endAt = new Date(date);
+                endAt.setHours(
+                  Math.floor(endMinutes / 60),
+                  endMinutes % 60,
+                  0,
+                  0,
+                );
+                if (!(endAt > startAt)) return false;
+                return startAt >= now && startAt <= weekAhead;
+              });
+            };
+            const isTruckServingByScheduleNow = (entries: any[]) => {
+              const now = new Date();
+              return entries.some((entry) => {
+                if (!scheduleStatusAllows(entry?.status)) return false;
+                const date = getScheduleDate(entry);
+                if (!date) return false;
+                const startMinutes = parseTimeToMinutes(
+                  entry?.startTime || entry?.start || entry?.opensAt,
+                );
+                const endMinutes = parseTimeToMinutes(
+                  entry?.endTime || entry?.end || entry?.closesAt,
+                );
+                if (startMinutes == null || endMinutes == null) return false;
+                if (!hasScheduleLocation(entry)) return false;
+                const startAt = new Date(date);
+                startAt.setHours(
+                  Math.floor(startMinutes / 60),
+                  startMinutes % 60,
+                  0,
+                  0,
+                );
+                const endAt = new Date(date);
+                endAt.setHours(
+                  Math.floor(endMinutes / 60),
+                  endMinutes % 60,
+                  0,
+                  0,
+                );
+                if (!(endAt > startAt)) return false;
+                return now >= startAt && now <= endAt;
+              });
+            };
+            const daysSince = (date: Date) =>
+              Math.floor((Date.now() - date.getTime()) / (1000 * 60 * 60 * 24));
+            const scheduleFreshnessDays = 7;
+            const truckMenuWarningDays = 14;
+            const truckMenuStaleDays = 30;
+            const restaurantMenuWarningDays = 60;
+            const restaurantMenuStaleDays = 90;
+            const truckScheduleEntries = collectTruckScheduleEntries();
+            const hasValidTruckScheduleWindow =
+              hasValidTruckOperatingWindow(truckScheduleEntries);
+            const servingByTruckScheduleNow =
+              isTruckServingByScheduleNow(truckScheduleEntries);
+            const serverTruckPresence = deriveTruckPresence(
+              {
+                mobileOnline: (currentRestaurant as any).mobileOnline,
+                liveBroadcasting: (currentRestaurant as any).liveBroadcasting,
+                currentLatitude: (currentRestaurant as any).currentLatitude,
+                currentLongitude: (currentRestaurant as any).currentLongitude,
+                lastBroadcastAt: (currentRestaurant as any).lastBroadcastAt,
+                liveUntilAt: (currentRestaurant as any).liveUntilAt,
+                locationSource:
+                  (currentRestaurant as any).locationSource || "owner_gps",
+                gpsAccuracy: (currentRestaurant as any).gpsAccuracy,
+              },
+              { freshnessMs: DEFAULT_TRUCK_BROADCAST_FRESHNESS_MS },
+            );
+            const liveByMobileSignal =
+              serverTruckPresence.broadcastState === "live";
+            const operatingUpdatedAtCandidate = [
+              (currentRestaurant as any).truckScheduleUpdatedAt,
+              (currentRestaurant as any).scheduleUpdatedAt,
+              (currentRestaurant as any).operatingHoursUpdatedAt,
+              (currentRestaurant as any).updatedAt,
+            ]
+              .map(parseDateCandidate)
+              .find(Boolean) as Date | null;
+            const scheduleUpdatedRecently = Boolean(
+              operatingUpdatedAtCandidate &&
               daysSince(operatingUpdatedAtCandidate) <= scheduleFreshnessDays,
-          );
-          const hasOperatingTimeRequirement = isFoodTruck
-            ? hasValidTruckScheduleWindow || scheduleUpdatedRecently
-            : hasSchedule;
-          const truckAvailableNow =
-            liveByMobileSignal || servingByTruckScheduleNow;
-          const menuFreshnessDateCandidate = [
-            (currentRestaurant as any).menuReviewedAt,
-            (currentRestaurant as any).menuUpdatedAt,
-            (currentRestaurant as any).menuLastUpdatedAt,
-            (currentRestaurant as any).menuLastReviewedAt,
-          ]
-            .map(parseDateCandidate)
-            .find(Boolean) as Date | null;
-          const menuFreshnessDays = menuFreshnessDateCandidate
-            ? daysSince(menuFreshnessDateCandidate)
-            : null;
-          const menuWarningDays = isFoodTruck
-            ? truckMenuWarningDays
-            : restaurantMenuWarningDays;
-          const menuStaleDays = isFoodTruck
-            ? truckMenuStaleDays
-            : restaurantMenuStaleDays;
-          const menuNeedsReview = menuFreshnessDays == null;
-          const menuIsStale = Boolean(
-            menuFreshnessDays != null && menuFreshnessDays > menuStaleDays,
-          );
-          const menuNeedsNudge = Boolean(
-            menuFreshnessDays != null &&
+            );
+            const hasOperatingTimeRequirement = isFoodTruck
+              ? hasValidTruckScheduleWindow || scheduleUpdatedRecently
+              : hasSchedule;
+            const truckAvailableNow =
+              liveByMobileSignal || servingByTruckScheduleNow;
+            const menuFreshnessDateCandidate = [
+              (currentRestaurant as any).menuReviewedAt,
+              (currentRestaurant as any).menuUpdatedAt,
+              (currentRestaurant as any).menuLastUpdatedAt,
+              (currentRestaurant as any).menuLastReviewedAt,
+            ]
+              .map(parseDateCandidate)
+              .find(Boolean) as Date | null;
+            const menuFreshnessDays = menuFreshnessDateCandidate
+              ? daysSince(menuFreshnessDateCandidate)
+              : null;
+            const menuWarningDays = isFoodTruck
+              ? truckMenuWarningDays
+              : restaurantMenuWarningDays;
+            const menuStaleDays = isFoodTruck
+              ? truckMenuStaleDays
+              : restaurantMenuStaleDays;
+            const menuNeedsReview = menuFreshnessDays == null;
+            const menuIsStale = Boolean(
+              menuFreshnessDays != null && menuFreshnessDays > menuStaleDays,
+            );
+            const menuNeedsNudge = Boolean(
+              menuFreshnessDays != null &&
               menuFreshnessDays > menuWarningDays &&
               menuFreshnessDays <= menuStaleDays,
-          );
-          const menuIsCurrent = hasMenu && !menuNeedsReview && !menuIsStale;
-          const hasDeal = (stats?.activeDeals || 0) > 0;
-          const hasEvents =
-            Number((currentRestaurant as any).upcomingPublicEventCount || 0) > 0 ||
-            Number((currentRestaurant as any).upcomingEventCount || 0) > 0;
-          const hasBarMarketing = hasDeal || hasEvents;
-          const featuredBartenders = Array.isArray((currentRestaurant as any).featuredBartenders)
-            ? (currentRestaurant as any).featuredBartenders
-            : [];
-          const hasActiveFeaturedBartender = featuredBartenders.some((entry: any) =>
-            Boolean(entry && (entry.isActive ?? true) && String(entry.name || "").trim()),
-          );
-          const verificationState = (currentRestaurant as any).verificationState;
-          const isVerifiedProfile = Boolean(
-            verificationState?.isVerifiedForSetup ?? (currentRestaurant as any).isVerified,
-          );
-          const barScheduleReady = hostsFoodTrucks ? hasOperatingTimeRequirement : true;
-          const publicReady = isBarBusiness
-            ? hasBasics &&
-              hasAddress &&
-              hasContact &&
-              hasPhoto &&
-              hasSchedule &&
-              hasBarMarketing &&
-              (!servesFood || hasMenu) &&
-              barScheduleReady
-            : hasBasics &&
-              hasAddress &&
-              hasContact &&
-              hasMenu &&
-              hasPhoto &&
-              hasOperatingTimeRequirement &&
-              (isFoodTruck ? true : hasDeal);
-          const profileSetupHref = `/restaurant-owner-dashboard?setup=profile&restaurantId=${encodeURIComponent(
-            String(selectedRestaurant),
-          )}`;
-          const checklistItems = isBarBusiness
-            ? [
-                {
-                  label: "Bar profile complete",
-                  done: hasBasics && hasAddress,
-                  href: profileSetupHref,
-                },
-                {
-                  label: "Hours complete",
-                  done: hasSchedule,
-                  href: "/restaurant-owner-dashboard?setup=schedule",
-                },
-                {
-                  label: "Photos/logo complete",
-                  done: hasPhoto,
-                  href: profileSetupHref,
-                },
-                {
-                  label: "Contact/social links complete",
-                  done: hasContact,
-                  href: profileSetupHref,
-                },
-                {
-                  label: "Events or specials current",
-                  done: hasBarMarketing,
-                  href: hasEvents ? "/events" : "/deal-creation",
-                },
-                ...(servesFood
-                  ? [
-                      {
-                        label: menuNeedsReview
-                          ? "Food menu complete (needs review timestamp)"
-                          : menuIsStale
-                            ? "Food menu complete (stale - refresh needed)"
-                            : menuNeedsNudge
-                              ? "Food menu complete (review soon)"
-                              : "Food menu complete",
-                        done: menuIsCurrent,
-                        href: `/menu-builder?restaurantId=${encodeURIComponent(
-                          String(selectedRestaurant),
-                        )}`,
-                      },
-                    ]
-                  : []),
-                ...(hostsFoodTrucks
-                  ? [
-                      {
-                        label: "Truck hosting availability complete",
-                        done: hasOperatingTimeRequirement,
-                        href: "/restaurant-owner-dashboard?setup=schedule&truck=1",
-                      },
-                      {
-                        label: "Event/truck schedule current",
-                        done: hasOperatingTimeRequirement,
-                        href: "/restaurant-owner-dashboard?setup=schedule&truck=1",
-                      },
-                    ]
-                  : []),
-                {
-                  label: "Public profile ready",
-                  done: publicReady,
-                  href: profileSetupHref,
-                },
-                {
-                  label: isVerifiedProfile
-                    ? "Verified profile badge"
-                    : "Verification pending (non-blocking)",
-                  done: isVerifiedProfile,
-                  href: profileSetupHref,
-                },
-              ]
-            : [
-                {
-                  label: "Basics complete",
-                  done: hasBasics,
-                  href: profileSetupHref,
-                },
-                {
-                  label: "Photos complete (add logo, cover photo, or food/truck photos)",
-                  done: hasPhoto,
-                  href: profileSetupHref,
-                },
-                {
-                  label: "Address or service area set",
-                  done: hasAddress,
-                  href: profileSetupHref,
-                },
-                {
-                  label: "Contact links complete",
-                  done: hasContact,
-                  href: profileSetupHref,
-                },
-                {
-                  label: menuNeedsReview
-                    ? "Menu current (needs review timestamp)"
-                    : menuIsStale
-                      ? "Menu current (stale - refresh needed)"
-                      : menuNeedsNudge
-                        ? "Menu current (review soon)"
-                        : "Menu current",
-                  done: menuIsCurrent,
-                  href: `/menu-builder?restaurantId=${encodeURIComponent(
-                    String(selectedRestaurant),
-                  )}`,
-                },
-                ...(isFoodTruck
-                  ? [
-                      {
-                        label: "Schedule this week",
-                        done: hasOperatingTimeRequirement,
-                        href: "/restaurant-owner-dashboard?setup=schedule&truck=1",
-                      },
-                    ]
-                  : [
-                      {
-                        label: "Hours complete",
-                        done: hasOperatingTimeRequirement,
-                        href: "/restaurant-owner-dashboard?setup=schedule",
-                      },
-                    ]),
-                {
-                  label: "Deals or specials added",
-                  done: hasDeal,
-                  href: "/deal-creation",
-                },
-                {
-                  label: "Events added (if relevant)",
-                  done: hasEvents,
-                  href: "/events",
-                },
-                {
-                  label: "Public profile ready",
-                  done: publicReady,
-                  href: profileSetupHref,
-                },
-                ...(isFoodTruck
-                  ? [
-                      {
-                        label: liveByMobileSignal
-                          ? "Live broadcast active"
-                          : servingByTruckScheduleNow
-                            ? "Current scheduled stop active"
-                            : "No live broadcast or current stop",
-                        done: truckAvailableNow,
-                        href: "/restaurant-owner-dashboard?setup=schedule&truck=1",
-                      },
-                    ]
-                  : []),
-                {
-                  label: isVerifiedProfile
-                    ? "Verified profile badge"
-                    : "Verification pending (non-blocking)",
-                  done: isVerifiedProfile,
-                  href: profileSetupHref,
-                },
-              ];
-          const completedCount = checklistItems.filter((i) => i.done).length;
-          if (completedCount === checklistItems.length) return null;
-          return (
-            <div className="mb-6 rounded-lg border border-blue-200 bg-blue-50 p-4">
-              <div className="mb-3 flex items-center justify-between">
-                <div>
-                  <h2 className="text-base font-semibold text-blue-900">
-                    Get the most out of your subscription
-                  </h2>
-                  <p className="text-xs text-blue-700 mt-0.5">
-                    {completedCount} of {checklistItems.length} steps complete
-                  </p>
+            );
+            const menuIsCurrent = hasMenu && !menuNeedsReview && !menuIsStale;
+            const hasDeal = (stats?.activeDeals || 0) > 0;
+            const hasEvents =
+              Number((currentRestaurant as any).upcomingPublicEventCount || 0) >
+                0 ||
+              Number((currentRestaurant as any).upcomingEventCount || 0) > 0;
+            const hasBarMarketing = hasDeal || hasEvents;
+            const featuredBartenders = Array.isArray(
+              (currentRestaurant as any).featuredBartenders,
+            )
+              ? (currentRestaurant as any).featuredBartenders
+              : [];
+            const hasActiveFeaturedBartender = featuredBartenders.some(
+              (entry: any) =>
+                Boolean(
+                  entry &&
+                  (entry.isActive ?? true) &&
+                  String(entry.name || "").trim(),
+                ),
+            );
+            const verificationState = (currentRestaurant as any)
+              .verificationState;
+            const isVerifiedProfile = Boolean(
+              verificationState?.isVerifiedForSetup ??
+              (currentRestaurant as any).isVerified,
+            );
+            const barScheduleReady = hostsFoodTrucks
+              ? hasOperatingTimeRequirement
+              : true;
+            const publicReady = isBarBusiness
+              ? hasBasics &&
+                hasAddress &&
+                hasContact &&
+                hasPhoto &&
+                hasSchedule &&
+                hasBarMarketing &&
+                (!servesFood || hasMenu) &&
+                barScheduleReady
+              : hasBasics &&
+                hasAddress &&
+                hasContact &&
+                hasMenu &&
+                hasPhoto &&
+                hasOperatingTimeRequirement &&
+                (isFoodTruck ? true : hasDeal);
+            const profileSetupHref = `/restaurant-owner-dashboard?setup=profile&restaurantId=${encodeURIComponent(
+              String(selectedRestaurant),
+            )}`;
+            const checklistItems = isBarBusiness
+              ? [
+                  {
+                    label: "Bar profile complete",
+                    done: hasBasics && hasAddress,
+                    href: profileSetupHref,
+                  },
+                  {
+                    label: "Hours complete",
+                    done: hasSchedule,
+                    href: "/restaurant-owner-dashboard?setup=schedule",
+                  },
+                  {
+                    label: "Photos/logo complete",
+                    done: hasPhoto,
+                    href: profileSetupHref,
+                  },
+                  {
+                    label: "Contact/social links complete",
+                    done: hasContact,
+                    href: profileSetupHref,
+                  },
+                  {
+                    label: "Events or specials current",
+                    done: hasBarMarketing,
+                    href: hasEvents ? "/events" : "/deal-creation",
+                  },
+                  ...(servesFood
+                    ? [
+                        {
+                          label: menuNeedsReview
+                            ? "Food menu complete (needs review timestamp)"
+                            : menuIsStale
+                              ? "Food menu complete (stale - refresh needed)"
+                              : menuNeedsNudge
+                                ? "Food menu complete (review soon)"
+                                : "Food menu complete",
+                          done: menuIsCurrent,
+                          href: `/menu-builder?restaurantId=${encodeURIComponent(
+                            String(selectedRestaurant),
+                          )}`,
+                        },
+                      ]
+                    : []),
+                  ...(hostsFoodTrucks
+                    ? [
+                        {
+                          label: "Truck hosting availability complete",
+                          done: hasOperatingTimeRequirement,
+                          href: "/restaurant-owner-dashboard?setup=schedule&truck=1",
+                        },
+                        {
+                          label: "Event/truck schedule current",
+                          done: hasOperatingTimeRequirement,
+                          href: "/restaurant-owner-dashboard?setup=schedule&truck=1",
+                        },
+                      ]
+                    : []),
+                  {
+                    label: "Public profile ready",
+                    done: publicReady,
+                    href: profileSetupHref,
+                  },
+                  {
+                    label: isVerifiedProfile
+                      ? "Verified profile badge"
+                      : "Verification pending (non-blocking)",
+                    done: isVerifiedProfile,
+                    href: profileSetupHref,
+                  },
+                ]
+              : [
+                  {
+                    label: "Basics complete",
+                    done: hasBasics,
+                    href: profileSetupHref,
+                  },
+                  {
+                    label:
+                      "Photos complete (add logo, cover photo, or food/truck photos)",
+                    done: hasPhoto,
+                    href: profileSetupHref,
+                  },
+                  {
+                    label: "Address or service area set",
+                    done: hasAddress,
+                    href: profileSetupHref,
+                  },
+                  {
+                    label: "Contact links complete",
+                    done: hasContact,
+                    href: profileSetupHref,
+                  },
+                  {
+                    label: menuNeedsReview
+                      ? "Menu current (needs review timestamp)"
+                      : menuIsStale
+                        ? "Menu current (stale - refresh needed)"
+                        : menuNeedsNudge
+                          ? "Menu current (review soon)"
+                          : "Menu current",
+                    done: menuIsCurrent,
+                    href: `/menu-builder?restaurantId=${encodeURIComponent(
+                      String(selectedRestaurant),
+                    )}`,
+                  },
+                  ...(isFoodTruck
+                    ? [
+                        {
+                          label: "Schedule this week",
+                          done: hasOperatingTimeRequirement,
+                          href: "/restaurant-owner-dashboard?setup=schedule&truck=1",
+                        },
+                      ]
+                    : [
+                        {
+                          label: "Hours complete",
+                          done: hasOperatingTimeRequirement,
+                          href: "/restaurant-owner-dashboard?setup=schedule",
+                        },
+                      ]),
+                  {
+                    label: "Deals or specials added",
+                    done: hasDeal,
+                    href: "/deal-creation",
+                  },
+                  {
+                    label: "Events added (if relevant)",
+                    done: hasEvents,
+                    href: "/events",
+                  },
+                  {
+                    label: "Public profile ready",
+                    done: publicReady,
+                    href: profileSetupHref,
+                  },
+                  ...(isFoodTruck
+                    ? [
+                        {
+                          label: liveByMobileSignal
+                            ? "Live broadcast active"
+                            : servingByTruckScheduleNow
+                              ? "Current scheduled stop active"
+                              : "No live broadcast or current stop",
+                          done: truckAvailableNow,
+                          href: "/restaurant-owner-dashboard?setup=schedule&truck=1",
+                        },
+                      ]
+                    : []),
+                  {
+                    label: isVerifiedProfile
+                      ? "Verified profile badge"
+                      : "Verification pending (non-blocking)",
+                    done: isVerifiedProfile,
+                    href: profileSetupHref,
+                  },
+                ];
+            const completedCount = checklistItems.filter((i) => i.done).length;
+            if (completedCount === checklistItems.length) return null;
+            return (
+              <div className="mb-6 rounded-lg border border-blue-200 bg-blue-50 p-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <div>
+                    <h2 className="text-base font-semibold text-blue-900">
+                      Get the most out of your subscription
+                    </h2>
+                    <p className="text-xs text-blue-700 mt-0.5">
+                      {completedCount} of {checklistItems.length} steps complete
+                    </p>
+                  </div>
+                  <span className="text-xs font-medium text-blue-600">
+                    {Math.round((completedCount / checklistItems.length) * 100)}
+                    %
+                  </span>
                 </div>
-                <span className="text-xs font-medium text-blue-600">
-                  {Math.round((completedCount / checklistItems.length) * 100)}%
-                </span>
-              </div>
-              <div className="mb-3 h-1.5 w-full rounded-full bg-blue-200">
-                <div
-                  className="h-1.5 rounded-full bg-blue-500 transition-all"
-                  style={{
-                    width: `${Math.round((completedCount / checklistItems.length) * 100)}%`,
-                  }}
-                />
-              </div>
-              <ul className="space-y-2">
-                {checklistItems.map((item) => (
-                  <li key={item.label} className="flex items-center gap-3">
-                    {item.done ? (
-                      <CheckCircle className="h-4 w-4 flex-shrink-0 text-emerald-500" />
-                    ) : (
-                      <div className="h-4 w-4 flex-shrink-0 rounded-full border-2 border-blue-400" />
-                    )}
-                    {item.done ? (
-                      <span className="text-sm text-blue-700 line-through opacity-60">
-                        {item.label}
-                      </span>
-                    ) : (
-                      <Link href={item.href}>
-                        <span className="text-sm font-medium text-blue-800 underline underline-offset-2 hover:text-blue-600 cursor-pointer">
+                <div className="mb-3 h-1.5 w-full rounded-full bg-blue-200">
+                  <div
+                    className="h-1.5 rounded-full bg-blue-500 transition-all"
+                    style={{
+                      width: `${Math.round((completedCount / checklistItems.length) * 100)}%`,
+                    }}
+                  />
+                </div>
+                <ul className="space-y-2">
+                  {checklistItems.map((item) => (
+                    <li key={item.label} className="flex items-center gap-3">
+                      {item.done ? (
+                        <CheckCircle className="h-4 w-4 flex-shrink-0 text-emerald-500" />
+                      ) : (
+                        <div className="h-4 w-4 flex-shrink-0 rounded-full border-2 border-blue-400" />
+                      )}
+                      {item.done ? (
+                        <span className="text-sm text-blue-700 line-through opacity-60">
                           {item.label}
                         </span>
-                      </Link>
-                    )}
-                  </li>
-                ))}
-              </ul>
-              {isBarBusiness && !hasActiveFeaturedBartender ? (
-                <p className="mt-3 text-xs text-blue-700">
-                  Optional boost: feature a bartender to highlight signature drinks and featured nights.
-                </p>
-              ) : null}
-            </div>
-          );
-        })()}
-
-      {/* Stats Cards */}
-      {(activeWorkspaceModule === "overview" ||
-        activeWorkspaceModule === "deals" ||
-        activeWorkspaceModule === "audience") &&
-        (canManageDeals || canViewAnalytics) && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardDescription className="flex items-center gap-2">
-                <BarChart3 className="h-4 w-4" />
-                Active Specials
-              </CardDescription>
-              <CardTitle className="text-3xl">
-                {stats?.activeDeals || 0}
-              </CardTitle>
-            </CardHeader>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardDescription className="flex items-center gap-2">
-                <Eye className="h-4 w-4" />
-                Total Views
-              </CardDescription>
-              <CardTitle className="text-3xl">
-                {stats?.totalViews || 0}
-              </CardTitle>
-            </CardHeader>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardDescription className="flex items-center gap-2">
-                <ShoppingCart className="h-4 w-4" />
-                Claims
-              </CardDescription>
-              <CardTitle className="text-3xl">
-                {stats?.totalClaims || 0}
-              </CardTitle>
-            </CardHeader>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardDescription className="flex items-center gap-2">
-                <TrendingUp className="h-4 w-4" />
-                Conversion Rate
-              </CardDescription>
-              <CardTitle className="text-3xl">
-                {stats?.conversionRate?.toFixed(1) || 0}%
-              </CardTitle>
-            </CardHeader>
-          </Card>
-        </div>
-      )}
-
-      {/* Deals Management */}
-      <Tabs
-        id="owner-workspace-operations"
-        key={defaultTab}
-        defaultValue={defaultTab}
-        className="scroll-mt-64 space-y-4 lg:scroll-mt-24"
-      >
-        <TabsList className={setupMode === "schedule" ? "hidden" : "w-full"}>
-          {canManageDeals ? (
-            <TabsTrigger value="active">Active Specials</TabsTrigger>
-          ) : null}
-          {canManageDeals ? (
-            <TabsTrigger value="inactive">Inactive Specials</TabsTrigger>
-          ) : null}
-          {canViewAnalytics ? (
-            <TabsTrigger value="analytics">Analytics</TabsTrigger>
-          ) : null}
-          {canManageBilling ? (
-            <TabsTrigger value="credits">
-              <CreditCard className="mr-1 hidden h-4 w-4 sm:block" />
-              MealScout Credits
-            </TabsTrigger>
-          ) : null}
-          {canManageParkingPass ? (
-            <TabsTrigger value="bookings">Bookings</TabsTrigger>
-          ) : null}
-          {canManageParkingPass ? (
-            <TabsTrigger value="foodtruck" data-testid="tab-food-truck">
-              {currentRestaurant?.isFoodTruck ? (
-                <Truck className="mr-1 hidden h-4 w-4 sm:block" />
-              ) : (
-                <Clock className="mr-1 hidden h-4 w-4 sm:block" />
-              )}
-              {currentRestaurant?.isFoodTruck ? "Schedule & live" : "Hours"}
-            </TabsTrigger>
-          ) : null}
-        </TabsList>
-
-        {canManageDeals ? (
-          <TabsContent value="active" className="space-y-4">
-            {loadingDeals ? (
-              <Card>
-                <CardContent className="flex items-center justify-center py-12">
-                  <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
-                </CardContent>
-              </Card>
-            ) : (
-              deals
-                .filter((deal) => deal.isActive)
-                .map((deal) => (
-                  <Card key={deal.id}>
-                    <CardContent className="p-6">
-                      <div className="flex justify-between items-start">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-3 mb-2">
-                            <h3 className="text-lg font-semibold">
-                              {deal.title}
-                            </h3>
-                            <Badge className={getDealTypeColor(deal.dealType)}>
-                              {deal.dealType}
-                            </Badge>
-                          </div>
-
-                          <p className="text-muted-foreground mb-3">
-                            {deal.description}
-                          </p>
-
-                          <div className="flex flex-wrap gap-4 text-sm">
-                            <div className="flex items-center gap-1">
-                              <DollarSign className="h-4 w-4" />
-                              <span className="font-medium">
-                                {deal.discountValue}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <Clock className="h-4 w-4" />
-                              <span>
-                                {deal.availableDuringBusinessHours
-                                  ? "During business hours"
-                                  : deal.startTime && deal.endTime
-                                    ? `${formatTime(deal.startTime)} - ${formatTime(
-                                        deal.endTime,
-                                      )}`
-                                    : "All day"}
-                              </span>
-                            </div>
-                            {deal.totalUsesLimit && (
-                              <div className="flex items-center gap-1">
-                                <Users className="h-4 w-4" />
-                                <span>
-                                  {deal.currentUses || 0} /{" "}
-                                  {deal.totalUsesLimit} claimed
-                                </span>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="flex gap-2">
-                          <Link href={`/deal/${deal.id}`}>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              data-testid={`button-view-${deal.id}`}
-                            >
-                              <Eye className="h-4 w-4 mr-1" />
-                              View
-                            </Button>
-                          </Link>
-                          <Link href={`/deal-edit/${deal.id}`}>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              data-testid={`button-edit-${deal.id}`}
-                            >
-                              <Edit className="h-4 w-4 mr-1" />
-                              Edit
-                            </Button>
-                          </Link>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() =>
-                              toggleDealMutation.mutate({
-                                dealId: deal.id,
-                                isActive: Boolean(deal.isActive),
-                              })
-                            }
-                            data-testid={`button-deactivate-${deal.id}`}
-                          >
-                            {deal.isActive ? "Pause" : "Activate"}
-                          </Button>
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            onClick={() => {
-                              if (
-                                confirm(
-                                  `Are you sure you want to delete "${deal.title}"? This cannot be undone.`,
-                                )
-                              ) {
-                                deleteDealMutation.mutate(deal.id);
-                              }
-                            }}
-                            data-testid={`button-delete-${deal.id}`}
-                          >
-                            Delete
-                          </Button>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))
-            )}
-
-            {deals.filter((deal) => deal.isActive).length === 0 &&
-              !loadingDeals && (
-                <Card>
-                  <CardContent className="text-center py-12">
-                    <p className="text-muted-foreground mb-4">
-                      No active specials
-                    </p>
-                    <Link href="/deal-creation">
-                      <Button data-testid="button-create-first-deal">
-                        <Plus className="h-4 w-4 mr-2" />
-                        Create Your First Special
-                      </Button>
-                    </Link>
-                  </CardContent>
-                </Card>
-              )}
-          </TabsContent>
-        ) : null}
-
-        {canManageDeals ? (
-          <TabsContent value="inactive" className="space-y-4">
-            {deals
-              .filter((deal) => !deal.isActive)
-              .map((deal) => (
-                <Card key={deal.id} className="opacity-75">
-                  <CardContent className="p-6">
-                    <div className="flex justify-between items-start">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
-                          <h3 className="text-lg font-semibold">
-                            {deal.title}
-                          </h3>
-                          <Badge variant="secondary">Inactive</Badge>
-                        </div>
-                        <p className="text-muted-foreground mb-3">
-                          {deal.description}
-                        </p>
-                      </div>
-
-                      <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() =>
-                            toggleDealMutation.mutate({
-                              dealId: deal.id,
-                              isActive: Boolean(deal.isActive),
-                            })
-                          }
-                          data-testid={`button-activate-${deal.id}`}
-                        >
-                          Activate
-                        </Button>
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => deleteDealMutation.mutate(deal.id)}
-                          data-testid={`button-delete-inactive-${deal.id}`}
-                        >
-                          Delete
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-
-            {deals.filter((deal) => !deal.isActive).length === 0 &&
-              !loadingDeals && (
-                <Card>
-                  <CardContent className="text-center py-12">
-                    <p className="text-muted-foreground">
-                      No inactive specials
-                    </p>
-                  </CardContent>
-                </Card>
-              )}
-          </TabsContent>
-        ) : null}
-
-        {canViewAnalytics ? (
-          <TabsContent value="analytics">
-            <div className="space-y-6">
-              {/* Analytics Header with Date Range */}
-              <Card>
-                <CardHeader>
-                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                    <div>
-                      <CardTitle className="flex items-center gap-2">
-                        <BarChart3 className="h-5 w-5" />
-                        Performance Analytics
-                      </CardTitle>
-                      <CardDescription>
-                        Comprehensive insights into your specials performance
-                        and customer engagement
-                      </CardDescription>
-                    </div>
-                    <div className="flex flex-col sm:flex-row gap-2">
-                      <div className="flex gap-2">
-                        <input
-                          type="date"
-                          value={analyticsDateRange.start}
-                          onChange={(e) =>
-                            setAnalyticsDateRange((prev) => ({
-                              ...prev,
-                              start: e.target.value,
-                            }))
-                          }
-                          className="px-3 py-2 border rounded-md text-sm"
-                          data-testid="input-analytics-start-date"
-                        />
-                        <input
-                          type="date"
-                          value={analyticsDateRange.end}
-                          onChange={(e) =>
-                            setAnalyticsDateRange((prev) => ({
-                              ...prev,
-                              end: e.target.value,
-                            }))
-                          }
-                          className="px-3 py-2 border rounded-md text-sm"
-                          data-testid="input-analytics-end-date"
-                        />
-                      </div>
-                      {hasAnalyticsAccess && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            const url = `/api/restaurants/${selectedRestaurant}/analytics/export?startDate=${analyticsDateRange.start}&endDate=${analyticsDateRange.end}&format=csv`;
-                            window.open(url, "_blank");
-                          }}
-                          data-testid="button-export-analytics"
-                        >
-                          <Download className="h-4 w-4 mr-2" />
-                          Export CSV
-                        </Button>
+                      ) : (
+                        <Link href={item.href}>
+                          <span className="text-sm font-medium text-blue-800 underline underline-offset-2 hover:text-blue-600 cursor-pointer">
+                            {item.label}
+                          </span>
+                        </Link>
                       )}
-                    </div>
-                  </div>
+                    </li>
+                  ))}
+                </ul>
+                {isBarBusiness && !hasActiveFeaturedBartender ? (
+                  <p className="mt-3 text-xs text-blue-700">
+                    Optional boost: feature a bartender to highlight signature
+                    drinks and featured nights.
+                  </p>
+                ) : null}
+              </div>
+            );
+          })()}
+
+        {/* Stats Cards */}
+        {(activeWorkspaceModule === "overview" ||
+          activeWorkspaceModule === "deals" ||
+          activeWorkspaceModule === "audience") &&
+          (canManageDeals || canViewAnalytics) && (
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardDescription className="flex items-center gap-2">
+                    <BarChart3 className="h-4 w-4" />
+                    Active Specials
+                  </CardDescription>
+                  <CardTitle className="text-3xl">
+                    {stats?.activeDeals || 0}
+                  </CardTitle>
                 </CardHeader>
               </Card>
 
-              {/* Performance Overview Cards */}
-              {loadingAnalytics ? (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {[...Array(4)].map((_, i) => (
-                    <Card key={i}>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardDescription className="flex items-center gap-2">
+                    <Eye className="h-4 w-4" />
+                    Total Views
+                  </CardDescription>
+                  <CardTitle className="text-3xl">
+                    {stats?.totalViews || 0}
+                  </CardTitle>
+                </CardHeader>
+              </Card>
+
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardDescription className="flex items-center gap-2">
+                    <ShoppingCart className="h-4 w-4" />
+                    Claims
+                  </CardDescription>
+                  <CardTitle className="text-3xl">
+                    {stats?.totalClaims || 0}
+                  </CardTitle>
+                </CardHeader>
+              </Card>
+
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardDescription className="flex items-center gap-2">
+                    <TrendingUp className="h-4 w-4" />
+                    Conversion Rate
+                  </CardDescription>
+                  <CardTitle className="text-3xl">
+                    {stats?.conversionRate?.toFixed(1) || 0}%
+                  </CardTitle>
+                </CardHeader>
+              </Card>
+            </div>
+          )}
+
+        {/* Deals Management */}
+        {activeWorkspaceModule !== "profile" &&
+        activeWorkspaceModule !== "media" ? (
+          <Tabs
+            id="owner-workspace-operations"
+            key={defaultTab}
+            defaultValue={defaultTab}
+            className="scroll-mt-64 space-y-4 lg:scroll-mt-24"
+          >
+            <TabsList
+              className={setupMode === "schedule" ? "hidden" : "w-full"}
+            >
+              {canManageDeals ? (
+                <TabsTrigger value="active">Active Specials</TabsTrigger>
+              ) : null}
+              {canManageDeals ? (
+                <TabsTrigger value="inactive">Inactive Specials</TabsTrigger>
+              ) : null}
+              {canViewAnalytics ? (
+                <TabsTrigger value="analytics">Analytics</TabsTrigger>
+              ) : null}
+              {canManageBilling ? (
+                <TabsTrigger value="credits">
+                  <CreditCard className="mr-1 hidden h-4 w-4 sm:block" />
+                  MealScout Credits
+                </TabsTrigger>
+              ) : null}
+              {canManageParkingPass ? (
+                <TabsTrigger value="bookings">Bookings</TabsTrigger>
+              ) : null}
+              {canManageParkingPass ? (
+                <TabsTrigger value="foodtruck" data-testid="tab-food-truck">
+                  {currentRestaurant?.isFoodTruck ? (
+                    <Truck className="mr-1 hidden h-4 w-4 sm:block" />
+                  ) : (
+                    <Clock className="mr-1 hidden h-4 w-4 sm:block" />
+                  )}
+                  {currentRestaurant?.isFoodTruck ? "Schedule & live" : "Hours"}
+                </TabsTrigger>
+              ) : null}
+            </TabsList>
+
+            {canManageDeals ? (
+              <TabsContent value="active" className="space-y-4">
+                {loadingDeals ? (
+                  <Card>
+                    <CardContent className="flex items-center justify-center py-12">
+                      <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
+                    </CardContent>
+                  </Card>
+                ) : (
+                  deals
+                    .filter((deal) => deal.isActive)
+                    .map((deal) => (
+                      <Card key={deal.id}>
+                        <CardContent className="p-6">
+                          <div className="flex justify-between items-start">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-3 mb-2">
+                                <h3 className="text-lg font-semibold">
+                                  {deal.title}
+                                </h3>
+                                <Badge
+                                  className={getDealTypeColor(deal.dealType)}
+                                >
+                                  {deal.dealType}
+                                </Badge>
+                              </div>
+
+                              <p className="text-muted-foreground mb-3">
+                                {deal.description}
+                              </p>
+
+                              <div className="flex flex-wrap gap-4 text-sm">
+                                <div className="flex items-center gap-1">
+                                  <DollarSign className="h-4 w-4" />
+                                  <span className="font-medium">
+                                    {deal.discountValue}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <Clock className="h-4 w-4" />
+                                  <span>
+                                    {deal.availableDuringBusinessHours
+                                      ? "During business hours"
+                                      : deal.startTime && deal.endTime
+                                        ? `${formatTime(deal.startTime)} - ${formatTime(
+                                            deal.endTime,
+                                          )}`
+                                        : "All day"}
+                                  </span>
+                                </div>
+                                {deal.totalUsesLimit && (
+                                  <div className="flex items-center gap-1">
+                                    <Users className="h-4 w-4" />
+                                    <span>
+                                      {deal.currentUses || 0} /{" "}
+                                      {deal.totalUsesLimit} claimed
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="flex gap-2">
+                              <Link href={`/deal/${deal.id}`}>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  data-testid={`button-view-${deal.id}`}
+                                >
+                                  <Eye className="h-4 w-4 mr-1" />
+                                  View
+                                </Button>
+                              </Link>
+                              <Link href={`/deal-edit/${deal.id}`}>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  data-testid={`button-edit-${deal.id}`}
+                                >
+                                  <Edit className="h-4 w-4 mr-1" />
+                                  Edit
+                                </Button>
+                              </Link>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() =>
+                                  toggleDealMutation.mutate({
+                                    dealId: deal.id,
+                                    isActive: Boolean(deal.isActive),
+                                  })
+                                }
+                                data-testid={`button-deactivate-${deal.id}`}
+                              >
+                                {deal.isActive ? "Pause" : "Activate"}
+                              </Button>
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => {
+                                  if (
+                                    confirm(
+                                      `Are you sure you want to delete "${deal.title}"? This cannot be undone.`,
+                                    )
+                                  ) {
+                                    deleteDealMutation.mutate(deal.id);
+                                  }
+                                }}
+                                data-testid={`button-delete-${deal.id}`}
+                              >
+                                Delete
+                              </Button>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))
+                )}
+
+                {deals.filter((deal) => deal.isActive).length === 0 &&
+                  !loadingDeals && (
+                    <Card>
+                      <CardContent className="text-center py-12">
+                        <p className="text-muted-foreground mb-4">
+                          No active specials
+                        </p>
+                        <Link href="/deal-creation">
+                          <Button data-testid="button-create-first-deal">
+                            <Plus className="h-4 w-4 mr-2" />
+                            Create Your First Special
+                          </Button>
+                        </Link>
+                      </CardContent>
+                    </Card>
+                  )}
+              </TabsContent>
+            ) : null}
+
+            {canManageDeals ? (
+              <TabsContent value="inactive" className="space-y-4">
+                {deals
+                  .filter((deal) => !deal.isActive)
+                  .map((deal) => (
+                    <Card key={deal.id} className="opacity-75">
                       <CardContent className="p-6">
-                        <div className="animate-pulse space-y-2">
-                          <div className="h-4 bg-muted rounded w-3/4"></div>
-                          <div className="h-8 bg-muted rounded w-1/2"></div>
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-3 mb-2">
+                              <h3 className="text-lg font-semibold">
+                                {deal.title}
+                              </h3>
+                              <Badge variant="secondary">Inactive</Badge>
+                            </div>
+                            <p className="text-muted-foreground mb-3">
+                              {deal.description}
+                            </p>
+                          </div>
+
+                          <div className="flex gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                toggleDealMutation.mutate({
+                                  dealId: deal.id,
+                                  isActive: Boolean(deal.isActive),
+                                })
+                              }
+                              data-testid={`button-activate-${deal.id}`}
+                            >
+                              Activate
+                            </Button>
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => deleteDealMutation.mutate(deal.id)}
+                              data-testid={`button-delete-inactive-${deal.id}`}
+                            >
+                              Delete
+                            </Button>
+                          </div>
                         </div>
                       </CardContent>
                     </Card>
                   ))}
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+
+                {deals.filter((deal) => !deal.isActive).length === 0 &&
+                  !loadingDeals && (
+                    <Card>
+                      <CardContent className="text-center py-12">
+                        <p className="text-muted-foreground">
+                          No inactive specials
+                        </p>
+                      </CardContent>
+                    </Card>
+                  )}
+              </TabsContent>
+            ) : null}
+
+            {canViewAnalytics ? (
+              <TabsContent value="analytics">
+                <div className="space-y-6">
+                  {/* Analytics Header with Date Range */}
                   <Card>
-                    <CardContent className="p-6">
-                      <div className="flex items-center justify-between">
+                    <CardHeader>
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                         <div>
-                          <p className="text-sm text-muted-foreground">
-                            Total Views
-                          </p>
-                          <p
-                            className="text-2xl font-bold"
-                            data-testid="text-total-views"
-                          >
-                            {(
-                              analyticsSummary as any
-                            )?.totalViews?.toLocaleString() || 0}
-                          </p>
+                          <CardTitle className="flex items-center gap-2">
+                            <BarChart3 className="h-5 w-5" />
+                            Performance Analytics
+                          </CardTitle>
+                          <CardDescription>
+                            Comprehensive insights into your specials
+                            performance and customer engagement
+                          </CardDescription>
                         </div>
-                        <Eye className="h-8 w-8 text-[color:var(--accent-text)]" />
-                      </div>
-                      {comparison &&
-                        (comparison as any)?.changes &&
-                        typeof (comparison as any).changes.viewsChange ===
-                          "number" && (
-                          <div className="mt-2 flex items-center text-xs">
-                            <TrendingUp
-                              className={`h-3 w-3 mr-1 ${
-                                (comparison as any).changes.viewsChange >= 0
-                                  ? "text-[color:var(--status-success)]"
-                                  : "text-[color:var(--status-error)]"
-                              }`}
-                            />
-                            <span
-                              className={
-                                (comparison as any).changes.viewsChange >= 0
-                                  ? "text-[color:var(--status-success)]"
-                                  : "text-[color:var(--status-error)]"
+                        <div className="flex flex-col sm:flex-row gap-2">
+                          <div className="flex gap-2">
+                            <input
+                              type="date"
+                              value={analyticsDateRange.start}
+                              onChange={(e) =>
+                                setAnalyticsDateRange((prev) => ({
+                                  ...prev,
+                                  start: e.target.value,
+                                }))
                               }
-                            >
-                              {(comparison as any).changes.viewsChange >= 0
-                                ? "+"
-                                : ""}
-                              {(comparison as any).changes.viewsChange.toFixed(
-                                1,
-                              )}
-                              %
-                            </span>
-                            <span className="text-muted-foreground ml-1">
-                              vs previous period
-                            </span>
-                          </div>
-                        )}
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardContent className="p-6">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-sm text-muted-foreground">
-                            Total Claims
-                          </p>
-                          <p
-                            className="text-2xl font-bold"
-                            data-testid="text-total-claims"
-                          >
-                            {(
-                              analyticsSummary as any
-                            )?.totalClaims?.toLocaleString() || 0}
-                          </p>
-                        </div>
-                        <ShoppingCart className="h-8 w-8 text-[color:var(--status-success)]" />
-                      </div>
-                      {comparison &&
-                        (comparison as any)?.changes &&
-                        typeof (comparison as any).changes.claimsChange ===
-                          "number" && (
-                          <div className="mt-2 flex items-center text-xs">
-                            <TrendingUp
-                              className={`h-3 w-3 mr-1 ${
-                                (comparison as any).changes.claimsChange >= 0
-                                  ? "text-[color:var(--status-success)]"
-                                  : "text-[color:var(--status-error)]"
-                              }`}
+                              className="px-3 py-2 border rounded-md text-sm"
+                              data-testid="input-analytics-start-date"
                             />
-                            <span
-                              className={
-                                (comparison as any).changes.claimsChange >= 0
-                                  ? "text-[color:var(--status-success)]"
-                                  : "text-[color:var(--status-error)]"
+                            <input
+                              type="date"
+                              value={analyticsDateRange.end}
+                              onChange={(e) =>
+                                setAnalyticsDateRange((prev) => ({
+                                  ...prev,
+                                  end: e.target.value,
+                                }))
                               }
-                            >
-                              {(comparison as any).changes.claimsChange >= 0
-                                ? "+"
-                                : ""}
-                              {(comparison as any).changes.claimsChange.toFixed(
-                                1,
-                              )}
-                              %
-                            </span>
-                            <span className="text-muted-foreground ml-1">
-                              vs previous period
-                            </span>
-                          </div>
-                        )}
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardContent className="p-6">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-sm text-muted-foreground">
-                            Total Revenue
-                          </p>
-                          <p
-                            className="text-2xl font-bold"
-                            data-testid="text-total-revenue"
-                          >
-                            $
-                            {(
-                              analyticsSummary as any
-                            )?.totalRevenue?.toLocaleString() || 0}
-                          </p>
-                        </div>
-                        <DollarSign className="h-8 w-8 text-yellow-500" />
-                      </div>
-                      {comparison &&
-                        (comparison as any)?.changes &&
-                        typeof (comparison as any).changes.revenueChange ===
-                          "number" && (
-                          <div className="mt-2 flex items-center text-xs">
-                            <TrendingUp
-                              className={`h-3 w-3 mr-1 ${
-                                (comparison as any).changes.revenueChange >= 0
-                                  ? "text-[color:var(--status-success)]"
-                                  : "text-[color:var(--status-error)]"
-                              }`}
+                              className="px-3 py-2 border rounded-md text-sm"
+                              data-testid="input-analytics-end-date"
                             />
-                            <span
-                              className={
-                                (comparison as any).changes.revenueChange >= 0
-                                  ? "text-[color:var(--status-success)]"
-                                  : "text-[color:var(--status-error)]"
-                              }
-                            >
-                              {(comparison as any).changes.revenueChange >= 0
-                                ? "+"
-                                : ""}
-                              {(
-                                comparison as any
-                              ).changes.revenueChange.toFixed(1)}
-                              %
-                            </span>
-                            <span className="text-muted-foreground ml-1">
-                              vs previous period
-                            </span>
                           </div>
-                        )}
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardContent className="p-6">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-sm text-muted-foreground">
-                            Conversion Rate
-                          </p>
-                          <p
-                            className="text-2xl font-bold"
-                            data-testid="text-conversion-rate"
-                          >
-                            {(analyticsSummary as any)?.conversionRate?.toFixed(
-                              1,
-                            ) || 0}
-                            %
-                          </p>
-                        </div>
-                        <TrendingUp className="h-8 w-8 text-purple-500" />
-                      </div>
-                      {comparison &&
-                        (comparison as any)?.changes &&
-                        typeof (comparison as any).changes
-                          .conversionRateChange === "number" && (
-                          <div className="mt-2 flex items-center text-xs">
-                            <TrendingUp
-                              className={`h-3 w-3 mr-1 ${
-                                (comparison as any).changes
-                                  .conversionRateChange >= 0
-                                  ? "text-[color:var(--status-success)]"
-                                  : "text-[color:var(--status-error)]"
-                              }`}
-                            />
-                            <span
-                              className={
-                                (comparison as any).changes
-                                  .conversionRateChange >= 0
-                                  ? "text-[color:var(--status-success)]"
-                                  : "text-[color:var(--status-error)]"
-                              }
+                          {hasAnalyticsAccess && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                const url = `/api/restaurants/${selectedRestaurant}/analytics/export?startDate=${analyticsDateRange.start}&endDate=${analyticsDateRange.end}&format=csv`;
+                                window.open(url, "_blank");
+                              }}
+                              data-testid="button-export-analytics"
                             >
-                              {(comparison as any).changes
-                                .conversionRateChange >= 0
-                                ? "+"
-                                : ""}
-                              {(
-                                comparison as any
-                              ).changes.conversionRateChange.toFixed(1)}
-                              %
-                            </span>
-                            <span className="text-muted-foreground ml-1">
-                              vs previous period
-                            </span>
-                          </div>
-                        )}
-                    </CardContent>
-                  </Card>
-                </div>
-              )}
-
-              {/* Premium Analytics Cards - Favorites & Recommendations */}
-              {hasAnalyticsAccess ? (
-                <div className="grid grid-cols-2 gap-4 mt-4">
-                  <Card className="border-yellow-200 dark:border-yellow-800">
-                    <CardContent className="p-6">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-sm text-muted-foreground flex items-center gap-1">
-                            <Heart className="h-3 w-3" />
-                            Total Favorites
-                          </p>
-                          <p
-                            className="text-2xl font-bold"
-                            data-testid="text-total-favorites"
-                          >
-                            {loadingFavorites ? (
-                              <div className="animate-pulse bg-muted rounded w-16 h-8"></div>
-                            ) : (
-                              favoritesAnalytics?.totalFavorites?.toLocaleString() ||
-                              0
-                            )}
-                          </p>
+                              <Download className="h-4 w-4 mr-2" />
+                              Export CSV
+                            </Button>
+                          )}
                         </div>
-                        <Heart className="h-8 w-8 text-yellow-500" />
                       </div>
-                      <p className="text-xs text-muted-foreground mt-2">
-                        Users who favorited your restaurant
-                      </p>
-                    </CardContent>
+                    </CardHeader>
                   </Card>
 
-                  <Card className="border-[color:var(--border-subtle)] dark:border-blue-800">
-                    <CardContent className="p-6">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-sm text-muted-foreground flex items-center gap-1">
-                            <Zap className="h-3 w-3" />
-                            Recommendations
-                          </p>
-                          <p
-                            className="text-2xl font-bold"
-                            data-testid="text-total-recommendations"
-                          >
-                            {loadingRecommendations ? (
-                              <div className="animate-pulse bg-muted rounded w-16 h-8"></div>
-                            ) : (
-                              recommendationsAnalytics?.totalRecommendations?.toLocaleString() ||
-                              0
-                            )}
-                          </p>
-                        </div>
-                        <Zap className="h-8 w-8 text-[color:var(--accent-text)]" />
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-2">
-                        Times shown in recommendations •{" "}
-                        {recommendationsAnalytics?.clickThroughRate?.toFixed(
-                          1,
-                        ) || 0}
-                        % CTR
-                      </p>
-                    </CardContent>
-                  </Card>
-                </div>
-              ) : (
-                <Card className="mt-4 border-dashed border-2">
-                  <CardContent className="p-6 text-center">
-                    <div className="flex flex-col items-center gap-3">
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <CreditCard className="h-5 w-5" />
-                        <span className="text-sm font-medium">
-                          Premium Analytics
-                        </span>
-                      </div>
-                      <p className="text-sm text-muted-foreground max-w-md">
-                        Upgrade for premium analytics on special performance and
-                        growth trends.
-                      </p>
-                      <Link href="/subscribe">
-                        <Button
-                          size="sm"
-                          className="mt-2"
-                          data-testid="button-upgrade-for-analytics"
-                        >
-                          <TrendingUp className="h-4 w-4 mr-2" />
-                          Upgrade Plan
-                        </Button>
-                      </Link>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Charts Section */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Revenue Timeline Chart */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-lg">Revenue Over Time</CardTitle>
-                    <CardDescription>
-                      Daily revenue and special performance trends
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    {analyticsTimeseries &&
-                    (analyticsTimeseries as any[]).length > 0 ? (
-                      <ResponsiveContainer width="100%" height={300}>
-                        <LineChart data={analyticsTimeseries as any[]}>
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey="date" />
-                          <YAxis />
-                          <Tooltip />
-                          <Line
-                            type="monotone"
-                            dataKey="revenue"
-                            stroke="#8884d8"
-                            strokeWidth={2}
-                          />
-                          <Line
-                            type="monotone"
-                            dataKey="claims"
-                            stroke="#82ca9d"
-                            strokeWidth={2}
-                          />
-                        </LineChart>
-                      </ResponsiveContainer>
-                    ) : (
-                      <div className="h-[300px] flex items-center justify-center text-muted-foreground">
-                        No data available for selected period
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-
-                {/* Views vs Claims Chart */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-lg">Views vs Claims</CardTitle>
-                    <CardDescription>
-                      Daily views and conversion tracking
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    {analyticsTimeseries &&
-                    (analyticsTimeseries as any[]).length > 0 ? (
-                      <ResponsiveContainer width="100%" height={300}>
-                        <BarChart data={analyticsTimeseries as any[]}>
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey="date" />
-                          <YAxis />
-                          <Tooltip />
-                          <Bar dataKey="views" fill="#8884d8" />
-                          <Bar dataKey="claims" fill="#82ca9d" />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    ) : (
-                      <div className="h-[300px] flex items-center justify-center text-muted-foreground">
-                        No data available for selected period
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </div>
-
-              {/* Top Deals Performance */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">
-                    Top Performing Specials
-                  </CardTitle>
-                  <CardDescription>
-                    Your most successful specials ranked by views and revenue
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {(analyticsSummary as any)?.topDeals?.length > 0 ? (
-                    <div className="space-y-4">
-                      {(analyticsSummary as any).topDeals.map(
-                        (deal: any, index: number) => (
-                          <div
-                            key={deal.dealId}
-                            className="flex items-center justify-between p-4 border rounded-lg"
-                          >
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-bold">
-                                {index + 1}
-                              </div>
-                              <div>
-                                <p className="font-medium">{deal.title}</p>
-                                <p className="text-sm text-muted-foreground">
-                                  Deal ID: {deal.dealId}
-                                </p>
-                              </div>
+                  {/* Performance Overview Cards */}
+                  {loadingAnalytics ? (
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      {[...Array(4)].map((_, i) => (
+                        <Card key={i}>
+                          <CardContent className="p-6">
+                            <div className="animate-pulse space-y-2">
+                              <div className="h-4 bg-muted rounded w-3/4"></div>
+                              <div className="h-8 bg-muted rounded w-1/2"></div>
                             </div>
-                            <div className="flex gap-6 text-sm">
-                              <div className="text-center">
-                                <p className="font-medium">{deal.views}</p>
-                                <p className="text-muted-foreground">Views</p>
-                              </div>
-                              <div className="text-center">
-                                <p className="font-medium">{deal.claims}</p>
-                                <p className="text-muted-foreground">Claims</p>
-                              </div>
-                              <div className="text-center">
-                                <p className="font-medium">${deal.revenue}</p>
-                                <p className="text-muted-foreground">Revenue</p>
-                              </div>
-                            </div>
-                          </div>
-                        ),
-                      )}
+                          </CardContent>
+                        </Card>
+                      ))}
                     </div>
                   ) : (
-                    <div className="text-center py-8 text-muted-foreground">
-                      No special performance data available
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <Card>
+                        <CardContent className="p-6">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-sm text-muted-foreground">
+                                Total Views
+                              </p>
+                              <p
+                                className="text-2xl font-bold"
+                                data-testid="text-total-views"
+                              >
+                                {(
+                                  analyticsSummary as any
+                                )?.totalViews?.toLocaleString() || 0}
+                              </p>
+                            </div>
+                            <Eye className="h-8 w-8 text-[color:var(--accent-text)]" />
+                          </div>
+                          {comparison &&
+                            (comparison as any)?.changes &&
+                            typeof (comparison as any).changes.viewsChange ===
+                              "number" && (
+                              <div className="mt-2 flex items-center text-xs">
+                                <TrendingUp
+                                  className={`h-3 w-3 mr-1 ${
+                                    (comparison as any).changes.viewsChange >= 0
+                                      ? "text-[color:var(--status-success)]"
+                                      : "text-[color:var(--status-error)]"
+                                  }`}
+                                />
+                                <span
+                                  className={
+                                    (comparison as any).changes.viewsChange >= 0
+                                      ? "text-[color:var(--status-success)]"
+                                      : "text-[color:var(--status-error)]"
+                                  }
+                                >
+                                  {(comparison as any).changes.viewsChange >= 0
+                                    ? "+"
+                                    : ""}
+                                  {(
+                                    comparison as any
+                                  ).changes.viewsChange.toFixed(1)}
+                                  %
+                                </span>
+                                <span className="text-muted-foreground ml-1">
+                                  vs previous period
+                                </span>
+                              </div>
+                            )}
+                        </CardContent>
+                      </Card>
+
+                      <Card>
+                        <CardContent className="p-6">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-sm text-muted-foreground">
+                                Total Claims
+                              </p>
+                              <p
+                                className="text-2xl font-bold"
+                                data-testid="text-total-claims"
+                              >
+                                {(
+                                  analyticsSummary as any
+                                )?.totalClaims?.toLocaleString() || 0}
+                              </p>
+                            </div>
+                            <ShoppingCart className="h-8 w-8 text-[color:var(--status-success)]" />
+                          </div>
+                          {comparison &&
+                            (comparison as any)?.changes &&
+                            typeof (comparison as any).changes.claimsChange ===
+                              "number" && (
+                              <div className="mt-2 flex items-center text-xs">
+                                <TrendingUp
+                                  className={`h-3 w-3 mr-1 ${
+                                    (comparison as any).changes.claimsChange >=
+                                    0
+                                      ? "text-[color:var(--status-success)]"
+                                      : "text-[color:var(--status-error)]"
+                                  }`}
+                                />
+                                <span
+                                  className={
+                                    (comparison as any).changes.claimsChange >=
+                                    0
+                                      ? "text-[color:var(--status-success)]"
+                                      : "text-[color:var(--status-error)]"
+                                  }
+                                >
+                                  {(comparison as any).changes.claimsChange >= 0
+                                    ? "+"
+                                    : ""}
+                                  {(
+                                    comparison as any
+                                  ).changes.claimsChange.toFixed(1)}
+                                  %
+                                </span>
+                                <span className="text-muted-foreground ml-1">
+                                  vs previous period
+                                </span>
+                              </div>
+                            )}
+                        </CardContent>
+                      </Card>
+
+                      <Card>
+                        <CardContent className="p-6">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-sm text-muted-foreground">
+                                Total Revenue
+                              </p>
+                              <p
+                                className="text-2xl font-bold"
+                                data-testid="text-total-revenue"
+                              >
+                                $
+                                {(
+                                  analyticsSummary as any
+                                )?.totalRevenue?.toLocaleString() || 0}
+                              </p>
+                            </div>
+                            <DollarSign className="h-8 w-8 text-yellow-500" />
+                          </div>
+                          {comparison &&
+                            (comparison as any)?.changes &&
+                            typeof (comparison as any).changes.revenueChange ===
+                              "number" && (
+                              <div className="mt-2 flex items-center text-xs">
+                                <TrendingUp
+                                  className={`h-3 w-3 mr-1 ${
+                                    (comparison as any).changes.revenueChange >=
+                                    0
+                                      ? "text-[color:var(--status-success)]"
+                                      : "text-[color:var(--status-error)]"
+                                  }`}
+                                />
+                                <span
+                                  className={
+                                    (comparison as any).changes.revenueChange >=
+                                    0
+                                      ? "text-[color:var(--status-success)]"
+                                      : "text-[color:var(--status-error)]"
+                                  }
+                                >
+                                  {(comparison as any).changes.revenueChange >=
+                                  0
+                                    ? "+"
+                                    : ""}
+                                  {(
+                                    comparison as any
+                                  ).changes.revenueChange.toFixed(1)}
+                                  %
+                                </span>
+                                <span className="text-muted-foreground ml-1">
+                                  vs previous period
+                                </span>
+                              </div>
+                            )}
+                        </CardContent>
+                      </Card>
+
+                      <Card>
+                        <CardContent className="p-6">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-sm text-muted-foreground">
+                                Conversion Rate
+                              </p>
+                              <p
+                                className="text-2xl font-bold"
+                                data-testid="text-conversion-rate"
+                              >
+                                {(
+                                  analyticsSummary as any
+                                )?.conversionRate?.toFixed(1) || 0}
+                                %
+                              </p>
+                            </div>
+                            <TrendingUp className="h-8 w-8 text-purple-500" />
+                          </div>
+                          {comparison &&
+                            (comparison as any)?.changes &&
+                            typeof (comparison as any).changes
+                              .conversionRateChange === "number" && (
+                              <div className="mt-2 flex items-center text-xs">
+                                <TrendingUp
+                                  className={`h-3 w-3 mr-1 ${
+                                    (comparison as any).changes
+                                      .conversionRateChange >= 0
+                                      ? "text-[color:var(--status-success)]"
+                                      : "text-[color:var(--status-error)]"
+                                  }`}
+                                />
+                                <span
+                                  className={
+                                    (comparison as any).changes
+                                      .conversionRateChange >= 0
+                                      ? "text-[color:var(--status-success)]"
+                                      : "text-[color:var(--status-error)]"
+                                  }
+                                >
+                                  {(comparison as any).changes
+                                    .conversionRateChange >= 0
+                                    ? "+"
+                                    : ""}
+                                  {(
+                                    comparison as any
+                                  ).changes.conversionRateChange.toFixed(1)}
+                                  %
+                                </span>
+                                <span className="text-muted-foreground ml-1">
+                                  vs previous period
+                                </span>
+                              </div>
+                            )}
+                        </CardContent>
+                      </Card>
                     </div>
                   )}
-                </CardContent>
-              </Card>
 
-              {/* Customer Insights */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Premium Analytics Cards - Favorites & Recommendations */}
+                  {hasAnalyticsAccess ? (
+                    <div className="grid grid-cols-2 gap-4 mt-4">
+                      <Card className="border-yellow-200 dark:border-yellow-800">
+                        <CardContent className="p-6">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-sm text-muted-foreground flex items-center gap-1">
+                                <Heart className="h-3 w-3" />
+                                Total Favorites
+                              </p>
+                              <p
+                                className="text-2xl font-bold"
+                                data-testid="text-total-favorites"
+                              >
+                                {loadingFavorites ? (
+                                  <div className="animate-pulse bg-muted rounded w-16 h-8"></div>
+                                ) : (
+                                  favoritesAnalytics?.totalFavorites?.toLocaleString() ||
+                                  0
+                                )}
+                              </p>
+                            </div>
+                            <Heart className="h-8 w-8 text-yellow-500" />
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-2">
+                            Users who favorited your restaurant
+                          </p>
+                        </CardContent>
+                      </Card>
+
+                      <Card className="border-[color:var(--border-subtle)] dark:border-blue-800">
+                        <CardContent className="p-6">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-sm text-muted-foreground flex items-center gap-1">
+                                <Zap className="h-3 w-3" />
+                                Recommendations
+                              </p>
+                              <p
+                                className="text-2xl font-bold"
+                                data-testid="text-total-recommendations"
+                              >
+                                {loadingRecommendations ? (
+                                  <div className="animate-pulse bg-muted rounded w-16 h-8"></div>
+                                ) : (
+                                  recommendationsAnalytics?.totalRecommendations?.toLocaleString() ||
+                                  0
+                                )}
+                              </p>
+                            </div>
+                            <Zap className="h-8 w-8 text-[color:var(--accent-text)]" />
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-2">
+                            Times shown in recommendations •{" "}
+                            {recommendationsAnalytics?.clickThroughRate?.toFixed(
+                              1,
+                            ) || 0}
+                            % CTR
+                          </p>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  ) : (
+                    <Card className="mt-4 border-dashed border-2">
+                      <CardContent className="p-6 text-center">
+                        <div className="flex flex-col items-center gap-3">
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <CreditCard className="h-5 w-5" />
+                            <span className="text-sm font-medium">
+                              Premium Analytics
+                            </span>
+                          </div>
+                          <p className="text-sm text-muted-foreground max-w-md">
+                            Upgrade for premium analytics on special performance
+                            and growth trends.
+                          </p>
+                          <Link href="/subscribe">
+                            <Button
+                              size="sm"
+                              className="mt-2"
+                              data-testid="button-upgrade-for-analytics"
+                            >
+                              <TrendingUp className="h-4 w-4 mr-2" />
+                              Upgrade Plan
+                            </Button>
+                          </Link>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* Charts Section */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Revenue Timeline Chart */}
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-lg">
+                          Revenue Over Time
+                        </CardTitle>
+                        <CardDescription>
+                          Daily revenue and special performance trends
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        {analyticsTimeseries &&
+                        (analyticsTimeseries as any[]).length > 0 ? (
+                          <ResponsiveContainer width="100%" height={300}>
+                            <LineChart data={analyticsTimeseries as any[]}>
+                              <CartesianGrid strokeDasharray="3 3" />
+                              <XAxis dataKey="date" />
+                              <YAxis />
+                              <Tooltip />
+                              <Line
+                                type="monotone"
+                                dataKey="revenue"
+                                stroke="#8884d8"
+                                strokeWidth={2}
+                              />
+                              <Line
+                                type="monotone"
+                                dataKey="claims"
+                                stroke="#82ca9d"
+                                strokeWidth={2}
+                              />
+                            </LineChart>
+                          </ResponsiveContainer>
+                        ) : (
+                          <div className="h-[300px] flex items-center justify-center text-muted-foreground">
+                            No data available for selected period
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+
+                    {/* Views vs Claims Chart */}
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-lg">
+                          Views vs Claims
+                        </CardTitle>
+                        <CardDescription>
+                          Daily views and conversion tracking
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        {analyticsTimeseries &&
+                        (analyticsTimeseries as any[]).length > 0 ? (
+                          <ResponsiveContainer width="100%" height={300}>
+                            <BarChart data={analyticsTimeseries as any[]}>
+                              <CartesianGrid strokeDasharray="3 3" />
+                              <XAxis dataKey="date" />
+                              <YAxis />
+                              <Tooltip />
+                              <Bar dataKey="views" fill="#8884d8" />
+                              <Bar dataKey="claims" fill="#82ca9d" />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        ) : (
+                          <div className="h-[300px] flex items-center justify-center text-muted-foreground">
+                            No data available for selected period
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  {/* Top Deals Performance */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg">
+                        Top Performing Specials
+                      </CardTitle>
+                      <CardDescription>
+                        Your most successful specials ranked by views and
+                        revenue
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      {(analyticsSummary as any)?.topDeals?.length > 0 ? (
+                        <div className="space-y-4">
+                          {(analyticsSummary as any).topDeals.map(
+                            (deal: any, index: number) => (
+                              <div
+                                key={deal.dealId}
+                                className="flex items-center justify-between p-4 border rounded-lg"
+                              >
+                                <div className="flex items-center gap-3">
+                                  <div className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-bold">
+                                    {index + 1}
+                                  </div>
+                                  <div>
+                                    <p className="font-medium">{deal.title}</p>
+                                    <p className="text-sm text-muted-foreground">
+                                      Deal ID: {deal.dealId}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="flex gap-6 text-sm">
+                                  <div className="text-center">
+                                    <p className="font-medium">{deal.views}</p>
+                                    <p className="text-muted-foreground">
+                                      Views
+                                    </p>
+                                  </div>
+                                  <div className="text-center">
+                                    <p className="font-medium">{deal.claims}</p>
+                                    <p className="text-muted-foreground">
+                                      Claims
+                                    </p>
+                                  </div>
+                                  <div className="text-center">
+                                    <p className="font-medium">
+                                      ${deal.revenue}
+                                    </p>
+                                    <p className="text-muted-foreground">
+                                      Revenue
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                            ),
+                          )}
+                        </div>
+                      ) : (
+                        <div className="text-center py-8 text-muted-foreground">
+                          No special performance data available
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  {/* Customer Insights */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-lg">
+                          Customer Insights
+                        </CardTitle>
+                        <CardDescription>
+                          Understanding your customer behavior
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <p className="text-sm text-muted-foreground">
+                              Repeat Customers
+                            </p>
+                            <p className="text-2xl font-bold">
+                              {(customerInsights as any)?.repeatCustomers || 0}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-muted-foreground">
+                              Avg Order Value
+                            </p>
+                            <p className="text-2xl font-bold">
+                              $
+                              {(
+                                customerInsights as any
+                              )?.averageOrderValue?.toFixed(2) || 0}
+                            </p>
+                          </div>
+                        </div>
+
+                        {(customerInsights as any)?.peakHours?.length > 0 && (
+                          <div>
+                            <p className="text-sm text-muted-foreground mb-2">
+                              Peak Hours
+                            </p>
+                            <div className="space-y-1">
+                              {(customerInsights as any).peakHours
+                                .slice(0, 3)
+                                .map((hour: any, index: number) => (
+                                  <div
+                                    key={hour.hour}
+                                    className="flex justify-between items-center"
+                                  >
+                                    <span className="text-sm">
+                                      {hour.hour}:00 - {hour.hour + 1}:00
+                                    </span>
+                                    <span className="text-sm font-medium">
+                                      {hour.count} orders
+                                    </span>
+                                  </div>
+                                ))}
+                            </div>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-lg">Demographics</CardTitle>
+                        <CardDescription>
+                          Customer age and gender breakdown
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        {(customerInsights as any)?.demographics ? (
+                          <div className="space-y-4">
+                            {(customerInsights as any).demographics.ageGroups
+                              .length > 0 && (
+                              <div>
+                                <p className="text-sm text-muted-foreground mb-2">
+                                  Age Groups
+                                </p>
+                                <div className="space-y-1">
+                                  {(
+                                    customerInsights as any
+                                  ).demographics.ageGroups.map((group: any) => (
+                                    <div
+                                      key={group.range}
+                                      className="flex justify-between items-center"
+                                    >
+                                      <span className="text-sm">
+                                        {group.range}
+                                      </span>
+                                      <span className="text-sm font-medium">
+                                        {group.count}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {(customerInsights as any).demographics
+                              .genderBreakdown.length > 0 && (
+                              <div>
+                                <p className="text-sm text-muted-foreground mb-2">
+                                  Gender Distribution
+                                </p>
+                                <div className="space-y-1">
+                                  {(
+                                    customerInsights as any
+                                  ).demographics.genderBreakdown.map(
+                                    (gender: any) => (
+                                      <div
+                                        key={gender.gender}
+                                        className="flex justify-between items-center"
+                                      >
+                                        <span className="text-sm capitalize">
+                                          {gender.gender}
+                                        </span>
+                                        <span className="text-sm font-medium">
+                                          {gender.count}
+                                        </span>
+                                      </div>
+                                    ),
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="text-center py-8 text-muted-foreground">
+                            No demographic data available
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </div>
+                </div>
+              </TabsContent>
+            ) : null}
+
+            {/* PHASE R1: MealScout Credits Redemption */}
+            {canManageBilling ? (
+              <TabsContent value="credits" className="space-y-6">
                 <Card>
                   <CardHeader>
-                    <CardTitle className="text-lg">Customer Insights</CardTitle>
+                    <CardTitle className="flex items-center gap-2">
+                      <CreditCard className="h-5 w-5" />
+                      Accept MealScout Credits
+                    </CardTitle>
                     <CardDescription>
-                      Understanding your customer behavior
+                      Accept MealScout credits from users as payment. Credits
+                      are settled weekly via Stripe.
+                    </CardDescription>
+                  </CardHeader>
+                </Card>
+
+                {selectedRestaurant && (
+                  <RestaurantCreditRedemptionForm
+                    restaurantId={selectedRestaurant}
+                    onSuccess={(redemption) => {
+                      toast({
+                        title: "Success",
+                        description: `Credit redeemed successfully! Redemption ID: ${redemption.redemption?.id}`,
+                      });
+                      // Optionally refresh data or update UI
+                    }}
+                  />
+                )}
+              </TabsContent>
+            ) : null}
+
+            {canManageParkingPass ? (
+              <TabsContent value="bookings" className="space-y-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Calendar className="h-5 w-5" />
+                      Event Bookings
+                    </CardTitle>
+                    <CardDescription>
+                      Track upcoming paid event bookings for your selected truck
+                      and cancel when needed. Confirmed cancellations do not
+                      issue refunds.
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
+                    <div className="grid gap-3 md:grid-cols-3">
+                      <div className="rounded-lg border p-4">
                         <p className="text-sm text-muted-foreground">
-                          Repeat Customers
+                          Total bookings
                         </p>
-                        <p className="text-2xl font-bold">
-                          {(customerInsights as any)?.repeatCustomers || 0}
+                        <p className="mt-1 text-2xl font-semibold">
+                          {visibleTruckBookings.length}
                         </p>
                       </div>
-                      <div>
+                      <div className="rounded-lg border p-4">
                         <p className="text-sm text-muted-foreground">
-                          Avg Order Value
+                          Confirmed
                         </p>
-                        <p className="text-2xl font-bold">
+                        <p className="mt-1 text-2xl font-semibold">
+                          {
+                            visibleTruckBookings.filter(
+                              (booking) => booking.status === "confirmed",
+                            ).length
+                          }
+                        </p>
+                      </div>
+                      <div className="rounded-lg border p-4">
+                        <p className="text-sm text-muted-foreground">
+                          Upcoming spend
+                        </p>
+                        <p className="mt-1 text-2xl font-semibold">
                           $
                           {(
-                            customerInsights as any
-                          )?.averageOrderValue?.toFixed(2) || 0}
+                            visibleTruckBookings
+                              .filter(
+                                (booking) =>
+                                  booking.status === "confirmed" ||
+                                  booking.status === "pending",
+                              )
+                              .reduce(
+                                (sum, booking) =>
+                                  sum + Number(booking.totalCents || 0),
+                                0,
+                              ) / 100
+                          ).toFixed(2)}
                         </p>
                       </div>
                     </div>
 
-                    {(customerInsights as any)?.peakHours?.length > 0 && (
-                      <div>
-                        <p className="text-sm text-muted-foreground mb-2">
-                          Peak Hours
-                        </p>
-                        <div className="space-y-1">
-                          {(customerInsights as any).peakHours
-                            .slice(0, 3)
-                            .map((hour: any, index: number) => (
-                              <div
-                                key={hour.hour}
-                                className="flex justify-between items-center"
-                              >
-                                <span className="text-sm">
-                                  {hour.hour}:00 - {hour.hour + 1}:00
-                                </span>
-                                <span className="text-sm font-medium">
-                                  {hour.count} orders
-                                </span>
-                              </div>
-                            ))}
-                        </div>
+                    {loadingTruckBookings ? (
+                      <div className="flex items-center justify-center py-10 text-sm text-muted-foreground">
+                        Loading bookings...
                       </div>
-                    )}
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-lg">Demographics</CardTitle>
-                    <CardDescription>
-                      Customer age and gender breakdown
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    {(customerInsights as any)?.demographics ? (
-                      <div className="space-y-4">
-                        {(customerInsights as any).demographics.ageGroups
-                          .length > 0 && (
-                          <div>
-                            <p className="text-sm text-muted-foreground mb-2">
-                              Age Groups
-                            </p>
-                            <div className="space-y-1">
-                              {(
-                                customerInsights as any
-                              ).demographics.ageGroups.map((group: any) => (
-                                <div
-                                  key={group.range}
-                                  className="flex justify-between items-center"
-                                >
-                                  <span className="text-sm">{group.range}</span>
-                                  <span className="text-sm font-medium">
-                                    {group.count}
-                                  </span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {(customerInsights as any).demographics.genderBreakdown
-                          .length > 0 && (
-                          <div>
-                            <p className="text-sm text-muted-foreground mb-2">
-                              Gender Distribution
-                            </p>
-                            <div className="space-y-1">
-                              {(
-                                customerInsights as any
-                              ).demographics.genderBreakdown.map(
-                                (gender: any) => (
-                                  <div
-                                    key={gender.gender}
-                                    className="flex justify-between items-center"
-                                  >
-                                    <span className="text-sm capitalize">
-                                      {gender.gender}
-                                    </span>
-                                    <span className="text-sm font-medium">
-                                      {gender.count}
-                                    </span>
-                                  </div>
-                                ),
-                              )}
-                            </div>
-                          </div>
-                        )}
+                    ) : visibleTruckBookings.length === 0 ? (
+                      <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
+                        No event bookings yet for this truck.
                       </div>
                     ) : (
-                      <div className="text-center py-8 text-muted-foreground">
-                        No demographic data available
+                      <div className="space-y-3">
+                        {visibleTruckBookings.map((booking) => {
+                          const canCancel =
+                            booking.status === "pending" ||
+                            booking.status === "confirmed";
+                          const eventDate = booking.event?.date
+                            ? new Date(booking.event.date)
+                            : null;
+
+                          return (
+                            <div
+                              key={booking.id}
+                              className="rounded-lg border p-4"
+                            >
+                              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                                <div className="space-y-2">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <p className="font-semibold">
+                                      {booking.event?.host?.businessName ||
+                                        "Host venue"}
+                                    </p>
+                                    <Badge
+                                      variant={
+                                        booking.status === "confirmed"
+                                          ? "default"
+                                          : booking.status === "pending"
+                                            ? "secondary"
+                                            : "outline"
+                                      }
+                                    >
+                                      {booking.status}
+                                    </Badge>
+                                  </div>
+                                  {booking.event?.host?.address ? (
+                                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                      <MapPin className="h-4 w-4" />
+                                      <span>{booking.event.host.address}</span>
+                                    </div>
+                                  ) : null}
+                                  {eventDate ? (
+                                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                      <Clock className="h-4 w-4" />
+                                      <span>
+                                        {format(eventDate, "EEE, MMM d")}
+                                        {booking.event?.startTime
+                                          ? ` at ${booking.event.startTime}`
+                                          : ""}
+                                        {booking.event?.endTime
+                                          ? ` - ${booking.event.endTime}`
+                                          : ""}
+                                      </span>
+                                    </div>
+                                  ) : null}
+                                </div>
+
+                                <div className="space-y-2 text-sm lg:text-right">
+                                  <p className="font-semibold">
+                                    $
+                                    {(
+                                      Number(booking.totalCents || 0) / 100
+                                    ).toFixed(2)}{" "}
+                                    total
+                                  </p>
+                                  <p className="text-muted-foreground">
+                                    Host fee $
+                                    {(
+                                      Number(booking.hostPriceCents || 0) / 100
+                                    ).toFixed(2)}{" "}
+                                    + platform fee $
+                                    {(
+                                      Number(booking.platformFeeCents || 0) /
+                                      100
+                                    ).toFixed(2)}
+                                  </p>
+                                  {canCancel ? (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      disabled={bookingCancelMutation.isPending}
+                                      onClick={() => {
+                                        if (
+                                          confirm(
+                                            "Cancel this booking? No refund will be issued.",
+                                          )
+                                        ) {
+                                          bookingCancelMutation.mutate(
+                                            booking.id,
+                                          );
+                                        }
+                                      }}
+                                    >
+                                      Cancel Booking
+                                    </Button>
+                                  ) : null}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                   </CardContent>
                 </Card>
-              </div>
-            </div>
-          </TabsContent>
-        ) : null}
+              </TabsContent>
+            ) : null}
 
-        {/* PHASE R1: MealScout Credits Redemption */}
-        {canManageBilling ? (
-          <TabsContent value="credits" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <CreditCard className="h-5 w-5" />
-                  Accept MealScout Credits
-                </CardTitle>
-                <CardDescription>
-                  Accept MealScout credits from users as payment. Credits are
-                  settled weekly via Stripe.
-                </CardDescription>
-              </CardHeader>
-            </Card>
+            {canManageParkingPass ? (
+              <TabsContent value="foodtruck" className="space-y-6">
+                <Card
+                  className="overflow-hidden border-orange-100 bg-white/95 shadow-clean"
+                  data-testid="owner-availability-workspace"
+                >
+                  <CardHeader className="border-b border-orange-100 bg-gradient-to-br from-orange-50 via-amber-50/70 to-white">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <CardTitle className="flex items-center gap-2 text-xl">
+                          {currentRestaurant?.isFoodTruck ? (
+                            <Truck className="h-5 w-5 text-orange-700" />
+                          ) : (
+                            <Clock className="h-5 w-5 text-orange-700" />
+                          )}
+                          {currentRestaurant?.isFoodTruck
+                            ? "Schedule & live"
+                            : "Hours & location"}
+                        </CardTitle>
+                        <CardDescription className="mt-1 max-w-2xl">
+                          {currentRestaurant?.isFoodTruck
+                            ? "Keep your weekly service hours, saved location, and live pin current."
+                            : "Keep the hours and map location on your public profile current."}
+                        </CardDescription>
+                      </div>
+                      <Badge
+                        variant="outline"
+                        className="border-orange-200 bg-white text-orange-900"
+                      >
+                        {currentRestaurant?.isFoodTruck
+                          ? "Food truck"
+                          : "Restaurant"}
+                      </Badge>
+                    </div>
+                  </CardHeader>
 
-            {selectedRestaurant && (
-              <RestaurantCreditRedemptionForm
-                restaurantId={selectedRestaurant}
-                onSuccess={(redemption) => {
-                  toast({
-                    title: "Success",
-                    description: `Credit redeemed successfully! Redemption ID: ${redemption.redemption?.id}`,
-                  });
-                  // Optionally refresh data or update UI
-                }}
-              />
-            )}
-          </TabsContent>
-        ) : null}
-
-        {canManageParkingPass ? (
-          <TabsContent value="bookings" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Calendar className="h-5 w-5" />
-                  Event Bookings
-                </CardTitle>
-                <CardDescription>
-                  Track upcoming paid event bookings for your selected truck and
-                  cancel when needed. Confirmed cancellations do not issue
-                  refunds.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid gap-3 md:grid-cols-3">
-                  <div className="rounded-lg border p-4">
-                    <p className="text-sm text-muted-foreground">
-                      Total bookings
-                    </p>
-                    <p className="mt-1 text-2xl font-semibold">
-                      {visibleTruckBookings.length}
-                    </p>
-                  </div>
-                  <div className="rounded-lg border p-4">
-                    <p className="text-sm text-muted-foreground">Confirmed</p>
-                    <p className="mt-1 text-2xl font-semibold">
-                      {
-                        visibleTruckBookings.filter(
-                          (booking) => booking.status === "confirmed",
-                        ).length
-                      }
-                    </p>
-                  </div>
-                  <div className="rounded-lg border p-4">
-                    <p className="text-sm text-muted-foreground">
-                      Upcoming spend
-                    </p>
-                    <p className="mt-1 text-2xl font-semibold">
-                      $
-                      {(
-                        visibleTruckBookings
-                          .filter(
-                            (booking) =>
-                              booking.status === "confirmed" ||
-                              booking.status === "pending",
-                          )
-                          .reduce(
-                            (sum, booking) =>
-                              sum + Number(booking.totalCents || 0),
-                            0,
-                          ) / 100
-                      ).toFixed(2)}
-                    </p>
-                  </div>
-                </div>
-
-                {loadingTruckBookings ? (
-                  <div className="flex items-center justify-center py-10 text-sm text-muted-foreground">
-                    Loading bookings...
-                  </div>
-                ) : visibleTruckBookings.length === 0 ? (
-                  <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-                    No event bookings yet for this truck.
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {visibleTruckBookings.map((booking) => {
-                      const canCancel =
-                        booking.status === "pending" ||
-                        booking.status === "confirmed";
-                      const eventDate = booking.event?.date
-                        ? new Date(booking.event.date)
-                        : null;
-
-                      return (
-                        <div key={booking.id} className="rounded-lg border p-4">
-                          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                            <div className="space-y-2">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <p className="font-semibold">
-                                  {booking.event?.host?.businessName ||
-                                    "Host venue"}
-                                </p>
-                                <Badge
-                                  variant={
-                                    booking.status === "confirmed"
-                                      ? "default"
-                                      : booking.status === "pending"
-                                        ? "secondary"
-                                        : "outline"
-                                  }
-                                >
-                                  {booking.status}
-                                </Badge>
-                              </div>
-                              {booking.event?.host?.address ? (
-                                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                  <MapPin className="h-4 w-4" />
-                                  <span>{booking.event.host.address}</span>
-                                </div>
-                              ) : null}
-                              {eventDate ? (
-                                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                  <Clock className="h-4 w-4" />
-                                  <span>
-                                    {format(eventDate, "EEE, MMM d")}
-                                    {booking.event?.startTime
-                                      ? ` at ${booking.event.startTime}`
-                                      : ""}
-                                    {booking.event?.endTime
-                                      ? ` - ${booking.event.endTime}`
-                                      : ""}
-                                  </span>
-                                </div>
-                              ) : null}
-                            </div>
-
-                            <div className="space-y-2 text-sm lg:text-right">
-                              <p className="font-semibold">
-                                $
-                                {(
-                                  Number(booking.totalCents || 0) / 100
-                                ).toFixed(2)}{" "}
-                                total
-                              </p>
-                              <p className="text-muted-foreground">
-                                Host fee $
-                                {(
-                                  Number(booking.hostPriceCents || 0) / 100
-                                ).toFixed(2)}{" "}
-                                + platform fee $
-                                {(
-                                  Number(booking.platformFeeCents || 0) / 100
-                                ).toFixed(2)}
-                              </p>
-                              {canCancel ? (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  disabled={bookingCancelMutation.isPending}
-                                  onClick={() => {
-                                    if (
-                                      confirm(
-                                        "Cancel this booking? No refund will be issued.",
-                                      )
-                                    ) {
-                                      bookingCancelMutation.mutate(booking.id);
-                                    }
-                                  }}
-                                >
-                                  Cancel Booking
-                                </Button>
-                              ) : null}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-        ) : null}
-
-        {canManageParkingPass ? (
-          <TabsContent value="foodtruck" className="space-y-6">
-            <Card
-              className="overflow-hidden border-orange-100 bg-white/95 shadow-clean"
-              data-testid="owner-availability-workspace"
-            >
-              <CardHeader className="border-b border-orange-100 bg-gradient-to-br from-orange-50 via-amber-50/70 to-white">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <CardTitle className="flex items-center gap-2 text-xl">
+                  <CardContent className="space-y-5 p-4 sm:p-6">
+                    <div className="grid gap-4 lg:grid-cols-2">
                       {currentRestaurant?.isFoodTruck ? (
-                        <Truck className="h-5 w-5 text-orange-700" />
-                      ) : (
-                        <Clock className="h-5 w-5 text-orange-700" />
-                      )}
-                      {currentRestaurant?.isFoodTruck
-                        ? "Schedule & live"
-                        : "Hours & location"}
-                    </CardTitle>
-                    <CardDescription className="mt-1 max-w-2xl">
-                      {currentRestaurant?.isFoodTruck
-                        ? "Keep your weekly service hours, saved location, and live pin current."
-                        : "Keep the hours and map location on your public profile current."}
-                    </CardDescription>
-                  </div>
-                  <Badge variant="outline" className="border-orange-200 bg-white text-orange-900">
-                    {currentRestaurant?.isFoodTruck ? "Food truck" : "Restaurant"}
-                  </Badge>
-                </div>
-              </CardHeader>
-
-              <CardContent className="space-y-5 p-4 sm:p-6">
-                <div className="grid gap-4 lg:grid-cols-2">
-                  {currentRestaurant?.isFoodTruck ? (
-                    <section
-                      className="rounded-2xl border border-orange-100 bg-orange-50/45 p-4 sm:p-5"
-                      data-testid="owner-live-location-panel"
-                    >
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div className="flex min-w-0 items-start gap-3">
-                          <span
-                            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ${
-                              isBroadcasting
-                                ? "bg-emerald-100 text-emerald-700"
-                                : connectionStatus === "connecting"
-                                  ? "bg-amber-100 text-amber-700"
-                                  : "bg-white text-orange-700 ring-1 ring-orange-100"
-                            }`}
-                          >
-                            {connectionStatus === "connecting" ? (
-                              <Loader2 className="h-5 w-5 animate-spin" />
-                            ) : isBroadcasting ? (
-                              <Radio className="h-5 w-5" />
-                            ) : (
-                              <WifiOff className="h-5 w-5" />
-                            )}
-                          </span>
-                          <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <h3 className="font-black text-[color:var(--text-primary)]">
-                                Live location
-                              </h3>
-                              <Badge
-                                className={
+                        <section
+                          className="rounded-2xl border border-orange-100 bg-orange-50/45 p-4 sm:p-5"
+                          data-testid="owner-live-location-panel"
+                        >
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div className="flex min-w-0 items-start gap-3">
+                              <span
+                                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ${
                                   isBroadcasting
-                                    ? "bg-emerald-600 text-white"
+                                    ? "bg-emerald-100 text-emerald-700"
                                     : connectionStatus === "connecting"
-                                      ? "bg-amber-500 text-white"
-                                      : "bg-stone-200 text-stone-800"
+                                      ? "bg-amber-100 text-amber-700"
+                                      : "bg-white text-orange-700 ring-1 ring-orange-100"
+                                }`}
+                              >
+                                {connectionStatus === "connecting" ? (
+                                  <Loader2 className="h-5 w-5 animate-spin" />
+                                ) : isBroadcasting ? (
+                                  <Radio className="h-5 w-5" />
+                                ) : (
+                                  <WifiOff className="h-5 w-5" />
+                                )}
+                              </span>
+                              <div className="min-w-0">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <h3 className="font-black text-[color:var(--text-primary)]">
+                                    Live location
+                                  </h3>
+                                  <Badge
+                                    className={
+                                      isBroadcasting
+                                        ? "bg-emerald-600 text-white"
+                                        : connectionStatus === "connecting"
+                                          ? "bg-amber-500 text-white"
+                                          : "bg-stone-200 text-stone-800"
+                                    }
+                                    data-testid="text-connection-status"
+                                  >
+                                    {connectionStatus === "connecting"
+                                      ? "Finding location"
+                                      : isBroadcasting
+                                        ? "Live"
+                                        : "Not live"}
+                                  </Badge>
+                                </div>
+                                <p className="mt-1 text-sm text-[color:var(--text-muted)]">
+                                  {connectionStatus === "connecting"
+                                    ? "Keep this page open while MealScout finds your current stop."
+                                    : isBroadcasting
+                                      ? "Customers can see your current truck location."
+                                      : "Share your current stop while you are serving."}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                            {!isBroadcasting ? (
+                              <Button
+                                onClick={handleStartBroadcasting}
+                                disabled={
+                                  startFoodTruckSessionMutation.isPending
                                 }
-                                data-testid="text-connection-status"
+                                className="min-h-11 flex-1 bg-emerald-600 text-white hover:bg-emerald-700"
+                                data-testid="button-start-broadcasting"
                               >
-                                {connectionStatus === "connecting"
-                                  ? "Finding location"
-                                  : isBroadcasting
-                                    ? "Live"
-                                    : "Not live"}
-                              </Badge>
-                            </div>
-                            <p className="mt-1 text-sm text-[color:var(--text-muted)]">
-                              {connectionStatus === "connecting"
-                                ? "Keep this page open while MealScout finds your current stop."
-                                : isBroadcasting
-                                  ? "Customers can see your current truck location."
-                                  : "Share your current stop while you are serving."}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-                        {!isBroadcasting ? (
-                          <Button
-                            onClick={handleStartBroadcasting}
-                            disabled={startFoodTruckSessionMutation.isPending}
-                            className="min-h-11 flex-1 bg-emerald-600 text-white hover:bg-emerald-700"
-                            data-testid="button-start-broadcasting"
-                          >
-                            {startFoodTruckSessionMutation.isPending ? (
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                {startFoodTruckSessionMutation.isPending ? (
+                                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Play className="mr-2 h-4 w-4" />
+                                )}
+                                {hasPremiumLocationTools
+                                  ? "Go live"
+                                  : "Upgrade to go live"}
+                              </Button>
                             ) : (
-                              <Play className="mr-2 h-4 w-4" />
-                            )}
-                            {hasPremiumLocationTools ? "Go live" : "Upgrade to go live"}
-                          </Button>
-                        ) : (
-                          <Button
-                            onClick={handleStopBroadcasting}
-                            disabled={stopFoodTruckSessionMutation.isPending}
-                            variant="destructive"
-                            className="min-h-11 flex-1"
-                            data-testid="button-stop-broadcasting"
-                          >
-                            {stopFoodTruckSessionMutation.isPending ? (
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            ) : (
-                              <Square className="mr-2 h-4 w-4" />
-                            )}
-                            Stop sharing
-                          </Button>
-                        )}
-                        {isBroadcasting ? (
-                          <ShareButton
-                            url={liveShareUrl}
-                            title={liveShareTitle}
-                            description={liveShareDescription}
-                            variant="outline"
-                            size="sm"
-                            className="min-h-11 flex-1 sm:flex-none"
-                          />
-                        ) : null}
-                      </div>
-
-                      {currentLocation ? (
-                        <div className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-emerald-100 bg-white p-3">
-                          <div className="flex min-w-0 items-center gap-2">
-                            <MapPin className="h-4 w-4 shrink-0 text-emerald-700" />
-                            <div className="min-w-0">
-                              <p className="text-sm font-bold">Current pin captured</p>
-                              <p
-                                className="text-xs text-[color:var(--text-muted)]"
-                                data-testid="text-last-broadcast"
+                              <Button
+                                onClick={handleStopBroadcasting}
+                                disabled={
+                                  stopFoodTruckSessionMutation.isPending
+                                }
+                                variant="destructive"
+                                className="min-h-11 flex-1"
+                                data-testid="button-stop-broadcasting"
                               >
-                                {lastBroadcast
-                                  ? `Updated ${format(lastBroadcast, "p")}`
-                                  : "Ready to send when sharing starts"}
-                              </p>
-                            </div>
+                                {stopFoodTruckSessionMutation.isPending ? (
+                                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Square className="mr-2 h-4 w-4" />
+                                )}
+                                Stop sharing
+                              </Button>
+                            )}
+                            {isBroadcasting ? (
+                              <ShareButton
+                                url={liveShareUrl}
+                                title={liveShareTitle}
+                                description={liveShareDescription}
+                                variant="outline"
+                                size="sm"
+                                className="min-h-11 flex-1 sm:flex-none"
+                              />
+                            ) : null}
                           </div>
-                          {gpsAccuracy ? (
-                            <Badge variant="outline" className="shrink-0 bg-white">
-                              {gpsAccuracy > 1000 ? "Approximate pin" : "Precise pin"}
-                            </Badge>
+
+                          {currentLocation ? (
+                            <div className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-emerald-100 bg-white p-3">
+                              <div className="flex min-w-0 items-center gap-2">
+                                <MapPin className="h-4 w-4 shrink-0 text-emerald-700" />
+                                <div className="min-w-0">
+                                  <p className="text-sm font-bold">
+                                    Current pin captured
+                                  </p>
+                                  <p
+                                    className="text-xs text-[color:var(--text-muted)]"
+                                    data-testid="text-last-broadcast"
+                                  >
+                                    {lastBroadcast
+                                      ? `Updated ${format(lastBroadcast, "p")}`
+                                      : "Ready to send when sharing starts"}
+                                  </p>
+                                </div>
+                              </div>
+                              {gpsAccuracy ? (
+                                <Badge
+                                  variant="outline"
+                                  className="shrink-0 bg-white"
+                                >
+                                  {gpsAccuracy > 1000
+                                    ? "Approximate pin"
+                                    : "Precise pin"}
+                                </Badge>
+                              ) : null}
+                            </div>
                           ) : null}
-                        </div>
+
+                          {locationError ? (
+                            <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3">
+                              <div className="flex items-start gap-2">
+                                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-700" />
+                                <p
+                                  className="text-sm text-red-900"
+                                  data-testid="text-location-error"
+                                >
+                                  {/approximate/i.test(locationError)
+                                    ? "MealScout is using an approximate pin. Turn on precise location for a better result."
+                                    : /denied|permission/i.test(locationError)
+                                      ? "Location access is off. Allow location access for MealScout and try again."
+                                      : "MealScout could not refresh your live pin. Check location access and your connection, then try again."}
+                                </p>
+                              </div>
+                            </div>
+                          ) : null}
+
+                          <p className="mt-4 text-xs leading-5 text-[color:var(--text-muted)]">
+                            Keep this page open while you are live. MealScout
+                            stops sharing when location updates stop.
+                          </p>
+                        </section>
                       ) : null}
 
-                      {locationError ? (
-                        <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3">
-                          <div className="flex items-start gap-2">
+                      <section
+                        className={`rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-4 sm:p-5 ${
+                          currentRestaurant?.isFoodTruck ? "" : "lg:col-span-2"
+                        }`}
+                        data-testid="owner-saved-location-panel"
+                      >
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                          <div className="flex min-w-0 items-start gap-3">
+                            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-orange-100 text-orange-700">
+                              <MapPin className="h-5 w-5" />
+                            </span>
+                            <div className="min-w-0">
+                              <h3 className="font-black text-[color:var(--text-primary)]">
+                                {currentRestaurant?.isFoodTruck
+                                  ? "Saved location"
+                                  : "Restaurant location"}
+                              </h3>
+                              <p className="mt-1 text-sm text-[color:var(--text-muted)]">
+                                {currentRestaurant?.isFoodTruck
+                                  ? "Customers see this location whenever your truck is not live."
+                                  : "Use your device to refresh the map pin for this address."}
+                              </p>
+                            </div>
+                          </div>
+                          <Button
+                            onClick={handleUpdateRestaurantLocation}
+                            disabled={
+                              isUpdatingLocation ||
+                              updateRestaurantLocationMutation.isPending
+                            }
+                            variant="outline"
+                            className="min-h-11 w-full sm:w-auto"
+                            data-testid="button-update-location"
+                          >
+                            {isUpdatingLocation ||
+                            updateRestaurantLocationMutation.isPending ? (
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            ) : (
+                              <RefreshCw className="mr-2 h-4 w-4" />
+                            )}
+                            {hasPremiumLocationTools
+                              ? "Use current location"
+                              : "Upgrade location tools"}
+                          </Button>
+                        </div>
+
+                        <div className="mt-4 rounded-xl bg-[var(--bg-surface-muted)] p-3">
+                          <p className="text-xs font-bold uppercase tracking-[0.1em] text-[color:var(--text-muted)]">
+                            Saved on profile
+                          </p>
+                          <p
+                            className="mt-1 text-sm font-bold text-[color:var(--text-primary)]"
+                            data-testid="text-restaurant-location"
+                          >
+                            {[currentRestaurant?.city, currentRestaurant?.state]
+                              .filter(Boolean)
+                              .join(", ") || "No saved city or state"}
+                          </p>
+                        </div>
+
+                        {locationUpdateError ? (
+                          <div className="mt-3 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-3">
                             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-700" />
                             <p
                               className="text-sm text-red-900"
-                              data-testid="text-location-error"
+                              data-testid="text-location-update-error"
                             >
-                              {/approximate/i.test(locationError)
-                                ? "MealScout is using an approximate pin. Turn on precise location for a better result."
-                                : /denied|permission/i.test(locationError)
-                                  ? "Location access is off. Allow location access for MealScout and try again."
-                                  : "MealScout could not refresh your live pin. Check location access and your connection, then try again."}
+                              {/denied|permission/i.test(locationUpdateError)
+                                ? "Location access is off. Allow location access for MealScout and try again."
+                                : "MealScout could not update this location. Check location access and try again."}
                             </p>
                           </div>
-                        </div>
-                      ) : null}
+                        ) : null}
 
-                      <p className="mt-4 text-xs leading-5 text-[color:var(--text-muted)]">
-                        Keep this page open while you are live. MealScout stops sharing when location updates stop.
-                      </p>
-                    </section>
-                  ) : null}
+                        {currentRestaurant?.isFoodTruck ? (
+                          <div className="mt-4 border-t border-[color:var(--border-subtle)] pt-4">
+                            <p className="text-sm font-bold">Booked stops</p>
+                            <p className="mt-1 text-xs text-[color:var(--text-muted)]">
+                              Manage host bookings and scheduled parking
+                              separately from your weekly service hours.
+                            </p>
+                            <Button
+                              asChild
+                              variant="ghost"
+                              className="mt-2 px-0 text-orange-800"
+                            >
+                              <Link href="/parking-pass-manage">
+                                Manage booked stops
+                              </Link>
+                            </Button>
+                          </div>
+                        ) : null}
+                      </section>
+                    </div>
 
-                  <section
-                    className={`rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-4 sm:p-5 ${
-                      currentRestaurant?.isFoodTruck ? "" : "lg:col-span-2"
-                    }`}
-                    data-testid="owner-saved-location-panel"
-                  >
-                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                      <div className="flex min-w-0 items-start gap-3">
-                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-orange-100 text-orange-700">
-                          <MapPin className="h-5 w-5" />
+                    <section
+                      className="rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-4 sm:p-5"
+                      data-testid="owner-weekly-hours-panel"
+                    >
+                      <div className="mb-4 flex items-start gap-3">
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700">
+                          <Clock className="h-5 w-5" />
                         </span>
-                        <div className="min-w-0">
+                        <div>
                           <h3 className="font-black text-[color:var(--text-primary)]">
                             {currentRestaurant?.isFoodTruck
-                              ? "Saved location"
-                              : "Restaurant location"}
+                              ? "Weekly service hours"
+                              : "Weekly hours"}
                           </h3>
                           <p className="mt-1 text-sm text-[color:var(--text-muted)]">
                             {currentRestaurant?.isFoodTruck
-                              ? "Customers see this location whenever your truck is not live."
-                              : "Use your device to refresh the map pin for this address."}
+                              ? "Set the usual days and times customers can find your truck."
+                              : "Set the opening and closing hours shown on your public profile."}
                           </p>
                         </div>
                       </div>
-                      <Button
-                        onClick={handleUpdateRestaurantLocation}
-                        disabled={
-                          isUpdatingLocation ||
-                          updateRestaurantLocationMutation.isPending
-                        }
-                        variant="outline"
-                        className="min-h-11 w-full sm:w-auto"
-                        data-testid="button-update-location"
-                      >
-                        {isUpdatingLocation ||
-                        updateRestaurantLocationMutation.isPending ? (
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        ) : (
-                          <RefreshCw className="mr-2 h-4 w-4" />
-                        )}
-                        {hasPremiumLocationTools
-                          ? "Use current location"
-                          : "Upgrade location tools"}
-                      </Button>
-                    </div>
 
-                    <div className="mt-4 rounded-xl bg-[var(--bg-surface-muted)] p-3">
-                      <p className="text-xs font-bold uppercase tracking-[0.1em] text-[color:var(--text-muted)]">
-                        Saved on profile
-                      </p>
-                      <p
-                        className="mt-1 text-sm font-bold text-[color:var(--text-primary)]"
-                        data-testid="text-restaurant-location"
-                      >
-                        {[currentRestaurant?.city, currentRestaurant?.state]
-                          .filter(Boolean)
-                          .join(", ") || "No saved city or state"}
-                      </p>
-                    </div>
-
-                    {locationUpdateError ? (
-                      <div className="mt-3 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-3">
-                        <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-700" />
-                        <p
-                          className="text-sm text-red-900"
-                          data-testid="text-location-update-error"
-                        >
-                          {/denied|permission/i.test(locationUpdateError)
-                            ? "Location access is off. Allow location access for MealScout and try again."
-                            : "MealScout could not update this location. Check location access and try again."}
-                        </p>
-                      </div>
-                    ) : null}
-
-                    {currentRestaurant?.isFoodTruck ? (
-                      <div className="mt-4 border-t border-[color:var(--border-subtle)] pt-4">
-                        <p className="text-sm font-bold">Booked stops</p>
-                        <p className="mt-1 text-xs text-[color:var(--text-muted)]">
-                          Manage host bookings and scheduled parking separately from your weekly service hours.
-                        </p>
-                        <Button asChild variant="ghost" className="mt-2 px-0 text-orange-800">
-                          <Link href="/parking-pass-manage">Manage booked stops</Link>
-                        </Button>
-                      </div>
-                    ) : null}
-                  </section>
-                </div>
-
-                <section
-                  className="rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-4 sm:p-5"
-                  data-testid="owner-weekly-hours-panel"
-                >
-                  <div className="mb-4 flex items-start gap-3">
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700">
-                      <Clock className="h-5 w-5" />
-                    </span>
-                    <div>
-                      <h3 className="font-black text-[color:var(--text-primary)]">
-                        {currentRestaurant?.isFoodTruck
-                          ? "Weekly service hours"
-                          : "Weekly hours"}
-                      </h3>
-                      <p className="mt-1 text-sm text-[color:var(--text-muted)]">
-                        {currentRestaurant?.isFoodTruck
-                          ? "Set the usual days and times customers can find your truck."
-                          : "Set the opening and closing hours shown on your public profile."}
-                      </p>
-                    </div>
-                  </div>
-
-                  <Form {...operatingHoursForm}>
-                    <form
-                      onSubmit={operatingHoursForm.handleSubmit(
-                        handleOperatingHoursSubmit,
-                      )}
-                      className="space-y-4"
-                    >
-                      <div className="grid gap-3 lg:grid-cols-2">
-                        {["mon", "tue", "wed", "thu", "fri", "sat", "sun"].map(
-                          (day) => {
-                            const dayName = {
-                              mon: "Monday",
-                              tue: "Tuesday",
-                              wed: "Wednesday",
-                              thu: "Thursday",
-                              fri: "Friday",
-                              sat: "Saturday",
-                              sun: "Sunday",
-                            }[day];
-                            const timeSlots =
-                              operatingHoursForm.watch(
-                                day as keyof OperatingHoursFormData,
-                              ) || [];
-
-                            return (
-                              <div
-                                key={day}
-                                className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)]/55 p-3"
-                              >
-                                <div className="flex min-h-9 items-center justify-between gap-3">
-                                  <FormLabel className="text-sm font-black">
-                                    {dayName}
-                                  </FormLabel>
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() =>
-                                      addTimeSlot(
-                                        day as keyof OperatingHoursFormData,
-                                      )
-                                    }
-                                    disabled={timeSlots.length >= 3}
-                                    data-testid={`button-add-${day}-hours`}
-                                  >
-                                    <Plus className="mr-1 h-4 w-4" />
-                                    Add time
-                                  </Button>
-                                </div>
-
-                                {timeSlots.length === 0 ? (
-                                  <p
-                                    className="mt-2 text-sm text-[color:var(--text-muted)]"
-                                    data-testid={`text-${day}-closed`}
-                                  >
-                                    Closed
-                                  </p>
-                                ) : (
-                                  <div className="mt-2 space-y-2">
-                                    {timeSlots.map((slot, index) => (
-                                      <div
-                                        key={index}
-                                        className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto] items-start gap-2"
-                                      >
-                                        <FormField
-                                          control={operatingHoursForm.control}
-                                          name={`${day}.${index}.open` as any}
-                                          render={({ field }) => (
-                                            <FormItem>
-                                              <FormControl>
-                                                <Input
-                                                  {...field}
-                                                  type="time"
-                                                  aria-label={`${dayName} opening time`}
-                                                  data-testid={`input-${day}-${index}-open`}
-                                                />
-                                              </FormControl>
-                                              <FormMessage />
-                                            </FormItem>
-                                          )}
-                                        />
-                                        <span className="pt-2 text-sm text-[color:var(--text-muted)]">
-                                          to
-                                        </span>
-                                        <FormField
-                                          control={operatingHoursForm.control}
-                                          name={`${day}.${index}.close` as any}
-                                          render={({ field }) => (
-                                            <FormItem>
-                                              <FormControl>
-                                                <Input
-                                                  {...field}
-                                                  type="time"
-                                                  aria-label={`${dayName} closing time`}
-                                                  data-testid={`input-${day}-${index}-close`}
-                                                />
-                                              </FormControl>
-                                              <FormMessage />
-                                            </FormItem>
-                                          )}
-                                        />
-                                        <Button
-                                          type="button"
-                                          variant="ghost"
-                                          size="icon"
-                                          className="h-10 w-10"
-                                          aria-label={`Remove ${dayName} time`}
-                                          onClick={() =>
-                                            removeTimeSlot(
-                                              day as keyof OperatingHoursFormData,
-                                              index,
-                                            )
-                                          }
-                                          data-testid={`button-remove-${day}-${index}-hours`}
-                                        >
-                                          <Trash2 className="h-4 w-4" />
-                                        </Button>
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          },
-                        )}
-                      </div>
-
-                      <div className="flex flex-col gap-3 border-t border-[color:var(--border-subtle)] pt-4 sm:flex-row sm:items-center">
-                        <Button
-                          type="submit"
-                          disabled={updateOperatingHoursMutation.isPending}
-                          className="min-h-11 w-full sm:w-auto"
-                          data-testid="button-save-operating-hours"
-                        >
-                          {updateOperatingHoursMutation.isPending ? (
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          ) : (
-                            <Save className="mr-2 h-4 w-4" />
+                      <Form {...operatingHoursForm}>
+                        <form
+                          onSubmit={operatingHoursForm.handleSubmit(
+                            handleOperatingHoursSubmit,
                           )}
-                          {currentRestaurant?.isFoodTruck
-                            ? "Save schedule"
-                            : "Save hours"}
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() => operatingHoursForm.reset()}
-                          className="min-h-11 w-full sm:w-auto"
-                          data-testid="button-reset-operating-hours"
+                          className="space-y-4"
                         >
-                          <RotateCcw className="mr-2 h-4 w-4" />
-                          Discard changes
+                          <div className="grid gap-3 lg:grid-cols-2">
+                            {[
+                              "mon",
+                              "tue",
+                              "wed",
+                              "thu",
+                              "fri",
+                              "sat",
+                              "sun",
+                            ].map((day) => {
+                              const dayName = {
+                                mon: "Monday",
+                                tue: "Tuesday",
+                                wed: "Wednesday",
+                                thu: "Thursday",
+                                fri: "Friday",
+                                sat: "Saturday",
+                                sun: "Sunday",
+                              }[day];
+                              const timeSlots =
+                                operatingHoursForm.watch(
+                                  day as keyof OperatingHoursFormData,
+                                ) || [];
+
+                              return (
+                                <div
+                                  key={day}
+                                  className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)]/55 p-3"
+                                >
+                                  <div className="flex min-h-9 items-center justify-between gap-3">
+                                    <FormLabel className="text-sm font-black">
+                                      {dayName}
+                                    </FormLabel>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() =>
+                                        addTimeSlot(
+                                          day as keyof OperatingHoursFormData,
+                                        )
+                                      }
+                                      disabled={timeSlots.length >= 3}
+                                      data-testid={`button-add-${day}-hours`}
+                                    >
+                                      <Plus className="mr-1 h-4 w-4" />
+                                      Add time
+                                    </Button>
+                                  </div>
+
+                                  {timeSlots.length === 0 ? (
+                                    <p
+                                      className="mt-2 text-sm text-[color:var(--text-muted)]"
+                                      data-testid={`text-${day}-closed`}
+                                    >
+                                      Closed
+                                    </p>
+                                  ) : (
+                                    <div className="mt-2 space-y-2">
+                                      {timeSlots.map((slot, index) => (
+                                        <div
+                                          key={index}
+                                          className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto] items-start gap-2"
+                                        >
+                                          <FormField
+                                            control={operatingHoursForm.control}
+                                            name={`${day}.${index}.open` as any}
+                                            render={({ field }) => (
+                                              <FormItem>
+                                                <FormControl>
+                                                  <Input
+                                                    {...field}
+                                                    type="time"
+                                                    aria-label={`${dayName} opening time`}
+                                                    data-testid={`input-${day}-${index}-open`}
+                                                  />
+                                                </FormControl>
+                                                <FormMessage />
+                                              </FormItem>
+                                            )}
+                                          />
+                                          <span className="pt-2 text-sm text-[color:var(--text-muted)]">
+                                            to
+                                          </span>
+                                          <FormField
+                                            control={operatingHoursForm.control}
+                                            name={
+                                              `${day}.${index}.close` as any
+                                            }
+                                            render={({ field }) => (
+                                              <FormItem>
+                                                <FormControl>
+                                                  <Input
+                                                    {...field}
+                                                    type="time"
+                                                    aria-label={`${dayName} closing time`}
+                                                    data-testid={`input-${day}-${index}-close`}
+                                                  />
+                                                </FormControl>
+                                                <FormMessage />
+                                              </FormItem>
+                                            )}
+                                          />
+                                          <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-10 w-10"
+                                            aria-label={`Remove ${dayName} time`}
+                                            onClick={() =>
+                                              removeTimeSlot(
+                                                day as keyof OperatingHoursFormData,
+                                                index,
+                                              )
+                                            }
+                                            data-testid={`button-remove-${day}-${index}-hours`}
+                                          >
+                                            <Trash2 className="h-4 w-4" />
+                                          </Button>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          <div className="flex flex-col gap-3 border-t border-[color:var(--border-subtle)] pt-4 sm:flex-row sm:items-center">
+                            <Button
+                              type="submit"
+                              disabled={updateOperatingHoursMutation.isPending}
+                              className="min-h-11 w-full sm:w-auto"
+                              data-testid="button-save-operating-hours"
+                            >
+                              {updateOperatingHoursMutation.isPending ? (
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              ) : (
+                                <Save className="mr-2 h-4 w-4" />
+                              )}
+                              {currentRestaurant?.isFoodTruck
+                                ? "Save schedule"
+                                : "Save hours"}
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={() => operatingHoursForm.reset()}
+                              className="min-h-11 w-full sm:w-auto"
+                              data-testid="button-reset-operating-hours"
+                            >
+                              <RotateCcw className="mr-2 h-4 w-4" />
+                              Discard changes
+                            </Button>
+                          </div>
+                        </form>
+                      </Form>
+                    </section>
+
+                    <details className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)]/45 p-4">
+                      <summary className="cursor-pointer text-sm font-bold text-[color:var(--text-secondary)]">
+                        Business type
+                      </summary>
+                      <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex items-start gap-3">
+                          <Truck className="mt-0.5 h-5 w-5 shrink-0 text-orange-700" />
+                          <div>
+                            <p className="text-sm font-bold">
+                              {currentRestaurant?.isFoodTruck
+                                ? "Food-truck tools are enabled"
+                                : "Restaurant tools are enabled"}
+                            </p>
+                            <p className="mt-1 text-xs text-[color:var(--text-muted)]">
+                              Change this only if the business type is
+                              incorrect.
+                            </p>
+                          </div>
+                        </div>
+                        <Button
+                          variant="outline"
+                          onClick={() =>
+                            toggleFoodTruckMutation.mutate(
+                              !currentRestaurant?.isFoodTruck,
+                            )
+                          }
+                          disabled={toggleFoodTruckMutation.isPending}
+                          className="min-h-11 w-full sm:w-auto"
+                          data-testid="button-toggle-food-truck"
+                        >
+                          {currentRestaurant?.isFoodTruck
+                            ? "Use restaurant tools"
+                            : "Use food-truck tools"}
                         </Button>
                       </div>
-                    </form>
-                  </Form>
-                </section>
-
-                <details className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)]/45 p-4">
-                  <summary className="cursor-pointer text-sm font-bold text-[color:var(--text-secondary)]">
-                    Business type
-                  </summary>
-                  <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="flex items-start gap-3">
-                      <Truck className="mt-0.5 h-5 w-5 shrink-0 text-orange-700" />
-                      <div>
-                        <p className="text-sm font-bold">
-                          {currentRestaurant?.isFoodTruck
-                            ? "Food-truck tools are enabled"
-                            : "Restaurant tools are enabled"}
-                        </p>
-                        <p className="mt-1 text-xs text-[color:var(--text-muted)]">
-                          Change this only if the business type is incorrect.
-                        </p>
-                      </div>
-                    </div>
-                    <Button
-                      variant="outline"
-                      onClick={() =>
-                        toggleFoodTruckMutation.mutate(
-                          !currentRestaurant?.isFoodTruck,
-                        )
-                      }
-                      disabled={toggleFoodTruckMutation.isPending}
-                      className="min-h-11 w-full sm:w-auto"
-                      data-testid="button-toggle-food-truck"
-                    >
-                      {currentRestaurant?.isFoodTruck
-                        ? "Use restaurant tools"
-                        : "Use food-truck tools"}
-                    </Button>
-                  </div>
-                </details>
-              </CardContent>
-            </Card>
-          </TabsContent>
+                    </details>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            ) : null}
+          </Tabs>
         ) : null}
-      </Tabs>
-
       </div>
     </BusinessWorkspaceShell>
   );
