@@ -72,8 +72,8 @@ for (const blockedScoutExit of [
 }
 assert(
   scout.includes("/scout — The canonical MealScout food discovery page.") &&
-    scout.includes("Nearby food coverage is still growing") &&
-    scout.includes("Browse nearby or open the map"),
+    scout.includes("Local food coverage is still growing") &&
+    scout.includes("Explore the map or try another craving"),
   "Scout must keep honest limited-coverage copy visible.",
 );
 assert(

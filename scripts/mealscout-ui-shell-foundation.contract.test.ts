@@ -49,11 +49,19 @@ assert.match(
   navigation,
   /guest: \[[\s\S]*label: "Scout"[\s\S]*label: "Saved"[\s\S]*label: "Account"/,
 );
-assert.match(navigation, /data-scout-mobile-nav-shell=\{[\s\S]*"navigation-only"/);
-assert.doesNotMatch(navigation, /useScoutNavSearch|\{scoutNavSearch\}/);
+assert.match(
+  navigation,
+  /data-scout-mobile-nav-shell=\{[\s\S]*"search-and-navigation"/,
+);
+assert.match(navigation, /useScoutNavSearch|\{scoutNavSearch\}/);
+assert.match(navigation, /isScoutRoute[\s\S]*\? "customer"[\s\S]*: "guest"/);
 
-assert.match(scout, /data-scout-search-surface="top"/);
-assert.match(scout, /<ScoutSearchDock[\s\S]*placement="inline"/);
+assert.doesNotMatch(scout, /data-scout-search-surface="top"/);
+assert.doesNotMatch(scout, /<ScoutSearchDock[\s\S]*placement="inline"/);
+assert.doesNotMatch(
+  app,
+  /currentPath === "\/scout"[\s\S]*usesCinematicBackground/,
+);
 
 assert.match(menu, /const publicProfileHref =/);
 assert.match(menu, /restaurantName \|\| "Menu"/);

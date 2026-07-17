@@ -761,9 +761,11 @@ export function GoogleMapSurface({
   const roadTrafficLayerRef = useRef<any>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [mapReadyVersion, setMapReadyVersion] = useState(0);
+  const [mapVisualReady, setMapVisualReady] = useState(false);
   const hasReportedFatalErrorRef = useRef(false);
   const onWindowResizeRef = useRef<(() => void) | null>(null);
   const idleListenerRef = useRef<any>(null);
+  const tilesLoadedListenerRef = useRef<any>(null);
   const layoutTimeoutIdsRef = useRef<number[]>([]);
   const onBoundsChangedRef = useRef(onBoundsChanged);
   const onZoomChangedRef = useRef(onZoomChanged);
@@ -862,6 +864,7 @@ export function GoogleMapSurface({
           await ensureGoogleMapConstructor(googleMaps);
 
         if (!mapRef.current) {
+          setMapVisualReady(false);
           const prefersFinePointer =
             typeof window !== "undefined" &&
             typeof window.matchMedia === "function" &&
@@ -941,6 +944,15 @@ export function GoogleMapSurface({
           idleListenerRef.current = mapRef.current.addListener(
             "idle",
             emitViewportState,
+          );
+          tilesLoadedListenerRef.current?.remove?.();
+          tilesLoadedListenerRef.current = mapRef.current.addListener(
+            "tilesloaded",
+            () => {
+              if (mounted) setMapVisualReady(true);
+              tilesLoadedListenerRef.current?.remove?.();
+              tilesLoadedListenerRef.current = null;
+            },
           );
 
           // Trigger resize whenever the container changes size (e.g. on
@@ -1262,6 +1274,8 @@ export function GoogleMapSurface({
       layoutTimeoutIdsRef.current = [];
       idleListenerRef.current?.remove?.();
       idleListenerRef.current = null;
+      tilesLoadedListenerRef.current?.remove?.();
+      tilesLoadedListenerRef.current = null;
       Array.from(markerRefs.current.values()).forEach((instance) => {
         googleMaps?.event?.clearInstanceListeners?.(instance);
         removeMarkerFromMap(instance);
@@ -1325,13 +1339,33 @@ export function GoogleMapSurface({
   };
 
   return (
-    <div className="h-full w-full relative">
+    <div className="relative h-full w-full bg-[#f7ead0]">
       <div className="h-full w-full">
         <div
           ref={mapContainerRef}
-          className="ms-google-map-canvas h-full w-full overflow-hidden"
+          className={`ms-google-map-canvas h-full w-full overflow-hidden transition-opacity duration-300 ${
+            mapVisualReady ? "opacity-100" : "opacity-0"
+          }`}
         />
       </div>
+
+      {!mapVisualReady && !loadError ? (
+        <div
+          className="pointer-events-none absolute inset-0 z-[2] overflow-hidden bg-[#f7ead0]"
+          data-google-map-loading="true"
+          role="status"
+          aria-label="Loading map"
+        >
+          <div className="absolute -left-10 top-[30%] h-2 w-[72%] -rotate-6 rounded-full bg-white/80" />
+          <div className="absolute -right-16 top-[58%] h-2 w-[78%] rotate-12 rounded-full bg-white/75" />
+          <div className="absolute left-[34%] -top-12 h-[82%] w-2 rotate-[24deg] rounded-full bg-white/70" />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_68%_25%,rgba(255,185,94,0.28),transparent_32%),radial-gradient(circle_at_20%_78%,rgba(103,190,151,0.22),transparent_30%)]" />
+          <div className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center gap-2 rounded-full bg-white/90 px-3 py-2 text-xs font-black text-[#4a2917] shadow-sm ring-1 ring-orange-200/70">
+            <span className="h-2 w-2 animate-pulse rounded-full bg-orange-500" />
+            Loading map
+          </div>
+        </div>
+      ) : null}
 
       {/* Cinematic grade over the live map; no bitmap overlay, map stays interactive. */}
       {isNightTheme && !useNativeMapStyle && (

@@ -61,7 +61,7 @@ for (const requiredSnippet of [
   "localRotatingSpotCandidatesForFeed",
   "networkRotatingSpotCandidates={activityFallbackRestaurants}",
   "rotateScoutSpots(",
-  'title: "Scout These Spots"',
+  'title: "Food Trucks to Explore"',
   'data-scout-row-fallback={',
   "scoutRotatingRowFallbackCopy",
   "emptyRowsEligibleForRotation",
@@ -70,6 +70,7 @@ for (const requiredSnippet of [
   "row.rotatingFallbackFor",
   'scope: "nearby" as const',
   'scope: "network" as const',
+  "claimedFallbackBusinessKeys.add(key)",
 ]) {
   assert.ok(
     scoutPage.includes(requiredSnippet),

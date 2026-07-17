@@ -5,6 +5,7 @@ const scoutPage = readFileSync("client/src/pages/explore-preview-v2.tsx", "utf8"
 const quarantinedScoutPage = readFileSync("client/src/pages/explore-preview.tsx", "utf8");
 const scoutCopy = readFileSync("client/src/features/scout/scoutSceneCopy.ts", "utf8");
 const scoutSearchDock = readFileSync("client/src/components/scout/ScoutSearchDock.tsx", "utf8");
+const navigation = readFileSync("client/src/components/navigation.tsx", "utf8");
 const publicProfilePage = readFileSync("client/src/pages/public-profile.tsx", "utf8");
 const platformBuild = readFileSync("scripts/platformBuild.mjs", "utf8");
 
@@ -48,10 +49,9 @@ for (const requiredScoutSnippet of [
   "function ScoutFirstScreenDecisionStack(",
   'data-scout-first-screen-decision-stack="true"',
   'data-scout-immediate-compact-card="true"',
-  'placement="inline"',
   "{scoutRows.map((row) => (",
-  "No nearby food yet",
-  "Search nearby food or move the map",
+  "No food results yet",
+  "Try a craving, category, or another map area.",
 ]) {
   if (!scoutPage.includes(requiredScoutSnippet)) {
     throw new Error(`Canonical Scout page missing snippet: ${requiredScoutSnippet}`);
@@ -114,7 +114,19 @@ if (
 }
 
 if (!scoutSearchDock.includes('data-scout-search-placement={placement}')) {
-  throw new Error("Scout search dock must expose fixed vs inline placement for the first-screen decision stack.");
+  throw new Error("Scout search dock must expose its placement for the shared shell.");
+}
+
+if (
+  !navigation.includes('placement="navigation"') ||
+  !navigation.includes('data-scout-mobile-nav-shell={') ||
+  !navigation.includes('"search-and-navigation"')
+) {
+  throw new Error("Scout search must be integrated with consumer navigation.");
+}
+
+if (scoutPage.includes('data-scout-search-surface="top"')) {
+  throw new Error("Scout must not render a separate search slab above the map.");
 }
 
 for (const publicProfileSnippet of [

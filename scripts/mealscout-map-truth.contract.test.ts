@@ -74,12 +74,15 @@ assert.doesNotMatch(
 const googleTags = scout.match(/<GoogleMapSurface[\s\S]*?\/>/g) || [];
 assert.equal(googleTags.length, 2, "Scout must have compact and full Google maps.");
 for (const tag of googleTags) {
-  assert.match(tag, /useNativeMapStyle=\{true\}/);
+  assert.match(tag, /useNativeMapStyle=\{false\}/);
   assert.match(tag, /isNightTheme=\{false\}/);
 }
 assert.match(googleTags[0], /showZoomControls=\{false\}/);
 assert.match(googleTags[1], /showZoomControls=\{true\}/);
 assert.match(googleMap, /useNativeMapStyle[\s\S]*styles\s*=\s*null/);
+assert.match(googleMap, /mapStyleFoodDay/);
+assert.match(googleMap, /data-google-map-loading="true"/);
+assert.match(googleMap, /tilesLoadedListenerRef\.current/);
 assert.match(googleMap, /idleListenerRef\.current\?\.remove/);
 assert.match(googleMap, /layoutTimeoutIdsRef\.current[\s\S]*clearTimeout/);
 assert.match(googleMap, /clearInstanceListeners/);
