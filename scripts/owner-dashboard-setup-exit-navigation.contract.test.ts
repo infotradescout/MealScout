@@ -19,8 +19,9 @@ const requiredPageSnippets = [
   'data-testid="button-exit-setup-mode"',
   "<Link href={buildDashboardHref()}>",
   "<OwnerProfileWorkspace",
-  'activeWorkspaceModule !== "profile"',
-  'activeWorkspaceModule !== "media"',
+  'setupMode === "profile"',
+  'setupMode === "profile-media"',
+  '!["schedule", "bookings"].includes(setupMode)',
 ];
 
 const requiredNonSetupLinks = [

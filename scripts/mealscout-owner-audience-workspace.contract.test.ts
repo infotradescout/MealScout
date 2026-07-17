@@ -18,7 +18,8 @@ const dashboardRequirements = [
   'workspaceMode === "audience" || setupMode === "analytics"',
   'activeWorkspaceModule === "audience"',
   "<OwnerAudienceWorkspace",
-  'activeWorkspaceModule !== "audience"',
+  'activeWorkspaceModule === "overview"',
+  'activeWorkspaceModule === "availability"',
   "legacyAnalyticsEnabled &&",
 ];
 

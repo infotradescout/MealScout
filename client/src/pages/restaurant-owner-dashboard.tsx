@@ -1649,28 +1649,6 @@ export default function RestaurantOwnerDashboard() {
     },
   });
 
-  const toggleFoodTruckMutation = useMutation({
-    mutationFn: async (isFoodTruck: boolean) => {
-      return await apiRequest(
-        "PATCH",
-        `/api/restaurants/${selectedRestaurant}`,
-        {
-          isFoodTruck,
-        },
-      );
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["/api/restaurants/my-restaurants"],
-      });
-      toast({
-        title: "Business type updated",
-        description:
-          "The matching location and schedule tools are now available.",
-      });
-    },
-  });
-
   // Restaurant location update mutation (different from food truck location)
   const updateRestaurantLocationMutation = useMutation({
     mutationFn: async (location: { latitude: number; longitude: number }) => {
@@ -4479,7 +4457,7 @@ export default function RestaurantOwnerDashboard() {
               <TabsList className="grid w-full grid-cols-2 rounded-2xl bg-orange-50 p-1 sm:max-w-md">
                 {canManageParkingPass ? (
                   <TabsTrigger value="foodtruck" data-testid="tab-food-truck">
-                    {currentRestaurant?.isFoodTruck ? (
+                    {currentIsTruckBusiness ? (
                       <Truck className="mr-1 hidden h-4 w-4 sm:block" />
                     ) : (
                       <Clock className="mr-1 hidden h-4 w-4 sm:block" />
@@ -5391,17 +5369,17 @@ export default function RestaurantOwnerDashboard() {
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
                         <CardTitle className="flex items-center gap-2 text-xl">
-                          {currentRestaurant?.isFoodTruck ? (
+                          {currentIsTruckBusiness ? (
                             <Truck className="h-5 w-5 text-orange-700" />
                           ) : (
                             <Clock className="h-5 w-5 text-orange-700" />
                           )}
-                          {currentRestaurant?.isFoodTruck
+                          {currentIsTruckBusiness
                             ? "Schedule & live"
                             : "Hours & location"}
                         </CardTitle>
                         <CardDescription className="mt-1 max-w-2xl">
-                          {currentRestaurant?.isFoodTruck
+                          {currentIsTruckBusiness
                             ? "Keep your weekly service hours, saved location, and live pin current."
                             : "Keep the hours and map location on your public profile current."}
                         </CardDescription>
@@ -5410,7 +5388,7 @@ export default function RestaurantOwnerDashboard() {
                         variant="outline"
                         className="border-orange-200 bg-white text-orange-900"
                       >
-                        {currentRestaurant?.isFoodTruck
+                        {currentIsTruckBusiness
                           ? "Food truck"
                           : "Restaurant"}
                       </Badge>
@@ -5419,7 +5397,7 @@ export default function RestaurantOwnerDashboard() {
 
                   <CardContent className="space-y-5 p-4 sm:p-6">
                     <div className="grid gap-4 lg:grid-cols-2">
-                      {currentRestaurant?.isFoodTruck ? (
+                      {currentIsTruckBusiness ? (
                         <section
                           className="rounded-2xl border border-orange-100 bg-orange-50/45 p-4 sm:p-5"
                           data-testid="owner-live-location-panel"
@@ -5583,7 +5561,7 @@ export default function RestaurantOwnerDashboard() {
 
                       <section
                         className={`rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-4 sm:p-5 ${
-                          currentRestaurant?.isFoodTruck ? "" : "lg:col-span-2"
+                          currentIsTruckBusiness ? "" : "lg:col-span-2"
                         }`}
                         data-testid="owner-saved-location-panel"
                       >
@@ -5594,12 +5572,12 @@ export default function RestaurantOwnerDashboard() {
                             </span>
                             <div className="min-w-0">
                               <h3 className="font-black text-[color:var(--text-primary)]">
-                                {currentRestaurant?.isFoodTruck
+                                {currentIsTruckBusiness
                                   ? "Saved location"
                                   : "Restaurant location"}
                               </h3>
                               <p className="mt-1 text-sm text-[color:var(--text-muted)]">
-                                {currentRestaurant?.isFoodTruck
+                                {currentIsTruckBusiness
                                   ? "Customers see this location whenever your truck is not live."
                                   : "Use your device to refresh the map pin for this address."}
                               </p>
@@ -5655,7 +5633,7 @@ export default function RestaurantOwnerDashboard() {
                           </div>
                         ) : null}
 
-                        {currentRestaurant?.isFoodTruck ? (
+                        {currentIsTruckBusiness ? (
                           <div className="mt-4 border-t border-[color:var(--border-subtle)] pt-4">
                             <p className="text-sm font-bold">Booked stops</p>
                             <p className="mt-1 text-xs text-[color:var(--text-muted)]">
@@ -5686,12 +5664,12 @@ export default function RestaurantOwnerDashboard() {
                         </span>
                         <div>
                           <h3 className="font-black text-[color:var(--text-primary)]">
-                            {currentRestaurant?.isFoodTruck
+                            {currentIsTruckBusiness
                               ? "Weekly service hours"
                               : "Weekly hours"}
                           </h3>
                           <p className="mt-1 text-sm text-[color:var(--text-muted)]">
-                            {currentRestaurant?.isFoodTruck
+                            {currentIsTruckBusiness
                               ? "Set the usual days and times customers can find your truck."
                               : "Set the opening and closing hours shown on your public profile."}
                           </p>
@@ -5845,7 +5823,7 @@ export default function RestaurantOwnerDashboard() {
                               ) : (
                                 <Save className="mr-2 h-4 w-4" />
                               )}
-                              {currentRestaurant?.isFoodTruck
+                              {currentIsTruckBusiness
                                 ? "Save schedule"
                                 : "Save hours"}
                             </Button>
@@ -5864,42 +5842,6 @@ export default function RestaurantOwnerDashboard() {
                       </Form>
                     </section>
 
-                    <details className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)]/45 p-4">
-                      <summary className="cursor-pointer text-sm font-bold text-[color:var(--text-secondary)]">
-                        Business type
-                      </summary>
-                      <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="flex items-start gap-3">
-                          <Truck className="mt-0.5 h-5 w-5 shrink-0 text-orange-700" />
-                          <div>
-                            <p className="text-sm font-bold">
-                              {currentRestaurant?.isFoodTruck
-                                ? "Food-truck tools are enabled"
-                                : "Restaurant tools are enabled"}
-                            </p>
-                            <p className="mt-1 text-xs text-[color:var(--text-muted)]">
-                              Change this only if the business type is
-                              incorrect.
-                            </p>
-                          </div>
-                        </div>
-                        <Button
-                          variant="outline"
-                          onClick={() =>
-                            toggleFoodTruckMutation.mutate(
-                              !currentRestaurant?.isFoodTruck,
-                            )
-                          }
-                          disabled={toggleFoodTruckMutation.isPending}
-                          className="min-h-11 w-full sm:w-auto"
-                          data-testid="button-toggle-food-truck"
-                        >
-                          {currentRestaurant?.isFoodTruck
-                            ? "Use restaurant tools"
-                            : "Use food-truck tools"}
-                        </Button>
-                      </div>
-                    </details>
                   </CardContent>
                 </Card>
               </TabsContent>

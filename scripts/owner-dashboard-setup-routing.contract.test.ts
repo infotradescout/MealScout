@@ -17,8 +17,10 @@ const requiredSnippets = [
   'setupMode === "profile" || setupMode === "profile-media"',
   'setupMode === "menu" ? (',
   'setupMode === "schedule"',
-  'setupMode !== "schedule"',
+  'setupMode === "bookings"',
+  '!["schedule", "bookings"].includes(setupMode)',
   '<TabsContent value="foodtruck"',
+  '<TabsTrigger value="bookings">Booked stops',
   'data-testid="owner-availability-workspace"',
   "setupPanelRef.current.scrollIntoView",
 ];

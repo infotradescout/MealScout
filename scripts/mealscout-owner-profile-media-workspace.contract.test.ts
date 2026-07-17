@@ -15,8 +15,12 @@ assert.match(
   owner,
   /mode=\{setupMode === "profile-media" \? "media" : "profile"\}/,
 );
-assert.match(owner, /activeWorkspaceModule !== "profile"/);
-assert.match(owner, /activeWorkspaceModule !== "media"/);
+assert.match(owner, /setupMode === "profile"[\s\S]*\? "profile"/);
+assert.match(owner, /setupMode === "profile-media"[\s\S]*\? "media"/);
+assert.match(
+  owner,
+  /setupMode &&[\s\S]*!\["schedule", "bookings"\]\.includes\(setupMode\)/,
+);
 assert.match(workspace, /data-testid="owner-profile-workspace"/);
 assert.match(workspace, /data-testid="owner-photos-workspace"/);
 assert.match(workspace, /data-testid="owner-profile-preview"/);

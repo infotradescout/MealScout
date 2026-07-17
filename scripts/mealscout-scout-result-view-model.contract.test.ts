@@ -52,7 +52,7 @@ assert.equal(dishView.imageUrl, "https://img.example/dish.jpg");
 assert.equal(dishView.primaryActionLabel, "View dish");
 assert.equal(dishView.variant, "dish");
 assert.equal(dishView.locationLabel, "Austin, TX");
-assert.equal(dishView.scopeLabel, "MealScout network · Austin, TX");
+assert.equal(dishView.scopeLabel, "More options in Austin, TX");
 
 const networkWithoutLocation = toScoutDiscoveryResult(
   { id: "deal-1", title: "Late Night Special" },
@@ -64,7 +64,7 @@ const networkWithoutLocation = toScoutDiscoveryResult(
 );
 assert.equal(
   buildScoutResultViewModel(networkWithoutLocation).scopeLabel,
-  "MealScout network",
+  "More options on MealScout",
 );
 
 const scoutSource = readFileSync(

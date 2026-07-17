@@ -87,7 +87,6 @@ for (const snippet of [
   "followedRestaurantCandidates",
   "const orderAgainCandidates: ScoutBusinessSectionCard[] = [];",
   "businessSectionRailCards",
-  "menuItemRailCards(popularDishCards)",
   "dealRailCards(hotDealCandidates)",
   'dealRailCards(happyHourDeals, "happy_hour")',
   "eventRailCards(visibleSceneEvents)",
@@ -109,7 +108,7 @@ for (const snippet of [
   "highPriorityDecisionItems.length > 0",
   "firstScreenSuppressedBusinessKey",
   "suppressFirstScreenBusiness",
-  'placement="fixed"',
+  'placement="inline"',
   "overflow-x-hidden",
   'data-scout-mobile-thirds-map="true"',
   "const compactMapHeight = isThinScoutViewport",
@@ -120,6 +119,12 @@ for (const snippet of [
 ]) {
   assert.ok(scoutPage.includes(snippet), `Scout horizontal rails runtime missing snippet: ${snippet}`);
 }
+
+assert.match(
+  scoutPage,
+  /cards: menuItemRailCards\(\s*popularDishCards,\s*showActivityFallback \? "network" : "nearby",?\s*\)\.concat/,
+  "Popular-dish rails must preserve nearby versus network scope labeling.",
+);
 
 const immediateStackStart = scoutPage.indexOf("function ScoutFirstScreenDecisionStack(");
 const activeSceneStart = scoutPage.indexOf("function ActiveSceneContent(");
@@ -132,10 +137,21 @@ assert.ok(
   !immediateStackSource.includes("NearbyRestaurantCard"),
   "Immediate decision stack must use compact cards instead of the full NearbyRestaurantCard rail layout.",
 );
-const defaultFlowOrderPattern =
-  /<ScoutFirstScreenDecisionStack[\s\S]{0,300}?items=\{firstScreenDecisionItems\}[\s\S]{0,300}?\/>\s*\{scoutRows\.map/;
+const defaultFlowStart = scoutPage.indexOf(
+  'data-scout-first-screen-layout={',
+);
+const defaultStackIndex = scoutPage.indexOf(
+  "<ScoutFirstScreenDecisionStack",
+  defaultFlowStart,
+);
+const defaultRowsIndex = scoutPage.indexOf(
+  "{scoutRows.map",
+  defaultStackIndex,
+);
 assert.ok(
-  defaultFlowOrderPattern.test(scoutPage),
+  defaultFlowStart >= 0 &&
+    defaultStackIndex > defaultFlowStart &&
+    defaultRowsIndex > defaultStackIndex,
   "Scout default flow must render compact decision stack before full rails without relying on JSX formatting.",
 );
 assert.ok(

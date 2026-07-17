@@ -40,6 +40,12 @@ assert.match(owner, /data-testid="owner-saved-location-panel"/);
 assert.match(owner, /data-testid="owner-weekly-hours-panel"/);
 assert.match(owner, /data-testid="owner-booked-stops-workspace"/);
 assert.doesNotMatch(owner, /Jump to schedule and live tools|Jump to hours/);
+assert.equal(
+  (owner.match(/currentRestaurant\?\.isFoodTruck/g) || []).length,
+  1,
+  "Business-type rendering must use the canonical truck classification",
+);
+assert.doesNotMatch(owner, /button-toggle-food-truck|toggleFoodTruckMutation/);
 
 // Restaurant and truck differences share one pattern without exposing truck
 // implementation details to operators.

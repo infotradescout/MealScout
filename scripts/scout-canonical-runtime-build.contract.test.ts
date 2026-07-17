@@ -34,13 +34,12 @@ for (const requiredScoutSnippet of [
   'title: "Now Serving Trucks"',
   'title: "Open Now Near You"',
   'title: "Food Trucks Today"',
-  'title: DISCOVERY_LAYERS.restaurants.title',
+  'const nearbyRestaurantsTitle = DISCOVERY_LAYERS.restaurants.title;',
   'title: "Local Activity"',
   'title: "Newest on MealScout"',
   'DISCOVERY_LAYERS.menuItems.title',
   'title: DISCOVERY_LAYERS.deals.title',
   'title: DISCOVERY_LAYERS.events.title',
-  'const { data: trendingData } = useQuery<ScoutTrendingResponse>({',
   '"/api/public/trending?limit=12&days=7"',
   'function getRestaurantProfilePath(restaurant: RestaurantSummary): string {',
   'function getTruckProfilePath(truck: LiveTruckSummary): string {',
@@ -49,7 +48,7 @@ for (const requiredScoutSnippet of [
   "function ScoutFirstScreenDecisionStack(",
   'data-scout-first-screen-decision-stack="true"',
   'data-scout-immediate-compact-card="true"',
-  'placement="fixed"',
+  'placement="inline"',
   "{scoutRows.map((row) => (",
   "No nearby food yet",
   "Search nearby food or move the map",
@@ -57,6 +56,14 @@ for (const requiredScoutSnippet of [
   if (!scoutPage.includes(requiredScoutSnippet)) {
     throw new Error(`Canonical Scout page missing snippet: ${requiredScoutSnippet}`);
   }
+}
+
+if (
+  !/const \{ data: trendingData, isLoading: trendingLoading \} =\s*useQuery<ScoutTrendingResponse>\(\{/.test(
+    scoutPage,
+  )
+) {
+  throw new Error("Canonical Scout page must load the shared trending feed.");
 }
 
 const mainStart = scoutPage.indexOf("<main");
