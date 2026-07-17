@@ -5,10 +5,14 @@ import { apiUrl } from "@/lib/api";
 import { SEOHead } from "@/components/seo-head";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { BackHeader } from "@/components/back-header";
+import {
+  CollectionLoadingState,
+  CollectionState,
+  ConsumerCollectionShell,
+} from "@/components/consumer-collection-shell";
 import { useAuth } from "@/hooks/useAuth";
 import { resolveCanonicalShareUrl } from "@/lib/share";
-import { Tag, Share2, MapPin, ChevronRight } from "lucide-react";
+import { Tag, Share2, ChevronRight } from "lucide-react";
 
 type DealRow = {
   id: string;
@@ -41,7 +45,7 @@ export default function DealsCityPage() {
   const citySlug = String(params.city || "").trim();
   const { user } = useAuth();
 
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["deals-city", citySlug],
     enabled: Boolean(citySlug),
     queryFn: async () => {
@@ -77,7 +81,7 @@ export default function DealsCityPage() {
     data?.city?.name ||
       citySlug.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
   );
-  const state = String(data?.city?.state || "");
+  const state = String(data?.city?.state || "").toUpperCase();
   const cityLabel = state ? `${cityName}, ${state}` : cityName;
   const totalDeals = Number(data?.totalDeals || 0);
   const title = `Deals in ${cityLabel} | MealScout`;
@@ -94,7 +98,7 @@ export default function DealsCityPage() {
       a:
         deals.length > 0
           ? `Yes! MealScout currently lists ${totalDeals} active deal${totalDeals !== 1 ? "s" : ""} in ${cityLabel} from local food trucks and restaurants. All deals are verified and expire automatically.`
-          : `MealScout is actively adding deals in ${cityLabel}. Sign up free to get notified the moment deals go live near you.`,
+          : `MealScout is actively adding deals in ${cityLabel}. Sign up free to hear when new deals go live.`,
     },
     {
       q: `How do I claim a deal in ${cityName}?`,
@@ -140,7 +144,17 @@ export default function DealsCityPage() {
   }, [deals, cityLabel, canonicalUrl, metaDescription]);
 
   return (
-    <div className="min-h-screen bg-[var(--bg-layered)]">
+    <ConsumerCollectionShell
+      section="deals"
+      title={`Deals in ${cityName}`}
+      description={`Current food offers from businesses in ${cityLabel}.`}
+      icon={Tag}
+      countLabel={
+        isLoading
+          ? null
+          : `${totalDeals} active ${totalDeals === 1 ? "deal" : "deals"}`
+      }
+    >
       <SEOHead
         title={title}
         description={metaDescription}
@@ -148,87 +162,41 @@ export default function DealsCityPage() {
         schemaData={schemaData}
       />
 
-      <BackHeader
-        title={`Deals · ${cityName}`}
-        fallbackHref={`/food-trucks/${citySlug}`}
-        icon={Tag}
-      />
-
-      <div className="max-w-3xl mx-auto px-4 pb-16 pt-4 space-y-6">
+      <div className="mx-auto max-w-3xl space-y-6">
         {/* Breadcrumb */}
         <nav
           className="flex items-center gap-1 text-xs text-muted-foreground"
           aria-label="Breadcrumb"
         >
-          <Link href="/" className="hover:underline">
-            Home
+          <Link href="/scout" className="hover:text-[#f4512c] hover:underline">
+            Scout
           </Link>
           <ChevronRight className="w-3 h-3" />
-          <Link href="/search" className="hover:underline">
+          <Link href="/deals" className="hover:text-[#f4512c] hover:underline">
             Deals
           </Link>
           <ChevronRight className="w-3 h-3" />
           <span className="text-foreground font-medium">{cityName}</span>
         </nav>
 
-        {/* Hero heading */}
-        <section className="rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-5 shadow-clean">
-          <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-            <Tag className="w-5 h-5 text-primary" />
-            Food Deals in {cityLabel}
-          </h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            {isLoading
-              ? "Loading deals…"
-              : totalDeals > 0
-                ? `${totalDeals} active deal${totalDeals !== 1 ? "s" : ""} from local trucks and restaurants. Verified and auto-removed when they expire.`
-                : `No active deals in ${cityName} right now — check back soon or explore nearby restaurants.`}
-          </p>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <Button
-              asChild
-              size="sm"
-              className="food-gradient-primary border-0"
-            >
-              <Link href={`/food-trucks/${citySlug}`}>
-                <MapPin className="w-3.5 h-3.5 mr-1" />
-                Food trucks in {cityName}
-              </Link>
-            </Button>
-            <Button
-              asChild
-              size="sm"
-              variant="outline"
-              className="border-[color:var(--border-subtle)]"
-            >
-              <Link href="/search">Search all deals</Link>
-            </Button>
-          </div>
-        </section>
-
         {/* Deal grid */}
         {isLoading ? (
-          <div className="text-sm text-muted-foreground py-8 text-center">
-            Loading deals…
-          </div>
+          <CollectionLoadingState label={`Loading deals in ${cityName}`} />
         ) : error ? (
-          <div className="text-sm text-destructive py-4">
-            {(error as any)?.message || "Failed to load deals."}
-          </div>
+          <CollectionState
+            icon={Tag}
+            title="Deals are unavailable"
+            description={(error as any)?.message || "We could not load this city right now."}
+            onRetry={() => void refetch()}
+          />
         ) : deals.length === 0 ? (
-          <section className="rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-5 shadow-clean text-center">
-            <p className="text-sm text-muted-foreground">
-              No active deals in {cityName} right now.
-            </p>
-            <Button
-              asChild
-              size="sm"
-              variant="outline"
-              className="mt-3 border-[color:var(--border-subtle)]"
-            >
-              <Link href="/search">Browse all cities</Link>
-            </Button>
-          </section>
+          <CollectionState
+            icon={Tag}
+            title={`No active deals in ${cityName}`}
+            description="Scout local menus, schedules, and food businesses while new offers are being added."
+            actionHref="/scout"
+            actionLabel="Scout"
+          />
         ) : (
           <section className="space-y-3">
             <h2 className="text-base font-semibold text-foreground">
@@ -294,8 +262,10 @@ export default function DealsCityPage() {
           </section>
         )}
 
-        {/* FAQ */}
-        <section className="rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-5 shadow-clean">
+        {!isLoading && !error ? (
+          <>
+            {/* FAQ */}
+            <section className="rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-5 shadow-clean">
           <h2 className="text-lg font-semibold text-foreground">
             Frequently Asked Questions
           </h2>
@@ -307,10 +277,10 @@ export default function DealsCityPage() {
               </div>
             ))}
           </div>
-        </section>
+            </section>
 
-        {/* Referral / Share section */}
-        <section className="rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-5 shadow-clean">
+            {/* Referral / Share section */}
+            <section className="rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-5 shadow-clean">
           <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
             <Share2 className="w-4 h-4" />
             Share These Deals with Friends
@@ -373,43 +343,19 @@ export default function DealsCityPage() {
               </Button>
             )}
           </div>
-        </section>
+            </section>
+          </>
+        ) : null}
 
-        {/* Continue Exploring */}
-        <section className="rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-5 shadow-clean">
-          <h2 className="text-lg font-semibold text-foreground">
-            Continue Exploring
-          </h2>
-          <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            <Link href={`/food-trucks/${citySlug}`}>
-              <Card className="border-[color:var(--border-subtle)] bg-[var(--bg-surface)] hover:shadow-clean-lg transition-shadow">
-                <CardContent className="p-4">
-                  <div className="font-medium text-foreground">
-                    Food Trucks in {cityName}
-                  </div>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Browse all active food trucks and their locations in{" "}
-                    {cityLabel}.
-                  </p>
-                </CardContent>
-              </Card>
-            </Link>
-            <Link href="/search">
-              <Card className="border-[color:var(--border-subtle)] bg-[var(--bg-surface)] hover:shadow-clean-lg transition-shadow">
-                <CardContent className="p-4">
-                  <div className="font-medium text-foreground">
-                    Search All Cities
-                  </div>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Explore deals and food trucks across every city on
-                    MealScout.
-                  </p>
-                </CardContent>
-              </Card>
-            </Link>
-          </div>
-        </section>
+        <div className="border-t border-[#683a1f]/10 pt-2 text-center">
+          <Link
+            href="/scout"
+            className="inline-flex min-h-11 items-center rounded-full px-5 text-sm font-black text-[#f4512c] hover:bg-[#fff0e8]"
+          >
+            Scout
+          </Link>
+        </div>
       </div>
-    </div>
+    </ConsumerCollectionShell>
   );
 }

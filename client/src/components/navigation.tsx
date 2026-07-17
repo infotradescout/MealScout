@@ -23,7 +23,6 @@ import {
   X,
   Compass,
   Heart,
-  Search,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -50,8 +49,6 @@ const NAV_HELP: Record<string, string> = {
   Overview: "See the current state of your business workspace.",
   Work: "Open the orders, requests, or bookings that need attention.",
   Manage: "Manage your public business presence and offerings.",
-  Search: "Search dishes, places, trucks, deals, and events.",
-  Map: "Open the local food map for nearby places and trucks.",
   Truck: "List a food truck on MealScout.",
   Claim: "Claim or update a food truck profile.",
   Login: "Sign in to your MealScout account.",
@@ -363,7 +360,6 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
 
     if (lane === "guest") {
       items.push(
-        { path: "/search", icon: Search, label: "Search" },
         { path: "/events", icon: Calendar, label: "Events" },
         { path: "/deals", icon: Tag, label: "Deals" },
         {
@@ -375,7 +371,6 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
       );
     } else if (lane === "customer") {
       items.push(
-        { path: "/search", icon: Search, label: "Search" },
         { path: "/events", icon: Calendar, label: "Events" },
         { path: "/deals", icon: Tag, label: "Deals" },
         { path: "/video", icon: Clapperboard, label: "Video" },

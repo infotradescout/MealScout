@@ -13,7 +13,7 @@ import {
 
 // Import the dashboard components
 import AdminDashboard from "@/pages/admin-dashboard";
-import UserDashboard from "@/pages/user-dashboard";
+import Favorites from "@/pages/favorites";
 import RestaurantOwnerDashboard from "@/pages/restaurant-owner-dashboard";
 
 type DashboardType = 'admin' | 'user' | 'restaurant';
@@ -48,7 +48,7 @@ export default function DashboardSwitcher({ defaultView = 'admin' }: DashboardSw
     if (user?.userType === 'restaurant_owner') {
       return <RestaurantOwnerDashboard />;
     } else {
-      return <UserDashboard />;
+      return <Favorites />;
     }
   }
 
@@ -93,7 +93,7 @@ export default function DashboardSwitcher({ defaultView = 'admin' }: DashboardSw
       case 'admin':
         return <AdminDashboard />;
       case 'user':
-        return <UserDashboard />;
+        return <Favorites />;
       case 'restaurant':
         return <RestaurantOwnerDashboard />;
       default:
