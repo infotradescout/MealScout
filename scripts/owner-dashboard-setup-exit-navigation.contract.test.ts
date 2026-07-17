@@ -24,7 +24,6 @@ const requiredPageSnippets = [
 ];
 
 const requiredNonSetupLinks = [
-  '<Link href={buildOwnerToolHref("/deal-creation")}>',
   '<Link href={buildOwnerToolHref("/hiring?tab=owner")}>',
   '<Link href={buildOwnerToolHref("/subscribe")}>',
 ];

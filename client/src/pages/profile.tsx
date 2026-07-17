@@ -292,7 +292,7 @@ export default function ProfilePage() {
   }
 
   const menuItems = [
-    { icon: Receipt, label: "Deal History", badge: null, href: "/orders" },
+    { icon: Receipt, label: "Activity", badge: null, href: "/orders" },
     { icon: Heart, label: "Favorites", badge: null, href: "/favorites" },
     {
       icon: Bell,

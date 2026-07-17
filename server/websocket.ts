@@ -7,6 +7,7 @@ import type { Session } from "express-session";
 import connectPg from "connect-pg-simple";
 import type { Socket } from "socket.io";
 import type { InsertFoodTruckLocation } from "@shared/schema";
+import { isAdminUserType } from "./roleAccess";
 import {
   incConnect,
   incDisconnect,
@@ -347,10 +348,12 @@ export function setupWebSocketServer(httpServer: Server): SocketIOServer {
               return;
             }
 
-            const isAuthorized = await storage.verifyRestaurantOwnership(
-              restaurantId,
-              socket.user.id,
-            );
+            const isAuthorized =
+              isAdminUserType(socket.user.userType) ||
+              (await storage.verifyRestaurantOwnership(
+                restaurantId,
+                socket.user.id,
+              ));
             if (!isAuthorized) {
               socket.emit("error", {
                 message: "Unauthorized: kitchen access denied",

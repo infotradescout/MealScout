@@ -23,6 +23,7 @@ import {
   X,
   Compass,
   Heart,
+  Receipt,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -235,7 +236,10 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     currentPath === "/restaurant-owner-dashboard" ||
     currentPath === "/menu-builder" ||
     currentPath === "/deal-creation" ||
-    currentPath.startsWith("/deal-edit/");
+    currentPath.startsWith("/deal-edit/") ||
+    currentPath === "/kitchen" ||
+    (currentPath === "/orders" &&
+      (isRestaurantOwner || isFoodTruck || isAdmin));
   const disableScoutHelpBubbles = isScoutRoute;
 
   const lane:
@@ -373,6 +377,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
       );
     } else if (lane === "customer") {
       items.push(
+        { path: "/orders", icon: Receipt, label: "Activity" },
         { path: "/events", icon: Calendar, label: "Events" },
         { path: "/deals", icon: Tag, label: "Deals" },
         { path: "/video", icon: Clapperboard, label: "Video" },
@@ -497,7 +502,9 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
         },
         { path: "/parking-pass", icon: ParkingSquare, label: "Parking Pass" },
         { path: "/deal-creation", icon: Tag, label: "Deals" },
-        { path: "/orders", icon: ShoppingCart, label: "Orders" },
+        ...(isAdmin
+          ? [{ path: "/orders", icon: ShoppingCart, label: "Orders" } as NavItem]
+          : []),
         { path: "/share-hub", icon: Share2, label: "Share" },
         { path: "/admin/dashboard?tab=users", icon: UserPlus, label: "Users" },
         {

@@ -655,7 +655,9 @@ function App() {
     currentPath === "/restaurant-owner-dashboard" ||
     currentPath === "/menu-builder" ||
     currentPath === "/deal-creation" ||
-    currentPath.startsWith("/deal-edit/");
+    currentPath.startsWith("/deal-edit/") ||
+    currentPath === "/orders" ||
+    currentPath === "/kitchen";
 
   if (isShellNotFound) {
     return (

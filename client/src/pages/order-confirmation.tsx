@@ -96,6 +96,23 @@ interface Order {
   items: OrderItem[];
 }
 
+function normalizeOrderPayload(payload: any): Order | null {
+  const order = payload?.order || payload;
+  if (!order?.id) return null;
+  return {
+    ...order,
+    items: (Array.isArray(payload?.items)
+      ? payload.items
+      : Array.isArray(order.items)
+        ? order.items
+        : []
+    ).map((item: any) => ({
+      ...item,
+      variantLabel: item?.variantLabel || item?.selectedVariant?.label || null,
+    })),
+  } as Order;
+}
+
 export default function OrderConfirmationPage() {
   const { orderId } = useParams<{ orderId: string }>();
   const [order, setOrder] = useState<Order | null>(null);
@@ -121,14 +138,18 @@ export default function OrderConfirmationPage() {
           );
           if (piRes.ok) {
             const data = await piRes.json();
-            setOrder(data);
+            const normalized = normalizeOrderPayload(data);
+            if (!normalized) throw new Error("Order not found");
+            setOrder(normalized);
             return;
           }
         }
         throw new Error("Order not found");
       }
       const data = await res.json();
-      setOrder(data);
+      const normalized = normalizeOrderPayload(data);
+      if (!normalized) throw new Error("Order not found");
+      setOrder(normalized);
     } catch (err: any) {
       setError(err.message);
     } finally {

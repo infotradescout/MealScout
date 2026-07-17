@@ -1,13 +1,36 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useAuth } from "@/hooks/useAuth";
-import Navigation from "@/components/navigation";
-import { Button } from "@/components/ui/button";
+import { format } from "date-fns";
+import { Link, useSearch } from "wouter";
+import {
+  AlertCircle,
+  CheckCircle2,
+  Clock3,
+  Loader2,
+  Receipt,
+  Tag,
+  XCircle,
+} from "lucide-react";
+import OwnerOrdersWorkspace, {
+  isBusinessOrderOperator,
+} from "@/components/owner-orders-workspace";
 import { Badge } from "@/components/ui/badge";
-import { Receipt, Clock, CheckCircle, XCircle } from "lucide-react";
-import { BackHeader } from "@/components/back-header";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { SEOHead } from "@/components/seo-head";
-import { authUrl } from "@/lib/api";
+import { useAuth } from "@/hooks/useAuth";
+
+type ActivityTab = "orders" | "deals";
+
+type ConsumerOrder = {
+  id: string;
+  status: string;
+  orderType: string;
+  paymentMethod: string;
+  totalCents: number;
+  scheduledFor?: string | null;
+  createdAt: string;
+};
 
 type ClaimedDeal = {
   id: string;
@@ -19,233 +42,328 @@ type ClaimedDeal = {
   dealTitle?: string | null;
   dealType?: string | null;
   discountValue?: string | number | null;
-  restaurantId?: string | null;
   restaurantName?: string | null;
 };
 
-export default function OrdersPage() {
-  const { isAuthenticated } = useAuth();
-  const [activeTab, setActiveTab] = useState<"active" | "completed">("active");
+const ORDER_STATUS: Record<
+  string,
+  { label: string; className: string; icon: typeof Clock3 }
+> = {
+  pending: {
+    label: "Received",
+    className: "border-amber-200 bg-amber-50 text-amber-900",
+    icon: Clock3,
+  },
+  confirmed: {
+    label: "Confirmed",
+    className: "border-blue-200 bg-blue-50 text-blue-800",
+    icon: CheckCircle2,
+  },
+  preparing: {
+    label: "Preparing",
+    className: "border-orange-200 bg-orange-50 text-orange-800",
+    icon: Clock3,
+  },
+  ready: {
+    label: "Ready",
+    className: "border-emerald-200 bg-emerald-50 text-emerald-800",
+    icon: CheckCircle2,
+  },
+  completed: {
+    label: "Completed",
+    className: "border-stone-200 bg-stone-100 text-stone-700",
+    icon: CheckCircle2,
+  },
+  cancelled: {
+    label: "Cancelled",
+    className: "border-red-200 bg-red-50 text-red-800",
+    icon: XCircle,
+  },
+};
 
-  const { data: claimedDeals, isLoading } = useQuery<ClaimedDeal[]>({
-    queryKey: ["/api/deals/claimed"],
-    enabled: isAuthenticated,
+function formatMoneyFromCents(cents: number | null | undefined) {
+  return `$${(Number(cents || 0) / 100).toFixed(2)}`;
+}
+
+function formatClaimMoney(value?: string | number | null) {
+  if (value === null || value === undefined) return null;
+  const amount = Number(value);
+  return Number.isFinite(amount) ? `$${amount.toFixed(2)}` : null;
+}
+
+function formatDiscount(claim: ClaimedDeal) {
+  const value = Number(claim.discountValue);
+  if (!Number.isFinite(value)) return "Deal claimed";
+  return claim.dealType === "fixed"
+    ? `$${value.toFixed(2)} off`
+    : `${value}% off`;
+}
+
+function ConsumerActivity() {
+  const search = useSearch();
+  const requestedView = new URLSearchParams(search).get("view");
+  const [activeTab, setActiveTab] = useState<ActivityTab>(
+    requestedView === "deals" ? "deals" : "orders",
+  );
+
+  useEffect(() => {
+    setActiveTab(requestedView === "deals" ? "deals" : "orders");
+  }, [requestedView]);
+
+  const ordersQuery = useQuery<{ orders: ConsumerOrder[] }>({
+    queryKey: ["/api/my/orders"],
+    retry: false,
   });
-
-  const claims = Array.isArray(claimedDeals) ? claimedDeals : [];
+  const dealsQuery = useQuery<ClaimedDeal[]>({
+    queryKey: ["/api/deals/claimed"],
+    retry: false,
+  });
+  const orders = Array.isArray(ordersQuery.data?.orders)
+    ? ordersQuery.data.orders
+    : [];
+  const claims = Array.isArray(dealsQuery.data) ? dealsQuery.data : [];
   const activeClaims = claims.filter((claim) => !claim.isUsed);
   const completedClaims = claims.filter((claim) => claim.isUsed);
-  const currentClaims = activeTab === "active" ? activeClaims : completedClaims;
+  const isLoading = activeTab === "orders" ? ordersQuery.isLoading : dealsQuery.isLoading;
+  const error = activeTab === "orders" ? ordersQuery.error : dealsQuery.error;
 
-  const formatMoney = (value?: string | number | null) => {
-    if (value === null || value === undefined) return "--";
-    const amount = typeof value === "string" ? Number(value) : value;
-    if (!Number.isFinite(amount)) return "--";
-    return `$${amount.toFixed(2)}`;
-  };
-
-  const formatDiscount = (claim: ClaimedDeal) => {
-    if (claim.discountValue === null || claim.discountValue === undefined) {
-      return "Deal claimed";
-    }
-    const value =
-      typeof claim.discountValue === "string"
-        ? Number(claim.discountValue)
-        : claim.discountValue;
-    if (!Number.isFinite(value)) return "Deal claimed";
-    return claim.dealType === "fixed"
-      ? `$${value.toFixed(2)} off`
-      : `${value}% off`;
-  };
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case "active":
-        return <Clock className="w-4 h-4 text-[color:var(--status-warning)]" />;
-      case "completed":
-        return (
-          <CheckCircle className="w-4 h-4 text-[color:var(--status-success)]" />
-        );
-      case "cancelled":
-        return <XCircle className="w-4 h-4 text-[color:var(--status-error)]" />;
-      default:
-        return <Clock className="w-4 h-4 text-[color:var(--text-secondary)]" />;
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "active":
-        return "bg-[color:var(--status-warning)]/15 text-[color:var(--status-warning)]";
-      case "completed":
-        return "bg-[color:var(--status-success)]/15 text-[color:var(--status-success)]";
-      case "cancelled":
-        return "bg-[color:var(--status-error)]/15 text-[color:var(--status-error)]";
-      default:
-        return "bg-[color:var(--border-subtle)]/40 text-[color:var(--text-secondary)]";
-    }
-  };
-
-  if (!isAuthenticated) {
-    return (
-      <div className="max-w-md mx-auto bg-[var(--bg-layered)] min-h-screen relative pb-20">
-        <BackHeader
-          title="Deal History"
-          fallbackHref="/"
-          icon={Receipt}
-          className="bg-[hsl(var(--background))/0.94] border-b border-[color:var(--border-subtle)] shadow-clean"
-        />
-
-        <div className="px-4 sm:px-6 py-12 text-center">
-          <Receipt className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-foreground mb-2">
-            Sign in to view orders
-          </h2>
-          <p className="text-muted-foreground mb-6">
-            Log in to see your claimed deals and deal history
-          </p>
-          <Button onClick={() => (window.location.href = authUrl("/api/auth/facebook"))}>
-            Sign In
-          </Button>
-        </div>
-
-        <Navigation />
-      </div>
-    );
-  }
+  const orderCounts = useMemo(
+    () => ({
+      active: orders.filter((order) =>
+        ["pending", "confirmed", "preparing", "ready"].includes(order.status),
+      ).length,
+      complete: orders.filter((order) =>
+        ["completed", "cancelled"].includes(order.status),
+      ).length,
+    }),
+    [orders],
+  );
 
   return (
-    <div className="max-w-md mx-auto bg-[var(--bg-layered)] min-h-screen relative pb-20">
+    <div className="min-h-screen bg-[var(--bg-layered)] lg:pt-16">
       <SEOHead
-        title="Deal History - MealScout | My Orders & Claims"
-        description="View your complete deal history and claimed deals. Track active orders, see past purchases, and review your savings on MealScout."
-        keywords="deal history, orders, claimed deals, order tracking, purchase history"
+        title="Activity - MealScout"
+        description="Review your MealScout orders and claimed deals."
         canonicalUrl="https://www.mealscout.us/orders"
-        noIndex={true}
+        noIndex
       />
-      <h1 className="sr-only">MealScout deal history</h1>
-      <BackHeader
-        title="Deal History"
-        fallbackHref="/"
-        icon={Receipt}
-        className="bg-[hsl(var(--background))/0.94] border-b border-[color:var(--border-subtle)] shadow-clean"
-      />
-
-      {/* Tabs */}
-      <div className="px-4 sm:px-6 py-4 bg-[var(--bg-card)] border-b border-[color:var(--border-subtle)]">
-        <div className="flex bg-[var(--bg-surface-muted)] rounded-xl p-1">
-          <Button
-            variant={activeTab === "active" ? "default" : "ghost"}
-            size="sm"
-            onClick={() => setActiveTab("active")}
-            className="flex-1 rounded-lg"
-            data-testid="tab-active-orders"
-          >
-            Active ({activeClaims.length})
-          </Button>
-          <Button
-            variant={activeTab === "completed" ? "default" : "ghost"}
-            size="sm"
-            onClick={() => setActiveTab("completed")}
-            className="flex-1 rounded-lg"
-            data-testid="tab-completed-orders"
-          >
-            Completed ({completedClaims.length})
+      <header className="sticky top-0 z-40 border-b border-[color:var(--border-subtle)] bg-[var(--bg-popup)]/95 px-4 py-3 backdrop-blur lg:top-16">
+        <div className="mx-auto flex max-w-3xl items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.14em] text-orange-700">
+              Your MealScout
+            </p>
+            <h1 className="text-xl font-black text-[color:var(--text-primary)]">
+              Activity
+            </h1>
+          </div>
+          <Button asChild variant="ghost" size="sm">
+            <Link href="/scout">Scout</Link>
           </Button>
         </div>
-      </div>
+      </header>
 
-      {/* Orders List */}
-      <div className="px-4 sm:px-6 py-6">
+      <main className="mx-auto w-full max-w-3xl px-4 py-5 sm:px-6 sm:py-7">
+        <div className="grid grid-cols-2 gap-2 rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-1.5 shadow-clean">
+          <Button
+            type="button"
+            variant={activeTab === "orders" ? "default" : "ghost"}
+            className="rounded-xl"
+            onClick={() => setActiveTab("orders")}
+            data-testid="tab-customer-orders"
+          >
+            <Receipt className="mr-2 h-4 w-4" />
+            Orders {orders.length}
+          </Button>
+          <Button
+            type="button"
+            variant={activeTab === "deals" ? "default" : "ghost"}
+            className="rounded-xl"
+            onClick={() => setActiveTab("deals")}
+            data-testid="tab-customer-deals"
+          >
+            <Tag className="mr-2 h-4 w-4" />
+            Claimed deals {claims.length}
+          </Button>
+        </div>
+
+        {activeTab === "orders" && orders.length > 0 ? (
+          <div className="mt-4 flex flex-wrap gap-2 text-xs text-[color:var(--text-muted)]">
+            <span className="rounded-full bg-orange-50 px-3 py-1.5 font-semibold text-orange-900">
+              {orderCounts.active} active
+            </span>
+            <span className="rounded-full bg-stone-100 px-3 py-1.5 font-semibold text-stone-700">
+              {orderCounts.complete} past
+            </span>
+          </div>
+        ) : null}
+
+        {activeTab === "deals" && claims.length > 0 ? (
+          <div className="mt-4 flex flex-wrap gap-2 text-xs text-[color:var(--text-muted)]">
+            <span className="rounded-full bg-orange-50 px-3 py-1.5 font-semibold text-orange-900">
+              {activeClaims.length} active
+            </span>
+            <span className="rounded-full bg-stone-100 px-3 py-1.5 font-semibold text-stone-700">
+              {completedClaims.length} used
+            </span>
+          </div>
+        ) : null}
+
         {isLoading ? (
-          <div className="space-y-4">
-            {[1, 2, 3].map((i) => (
+          <div className="mt-6 space-y-3">
+            {[0, 1, 2].map((item) => (
               <div
-                key={i}
-                className="bg-[var(--bg-card)] rounded-2xl p-6 shadow-clean animate-pulse border border-[color:var(--border-subtle)]"
-              >
-                <div className="flex justify-between items-start mb-3">
-                  <div className="h-6 bg-muted rounded w-3/4"></div>
-                  <div className="h-6 bg-muted rounded w-16"></div>
-                </div>
-                <div className="h-4 bg-muted rounded w-1/2 mb-2"></div>
-                <div className="h-4 bg-muted rounded w-1/3"></div>
-              </div>
+                key={item}
+                className="h-36 animate-pulse rounded-3xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface)]"
+              />
             ))}
           </div>
-        ) : currentClaims.length > 0 ? (
-          <div className="space-y-4">
-            {currentClaims.map((claim) => {
-              const status = claim.isUsed ? "completed" : "active";
-              const claimedAt = claim.claimedAt
-                ? new Date(claim.claimedAt)
-                : null;
+        ) : error ? (
+          <Card className="mt-6 border-red-200 bg-red-50">
+            <CardContent className="flex flex-col items-center px-6 py-10 text-center">
+              <AlertCircle className="h-9 w-9 text-red-700" />
+              <h2 className="mt-3 text-lg font-black text-red-950">
+                Activity could not be loaded
+              </h2>
+              <p className="mt-1 text-sm text-red-800">
+                {(error as Error).message || "Please try again."}
+              </p>
+            </CardContent>
+          </Card>
+        ) : activeTab === "orders" && orders.length > 0 ? (
+          <div className="mt-6 space-y-3">
+            {orders.map((order) => {
+              const details = ORDER_STATUS[order.status] || ORDER_STATUS.pending;
+              const Icon = details.icon;
+              const createdAt = new Date(order.createdAt);
               return (
-                <div
-                  key={claim.id}
-                  className="bg-[var(--bg-card)] rounded-2xl p-6 shadow-clean border border-[color:var(--border-subtle)]"
-                  data-testid={`order-${claim.id}`}
-                >
-                  <div className="flex justify-between items-start mb-3">
-                    <div>
-                      <h3 className="font-semibold text-foreground">
-                        {claim.restaurantName || "Restaurant"}
-                      </h3>
-                      <p className="text-sm text-muted-foreground">
-                        {claim.dealTitle || "Deal"}
-                      </p>
+                <Card key={order.id} className="border-[color:var(--border-subtle)] bg-[var(--bg-surface)] shadow-clean">
+                  <CardContent className="p-5">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-black text-[color:var(--text-primary)]">
+                          Order #{order.id.slice(-6).toUpperCase()}
+                        </p>
+                        <p className="mt-1 text-sm capitalize text-[color:var(--text-muted)]">
+                          {order.orderType.replace("_", " ")} · {order.paymentMethod}
+                        </p>
+                      </div>
+                      <Badge variant="outline" className={`gap-1 ${details.className}`}>
+                        <Icon className="h-3.5 w-3.5" />
+                        {details.label}
+                      </Badge>
                     </div>
-                    <Badge className={getStatusColor(status)}>
-                      {getStatusIcon(status)}
-                      <span className="ml-1 capitalize">{status}</span>
-                    </Badge>
-                  </div>
-
-                  <div className="flex justify-between items-center text-sm text-muted-foreground mb-3">
-                    <span>{formatDiscount(claim)}</span>
-                    <span>{formatMoney(claim.orderAmount)}</span>
-                  </div>
-
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs text-muted-foreground">
-                      {claimedAt ? claimedAt.toLocaleDateString() : "--"}
-                    </span>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      asChild
-                      data-testid={`button-view-${claim.id}`}
-                    >
-                      <a href={`/deal/${claim.dealId}`}>View Deal</a>
-                    </Button>
-                  </div>
-                </div>
+                    <div className="mt-4 flex items-end justify-between gap-3 border-t border-[color:var(--border-subtle)] pt-4">
+                      <div>
+                        <p className="font-black text-[color:var(--text-primary)]">
+                          {formatMoneyFromCents(order.totalCents)}
+                        </p>
+                        <p className="mt-0.5 text-xs text-[color:var(--text-muted)]">
+                          {Number.isNaN(createdAt.getTime())
+                            ? "Date unavailable"
+                            : format(createdAt, "MMM d, yyyy · h:mm a")}
+                        </p>
+                      </div>
+                      <Button asChild variant="outline" size="sm">
+                        <Link href={`/order-confirmation/${order.id}`}>View status</Link>
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        ) : activeTab === "deals" && claims.length > 0 ? (
+          <div className="mt-6 space-y-3">
+            {claims.map((claim) => {
+              const claimedAt = new Date(claim.claimedAt);
+              return (
+                <Card key={claim.id} className="border-[color:var(--border-subtle)] bg-[var(--bg-surface)] shadow-clean">
+                  <CardContent className="p-5">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-black text-[color:var(--text-primary)]">
+                          {claim.restaurantName || "Food business"}
+                        </p>
+                        <p className="mt-1 text-sm text-[color:var(--text-muted)]">
+                          {claim.dealTitle || "Claimed deal"}
+                        </p>
+                      </div>
+                      <Badge
+                        variant="outline"
+                        className={
+                          claim.isUsed
+                            ? "border-stone-200 bg-stone-100 text-stone-700"
+                            : "border-orange-200 bg-orange-50 text-orange-800"
+                        }
+                      >
+                        {claim.isUsed ? "Used" : "Active"}
+                      </Badge>
+                    </div>
+                    <div className="mt-4 flex items-end justify-between gap-3 border-t border-[color:var(--border-subtle)] pt-4">
+                      <div>
+                        <p className="font-black text-orange-800">
+                          {formatDiscount(claim)}
+                        </p>
+                        <p className="mt-0.5 text-xs text-[color:var(--text-muted)]">
+                          {formatClaimMoney(claim.orderAmount)
+                            ? `${formatClaimMoney(claim.orderAmount)} order · `
+                            : ""}
+                          {Number.isNaN(claimedAt.getTime())
+                            ? "Date unavailable"
+                            : format(claimedAt, "MMM d, yyyy")}
+                        </p>
+                      </div>
+                      <Button asChild variant="outline" size="sm">
+                        <Link href={`/deal/${claim.dealId}`}>View deal</Link>
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
               );
             })}
           </div>
         ) : (
-          <div className="text-center py-12">
-            <div className="w-20 h-20 bg-[var(--bg-surface-muted)] rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <Receipt className="w-8 h-8 text-muted-foreground" />
-            </div>
-            <h3 className="font-bold text-lg text-foreground mb-2">
-              {activeTab === "active"
-                ? "No active claims"
-                : "No completed claims"}
-            </h3>
-            <p className="text-muted-foreground mb-6">
-              {activeTab === "active"
-                ? "Claim a deal to see it here"
-                : "Your deal history will appear here"}
-            </p>
-            <Button asChild data-testid="button-browse-deals-orders">
-              <a href="/deals">Browse Deals</a>
-            </Button>
-          </div>
+          <Card className="mt-6 border-dashed border-orange-200 bg-[var(--bg-surface)]">
+            <CardContent className="px-6 py-14 text-center">
+              {activeTab === "orders" ? (
+                <Receipt className="mx-auto h-10 w-10 text-orange-600" />
+              ) : (
+                <Tag className="mx-auto h-10 w-10 text-orange-600" />
+              )}
+              <h2 className="mt-4 text-xl font-black text-[color:var(--text-primary)]">
+                {activeTab === "orders" ? "No orders yet" : "No claimed deals yet"}
+              </h2>
+              <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-[color:var(--text-muted)]">
+                {activeTab === "orders"
+                  ? "Orders placed through a MealScout menu will appear here."
+                  : "Claimed specials will stay here until you use them."}
+              </p>
+              <Button asChild className="mt-6">
+                <Link href="/scout">Scout</Link>
+              </Button>
+            </CardContent>
+          </Card>
         )}
-      </div>
-
-      <Navigation />
+      </main>
     </div>
   );
+}
+
+export default function OrdersPage() {
+  const { user, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[var(--bg-layered)]">
+        <Loader2 className="h-7 w-7 animate-spin text-orange-600" />
+      </div>
+    );
+  }
+
+  if (isBusinessOrderOperator(user?.userType)) {
+    return <OwnerOrdersWorkspace view="orders" />;
+  }
+
+  return <ConsumerActivity />;
 }

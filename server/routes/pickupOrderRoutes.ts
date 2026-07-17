@@ -50,7 +50,8 @@ import {
   ensurePremiumTrialForUser,
 } from "../services/premiumTrial";
 import { eq, and, desc, inArray } from "drizzle-orm";
-import { isAuthenticated, isRestaurantOwner } from "../unifiedAuth";
+import { isAuthenticated } from "../unifiedAuth";
+import { isAdminUserType } from "../roleAccess";
 import { storage } from "../storage";
 import { emailService } from "../emailService";
 import { sendSms } from "../smsService";
@@ -157,6 +158,23 @@ async function assertOwnsRestaurant(userId: string, restaurantId: string) {
   const ok = await storage.verifyRestaurantOwnership(restaurantId, userId);
   if (!ok)
     throw Object.assign(new Error("Not authorized"), { statusCode: 403 });
+}
+
+async function assertCanManageRestaurantOrders(user: any, restaurantId: string) {
+  if (isAdminUserType(user?.userType)) return;
+  if (!["restaurant_owner", "food_truck"].includes(String(user?.userType || ""))) {
+    throw Object.assign(new Error("Restaurant owner access required"), {
+      statusCode: 403,
+    });
+  }
+  await assertOwnsRestaurant(user.id, restaurantId);
+}
+
+async function assertOrderingWorkspaceAccess(user: any, restaurantId: string) {
+  await assertCanManageRestaurantOrders(user, restaurantId);
+  if (!isAdminUserType(user?.userType)) {
+    await assertHasOrderingSubscription(user.id, restaurantId);
+  }
 }
 
 // ── Subscription gate ─────────────────────────────────────────────────────────
@@ -799,11 +817,9 @@ export function registerPickupOrderRoutes(app: Express) {
   app.get(
     "/api/owner/kitchen-queue/:restaurantId",
     isAuthenticated,
-    isRestaurantOwner,
     wrap(async (req, res) => {
       const { restaurantId } = req.params;
-      await assertOwnsRestaurant(req.user.id, restaurantId);
-      await assertHasOrderingSubscription(req.user.id, restaurantId);
+      await assertOrderingWorkspaceAccess(req.user, restaurantId);
 
       const activeOrders: PickupOrder[] = await db
         .select()
@@ -846,17 +862,15 @@ export function registerPickupOrderRoutes(app: Express) {
   app.get(
     "/api/owner/orders/:restaurantId",
     isAuthenticated,
-    isRestaurantOwner,
     wrap(async (req, res) => {
       const { restaurantId } = req.params;
-      await assertOwnsRestaurant(req.user.id, restaurantId);
-      await assertHasOrderingSubscription(req.user.id, restaurantId);
+      await assertOrderingWorkspaceAccess(req.user, restaurantId);
 
       const page = Math.max(1, parseInt(String(req.query.page || "1"), 10));
       const limit = 50;
       const offset = (page - 1) * limit;
 
-      const orders = await db
+      const orders: PickupOrder[] = await db
         .select()
         .from(pickupOrders)
         .where(eq(pickupOrders.restaurantId, restaurantId))
@@ -864,7 +878,23 @@ export function registerPickupOrderRoutes(app: Express) {
         .limit(limit)
         .offset(offset);
 
-      res.json({ orders });
+      const orderIds = orders.map((order) => order.id);
+      const items: PickupOrderItem[] =
+        orderIds.length > 0
+          ? await db
+              .select()
+              .from(pickupOrderItems)
+              .where(inArray(pickupOrderItems.orderId, orderIds))
+          : [];
+
+      res.json({
+        orders: orders.map((order) => ({
+          ...order,
+          items: items.filter((item) => item.orderId === order.id),
+        })),
+        page,
+        hasMore: orders.length === limit,
+      });
     }),
   );
 
@@ -880,7 +910,6 @@ export function registerPickupOrderRoutes(app: Express) {
   app.patch(
     "/api/owner/orders/:orderId/status",
     isAuthenticated,
-    isRestaurantOwner,
     wrap(async (req, res) => {
       const { orderId } = req.params;
       const { status, prepTimeMinutes } = z
@@ -903,8 +932,7 @@ export function registerPickupOrderRoutes(app: Express) {
         .where(eq(pickupOrders.id, orderId));
       if (!order) return res.status(404).json({ message: "Order not found" });
 
-      await assertOwnsRestaurant(req.user.id, order.restaurantId);
-      await assertHasOrderingSubscription(req.user.id, order.restaurantId);
+      await assertOrderingWorkspaceAccess(req.user, order.restaurantId);
 
       // Validate transition
       const validTransitions: Record<string, string[]> = {
@@ -934,9 +962,9 @@ export function registerPickupOrderRoutes(app: Express) {
         updatedAt: now,
       };
 
-      if (status === ORDER_STATUS.CONFIRMED && prepTimeMinutes) {
-        updates.prepTimeMinutes = prepTimeMinutes;
+      if (status === ORDER_STATUS.CONFIRMED) {
         updates.confirmedAt = now;
+        if (prepTimeMinutes) updates.prepTimeMinutes = prepTimeMinutes;
       }
       if (status === ORDER_STATUS.READY) updates.readyAt = now;
       if (status === ORDER_STATUS.COMPLETED) updates.completedAt = now;
