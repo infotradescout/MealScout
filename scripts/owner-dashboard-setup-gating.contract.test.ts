@@ -1,6 +1,14 @@
 import { readFileSync } from "node:fs";
 
 const dashboard = readFileSync("client/src/pages/restaurant-owner-dashboard.tsx", "utf8");
+const dealsWorkspace = readFileSync(
+  "client/src/components/owner-deals-workspace.tsx",
+  "utf8",
+);
+const audienceWorkspace = readFileSync(
+  "client/src/components/owner-audience-workspace.tsx",
+  "utf8",
+);
 
 const requiredSnippets = [
   "currentRestaurant && setupMode && setupMode !== \"schedule\"",
@@ -8,8 +16,10 @@ const requiredSnippets = [
   "id=\"owner-workspace-operations\"",
   "key={defaultTab}",
   "defaultValue={defaultTab}",
-  "TabsTrigger value=\"active\"",
-  "TabsTrigger value=\"analytics\"",
+  "<OwnerDealsWorkspace",
+  "<OwnerAudienceWorkspace",
+  'activeWorkspaceModule === "deals"',
+  'activeWorkspaceModule === "audience"',
   "TabsTrigger value=\"bookings\"",
   "TabsTrigger value=\"foodtruck\"",
   "Open menu builder",
@@ -21,6 +31,24 @@ const requiredSnippets = [
 for (const snippet of requiredSnippets) {
   if (!dashboard.includes(snippet)) {
     throw new Error(`Missing setup gating snippet: ${snippet}`);
+  }
+}
+
+for (const [source, snippet] of [
+  [dealsWorkspace, "Give people a reason to choose"],
+  [audienceWorkspace, 'data-testid="owner-audience-workspace"'],
+] as const) {
+  if (!source.includes(snippet)) {
+    throw new Error(`Missing routed workspace gating snippet: ${snippet}`);
+  }
+}
+
+for (const retiredTab of [
+  'TabsTrigger value="active"',
+  'TabsTrigger value="analytics"',
+]) {
+  if (dashboard.includes(retiredTab)) {
+    throw new Error(`Retired owner dashboard tab remains: ${retiredTab}`);
   }
 }
 

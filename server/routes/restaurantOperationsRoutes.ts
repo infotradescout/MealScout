@@ -2743,7 +2743,7 @@ export function registerRestaurantOperationsRoutes(
             title: "Menu interest is strong",
             body: "If you have a real current special, feature it so customers have a reason to choose you today.",
             ctaLabel: "Add a special",
-            ctaHref: "/deal-creation",
+            ctaHref: `/deal-creation?restaurantId=${encodeURIComponent(String(restaurantId))}`,
           });
         }
         if (isTruck && !hasTruckSchedule) {

@@ -77,6 +77,7 @@ import OwnerProfileWorkspace, {
   type OwnerProfileMediaItem,
 } from "@/components/owner-profile-workspace";
 import OwnerDealsWorkspace from "@/components/owner-deals-workspace";
+import OwnerAudienceWorkspace from "@/components/owner-audience-workspace";
 import RestaurantCreditRedemptionForm from "@/components/RestaurantCreditRedemptionForm";
 import { format, subDays, startOfMonth, endOfMonth } from "date-fns";
 import { useFoodTruckSocket } from "@/hooks/useFoodTruckSocket";
@@ -338,6 +339,9 @@ export default function RestaurantOwnerDashboard() {
   const hasAnalyticsAccess =
     canViewAnalytics &&
     (isAdmin || isStaff || Boolean(subscription?.hasAccess));
+  // The routed Audience workspace owns served analytics. Keep the legacy query
+  // definitions inert until their hidden JSX is removed in the cleanup pass.
+  const legacyAnalyticsEnabled = false;
   const canManageBilling =
     isAdmin || isStaff || isRestaurantOwner || isFoodTruck;
 
@@ -358,7 +362,8 @@ export default function RestaurantOwnerDashboard() {
         if (!response.ok) throw new Error("Failed to load favorites analytics");
         return response.json();
       },
-      enabled: !!selectedRestaurant && hasAnalyticsAccess,
+      enabled:
+        legacyAnalyticsEnabled && !!selectedRestaurant && hasAnalyticsAccess,
     });
 
   // Fetch recommendations analytics for paid users
@@ -380,7 +385,8 @@ export default function RestaurantOwnerDashboard() {
         }
         return response.json();
       },
-      enabled: !!selectedRestaurant && hasAnalyticsAccess,
+      enabled:
+        legacyAnalyticsEnabled && !!selectedRestaurant && hasAnalyticsAccess,
     });
 
   const { data: truckBookings = [], isLoading: loadingTruckBookings } =
@@ -413,7 +419,8 @@ export default function RestaurantOwnerDashboard() {
       if (!response.ok) throw new Error("Failed to load analytics summary");
       return response.json();
     },
-    enabled: !!selectedRestaurant && hasAnalyticsAccess,
+    enabled:
+      legacyAnalyticsEnabled && !!selectedRestaurant && hasAnalyticsAccess,
   });
 
   const { data: analyticsTimeseries } = useQuery({
@@ -434,7 +441,8 @@ export default function RestaurantOwnerDashboard() {
       if (!response.ok) throw new Error("Failed to load analytics timeseries");
       return response.json();
     },
-    enabled: !!selectedRestaurant && hasAnalyticsAccess,
+    enabled:
+      legacyAnalyticsEnabled && !!selectedRestaurant && hasAnalyticsAccess,
   });
 
   const { data: customerInsights } = useQuery({
@@ -454,7 +462,8 @@ export default function RestaurantOwnerDashboard() {
       if (!response.ok) throw new Error("Failed to load customer insights");
       return response.json();
     },
-    enabled: !!selectedRestaurant && hasAnalyticsAccess,
+    enabled:
+      legacyAnalyticsEnabled && !!selectedRestaurant && hasAnalyticsAccess,
   });
 
   const { data: comparison } = useQuery({
@@ -482,7 +491,8 @@ export default function RestaurantOwnerDashboard() {
         `/api/restaurants/${selectedRestaurant}/analytics/compare?currentStart=${currentStart.toISOString()}&currentEnd=${currentEnd.toISOString()}&previousStart=${previousStart.toISOString()}&previousEnd=${previousEnd.toISOString()}`,
       );
     },
-    enabled: !!selectedRestaurant && hasAnalyticsAccess,
+    enabled:
+      legacyAnalyticsEnabled && !!selectedRestaurant && hasAnalyticsAccess,
   });
 
   // Calculate distance between two GPS coordinates
@@ -649,7 +659,7 @@ export default function RestaurantOwnerDashboard() {
             ? "menu"
             : workspaceMode === "deals"
               ? "deals"
-              : workspaceMode === "audience"
+              : workspaceMode === "audience" || setupMode === "analytics"
                 ? "audience"
                 : "overview";
   const currentMenuApproval = (currentRestaurant as any)?.menuApproval || null;
@@ -1970,24 +1980,19 @@ export default function RestaurantOwnerDashboard() {
     },
   });
   const availableTabs = [
-    ...(canViewAnalytics ? (["analytics"] as const) : []),
     ...(canManageBilling ? (["credits"] as const) : []),
     ...(canManageParkingPass ? (["bookings", "foodtruck"] as const) : []),
   ];
   const requestedDefaultTab =
-    workspaceMode === "audience"
-        ? "analytics"
-        : setupMode === "schedule" || dashboardParams.get("truck") === "1"
+    setupMode === "schedule" || dashboardParams.get("truck") === "1"
           ? "foodtruck"
           : setupMode === "bookings"
             ? "bookings"
-            : setupMode === "analytics"
-              ? "analytics"
-              : null;
+            : null;
   const defaultTab =
     requestedDefaultTab && availableTabs.includes(requestedDefaultTab as any)
       ? requestedDefaultTab
-      : (availableTabs[0] ?? "analytics");
+      : (availableTabs[0] ?? "credits");
   const buildOwnerToolHref = (
     destination: string,
     extras?: Record<string, string>,
@@ -4369,9 +4374,18 @@ export default function RestaurantOwnerDashboard() {
           />
         ) : null}
 
+        {activeWorkspaceModule === "audience" ? (
+          <OwnerAudienceWorkspace
+            restaurantId={selectedRestaurant}
+            businessName={currentRestaurant.name}
+            businessType={currentRestaurant.businessType}
+            canViewAnalytics={canViewAnalytics}
+            publicProfileHref={currentPublicProfileHref}
+          />
+        ) : null}
+
         {/* Stats Cards */}
-        {(activeWorkspaceModule === "overview" ||
-          activeWorkspaceModule === "audience") &&
+        {activeWorkspaceModule === "overview" &&
           (canManageDeals || canViewAnalytics) && (
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
               <Card>
@@ -4427,7 +4441,9 @@ export default function RestaurantOwnerDashboard() {
         {/* Business operations */}
         {activeWorkspaceModule !== "profile" &&
         activeWorkspaceModule !== "media" &&
-        activeWorkspaceModule !== "deals" ? (
+        activeWorkspaceModule !== "deals" &&
+        activeWorkspaceModule !== "audience" &&
+        availableTabs.length > 0 ? (
           <Tabs
             id="owner-workspace-operations"
             key={defaultTab}
@@ -4437,9 +4453,6 @@ export default function RestaurantOwnerDashboard() {
             <TabsList
               className={setupMode === "schedule" ? "hidden" : "w-full"}
             >
-              {canViewAnalytics ? (
-                <TabsTrigger value="analytics">Analytics</TabsTrigger>
-              ) : null}
               {canManageBilling ? (
                 <TabsTrigger value="credits">
                   <CreditCard className="mr-1 hidden h-4 w-4 sm:block" />
