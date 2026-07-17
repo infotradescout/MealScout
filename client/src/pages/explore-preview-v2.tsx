@@ -5264,25 +5264,25 @@ export default function ExplorePreview() {
     topLocalFavoriteRestaurants.length > 0;
   const isThinScoutViewport = isLowActivity && localActivityCount <= 1;
   const compactMapHeight = isThinScoutViewport
-    ? "clamp(208px, 24dvh, 238px)"
-    : "clamp(250px, 32dvh, 310px)";
+    ? "clamp(150px, 18dvh, 178px)"
+    : "clamp(176px, 22dvh, 208px)";
   const collapsedMapClass =
-    "mx-0 mt-0 rounded-b-[1.75rem] bg-[#f7ead0] ring-1 ring-orange-200/60";
+    "mx-0 mt-0 rounded-b-[1.5rem] bg-[#17110d] ring-1 ring-orange-200/16";
   const railSectionClass = isHighActivity
-    ? "pl-4 pr-0 pt-1 pb-5"
-    : "pl-4 pr-0 pt-2 pb-6 sm:pl-5";
+    ? "pl-4 pr-0 pt-1 pb-4"
+    : "pl-4 pr-0 pt-2 pb-4 sm:pl-5";
   const compactRailSectionClass = isHighActivity
-    ? "pl-4 pr-0 pt-0 pb-4"
-    : "pl-4 pr-0 pt-1 pb-5 sm:pl-5";
+    ? "pl-4 pr-0 pt-0 pb-3"
+    : "pl-4 pr-0 pt-1 pb-4 sm:pl-5";
   const truckCardWidth = isHighActivity
-    ? "w-[184px] sm:w-[206px]"
-    : "w-[204px] sm:w-[228px]";
+    ? "w-[176px] sm:w-[198px]"
+    : "w-[188px] sm:w-[212px]";
   const standardCardWidth = isHighActivity
-    ? "w-[172px] sm:w-[190px]"
-    : "w-[184px] sm:w-[204px]";
+    ? "w-[168px] sm:w-[186px]"
+    : "w-[176px] sm:w-[196px]";
   const featureCardWidth = isHighActivity
-    ? "w-[190px] sm:w-[212px]"
-    : "w-[204px] sm:w-[226px]";
+    ? "w-[182px] sm:w-[204px]"
+    : "w-[194px] sm:w-[216px]";
   const restaurantsRailTitle = isMediumActivity
     ? "Open Near You"
     : nearbyRestaurantsTitle;
@@ -5364,14 +5364,14 @@ export default function ExplorePreview() {
         description="Discover food trucks, restaurants, dishes, events, and local food deals near you with MealScout."
       />
 
-      {/* Scout is an everyday food surface. Photography and the map can carry
-          dark contrast; the application canvas stays warm and bright. */}
+      {/* Scout uses a warm night canvas so food photography and live map state
+          stay visually primary without reverting to an analytics dashboard. */}
       <div
         aria-hidden="true"
-        className="pointer-events-none fixed inset-0 -z-20 bg-[#fff8ec]"
+        className="pointer-events-none fixed inset-0 -z-20 bg-[#1c140f]"
         style={{
           backgroundImage:
-            "radial-gradient(85% 44% at 50% -8%, rgba(255,170,92,0.22) 0%, rgba(255,248,236,0) 62%), linear-gradient(180deg, #fff8ec 0%, #fffdf8 58%, #fff7e8 100%)",
+            "radial-gradient(90% 46% at 50% -8%, rgba(255,116,62,0.16) 0%, rgba(28,20,15,0) 64%), linear-gradient(180deg, #25170f 0%, #1d1510 52%, #17120f 100%)",
         }}
       />
 
@@ -5379,7 +5379,7 @@ export default function ExplorePreview() {
         className={`relative z-10 overflow-x-hidden ${
           sheetState === "fullMap"
             ? ""
-            : "pb-[calc(8.5rem+env(safe-area-inset-bottom,0px))] md:mx-auto md:max-w-[1120px] md:px-4 md:pb-8 xl:max-w-[1280px]"
+            : "pb-[calc(7rem+env(safe-area-inset-bottom,0px))] md:mx-auto md:max-w-[1120px] md:px-4 md:pb-8 xl:max-w-[1280px]"
         }`}
       >
         {/* ============================================================
@@ -5393,7 +5393,7 @@ export default function ExplorePreview() {
             data-scout-mobile-thirds-map="true"
             className={`relative overflow-hidden ${
               sheetState === "fullMap"
-                ? "w-full bg-[#f7ead0]"
+                ? "w-full bg-[#17110d]"
                 : collapsedMapClass
             }`}
             style={{
@@ -5403,7 +5403,7 @@ export default function ExplorePreview() {
               boxShadow:
                 sheetState === "fullMap"
                   ? undefined
-                  : "0 14px 34px rgba(112,64,28,0.16)",
+                  : "0 14px 34px rgba(0,0,0,0.34)",
             }}
           >
             {/* Scout map surfaces
@@ -5433,7 +5433,7 @@ export default function ExplorePreview() {
                         markers={sceneFilteredMapMarkers}
                         showRoadTrafficLayer={false}
                         userLocation={verifiedMapUserLocation}
-                        isNightTheme={false}
+                        isNightTheme={true}
                         useNativeMapStyle={false}
                         showZoomControls={false}
                         onBoundsChanged={handleMapBoundsChanged}
@@ -5489,7 +5489,7 @@ export default function ExplorePreview() {
                       markers={sceneFilteredMapMarkers}
                       showRoadTrafficLayer={false}
                       userLocation={verifiedMapUserLocation}
-                      isNightTheme={false}
+                      isNightTheme={true}
                       useNativeMapStyle={false}
                       showZoomControls={true}
                       zoomControlsPosition="below-header"
@@ -5524,7 +5524,7 @@ export default function ExplorePreview() {
                         />
                       </Suspense>
                       {(!hasMapKey || googleMapFailed) && (
-                        <div className="pointer-events-none absolute left-1/2 top-1/2 z-10 max-w-[18rem] -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-white/88 px-5 py-4 text-center text-sm font-bold text-orange-900 ring-1 ring-orange-200/60 backdrop-blur-xl">
+                        <div className="pointer-events-none absolute left-1/2 top-1/2 z-10 max-w-[18rem] -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-[#211710]/92 px-5 py-4 text-center text-sm font-bold text-orange-50 ring-1 ring-white/12 backdrop-blur-xl">
                           Full pan and zoom are loading. You can still browse
                           nearby food.
                         </div>
@@ -5554,7 +5554,7 @@ export default function ExplorePreview() {
                 type="button"
                 onClick={collapseScoutMap}
                 aria-label="Collapse map and return to discover"
-                className="absolute z-30 right-4 top-[calc(env(safe-area-inset-top)+0.75rem)] inline-flex h-12 items-center gap-2 rounded-full bg-white/90 px-4 font-black text-orange-800 ring-1 ring-orange-200/70 backdrop-blur-md transition-colors hover:bg-orange-50"
+                className="absolute z-30 right-4 top-[calc(env(safe-area-inset-top)+0.75rem)] inline-flex h-12 items-center gap-2 rounded-full bg-[#1b120d]/92 px-4 font-black text-orange-50 ring-1 ring-white/14 backdrop-blur-md transition-colors hover:bg-[#2a1b13]"
                 style={{
                   boxShadow: "0 12px 30px rgba(154,72,18,0.18)",
                 }}
@@ -5627,20 +5627,12 @@ export default function ExplorePreview() {
             {/* Compact map overlay — matches visual mockup */}
             {sheetState === "default" && (
               <>
-                {/* Top-left: wordmark + pts */}
+                {/* Map context, not a duplicate app header. */}
                 <div className="absolute left-3 top-3 z-20 flex items-center gap-2">
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-[#100c0a]/80 px-2.5 py-1.5 ring-1 ring-orange-200/30 backdrop-blur-xl shadow-[0_8px_20px_rgba(0,0,0,0.38)]">
-                    <img
-                      src={mealScoutIcon}
-                      alt=""
-                      className="h-5 w-5 object-contain"
-                      aria-hidden="true"
-                    />
-                    <span className="text-[13px] font-black tracking-tight text-white">
-                      Meal<span className="text-orange-400">Scout</span>
-                    </span>
+                  <span className="inline-flex max-w-[15rem] items-center gap-1.5 rounded-full bg-[#100c0a]/84 px-2.5 py-1.5 text-[11px] font-black text-white/88 ring-1 ring-orange-200/24 backdrop-blur-xl shadow-[0_8px_20px_rgba(0,0,0,0.38)]">
+                    <MapPin className="h-3.5 w-3.5 shrink-0 text-orange-300" aria-hidden="true" />
+                    <span className="truncate">{compactMapMarketHint}</span>
                   </span>
-                  {user && <ScoutPointsBadge userId={String(user.id)} />}
                 </div>
 
                 {/* Top-right: recenter (sits below the map's own "Live" badge so the two don't overlap) */}
@@ -5653,7 +5645,7 @@ export default function ExplorePreview() {
                     }
                   }}
                   aria-label="Recenter map"
-                  className="absolute right-3 top-14 z-20 inline-flex h-9 w-9 items-center justify-center rounded-full bg-[#100c0a]/80 ring-1 ring-orange-200/30 backdrop-blur-xl shadow-[0_8px_20px_rgba(0,0,0,0.38)]"
+                  className="absolute right-3 top-3 z-20 inline-flex h-9 w-9 items-center justify-center rounded-full bg-[#100c0a]/84 ring-1 ring-orange-200/24 backdrop-blur-xl shadow-[0_8px_20px_rgba(0,0,0,0.38)]"
                 >
                   <Navigation2
                     className="h-4 w-4 text-white"
@@ -5684,7 +5676,7 @@ export default function ExplorePreview() {
                   type="button"
                   onClick={openScoutMap}
                   aria-label="Open full map"
-                  className="absolute bottom-3 left-1/2 z-20 -translate-x-1/2 inline-flex items-center gap-1.5 rounded-full bg-[#100c0a]/72 px-4 py-2 text-[11px] font-black text-white/80 ring-1 ring-white/14 backdrop-blur-xl"
+                  className="absolute bottom-7 left-1/2 z-20 -translate-x-1/2 inline-flex items-center gap-1.5 rounded-full bg-[#100c0a]/84 px-3.5 py-1.5 text-[11px] font-black text-white/86 ring-1 ring-white/14 backdrop-blur-xl"
                 >
                   Open full map
                   <ChevronDown
@@ -5880,13 +5872,13 @@ function SectionHeader({
 }) {
   const showLink = itemCount === undefined || itemCount > 1;
   const seeAllClassName =
-    "inline-flex w-fit shrink-0 items-center gap-1.5 rounded-full bg-white/85 px-3 py-1.5 text-xs font-black uppercase tracking-[0.08em] text-orange-800 ring-1 ring-orange-200/80 shadow-sm transition-colors hover:bg-orange-50 sm:text-sm sm:normal-case sm:tracking-normal";
+    "inline-flex w-fit shrink-0 items-center gap-1 rounded-full bg-orange-300/10 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.08em] text-orange-200 ring-1 ring-orange-200/22 transition-colors hover:bg-orange-300/16 sm:text-sm sm:normal-case sm:tracking-normal";
 
   return (
-    <div className="mb-3 pr-5">
+    <div className="mb-2.5 pr-4">
       <div className="flex items-end justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="text-lg font-black tracking-tight text-[#32190d] sm:text-xl">
+          <h2 className="font-sans text-[17px] font-bold normal-case tracking-tight text-orange-50 sm:text-xl">
             {title}
           </h2>
         </div>
@@ -5907,7 +5899,7 @@ function SectionHeader({
         ) : null}
       </div>
       {subtitle ? (
-        <p className="mt-1 text-xs font-medium leading-snug text-stone-600 sm:text-sm">
+        <p className="mt-1 max-w-[34rem] text-xs font-medium leading-snug text-orange-50/58 sm:text-sm">
           {subtitle}
         </p>
       ) : null}
@@ -6278,56 +6270,45 @@ const scoutHorizontalRowMeta = new Map(
 const scoutRotatingRowFallbackCopy: Partial<
   Record<ScoutHorizontalRowId, { title: string; subtitle: string }>
 > = {
-  food_trucks_today: {
-    title: "Food Trucks to Explore",
-    subtitle:
-      "No trucks are live or scheduled right now. Explore food-truck profiles instead.",
-  },
   open_now_near_you: {
     title: "Places to Try",
-    subtitle:
-      "No open status is posted right now. Other food businesses rotate in.",
+    subtitle: "Open hours are not posted yet.",
   },
   popular_dishes: {
     title: "Menus to Explore",
-    subtitle:
-      "More menu variety is on the way. Explore other food businesses for now.",
+    subtitle: "Local menus are still filling in.",
   },
   hot_deals: {
     title: "More Food to Explore",
-    subtitle:
-      "No active deals are posted right now. Other food businesses rotate in.",
+    subtitle: "No active deals are posted.",
   },
   happy_hours: {
     title: "Bars and Restaurants to Explore",
-    subtitle:
-      "No happy hours are posted right now. Other food businesses rotate in.",
+    subtitle: "No happy hours are posted.",
   },
   events_popups: {
     title: "Food Businesses to Explore",
-    subtitle:
-      "No food events are posted right now. Other food businesses rotate in.",
+    subtitle: "No food events are posted.",
   },
   nearby_restaurants: {
     title: "Restaurants to Explore",
-    subtitle: "No local restaurant results are ready. Other restaurants rotate in.",
+    subtitle: "Local restaurant results are still filling in.",
   },
   trending_this_week: {
     title: "Worth a Look",
-    subtitle: "No activity is trending yet. Other food businesses rotate in.",
+    subtitle: "Local activity is still building.",
   },
   new_to_mealscout: {
     title: "More on MealScout",
-    subtitle: "No new listings are ready. Other food businesses rotate in.",
+    subtitle: "New local listings are still building.",
   },
   community_picks: {
     title: "Community Food Spots",
-    subtitle:
-      "No community picks are posted yet. Other food businesses rotate in.",
+    subtitle: "No community picks are posted yet.",
   },
   worth_discovering: {
     title: "More Worth Discovering",
-    subtitle: "More food businesses rotate in while activity is quiet.",
+    subtitle: "More local food worth a look.",
   },
 };
 
@@ -6374,11 +6355,11 @@ function ScoutHorizontalCategoryRail({
         }
       />
       <div
-        className="w-full max-w-full overflow-x-auto overscroll-x-contain atmo-hide-scrollbar -mr-1"
+        className="w-full max-w-full overflow-x-auto overscroll-x-contain atmo-hide-scrollbar [scrollbar-width:none] [&::-webkit-scrollbar]:hidden -mr-1"
         data-scout-horizontal-rail="true"
       >
         <ul
-          className="flex w-max max-w-none snap-x snap-mandatory gap-3.5 pr-5 sm:gap-4 lg:grid lg:w-full lg:grid-cols-4 lg:snap-none"
+          className="flex w-max max-w-none snap-x snap-mandatory gap-3 pr-4 sm:gap-3.5 lg:grid lg:w-full lg:grid-cols-4 lg:snap-none"
           role="list"
           aria-label={row.title}
         >
@@ -6394,8 +6375,8 @@ function ScoutHorizontalCategoryRail({
         </ul>
       </div>
       {row.cards.length > 2 ? (
-        <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-20 items-center justify-end bg-gradient-to-l from-[#fff8ec] via-[#fff8ec]/88 to-transparent pr-2 sm:flex lg:hidden">
-          <span className="rounded-full bg-white/90 px-2 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-stone-500 ring-1 ring-orange-200/70">
+        <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-20 items-center justify-end bg-gradient-to-l from-[#211610] via-[#211610]/88 to-transparent pr-2 sm:flex lg:hidden">
+          <span className="rounded-full bg-white/8 px-2 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-white/58 ring-1 ring-white/10">
             Scroll
           </span>
         </div>
@@ -6552,15 +6533,15 @@ function ScoutFirstScreenDecisionStack({
   if (!primary) {
     return (
       <section
-        className="px-4 pb-3 pt-3 sm:h-full sm:px-0"
+        className="px-4 pb-2 pt-2 sm:h-full sm:px-0"
         data-scout-first-screen-decision-stack="true"
         data-scout-first-screen-empty="true"
       >
-        <div className="h-full rounded-2xl bg-white/90 px-4 py-3 ring-1 ring-orange-200/70 shadow-[0_8px_24px_rgba(112,64,28,0.10)]">
-          <p className="text-[11px] font-black uppercase tracking-[0.12em] text-orange-700">
+        <div className="h-full rounded-2xl bg-[#2b1b13]/94 px-4 py-3 ring-1 ring-orange-200/18 shadow-[0_10px_26px_rgba(0,0,0,0.24)]">
+          <p className="text-[11px] font-black uppercase tracking-[0.12em] text-orange-300">
             No food results yet
           </p>
-          <p className="mt-1 text-sm font-semibold text-stone-600">
+          <p className="mt-1 text-sm font-semibold text-orange-50/62">
             Try a craving, category, or another map area.
           </p>
           <ScoutRecoveryActions className="mt-3" />
@@ -6571,30 +6552,28 @@ function ScoutFirstScreenDecisionStack({
 
   return (
     <section
-      className="px-4 pb-3 pt-3 sm:h-full sm:px-0"
+      className="px-4 pb-2 pt-2 sm:h-full sm:px-0"
       data-scout-first-screen-decision-stack="true"
       data-scout-decision-source-row={primary.sourceRowId}
     >
       <div className="h-full">
-        <div className="mb-2 min-w-0 px-0.5">
-          <p className="text-[11px] font-black uppercase tracking-[0.12em] text-orange-700">
+        <div className="mb-1.5 min-w-0 px-0.5">
+          <p className="text-[11px] font-black uppercase tracking-[0.12em] text-orange-300">
             {primary.sectionLabel}
           </p>
-          <p className="mt-0.5 truncate text-xs font-semibold text-stone-600">
-            {primary.summary}
-          </p>
+          <span className="sr-only">{primary.summary}</span>
         </div>
         <ScoutImmediateCompactCard item={primary} />
         {thinMarket ? (
           <div
-            className="mt-3 rounded-2xl bg-orange-50/85 px-3 py-3 ring-1 ring-orange-200/70"
+            className="mt-2.5 rounded-2xl bg-orange-300/8 px-3 py-3 ring-1 ring-orange-200/16"
             data-testid="scout-thin-market-state"
           >
-            <p className="text-sm font-black text-[#251208]">
+            <p className="text-sm font-black text-orange-50">
               Local food coverage is still growing, so the closest real place
               stays first.
             </p>
-            <p className="mt-1 text-xs font-semibold leading-relaxed text-stone-600">
+            <p className="mt-1 text-xs font-semibold leading-relaxed text-orange-50/58">
               Explore the map or try another craving.
             </p>
             <ScoutRecoveryActions className="mt-3" />
@@ -6616,7 +6595,7 @@ function ScoutRecoveryActions({ className = "" }: { className?: string }) {
       </Link>
       <Link
         href="/search"
-        className="rounded-full bg-white px-3 py-1.5 text-[11px] font-black text-stone-700 ring-1 ring-orange-200/80"
+        className="rounded-full bg-white/8 px-3 py-1.5 text-[11px] font-black text-orange-50/82 ring-1 ring-white/12"
       >
         Search
       </Link>
@@ -6932,28 +6911,28 @@ function CompactDecisionCardShell({
   const showImage = Boolean(imageUrl) && !imageFailed;
   const shellClass =
     variant === "dish"
-      ? "bg-[#fffaf2] ring-orange-200/80"
+      ? "bg-[#332016] ring-orange-200/20"
       : variant === "truck"
-        ? "bg-white ring-orange-200/80"
+        ? "bg-[#2c1a12] ring-orange-200/22"
         : variant === "deal"
-          ? "bg-[#fbfff4] ring-lime-300/70"
+          ? "bg-[#1f2718] ring-lime-200/22"
           : variant === "event"
-            ? "bg-[#f6fbff] ring-sky-300/65"
+            ? "bg-[#17232c] ring-sky-200/22"
             : variant === "host"
-              ? "bg-[#fffbf2] ring-amber-300/65"
-              : "bg-white ring-orange-200/75";
+              ? "bg-[#302416] ring-amber-200/22"
+              : "bg-[#2a1b14] ring-orange-200/20";
   const thumbClass =
     variant === "dish"
-      ? "rounded-full bg-orange-50 ring-orange-200/70"
+      ? "rounded-full bg-black/18 ring-orange-200/18"
       : variant === "truck"
-        ? "rounded-2xl bg-orange-50 ring-orange-200/70"
+        ? "rounded-2xl bg-black/18 ring-orange-200/18"
         : variant === "deal"
-          ? "rounded-lg bg-lime-50 ring-lime-200/70"
+          ? "rounded-lg bg-black/18 ring-lime-200/18"
           : variant === "event"
-            ? "rounded-lg bg-sky-50 ring-sky-200/70"
+            ? "rounded-lg bg-black/18 ring-sky-200/18"
             : variant === "host"
-              ? "rounded-xl bg-amber-50 ring-amber-200/70"
-              : "rounded-xl bg-orange-50 ring-orange-200/70";
+              ? "rounded-xl bg-black/18 ring-amber-200/18"
+              : "rounded-xl bg-black/18 ring-orange-200/18";
   const actionClass =
     variant === "deal"
       ? "bg-lime-300 text-[#102006]"
@@ -6964,17 +6943,17 @@ function CompactDecisionCardShell({
           : "bg-orange-400 text-[#1a0d08]";
   return (
     <div
-      className={`relative flex min-h-[98px] items-center gap-3 overflow-hidden rounded-2xl p-2.5 ring-1 shadow-[0_8px_24px_rgba(112,64,28,0.12)] ${shellClass}`}
+      className={`relative flex min-h-[88px] items-center gap-2.5 overflow-hidden rounded-2xl p-2 ring-1 shadow-[0_10px_26px_rgba(0,0,0,0.24)] ${shellClass}`}
       data-scout-immediate-compact-card="true"
     >
       {variant === "dish" ? (
         <span
-          className="absolute inset-x-3 bottom-0 border-t border-dashed border-orange-200/70"
+          className="absolute inset-x-3 bottom-0 border-t border-dashed border-orange-100/18"
           aria-hidden="true"
         />
       ) : null}
       <div
-        className={`flex h-[72px] w-[72px] shrink-0 items-center justify-center overflow-hidden ring-1 ${thumbClass}`}
+        className={`flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden ring-1 ${thumbClass}`}
       >
         {showImage ? (
           <img
@@ -7005,10 +6984,10 @@ function CompactDecisionCardShell({
         )}
       </div>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-[15px] font-black leading-tight text-[#2f180d]">
+        <p className="truncate text-[15px] font-black leading-tight text-orange-50">
           {title}
         </p>
-        <p className="mt-1 truncate text-xs font-semibold text-stone-600">
+        <p className="mt-1 truncate text-xs font-semibold text-orange-50/58">
           {meta}
         </p>
         <div className="mt-2 flex items-center gap-2">
@@ -7023,7 +7002,7 @@ function CompactDecisionCardShell({
               href={directionsUrl}
               target="_blank"
               rel="noreferrer"
-              className="rounded-full bg-orange-50 px-3 py-1.5 text-[11px] font-black text-orange-800 ring-1 ring-orange-200/80"
+              className="rounded-full bg-white/8 px-3 py-1.5 text-[11px] font-black text-orange-50/82 ring-1 ring-white/12"
             >
               Directions
             </a>
@@ -7352,7 +7331,9 @@ function ActiveSceneContent({
         .map((item) => item.restaurant);
 
     const liveTruckCandidates = visibleTrucksServingNow;
-    const foodTrucksTodayCandidates = scoutTruckInventory;
+    // Live truck discovery is operational truth, never a profile fallback.
+    // General truck profiles can still appear in non-live discovery categories.
+    const foodTrucksTodayCandidates: LiveTruckSummary[] = [];
     const nearbyRestaurantCandidates = nearbyRestaurants;
     const favoriteRestaurantCandidates = nearbyRestaurantCandidates.filter(
       (restaurant) =>
@@ -8100,12 +8081,7 @@ function ActiveSceneContent({
     });
     const claimedFallbackBusinessKeys = new Set<string>();
     const rotatingSpotsForRow = (rowId: ScoutHorizontalRowId) =>
-      rowId === "food_trucks_today"
-        ? rotatingSpots.filter(
-            (spot) =>
-              getScoutRestaurantLikeKind(spot.restaurant) === "food_truck",
-          )
-        : rotatingSpots;
+      rowId === "food_trucks_today" ? [] : rotatingSpots;
     const emptyRowsEligibleForRotation = new Set(
       baseScoutRows
         .filter(
@@ -8224,9 +8200,7 @@ function ActiveSceneContent({
       })
       .map((row) => ({
         ...row,
-        cards: row.rotatingFallbackFor
-          ? row.cards
-          : row.cards.filter((card) => !suppressFirstScreenBusiness(card)),
+        cards: row.cards.filter((card) => !suppressFirstScreenBusiness(card)),
       }));
 
     const renderScoutRailCard = (card: ScoutRailRenderCard) => {
@@ -8396,7 +8370,8 @@ function ActiveSceneContent({
         />
       ) : null}
 
-      {(laneId === "nearby_now" || laneId === "food_trucks") && (
+      {(laneId === "nearby_now" || laneId === "food_trucks") &&
+      visibleTrucksServingNow.length > 0 ? (
         <section className={railSectionClass}>
           <SectionHeader
             title={laneFoodTrucksTitle}
@@ -8444,7 +8419,7 @@ function ActiveSceneContent({
             </div>
           )}
         </section>
-      )}
+      ) : null}
 
       {(laneId === "nearby_now" ||
         laneId === "restaurants" ||
@@ -8603,7 +8578,7 @@ function ActiveSceneContent({
           <SectionHeader
             title="Food Businesses to Explore"
             linkHref="/search"
-            subtitle="More local menus are on the way. Other food businesses rotate in."
+            subtitle="Local menus are still filling in."
             itemCount={newMenuFallbackSpots.length}
           />
           <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
@@ -9502,7 +9477,7 @@ function LiveTruckSkeletonCard() {
   return (
     <div
       aria-hidden="true"
-      className="rounded-3xl overflow-hidden bg-white/5 ring-1 ring-white/10"
+      className="overflow-hidden rounded-2xl bg-[#2a1b14] ring-1 ring-orange-200/14"
     >
       <div className="aspect-[4/5] w-full animate-pulse bg-white/5" />
     </div>
@@ -9606,10 +9581,10 @@ function LiveTruckCard({
   return (
     <Link
       href={cardHref}
-      className="group relative block overflow-hidden rounded-2xl bg-white ring-1 ring-orange-200/75 transition duration-200 hover:-translate-y-0.5 hover:ring-emerald-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
+      className="group relative block overflow-hidden rounded-2xl bg-[#2a1b14] ring-1 ring-orange-200/18 transition duration-200 hover:-translate-y-0.5 hover:ring-orange-200/34 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
       aria-label={`Open ${cardTitle}`}
       style={{
-        boxShadow: "0 10px 26px rgba(112,64,28,0.12)",
+        boxShadow: "0 12px 28px rgba(0,0,0,0.24)",
       }}
     >
       <div className="relative aspect-[16/11] w-full bg-[#120805]/60">
@@ -9669,16 +9644,16 @@ function LiveTruckCard({
           />
         </button>
       </div>
-      <div className="relative border-t border-orange-100 bg-white px-4 py-3 pl-7">
+      <div className="relative border-t border-orange-200/10 bg-[#2a1b14] px-3 py-3">
         <div className="flex items-start gap-2.5">
-          <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-orange-700 ring-1 ring-orange-200/80">
+          <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-orange-300/10 text-orange-200 ring-1 ring-orange-200/18">
             <TruckIcon className="h-4 w-4" aria-hidden="true" />
           </span>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-base font-black leading-tight text-[#2f180d]">
+            <p className="truncate text-base font-black leading-tight text-orange-50">
               {cardTitle}
             </p>
-            <p className="mt-1 inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-orange-700">
+            <p className="mt-1 inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-orange-200/86">
               <Navigation2 className="h-3.5 w-3.5" aria-hidden="true" />
               <span>
                 {[wait, distance].filter(Boolean).join(" / ") ||
@@ -9687,8 +9662,8 @@ function LiveTruckCard({
             </p>
           </div>
         </div>
-        <p className="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-stone-600">
-          <Flame className="h-4 w-4 text-orange-600" aria-hidden="true" />
+        <p className="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-orange-50/64">
+          <Flame className="h-4 w-4 text-orange-300" aria-hidden="true" />
           <span>{vibe.label}</span>
         </p>
         <div className="mt-2 flex flex-wrap gap-1">
@@ -9740,8 +9715,8 @@ function DealCard({
   return (
     <Link
       href={cardHref}
-      className="block overflow-hidden rounded-2xl bg-white ring-1 ring-lime-200/70 transition duration-200 hover:-translate-y-0.5 hover:ring-lime-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-lime-400"
-      style={{ boxShadow: "0 10px 26px rgba(112,64,28,0.12)" }}
+      className="block overflow-hidden rounded-2xl bg-[#202617] ring-1 ring-lime-200/18 transition duration-200 hover:-translate-y-0.5 hover:ring-lime-200/34 focus:outline-none focus-visible:ring-2 focus-visible:ring-lime-300/70"
+      style={{ boxShadow: "0 12px 28px rgba(0,0,0,0.24)" }}
       aria-label={`Open deal ${cardTitle}`}
     >
       <div className="relative aspect-[4/5] w-full bg-[#120805]/60">
@@ -10019,8 +9994,8 @@ function LocalMenuItemCard({
           discoveryReasons: item.discoveryReasons,
         })
       }
-      className="block overflow-hidden rounded-2xl bg-white ring-1 ring-orange-200/75 transition duration-200 hover:-translate-y-0.5 hover:ring-orange-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-400"
-      style={{ boxShadow: "0 10px 26px rgba(112,64,28,0.12)" }}
+      className="block overflow-hidden rounded-2xl bg-[#2a1b14] ring-1 ring-orange-200/18 transition duration-200 hover:-translate-y-0.5 hover:ring-orange-200/34 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
+      style={{ boxShadow: "0 12px 28px rgba(0,0,0,0.24)" }}
       aria-label={`Open ${cardTitle} from ${item.restaurantName || "local menu"}`}
       data-testid="scout-local-menu-item-card"
     >
@@ -10049,18 +10024,18 @@ function LocalMenuItemCard({
         )}
       </div>
       <div className="px-3 pb-3 pt-2.5">
-        <p className="line-clamp-2 min-h-[2.25rem] text-sm font-bold leading-tight text-[#2f180d]">
+        <p className="line-clamp-2 min-h-[2.25rem] text-sm font-bold leading-tight text-orange-50">
           {cardTitle}
         </p>
-        <p className="mt-1 truncate text-xs font-semibold text-orange-800">
+        <p className="mt-1 truncate text-xs font-semibold text-orange-200/84">
           {item.restaurantName || "Local spot"}
         </p>
-        <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-stone-500">
+        <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-orange-50/44">
           {displayCategory && <span>{displayCategory}</span>}
           {distLabel && <span>{distLabel}</span>}
         </div>
         {item.description && (
-          <p className="mt-2 line-clamp-1 text-xs leading-snug text-stone-600">
+          <p className="mt-2 line-clamp-1 text-xs leading-snug text-orange-50/58">
             {item.description}
           </p>
         )}
@@ -10072,8 +10047,8 @@ function LocalMenuItemCard({
             disabled={isTogglingRecommend}
             className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide disabled:opacity-60 ${
               hasRecommended
-                ? "text-emerald-700"
-                : "text-orange-700 hover:text-orange-800"
+                ? "text-emerald-300"
+                : "text-orange-300 hover:text-orange-200"
             }`}
           >
             <Heart
@@ -10182,8 +10157,8 @@ function EventCard({
   return (
     <Link
       href={cardHref}
-      className="block overflow-hidden rounded-2xl bg-white ring-1 ring-sky-200/70 transition duration-200 hover:-translate-y-0.5 hover:ring-sky-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
-      style={{ boxShadow: "0 10px 26px rgba(112,64,28,0.12)" }}
+      className="block overflow-hidden rounded-2xl bg-[#18242c] ring-1 ring-sky-200/18 transition duration-200 hover:-translate-y-0.5 hover:ring-sky-200/34 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-300/70"
+      style={{ boxShadow: "0 12px 28px rgba(0,0,0,0.24)" }}
       aria-label={`Open event ${title}`}
     >
       <div className="relative aspect-[4/5] w-full bg-[#120805]/60">
@@ -10408,15 +10383,15 @@ function NearbyRestaurantCard({
     }),
   ];
   const cardShellClass = isFoodTruckEntity
-    ? "group relative block overflow-hidden rounded-2xl bg-white ring-1 ring-orange-200/75 transition duration-200 hover:-translate-y-0.5 hover:ring-orange-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-400"
-    : "group block overflow-hidden rounded-2xl bg-white ring-1 ring-orange-200/70 transition duration-200 hover:-translate-y-0.5 hover:ring-orange-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-400";
+    ? "group relative block overflow-hidden rounded-2xl bg-[#2a1b14] ring-1 ring-orange-200/18 transition duration-200 hover:-translate-y-0.5 hover:ring-orange-200/34 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
+    : "group block overflow-hidden rounded-2xl bg-[#261b15] ring-1 ring-orange-100/14 transition duration-200 hover:-translate-y-0.5 hover:ring-orange-200/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70";
   const labelPillClass = isFoodTruckEntity
     ? "bg-[#120805]/72 text-orange-100 ring-orange-200/20"
     : "bg-[#1b0e08]/76 text-orange-50 ring-orange-200/24";
   const statusDotClass = isFoodTruckEntity ? "bg-orange-400" : "bg-emerald-400";
   const statusTextClass = isFoodTruckEntity
-    ? "text-orange-700"
-    : "text-emerald-700";
+    ? "text-orange-300"
+    : "text-emerald-300";
   const placeIcon = isFoodTruckEntity ? (
     <TruckIcon className="h-5 w-5 text-white/80" aria-hidden="true" />
   ) : (
@@ -10577,11 +10552,11 @@ function NearbyRestaurantCard({
       href={profileHref}
       className={cardShellClass}
       aria-label={`Open ${name}`}
-      style={{ boxShadow: "0 10px 26px rgba(112,64,28,0.12)" }}
+      style={{ boxShadow: "0 12px 28px rgba(0,0,0,0.24)" }}
       data-testid="scout-restaurant-card"
     >
       {/* Image */}
-      <div className="relative aspect-[16/11] w-full bg-orange-50">
+      <div className="relative aspect-[16/11] w-full bg-[#17100c]">
         <ScoutCardMedia
           imageUrl={img || null}
           imageObjectPosition={cardView.imageObjectPosition}
@@ -10627,7 +10602,7 @@ function NearbyRestaurantCard({
         }
       >
         <div className="flex items-start justify-between gap-2">
-          <p className="min-w-0 line-clamp-2 min-h-[2.25rem] text-sm font-bold leading-tight text-[#2f180d]">
+          <p className="min-w-0 line-clamp-2 min-h-[2.25rem] text-sm font-bold leading-tight text-orange-50">
             {name}
           </p>
           {statusLabels.length > 0 && (
@@ -10650,29 +10625,29 @@ function NearbyRestaurantCard({
         <div className="mt-1 flex items-center gap-1.5 overflow-hidden text-[11px]">
           {cuisine && (
             <span
-              className="truncate text-orange-800"
+              className="truncate text-orange-200/82"
             >
               {cuisine}
             </span>
           )}
           {cuisine && (location || distLabel) && (
-            <span className="text-stone-300 text-[11px]">·</span>
+            <span className="text-white/24 text-[11px]">·</span>
           )}
           {location && (
-            <span className="truncate text-stone-600">
+            <span className="truncate text-orange-50/55">
               {location}
             </span>
           )}
           {distLabel && (
             <>
-              <span className="text-stone-300 text-[11px]">·</span>
-              <span className="shrink-0 text-stone-500">{distLabel}</span>
+              <span className="text-white/24 text-[11px]">·</span>
+              <span className="shrink-0 text-orange-50/48">{distLabel}</span>
             </>
           )}
         </div>
         {menuPreview.length > 0 && (
           <div
-            className="mt-2 flex items-center gap-2 rounded-xl bg-orange-50/80 p-1.5 ring-1 ring-orange-100"
+            className="mt-2 flex items-center gap-2 rounded-xl bg-black/16 p-1.5 ring-1 ring-white/8"
             data-testid="scout-menu-preview"
           >
             <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded-md">
@@ -10680,7 +10655,7 @@ function NearbyRestaurantCard({
                 imageUrl={menuPreview[0].imageUrl || null}
                 fallbackIcon={
                   <Utensils
-                    className="h-3 w-3 text-orange-700"
+                    className="h-3 w-3 text-orange-200"
                     aria-hidden="true"
                   />
                 }
@@ -10693,12 +10668,12 @@ function NearbyRestaurantCard({
               />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-[11px] font-semibold text-stone-700">
+              <p className="truncate text-[11px] font-semibold text-orange-50/80">
                 {menuPreview[0].name}
               </p>
             </div>
             {formatPrice(menuPreview[0].priceCents) && (
-              <span className="shrink-0 text-[11px] font-semibold text-orange-800">
+              <span className="shrink-0 text-[11px] font-semibold text-orange-200/84">
                 {formatPrice(menuPreview[0].priceCents)}
               </span>
             )}
@@ -10711,13 +10686,13 @@ function NearbyRestaurantCard({
             aria-hidden={communityUpdates.length === 0}
           >
             {favoriteCount > 0 && (
-              <span className="inline-flex items-center gap-1 text-[10px] font-mono text-stone-500">
+              <span className="inline-flex items-center gap-1 text-[10px] font-mono text-orange-50/42">
                 <Bookmark className="h-2.5 w-2.5" aria-hidden="true" />
                 {favoriteCount}
               </span>
             )}
             {followCount > 0 && (
-              <span className="inline-flex items-center gap-1 text-[10px] font-mono text-stone-500">
+              <span className="inline-flex items-center gap-1 text-[10px] font-mono text-orange-50/42">
                 <Heart className="h-2.5 w-2.5" aria-hidden="true" />
                 {followCount}
               </span>
@@ -10736,7 +10711,7 @@ function NearbyRestaurantCard({
               className={`inline-flex h-7 w-7 items-center justify-center rounded-full transition ${
                 isRecommended
                   ? "bg-orange-300 text-[#1a0d08]"
-                  : "bg-orange-50 text-stone-600 hover:bg-orange-100"
+                  : "bg-white/8 text-orange-50/70 hover:bg-white/12"
               }`}
               aria-pressed={isRecommended}
               aria-label={
@@ -11879,9 +11854,9 @@ function TruckCard({
         event.preventDefault();
         onSelect(truck);
       }}
-      className="relative block overflow-hidden rounded-2xl bg-white ring-1 ring-orange-200/75 transition duration-200 hover:-translate-y-0.5 hover:ring-orange-300 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-400"
+      className="relative block overflow-hidden rounded-2xl bg-[#2a1b14] ring-1 ring-orange-200/18 transition duration-200 hover:-translate-y-0.5 hover:ring-orange-200/34 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
       style={{
-        boxShadow: "0 10px 26px rgba(112,64,28,0.12)",
+        boxShadow: "0 12px 28px rgba(0,0,0,0.24)",
       }}
     >
       {/* Hero image */}
@@ -11930,32 +11905,32 @@ function TruckCard({
         </span>
       </div>
       {/* Info */}
-      <div className="border-t border-orange-100 bg-white px-3 py-3 pl-7">
+      <div className="border-t border-orange-200/10 bg-[#2a1b14] px-3 py-3">
         <div className="flex items-start gap-2.5">
-          <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-orange-700 ring-1 ring-orange-200/80">
+          <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-orange-300/10 text-orange-200 ring-1 ring-orange-200/18">
             <TruckIcon className="h-4 w-4" aria-hidden="true" />
           </span>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-black leading-snug text-[#2f180d]">
+            <p className="truncate text-sm font-black leading-snug text-orange-50">
               {name}
             </p>
             <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
               {cuisine && (
-                <span className="text-orange-800 text-[11px]">
+                <span className="text-orange-200/82 text-[11px]">
                   {cuisine}
                 </span>
               )}
               {cuisine && (distLabel || waitLabel) && (
-                <span className="text-stone-300 text-[11px]">/</span>
+                <span className="text-white/24 text-[11px]">/</span>
               )}
               {distLabel && (
-                <span className="text-stone-600 text-[11px]">{distLabel}</span>
+                <span className="text-orange-50/55 text-[11px]">{distLabel}</span>
               )}
               {distLabel && waitLabel && (
-                <span className="text-stone-300 text-[11px]">/</span>
+                <span className="text-white/24 text-[11px]">/</span>
               )}
               {waitLabel && (
-                <span className="text-stone-500 text-[11px]">
+                <span className="text-orange-50/48 text-[11px]">
                   {waitLabel} wait
                 </span>
               )}
@@ -11995,11 +11970,11 @@ function HorizontalSkeletonRow({
       <ul className="flex gap-4 pr-5" role="list" aria-label="Loading…">
         {Array.from({ length: count }).map((_, i) => (
           <li key={i} className="shrink-0" style={{ width }}>
-            <div className="overflow-hidden rounded-2xl bg-white ring-1 ring-orange-200/70">
-              <div className="aspect-[4/3] w-full animate-pulse bg-orange-50" />
+            <div className="overflow-hidden rounded-2xl bg-[#2a1b14] ring-1 ring-orange-200/14">
+              <div className="aspect-[4/3] w-full animate-pulse bg-white/5" />
               <div className="p-3 space-y-2">
-                <div className="h-3 w-3/4 animate-pulse rounded bg-orange-100" />
-                <div className="h-2.5 w-1/2 animate-pulse rounded bg-stone-100" />
+                <div className="h-3 w-3/4 animate-pulse rounded bg-white/10" />
+                <div className="h-2.5 w-1/2 animate-pulse rounded bg-white/7" />
               </div>
             </div>
           </li>

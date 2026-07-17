@@ -420,7 +420,7 @@ export function ThemedScoutMapV2({
           // instead of leaving a blank/void-looking canvas.
           <div
             className="absolute inset-0 h-full w-full min-h-full"
-            style={{ backgroundColor: "#f5f3ee" }}
+            style={{ backgroundColor: "#211710" }}
           />
         ) : (
           <div
@@ -433,7 +433,7 @@ export function ThemedScoutMapV2({
 
       <style>{`
         .msm-map-canvas .maplibregl-canvas {
-          filter: none;
+          filter: brightness(0.48) saturate(0.72) sepia(0.18) contrast(1.12);
         }
 
         /* ── User location pin ── */

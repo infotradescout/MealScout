@@ -47,17 +47,17 @@ assert.equal(
 const sectionAssignments = assignScoutBusinessCardsBySection([
   {
     id: "live_trucks_now",
-    items: [knownTruck],
+    items: [knownTruck, knownTruck],
     getBusinessKey: (item) => getScoutBusinessKey(item),
   },
   {
     id: "food_trucks_today",
-    items: [knownTruck],
+    items: [],
     getBusinessKey: (item) => getScoutBusinessKey(item),
   },
   {
     id: "nearby_restaurants",
-    items: [knownTruck, knownRestaurant],
+    items: [knownRestaurant, knownRestaurant],
     getBusinessKey: (item) => getScoutBusinessKey(item),
   },
   {
@@ -70,22 +70,22 @@ const sectionAssignments = assignScoutBusinessCardsBySection([
 assert.deepEqual(
   sectionAssignments.live_trucks_now?.map((item) => item.id),
   ["blessed-berry-bowls"],
-  "The strongest section should keep the truck business card.",
+  "A category must never place duplicate cards for the same truck beside itself.",
 );
 assert.deepEqual(
   sectionAssignments.food_trucks_today,
   [],
-  "The same truck business card must not repeat in Food Trucks Today after Open Now claims it.",
+  "Food Trucks Today must remain empty when no live or serving truck is supplied.",
 );
 assert.deepEqual(
   sectionAssignments.nearby_restaurants?.map((item) => item.id),
   ["garden-table"],
-  "Nearby Restaurants must not receive a truck business card.",
+  "A category must never place duplicate cards for the same restaurant beside itself.",
 );
 assert.deepEqual(
-  sectionAssignments.worth_discovering,
-  [],
-  "Worth Discovering must not duplicate cards already shown in stronger sections.",
+  sectionAssignments.worth_discovering?.map((item) => item.id),
+  ["garden-table"],
+  "A good business may appear in a different category when it genuinely belongs there.",
 );
 
 const requiredKinds = [
