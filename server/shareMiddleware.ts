@@ -85,7 +85,7 @@ export function resolveCanonicalShareOrigin(req?: {
  *
  * Can be used for:
  * - Restaurant pages: /restaurants/:id
- * - Deal pages: /deals/:id
+ * - Deal pages: /deal/:id
  * - Searches: /search?q=pizza
  * - County pages: /counties/san_diego/ca
  * - Collection pages: /collections/best-of-town

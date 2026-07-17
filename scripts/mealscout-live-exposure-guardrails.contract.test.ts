@@ -23,11 +23,9 @@ function sliceBetween(source: string, start: string, end: string) {
 
 const guestPrimary = sliceBetween(navigation, "guest: [", "customer: [");
 const guestMore = sliceBetween(navigation, 'if (lane === "guest")', "} else if");
-const sixSlotNav = sliceBetween(navigation, "const sixSlotNav: NavItem[] = [", "];");
 
 for (const redGuestLink of [
   'path: "/video"',
-  'path: "/events"',
   'path: "/customer-signup"',
   'path: "/share-hub"',
 ]) {
@@ -42,8 +40,16 @@ for (const redGuestLink of [
 }
 
 assert(
-  sixSlotNav.includes('lane === "guest"') && sixSlotNav.includes('path: "/claim-business"'),
-  "Guest six-slot nav must replace the share slot with claim-business containment.",
+  guestPrimary.includes('path: "/scout"') &&
+    guestPrimary.includes('path: "/favorites"') &&
+    guestPrimary.includes('path: "/login"'),
+  "Guest primary navigation must stay focused on Scout, Saved, and Account.",
+);
+assert(
+  guestMore.includes('path: "/events"') &&
+    guestMore.includes('path: "/deals"') &&
+    guestMore.includes('path: "/claim-business"'),
+  "Guest supporting discovery and business intake must remain available under More.",
 );
 assert(
   navigation.includes('path: "/restaurant-signup?businessType=food_truck"'),

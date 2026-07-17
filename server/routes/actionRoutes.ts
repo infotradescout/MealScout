@@ -1,14 +1,20 @@
 import { Router } from "express";
+import { randomUUID } from "node:crypto";
 import { storage } from "../storage";
 import { ensurePremiumTrialForUserId } from "../services/premiumTrial";
 import { db } from "../db";
-import { deals, restaurants, creditLedger } from "@shared/schema";
+import { deals, restaurants } from "@shared/schema";
 import { eq, and, like, ilike } from "drizzle-orm";
 import { listParkingPassOccurrences } from "../services/parkingPassVirtual";
 import {
   isHostProfileMapEligible,
   isParkingPassPublicReady,
 } from "../services/parkingPassQuality";
+import {
+  debitCredit,
+  getUserCreditBalance,
+  InsufficientCreditBalanceError,
+} from "../creditService";
 
 const router = Router();
 
@@ -427,24 +433,31 @@ async function redeemCredits(params: {
       };
     }
 
-    // Create credit redemption entry in ledger
-    await db.insert(creditLedger).values({
-      userId: params.userId,
-      amount: params.amount,
-      sourceType: "redemption",
-      description: params.reason || "Credits redeemed",
-      dealId: params.dealId,
-      sourceUserId: params.userId,
-    } as any);
+    const entry = await debitCredit(
+      params.userId,
+      params.amount,
+      "tradescout_redemption",
+      params.dealId || `tradescout_action:${randomUUID()}`,
+      "tradescout_action",
+    );
 
     return {
       success: true,
       data: {
         amountRedeemed: params.amount,
+        ledgerEntryId: entry.id,
         message: "Credits redeemed successfully",
       },
     };
   } catch (error: any) {
+    if (error instanceof InsufficientCreditBalanceError) {
+      return {
+        success: false,
+        error: error.message,
+        available: error.available,
+        requested: error.requested,
+      };
+    }
     return {
       success: false,
       error: error.message,
@@ -472,13 +485,7 @@ async function getCreditBalance(params: { userId: string }) {
       };
     }
 
-    // Calculate balance from credit ledger (sum of all credits for this user)
-    const credits = await db
-      .select()
-      .from(creditLedger)
-      .where(eq(creditLedger.userId, params.userId));
-
-    const balance = credits.reduce((sum: number, credit: any) => sum + parseFloat(credit.amount as any), 0);
+    const balance = await getUserCreditBalance(params.userId);
 
     return {
       success: true,

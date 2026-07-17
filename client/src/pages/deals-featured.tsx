@@ -1,10 +1,13 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "wouter";
-import Navigation from "@/components/navigation";
+import { Flame } from "lucide-react";
 import DealCard from "@/components/deal-card";
+import {
+  CollectionLoadingState,
+  CollectionState,
+  ConsumerCollectionShell,
+} from "@/components/consumer-collection-shell";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Flame, SlidersHorizontal, Filter } from "lucide-react";
 import { SEOHead } from "@/components/seo-head";
 import {
   sendGeoPing,
@@ -36,21 +39,23 @@ export default function FeaturedDealsPage() {
           lng: position.coords.longitude,
         });
       },
-      () => {
-        setAdLocation(null);
-      },
+      () => setAdLocation(null),
       { enableHighAccuracy: false, timeout: 6000 },
     );
   }, []);
 
-  const { data: featuredDeals, isLoading } = useQuery({
+  const {
+    data: featuredDeals,
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery({
     queryKey: ["/api/deals/featured"],
-    enabled: true,
   });
 
   const { data: geoAds = [] } = useQuery<GeoAd[]>({
     queryKey: ["/api/geo-ads", "deals", adLocation?.lat, adLocation?.lng],
-    enabled: !!adLocation,
+    enabled: Boolean(adLocation),
     queryFn: async () => {
       if (!adLocation) return [];
       const res = await fetch(
@@ -65,10 +70,9 @@ export default function FeaturedDealsPage() {
   useEffect(() => {
     if (!adLocation) return;
     sendGeoPing({ lat: adLocation.lat, lng: adLocation.lng, source: "deals" });
-  }, [adLocation?.lat, adLocation?.lng]);
+  }, [adLocation]);
 
   useEffect(() => {
-    if (!geoAds.length) return;
     geoAds.forEach((ad) =>
       trackGeoAdImpression({ adId: ad.id, placement: "deals" }),
     );
@@ -82,160 +86,96 @@ export default function FeaturedDealsPage() {
   };
 
   return (
-    <div className="max-w-md lg:max-w-4xl xl:max-w-6xl mx-auto bg-[var(--bg-layered)] min-h-screen relative pb-20">
+    <ConsumerCollectionShell
+      section="deals"
+      title="Deals"
+      description="Current offers from local food businesses, with the details you need before you go."
+      icon={Flame}
+      countLabel={
+        isLoading
+          ? null
+          : `${allDeals.length} active ${allDeals.length === 1 ? "deal" : "deals"}`
+      }
+    >
       <SEOHead
-        title="Time-Sensitive Specials - MealScout | Nearby Limited-Time Offers"
-        description="Discover time-sensitive food specials near you. Limited-time offers from local restaurants, sorted by proximity."
-        keywords="limited time food deals, nearby restaurant specials, today food discounts, local meal promotions, food deals near me"
-        canonicalUrl="https://www.mealscout.us/deals/featured"
+        title="Local Food Deals | MealScout"
+        description="Browse current offers from local restaurants, food trucks, and food businesses on MealScout."
+        keywords="local food deals, restaurant specials, food truck deals"
+        canonicalUrl="https://www.mealscout.us/deals"
       />
-      {/* Header */}
-      <header className="px-4 sm:px-6 py-6 bg-[hsl(var(--background))/0.94] border-b border-[color:var(--border-subtle)] shadow-clean">
-        <div className="flex items-center mb-6">
-          <Link href="/">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="mr-3 -ml-2"
-              data-testid="button-back-featured"
-            >
-              <ArrowLeft className="w-4 h-4" />
-            </Button>
-          </Link>
-          <div className="flex items-center">
-            <div className="w-8 h-8 bg-gradient-to-r from-[color:var(--accent-text)] to-[color:var(--status-error)] rounded-lg flex items-center justify-center mr-3 shadow-clean">
-              <Flame className="w-4 h-4 text-white" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-foreground">
-                Time-Sensitive Specials Nearby
-              </h1>
-              <p className="text-sm text-muted-foreground">
-                Limited-time offers from nearby restaurants (distance-based)
-              </p>
-            </div>
-          </div>
-        </div>
 
-        {/* Filter & Sort */}
-        <div className="flex items-center justify-between">
-          <div className="text-sm text-muted-foreground">
-            {allDeals.length} time-sensitive special
-            {allDeals.length !== 1 ? "s" : ""}
-          </div>
-          <div className="flex space-x-2">
-            <Button
-              variant="outline"
-              size="sm"
-              data-testid="button-sort-featured"
+      {geoAds.length > 0 ? (
+        <aside aria-label="Sponsored" className="mb-6">
+          {geoAds.map((ad) => (
+            <div
+              key={ad.id}
+              className="grid overflow-hidden rounded-[1.5rem] border border-[#683a1f]/15 bg-white/[0.92] shadow-[0_18px_45px_rgba(102,50,21,0.07)] sm:grid-cols-[12rem_minmax(0,1fr)]"
             >
-              <SlidersHorizontal className="w-4 h-4 mr-2" />
-              Sort
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              data-testid="button-filter-featured"
-            >
-              <Filter className="w-4 h-4 mr-2" />
-              Filter
-            </Button>
-          </div>
-        </div>
-      </header>
-
-      {/* Content */}
-      <div className="px-4 sm:px-6 py-6">
-        {geoAds.length > 0 && (
-          <div className="mb-6">
-            {geoAds.map((ad) => (
-              <div
-                key={ad.id}
-                className="rounded-2xl border border-[color:var(--border-subtle)] bg-[color:var(--bg-card)] p-4 shadow-clean"
-              >
-                {ad.mediaUrl && (
-                  <img
-                    src={ad.mediaUrl}
-                    alt={ad.title}
-                    className="w-full h-40 object-cover rounded-xl mb-3"
-                    loading="lazy"
-                    decoding="async"
-                  />
-                )}
-                <div className="text-xs uppercase tracking-wide text-muted-foreground">
+              {ad.mediaUrl ? (
+                <img
+                  src={ad.mediaUrl}
+                  alt=""
+                  className="h-40 w-full object-cover sm:h-full"
+                  loading="lazy"
+                  decoding="async"
+                />
+              ) : (
+                <div className="hidden bg-[#fff0e8] sm:block" />
+              )}
+              <div className="p-5">
+                <p className="text-[0.68rem] font-black uppercase tracking-[0.16em] text-[#9a4c31]">
                   Sponsored
-                </div>
-                <div className="text-base font-semibold text-foreground mt-1">
+                </p>
+                <h2 className="mt-1 text-lg font-black text-[#2b160d]">
                   {ad.title}
-                </div>
-                {ad.body && (
-                  <p className="text-sm text-muted-foreground mt-1">
+                </h2>
+                {ad.body ? (
+                  <p className="mt-1 text-sm leading-6 text-[#6b5041]">
                     {ad.body}
                   </p>
-                )}
-                <div className="mt-3">
-                  <Button size="sm" onClick={() => handleGeoAdClick(ad)}>
-                    {ad.ctaText || "Learn more"}
-                  </Button>
-                </div>
+                ) : null}
+                <Button
+                  size="sm"
+                  className="mt-4 rounded-full bg-[#2b160d] px-4 font-bold text-white hover:bg-[#4b2a1d]"
+                  onClick={() => handleGeoAdClick(ad)}
+                >
+                  {ad.ctaText || "Learn more"}
+                </Button>
               </div>
-            ))}
-          </div>
-        )}
+            </div>
+          ))}
+        </aside>
+      ) : null}
 
-        {isLoading ? (
-          <div className="space-y-4">
-            {[1, 2, 3].map((i) => (
-              <div
-                key={i}
-                className="bg-[var(--bg-card)] rounded-2xl overflow-hidden animate-pulse shadow-clean border border-[color:var(--border-subtle)]"
-              >
-                <div className="w-full h-48 bg-muted"></div>
-                <div className="p-6 space-y-3">
-                  <div className="h-6 bg-muted rounded-lg w-3/4"></div>
-                  <div className="h-4 bg-muted rounded-lg w-1/2"></div>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : allDeals.length > 0 ? (
-          <div className="space-y-4 lg:grid lg:grid-cols-2 xl:grid-cols-3 lg:gap-6 lg:space-y-0">
+      {isLoading ? (
+        <CollectionLoadingState label="Loading deals" />
+      ) : isError ? (
+        <CollectionState
+          icon={Flame}
+          title="Deals are unavailable"
+          description="We could not load the current offers. Try again in a moment."
+          onRetry={() => void refetch()}
+        />
+      ) : allDeals.length === 0 ? (
+        <CollectionState
+          icon={Flame}
+          title="No active deals right now"
+          description="Scout still has local menus, profiles, schedules, and places to try."
+          actionHref="/scout"
+          actionLabel="Scout"
+        />
+      ) : (
+        <section aria-labelledby="active-deals-heading">
+          <h2 id="active-deals-heading" className="sr-only">
+            Active food deals
+          </h2>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {allDeals.map((deal: any) => (
               <DealCard key={deal.id} deal={deal} />
             ))}
           </div>
-        ) : (
-          <div className="text-center py-12">
-            <div className="w-20 h-20 bg-[color:var(--accent-text)]/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <Flame className="w-8 h-8 text-[color:var(--accent-text)]" />
-            </div>
-            <h3 className="font-bold text-lg text-foreground mb-2">
-              No time-sensitive specials yet
-            </h3>
-            <p className="text-muted-foreground mb-6">
-              Check back soon for nearby limited-time offers from local
-              restaurants!
-            </p>
-            <Link href="/search">
-              <Button data-testid="button-browse-all-featured">
-                Browse All Specials
-              </Button>
-            </Link>
-            <div className="mt-2">
-              <Link href="/scout">
-                <Button
-                  variant="outline"
-                  data-testid="button-open-map-featured"
-                >
-                  Open Scout
-                </Button>
-              </Link>
-            </div>
-          </div>
-        )}
-      </div>
-
-      <Navigation />
-    </div>
+        </section>
+      )}
+    </ConsumerCollectionShell>
   );
 }

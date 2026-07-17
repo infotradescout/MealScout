@@ -2,24 +2,52 @@
  * PHASE 4: Credit System Service
  * 
  * Manages user credits (never stores balance directly)
- * Balance is calculated as: SUM(creditLedger.amount WHERE userId = x AND redeemedAt IS NULL)
+ * Balance is calculated from every immutable positive and negative ledger
+ * entry for the user. `redeemedAt` records when a debit occurred; excluding
+ * those rows would make spent credits remain available.
  */
 
 import { db } from './db';
 import { creditLedger, affiliateCommissionLedger } from '@shared/schema';
-import { eq, isNull, sum, and, inArray } from 'drizzle-orm';
+import { eq, sum, and, inArray, lt, sql } from 'drizzle-orm';
+
+export class InsufficientCreditBalanceError extends Error {
+  constructor(
+    public readonly available: number,
+    public readonly requested: number,
+  ) {
+    super("Insufficient credit balance");
+    this.name = "InsufficientCreditBalanceError";
+  }
+}
+
+export class CreditDebitReferenceConflictError extends Error {
+  constructor() {
+    super("Credit debit reference was already used for a different amount");
+    this.name = "CreditDebitReferenceConflictError";
+  }
+}
+
+type DebitCreditOptions = {
+  /**
+   * Use only after an external payment system has already granted the user
+   * monetary value. The ledger must record that exact value even when another
+   * concurrent debit consumed the last available credit first.
+   */
+  externalValueAlreadyCommitted?: boolean;
+};
 
 /**
  * Get user's available credit balance
  * 
- * Sums all unredeemed credits for a user
+ * Sums all credits and debits for a user.
  */
 export async function getUserCreditBalance(userId: string): Promise<number> {
   try {
     const result = await db
       .select({ total: sum(creditLedger.amount) })
       .from(creditLedger)
-      .where(and(eq(creditLedger.userId, userId), isNull(creditLedger.redeemedAt)));
+      .where(eq(creditLedger.userId, userId));
 
     const balance = result[0]?.total ? parseFloat(result[0].total.toString()) : 0;
     return balance;
@@ -71,33 +99,88 @@ export async function debitCredit(
   sourceType: string,
   sourceId: string,
   redeemedFor?: string,
+  options: DebitCreditOptions = {},
 ) {
-  if (amount <= 0) {
+  if (!Number.isFinite(amount) || amount <= 0) {
     throw new Error("Debit amount must be positive");
   }
 
   try {
-    const credit = await db
-      .insert(creditLedger)
-      .values({
-        userId,
-        amount: (-amount).toString(),
-        sourceType,
-        sourceId,
-        redeemedAt: new Date(),
-        redeemedFor: redeemedFor || null,
-      })
-      .returning();
+    const normalizedAmount = Math.round(amount * 100) / 100;
+    const requestedCents = Math.round(normalizedAmount * 100);
+    if (requestedCents <= 0) {
+      throw new Error("Debit amount must be at least one cent");
+    }
+    const credit = await db.transaction(async (tx: any) => {
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(hashtext(${`credit_balance:${userId}`}))`,
+      );
+
+      if (sourceId) {
+        const [existing] = await tx
+          .select()
+          .from(creditLedger)
+          .where(
+            and(
+              eq(creditLedger.userId, userId),
+              eq(creditLedger.sourceType, sourceType),
+              eq(creditLedger.sourceId, sourceId),
+              lt(creditLedger.amount, "0"),
+            ),
+          )
+          .limit(1);
+        if (existing) {
+          const existingCents = Math.abs(
+            Math.round(Number.parseFloat(existing.amount.toString()) * 100),
+          );
+          if (existingCents !== requestedCents) {
+            throw new CreditDebitReferenceConflictError();
+          }
+          return existing;
+        }
+      }
+
+      const [balanceRow] = await tx
+        .select({ total: sum(creditLedger.amount) })
+        .from(creditLedger)
+        .where(eq(creditLedger.userId, userId));
+      const balance = balanceRow?.total
+        ? Number.parseFloat(balanceRow.total.toString())
+        : 0;
+      const availableCents = Math.round(balance * 100);
+      if (
+        !options.externalValueAlreadyCommitted &&
+        availableCents < requestedCents
+      ) {
+        throw new InsufficientCreditBalanceError(
+          availableCents / 100,
+          requestedCents / 100,
+        );
+      }
+
+      const [created] = await tx
+        .insert(creditLedger)
+        .values({
+          userId,
+          amount: (-normalizedAmount).toFixed(2),
+          sourceType,
+          sourceId,
+          redeemedAt: new Date(),
+          redeemedFor: redeemedFor || null,
+        })
+        .returning();
+      return created;
+    });
 
     console.log("[Phase 4] Credit debited:", {
       userId,
-      amount,
+      amount: normalizedAmount,
       sourceType,
       sourceId,
       redeemedFor,
     });
 
-    return credit[0];
+    return credit;
   } catch (error) {
     console.error("[creditService] Error debiting credit:", error);
     throw error;

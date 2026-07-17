@@ -160,10 +160,6 @@ async function verifyScout(page, baseUrl, viewportLabel) {
       bodyText.includes("the local board is quiet right now."),
     `${viewportLabel} /scout did not render discovery rails or a sparse-state body`,
   );
-  assert(
-    bodyText.includes("open now") || bodyText.includes("the local board is quiet right now."),
-    `${viewportLabel} /scout did not render a valid discovery or sparse-state body`,
-  );
   await verifyNoProhibitedText(page, `${viewportLabel} /scout`);
 }
 
@@ -211,7 +207,7 @@ async function verifyRestaurantProfile(page, baseUrl, route, viewportLabel) {
 async function verifySearchEmpty(page, baseUrl, viewportLabel) {
   await openRoute(page, baseUrl, "/search?q=zzzzzzzzzzzzzzzzzz");
   await expectVisibleText(page, "No matches found");
-  await expectVisibleText(page, "Try adjusting your search terms to find restaurants, trucks, or deals.");
+  await expectVisibleText(page, "Try another dish, place, truck, or category.");
 }
 
 async function verifyUnavailableState(page, baseUrl, viewportLabel) {
@@ -246,9 +242,6 @@ async function runViewport(name, contextOptions, baseUrl) {
       "CREATIVBOWLS",
       name,
       "Share this profile",
-      [
-        "Own this truck? Add menu, schedule, logo, or hours.",
-      ],
     );
     await verifyRestaurantProfile(page, baseUrl, restaurantRoute, name);
     await verifySearchEmpty(page, baseUrl, name);

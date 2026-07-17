@@ -122,26 +122,20 @@ assert.match(
   "Desktop Scout rails must fill the available width with a four-card grid",
 );
 
-assert.match(
-  navigation,
-  /useScoutNavSearch/,
-  "Navigation must consume the single Scout search state",
-);
-const mobileSearchIndex = navigation.lastIndexOf("{scoutNavSearch}");
-const mobileNavIndex = navigation.indexOf("relative flex items-end");
-assert.ok(
-  mobileSearchIndex >= 0 && mobileNavIndex > mobileSearchIndex,
-  "On mobile, Scout search must be stacked directly above the bottom navigation",
-);
-assert.match(
-  navigation,
-  /data-scout-mobile-nav-shell=\{isScoutRoute \? "stacked" : undefined\}/,
-  "Mobile Scout search and navigation must share one cohesive shell",
-);
 assert.doesNotMatch(
   navigation,
-  /mx-3 mb-2 overflow-hidden rounded-2xl[\s\S]{0,220}\{scoutNavSearch\}[\s\S]{0,80}<\/div>[\s\S]{0,80}<div className="w-full px-0">/,
-  "Mobile Scout search must not render as a separate floating card above navigation",
+  /useScoutNavSearch|\{scoutNavSearch\}/,
+  "Global navigation must not own or position Scout search",
+);
+assert.match(
+  navigation,
+  /data-scout-mobile-nav-shell=\{[\s\S]*isScoutRoute \? "navigation-only" : undefined[\s\S]*\}/,
+  "Mobile Scout navigation must remain a navigation-only shell",
+);
+assert.match(
+  scout,
+  /data-scout-search-surface="top"[\s\S]*<ScoutSearchDock[\s\S]*placement="inline"/,
+  "Scout must render its own search surface above discovery content",
 );
 
-console.log("MealScout Scout fallback and stacked navigation contract: PASS");
+console.log("MealScout Scout fallback and owned search contract: PASS");

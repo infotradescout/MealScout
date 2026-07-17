@@ -18,29 +18,47 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Badge } from "@/components/ui/badge";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { 
-  ArrowLeft, Upload, X, Eye, Sparkles, Clock, Users, DollarSign, 
-  Edit3, Save, Trash2, Copy, Calendar, Timer, Settings, AlertTriangle
+import {
+  Upload, Eye, Users, DollarSign,
+  Edit3, Save, Trash2, Copy, Calendar, Settings, AlertTriangle, Loader2,
 } from "lucide-react";
-import { BackHeader } from "@/components/back-header";
-import type { Deal } from "@shared/schema";
+import BusinessWorkspaceShell from "@/components/business-workspace-shell";
+import type { Deal, Restaurant } from "@shared/schema";
 import { authUrl } from "@/lib/api";
+import { isBarBusinessType, isTruckBusinessType } from "@shared/businessTypes";
+import { buildPublicProfilePath } from "@/lib/public-profile-path";
 
-const dealEditSchema = z.object({
-  title: z.string().min(1, "Special title is required"),
-  description: z.string().min(1, "Description is required"),
-  dealType: z.enum(["percentage", "fixed"]),
-  discountValue: z.string().min(1, "Discount value is required"),
-  minOrderAmount: z.string().optional(),
-  startDate: z.string().min(1, "Start date is required"),
-  endDate: z.string().min(1, "End date is required"),
-  startTime: z.string().min(1, "Start time is required"),
-  endTime: z.string().min(1, "End time is required"),
-  totalUsesLimit: z.string().optional(),
-  perCustomerLimit: z.string().optional(),
-  facebookPageUrl: z.string().optional(),
-  isActive: z.boolean(),
-});
+const dealEditSchema = z
+  .object({
+    title: z.string().min(1, "Special title is required"),
+    description: z.string().min(1, "Description is required"),
+    dealType: z.enum(["percentage", "fixed"]),
+    discountValue: z.string().min(1, "Discount value is required"),
+    minOrderAmount: z.string().optional(),
+    startDate: z.string().min(1, "Start date is required"),
+    endDate: z.string().optional(),
+    startTime: z.string().optional(),
+    endTime: z.string().optional(),
+    availableDuringBusinessHours: z.boolean().default(false),
+    isOngoing: z.boolean().default(false),
+    totalUsesLimit: z.string().optional(),
+    perCustomerLimit: z.string().optional(),
+    facebookPageUrl: z.string().optional(),
+    isActive: z.boolean(),
+  })
+  .refine((data) => data.isOngoing || Boolean(data.endDate), {
+    message: "End date is required unless the special is ongoing",
+    path: ["endDate"],
+  })
+  .refine(
+    (data) =>
+      data.availableDuringBusinessHours ||
+      Boolean(data.startTime && data.endTime),
+    {
+      message: "Start and end times are required unless business hours are used",
+      path: ["startTime"],
+    },
+  );
 
 type DealEditFormData = z.infer<typeof dealEditSchema>;
 
@@ -61,10 +79,26 @@ export default function DealEdit() {
     enabled: !!dealId && isAuthenticated,
   });
 
-  const { data: restaurants } = useQuery({
+  const { data: restaurants = [], isLoading: restaurantsLoading } = useQuery<
+    Restaurant[]
+  >({
     queryKey: ["/api/restaurants/my-restaurants"],
     enabled: isAuthenticated,
   });
+  const { data: businessAccess } = useQuery<{
+    permissions?: {
+      manageDeals?: boolean;
+      viewAnalytics?: boolean;
+    };
+  }>({
+    queryKey: ["/api/business-access/me"],
+    enabled: isAuthenticated,
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+  const selectedBusiness =
+    restaurants.find((restaurant) => restaurant.id === deal?.restaurantId) ||
+    null;
 
   const form = useForm<DealEditFormData>({
     resolver: zodResolver(dealEditSchema),
@@ -78,6 +112,8 @@ export default function DealEdit() {
       endDate: "",
       startTime: "",
       endTime: "",
+      availableDuringBusinessHours: false,
+      isOngoing: false,
       totalUsesLimit: "",
       perCustomerLimit: "",
       facebookPageUrl: "",
@@ -102,6 +138,10 @@ export default function DealEdit() {
         endDate: deal.endDate ? formatDate(deal.endDate.toString()) : "",
         startTime: deal.startTime || "",
         endTime: deal.endTime || "",
+        availableDuringBusinessHours: Boolean(
+          deal.availableDuringBusinessHours,
+        ),
+        isOngoing: Boolean(deal.isOngoing),
         totalUsesLimit: deal.totalUsesLimit?.toString() || "",
         perCustomerLimit: deal.perCustomerLimit?.toString() || "",
         facebookPageUrl: deal.facebookPageUrl || "",
@@ -133,10 +173,14 @@ export default function DealEdit() {
         discountValue: parseFloat(data.discountValue),
         minOrderAmount: data.minOrderAmount ? parseFloat(data.minOrderAmount) : null,
         totalUsesLimit: data.totalUsesLimit ? parseInt(data.totalUsesLimit) : null,
-        perCustomerLimit: data.perCustomerLimit ? parseInt(data.perCustomerLimit) : null,
+        perCustomerLimit: data.perCustomerLimit ? parseInt(data.perCustomerLimit) : 1,
         startDate: new Date(data.startDate).toISOString(),
-        endDate: new Date(data.endDate).toISOString(),
-        imageUrl: selectedImage || null,
+        endDate: data.isOngoing ? null : new Date(data.endDate!).toISOString(),
+        startTime: data.availableDuringBusinessHours ? null : data.startTime,
+        endTime: data.availableDuringBusinessHours ? null : data.endTime,
+        availableDuringBusinessHours: data.availableDuringBusinessHours,
+        isOngoing: data.isOngoing,
+        imageUrl: selectedImage || deal?.imageUrl,
       };
 
       return await apiRequest("PATCH", `/api/deals/${dealId}`, dealData);
@@ -149,6 +193,18 @@ export default function DealEdit() {
       setIsDirty(false);
       queryClient.invalidateQueries({ queryKey: [`/api/deals/${dealId}`] });
       queryClient.invalidateQueries({ queryKey: ["/api/deals"] });
+      if (deal?.restaurantId) {
+        queryClient.invalidateQueries({
+          queryKey: [
+            "/api/owner/restaurants",
+            deal.restaurantId,
+            "deals",
+          ],
+        });
+        queryClient.invalidateQueries({
+          queryKey: [`/api/deals/restaurant/${deal.restaurantId}`],
+        });
+      }
     },
     onError: (error) => {
       if (isUnauthorizedError(error)) {
@@ -183,7 +239,11 @@ export default function DealEdit() {
         description: "The deal has been permanently deleted.",
       });
       queryClient.invalidateQueries({ queryKey: ["/api/deals"] });
-      setLocation("/restaurant-owner-dashboard");
+      setLocation(
+        deal?.restaurantId
+          ? `/restaurant-owner-dashboard?workspace=deals&restaurantId=${encodeURIComponent(deal.restaurantId)}`
+          : "/restaurant-owner-dashboard?workspace=deals",
+      );
     },
     onError: (error) => {
       toast({
@@ -196,7 +256,7 @@ export default function DealEdit() {
 
   const duplicateDealMutation = useMutation({
     mutationFn: async () => {
-      if (!deal || !Array.isArray(restaurants) || restaurants.length === 0) {
+      if (!deal || !selectedBusiness) {
         throw new Error("No restaurant or deal data available");
       }
 
@@ -204,17 +264,22 @@ export default function DealEdit() {
       const dealData = {
         ...formData,
         title: `${formData.title} (Copy)`,
-        restaurantId: restaurants[0].id,
+        restaurantId: deal.restaurantId,
         discountValue: parseFloat(formData.discountValue),
         minOrderAmount: formData.minOrderAmount ? parseFloat(formData.minOrderAmount) : null,
         totalUsesLimit: formData.totalUsesLimit ? parseInt(formData.totalUsesLimit) : null,
-        perCustomerLimit: formData.perCustomerLimit ? parseInt(formData.perCustomerLimit) : null,
+        perCustomerLimit: formData.perCustomerLimit ? parseInt(formData.perCustomerLimit) : 1,
         startDate: new Date(formData.startDate),
-        endDate: new Date(formData.endDate),
-        imageUrl: selectedImage || null,
+        endDate: formData.isOngoing ? null : new Date(formData.endDate!),
+        startTime: formData.availableDuringBusinessHours ? null : formData.startTime,
+        endTime: formData.availableDuringBusinessHours ? null : formData.endTime,
+        availableDuringBusinessHours: formData.availableDuringBusinessHours,
+        isOngoing: formData.isOngoing,
+        imageUrl: selectedImage || deal.imageUrl,
       };
 
-      return await apiRequest("POST", "/api/deals", dealData);
+      const response = await apiRequest("POST", "/api/deals", dealData);
+      return response.json();
     },
     onSuccess: (newDeal) => {
       toast({
@@ -222,7 +287,16 @@ export default function DealEdit() {
         description: "A copy of this deal has been created successfully.",
       });
       queryClient.invalidateQueries({ queryKey: ["/api/deals"] });
-      setLocation(`/deal-edit/${(newDeal as any).id}`);
+      queryClient.invalidateQueries({
+        queryKey: [
+          "/api/owner/restaurants",
+          deal?.restaurantId,
+          "deals",
+        ],
+      });
+      setLocation(
+        `/deal-edit/${newDeal.id}?restaurantId=${encodeURIComponent(deal!.restaurantId)}`,
+      );
     },
     onError: (error) => {
       toast({
@@ -267,15 +341,7 @@ export default function DealEdit() {
     }
   };
 
-  const removeImage = () => {
-    setSelectedImage(null);
-    setIsDirty(true);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
-
-  if (isLoading || dealLoading) {
+  if (isLoading || dealLoading || restaurantsLoading) {
     return (
       <div className="max-w-4xl mx-auto bg-[var(--bg-layered)] min-h-screen flex items-center justify-center">
         <div className="flex flex-col items-center space-y-4">
@@ -301,7 +367,7 @@ export default function DealEdit() {
     );
   }
 
-  if (dealError || !deal) {
+  if (dealError || !deal || !selectedBusiness) {
     return (
       <div className="max-w-4xl mx-auto bg-[var(--bg-layered)] min-h-screen flex items-center justify-center">
         <Card>
@@ -311,8 +377,8 @@ export default function DealEdit() {
             <p className="text-muted-foreground mb-4">
               The deal you're trying to edit doesn't exist or you don't have permission to edit it.
             </p>
-            <Link href="/restaurant-owner-dashboard">
-              <Button>Back to Dashboard</Button>
+            <Link href="/restaurant-owner-dashboard?workspace=deals">
+              <Button>Return to deals</Button>
             </Link>
           </CardContent>
         </Card>
@@ -330,20 +396,63 @@ export default function DealEdit() {
     image: selectedImage,
     isActive: form.watch("isActive"),
   };
+  const isOwnerRole =
+    user?.userType === "restaurant_owner" ||
+    user?.userType === "food_truck" ||
+    user?.userType === "admin" ||
+    user?.userType === "duper_admin" ||
+    user?.userType === "super_admin" ||
+    user?.userType === "staff";
+  const canManageDeals =
+    isOwnerRole || businessAccess?.permissions?.manageDeals === true;
+  const workspaceCapabilities = {
+    deals: canManageDeals,
+    audience:
+      isOwnerRole || businessAccess?.permissions?.viewAnalytics === true,
+    team: isOwnerRole,
+    payments: isOwnerRole,
+  };
+  const publicEntityType =
+    selectedBusiness.isFoodTruck ||
+    isTruckBusinessType(selectedBusiness.businessType)
+      ? "truck"
+      : isBarBusinessType(selectedBusiness.businessType)
+        ? "bar"
+        : "restaurant";
+  const publicProfileHref = buildPublicProfilePath({
+    entityType: publicEntityType,
+    id: selectedBusiness.id,
+    name: selectedBusiness.name,
+  });
+  const dealsWorkspaceHref = `/restaurant-owner-dashboard?workspace=deals&restaurantId=${encodeURIComponent(selectedBusiness.id)}`;
+  const dealEndAt = deal.endDate ? new Date(deal.endDate).getTime() : null;
+  const dealStartAt = new Date(deal.startDate).getTime();
+  const dealStatus =
+    dealEndAt !== null && dealEndAt < Date.now()
+      ? "Expired"
+      : !deal.isActive
+        ? "Paused"
+        : dealStartAt > Date.now()
+          ? "Scheduled"
+          : "Live";
 
   return (
-    <div className="max-w-4xl mx-auto bg-background min-h-screen">
-      <BackHeader
-        title="Edit Special"
-        fallbackHref="/restaurant-owner-dashboard"
-        icon={Edit3}
-        rightActions={
+    <BusinessWorkspaceShell
+      activeModule="deals"
+      business={selectedBusiness}
+      businesses={restaurants}
+      onBusinessChange={(businessId) =>
+        setLocation(
+          `/restaurant-owner-dashboard?workspace=deals&restaurantId=${encodeURIComponent(businessId)}`,
+        )
+      }
+      publicProfileHref={publicProfileHref}
+      capabilities={workspaceCapabilities}
+      headerActions={
           <div className="flex items-center space-x-2">
-            {deal.isActive ? (
-              <Badge className="bg-[color:var(--status-success)]/100">Active</Badge>
-            ) : (
-              <Badge variant="secondary">Inactive</Badge>
-            )}
+            <Badge variant={dealStatus === "Live" ? "default" : "secondary"}>
+              {dealStatus}
+            </Badge>
             
             <Button
               variant="outline"
@@ -386,12 +495,28 @@ export default function DealEdit() {
               </AlertDialogContent>
             </AlertDialog>
           </div>
-        }
-      />
+      }
+    >
 
-      <div className="flex flex-col lg:flex-row gap-8 p-6">
+      <div className="mx-auto max-w-6xl px-4 py-5 pb-28 sm:px-6 lg:py-8">
+        <section className="mb-6 flex flex-col gap-3 rounded-2xl border border-orange-200 bg-gradient-to-br from-orange-50 via-background to-amber-50 p-5 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.14em] text-orange-700">
+              {selectedBusiness.name}
+            </p>
+            <h1 className="mt-1 text-2xl font-black tracking-tight">Edit special</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Keep the offer, schedule, image, and limits accurate.
+            </p>
+          </div>
+          <Button asChild variant="ghost" size="sm" className="self-start sm:self-auto">
+            <Link href={dealsWorkspaceHref}>Done</Link>
+          </Button>
+        </section>
+
+        <div className="flex flex-col gap-8 lg:flex-row">
         {/* Edit Form */}
-        <div className="flex-1 max-w-2xl">
+        <div className={showPreview ? "flex-1 max-w-2xl" : "flex-1 max-w-4xl"}>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
               {/* Basic Information */}
@@ -553,6 +678,23 @@ export default function DealEdit() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-6">
+                  <FormField
+                    control={form.control}
+                    name="isOngoing"
+                    render={({ field }) => (
+                      <FormItem className="flex items-center justify-between gap-4 rounded-lg border p-4">
+                        <div>
+                          <FormLabel className="text-base">Ongoing special</FormLabel>
+                          <p className="text-sm text-muted-foreground">
+                            Keep it available without an end date.
+                          </p>
+                        </div>
+                        <FormControl>
+                          <Switch checked={field.value} onCheckedChange={field.onChange} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FormField
                       control={form.control}
@@ -568,22 +710,43 @@ export default function DealEdit() {
                       )}
                     />
 
-                    <FormField
-                      control={form.control}
-                      name="endDate"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>End Date</FormLabel>
-                          <FormControl>
-                            <Input type="date" {...field} data-testid="input-end-date" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                    {!form.watch("isOngoing") ? (
+                      <FormField
+                        control={form.control}
+                        name="endDate"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>End Date</FormLabel>
+                            <FormControl>
+                              <Input type="date" {...field} data-testid="input-end-date" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    ) : null}
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="availableDuringBusinessHours"
+                    render={({ field }) => (
+                      <FormItem className="flex items-center justify-between gap-4 rounded-lg border p-4">
+                        <div>
+                          <FormLabel className="text-base">Use business hours</FormLabel>
+                          <p className="text-sm text-muted-foreground">
+                            Make this special available whenever the business is open.
+                          </p>
+                        </div>
+                        <FormControl>
+                          <Switch checked={field.value} onCheckedChange={field.onChange} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+
+                  {!form.watch("availableDuringBusinessHours") ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FormField
                       control={form.control}
                       name="startTime"
@@ -611,7 +774,8 @@ export default function DealEdit() {
                         </FormItem>
                       )}
                     />
-                  </div>
+                    </div>
+                  ) : null}
                 </CardContent>
               </Card>
 
@@ -694,13 +858,14 @@ export default function DealEdit() {
                         />
                         <Button
                           type="button"
-                          variant="destructive"
+                          variant="secondary"
                           size="sm"
                           className="absolute top-2 right-2"
-                          onClick={removeImage}
-                          data-testid="button-remove-image"
+                          onClick={() => fileInputRef.current?.click()}
+                          data-testid="button-change-image"
                         >
-                          <X className="w-4 h-4" />
+                          <Upload className="mr-1.5 h-4 w-4" />
+                          Change
                         </Button>
                       </div>
                     ) : (
@@ -750,7 +915,7 @@ export default function DealEdit() {
               </Card>
 
               {/* Actions */}
-              <div className="flex space-x-4 sticky bottom-6 bg-background py-4">
+              <div className="sticky bottom-[calc(var(--scout-nav-height,58px)+env(safe-area-inset-bottom,0px))] z-30 flex space-x-4 bg-background py-4 lg:bottom-6">
                 <Button
                   type="submit"
                   disabled={updateDealMutation.isPending || !isDirty}
@@ -821,8 +986,9 @@ export default function DealEdit() {
             </Card>
           </div>
         )}
+        </div>
       </div>
-    </div>
+    </BusinessWorkspaceShell>
   );
 }
 

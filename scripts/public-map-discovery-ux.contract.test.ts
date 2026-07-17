@@ -7,7 +7,7 @@ const requiredSnippets = [
   'aria-label="Nearby discovery summary"',
   'data-testid="map-discovery-summary"',
   'label: "Food trucks"',
-  'label: "Open places"',
+  'label: "Food places"',
   'label: "Deals"',
   'label: "Events"',
   "truckCount > 0",

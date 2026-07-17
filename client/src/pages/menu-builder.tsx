@@ -8,6 +8,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import Navigation from "@/components/navigation";
+import BusinessWorkspaceShell from "@/components/business-workspace-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -35,28 +36,27 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
 import {
   Plus,
   Pencil,
   Trash2,
   Upload,
-  ChevronRight,
+  ChevronDown,
+  CircleAlert,
+  CircleCheckBig,
   Loader2,
   UtensilsCrossed,
   DollarSign,
+  ImageIcon,
   Package,
   Eye,
   EyeOff,
-  Settings,
+  SlidersHorizontal,
 } from "lucide-react";
-import { Link } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
+import type { Restaurant } from "@shared/schema";
+import { isBarBusinessType, isTruckBusinessType } from "@shared/businessTypes";
+import { buildPublicProfilePath } from "@/lib/public-profile-path";
 
 const formatMoney = (cents: number) =>
   `$${(Number(cents || 0) / 100).toFixed(2)}`;
@@ -112,11 +112,12 @@ interface MenuItem {
   calories: number | null;
   variants: MenuItemVariant[];
   modifiers: MenuItemModifier[];
-  categoryId: string;
+  categoryId: string | null;
 }
 
 interface FullMenu extends Menu {
   categories: Array<MenuCategory & { items: MenuItem[] }>;
+  uncategorizedItems?: MenuItem[];
 }
 
 interface OrderingReadiness {
@@ -141,8 +142,9 @@ interface OrderingReadiness {
 // ──────────────────────────────── helpers ─────────────────────────────────────
 function useRestaurantId(): string | null {
   const { user } = useAuth();
+  const search = useSearch();
   if (typeof window !== "undefined") {
-    const params = new URLSearchParams(window.location.search);
+    const params = new URLSearchParams(search);
     const queryRestaurantId = String(params.get("restaurantId") || "").trim();
     if (queryRestaurantId) return queryRestaurantId;
   }
@@ -195,31 +197,17 @@ function normalizeFullMenu(menu: unknown): FullMenu | null {
   };
 }
 
-function normalizeFullMenusPayload(payload: unknown): FullMenu[] {
-  if (Array.isArray(payload)) {
-    return payload.map(normalizeFullMenu).filter((menu): menu is FullMenu => !!menu);
-  }
-  if (payload && typeof payload === "object") {
-    const wrapped = payload as Record<string, unknown>;
-    if (Array.isArray(wrapped.menus)) {
-      return wrapped.menus
-        .map(normalizeFullMenu)
-        .filter((menu): menu is FullMenu => !!menu);
-    }
-  }
-  const single = normalizeFullMenu(payload);
-  return single ? [single] : [];
-}
-
 // ──────────────────────────────── main page ───────────────────────────────────
 export default function MenuBuilderPage() {
   const restaurantId = useRestaurantId();
+  const { user } = useAuth();
+  const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [selectedMenuId, setSelectedMenuId] = useState<string | null>(null);
   const [showNewMenuDialog, setShowNewMenuDialog] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [newMenuName, setNewMenuName] = useState("");
-  const [newMenuServiceType, setNewMenuServiceType] = useState("all_day");
+  const [newMenuServiceType, setNewMenuServiceType] = useState("all");
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importFiles, setImportFiles] = useState<File[]>([]);
   const [importType, setImportType] = useState<"csv" | "pdf" | "pos_json" | "photo">("csv");
@@ -230,9 +218,61 @@ export default function MenuBuilderPage() {
   const [externalJson, setExternalJson] = useState("");
   const [isRequestingPosSync, setIsRequestingPosSync] = useState(false);
 
+  const { data: businesses = [], isLoading: loadingBusinesses } = useQuery<
+    Restaurant[]
+  >({
+    queryKey: ["/api/restaurants/my-restaurants"],
+    enabled: !!user,
+  });
+  const { data: businessAccess } = useQuery<{
+    hasAnyAccess: boolean;
+    permissions: {
+      manageDeals: boolean;
+      viewAnalytics: boolean;
+    };
+  }>({
+    queryKey: ["/api/business-access/me"],
+    enabled: !!user,
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+  const currentBusiness =
+    businesses.find((business) => business.id === restaurantId) || null;
+  const isOwnerRole =
+    user?.userType === "restaurant_owner" ||
+    user?.userType === "food_truck" ||
+    user?.userType === "admin" ||
+    user?.userType === "duper_admin" ||
+    user?.userType === "super_admin" ||
+    user?.userType === "staff";
+  const currentEntityType =
+    currentBusiness?.isFoodTruck ||
+    isTruckBusinessType(currentBusiness?.businessType)
+      ? "truck"
+      : isBarBusinessType(currentBusiness?.businessType)
+        ? "bar"
+        : "restaurant";
+  const publicProfileHref = currentBusiness
+    ? buildPublicProfilePath({
+        entityType: currentEntityType,
+        id: currentBusiness.id,
+        name: currentBusiness.name,
+      })
+    : null;
+  const handleWorkspaceBusinessChange = (businessId: string) => {
+    setSelectedMenuId(null);
+    const params = new URLSearchParams(window.location.search);
+    params.set("restaurantId", businessId);
+    const query = params.toString();
+    setLocation(`/menu-builder${query ? `?${query}` : ""}`);
+  };
+
   useEffect(() => {
-    if (!menuSourceUrl.trim()) return;
     try {
+      if (!menuSourceUrl.trim()) {
+        window.localStorage.removeItem(MENU_IMPORT_DRAFT_KEY);
+        return;
+      }
       window.localStorage.setItem(
         MENU_IMPORT_DRAFT_KEY,
         JSON.stringify({
@@ -261,23 +301,36 @@ export default function MenuBuilderPage() {
     },
     enabled: !!restaurantId,
   });
+  const menus = toArray<Menu>(menusQuery.data);
 
-  // fetch full menu with categories + items
+  useEffect(() => {
+    if (menusQuery.isLoading) return;
+    if (menus.length === 0) {
+      if (selectedMenuId) setSelectedMenuId(null);
+      return;
+    }
+    if (
+      !selectedMenuId ||
+      !menus.some((menu) => String(menu.id) === String(selectedMenuId))
+    ) {
+      setSelectedMenuId(menus[0].id);
+    }
+  }, [menus, menusQuery.isLoading, selectedMenuId]);
+
+  // Fetch the owner detail payload so unavailable items remain editable.
   const fullMenuQuery = useQuery<FullMenu | null>({
-    queryKey: ["/api/menus", selectedMenuId],
+    queryKey: ["/api/owner/menus", selectedMenuId, "details"],
     queryFn: async () => {
-      if (!selectedMenuId || !restaurantId) throw new Error("No menu selected");
+      if (!selectedMenuId) throw new Error("No menu selected");
       const res = await fetch(
-        `/api/menus/${encodeURIComponent(restaurantId)}?menuId=${encodeURIComponent(selectedMenuId)}`,
+        `/api/owner/menus/${encodeURIComponent(selectedMenuId)}/details`,
         { credentials: "include" },
       );
       if (!res.ok) throw new Error("Failed to load menu");
       const data = await res.json();
-      const menus = normalizeFullMenusPayload(data);
-      if (!menus.length) return null;
-      return menus.find((m) => m.id === selectedMenuId) ?? menus[0] ?? null;
+      return normalizeFullMenu(data?.menu ?? data);
     },
-    enabled: !!selectedMenuId && !!restaurantId,
+    enabled: !!selectedMenuId,
   });
 
   // create menu
@@ -290,14 +343,16 @@ export default function MenuBuilderPage() {
       });
       return res.json();
     },
-    onSuccess: (menu) => {
+    onSuccess: (payload) => {
+      const createdMenu = normalizeFullMenu(payload?.menu ?? payload);
       queryClient.invalidateQueries({
         queryKey: ["/api/owner/menus", restaurantId],
       });
-      setSelectedMenuId(menu.id);
+      if (createdMenu?.id) setSelectedMenuId(createdMenu.id);
       setShowNewMenuDialog(false);
       setNewMenuName("");
-      toast({ title: "Menu created!" });
+      setNewMenuServiceType("all");
+      toast({ title: "Menu created" });
     },
     onError: (err: Error) =>
       toast({
@@ -336,7 +391,7 @@ export default function MenuBuilderPage() {
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.message || "Import failed");
         queryClient.invalidateQueries({
-          queryKey: ["/api/menus", selectedMenuId],
+          queryKey: ["/api/owner/menus", selectedMenuId, "details"],
         });
         setShowImportDialog(false);
         setExternalJson("");
@@ -358,14 +413,14 @@ export default function MenuBuilderPage() {
         const data = await res.json();
         if (!res.ok) throw new Error(data.message || "Import failed");
         queryClient.invalidateQueries({
-          queryKey: ["/api/menus", selectedMenuId],
+          queryKey: ["/api/owner/menus", selectedMenuId, "details"],
         });
         setShowImportDialog(false);
         setImportFiles([]);
         toast({
           title: "Import complete",
           description: data.imported
-            ? `${data.imported} items imported. Review prices and details before publishing.`
+            ? `${data.imported} items imported. Review prices and availability now.`
             : "No items found in those photos. Try clearer, well-lit shots of the menu text.",
         });
         return;
@@ -381,7 +436,7 @@ export default function MenuBuilderPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Import failed");
       queryClient.invalidateQueries({
-        queryKey: ["/api/menus", selectedMenuId],
+        queryKey: ["/api/owner/menus", selectedMenuId, "details"],
       });
       setShowImportDialog(false);
       setImportFile(null);
@@ -455,63 +510,267 @@ export default function MenuBuilderPage() {
     );
   }
 
-  const menus = toArray<Menu>(menusQuery.data);
+  if (loadingBusinesses) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[var(--bg-layered)]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!currentBusiness) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[var(--bg-layered)] px-4">
+        <Card className="w-full max-w-md">
+          <CardContent className="p-6 text-center">
+            <h1 className="text-lg font-bold">Business unavailable</h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              This menu is not linked to a business you can manage.
+            </p>
+            <Button asChild className="mt-4">
+              <Link href="/dashboard">Back to overview</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   const selectedMenu = normalizeFullMenu(fullMenuQuery.data);
 
   return (
-    <div className="min-h-screen bg-background">
-      <Navigation />
-      <div className="max-w-6xl mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
+    <BusinessWorkspaceShell
+      activeModule="menu"
+      business={currentBusiness}
+      businesses={businesses}
+      onBusinessChange={handleWorkspaceBusinessChange}
+      publicProfileHref={publicProfileHref}
+      capabilities={{
+        deals: isOwnerRole || businessAccess?.permissions?.manageDeals === true,
+        audience:
+          isOwnerRole || businessAccess?.permissions?.viewAnalytics === true,
+        team: isOwnerRole,
+        payments: isOwnerRole,
+      }}
+      headerActions={
+        <Button size="sm" onClick={() => setShowNewMenuDialog(true)}>
+          <Plus className="mr-1.5 h-4 w-4" />
+          New menu
+        </Button>
+      }
+    >
+      <div
+        className="mx-auto min-h-screen max-w-6xl space-y-4 px-4 py-5 pb-28 lg:px-6 lg:py-8"
+        data-testid="owner-menu-workspace"
+      >
+        <section className="rounded-2xl border border-orange-200/80 bg-gradient-to-br from-orange-50 via-background to-amber-50/70 p-4 shadow-sm sm:p-5">
           <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2">
-              <UtensilsCrossed className="w-6 h-6" />
-              Menu Builder
-            </h1>
-            <p className="text-muted-foreground text-sm mt-1">
-              Create and manage your online menus for pickup &amp; dine-in
-              ordering.
-            </p>
-          </div>
-          <div className="flex gap-2">
-            {selectedMenuId && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowImportDialog(true)}
-              >
-                <Upload className="w-4 h-4 mr-2" />
-                Import Items
-              </Button>
-            )}
-            <Button size="sm" onClick={() => setShowNewMenuDialog(true)}>
-              <Plus className="w-4 h-4 mr-2" />
-              New Menu
-            </Button>
-          </div>
-        </div>
-
-        <Card className="mb-6 border-amber-300/30 bg-amber-50/70 dark:bg-amber-950/20">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg">Menu setup</CardTitle>
-            <CardDescription>
-              Import what you already have, then review it before publishing to Scout.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
             <div>
-              <Label htmlFor="menu-source-url">Website, PDF, or online menu source</Label>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-orange-700">
+                {currentEntityType === "truck"
+                  ? "Food truck menu"
+                  : currentEntityType === "bar"
+                    ? "Bar menu"
+                    : "Restaurant menu"}
+              </p>
+              <h1 className="mt-1 text-2xl font-bold tracking-tight">
+                Menus and items
+              </h1>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Keep names, prices, and availability current for customers.
+              </p>
+            </div>
+          </div>
+
+          {menus.length > 0 ? (
+            <div
+              className="mt-4 flex gap-2 overflow-x-auto pb-1"
+              aria-label="Business menus"
+            >
+              {menus.map((menu) => {
+                const selected = selectedMenuId === menu.id;
+                return (
+                  <button
+                    key={menu.id}
+                    type="button"
+                    onClick={() => setSelectedMenuId(menu.id)}
+                    className={`min-w-40 rounded-xl border px-3 py-2 text-left text-sm transition-colors ${
+                      selected
+                        ? "border-orange-500 bg-orange-600 text-white shadow-sm"
+                        : "border-border bg-background/90 hover:border-orange-300 hover:bg-orange-50"
+                    }`}
+                    aria-pressed={selected}
+                  >
+                    <span className="block truncate font-semibold">
+                      {menu.name}
+                    </span>
+                    <span className="mt-0.5 block text-xs opacity-80">
+                      {menu.serviceType === "all"
+                        ? "All day"
+                        : menu.serviceType.replace(/_/g, " ")}
+                      {!menu.isActive ? " · Hidden" : ""}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
+        </section>
+
+        {menusQuery.isLoading ? (
+          <Card>
+            <CardContent className="flex min-h-52 items-center justify-center">
+              <Loader2 className="h-6 w-6 animate-spin text-orange-600" />
+              <span className="ml-2 text-sm text-muted-foreground">
+                Loading menus…
+              </span>
+            </CardContent>
+          </Card>
+        ) : menusQuery.isError ? (
+          <Card className="border-red-200">
+            <CardContent className="p-6 text-center">
+              <CircleAlert className="mx-auto h-8 w-8 text-red-600" />
+              <h2 className="mt-3 font-semibold">Menus could not be loaded</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Your menu data was not changed. Try loading it again.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                className="mt-4"
+                onClick={() => menusQuery.refetch()}
+              >
+                Try again
+              </Button>
+            </CardContent>
+          </Card>
+        ) : menus.length === 0 ? (
+          <Card className="border-dashed border-orange-300 bg-orange-50/40">
+            <CardContent className="flex min-h-64 flex-col items-center justify-center p-6 text-center">
+              <div className="rounded-full bg-orange-100 p-3 text-orange-700">
+                <UtensilsCrossed className="h-7 w-7" />
+              </div>
+              <h2 className="mt-4 text-lg font-bold">Add your first menu</h2>
+              <p className="mt-1 max-w-md text-sm text-muted-foreground">
+                Start with an empty menu, then add items manually or import an
+                existing file or photo.
+              </p>
+              <Button
+                type="button"
+                className="mt-4"
+                onClick={() => setShowNewMenuDialog(true)}
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Create menu
+              </Button>
+            </CardContent>
+          </Card>
+        ) : fullMenuQuery.isLoading ? (
+          <Card>
+            <CardContent className="flex min-h-64 items-center justify-center">
+              <Loader2 className="h-6 w-6 animate-spin text-orange-600" />
+              <span className="ml-2 text-sm text-muted-foreground">
+                Loading menu items…
+              </span>
+            </CardContent>
+          </Card>
+        ) : fullMenuQuery.isError ? (
+          <Card className="border-red-200">
+            <CardContent className="p-6 text-center">
+              <CircleAlert className="mx-auto h-8 w-8 text-red-600" />
+              <h2 className="mt-3 font-semibold">This menu could not be loaded</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Nothing was changed. Try loading the selected menu again.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                className="mt-4"
+                onClick={() => fullMenuQuery.refetch()}
+              >
+                Try again
+              </Button>
+            </CardContent>
+          </Card>
+        ) : selectedMenu ? (
+          <MenuEditor
+            key={selectedMenu.id}
+            menu={selectedMenu}
+            restaurantId={restaurantId}
+            onImport={() => setShowImportDialog(true)}
+            onRefresh={() => {
+              queryClient.invalidateQueries({
+                queryKey: [
+                  "/api/owner/menus",
+                  selectedMenuId,
+                  "details",
+                ],
+              });
+              queryClient.invalidateQueries({
+                queryKey: ["/api/owner/menus", restaurantId],
+              });
+            }}
+          />
+        ) : null}
+
+        <details
+          className="group rounded-2xl border bg-card shadow-sm"
+          data-testid="menu-import-tools"
+        >
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-4 font-semibold sm:p-5">
+            <span className="flex items-center gap-2">
+              <Upload className="h-4 w-4 text-orange-600" />
+              Import or connect an existing menu
+            </span>
+            <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
+          </summary>
+          <div className="space-y-4 border-t p-4 sm:p-5">
+            <div>
+              <Label htmlFor="menu-source-url">Menu source link</Label>
               <Input
                 id="menu-source-url"
                 value={menuSourceUrl}
                 onChange={(event) => setMenuSourceUrl(event.target.value)}
-                placeholder="Paste your website, menu PDF, or existing online menu URL"
+                placeholder="Website, menu PDF, or online menu URL"
               />
               <p className="mt-1 text-xs text-muted-foreground">
-                MealScout keeps this source with your setup so you can use it while importing or rebuilding the menu.
+                This draft stays on this device until you submit the source or
+                import a file.
               </p>
             </div>
+            <div className="grid gap-3 sm:grid-cols-[180px_1fr]">
+              <div>
+                <Label>Menu or POS source</Label>
+                <Select value={posSource} onValueChange={setPosSource}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="toast">Toast</SelectItem>
+                    <SelectItem value="square">Square</SelectItem>
+                    <SelectItem value="clover">Clover</SelectItem>
+                    <SelectItem value="website">Website menu</SelectItem>
+                    <SelectItem value="ubereats">Uber Eats</SelectItem>
+                    <SelectItem value="doordash">DoorDash</SelectItem>
+                    <SelectItem value="gmb">Google Business Profile</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="menu-source-notes">Notes</Label>
+                <Input
+                  id="menu-source-notes"
+                  value={posNotes}
+                  onChange={(event) => setPosNotes(event.target.value)}
+                  placeholder="Location name or anything needed to identify this menu"
+                />
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Saving the source creates a connection request. You can keep
+              editing manually or import an export while it is pending.
+            </p>
             <div className="flex flex-wrap gap-2">
               <Button
                 type="button"
@@ -524,189 +783,33 @@ export default function MenuBuilderPage() {
                 }}
               >
                 <Upload className="mr-2 h-4 w-4" />
-                {selectedMenuId ? "Upload CSV/PDF import" : "Create menu to import"}
+                {selectedMenuId ? "Import file or photos" : "Create menu to import"}
               </Button>
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setShowNewMenuDialog(true)}
+                onClick={requestPosConnection}
+                disabled={isRequestingPosSync}
               >
-                <Plus className="mr-2 h-4 w-4" />
-                Build manually
+                {isRequestingPosSync ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : null}
+                Save source
               </Button>
-              {restaurantId ? (
-                <Link href={`/menu/${restaurantId}`} target="_blank">
-                  <Button type="button" variant="outline">
-                    <Eye className="mr-2 h-4 w-4" />
-                    Public preview
-                  </Button>
-                </Link>
-              ) : null}
-              <Link href="/restaurant-owner-dashboard?src=menu-builder&setup=schedule">
-                <Button type="button" variant="outline">
-                  Schedule and hours
-                </Button>
-              </Link>
             </div>
-            <div className="rounded-xl border bg-background/70 p-3">
-              <div className="flex flex-col gap-3 md:flex-row md:items-end">
-                <div className="md:w-48">
-                  <Label>Existing POS/menu system</Label>
-                  <Select value={posSource} onValueChange={setPosSource}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="toast">Toast</SelectItem>
-                      <SelectItem value="square">Square</SelectItem>
-                      <SelectItem value="clover">Clover</SelectItem>
-                      <SelectItem value="website">Website menu</SelectItem>
-                      <SelectItem value="ubereats">Uber Eats</SelectItem>
-                      <SelectItem value="doordash">DoorDash</SelectItem>
-                      <SelectItem value="gmb">Google Business Profile</SelectItem>
-                      <SelectItem value="other">Other</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex-1">
-                  <Label>Connection notes</Label>
-                  <Input
-                    value={posNotes}
-                    onChange={(event) => setPosNotes(event.target.value)}
-                    placeholder="Example: Toast location name, Square merchant nickname, or login owner to contact"
-                  />
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={requestPosConnection}
-                  disabled={isRequestingPosSync}
-                >
-                  {isRequestingPosSync && (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  )}
-                  Save POS source
-                </Button>
-              </div>
-              <p className="mt-2 text-xs text-muted-foreground">
-                Direct sync starts as a connection request. For now, exports from Toast, Square, Clover, DoorDash, Uber Eats, or Google can be imported as CSV/PDF/JSON while we wire deeper API access.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          {/* Left sidebar: menu list */}
-          <div className="lg:col-span-1 space-y-2">
-            <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
-              Your Menus
-            </h2>
-            {menusQuery.isLoading && (
-              <div className="flex justify-center py-8">
-                <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
-              </div>
-            )}
-            {menus.map((menu) => (
-              <button
-                key={menu.id}
-                onClick={() => setSelectedMenuId(menu.id)}
-                className={`w-full text-left px-3 py-2 rounded-md border text-sm transition-colors ${
-                  selectedMenuId === menu.id
-                    ? "bg-primary text-primary-foreground border-primary"
-                    : "bg-card hover:bg-muted border-border"
-                }`}
-              >
-                <div className="font-medium truncate">{menu.name}</div>
-                <div className="text-xs opacity-70 capitalize">
-                  {menu.serviceType.replace("_", " ")}
-                </div>
-                {!menu.isActive && (
-                  <Badge variant="secondary" className="text-xs mt-1">
-                    Inactive
-                  </Badge>
-                )}
-              </button>
-            ))}
-            {menus.length === 0 && !menusQuery.isLoading && (
-              <div className="rounded-lg border border-dashed p-4 text-center">
-                <p className="text-sm font-medium">No menus yet.</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Create your first menu, then import or add items.
-                </p>
-                <Button
-                  type="button"
-                  size="sm"
-                  className="mt-3"
-                  onClick={() => setShowNewMenuDialog(true)}
-                >
-                  <Plus className="mr-1 h-4 w-4" />
-                  Create menu
-                </Button>
-              </div>
-            )}
           </div>
-
-          {/* Right: menu editor */}
-          <div className="lg:col-span-3">
-            {!selectedMenuId ? (
-              <Card>
-                <CardContent className="flex flex-col items-center justify-center h-64 text-center">
-                  <UtensilsCrossed className="w-10 h-10 text-muted-foreground mb-3" />
-                  <h3 className="font-medium mb-1">Select or create a menu</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Choose a menu from the left, create a new one, or keep the source URL above while you rebuild.
-                  </p>
-                  <Button
-                    type="button"
-                    className="mt-4"
-                    onClick={() => setShowNewMenuDialog(true)}
-                  >
-                    <Plus className="mr-2 h-4 w-4" />
-                    Create first menu
-                  </Button>
-                </CardContent>
-              </Card>
-            ) : fullMenuQuery.isLoading ? (
-              <div className="flex justify-center py-16">
-                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-              </div>
-            ) : selectedMenu ? (
-              <MenuEditor
-                menu={selectedMenu}
-                restaurantId={restaurantId}
-                onRefresh={() => {
-                  queryClient.invalidateQueries({
-                    queryKey: ["/api/menus", selectedMenuId],
-                  });
-                  queryClient.invalidateQueries({
-                    queryKey: ["/api/owner/menus", restaurantId],
-                  });
-                }}
-              />
-            ) : (
-              <Card>
-                <CardContent className="flex flex-col items-center justify-center h-64 text-center">
-                  <UtensilsCrossed className="w-10 h-10 text-muted-foreground mb-3" />
-                  <h3 className="font-medium mb-1">Menu data unavailable</h3>
-                  <p className="text-sm text-muted-foreground">
-                    We could not load menu items in the expected format. Try refreshing or re-importing your menu data.
-                  </p>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-        </div>
+        </details>
       </div>
 
       {/* New menu dialog */}
       <Dialog open={showNewMenuDialog} onOpenChange={setShowNewMenuDialog}>
-        <DialogContent>
+        <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Create New Menu</DialogTitle>
+            <DialogTitle>Create menu</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div>
-              <Label htmlFor="menu-name">Menu Name</Label>
+              <Label htmlFor="menu-name">Menu name</Label>
               <Input
                 id="menu-name"
                 placeholder="e.g. Lunch Menu, Happy Hour, Full Menu"
@@ -715,7 +818,7 @@ export default function MenuBuilderPage() {
               />
             </div>
             <div>
-              <Label htmlFor="service-type">Service Type</Label>
+              <Label htmlFor="service-type">When it is served</Label>
               <Select
                 value={newMenuServiceType}
                 onValueChange={setNewMenuServiceType}
@@ -724,12 +827,12 @@ export default function MenuBuilderPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all_day">All Day</SelectItem>
+                  <SelectItem value="all">All day</SelectItem>
                   <SelectItem value="breakfast">Breakfast</SelectItem>
                   <SelectItem value="lunch">Lunch</SelectItem>
                   <SelectItem value="dinner">Dinner</SelectItem>
                   <SelectItem value="late_night">Late Night</SelectItem>
-                  <SelectItem value="brunch">Brunch</SelectItem>
+                  <SelectItem value="weekend_brunch">Weekend brunch</SelectItem>
                   <SelectItem value="happy_hour">Happy Hour</SelectItem>
                   <SelectItem value="seasonal">Seasonal</SelectItem>
                 </SelectContent>
@@ -750,7 +853,7 @@ export default function MenuBuilderPage() {
               {createMenuMutation.isPending && (
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
               )}
-              Create Menu
+              Create menu
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -758,14 +861,14 @@ export default function MenuBuilderPage() {
 
       {/* Import dialog */}
       <Dialog open={showImportDialog} onOpenChange={setShowImportDialog}>
-        <DialogContent>
+        <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Import Menu Items</DialogTitle>
+            <DialogTitle>Import menu items</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             {menuSourceUrl.trim() ? (
               <div className="rounded-lg border bg-muted/40 p-3 text-sm">
-                <div className="font-medium">Source saved from onboarding</div>
+                <div className="font-medium">Saved menu source</div>
                 <a
                   href={menuSourceUrl.trim()}
                   target="_blank"
@@ -777,8 +880,8 @@ export default function MenuBuilderPage() {
               </div>
             ) : null}
             <div>
-              <Label>Import Format</Label>
-              <div className="flex gap-2 mt-2">
+              <Label>Import format</Label>
+              <div className="mt-2 flex flex-wrap gap-2">
                 {(["csv", "pdf", "photo", "pos_json"] as const).map((t) => (
                   <Button
                     key={t}
@@ -786,7 +889,11 @@ export default function MenuBuilderPage() {
                     size="sm"
                     onClick={() => setImportType(t)}
                   >
-                    {t === "pos_json" ? "POS JSON" : t === "photo" ? "Photos" : t.toUpperCase()}
+                    {t === "pos_json"
+                      ? "POS JSON"
+                      : t === "photo"
+                        ? "Photos"
+                        : t.toUpperCase()}
                   </Button>
                 ))}
               </div>
@@ -890,7 +997,7 @@ export default function MenuBuilderPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </BusinessWorkspaceShell>
   );
 }
 
@@ -898,10 +1005,12 @@ export default function MenuBuilderPage() {
 function MenuEditor({
   menu,
   restaurantId,
+  onImport,
   onRefresh,
 }: {
   menu: FullMenu;
   restaurantId: string;
+  onImport: () => void;
   onRefresh: () => void;
 }) {
   const { toast } = useToast();
@@ -936,6 +1045,34 @@ function MenuEditor({
     enabled: !!restaurantId,
   });
   const readiness = readinessQuery.data;
+  const uncategorizedItems = toArray<MenuItem>(menu.uncategorizedItems);
+  const sections = [
+    ...menu.categories.map((category) => ({
+      id: category.id,
+      name: category.name,
+      description: category.description,
+      items: category.items,
+      category,
+    })),
+    ...(uncategorizedItems.length
+      ? [
+          {
+            id: "uncategorized",
+            name: "Other items",
+            description: "Items that are not assigned to a category yet.",
+            items: uncategorizedItems,
+            category: null,
+          },
+        ]
+      : []),
+  ];
+  const allItems = sections.flatMap((section) => section.items);
+  const customerVisibleItems = sections.flatMap((section) =>
+    section.category?.isActive === false ? [] : section.items,
+  );
+  const availableItemCount = customerVisibleItems.filter(
+    (item) => item.isAvailable,
+  ).length;
 
   const saveCategory = async () => {
     try {
@@ -971,15 +1108,33 @@ function MenuEditor({
     }
   };
 
-  const deleteCategory = async (id: string) => {
-    if (!confirm("Delete this category and all its items?")) return;
+  const setCategoryVisibility = async (category: MenuCategory) => {
+    const nextActive = !category.isActive;
+    if (
+      !nextActive &&
+      !confirm("Hide this category and its items from customers?")
+    ) {
+      return;
+    }
     try {
-      await apiRequest("DELETE", `/api/owner/menu-categories/${id}`, undefined);
+      if (nextActive) {
+        await apiRequest(
+          "PATCH",
+          `/api/owner/menu-categories/${category.id}`,
+          { isActive: true },
+        );
+      } else {
+        await apiRequest(
+          "DELETE",
+          `/api/owner/menu-categories/${category.id}`,
+          undefined,
+        );
+      }
       onRefresh();
-      toast({ title: "Category deleted" });
+      toast({ title: nextActive ? "Category visible" : "Category hidden" });
     } catch (err: any) {
       toast({
-        title: "Error",
+        title: "Category visibility could not be updated",
         description: err.message,
         variant: "destructive",
       });
@@ -1008,254 +1163,389 @@ function MenuEditor({
 
   return (
     <div className="space-y-4">
-      {readiness && (
-        <Card className="border-orange-200 bg-orange-50/60">
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <CardTitle className="text-base">Online ordering readiness</CardTitle>
-                <CardDescription>
-                  {readiness.orderingEnabled
-                    ? "Customers can place orders from this menu."
-                    : "Finish these items before customers can order online."}
-                </CardDescription>
-              </div>
-              <Badge variant={readiness.orderingEnabled ? "default" : "secondary"}>
-                {readiness.orderingEnabled ? "Ready" : "Needs attention"}
-              </Badge>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="grid gap-2 sm:grid-cols-2">
-              {readiness.checks.map((check) => (
-                <div
-                  key={check.id}
-                  className="rounded-lg border bg-background/80 px-3 py-2 text-sm"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-medium">{check.label}</span>
-                    <Badge variant={check.ok ? "default" : check.blocking ? "destructive" : "secondary"}>
-                      {check.ok ? "OK" : check.blocking ? "Blocked" : "Warning"}
-                    </Badge>
-                  </div>
-                  {!check.ok && (
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {check.action}
-                    </p>
-                  )}
-                </div>
-              ))}
-            </div>
-            {readiness.payout?.message && (
-              <div className="rounded-lg border bg-background/80 px-3 py-2 text-xs text-muted-foreground">
-                <span className="font-semibold text-foreground">Payouts: </span>
-                {readiness.payout.message}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Menu header */}
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
+      <Card className="overflow-hidden" data-testid="owner-menu-editor">
+        <CardHeader className="border-b bg-gradient-to-r from-orange-50 via-background to-amber-50/70 p-4 sm:p-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <CardTitle className="text-lg">{menu.name}</CardTitle>
-              <CardDescription className="capitalize">
-                {menu.serviceType.replace(/_/g, " ")}
+              <div className="flex flex-wrap items-center gap-2">
+                <CardTitle className="text-xl">{menu.name}</CardTitle>
+                <Badge variant={menuSettings.isActive ? "default" : "secondary"}>
+                  {menuSettings.isActive ? "Visible" : "Hidden"}
+                </Badge>
+              </div>
+              <CardDescription className="mt-1 capitalize">
+                {menu.serviceType === "all"
+                  ? "All day"
+                  : menu.serviceType.replace(/_/g, " ")}
               </CardDescription>
             </div>
-            <Link href={`/menu/${restaurantId}`} target="_blank">
-              <Button variant="outline" size="sm">
-                <Eye className="w-4 h-4 mr-2" />
-                Preview
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={onImport}>
+                <Upload className="mr-1.5 h-4 w-4" />
+                Import
               </Button>
-            </Link>
+              <Button asChild type="button" variant="outline" size="sm">
+                <Link href={`/menu/${restaurantId}`} target="_blank">
+                  <Eye className="mr-1.5 h-4 w-4" />
+                  Preview
+                </Link>
+              </Button>
+            </div>
+          </div>
+          <div className="mt-4 grid grid-cols-3 gap-2">
+            <div className="rounded-xl border bg-background/80 px-3 py-2">
+              <p className="text-lg font-bold">{allItems.length}</p>
+              <p className="text-xs text-muted-foreground">Items</p>
+            </div>
+            <div className="rounded-xl border bg-background/80 px-3 py-2">
+              <p className="text-lg font-bold">{availableItemCount}</p>
+              <p className="text-xs text-muted-foreground">Available</p>
+            </div>
+            <div className="rounded-xl border bg-background/80 px-3 py-2">
+              <p className="text-lg font-bold">{menu.categories.length}</p>
+              <p className="text-xs text-muted-foreground">Categories</p>
+            </div>
           </div>
         </CardHeader>
-        <CardContent>
-          <Tabs defaultValue="categories">
-            <TabsList>
-              <TabsTrigger value="categories">
-                Categories &amp; Items
-              </TabsTrigger>
-              <TabsTrigger value="settings">Menu Settings</TabsTrigger>
-            </TabsList>
 
-            <TabsContent value="categories" className="pt-4 space-y-2">
-              <div className="flex justify-end mb-3">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => {
-                    setEditingCategory(null);
-                    setCategoryName("");
-                    setCategoryDesc("");
-                    setShowCategoryDialog(true);
-                  }}
+        <CardContent className="space-y-4 p-4 sm:p-5">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="font-semibold">Categories and items</h2>
+              <p className="text-xs text-muted-foreground">
+                Availability changes save immediately.
+              </p>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setEditingCategory(null);
+                setCategoryName("");
+                setCategoryDesc("");
+                setShowCategoryDialog(true);
+              }}
+            >
+              <Plus className="mr-1 h-4 w-4" />
+              Category
+            </Button>
+          </div>
+
+          {sections.length === 0 ? (
+            <div className="rounded-xl border border-dashed bg-muted/20 p-6 text-center">
+              <UtensilsCrossed className="mx-auto h-7 w-7 text-muted-foreground" />
+              <p className="mt-3 font-medium">No categories yet</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Add a category such as Mains, Drinks, or Desserts, then add its
+                items.
+              </p>
+              <Button
+                type="button"
+                className="mt-4"
+                onClick={() => {
+                  setEditingCategory(null);
+                  setCategoryName("");
+                  setCategoryDesc("");
+                  setShowCategoryDialog(true);
+                }}
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Add category
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {sections.map((section) => (
+                <section
+                  key={section.id}
+                  className={`overflow-hidden rounded-xl border bg-background ${
+                    section.category?.isActive === false
+                      ? "border-dashed opacity-75"
+                      : ""
+                  }`}
                 >
-                  <Plus className="w-4 h-4 mr-1" />
-                  Add Category
-                </Button>
-              </div>
-
-              {menu.categories.length === 0 && (
-                <p className="text-center text-sm text-muted-foreground py-8">
-                  No categories yet. Add a category to start adding items.
-                </p>
-              )}
-
-              <Accordion type="multiple" className="space-y-2">
-                {menu.categories.map((cat) => (
-                  <AccordionItem
-                    key={cat.id}
-                    value={cat.id}
-                    className="border rounded-lg"
-                  >
-                    <div className="flex items-center px-4">
-                      <AccordionTrigger className="flex-1 text-left font-medium py-3">
-                        {cat.name}
-                        <Badge variant="secondary" className="ml-2 text-xs">
-                          {cat.items.length}
+                  <div className="flex items-start justify-between gap-3 border-b bg-muted/25 px-3 py-3 sm:px-4">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="font-semibold">{section.name}</h3>
+                        <Badge variant="secondary" className="text-xs">
+                          {section.items.length}
                         </Badge>
-                      </AccordionTrigger>
-                      <div className="flex gap-1 ml-2">
+                        {section.category?.isActive === false ? (
+                          <Badge variant="outline" className="text-xs">
+                            Hidden
+                          </Badge>
+                        ) : null}
+                      </div>
+                      {section.description ? (
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          {section.description}
+                        </p>
+                      ) : null}
+                    </div>
+                    {section.category ? (
+                      <div className="flex shrink-0 gap-1">
                         <Button
+                          type="button"
                           variant="ghost"
                           size="sm"
-                          className="h-7 w-7 p-0"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setEditingCategory(cat);
-                            setCategoryName(cat.name);
-                            setCategoryDesc(cat.description ?? "");
+                          className="h-8 px-2"
+                          aria-label={`Edit ${section.name} category`}
+                          onClick={() => {
+                            setEditingCategory(section.category);
+                            setCategoryName(section.category.name);
+                            setCategoryDesc(section.category.description ?? "");
                             setShowCategoryDialog(true);
                           }}
                         >
-                          <Pencil className="w-3.5 h-3.5" />
+                          <Pencil className="h-3.5 w-3.5" />
+                          <span className="ml-1 hidden sm:inline">Edit</span>
                         </Button>
                         <Button
+                          type="button"
                           variant="ghost"
                           size="sm"
-                          className="h-7 w-7 p-0 text-destructive hover:text-destructive"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            deleteCategory(cat.id);
-                          }}
+                          className={`h-8 px-2 ${
+                            section.category.isActive
+                              ? "text-destructive hover:text-destructive"
+                              : "text-foreground"
+                          }`}
+                          aria-label={`${
+                            section.category.isActive ? "Hide" : "Restore"
+                          } ${section.name} category`}
+                          onClick={() =>
+                            setCategoryVisibility(section.category)
+                          }
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
+                          {section.category.isActive ? (
+                            <EyeOff className="h-3.5 w-3.5" />
+                          ) : (
+                            <Eye className="h-3.5 w-3.5" />
+                          )}
+                          <span className="ml-1 hidden sm:inline">
+                            {section.category.isActive ? "Hide" : "Restore"}
+                          </span>
                         </Button>
                       </div>
-                    </div>
-                    <AccordionContent className="px-4 pb-4">
-                      <div className="space-y-2 mb-3">
-                        {cat.items.map((item) => (
-                          <MenuItemRow
-                            key={item.id}
-                            item={item}
-                            onEdit={() => {
-                              setEditingItem(item);
-                              setActiveCategoryId(cat.id);
-                              setShowItemDialog(true);
-                            }}
-                            onRefresh={onRefresh}
-                          />
-                        ))}
-                      </div>
+                    ) : null}
+                  </div>
+                  <div className="space-y-2 p-3 sm:p-4">
+                    {section.items.length > 0 ? (
+                      section.items.map((item) => (
+                        <MenuItemRow
+                          key={item.id}
+                          item={item}
+                          onEdit={() => {
+                            setEditingItem(item);
+                            setActiveCategoryId(section.category?.id ?? null);
+                            setShowItemDialog(true);
+                          }}
+                          onRefresh={onRefresh}
+                        />
+                      ))
+                    ) : (
+                      <p className="rounded-lg bg-muted/30 px-3 py-4 text-center text-sm text-muted-foreground">
+                        No items in this category yet.
+                      </p>
+                    )}
+                    {section.category ? (
                       <Button
+                        type="button"
                         size="sm"
                         variant="outline"
                         className="w-full"
                         onClick={() => {
                           setEditingItem(null);
-                          setActiveCategoryId(cat.id);
+                          setActiveCategoryId(section.category.id);
                           setShowItemDialog(true);
                         }}
                       >
-                        <Plus className="w-4 h-4 mr-1" />
-                        Add Item
+                        <Plus className="mr-1 h-4 w-4" />
+                        Add item to {section.name}
                       </Button>
-                    </AccordionContent>
-                  </AccordionItem>
-                ))}
-              </Accordion>
-            </TabsContent>
-
-            <TabsContent value="settings" className="pt-4 space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label>Menu Active</Label>
-                  <p className="text-xs text-muted-foreground">
-                    Customers can order from this menu
-                  </p>
-                </div>
-                <Switch
-                  checked={menuSettings.isActive}
-                  onCheckedChange={(v) =>
-                    setMenuSettings((s) => ({ ...s, isActive: v }))
-                  }
-                />
-              </div>
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label>Accept Cash Payments</Label>
-                  <p className="text-xs text-muted-foreground">
-                    Allow cash for pickup orders
-                  </p>
-                </div>
-                <Switch
-                  checked={menuSettings.acceptsCash}
-                  onCheckedChange={(v) =>
-                    setMenuSettings((s) => ({ ...s, acceptsCash: v }))
-                  }
-                />
-              </div>
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label>Absorb customer fees</Label>
-                  <p className="text-xs text-muted-foreground">
-                    Hide processing plus the $1 MealScout fee from customers (you cover it)
-                  </p>
-                </div>
-                <Switch
-                  checked={menuSettings.hidePlatformFee}
-                  onCheckedChange={(v) =>
-                    setMenuSettings((s) => ({ ...s, hidePlatformFee: v }))
-                  }
-                />
-              </div>
-              <Button onClick={saveMenuSettings} disabled={savingSettings}>
-                {savingSettings && (
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                )}
-                Save Settings
-              </Button>
-            </TabsContent>
-          </Tabs>
+                    ) : null}
+                  </div>
+                </section>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
 
+      {readinessQuery.isLoading ? (
+        <div className="rounded-xl border bg-card px-4 py-3 text-sm text-muted-foreground">
+          Checking online ordering…
+        </div>
+      ) : readinessQuery.isError ? (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          Online ordering status is unavailable. Menu editing still works.
+        </div>
+      ) : readiness ? (
+        <details
+          className="group rounded-2xl border bg-card shadow-sm"
+          data-testid="menu-ordering-readiness"
+        >
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-4 sm:p-5">
+            <span className="flex min-w-0 items-start gap-3">
+              {readiness.orderingEnabled ? (
+                <CircleCheckBig className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
+              ) : (
+                <CircleAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+              )}
+              <span>
+                <span className="block font-semibold">Online ordering</span>
+                <span className="block text-xs font-normal text-muted-foreground">
+                  {readiness.orderingEnabled
+                    ? "Customers can place pickup orders."
+                    : "Setup is incomplete. Your visible menu can still be viewed."}
+                </span>
+              </span>
+            </span>
+            <span className="flex shrink-0 items-center gap-2">
+              <Badge variant={readiness.orderingEnabled ? "default" : "secondary"}>
+                {readiness.orderingEnabled ? "Ready" : "Needs setup"}
+              </Badge>
+              <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
+            </span>
+          </summary>
+          <div className="space-y-3 border-t p-4 sm:p-5">
+            <div className="grid gap-2 sm:grid-cols-2">
+              {readiness.checks.map((check) => (
+                <div key={check.id} className="rounded-lg border px-3 py-2 text-sm">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-medium">{check.label}</span>
+                    <Badge
+                      variant={
+                        check.ok
+                          ? "default"
+                          : check.blocking
+                            ? "destructive"
+                            : "secondary"
+                      }
+                    >
+                      {check.ok ? "Done" : check.blocking ? "Required" : "Review"}
+                    </Badge>
+                  </div>
+                  {!check.ok ? (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {check.action}
+                    </p>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+            {readiness.payout?.message ? (
+              <p className="rounded-lg bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                <span className="font-semibold text-foreground">Payouts: </span>
+                {readiness.payout.message}
+              </p>
+            ) : null}
+          </div>
+        </details>
+      ) : null}
+
+      <details
+        className="group rounded-2xl border bg-card shadow-sm"
+        data-testid="menu-settings"
+      >
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-4 sm:p-5">
+          <span className="flex items-center gap-2 font-semibold">
+            <SlidersHorizontal className="h-4 w-4 text-orange-600" />
+            Menu and ordering settings
+          </span>
+          <span className="flex items-center gap-2">
+            <Badge variant={menuSettings.isActive ? "default" : "secondary"}>
+              {menuSettings.isActive ? "Visible" : "Hidden"}
+            </Badge>
+            <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
+          </span>
+        </summary>
+        <div className="space-y-4 border-t p-4 sm:p-5">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <Label>Visible to customers</Label>
+              <p className="text-xs text-muted-foreground">
+                Customers can see this menu and its available items on MealScout.
+              </p>
+            </div>
+            <Switch
+              checked={menuSettings.isActive}
+              onCheckedChange={(value) =>
+                setMenuSettings((settings) => ({
+                  ...settings,
+                  isActive: value,
+                }))
+              }
+            />
+          </div>
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <Label>Accept cash for pickup</Label>
+              <p className="text-xs text-muted-foreground">
+                Offer pay-at-pickup when online ordering is available.
+              </p>
+            </div>
+            <Switch
+              checked={menuSettings.acceptsCash}
+              onCheckedChange={(value) =>
+                setMenuSettings((settings) => ({
+                  ...settings,
+                  acceptsCash: value,
+                }))
+              }
+            />
+          </div>
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <Label>Cover customer fees</Label>
+              <p className="text-xs text-muted-foreground">
+                You cover processing and the $1 MealScout fee instead of the customer.
+              </p>
+            </div>
+            <Switch
+              checked={menuSettings.hidePlatformFee}
+              onCheckedChange={(value) =>
+                setMenuSettings((settings) => ({
+                  ...settings,
+                  hidePlatformFee: value,
+                }))
+              }
+            />
+          </div>
+          <Button type="button" onClick={saveMenuSettings} disabled={savingSettings}>
+            {savingSettings ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : null}
+            Save settings
+          </Button>
+        </div>
+      </details>
+
       {/* Category dialog */}
       <Dialog open={showCategoryDialog} onOpenChange={setShowCategoryDialog}>
-        <DialogContent>
+        <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>
-              {editingCategory ? "Edit Category" : "Add Category"}
+              {editingCategory ? "Edit category" : "Add category"}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-3 py-2">
             <div>
-              <Label>Name</Label>
+              <Label htmlFor="category-name">Name</Label>
               <Input
+                id="category-name"
                 value={categoryName}
                 onChange={(e) => setCategoryName(e.target.value)}
                 placeholder="e.g. Appetizers, Burgers, Drinks"
               />
             </div>
             <div>
-              <Label>Description (optional)</Label>
+              <Label htmlFor="category-description">
+                Description (optional)
+              </Label>
               <Textarea
+                id="category-description"
                 value={categoryDesc}
                 onChange={(e) => setCategoryDesc(e.target.value)}
                 placeholder="Brief description shown to customers"
@@ -1310,54 +1600,59 @@ function MenuItemRow({
   onRefresh: () => void;
 }) {
   const { toast } = useToast();
+  const [updatingAvailability, setUpdatingAvailability] = useState(false);
 
   const toggleAvailable = async () => {
+    setUpdatingAvailability(true);
     try {
       await apiRequest("PATCH", `/api/owner/menu-items/${item.id}`, {
         isAvailable: !item.isAvailable,
       });
       onRefresh();
+      toast({
+        title: item.isAvailable ? "Item marked unavailable" : "Item is available",
+      });
     } catch (err: any) {
       toast({
-        title: "Error",
+        title: "Availability could not be updated",
         description: err.message,
         variant: "destructive",
       });
-    }
-  };
-
-  const deleteItem = async () => {
-    if (!confirm(`Delete "${item.name}"?`)) return;
-    try {
-      await apiRequest("DELETE", `/api/owner/menu-items/${item.id}`, undefined);
-      onRefresh();
-    } catch (err: any) {
-      toast({
-        title: "Error",
-        description: err.message,
-        variant: "destructive",
-      });
+    } finally {
+      setUpdatingAvailability(false);
     }
   };
 
   return (
-    <div className="flex items-center gap-3 p-2 rounded-md hover:bg-muted/50 border">
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <span className="font-medium text-sm truncate">{item.name}</span>
+    <div className="flex flex-col gap-3 rounded-xl border p-3 transition-colors hover:bg-muted/25 sm:flex-row sm:items-center">
+      <div className="flex min-w-0 flex-1 items-center gap-3">
+        {item.imageUrl ? (
+          <img
+            src={item.imageUrl}
+            alt=""
+            className="h-14 w-14 shrink-0 rounded-lg object-cover"
+          />
+        ) : (
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-orange-50 text-orange-300">
+            <ImageIcon className="h-5 w-5" />
+          </div>
+        )}
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-semibold">{item.name}</span>
           {item.itemType === "merchandise" && (
-            <Badge variant="outline" className="text-xs gap-1">
-              <Package className="w-3 h-3" />
-              Merch
+              <Badge variant="outline" className="gap-1 text-xs">
+                <Package className="h-3 w-3" />
+                Merchandise
             </Badge>
           )}
           {!item.isAvailable && (
             <Badge variant="secondary" className="text-xs">
-              86'd
+                Unavailable
             </Badge>
           )}
         </div>
-        <div className="text-xs text-muted-foreground flex gap-2 mt-0.5">
+          <div className="mt-1 flex flex-wrap gap-2 text-xs text-muted-foreground">
           <span>{formatMoney(item.priceCents)}</span>
           {item.itemType !== "merchandise" && item.calories && (
             <span>· {item.calories} cal</span>
@@ -1366,35 +1661,41 @@ function MenuItemRow({
             <span>· {item.inventoryQty} left</span>
           )}
         </div>
+        </div>
       </div>
-      <div className="flex items-center gap-1 shrink-0">
+      <div className="flex shrink-0 items-center justify-end gap-2">
         <Button
-          variant="ghost"
+          type="button"
+          variant={item.isAvailable ? "outline" : "secondary"}
           size="sm"
-          className="h-7 w-7 p-0"
+          className="h-8 px-2.5"
           onClick={toggleAvailable}
+          disabled={updatingAvailability}
+          aria-label={
+            item.isAvailable
+              ? `Mark ${item.name} unavailable`
+              : `Mark ${item.name} available`
+          }
         >
-          {item.isAvailable ? (
-            <Eye className="w-3.5 h-3.5" />
+          {updatingAvailability ? (
+            <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+          ) : item.isAvailable ? (
+            <Eye className="mr-1.5 h-3.5 w-3.5" />
           ) : (
-            <EyeOff className="w-3.5 h-3.5 text-muted-foreground" />
+            <EyeOff className="mr-1.5 h-3.5 w-3.5" />
           )}
+          {item.isAvailable ? "Available" : "Unavailable"}
         </Button>
         <Button
-          variant="ghost"
+          type="button"
+          variant="outline"
           size="sm"
-          className="h-7 w-7 p-0"
+          className="h-8 px-2.5"
           onClick={onEdit}
+          aria-label={`Edit ${item.name}`}
         >
-          <Pencil className="w-3.5 h-3.5" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-7 w-7 p-0 text-destructive hover:text-destructive"
-          onClick={deleteItem}
-        >
-          <Trash2 className="w-3.5 h-3.5" />
+          <Pencil className="mr-1.5 h-3.5 w-3.5" />
+          Edit
         </Button>
       </div>
     </div>
@@ -1412,7 +1713,7 @@ function MenuItemDialog({
 }: {
   item: MenuItem | null;
   menuId: string;
-  categoryId: string;
+  categoryId: string | null;
   restaurantId: string;
   onClose: () => void;
   onSaved: () => void;
@@ -1431,18 +1732,39 @@ function MenuItemDialog({
     dietaryTags: (item?.dietaryTags ?? []).join(", "),
     allergens: (item?.allergens ?? []).join(", "),
   });
+  const [variantDrafts, setVariantDrafts] = useState(
+    (item?.variants ?? []).map((variant) => ({
+      label: variant.label,
+      additionalPrice: String((variant.additionalCents || 0) / 100),
+      isDefault: Boolean(variant.isDefault),
+    })),
+  );
+  const [modifierDrafts, setModifierDrafts] = useState(
+    (item?.modifiers ?? []).map((modifier) => ({
+      groupName: modifier.groupName,
+      label: modifier.label,
+      additionalPrice: String((modifier.additionalCents || 0) / 100),
+      isRequired: Boolean(modifier.isRequired),
+      maxSelections: String(modifier.maxSelections || 1),
+    })),
+  );
+  const parsedPrice = Number.parseFloat(form.priceCents);
+  const hasValidPrice =
+    form.priceCents.trim().length > 0 &&
+    Number.isFinite(parsedPrice) &&
+    parsedPrice >= 0;
 
   const save = async () => {
-    if (!form.name.trim() || !form.priceCents) return;
+    if (!form.name.trim() || !hasValidPrice) return;
     setIsSaving(true);
     try {
       const payload = {
         menuId,
-        categoryId,
+        categoryId: item?.categoryId ?? categoryId,
         restaurantId,
         name: form.name.trim(),
         description: form.description.trim() || null,
-        priceCents: Math.round(parseFloat(form.priceCents) * 100),
+        priceCents: Math.round(parsedPrice * 100),
         itemType: form.itemType,
         calories:
           form.itemType === "merchandise"
@@ -1474,10 +1796,78 @@ function MenuItemDialog({
           : [],
       };
 
+      let savedItemId = item?.id || null;
       if (item) {
         await apiRequest("PATCH", `/api/owner/menu-items/${item.id}`, payload);
       } else {
-        await apiRequest("POST", "/api/owner/menu-items", payload);
+        const response = await apiRequest("POST", "/api/owner/menu-items", payload);
+        const data = await response.json().catch(() => ({}));
+        savedItemId = String(data?.item?.id || "") || null;
+      }
+
+      if (!savedItemId) {
+        onSaved();
+        toast({
+          title: "Item saved",
+          description:
+            "MealScout could not link sizes and add-ons. Reopen the item and try those options again.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const variants = variantDrafts
+        .filter((variant) => variant.label.trim())
+        .map((variant, index) => ({
+          menuItemId: savedItemId,
+          label: variant.label.trim(),
+          additionalCents: Math.max(
+            0,
+            Math.round(
+              (Number.parseFloat(variant.additionalPrice) || 0) * 100,
+            ),
+          ),
+          isDefault: variant.isDefault,
+          sortOrder: index,
+        }));
+      const modifiers = modifierDrafts
+        .filter((modifier) => modifier.groupName.trim() && modifier.label.trim())
+        .map((modifier, index) => ({
+          menuItemId: savedItemId,
+          groupName: modifier.groupName.trim(),
+          label: modifier.label.trim(),
+          additionalCents: Math.max(
+            0,
+            Math.round(
+              (Number.parseFloat(modifier.additionalPrice) || 0) * 100,
+            ),
+          ),
+          isRequired: modifier.isRequired,
+          maxSelections: Math.max(
+            1,
+            Number.parseInt(modifier.maxSelections, 10) || 1,
+          ),
+          sortOrder: index,
+        }));
+
+      try {
+        await Promise.all([
+          apiRequest("PUT", `/api/owner/menu-items/${savedItemId}/variants`, {
+            variants,
+          }),
+          apiRequest("PUT", `/api/owner/menu-items/${savedItemId}/modifiers`, {
+            modifiers,
+          }),
+        ]);
+      } catch {
+        onSaved();
+        toast({
+          title: "Item saved",
+          description:
+            "Sizes or add-ons did not finish saving. Reopen the item and try those options again.",
+          variant: "destructive",
+        });
+        return;
       }
       onSaved();
       toast({ title: item ? "Item updated" : "Item added" });
@@ -1494,15 +1884,32 @@ function MenuItemDialog({
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-h-[92vh] max-w-2xl overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{item ? "Edit Item" : "Add Menu Item"}</DialogTitle>
+          <DialogTitle>{item ? "Edit item" : "Add menu item"}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-2">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="col-span-2">
-              <Label>Item Name *</Label>
+          {item?.imageUrl ? (
+            <div className="flex items-center gap-3 rounded-xl border bg-muted/20 p-3">
+              <img
+                src={item.imageUrl}
+                alt=""
+                className="h-16 w-16 rounded-lg object-cover"
+              />
+              <div>
+                <p className="text-sm font-semibold">Customer photo</p>
+                <p className="text-xs text-muted-foreground">
+                  This image is already attached to the item.
+                </p>
+              </div>
+            </div>
+          ) : null}
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <Label htmlFor="menu-item-name">Item name *</Label>
               <Input
+                id="menu-item-name"
                 value={form.name}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, name: e.target.value }))
@@ -1511,10 +1918,11 @@ function MenuItemDialog({
               />
             </div>
             <div>
-              <Label>Price *</Label>
+              <Label htmlFor="menu-item-price">Base price *</Label>
               <div className="relative">
-                <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <DollarSign className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
+                  id="menu-item-price"
                   className="pl-8"
                   value={form.priceCents}
                   onChange={(e) =>
@@ -1526,9 +1934,14 @@ function MenuItemDialog({
                   step="0.01"
                 />
               </div>
+              {form.priceCents && !hasValidPrice ? (
+                <p className="mt-1 text-xs text-destructive">
+                  Enter a valid price of $0 or more.
+                </p>
+              ) : null}
             </div>
             <div>
-              <Label>Item type</Label>
+              <Label htmlFor="menu-item-type">Item type</Label>
               <Select
                 value={form.itemType}
                 onValueChange={(value) =>
@@ -1541,7 +1954,7 @@ function MenuItemDialog({
                   }))
                 }
               >
-                <SelectTrigger>
+                <SelectTrigger id="menu-item-type">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -1550,9 +1963,10 @@ function MenuItemDialog({
                 </SelectContent>
               </Select>
             </div>
-            <div className="col-span-2">
-              <Label>Description</Label>
+            <div className="sm:col-span-2">
+              <Label htmlFor="menu-item-description">Description</Label>
               <Textarea
+                id="menu-item-description"
                 value={form.description}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, description: e.target.value }))
@@ -1564,8 +1978,9 @@ function MenuItemDialog({
             {form.itemType !== "merchandise" && (
               <>
                 <div>
-                  <Label>Calories</Label>
+                  <Label htmlFor="menu-item-calories">Calories</Label>
                   <Input
+                    id="menu-item-calories"
                     value={form.calories}
                     onChange={(e) =>
                       setForm((f) => ({ ...f, calories: e.target.value }))
@@ -1575,43 +1990,342 @@ function MenuItemDialog({
                     min="0"
                   />
                 </div>
-                <div className="col-span-2">
-                  <Label>
-                    Dietary Tags{" "}
-                    <span className="text-xs text-muted-foreground">
-                      (comma separated)
-                    </span>
+                <div className="sm:col-span-2">
+                  <Label htmlFor="menu-item-dietary-tags">
+                    Dietary tags
                   </Label>
                   <Input
+                    id="menu-item-dietary-tags"
                     value={form.dietaryTags}
                     onChange={(e) =>
                       setForm((f) => ({ ...f, dietaryTags: e.target.value }))
                     }
                     placeholder="vegan, gluten-free, keto"
                   />
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Separate multiple tags with commas.
+                  </p>
                 </div>
-                <div className="col-span-2">
-                  <Label>
-                    Allergens{" "}
-                    <span className="text-xs text-muted-foreground">
-                      (comma separated)
-                    </span>
-                  </Label>
+                <div className="sm:col-span-2">
+                  <Label htmlFor="menu-item-allergens">Allergens</Label>
                   <Input
+                    id="menu-item-allergens"
                     value={form.allergens}
                     onChange={(e) =>
                       setForm((f) => ({ ...f, allergens: e.target.value }))
                     }
                     placeholder="nuts, dairy, gluten"
                   />
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Separate multiple allergens with commas.
+                  </p>
                 </div>
               </>
             )}
           </div>
 
-          <div className="space-y-3 pt-2 border-t">
-            <div className="flex items-center justify-between">
-              <Label>Available</Label>
+          {form.itemType !== "merchandise" ? (
+            <details
+              className="group rounded-xl border"
+              data-testid="menu-item-options-editor"
+            >
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-3 font-semibold">
+                <span>Sizes and add-ons</span>
+                <span className="flex items-center gap-2">
+                  <Badge variant="secondary">
+                    {variantDrafts.length + modifierDrafts.length}
+                  </Badge>
+                  <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
+                </span>
+              </summary>
+              <div className="space-y-5 border-t p-3">
+                <section className="space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <h3 className="text-sm font-semibold">Sizes or styles</h3>
+                      <p className="text-xs text-muted-foreground">
+                        Add choices that change the base price.
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        setVariantDrafts((current) => [
+                          ...current,
+                          {
+                            label: "",
+                            additionalPrice: "0",
+                            isDefault: current.length === 0,
+                          },
+                        ])
+                      }
+                    >
+                      <Plus className="mr-1 h-4 w-4" />
+                      Size
+                    </Button>
+                  </div>
+                  {variantDrafts.length === 0 ? (
+                    <p className="rounded-lg bg-muted/30 px-3 py-3 text-xs text-muted-foreground">
+                      No size or style choices.
+                    </p>
+                  ) : (
+                    variantDrafts.map((variant, index) => (
+                      <div
+                        key={`variant-${index}`}
+                        className="grid gap-2 rounded-lg border p-3 sm:grid-cols-[1fr_130px_auto_auto] sm:items-end"
+                      >
+                        <div>
+                          <Label htmlFor={`variant-label-${index}`}>Label</Label>
+                          <Input
+                            id={`variant-label-${index}`}
+                            value={variant.label}
+                            onChange={(event) =>
+                              setVariantDrafts((current) =>
+                                current.map((entry, entryIndex) =>
+                                  entryIndex === index
+                                    ? { ...entry, label: event.target.value }
+                                    : entry,
+                                ),
+                              )
+                            }
+                            placeholder="Large"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor={`variant-price-${index}`}>
+                            Added price
+                          </Label>
+                          <Input
+                            id={`variant-price-${index}`}
+                            value={variant.additionalPrice}
+                            onChange={(event) =>
+                              setVariantDrafts((current) =>
+                                current.map((entry, entryIndex) =>
+                                  entryIndex === index
+                                    ? {
+                                        ...entry,
+                                        additionalPrice: event.target.value,
+                                      }
+                                    : entry,
+                                ),
+                              )
+                            }
+                            type="number"
+                            min="0"
+                            step="0.01"
+                          />
+                        </div>
+                        <label className="flex h-10 items-center gap-2 text-xs font-medium">
+                          <Switch
+                            checked={variant.isDefault}
+                            onCheckedChange={(checked) =>
+                              setVariantDrafts((current) =>
+                                current.map((entry, entryIndex) => ({
+                                  ...entry,
+                                  isDefault: checked && entryIndex === index,
+                                })),
+                              )
+                            }
+                          />
+                          Default
+                        </label>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-10 px-2 text-destructive hover:text-destructive"
+                          aria-label={`Remove ${variant.label || "size"}`}
+                          onClick={() =>
+                            setVariantDrafts((current) =>
+                              current.filter((_, entryIndex) => entryIndex !== index),
+                            )
+                          }
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))
+                  )}
+                </section>
+
+                <section className="space-y-3 border-t pt-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <h3 className="text-sm font-semibold">Add-ons</h3>
+                      <p className="text-xs text-muted-foreground">
+                        Add sauces, toppings, or other choices.
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        setModifierDrafts((current) => [
+                          ...current,
+                          {
+                            groupName: "",
+                            label: "",
+                            additionalPrice: "0",
+                            isRequired: false,
+                            maxSelections: "1",
+                          },
+                        ])
+                      }
+                    >
+                      <Plus className="mr-1 h-4 w-4" />
+                      Add-on
+                    </Button>
+                  </div>
+                  {modifierDrafts.length === 0 ? (
+                    <p className="rounded-lg bg-muted/30 px-3 py-3 text-xs text-muted-foreground">
+                      No add-ons.
+                    </p>
+                  ) : (
+                    modifierDrafts.map((modifier, index) => (
+                      <div
+                        key={`modifier-${index}`}
+                        className="space-y-3 rounded-lg border p-3"
+                      >
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          <div>
+                            <Label htmlFor={`modifier-group-${index}`}>
+                              Group
+                            </Label>
+                            <Input
+                              id={`modifier-group-${index}`}
+                              value={modifier.groupName}
+                              onChange={(event) =>
+                                setModifierDrafts((current) =>
+                                  current.map((entry, entryIndex) =>
+                                    entryIndex === index
+                                      ? { ...entry, groupName: event.target.value }
+                                      : entry,
+                                  ),
+                                )
+                              }
+                              placeholder="Sauces"
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor={`modifier-label-${index}`}>
+                              Choice
+                            </Label>
+                            <Input
+                              id={`modifier-label-${index}`}
+                              value={modifier.label}
+                              onChange={(event) =>
+                                setModifierDrafts((current) =>
+                                  current.map((entry, entryIndex) =>
+                                    entryIndex === index
+                                      ? { ...entry, label: event.target.value }
+                                      : entry,
+                                  ),
+                                )
+                              }
+                              placeholder="Ranch"
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor={`modifier-price-${index}`}>
+                              Added price
+                            </Label>
+                            <Input
+                              id={`modifier-price-${index}`}
+                              value={modifier.additionalPrice}
+                              onChange={(event) =>
+                                setModifierDrafts((current) =>
+                                  current.map((entry, entryIndex) =>
+                                    entryIndex === index
+                                      ? {
+                                          ...entry,
+                                          additionalPrice: event.target.value,
+                                        }
+                                      : entry,
+                                  ),
+                                )
+                              }
+                              type="number"
+                              min="0"
+                              step="0.01"
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor={`modifier-max-${index}`}>
+                              Maximum choices
+                            </Label>
+                            <Input
+                              id={`modifier-max-${index}`}
+                              value={modifier.maxSelections}
+                              onChange={(event) =>
+                                setModifierDrafts((current) =>
+                                  current.map((entry, entryIndex) =>
+                                    entryIndex === index
+                                      ? {
+                                          ...entry,
+                                          maxSelections: event.target.value,
+                                        }
+                                      : entry,
+                                  ),
+                                )
+                              }
+                              type="number"
+                              min="1"
+                              step="1"
+                            />
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between gap-3">
+                          <label className="flex items-center gap-2 text-xs font-medium">
+                            <Switch
+                              checked={modifier.isRequired}
+                              onCheckedChange={(checked) =>
+                                setModifierDrafts((current) =>
+                                  current.map((entry, entryIndex) =>
+                                    entryIndex === index
+                                      ? { ...entry, isRequired: checked }
+                                      : entry,
+                                  ),
+                                )
+                              }
+                            />
+                            Customer must choose
+                          </label>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="text-destructive hover:text-destructive"
+                            onClick={() =>
+                              setModifierDrafts((current) =>
+                                current.filter(
+                                  (_, entryIndex) => entryIndex !== index,
+                                ),
+                              )
+                            }
+                          >
+                            <Trash2 className="mr-1.5 h-4 w-4" />
+                            Remove
+                          </Button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </section>
+              </div>
+            </details>
+          ) : null}
+
+          <div className="space-y-3 rounded-xl border p-3">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <Label>Available to customers</Label>
+                <p className="text-xs text-muted-foreground">
+                  Turn this off when the item is sold out or paused.
+                </p>
+              </div>
               <Switch
                 checked={form.isAvailable}
                 onCheckedChange={(v) =>
@@ -1619,8 +2333,13 @@ function MenuItemDialog({
                 }
               />
             </div>
-            <div className="flex items-center justify-between">
-              <Label>Track Inventory</Label>
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <Label>Track inventory</Label>
+                <p className="text-xs text-muted-foreground">
+                  Keep a remaining quantity for this item.
+                </p>
+              </div>
               <Switch
                 checked={form.trackInventory}
                 onCheckedChange={(v) =>
@@ -1630,8 +2349,9 @@ function MenuItemDialog({
             </div>
             {form.trackInventory && (
               <div>
-                <Label>In Stock Quantity</Label>
+                <Label htmlFor="menu-item-inventory">In-stock quantity</Label>
                 <Input
+                  id="menu-item-inventory"
                   value={form.inventoryQty}
                   onChange={(e) =>
                     setForm((f) => ({ ...f, inventoryQty: e.target.value }))
@@ -1645,15 +2365,18 @@ function MenuItemDialog({
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
+          <Button type="button" variant="outline" onClick={onClose}>
             Cancel
           </Button>
           <Button
+            type="button"
             onClick={save}
-            disabled={isSaving || !form.name.trim() || !form.priceCents}
+            disabled={isSaving || !form.name.trim() || !hasValidPrice}
           >
-            {isSaving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-            {item ? "Save Changes" : "Add Item"}
+            {isSaving ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : null}
+            {item ? "Save changes" : "Add item"}
           </Button>
         </DialogFooter>
       </DialogContent>

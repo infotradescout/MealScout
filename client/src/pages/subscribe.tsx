@@ -5,8 +5,10 @@ import {
   useElements,
 } from "@stripe/react-stripe-js";
 import { loadStripe } from "@stripe/stripe-js";
-import { useEffect, useState } from "react";
-import { Link, useLocation } from "wouter";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { Link, useLocation, useSearch } from "wouter";
+import type { Restaurant } from "@shared/schema";
+import { isBarBusinessType, isTruckBusinessType } from "@shared/businessTypes";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -32,17 +34,25 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { BackHeader } from "@/components/back-header";
 import {
+  AlertTriangle,
   CreditCard,
   Check,
   Calendar,
   AlertCircle,
   CheckCircle,
+  Loader2,
+  ReceiptText,
+  ShieldCheck,
+  Sparkles,
+  WalletCards,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { authUrl } from "@/lib/api";
 import PaymentBrowserGate from "@/components/payment-browser-gate";
 import { isPaymentHostileBrowser } from "@/lib/inAppBrowser";
+import BusinessWorkspaceShell from "@/components/business-workspace-shell";
+import { buildPublicProfilePath } from "@/lib/public-profile-path";
 
 // Make sure to call `loadStripe` outside of a component's render to avoid
 // recreating the `Stripe` object on every render.
@@ -74,6 +84,7 @@ interface ApiSubscriptionStatus {
   hasAccess?: boolean;
   trialAccess?: boolean;
   trialEndsAt?: string | Date | null;
+  lifetimeAccess?: boolean;
   message?: string;
   currentPeriodEnd?: number;
   cancelAtPeriodEnd?: boolean;
@@ -196,124 +207,95 @@ const PaymentForm = ({
 };
 
 const PlanSelector = ({
-  billingInterval,
   promoCode,
-  onBillingIntervalChange,
   onPromoCodeChange,
   onContinue,
 }: {
-  billingInterval: "month";
   promoCode: string;
-  onBillingIntervalChange: (value: "month") => void;
   onPromoCodeChange: (value: string) => void;
   onContinue: () => void;
 }) => {
-  const getPricingDisplay = () =>
-    "Locked-in promo pricing at $25/month (normally $50).";
-  const getPricingAmount = () => (
-    <>
-      <span className="mr-2 text-xl text-[color:var(--text-muted)] line-through">
-        $50
-      </span>
-      $25
-    </>
-  );
-
   return (
-    <div className="space-y-6">
-      {/* Monthly Only */}
-      <Card className="bg-[linear-gradient(110deg,rgba(34,197,94,0.12),rgba(20,184,166,0.12))] border-[color:var(--border-subtle)] shadow-clean">
-        <CardContent className="p-6">
-          <h3 className="text-xl font-bold text-[color:var(--text-primary)] mb-4 text-center">
-            Choose Your Plan
-          </h3>
-          <div className="grid grid-cols-1 gap-4">
-            <div
-              className="border rounded-lg p-4 text-center border-[color:var(--status-success)]/40 bg-[color:var(--status-success)]/10 shadow-clean"
-              onClick={() => onBillingIntervalChange("month")}
-              data-testid="card-billing-monthly"
-            >
-              <div className="font-semibold text-[color:var(--text-primary)] mb-1">
-                Monthly Premium
-              </div>
-              <div className="text-sm text-[color:var(--text-secondary)]">
-                Cancel anytime
-              </div>
+    <Card className="overflow-hidden border-orange-200 bg-[var(--bg-surface)] shadow-clean">
+      <CardContent className="p-0">
+        <div className="grid lg:grid-cols-[1.1fr_0.9fr]">
+          <div className="bg-[linear-gradient(135deg,#fff7ed,#ffedd5_55%,#fef3c7)] p-6 sm:p-8">
+            <div className="flex items-center gap-2 text-sm font-black text-orange-800">
+              <Sparkles className="h-4 w-4" aria-hidden="true" />
+              MealScout Premium
             </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Promo Code */}
-      <Card className="border-[color:var(--border-subtle)] bg-[var(--bg-card)] shadow-clean">
-        <CardContent className="p-6">
-          <Label
-            htmlFor="promoCode"
-            className="text-base font-semibold text-[color:var(--text-primary)] mb-2 block"
-          >
-            Have a promo code?
-          </Label>
-          <Input
-            id="promoCode"
-            type="text"
-            placeholder="Type promo code"
-            value={promoCode}
-            onChange={(e) => onPromoCodeChange(e.target.value.toUpperCase())}
-            className="text-center font-mono"
-            data-testid="input-promo-code"
-          />
-          <p className="text-sm text-muted-foreground mt-2 text-center">
-            We'll apply it before checkout.
-          </p>
-        </CardContent>
-      </Card>
-
-      {/* Summary and Continue */}
-      <Card className="bg-[linear-gradient(110deg,rgba(59,130,246,0.12),rgba(99,102,241,0.12))] border-[color:var(--border-subtle)] shadow-clean">
-        <CardContent className="p-6">
-          <div className="text-center">
-            <h3 className="text-lg font-bold text-[color:var(--text-primary)] mb-2">
-              You're Almost Set
-            </h3>
-            <div className="flex justify-center items-center space-x-2 mb-2">
-              <Check className="w-5 h-5 text-[color:var(--status-success)]" />
-              <span className="font-semibold text-[color:var(--text-primary)]">
-                MealScout Premium
+            <div className="mt-5 flex items-end gap-2">
+              <span className="text-5xl font-black tracking-tight text-stone-950">
+                $25
+              </span>
+              <span className="pb-1.5 text-sm font-bold text-stone-600">
+                per month
               </span>
             </div>
-            <div className="text-3xl font-bold text-[color:var(--accent-text)] mb-2">
-              {getPricingAmount()}
-            </div>
-            <div className="text-sm text-[color:var(--text-secondary)] mb-4">
-              {getPricingDisplay()}
-            </div>
-            {promoCode && (
-              <div className="text-sm text-[color:var(--status-success)] mb-4">
-                Promo code: {promoCode}
-              </div>
-            )}
-            <p className="text-xs text-[color:var(--text-muted)] mb-4">
-              Parking pass bookings and menu browsing are always free for
-              verified trucks. Premium unlocks online ordering, schedule
-              management, live location, and more.
+            <p className="mt-2 text-sm text-stone-600">
+              Monthly billing. Cancel at the end of any billing period.
             </p>
+            <div className="mt-6 grid gap-3 text-sm text-stone-700 sm:grid-cols-2 lg:grid-cols-1">
+              {[
+                "Online ordering tools",
+                "Deals and distribution",
+                "Schedule and live-location tools",
+                "Premium business activity summary",
+              ].map((feature) => (
+                <div key={feature} className="flex items-start gap-2">
+                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-700" aria-hidden="true" />
+                  <span>{feature}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex flex-col justify-between p-6 sm:p-8">
+            <div>
+              <Label
+                htmlFor="promoCode"
+                className="text-sm font-black text-stone-950"
+              >
+                Promo code
+              </Label>
+              <Input
+                id="promoCode"
+                type="text"
+                placeholder="Enter code"
+                value={promoCode}
+                onChange={(event) =>
+                  onPromoCodeChange(event.target.value.toUpperCase())
+                }
+                className="mt-2 font-mono"
+                data-testid="input-promo-code"
+              />
+              <p className="mt-2 text-xs leading-5 text-stone-500">
+                Any eligible code is checked before payment begins.
+              </p>
+              {promoCode ? (
+                <p className="mt-3 text-sm font-bold text-emerald-700">
+                  Code ready: {promoCode}
+                </p>
+              ) : null}
+            </div>
             <Button
               onClick={onContinue}
-              className="w-full py-3 font-semibold text-sm"
+              className="mt-6 w-full"
               data-testid="button-continue-to-payment"
             >
-              Continue to Checkout
+              Continue to secure checkout
             </Button>
           </div>
-        </CardContent>
-      </Card>
-    </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 };
 
 const SubscriptionManagement = () => {
   const { user } = useAuth();
   const { toast } = useToast();
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
 
   const {
     data: subscriptionStatus,
@@ -337,8 +319,6 @@ const SubscriptionManagement = () => {
     refetchOnWindowFocus: false,
   });
 
-  const [showCancelDialog, setShowCancelDialog] = useState(false);
-
   const emailSummaryMutation = useMutation({
     mutationFn: async () => {
       const response = await apiRequest(
@@ -349,78 +329,57 @@ const SubscriptionManagement = () => {
     },
     onSuccess: () => {
       toast({
-        title: "Summary Sent",
-        description: "Your weekly premium summary was emailed successfully.",
+        title: "Summary sent",
+        description: "The weekly premium summary was sent to your account email.",
       });
     },
     onError: (error: any) => {
       toast({
-        title: "Email Failed",
-        description: error.message || "Failed to send weekly summary email",
+        title: "Summary not sent",
+        description: error.message || "The weekly summary could not be emailed.",
         variant: "destructive",
       });
     },
   });
 
   const cancelMutation = useMutation({
-    mutationFn: async () => {
-      return await apiRequest("POST", "/api/subscription/cancel");
-    },
+    mutationFn: async () => apiRequest("POST", "/api/subscription/cancel"),
     onSuccess: () => {
       toast({
-        title: "Subscription Cancellation Scheduled",
-        description: "Your subscription will cancel at the end of the current billing period. You keep full access until then.",
+        title: "Cancellation scheduled",
+        description:
+          "Premium stays active through the end of the current billing period.",
       });
       queryClient.invalidateQueries({ queryKey: ["/api/subscription/status"] });
       setShowCancelDialog(false);
     },
     onError: (error: any) => {
       toast({
-        title: "Cancellation Failed",
-        description: error.message || "Failed to cancel subscription",
+        title: "Cancellation not scheduled",
+        description: error.message || "The subscription could not be cancelled.",
         variant: "destructive",
       });
     },
   });
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "active":
-        return (
-          <Badge className="bg-[color:var(--status-success)]/15 text-[color:var(--status-success)]">
-            <CheckCircle className="h-3 w-3 mr-1" />
-            Active
-          </Badge>
-        );
-      case "canceled":
-        return (
-          <Badge className="bg-[color:var(--status-error)]/15 text-[color:var(--status-error)]">
-            <AlertCircle className="h-3 w-3 mr-1" />
-            Cancelled
-          </Badge>
-        );
-      case "past_due":
-        return (
-          <Badge className="bg-[color:var(--status-error)]/15 text-[color:var(--status-error)]">
-            <AlertCircle className="h-3 w-3 mr-1" />
-            Past Due
-          </Badge>
-        );
-      case "none":
-        return <Badge variant="secondary">No Subscription</Badge>;
-      default:
-        return <Badge variant="secondary">{status}</Badge>;
-    }
-  };
-
-  const formatDate = (timestamp: number) => {
-    return new Date(timestamp * 1000).toLocaleDateString("en-US", {
+  const formatTimestamp = (timestamp?: number) =>
+    timestamp
+      ? new Date(timestamp * 1000).toLocaleDateString("en-US", {
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        })
+      : null;
+  const formatDateValue = (value?: string | Date | null) => {
+    if (!value) return null;
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return null;
+    return parsed.toLocaleDateString("en-US", {
       year: "numeric",
       month: "long",
       day: "numeric",
     });
   };
-
   const formatSummaryDate = (value?: string) => {
     if (!value) return "N/A";
     const parsed = new Date(value);
@@ -433,241 +392,275 @@ const SubscriptionManagement = () => {
 
   if (isLoading) {
     return (
-      <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">
-        <CardContent className="flex items-center justify-center py-12">
-          <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
+      <div className="flex min-h-64 items-center justify-center text-stone-600">
+        <Loader2 className="mr-2 h-5 w-5 animate-spin" aria-hidden="true" />
+        Loading plan details…
+      </div>
+    );
+  }
+
+  if (isError || !subscriptionStatus) {
+    return (
+      <Card className="border-amber-200 bg-amber-50 shadow-clean">
+        <CardContent className="flex gap-3 p-5 text-amber-950">
+          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
+          <div>
+            <h2 className="font-black">Plan details are unavailable</h2>
+            <p className="mt-1 text-sm text-amber-900/80">
+              No billing change was made. Refresh the page or try again later.
+            </p>
+          </div>
         </CardContent>
       </Card>
     );
   }
 
+  const status = String(subscriptionStatus.status || "none").toLowerCase();
+  const isTrial = subscriptionStatus.trialAccess === true;
+  const isLifetime = subscriptionStatus.lifetimeAccess === true;
+  const isPaidActive = status === "active" && !isTrial && !isLifetime;
+  const periodEnd = formatTimestamp(subscriptionStatus.currentPeriodEnd);
+  const trialEnd = formatDateValue(subscriptionStatus.trialEndsAt);
+  const statusLabel = isTrial
+    ? "Trial active"
+    : isLifetime
+      ? "Lifetime access"
+      : status === "past_due"
+        ? "Payment past due"
+        : status === "active"
+          ? "Active"
+          : status.replace(/_/g, " ");
+  const planLabel = isTrial
+    ? "Premium trial"
+    : isLifetime
+      ? "Premium partner access"
+      : "MealScout Premium";
+
   return (
-    <div className="space-y-6">
-      <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <CreditCard className="h-5 w-5" />
-            Current Subscription
-          </CardTitle>
-          <CardDescription>
-            Your subscription status and billing information
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex justify-between items-center">
-            <span className="text-sm font-medium">Status</span>
-            {getStatusBadge(subscriptionStatus?.status || "none")}
+    <div className="space-y-5">
+      <section className="overflow-hidden rounded-[1.75rem] border border-orange-200 bg-[linear-gradient(135deg,#fff7ed,#ffedd5_60%,#fef3c7)] p-6 shadow-clean sm:p-8">
+        <div className="flex flex-col justify-between gap-6 sm:flex-row sm:items-start">
+          <div>
+            <div className="flex items-center gap-2 text-sm font-black text-orange-800">
+              <ShieldCheck className="h-4 w-4" aria-hidden="true" />
+              Current plan
+            </div>
+            <h2 className="mt-3 text-3xl font-black tracking-tight text-stone-950">
+              {planLabel}
+            </h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-700">
+              This plan belongs to your MealScout business account and supports
+              the businesses managed through that account.
+            </p>
           </div>
+          <Badge
+            className={
+              status === "past_due"
+                ? "w-fit bg-red-100 text-red-800"
+                : "w-fit bg-emerald-100 text-emerald-800"
+            }
+          >
+            {statusLabel}
+          </Badge>
+        </div>
 
-          {subscriptionStatus?.status === "active" && (
-            <>
-              <div className="flex justify-between items-center">
-                <span className="text-sm font-medium flex items-center gap-2">
-                  <Calendar className="h-4 w-4" />
-                  Current Period Ends
-                </span>
-                <span className="text-sm">
-                  {subscriptionStatus.currentPeriodEnd
-                    ? formatDate(subscriptionStatus.currentPeriodEnd)
-                    : "N/A"}
-                </span>
-              </div>
+        <div className="mt-6 flex flex-wrap gap-3 text-sm text-stone-700">
+          {isPaidActive ? (
+            <div className="inline-flex items-center gap-2 rounded-full bg-white/75 px-3 py-2">
+              <CreditCard className="h-4 w-4 text-orange-700" aria-hidden="true" />
+              $25 per month
+            </div>
+          ) : null}
+          {trialEnd ? (
+            <div className="inline-flex items-center gap-2 rounded-full bg-white/75 px-3 py-2">
+              <Calendar className="h-4 w-4 text-orange-700" aria-hidden="true" />
+              Trial ends {trialEnd}
+            </div>
+          ) : null}
+          {periodEnd ? (
+            <div className="inline-flex items-center gap-2 rounded-full bg-white/75 px-3 py-2">
+              <Calendar className="h-4 w-4 text-orange-700" aria-hidden="true" />
+              {subscriptionStatus.cancelAtPeriodEnd ? "Access through" : "Renews"} {periodEnd}
+            </div>
+          ) : null}
+        </div>
+      </section>
 
-              {subscriptionStatus.cancelAtPeriodEnd && (
-                <div className="bg-[color:var(--status-warning)]/10 border border-[color:var(--status-warning)]/30 rounded-lg p-3">
-                  <div className="flex items-center gap-2 text-[color:var(--status-warning)]">
-                    <AlertCircle className="h-4 w-4" />
-                    <span className="text-sm font-medium">
-                      Subscription will cancel at the end of the billing period
-                    </span>
-                  </div>
-                </div>
-              )}
+      {subscriptionStatus.cancelAtPeriodEnd ? (
+        <div className="flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-950">
+          <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
+          <p className="text-sm leading-6">
+            Cancellation is scheduled. Premium remains available through the
+            current billing period.
+          </p>
+        </div>
+      ) : null}
 
-              <div className="pt-4 border-t space-y-4">
-                <div>
-                  <h4 className="font-medium mb-2">Always free (no subscription needed)</h4>
-                  <ul className="space-y-2 text-sm text-muted-foreground">
-                    <li className="flex items-center gap-2">
-                      <CheckCircle className="h-4 w-4 text-[color:var(--status-success)]" />
-                      Book parking pass spots at host locations
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <CheckCircle className="h-4 w-4 text-[color:var(--status-success)]" />
-                      Public online menu browsing for customers
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <CheckCircle className="h-4 w-4 text-[color:var(--status-success)]" />
-                      Appear on the MealScout map
-                    </li>
-                  </ul>
-                </div>
-                <div>
-                  <h4 className="font-medium mb-2">Premium features ($25/mo)</h4>
-                  <ul className="space-y-2 text-sm text-muted-foreground">
-                    <li className="flex items-center gap-2">
-                      <CheckCircle className="h-4 w-4 text-[color:var(--status-success)]" />
-                      Online ordering for customers (card &amp; cash)
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <CheckCircle className="h-4 w-4 text-[color:var(--status-success)]" />
-                      Post and distribute specials
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <CheckCircle className="h-4 w-4 text-[color:var(--status-success)]" />
-                      Off-platform schedule management
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <CheckCircle className="h-4 w-4 text-[color:var(--status-success)]" />
-                      One-click live location updates
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <CheckCircle className="h-4 w-4 text-[color:var(--status-success)]" />
-                      Social auto-post controls and premium analytics
-                    </li>
-                  </ul>
-                </div>
-              </div>
-            </>
-          )}
+      {status === "past_due" ? (
+        <div className="flex flex-col gap-4 rounded-2xl border border-red-200 bg-red-50 p-5 text-red-950 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex gap-3">
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
+            <div>
+              <p className="font-black">Payment needs attention</p>
+              <p className="mt-1 text-sm text-red-900/80">
+                Starting another subscription is disabled while this plan is past due.
+              </p>
+            </div>
+          </div>
+          <Button asChild variant="outline">
+            <Link href="/profile/help">Contact support</Link>
+          </Button>
+        </div>
+      ) : null}
 
-          {subscriptionStatus?.status === "active" &&
-            !subscriptionStatus.cancelAtPeriodEnd && (
-              <div className="pt-4 space-y-2">
-                <Dialog
-                  open={showCancelDialog}
-                  onOpenChange={setShowCancelDialog}
-                >
-                  <DialogTrigger asChild>
-                    <Button
-                      variant="destructive"
-                      className="w-full"
-                      data-testid="button-cancel-subscription"
-                    >
-                      Cancel Subscription
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Cancel Subscription</DialogTitle>
-                      <DialogDescription>
-                        Your subscription will be cancelled at the end of the current billing period. You keep full access to all premium features until then — no immediate interruption.
-                      </DialogDescription>
-                    </DialogHeader>
-                    <DialogFooter>
-                      <Button
-                        variant="outline"
-                        onClick={() => setShowCancelDialog(false)}
-                      >
-                        Keep Subscription
-                      </Button>
-                      <Button
-                        variant="destructive"
-                        onClick={() => cancelMutation.mutate()}
-                        disabled={cancelMutation.isPending}
-                      >
-                        {cancelMutation.isPending
-                          ? "Cancelling..."
-                          : "Cancel at Period End"}
-                      </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-              </div>
-            )}
-        </CardContent>
-      </Card>
-
-      {subscriptionStatus?.status === "active" && (
-        <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">
+      <div className="grid gap-5 lg:grid-cols-[1.2fr_0.8fr]">
+        <Card className="border-[color:var(--border-subtle)] bg-[var(--bg-surface)] shadow-clean">
           <CardHeader>
-            <CardTitle>Premium Weekly Summary</CardTitle>
+            <CardTitle className="flex items-center gap-2 text-xl">
+              <Sparkles className="h-5 w-5 text-orange-700" aria-hidden="true" />
+              Premium access
+            </CardTitle>
             <CardDescription>
-              Activity snapshot from {formatSummaryDate(weeklySummary?.weekStart)}
-              {" "}to {formatSummaryDate(weeklySummary?.weekEnd)}.
+              Tools available while this plan is active.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="grid gap-3 sm:grid-cols-2">
+            {[
+              "Online ordering tools",
+              "Deals and distribution",
+              "Schedule and live-location tools",
+              "Premium business activity summary",
+            ].map((feature) => (
+              <div
+                key={feature}
+                className="flex items-start gap-2 rounded-xl bg-orange-50 px-3 py-3 text-sm text-stone-700"
+              >
+                <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-emerald-700" aria-hidden="true" />
+                <span>{feature}</span>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
+        <Card className="border-[color:var(--border-subtle)] bg-[var(--bg-surface)] shadow-clean">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-xl">
+              <ReceiptText className="h-5 w-5 text-orange-700" aria-hidden="true" />
+              Billing control
+            </CardTitle>
+            <CardDescription>
+              Plan and payment access stays with the account owner.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {isPaidActive && !subscriptionStatus.cancelAtPeriodEnd ? (
+              <Dialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
+                <DialogTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="w-full border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800"
+                    data-testid="button-cancel-subscription"
+                  >
+                    Cancel subscription
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Cancel subscription?</DialogTitle>
+                    <DialogDescription>
+                      Premium stays active through the end of the current billing
+                      period. The cancellation does not interrupt access today.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setShowCancelDialog(false)}>
+                      Keep subscription
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      onClick={() => cancelMutation.mutate()}
+                      disabled={cancelMutation.isPending}
+                    >
+                      {cancelMutation.isPending ? "Scheduling…" : "Cancel at period end"}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            ) : (
+              <p className="rounded-xl bg-stone-50 p-4 text-sm leading-6 text-stone-600">
+                {subscriptionStatus.cancelAtPeriodEnd
+                  ? "No further billing action is needed."
+                  : isTrial
+                    ? "Payment is not required while the trial is active."
+                    : isLifetime
+                      ? "This account does not have a recurring premium charge."
+                      : "No billing action is available for this plan state."}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {status === "active" ? (
+        <Card className="border-[color:var(--border-subtle)] bg-[var(--bg-surface)] shadow-clean">
+          <CardHeader className="sm:flex-row sm:items-start sm:justify-between sm:space-y-0">
+            <div>
+              <CardTitle className="text-xl">Premium activity</CardTitle>
+              <CardDescription className="mt-1">
+                {isWeeklySummaryLoading
+                  ? "Loading this week's account activity…"
+                  : `Activity from ${formatSummaryDate(weeklySummary?.weekStart)} to ${formatSummaryDate(weeklySummary?.weekEnd)}.`}
+              </CardDescription>
+            </div>
+            {weeklySummary ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => emailSummaryMutation.mutate()}
+                disabled={emailSummaryMutation.isPending}
+                data-testid="button-email-weekly-summary"
+              >
+                {emailSummaryMutation.isPending ? "Sending…" : "Email summary"}
+              </Button>
+            ) : null}
+          </CardHeader>
+          <CardContent>
             {isWeeklySummaryLoading ? (
-              <div className="text-sm text-muted-foreground">
-                Loading weekly summary...
+              <div className="flex items-center py-6 text-sm text-stone-500">
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+                Loading activity…
               </div>
             ) : isWeeklySummaryError || !weeklySummary ? (
-              <div className="text-sm text-muted-foreground">
-                Weekly summary is temporarily unavailable.
-              </div>
+              <p className="rounded-xl bg-stone-50 p-4 text-sm text-stone-600">
+                The weekly activity summary is temporarily unavailable. Billing
+                status is unaffected.
+              </p>
             ) : (
               <>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="rounded-lg border border-[color:var(--border-subtle)] p-3">
-                    <div className="text-xs text-[color:var(--text-muted)]">
-                      Stops Covered
+                <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                  {[
+                    ["Stops covered", weeklySummary.stopsCovered],
+                    ["Live activations", weeklySummary.liveLocationActivations],
+                    ["Schedule updates", weeklySummary.manualScheduleUsage],
+                    ["Parking reports", weeklySummary.parkingReportsCompleted],
+                  ].map(([label, value]) => (
+                    <div key={String(label)} className="rounded-2xl bg-orange-50 p-4">
+                      <p className="text-xs font-bold uppercase tracking-wide text-orange-800">
+                        {label}
+                      </p>
+                      <p className="mt-2 text-2xl font-black text-stone-950">{value}</p>
                     </div>
-                    <div className="text-xl font-semibold text-[color:var(--text-primary)]">
-                      {weeklySummary.stopsCovered}
-                    </div>
-                  </div>
-                  <div className="rounded-lg border border-[color:var(--border-subtle)] p-3">
-                    <div className="text-xs text-[color:var(--text-muted)]">
-                      Live Location Activations
-                    </div>
-                    <div className="text-xl font-semibold text-[color:var(--text-primary)]">
-                      {weeklySummary.liveLocationActivations}
-                    </div>
-                  </div>
-                  <div className="rounded-lg border border-[color:var(--border-subtle)] p-3">
-                    <div className="text-xs text-[color:var(--text-muted)]">
-                      Manual Schedule Usage
-                    </div>
-                    <div className="text-xl font-semibold text-[color:var(--text-primary)]">
-                      {weeklySummary.manualScheduleUsage}
-                    </div>
-                  </div>
-                  <div className="rounded-lg border border-[color:var(--border-subtle)] p-3">
-                    <div className="text-xs text-[color:var(--text-muted)]">
-                      Parking Reports Completed
-                    </div>
-                    <div className="text-xl font-semibold text-[color:var(--text-primary)]">
-                      {weeklySummary.parkingReportsCompleted}
-                    </div>
-                  </div>
+                  ))}
                 </div>
-
-                <div className="text-xs text-[color:var(--text-secondary)]">
-                  Tracking across {weeklySummary.restaurantCount} linked business
+                <p className="mt-4 text-xs text-stone-500">
+                  Account activity across {weeklySummary.restaurantCount} linked business
                   {weeklySummary.restaurantCount === 1 ? "" : "es"}.
-                </div>
-
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => emailSummaryMutation.mutate()}
-                  disabled={emailSummaryMutation.isPending}
-                  data-testid="button-email-weekly-summary"
-                >
-                  {emailSummaryMutation.isPending
-                    ? "Sending..."
-                    : "Email Me This Summary"}
-                </Button>
+                </p>
               </>
             )}
           </CardContent>
         </Card>
-      )}
-
-      <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">
-        <CardHeader>
-          <CardTitle>Billing History</CardTitle>
-          <CardDescription>
-            View your past invoices and payments
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">
-            Billing history will be available after your first payment.
-          </p>
-        </CardContent>
-      </Card>
+      ) : null}
     </div>
   );
 };
@@ -675,12 +668,47 @@ const SubscriptionManagement = () => {
 export default function Subscribe() {
   const { user, isAuthenticated, isLoading } = useAuth();
   const { toast } = useToast();
-  const [location, setLocation] = useLocation();
+  const [, setLocation] = useLocation();
+  const search = useSearch();
+  const queryParams = useMemo(() => new URLSearchParams(search), [search]);
+  const requestedRestaurantId = queryParams.get("restaurantId") || "";
+  const businessWorkspaceUserTypes = new Set([
+    "restaurant_owner",
+    "food_truck",
+    "admin",
+    "duper_admin",
+    "super_admin",
+    "staff",
+  ]);
+  const canUseBusinessWorkspace = businessWorkspaceUserTypes.has(
+    String(user?.userType || ""),
+  );
+
+  const {
+    data: businesses = [],
+    isLoading: businessesLoading,
+    isError: businessesError,
+  } = useQuery<Restaurant[]>({
+    queryKey: ["/api/restaurants/my-restaurants"],
+    enabled: Boolean(user && canUseBusinessWorkspace),
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+  const currentBusiness = useMemo(() => {
+    if (!businesses.length) return null;
+    return (
+      businesses.find((business) => business.id === requestedRestaurantId) ||
+      businesses[0]
+    );
+  }, [businesses, requestedRestaurantId]);
 
   const getSafeNextPath = (): string | null => {
     try {
-      const params = new URLSearchParams(location.split("?")[1] || "");
-      const raw = (params.get("next") || params.get("redirect") || "").trim();
+      const raw = (
+        queryParams.get("next") ||
+        queryParams.get("redirect") ||
+        ""
+      ).trim();
       if (!raw) return null;
       if (!raw.startsWith("/")) return null;
       if (raw.startsWith("//")) return null;
@@ -691,14 +719,22 @@ export default function Subscribe() {
     }
   };
 
+  const selectedBusinessReturnPath = requestedRestaurantId
+    ? `/restaurant-owner-dashboard?restaurantId=${encodeURIComponent(
+        requestedRestaurantId,
+      )}`
+    : null;
   const defaultNextPath =
-    user?.userType === "food_truck"
+    selectedBusinessReturnPath ||
+    (user?.userType === "food_truck"
       ? "/parking-pass"
-      : "/restaurant-owner-dashboard";
+      : "/restaurant-owner-dashboard");
   const nextPath = getSafeNextPath() || defaultNextPath;
-  const stripeReturnUrl = `${window.location.origin}/subscribe?next=${encodeURIComponent(
-    nextPath,
-  )}`;
+  const stripeReturnParams = new URLSearchParams({ next: nextPath });
+  if (requestedRestaurantId) {
+    stripeReturnParams.set("restaurantId", requestedRestaurantId);
+  }
+  const stripeReturnUrl = `${window.location.origin}/subscribe?${stripeReturnParams.toString()}`;
 
   useEffect(() => {
     // Stripe redirect (3DS/etc) lands back here with `redirect_status`.
@@ -718,7 +754,7 @@ export default function Subscribe() {
   }, [nextPath, setLocation, toast]);
 
   // Plan selection state
-  const [billingInterval, setBillingInterval] = useState<"month">("month");
+  const billingInterval: "month" = "month";
   const [promoCode, setPromoCode] = useState("");
   const [creditsToApply, setCreditsToApply] = useState("");
 
@@ -730,18 +766,16 @@ export default function Subscribe() {
   );
   const hostileBrowser = isPaymentHostileBrowser();
 
-  // Debug: Log auth status
-  console.log("Subscribe page - Auth Status:", {
-    isAuthenticated,
-    isLoading,
-    hasUser: !!user,
-    userEmail: user?.email,
-  });
-
   // Check current subscription status to determine which view to show
-  const { data: currentSubscription } = useQuery<ApiSubscriptionStatus>({
+  const {
+    data: currentSubscription,
+    isLoading: currentSubscriptionLoading,
+    isError: currentSubscriptionError,
+  } = useQuery<ApiSubscriptionStatus>({
     queryKey: ["/api/subscription/status"],
     enabled: !!user,
+    retry: false,
+    refetchOnWindowFocus: false,
   });
 
   const { data: creditBalanceData } = useQuery<{ balance: number }>({
@@ -878,34 +912,90 @@ export default function Subscribe() {
     setSubscriptionState({ status: "selecting" });
   };
 
-  const showNewSubscription = () => {
-    setSubscriptionState({ status: "selecting" });
+  const publicProfileHref = currentBusiness
+    ? buildPublicProfilePath({
+        entityType: isTruckBusinessType(currentBusiness.businessType)
+          ? "truck"
+          : isBarBusinessType(currentBusiness.businessType)
+            ? "bar"
+            : "restaurant",
+        id: currentBusiness.id,
+        name: currentBusiness.name,
+      })
+    : null;
+
+  const handleBusinessChange = (businessId: string) => {
+    const params = new URLSearchParams(search);
+    params.set("restaurantId", businessId);
+    setLocation(`/subscribe?${params.toString()}`);
   };
 
-  if (isLoading) {
+  const renderPaymentsFrame = (content: ReactNode) => {
+    if (currentBusiness && canUseBusinessWorkspace) {
+      return (
+        <BusinessWorkspaceShell
+          activeModule="payments"
+          business={currentBusiness}
+          businesses={businesses}
+          onBusinessChange={handleBusinessChange}
+          publicProfileHref={publicProfileHref}
+          capabilities={{
+            deals: true,
+            audience: true,
+            team: true,
+            payments: true,
+          }}
+        >
+          <div className="mx-auto min-h-screen max-w-6xl px-4 py-6 lg:px-6 lg:py-8">
+            {content}
+          </div>
+        </BusinessWorkspaceShell>
+      );
+    }
+
     return (
-      <div className="max-w-md mx-auto bg-[var(--bg-layered)] min-h-screen flex items-center justify-center">
-        <div
-          className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full"
-          aria-label="Loading"
+      <div className="min-h-screen bg-[var(--bg-layered)]">
+        <BackHeader
+          title="Plan & billing"
+          fallbackHref={nextPath}
+          icon={CreditCard}
+          className="border-b border-[color:var(--border-subtle)] bg-[hsl(var(--background))/0.94] shadow-clean"
         />
+        <main className="mx-auto max-w-4xl px-4 py-6 sm:py-8">{content}</main>
+      </div>
+    );
+  };
+
+  if (
+    isLoading ||
+    (canUseBusinessWorkspace && businessesLoading) ||
+    (isAuthenticated && currentSubscriptionLoading)
+  ) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[var(--bg-layered)] text-stone-600">
+        <Loader2 className="mr-2 h-5 w-5 animate-spin" aria-hidden="true" />
+        Loading plan &amp; billing…
       </div>
     );
   }
 
   if (!isAuthenticated) {
     return (
-      <div className="max-w-md mx-auto bg-[var(--bg-layered)] min-h-screen flex items-center justify-center">
-        <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">
-          <CardContent className="p-6">
-            <p className="text-center text-muted-foreground mb-4">
-              Please log in to manage your subscription
+      <div className="flex min-h-screen items-center justify-center bg-[var(--bg-layered)] px-4">
+        <Card className="w-full max-w-md border-[color:var(--border-subtle)] bg-[var(--bg-surface)] shadow-clean">
+          <CardContent className="p-6 text-center">
+            <WalletCards className="mx-auto h-9 w-9 text-orange-700" aria-hidden="true" />
+            <h1 className="mt-4 text-xl font-black text-stone-950">
+              Sign in to manage billing
+            </h1>
+            <p className="mt-2 text-sm text-stone-600">
+              Plan and payment details are protected with your business account.
             </p>
             <Button
               onClick={() => (window.location.href = authUrl("/api/auth/google/restaurant"))}
-              className="w-full"
+              className="mt-5 w-full"
             >
-              Log In
+              Sign in
             </Button>
           </CardContent>
         </Card>
@@ -915,307 +1005,252 @@ export default function Subscribe() {
 
   // Show message if Stripe is not configured
   if (!stripePromise) {
-    return (
-      <div className="max-w-md mx-auto bg-[var(--bg-layered)] min-h-screen">
-        <BackHeader
-          title="Plans & Billing"
-          fallbackHref={nextPath}
-          icon={CreditCard}
-          className="bg-[hsl(var(--background))/0.94] border-b border-[color:var(--border-subtle)] shadow-clean"
-        />
-        <div className="px-4 py-6 flex items-center justify-center min-h-[50vh]">
-          <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">
-            <CardContent className="p-6 text-center">
-              <i className="fas fa-cog text-muted-foreground text-3xl mb-4"></i>
-              <h2 className="text-lg font-semibold text-foreground mb-2">
-                Payment Setup Required
-              </h2>
-              <p className="text-muted-foreground mb-4">
-                Stripe payment processing is not yet configured.
-              </p>
-              <Button
-                className="w-full mb-2"
-                onClick={() => setLocation(nextPath)}
-              >
-                Skip Premium for now
+    return renderPaymentsFrame(
+      <div className="mx-auto max-w-2xl py-8 sm:py-14">
+        <Card className="border-amber-200 bg-[linear-gradient(135deg,#fffbeb,#fff7ed)] shadow-clean">
+          <CardContent className="p-6 sm:p-8">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-100 text-amber-800">
+              <WalletCards className="h-6 w-6" aria-hidden="true" />
+            </div>
+            <h2 className="mt-5 text-2xl font-black text-stone-950">
+              Payment setup required
+            </h2>
+            <p className="mt-2 max-w-xl text-sm leading-6 text-stone-600">
+              Secure subscription checkout is not configured in this environment.
+              No plan or payment change can be made here.
+            </p>
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+              <Button onClick={() => setLocation(nextPath)}>
+                Return to workspace
               </Button>
-              <Link href="/">
-                <Button variant="outline" className="w-full">
-                  Back to Home
-                </Button>
-              </Link>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+              <Button asChild variant="outline">
+                <Link href="/scout">Scout</Link>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>,
     );
   }
 
-  // Determine which view to show based on subscription status
-  const hasActiveSubscription = currentSubscription?.status === "active";
+  const currentPlanStatus = String(
+    currentSubscription?.status || "none",
+  ).toLowerCase();
+  const hasExistingPlan = currentPlanStatus !== "none";
   const showManagement =
-    hasActiveSubscription && subscriptionState.status === "selecting";
+    hasExistingPlan && subscriptionState.status === "selecting";
+  const requestedBusinessMissing = Boolean(
+    requestedRestaurantId &&
+      !businessesLoading &&
+      !businesses.some((business) => business.id === requestedRestaurantId),
+  );
 
-  return (
-    <div className="max-w-md mx-auto bg-[var(--bg-layered)] min-h-screen">
-      <BackHeader
-        title="Plans & Billing"
-        fallbackHref={nextPath}
-        icon={CreditCard}
-        className="bg-[hsl(var(--background))/0.94] border-b border-[color:var(--border-subtle)] shadow-clean"
-      />
+  const contextNotice =
+    businessesError || requestedBusinessMissing ? (
+      <div className="mb-5 flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-950">
+        <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
+        <p className="text-sm leading-6">
+          {businessesError
+            ? "Business context could not be loaded. Billing still applies to this signed-in account."
+            : "The requested business is not available to this account. Choose an available business before returning to its workspace."}
+        </p>
+      </div>
+    ) : null;
 
-      <div className="px-4 py-6">
-        <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">
-          <CardContent className="p-4 space-y-3">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <div className="text-sm font-semibold text-[color:var(--text-primary)]">
-                  Start free, upgrade when you're ready
-                </div>
-                <div className="text-xs text-[color:var(--text-secondary)]">
-                  Premium helps you publish deals and track performance.
-                  Parking Pass booking fees stay separate for food trucks.
-                </div>
-              </div>
-              <Button
-                variant="outline"
-                className="shrink-0"
-                onClick={() => setLocation(nextPath)}
-                data-testid="button-continue-without-premium"
-              >
-                Skip for now
-              </Button>
+  const pageContent = (
+    <div className="space-y-5">
+      {contextNotice}
+
+      {!showManagement && subscriptionState.status === "selecting" ? (
+        <section className="rounded-[1.75rem] border border-orange-200 bg-[linear-gradient(135deg,#fff7ed,#ffedd5_60%,#fef3c7)] p-6 shadow-clean sm:p-8">
+          <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-start">
+            <div>
+              <p className="text-sm font-black uppercase tracking-[0.12em] text-orange-800">
+                Plan &amp; billing
+              </p>
+              <h2 className="mt-2 text-3xl font-black tracking-tight text-stone-950">
+                MealScout Premium
+              </h2>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-700">
+                Public profiles and menu browsing stay available without Premium.
+                Upgrade here for paid operating tools.
+              </p>
             </div>
-            <div className="flex gap-2">
-              <Link href="/parking-pass">
-                <Button
-                  variant="secondary"
-                  className="w-full"
-                  data-testid="button-go-parking-pass"
-                >
-                  Book Parking Pass
-                </Button>
-              </Link>
-              <Link href="/deal-creation">
-                <Button
-                  variant="secondary"
-                  className="w-full"
-                  data-testid="button-go-deal-creation"
-                >
-                  Create Deals
-                </Button>
-              </Link>
+            <Button
+              variant="outline"
+              className="shrink-0 bg-white/70"
+              onClick={() => setLocation(nextPath)}
+              data-testid="button-continue-without-premium"
+            >
+              Return to workspace
+            </Button>
+          </div>
+        </section>
+      ) : null}
+
+      {currentSubscriptionError ? (
+        <Card className="border-amber-200 bg-amber-50 shadow-clean">
+          <CardContent className="flex gap-3 p-5 text-amber-950">
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
+            <div>
+              <h2 className="font-black">Billing status could not be confirmed</h2>
+              <p className="mt-1 text-sm leading-6 text-amber-900/80">
+                Checkout is disabled so a second subscription cannot be created by mistake.
+              </p>
             </div>
-            {(currentSubscription as any)?.trialAccess &&
-              (currentSubscription as any)?.trialEndsAt && (
-                <div className="text-xs text-[color:var(--status-success)]">
-                  Your free trial ends{" "}
-                  {new Date(
-                    (currentSubscription as any).trialEndsAt,
-                  ).toLocaleDateString("en-US", {
-                    year: "numeric",
-                    month: "long",
-                    day: "numeric",
-                  })}
-                  .
-                </div>
-              )}
           </CardContent>
         </Card>
+      ) : null}
 
-        {/* If user has active subscription and not in payment flow, show management */}
-        {showManagement && (
-          <div className="space-y-6">
-            <SubscriptionManagement />
+      {showManagement && !currentSubscriptionError ? <SubscriptionManagement /> : null}
 
-            {/* Option to upgrade/change plan */}
-            <Card className="bg-[linear-gradient(110deg,rgba(59,130,246,0.12),rgba(168,85,247,0.12))] border-[color:var(--border-subtle)] shadow-clean">
-              <CardContent className="p-6 text-center">
-                <h3 className="text-lg font-bold text-[color:var(--text-primary)] mb-2">
-                  Need to update your plan?
-                </h3>
-                <p className="text-sm text-[color:var(--text-secondary)] mb-2">
-                  You can switch plans or add a promo code anytime.
-                </p>
-                <p className="text-xs text-[color:var(--accent-text)] font-medium mb-4">
-                  Have a code? Add it in the next step.
-                </p>
-                <Button
-                  onClick={showNewSubscription}
-                  variant="outline"
-                  className="w-full"
-                  data-testid="button-change-plan"
-                >
-                  Manage Plan & Promo
-                </Button>
-              </CardContent>
-            </Card>
-          </div>
-        )}
+      {subscriptionState.status === "selecting" &&
+      !showManagement &&
+      !currentSubscriptionError ? (
+        <div className="space-y-5">
+          {hostileBrowser ? (
+            <PaymentBrowserGate
+              currentUrl={window.location.href}
+              reason="Complete subscription checkout in Chrome or Safari."
+            />
+          ) : null}
 
-        {/* Show plan selection for new users or when changing plans */}
-        {subscriptionState.status === "selecting" && !showManagement && (
-          <div className="space-y-6">
-            {hostileBrowser ? (
-              <PaymentBrowserGate
-                currentUrl={window.location.href}
-                reason="Complete subscription checkout in Chrome or Safari."
-              />
-            ) : null}
-            {/* If user has active subscription, show note about changing plans */}
-            {hasActiveSubscription && (
-              <Card className="bg-[color:var(--status-warning)]/10 border-[color:var(--status-warning)]/30 shadow-clean">
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-2 text-[color:var(--status-warning)]">
-                    <AlertCircle className="h-4 w-4" />
-                    <span className="text-sm font-medium">
-                      You already have Premium. Picking a new plan will replace
-                      your current one.
-                    </span>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">
+          <div className="grid gap-5 lg:grid-cols-[0.8fr_1.2fr]">
+            <Card className="border-[color:var(--border-subtle)] bg-[var(--bg-surface)] shadow-clean">
               <CardHeader>
-                <CardTitle>Use Credits</CardTitle>
+                <CardTitle className="flex items-center gap-2 text-xl">
+                  <WalletCards className="h-5 w-5 text-orange-700" aria-hidden="true" />
+                  Use credits
+                </CardTitle>
                 <CardDescription>
-                  Use available credits to lower your next bill.
+                  Apply available MealScout credits to the first invoice.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="text-sm text-[color:var(--text-secondary)]">
-                  Credit balance: $
-                  {Number(creditBalanceData?.balance || 0).toFixed(2)}
+              <CardContent className="space-y-4">
+                <div className="rounded-2xl bg-orange-50 p-4">
+                  <p className="text-xs font-bold uppercase tracking-wide text-orange-800">
+                    Available
+                  </p>
+                  <p className="mt-1 text-2xl font-black text-stone-950">
+                    ${Number(creditBalanceData?.balance || 0).toFixed(2)}
+                  </p>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="credit-apply">Amount to use</Label>
+                <div>
+                  <Label htmlFor="credit-apply">Amount to apply</Label>
                   <Input
                     id="credit-apply"
                     type="number"
                     min="0"
+                    max={Number(creditBalanceData?.balance || 0)}
                     step="0.01"
                     value={creditsToApply}
-                    onChange={(e) => setCreditsToApply(e.target.value)}
+                    onChange={(event) => setCreditsToApply(event.target.value)}
                     placeholder="0.00"
+                    className="mt-2"
                   />
-                  <p className="text-xs text-[color:var(--text-muted)]">
-                    Credits are applied to your next invoice.
+                  <p className="mt-2 text-xs leading-5 text-stone-500">
+                    The server verifies the final available balance before applying it.
                   </p>
                 </div>
               </CardContent>
             </Card>
 
-            <PlanSelector
-              billingInterval={billingInterval}
-              promoCode={promoCode}
-              onBillingIntervalChange={setBillingInterval}
-              onPromoCodeChange={setPromoCode}
-              onContinue={initializeSubscription}
-            />
-
-            {/* If user has active subscription, show option to go back to management */}
-            {hasActiveSubscription && (
-              <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">
-                <CardContent className="p-4 text-center">
-                  <Button
-                    variant="outline"
-                    onClick={() =>
-                      setSubscriptionState({ status: "selecting" })
-                    }
-                    className="w-full"
-                    data-testid="button-back-to-management"
-                  >
-                    Back to Billing Overview
-                  </Button>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-        )}
-
-        {subscriptionState.status === "initializing" && (
-          <div className="flex items-center justify-center min-h-[50vh]">
-            <div className="text-center">
-              <div
-                className="animate-spin w-12 h-12 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4"
-                aria-label="Loading"
-              />
-              <p
-                className="text-muted-foreground"
-                data-testid="text-initializing"
-              >
-                Setting up your plan...
+            <div className="rounded-[1.75rem] border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-6 shadow-clean sm:p-8">
+              <div className="flex items-center gap-2 text-sm font-black text-stone-950">
+                <ShieldCheck className="h-5 w-5 text-emerald-700" aria-hidden="true" />
+                Always available without Premium
+              </div>
+              <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                {[
+                  "Public business profile",
+                  "Customer menu browsing",
+                  "Basic discovery presence",
+                  "Parking Pass spot booking",
+                ].map((feature) => (
+                  <div key={feature} className="flex items-start gap-2 text-sm text-stone-600">
+                    <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-700" aria-hidden="true" />
+                    <span>{feature}</span>
+                  </div>
+                ))}
+              </div>
+              <p className="mt-5 text-xs leading-5 text-stone-500">
+                Parking Pass booking fees remain separate from the Premium subscription.
               </p>
             </div>
           </div>
-        )}
 
-        {subscriptionState.status === "requires_payment" &&
-          subscriptionState.clientSecret && (
-            <>
-              {hostileBrowser ? (
-                <PaymentBrowserGate
-                  currentUrl={window.location.href}
-                  reason="Complete subscription checkout in Chrome or Safari."
-                />
-              ) : null}
-            <Elements
-              stripe={stripePromise}
-              options={{ clientSecret: subscriptionState.clientSecret }}
-            >
-              <div className="space-y-6">
-                <Card className="bg-[linear-gradient(110deg,rgba(59,130,246,0.12),rgba(99,102,241,0.12))] border-[color:var(--border-subtle)] shadow-clean">
-                  <CardContent className="p-6 text-center">
-                    <h3 className="text-lg font-bold text-[color:var(--text-primary)] mb-2">
-                      Complete Your Payment
-                    </h3>
-                    <p className="text-sm text-[color:var(--text-secondary)]">
-                      MealScout Restaurant Plan -{" "}
-                      <span className="line-through text-[color:var(--text-muted)]">
-                        $50
-                      </span>{" "}
-                      $25/month (join before April 1, 2026)
-                    </p>
-                  </CardContent>
-                </Card>
-                <PaymentForm
-                  clientSecret={subscriptionState.clientSecret}
-                  intentType={subscriptionState.intentType}
-                  returnUrl={stripeReturnUrl}
-                  onSuccess={(paymentIntentId: string) =>
-                    handlePaymentSuccess(paymentIntentId)
-                  }
-                />
-              </div>
-            </Elements>
-            </>
-          )}
+          <PlanSelector
+            promoCode={promoCode}
+            onPromoCodeChange={setPromoCode}
+            onContinue={initializeSubscription}
+          />
+        </div>
+      ) : null}
 
-        {subscriptionState.status === "error" && (
-          <div className="flex items-center justify-center min-h-[50vh]">
-            <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">
-              <CardContent className="p-6 text-center">
-                <i className="fas fa-exclamation-triangle text-destructive text-3xl mb-4"></i>
-                <h2 className="text-lg font-semibold text-foreground mb-2">
-                  Setup Error
-                </h2>
-                <p
-                  className="text-muted-foreground mb-4"
-                  data-testid="text-error-message"
-                >
-                  {subscriptionState.error}
-                </p>
-                <Button onClick={handleRetry} className="w-full">
-                  Try Again
-                </Button>
-              </CardContent>
-            </Card>
+      {subscriptionState.status === "initializing" ? (
+        <div className="flex min-h-72 items-center justify-center rounded-[1.75rem] border border-[color:var(--border-subtle)] bg-[var(--bg-surface)]">
+          <div className="text-center">
+            <Loader2 className="mx-auto h-9 w-9 animate-spin text-orange-700" aria-hidden="true" />
+            <p className="mt-4 font-bold text-stone-700" data-testid="text-initializing">
+              Setting up your plan…
+            </p>
           </div>
-        )}
-      </div>
+        </div>
+      ) : null}
+
+      {subscriptionState.status === "requires_payment" &&
+      subscriptionState.clientSecret ? (
+        <div className="space-y-5">
+          {hostileBrowser ? (
+            <PaymentBrowserGate
+              currentUrl={window.location.href}
+              reason="Complete subscription checkout in Chrome or Safari."
+            />
+          ) : null}
+          <Elements
+            stripe={stripePromise}
+            options={{ clientSecret: subscriptionState.clientSecret }}
+          >
+            <div className="mx-auto max-w-2xl space-y-5">
+              <div className="rounded-[1.75rem] border border-orange-200 bg-[linear-gradient(135deg,#fff7ed,#ffedd5)] p-6 text-center shadow-clean">
+                <h2 className="text-2xl font-black text-stone-950">
+                  Complete secure checkout
+                </h2>
+                <p className="mt-2 text-sm text-stone-600">
+                  MealScout Premium · $25 per month
+                </p>
+              </div>
+              <PaymentForm
+                clientSecret={subscriptionState.clientSecret}
+                intentType={subscriptionState.intentType}
+                returnUrl={stripeReturnUrl}
+                onSuccess={handlePaymentSuccess}
+              />
+            </div>
+          </Elements>
+        </div>
+      ) : null}
+
+      {subscriptionState.status === "error" ? (
+        <div className="mx-auto max-w-xl py-8">
+          <Card className="border-red-200 bg-red-50 shadow-clean">
+            <CardContent className="p-6 text-center">
+              <AlertTriangle className="mx-auto h-9 w-9 text-red-700" aria-hidden="true" />
+              <h2 className="mt-4 text-xl font-black text-red-950">
+                Checkout could not start
+              </h2>
+              <p className="mt-2 text-sm leading-6 text-red-900/80" data-testid="text-error-message">
+                {subscriptionState.error}
+              </p>
+              <Button onClick={handleRetry} className="mt-5">
+                Try again
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      ) : null}
     </div>
   );
+
+  return renderPaymentsFrame(pageContent);
 }

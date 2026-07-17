@@ -11,6 +11,7 @@ import { dealClaims, deals, users } from "@shared/schema";
 import { getUserCreditBalance } from "./creditService";
 import { isAuthenticated } from "./unifiedAuth";
 import { storage } from "./storage";
+import { canManageBusinessFinancials } from "./businessFinancialAccess";
 
 const router = Router();
 
@@ -19,12 +20,25 @@ const router = Router();
  *
  * Get user's current credit balance (for form validation)
  */
-router.get("/:userId/balance", async (req: Request, res: Response) => {
+router.get("/:userId/balance", isAuthenticated, async (req: Request, res: Response) => {
   try {
     const { userId } = req.params;
+    const restaurantId = String(req.query.restaurantId || "").trim();
+    if (!restaurantId) {
+      return res.status(400).json({ error: "Business ID required" });
+    }
+    const authorized = await canManageBusinessFinancials({
+      restaurantId,
+      userId: String(req.user?.id || ""),
+      userType: (req.user as any)?.userType,
+    });
+    if (!authorized) {
+      return res.status(403).json({ error: "Financial access required" });
+    }
 
     const balance = await getUserCreditBalance(userId);
 
+    res.set("Cache-Control", "no-store");
     res.json({
       userId,
       balance,
@@ -157,15 +171,33 @@ router.get("/favorites", isAuthenticated, async (req: any, res: Response) => {
  *
  * Search for users by email (for restaurant credit redemption form)
  */
-router.get("/search", async (req: Request, res: Response) => {
+router.get("/search", isAuthenticated, async (req: Request, res: Response) => {
   try {
-    const { q, limit = 5 } = req.query;
+    const { q, limit = 5, restaurantId: rawRestaurantId } = req.query;
+    const restaurantId = String(rawRestaurantId || "").trim();
+    if (!restaurantId) {
+      return res.status(400).json({ error: "Business ID required" });
+    }
+    const authorized = await canManageBusinessFinancials({
+      restaurantId,
+      userId: String(req.user?.id || ""),
+      userType: (req.user as any)?.userType,
+    });
+    if (!authorized) {
+      return res.status(403).json({ error: "Financial access required" });
+    }
 
     if (!q || typeof q !== "string") {
       return res.status(400).json({ error: "Search query required" });
     }
+    const normalizedQuery = q.trim();
+    if (normalizedQuery.length < 2) {
+      return res.status(400).json({
+        error: "Enter at least 2 characters to search",
+      });
+    }
 
-    const parsedLimit = Math.min(Number(limit) || 5, 20);
+    const parsedLimit = Math.min(Number(limit) || 5, 10);
 
     const results = await db
       .select({
@@ -177,7 +209,7 @@ router.get("/search", async (req: Request, res: Response) => {
       .from(users)
       .where(
         and(
-          ilike(users.email, `%${q}%`),
+          ilike(users.email, `%${normalizedQuery}%`),
           or(eq(users.isDisabled, false), isNull(users.isDisabled))
         )
       )
@@ -199,6 +231,7 @@ router.get("/search", async (req: Request, res: Response) => {
       }
     );
 
+    res.set("Cache-Control", "no-store");
     res.json({ users: mapped });
   } catch (error) {
     console.error("[userRoutes] Error searching users:", error);

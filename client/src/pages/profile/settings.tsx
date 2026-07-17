@@ -1,77 +1,41 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
+import type { Restaurant } from "@shared/schema";
+import { isBarBusinessType, isTruckBusinessType } from "@shared/businessTypes";
 import {
-  ArrowLeft,
   Bell,
-  Globe,
-  Palette,
-  Save,
-  Settings,
-  Shield,
+  Building2,
+  CheckCircle2,
+  CircleHelp,
+  CreditCard,
+  ExternalLink,
+  Eye,
+  Image,
+  Loader2,
+  LockKeyhole,
+  Settings2,
+  ShieldCheck,
+  UserRound,
+  Users,
 } from "lucide-react";
-import Navigation from "@/components/navigation";
+import BusinessWorkspaceShell from "@/components/business-workspace-shell";
+import { BackHeader } from "@/components/back-header";
 import NotificationSettings from "@/components/notification-settings";
-import { useAuth } from "@/hooks/useAuth";
-import { useToast } from "@/hooks/use-toast";
-import { useI18n, type SupportedLocale } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Textarea } from "@/components/ui/textarea";
+import { useAuth } from "@/hooks/useAuth";
+import { useToast } from "@/hooks/use-toast";
+import { buildPublicProfilePath } from "@/lib/public-profile-path";
 
 type SettingsPayload = {
-  accountSettings: {
-    language?: string;
-    currency?: string;
-    locationServices?: boolean;
-    analytics?: boolean;
-    marketing?: boolean;
-    customDomain?: {
-      hostname?: string;
-      status?: "unverified" | "verified" | "mismatch" | "error";
-      lastCheckedAt?: string;
-      expectedTarget?: string;
-      diagnostics?: string;
-    };
-  };
-  publicProfileSettings: {
-    templatePreset?: "classic" | "story" | "bold" | "minimal";
-    theme?: "sunset" | "slate" | "forest" | "amber";
-    accentColor?: string;
-    fontFamily?: "system" | "serif" | "display" | "mono";
-    heroLayout?: "center" | "left" | "split";
-    heroTitle?: string;
-    heroSubtitle?: string;
-    ctaLabel?: string;
-    ctaUrl?: string;
-    about?: string;
-    highlights?: string[];
-    featuredLinks?: Array<{ label: string; url: string }>;
-    galleryUrls?: string[];
-    sectionOrder?: Array<
-      | "about"
-      | "highlights"
-      | "links"
-      | "gallery"
-      | "contact"
-      | "location"
-      | "metrics"
-    >;
+  accountSettings?: Record<string, unknown>;
+  publicProfileSettings?: {
     showAddress?: boolean;
     showContact?: boolean;
-    showHours?: boolean;
-    hideProfileBadge?: boolean;
   };
   profileLinks?: Array<{
     entity: "restaurant" | "host" | "supplier";
@@ -79,1273 +43,487 @@ type SettingsPayload = {
     title: string;
     path: string;
   }>;
-  media?: {
-    provider?: "cloudinary" | "none" | string;
-    configured?: boolean;
-  };
 };
 
-const SECTION_OPTIONS = [
-  "about",
-  "location",
-  "contact",
-  "metrics",
-  "highlights",
-  "links",
-  "gallery",
-] as const;
-type SectionKey = (typeof SECTION_OPTIONS)[number];
+type SettingsTab = "account" | "notifications" | "visibility";
 
-const PREVIEW_THEME_BG: Record<string, string> = {
-  sunset: "from-rose-900 to-orange-700",
-  slate: "from-slate-900 to-slate-700",
-  forest: "from-emerald-900 to-emerald-700",
-  amber: "from-amber-900 to-amber-700",
-};
+const validTabs = new Set<SettingsTab>([
+  "account",
+  "notifications",
+  "visibility",
+]);
 
-export default function SettingsPage() {
-  const { user, isAuthenticated } = useAuth();
-  const { toast } = useToast();
-  const { locale, setLocale } = useI18n();
-  const [savingGeneral, setSavingGeneral] = useState(false);
-  const [savingProfile, setSavingProfile] = useState(false);
-  const [uploadingGallery, setUploadingGallery] = useState(false);
-  const [verifyingDomain, setVerifyingDomain] = useState(false);
-  const [dragSection, setDragSection] = useState<SectionKey | null>(null);
-
-  const { data, isLoading, refetch } = useQuery<SettingsPayload>({
-    queryKey: ["/api/settings/me"],
-    enabled: isAuthenticated,
-    queryFn: async () => {
-      const res = await fetch("/api/settings/me", { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to load settings");
-      return res.json();
-    },
-  });
-
-  const [general, setGeneral] = useState({
-    language: "english",
-    currency: "usd",
-    locationServices: true,
-    analytics: true,
-    marketing: false,
-    customDomainHost: "",
-  });
-  const [profile, setProfile] = useState({
-    templatePreset: "classic" as "classic" | "story" | "bold" | "minimal",
-    theme: "sunset" as "sunset" | "slate" | "forest" | "amber",
-    accentColor: "#f97316",
-    fontFamily: "system" as "system" | "serif" | "display" | "mono",
-    heroLayout: "left" as "center" | "left" | "split",
-    heroTitle: "",
-    heroSubtitle: "",
-    ctaLabel: "",
-    ctaUrl: "",
-    about: "",
-    highlights: "",
-    featuredLinks: "",
-    galleryUrls: "",
-    sectionOrder: "about,location,contact,metrics,highlights,links,gallery",
-    showAddress: true,
-    showContact: true,
-    showHours: true,
-    hideProfileBadge: false,
-  });
-
-  const hydratedRef = useRef(false);
-
-  const languageSettingFromLocale = (value: SupportedLocale) =>
-    value === "es" ? "spanish" : "english";
-  const localeFromLanguageSetting = (value: string): SupportedLocale =>
-    value === "spanish" ? "es" : "en";
-
-  useEffect(() => {
-    if (!data || hydratedRef.current) return;
-    const a = data.accountSettings || {};
-    const p = data.publicProfileSettings || {};
-    setGeneral({
-      language: a.language || languageSettingFromLocale(locale),
-      currency: a.currency || "usd",
-      locationServices: a.locationServices ?? true,
-      analytics: a.analytics ?? true,
-      marketing: a.marketing ?? false,
-      customDomainHost: a.customDomain?.hostname || "",
-    });
-    setProfile({
-      templatePreset: (p.templatePreset as any) || "classic",
-      theme: (p.theme as any) || "sunset",
-      accentColor: p.accentColor || "#f97316",
-      fontFamily: (p.fontFamily as any) || "system",
-      heroLayout: (p.heroLayout as any) || "left",
-      heroTitle: p.heroTitle || "",
-      heroSubtitle: p.heroSubtitle || "",
-      ctaLabel: p.ctaLabel || "",
-      ctaUrl: p.ctaUrl || "",
-      about: p.about || "",
-      highlights: Array.isArray(p.highlights) ? p.highlights.join("\n") : "",
-      featuredLinks: Array.isArray(p.featuredLinks)
-        ? p.featuredLinks.map((l) => `${l.label}|${l.url}`).join("\n")
-        : "",
-      galleryUrls: Array.isArray(p.galleryUrls) ? p.galleryUrls.join("\n") : "",
-      sectionOrder: Array.isArray(p.sectionOrder)
-        ? p.sectionOrder.join(",")
-        : "about,location,contact,metrics,highlights,links,gallery",
-      showAddress: p.showAddress ?? true,
-      showContact: p.showContact ?? true,
-      showHours: p.showHours ?? true,
-      hideProfileBadge: p.hideProfileBadge ?? false,
-    });
-    if (a.language) {
-      setLocale(localeFromLanguageSetting(a.language));
-    }
-    hydratedRef.current = true;
-  }, [data, locale, setLocale]);
-
-  if (!isAuthenticated || !user) {
-    return (
-      <div className="max-w-3xl mx-auto bg-[var(--bg-app)] min-h-screen relative pb-20">
-        <div className="text-center py-12">
-          <Settings className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
-          <h2 className="text-xl font-semibold mb-2">Sign in required</h2>
-          <p className="text-muted-foreground">
-            Log in to access your settings
-          </p>
-        </div>
-        <Navigation />
+function SettingsLinkCard({
+  href,
+  icon: Icon,
+  title,
+  description,
+  external = false,
+}: {
+  href: string;
+  icon: typeof Settings2;
+  title: string;
+  description: string;
+  external?: boolean;
+}) {
+  const content = (
+    <>
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-orange-100 text-orange-800">
+        <Icon className="h-5 w-5" aria-hidden="true" />
       </div>
+      <div className="min-w-0 flex-1">
+        <p className="font-black text-stone-950">{title}</p>
+        <p className="mt-1 text-sm leading-5 text-stone-600">{description}</p>
+      </div>
+      <ExternalLink className="mt-1 h-4 w-4 shrink-0 text-stone-400" aria-hidden="true" />
+    </>
+  );
+
+  const className =
+    "flex min-h-24 items-start gap-3 rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-4 transition hover:border-orange-200 hover:bg-orange-50/50";
+
+  if (external) {
+    return (
+      <a href={href} target="_blank" rel="noreferrer" className={className}>
+        {content}
+      </a>
     );
   }
 
-  const saveGeneral = async () => {
-    setSavingGeneral(true);
-    try {
-      const res = await fetch("/api/settings/me", {
-        method: "PATCH",
+  return (
+    <Link href={href} className={className}>
+      {content}
+    </Link>
+  );
+}
+
+export default function SettingsPage() {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const search = useSearch();
+  const [, setLocation] = useLocation();
+  const params = useMemo(() => new URLSearchParams(search), [search]);
+  const requestedRestaurantId = params.get("restaurantId") || "";
+  const requestedTab = String(params.get("tab") || "account") as SettingsTab;
+  const activeTab = validTabs.has(requestedTab) ? requestedTab : "account";
+
+  const businessWorkspaceUserTypes = new Set([
+    "restaurant_owner",
+    "food_truck",
+    "admin",
+    "duper_admin",
+    "super_admin",
+    "staff",
+  ]);
+  const canUseBusinessWorkspace = businessWorkspaceUserTypes.has(
+    String(user?.userType || ""),
+  );
+
+  const {
+    data,
+    isLoading: settingsLoading,
+    isError: settingsError,
+    refetch,
+  } = useQuery<SettingsPayload>({
+    queryKey: ["/api/settings/me"],
+    queryFn: async () => {
+      const response = await fetch("/api/settings/me", {
         credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          accountSettings: {
-            language: general.language,
-            currency: general.currency,
-            locationServices: general.locationServices,
-            analytics: general.analytics,
-            marketing: general.marketing,
-            customDomain: {
-              hostname: general.customDomainHost || "",
-              status: data?.accountSettings?.customDomain?.status,
-              lastCheckedAt: data?.accountSettings?.customDomain?.lastCheckedAt,
-              expectedTarget:
-                data?.accountSettings?.customDomain?.expectedTarget,
-              diagnostics: data?.accountSettings?.customDomain?.diagnostics,
-            },
-          },
-        }),
       });
-      if (!res.ok) throw new Error("Failed to save settings");
-      toast({ title: "Saved", description: "General settings updated." });
-      await refetch();
-    } catch (error: any) {
-      toast({
-        title: "Save failed",
-        description: error?.message || "Unable to save general settings.",
-        variant: "destructive",
-      });
-    } finally {
-      setSavingGeneral(false);
-    }
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.message || "Settings could not be loaded.");
+      }
+      return payload as SettingsPayload;
+    },
+    enabled: Boolean(user),
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+
+  const {
+    data: businesses = [],
+    isLoading: businessesLoading,
+  } = useQuery<Restaurant[]>({
+    queryKey: ["/api/restaurants/my-restaurants"],
+    enabled: Boolean(user && canUseBusinessWorkspace),
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+
+  const currentBusiness = useMemo(() => {
+    if (!businesses.length) return null;
+    return (
+      businesses.find((business) => business.id === requestedRestaurantId) ||
+      businesses[0]
+    );
+  }, [businesses, requestedRestaurantId]);
+
+  const [showAddress, setShowAddress] = useState(true);
+  const [showContact, setShowContact] = useState(true);
+  const [savingVisibility, setSavingVisibility] = useState(false);
+
+  useEffect(() => {
+    if (!data) return;
+    setShowAddress(data.publicProfileSettings?.showAddress !== false);
+    setShowContact(data.publicProfileSettings?.showContact !== false);
+  }, [data]);
+
+  const publicProfileHref = currentBusiness
+    ? buildPublicProfilePath({
+        entityType: isTruckBusinessType(currentBusiness.businessType)
+          ? "truck"
+          : isBarBusinessType(currentBusiness.businessType)
+            ? "bar"
+            : "restaurant",
+        id: currentBusiness.id,
+        name: currentBusiness.name,
+      })
+    : null;
+
+  const selectedBusinessId = currentBusiness?.id || requestedRestaurantId;
+  const buildBusinessHref = (
+    pathname: string,
+    extra?: Record<string, string>,
+  ) => {
+    const next = new URLSearchParams();
+    if (selectedBusinessId) next.set("restaurantId", selectedBusinessId);
+    Object.entries(extra || {}).forEach(([key, value]) => next.set(key, value));
+    const query = next.toString();
+    return `${pathname}${query ? `?${query}` : ""}`;
   };
 
-  const saveProfile = async () => {
-    setSavingProfile(true);
-    try {
-      const parsedHighlights = profile.highlights
-        .split("\n")
-        .map((v) => v.trim())
-        .filter(Boolean);
-      const parsedGallery = profile.galleryUrls
-        .split("\n")
-        .map((v) => v.trim())
-        .filter(Boolean);
-      const parsedLinks = profile.featuredLinks
-        .split("\n")
-        .map((line) => line.trim())
-        .filter(Boolean)
-        .map((line) => {
-          const [label, url] = line.split("|").map((s) => s.trim());
-          return { label: label || url, url: url || label };
-        })
-        .filter((row) => row.label && row.url);
-      const parsedSectionOrder = profile.sectionOrder
-        .split(",")
-        .map((v) => v.trim().toLowerCase())
-        .filter(Boolean)
-        .filter((v) =>
-          [
-            "about",
-            "highlights",
-            "links",
-            "gallery",
-            "contact",
-            "location",
-            "metrics",
-          ].includes(v),
-        ) as Array<
-        | "about"
-        | "highlights"
-        | "links"
-        | "gallery"
-        | "contact"
-        | "location"
-        | "metrics"
-      >;
+  const handleBusinessChange = (businessId: string) => {
+    const next = new URLSearchParams(search);
+    next.set("restaurantId", businessId);
+    setLocation(`/profile/settings?${next.toString()}`);
+  };
 
-      const res = await fetch("/api/settings/me", {
+  const handleTabChange = (value: string) => {
+    const next = new URLSearchParams(search);
+    next.set("tab", value);
+    if (currentBusiness?.id) next.set("restaurantId", currentBusiness.id);
+    setLocation(`/profile/settings?${next.toString()}`);
+  };
+
+  const saveVisibility = async () => {
+    setSavingVisibility(true);
+    try {
+      const response = await fetch("/api/settings/me", {
         method: "PATCH",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           publicProfileSettings: {
-            templatePreset: profile.templatePreset,
-            theme: profile.theme,
-            accentColor: profile.accentColor,
-            fontFamily: profile.fontFamily,
-            heroLayout: profile.heroLayout,
-            heroTitle: profile.heroTitle,
-            heroSubtitle: profile.heroSubtitle,
-            ctaLabel: profile.ctaLabel,
-            ctaUrl: profile.ctaUrl,
-            about: profile.about,
-            highlights: parsedHighlights,
-            featuredLinks: parsedLinks,
-            galleryUrls: parsedGallery,
-            sectionOrder: parsedSectionOrder,
-            showAddress: profile.showAddress,
-            showContact: profile.showContact,
-            showHours: profile.showHours,
-            hideProfileBadge: profile.hideProfileBadge,
+            showAddress,
+            showContact,
           },
         }),
       });
-      if (!res.ok) throw new Error("Failed to save profile studio changes");
-      toast({ title: "Saved", description: "Public profile studio updated." });
-      await refetch();
-    } catch (error: any) {
-      toast({
-        title: "Save failed",
-        description: error?.message || "Unable to save profile settings.",
-        variant: "destructive",
-      });
-    } finally {
-      setSavingProfile(false);
-    }
-  };
-
-  const applyPreset = (preset: "classic" | "story" | "bold" | "minimal") => {
-    const baseByPreset: Record<
-      typeof preset,
-      {
-        theme: "sunset" | "slate" | "forest" | "amber";
-        fontFamily: "system" | "serif" | "display" | "mono";
-        heroLayout: "center" | "left" | "split";
-        accentColor: string;
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.message || "Visibility could not be saved.");
       }
-    > = {
-      classic: {
-        theme: "sunset",
-        fontFamily: "system",
-        heroLayout: "left",
-        accentColor: "#f97316",
-      },
-      story: {
-        theme: "forest",
-        fontFamily: "serif",
-        heroLayout: "split",
-        accentColor: "#10b981",
-      },
-      bold: {
-        theme: "amber",
-        fontFamily: "display",
-        heroLayout: "center",
-        accentColor: "#f59e0b",
-      },
-      minimal: {
-        theme: "slate",
-        fontFamily: "system",
-        heroLayout: "left",
-        accentColor: "#64748b",
-      },
-    };
-    const next = baseByPreset[preset];
-    setProfile((prev) => ({
-      ...prev,
-      templatePreset: preset,
-      theme: next.theme,
-      fontFamily: next.fontFamily,
-      heroLayout: next.heroLayout,
-      accentColor: next.accentColor,
-    }));
-  };
-
-  const uploadGalleryImage = async (file: File) => {
-    setUploadingGallery(true);
-    try {
-      const formData = new FormData();
-      formData.append("image", file);
-      const res = await fetch("/api/settings/public-profile/gallery", {
-        method: "POST",
-        credentials: "include",
-        body: formData,
-      });
-      if (!res.ok) throw new Error("Upload failed");
-      const payload = await res.json();
-      const urls = Array.isArray(payload?.galleryUrls)
-        ? payload.galleryUrls
-        : [];
-      setProfile((prev) => ({ ...prev, galleryUrls: urls.join("\n") }));
-      toast({ title: "Uploaded", description: "Image added to gallery." });
-    } catch (error: any) {
-      toast({
-        title: "Upload failed",
-        description: error?.message || "Unable to upload image.",
-        variant: "destructive",
-      });
-    } finally {
-      setUploadingGallery(false);
-    }
-  };
-
-  const verifyCustomDomain = async () => {
-    const hostname = String(general.customDomainHost || "")
-      .trim()
-      .toLowerCase();
-    if (!hostname) {
-      toast({
-        title: "Domain required",
-        description: "Enter a custom domain first.",
-        variant: "destructive",
-      });
-      return;
-    }
-    setVerifyingDomain(true);
-    try {
-      const res = await fetch("/api/settings/custom-domain/verify", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ hostname }),
-      });
-      const payload = await res.json().catch(() => ({}));
-      if (!res.ok)
-        throw new Error(payload?.message || "Domain verification failed");
-      toast({
-        title:
-          payload?.status === "verified"
-            ? "Domain verified"
-            : "Domain check complete",
-        description:
-          payload?.status === "verified"
-            ? `DNS is correctly pointing to ${payload?.expectedTarget || "the platform"}`
-            : payload?.diagnostics || "DNS is not yet aligned.",
-      });
       await refetch();
-    } catch (error: any) {
       toast({
-        title: "Verification failed",
-        description: error?.message || "Unable to verify domain.",
+        title: "Visibility saved",
+        description: "Public address and contact visibility are up to date.",
+      });
+    } catch (error) {
+      toast({
+        title: "Visibility not saved",
+        description:
+          error instanceof Error ? error.message : "Please try again.",
         variant: "destructive",
       });
     } finally {
-      setVerifyingDomain(false);
+      setSavingVisibility(false);
     }
   };
 
-  const getSectionOrderList = (): SectionKey[] => {
-    const parsed = profile.sectionOrder
-      .split(",")
-      .map((v) => v.trim().toLowerCase())
-      .filter((v): v is SectionKey =>
-        (SECTION_OPTIONS as readonly string[]).includes(v),
-      );
-    const deduped = Array.from(new Set(parsed));
-    for (const key of SECTION_OPTIONS) {
-      if (!deduped.includes(key)) deduped.push(key);
-    }
-    return deduped;
-  };
-
-  const reorderSections = (from: SectionKey, to: SectionKey) => {
-    if (from === to) return;
-    const list = getSectionOrderList();
-    const fromIdx = list.indexOf(from);
-    const toIdx = list.indexOf(to);
-    if (fromIdx < 0 || toIdx < 0) return;
-    const next = [...list];
-    next.splice(fromIdx, 1);
-    next.splice(toIdx, 0, from);
-    setProfile((prev) => ({ ...prev, sectionOrder: next.join(",") }));
-  };
-
-  const resolvedPreviewTheme = profile.theme || "sunset";
-  const resolvedPreviewFontClass =
-    profile.fontFamily === "serif"
-      ? "font-serif"
-      : profile.fontFamily === "mono"
-        ? "font-mono"
-        : profile.fontFamily === "display"
-          ? "font-[Georgia]"
-          : "font-sans";
-  const previewSections = getSectionOrderList();
-  const previewHighlights = profile.highlights
-    .split("\n")
-    .map((v) => v.trim())
-    .filter(Boolean)
-    .slice(0, 6);
-  const previewLinks = profile.featuredLinks
-    .split("\n")
-    .map((v) => v.trim())
-    .filter(Boolean)
-    .slice(0, 4)
-    .map((line) => {
-      const [label, url] = line.split("|").map((s) => s.trim());
-      return { label: label || url || "Link", url: url || label || "#" };
-    });
-  const previewGallery = profile.galleryUrls
-    .split("\n")
-    .map((v) => v.trim())
-    .filter(Boolean)
-    .slice(0, 6);
-
-  return (
-    <div className="max-w-3xl mx-auto bg-[var(--bg-app)] min-h-screen relative pb-20">
-      <header className="px-4 sm:px-6 py-6 bg-[hsl(var(--background))] border-b border-white/5">
-        <div className="flex items-center mb-2">
-          <Link href="/profile">
-            <Button variant="ghost" size="sm" className="mr-3 -ml-2">
-              <ArrowLeft className="w-4 h-4" />
-            </Button>
-          </Link>
-          <div className="flex items-center">
-            <Settings className="w-6 h-6 text-primary mr-3" />
-            <h1 className="text-xl font-bold text-foreground">
-              Settings + Profile Studio
-            </h1>
+  const renderSettingsFrame = (content: ReactNode) => {
+    if (currentBusiness && canUseBusinessWorkspace) {
+      return (
+        <BusinessWorkspaceShell
+          activeModule="settings"
+          business={currentBusiness}
+          businesses={businesses}
+          onBusinessChange={handleBusinessChange}
+          publicProfileHref={publicProfileHref}
+          capabilities={{
+            deals: true,
+            audience: true,
+            team: true,
+            payments: true,
+          }}
+        >
+          <div className="mx-auto min-h-screen max-w-6xl px-4 py-6 lg:px-6 lg:py-8">
+            {content}
           </div>
-        </div>
-        <p className="text-sm text-muted-foreground">
-          Build your public profile into a mini website and control account
-          preferences.
-        </p>
-      </header>
+        </BusinessWorkspaceShell>
+      );
+    }
 
-      <div className="px-4 sm:px-6 py-6">
-        <Card className="mb-6 border-amber-300/25 bg-amber-50/60 dark:bg-amber-950/20">
-          <CardHeader>
-            <CardTitle>Quick setup lanes</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-2 sm:grid-cols-2">
-            <Link href="/profile">
-              <Button variant="outline" className="w-full justify-start">
-                Personal profile
-              </Button>
-            </Link>
-            <Link href="/restaurant-owner-dashboard?src=settings">
-              <Button variant="outline" className="w-full justify-start">
-                Business profiles
-              </Button>
-            </Link>
-            <Link href="/menu-builder?src=settings">
-              <Button variant="outline" className="w-full justify-start">
-                Menus and imports
-              </Button>
-            </Link>
-            <Link href="/restaurant-owner-dashboard?src=settings&setup=schedule">
-              <Button variant="outline" className="w-full justify-start">
-                Schedule and hours
-              </Button>
-            </Link>
-            <Link href="/scout">
-              <Button variant="outline" className="w-full justify-start">
-                Scout discovery
-              </Button>
-            </Link>
-            <Link href="/parking-pass?setup=host">
-              <Button variant="outline" className="w-full justify-start">
-                Parking Pass hosts
-              </Button>
-            </Link>
-            <Link href="/profile/notifications">
-              <Button variant="outline" className="w-full justify-start">
-                Notifications
-              </Button>
-            </Link>
+    return (
+      <div className="min-h-screen bg-[var(--bg-layered)]">
+        <BackHeader
+          title="Settings"
+          fallbackHref="/profile"
+          icon={Settings2}
+          className="border-b border-[color:var(--border-subtle)] bg-[hsl(var(--background))/0.94] shadow-clean"
+        />
+        <main className="mx-auto max-w-5xl px-4 py-6 sm:py-8">{content}</main>
+      </div>
+    );
+  };
+
+  if (
+    settingsLoading ||
+    (canUseBusinessWorkspace && businessesLoading)
+  ) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[var(--bg-layered)] text-stone-600">
+        <Loader2 className="mr-2 h-5 w-5 animate-spin" aria-hidden="true" />
+        Loading settings…
+      </div>
+    );
+  }
+
+  if (settingsError || !data) {
+    return renderSettingsFrame(
+      <div className="mx-auto max-w-xl py-10">
+        <Card className="border-amber-200 bg-amber-50 shadow-clean">
+          <CardContent className="p-6 text-center">
+            <LockKeyhole className="mx-auto h-9 w-9 text-amber-800" aria-hidden="true" />
+            <h1 className="mt-4 text-xl font-black text-amber-950">
+              Settings are unavailable
+            </h1>
+            <p className="mt-2 text-sm text-amber-900/80">
+              Nothing was changed. Try loading the account again.
+            </p>
+            <Button onClick={() => refetch()} className="mt-5">
+              Try again
+            </Button>
           </CardContent>
         </Card>
+      </div>,
+    );
+  }
 
-        <Tabs defaultValue="profile" className="space-y-6">
-          <TabsList className="grid h-auto w-full grid-cols-2 gap-1 sm:grid-cols-4">
-            <TabsTrigger value="profile">
-              <Palette className="mr-1 hidden h-4 w-4 sm:block" />
-              Studio
-            </TabsTrigger>
-            <TabsTrigger value="general">General</TabsTrigger>
-            <TabsTrigger value="notifications">
-              <Bell className="mr-1 hidden h-4 w-4 sm:block" />
-              Alerts
-            </TabsTrigger>
-            <TabsTrigger value="privacy">
-              <Shield className="mr-1 hidden h-4 w-4 sm:block" />
-              Privacy
-            </TabsTrigger>
-          </TabsList>
+  const accountName =
+    [user?.firstName, user?.lastName].filter(Boolean).join(" ") ||
+    user?.email ||
+    "MealScout account";
+  const profileLinks = data.profileLinks || [];
 
-          <TabsContent value="profile" className="space-y-6">
-            <Card>
+  const content = (
+    <div className="space-y-5" data-account-settings-shell="true">
+      <section className="rounded-[1.75rem] border border-orange-200 bg-[linear-gradient(135deg,#fff7ed,#ffedd5_60%,#fef3c7)] p-6 shadow-clean sm:p-8">
+        <p className="text-sm font-black uppercase tracking-[0.12em] text-orange-800">
+          Account settings
+        </p>
+        <div className="mt-2 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+          <div>
+            <h2 className="text-3xl font-black tracking-tight text-stone-950">
+              {accountName}
+            </h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-700">
+              Account access, browser notifications, support, and public contact visibility.
+            </p>
+          </div>
+          {user?.email ? (
+            <p className="text-sm font-bold text-stone-600">{user.email}</p>
+          ) : null}
+        </div>
+      </section>
+
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-5">
+        <TabsList className="grid h-auto w-full grid-cols-3 rounded-2xl bg-stone-100 p-1">
+          <TabsTrigger value="account" className="min-h-10 rounded-xl">
+            Account
+          </TabsTrigger>
+          <TabsTrigger value="notifications" className="min-h-10 rounded-xl">
+            Notifications
+          </TabsTrigger>
+          <TabsTrigger value="visibility" className="min-h-10 rounded-xl">
+            Visibility
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="account" className="space-y-5">
+          <Card className="border-[color:var(--border-subtle)] bg-[var(--bg-surface)] shadow-clean">
+            <CardHeader>
+              <CardTitle className="text-xl">Account tools</CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-3 sm:grid-cols-2">
+              <SettingsLinkCard
+                href="/profile"
+                icon={UserRound}
+                title="Personal profile"
+                description="Review the name and identity attached to this account."
+              />
+              <SettingsLinkCard
+                href="/profile/notifications"
+                icon={Bell}
+                title="Notification center"
+                description="Review account notification history and delivery status."
+              />
+              <SettingsLinkCard
+                href="/profile/help"
+                icon={CircleHelp}
+                title="Help and support"
+                description="Open a support request or review existing tickets."
+              />
+              {selectedBusinessId ? (
+                <SettingsLinkCard
+                  href={buildBusinessHref("/subscribe")}
+                  icon={CreditCard}
+                  title="Plan and billing"
+                  description="Review Premium status, credits, and billing access."
+                />
+              ) : null}
+            </CardContent>
+          </Card>
+
+          {selectedBusinessId ? (
+            <Card className="border-[color:var(--border-subtle)] bg-[var(--bg-surface)] shadow-clean">
               <CardHeader>
-                <CardTitle>Live Preview</CardTitle>
+                <CardTitle className="text-xl">Business presentation</CardTitle>
               </CardHeader>
               <CardContent>
-                <div
-                  className={`overflow-hidden rounded-lg border ${resolvedPreviewFontClass}`}
-                >
-                  <div
-                    className={`bg-gradient-to-br ${PREVIEW_THEME_BG[resolvedPreviewTheme] || PREVIEW_THEME_BG.sunset} p-6 text-white`}
-                  >
-                    {!profile.hideProfileBadge ? (
-                      <p className="mb-2 text-xs uppercase tracking-wide text-white/80">
-                        Public Profile
-                      </p>
-                    ) : null}
-                    <h3
-                      className={`text-2xl font-bold ${profile.heroLayout === "center" ? "text-center" : "text-left"}`}
-                    >
-                      {profile.heroTitle ||
-                        (data?.profileLinks?.[0]?.title ??
-                          "Your Business Name")}
-                    </h3>
-                    {(profile.heroSubtitle || "").trim() ? (
-                      <p
-                        className={`mt-2 text-sm text-white/85 ${profile.heroLayout === "center" ? "text-center" : "text-left"}`}
-                      >
-                        {profile.heroSubtitle}
-                      </p>
-                    ) : null}
-                    {(profile.ctaLabel || "").trim() ? (
-                      <div
-                        className={`mt-3 ${profile.heroLayout === "center" ? "text-center" : ""}`}
-                      >
-                        <span className="inline-flex rounded border border-white/40 bg-white/10 px-3 py-1 text-xs">
-                          {profile.ctaLabel}
-                        </span>
-                      </div>
-                    ) : null}
-                  </div>
-                  <div className="space-y-4 p-4">
-                    {previewSections.map((section) => {
-                      if (section === "about") {
-                        if (!profile.about.trim()) return null;
-                        return (
-                          <div key={section}>
-                            <p className="text-sm text-muted-foreground">
-                              {profile.about}
-                            </p>
-                          </div>
-                        );
-                      }
-                      if (section === "highlights") {
-                        if (!previewHighlights.length) return null;
-                        return (
-                          <div key={section}>
-                            <p className="mb-1 text-xs uppercase text-muted-foreground">
-                              Highlights
-                            </p>
-                            <div className="flex flex-wrap gap-2">
-                              {previewHighlights.map((h, i) => (
-                                <span
-                                  key={`${h}-${i}`}
-                                  className="rounded border px-2 py-1 text-xs"
-                                  style={{
-                                    borderColor: profile.accentColor,
-                                    color: profile.accentColor,
-                                  }}
-                                >
-                                  {h}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                        );
-                      }
-                      if (section === "links") {
-                        if (!previewLinks.length) return null;
-                        return (
-                          <div key={section}>
-                            <p className="mb-1 text-xs uppercase text-muted-foreground">
-                              Links
-                            </p>
-                            <div className="grid gap-2">
-                              {previewLinks.map((link, i) => (
-                                <div
-                                  key={`${link.url}-${i}`}
-                                  className="rounded border px-2 py-1 text-xs"
-                                >
-                                  {link.label}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        );
-                      }
-                      if (section === "gallery") {
-                        if (!previewGallery.length) return null;
-                        return (
-                          <div key={section}>
-                            <p className="mb-1 text-xs uppercase text-muted-foreground">
-                              Gallery
-                            </p>
-                            <div className="grid grid-cols-3 gap-2">
-                              {previewGallery.map((url, i) => (
-                                <img
-                                  key={`${url}-${i}`}
-                                  src={url}
-                                  alt={`Preview ${i + 1}`}
-                                  className="h-16 w-full rounded object-cover"
-                                  loading="lazy"
-                                />
-                              ))}
-                            </div>
-                          </div>
-                        );
-                      }
-                      if (section === "contact") {
-                        if (!profile.showContact) return null;
-                        return (
-                          <p
-                            key={section}
-                            className="text-xs text-muted-foreground"
-                          >
-                            Contact section enabled
-                          </p>
-                        );
-                      }
-                      if (section === "location") {
-                        if (!profile.showAddress) return null;
-                        return (
-                          <p
-                            key={section}
-                            className="text-xs text-muted-foreground"
-                          >
-                            Address section enabled
-                          </p>
-                        );
-                      }
-                      if (section === "metrics") {
-                        return (
-                          <p
-                            key={section}
-                            className="text-xs text-muted-foreground"
-                          >
-                            Metrics section enabled
-                          </p>
-                        );
-                      }
-                      return null;
+                <p className="mb-4 text-sm leading-6 text-stone-600">
+                  Business identity and images are managed per business so changes do not leak into another profile.
+                </p>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <SettingsLinkCard
+                    href={buildBusinessHref("/restaurant-owner-dashboard", {
+                      setup: "profile",
                     })}
-                  </div>
+                    icon={Building2}
+                    title="Public profile"
+                    description="Edit business details, links, and location information."
+                  />
+                  <SettingsLinkCard
+                    href={buildBusinessHref("/restaurant-owner-dashboard", {
+                      setup: "profile-media",
+                    })}
+                    icon={Image}
+                    title="Business photos"
+                    description="Manage logo, cover, food, menu, and venue images."
+                  />
+                  <SettingsLinkCard
+                    href={buildBusinessHref("/business-team")}
+                    icon={Users}
+                    title="Team access"
+                    description="Choose who can help manage this business."
+                  />
+                  {publicProfileHref ? (
+                    <SettingsLinkCard
+                      href={publicProfileHref}
+                      icon={Eye}
+                      title="Preview public profile"
+                      description="See the profile customers currently receive."
+                      external
+                    />
+                  ) : null}
                 </div>
               </CardContent>
             </Card>
+          ) : null}
+        </TabsContent>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Public Profile Studio</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid gap-3 md:grid-cols-2">
-                  <div>
-                    <Label>Template preset</Label>
-                    <Select
-                      value={profile.templatePreset}
-                      onValueChange={(value: any) => applyPreset(value)}
+        <TabsContent value="notifications">
+          <Card className="border-[color:var(--border-subtle)] bg-[var(--bg-surface)] shadow-clean">
+            <CardHeader>
+              <CardTitle className="text-xl">Browser notifications</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <NotificationSettings />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="visibility" className="space-y-5">
+          <Card className="border-[color:var(--border-subtle)] bg-[var(--bg-surface)] shadow-clean">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-xl">
+                <ShieldCheck className="h-5 w-5 text-orange-700" aria-hidden="true" />
+                Public contact visibility
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
+                These two settings apply to every public profile owned by this account.
+                Business-specific details and photos remain in each business workspace.
+              </div>
+
+              <div className="divide-y divide-stone-200 rounded-2xl border border-stone-200">
+                <Label className="flex items-center justify-between gap-4 p-4 font-normal">
+                  <span>
+                    <span className="block font-black text-stone-950">Show public address</span>
+                    <span className="mt-1 block text-sm leading-5 text-stone-600">
+                      Allow owned public profiles to display their saved address.
+                    </span>
+                  </span>
+                  <Switch checked={showAddress} onCheckedChange={setShowAddress} />
+                </Label>
+                <Label className="flex items-center justify-between gap-4 p-4 font-normal">
+                  <span>
+                    <span className="block font-black text-stone-950">Show public contact details</span>
+                    <span className="mt-1 block text-sm leading-5 text-stone-600">
+                      Allow owned public profiles to display their saved contact information.
+                    </span>
+                  </span>
+                  <Switch checked={showContact} onCheckedChange={setShowContact} />
+                </Label>
+              </div>
+
+              <Button
+                onClick={saveVisibility}
+                disabled={savingVisibility}
+                data-testid="button-save-public-visibility"
+              >
+                {savingVisibility ? "Saving…" : "Save visibility"}
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card className="border-[color:var(--border-subtle)] bg-[var(--bg-surface)] shadow-clean">
+            <CardHeader>
+              <CardTitle className="text-xl">Profiles affected</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {profileLinks.length ? (
+                <div className="space-y-2">
+                  {profileLinks.map((profile) => (
+                    <a
+                      key={`${profile.entity}-${profile.id}`}
+                      href={profile.path}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center justify-between gap-3 rounded-xl border border-stone-200 px-4 py-3 text-sm transition hover:bg-orange-50"
                     >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="classic">Classic</SelectItem>
-                        <SelectItem value="story">Story</SelectItem>
-                        <SelectItem value="bold">Bold</SelectItem>
-                        <SelectItem value="minimal">Minimal</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="flex items-end gap-2">
-                    <Button
-                      variant="outline"
-                      onClick={() => applyPreset("classic")}
-                    >
-                      Classic
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => applyPreset("story")}
-                    >
-                      Story
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => applyPreset("bold")}
-                    >
-                      Bold
-                    </Button>
-                  </div>
+                      <span className="min-w-0 truncate font-bold text-stone-900">
+                        {profile.title}
+                      </span>
+                      <ExternalLink className="h-4 w-4 shrink-0 text-stone-400" aria-hidden="true" />
+                    </a>
+                  ))}
                 </div>
-
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div>
-                    <Label>Theme</Label>
-                    <Select
-                      value={profile.theme}
-                      onValueChange={(value: any) =>
-                        setProfile((prev) => ({ ...prev, theme: value }))
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="sunset">Sunset</SelectItem>
-                        <SelectItem value="slate">Slate</SelectItem>
-                        <SelectItem value="forest">Forest</SelectItem>
-                        <SelectItem value="amber">Amber</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>Accent color</Label>
-                    <Input
-                      value={profile.accentColor}
-                      onChange={(e) =>
-                        setProfile((prev) => ({
-                          ...prev,
-                          accentColor: e.target.value,
-                        }))
-                      }
-                      placeholder="#f97316"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div>
-                    <Label>Font style</Label>
-                    <Select
-                      value={profile.fontFamily}
-                      onValueChange={(value: any) =>
-                        setProfile((prev) => ({ ...prev, fontFamily: value }))
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="system">System</SelectItem>
-                        <SelectItem value="serif">Serif</SelectItem>
-                        <SelectItem value="display">Display</SelectItem>
-                        <SelectItem value="mono">Mono</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>Hero layout</Label>
-                    <Select
-                      value={profile.heroLayout}
-                      onValueChange={(value: any) =>
-                        setProfile((prev) => ({ ...prev, heroLayout: value }))
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="left">Left</SelectItem>
-                        <SelectItem value="center">Center</SelectItem>
-                        <SelectItem value="split">Split</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <div>
-                  <Label>Hero title</Label>
-                  <Input
-                    value={profile.heroTitle}
-                    onChange={(e) =>
-                      setProfile((prev) => ({
-                        ...prev,
-                        heroTitle: e.target.value,
-                      }))
-                    }
-                    placeholder="Your headline"
-                  />
-                </div>
-                <div>
-                  <Label>Hero subtitle</Label>
-                  <Input
-                    value={profile.heroSubtitle}
-                    onChange={(e) =>
-                      setProfile((prev) => ({
-                        ...prev,
-                        heroSubtitle: e.target.value,
-                      }))
-                    }
-                    placeholder="Short one-liner"
-                  />
-                </div>
-
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div>
-                    <Label>CTA label</Label>
-                    <Input
-                      value={profile.ctaLabel}
-                      onChange={(e) =>
-                        setProfile((prev) => ({
-                          ...prev,
-                          ctaLabel: e.target.value,
-                        }))
-                      }
-                      placeholder="Book now"
-                    />
-                  </div>
-                  <div>
-                    <Label>CTA URL</Label>
-                    <Input
-                      value={profile.ctaUrl}
-                      onChange={(e) =>
-                        setProfile((prev) => ({
-                          ...prev,
-                          ctaUrl: e.target.value,
-                        }))
-                      }
-                      placeholder="https://..."
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <Label>About</Label>
-                  <Textarea
-                    value={profile.about}
-                    onChange={(e) =>
-                      setProfile((prev) => ({ ...prev, about: e.target.value }))
-                    }
-                    rows={5}
-                    placeholder="Tell visitors what makes your business special."
-                  />
-                </div>
-
-                <div>
-                  <Label>Highlights (one per line)</Label>
-                  <Textarea
-                    value={profile.highlights}
-                    onChange={(e) =>
-                      setProfile((prev) => ({
-                        ...prev,
-                        highlights: e.target.value,
-                      }))
-                    }
-                    rows={4}
-                    placeholder={
-                      "Fresh made daily\nFamily-owned\nAvailable for events"
-                    }
-                  />
-                </div>
-
-                <div>
-                  <Label>Featured links (one per line: label|url)</Label>
-                  <Textarea
-                    value={profile.featuredLinks}
-                    onChange={(e) =>
-                      setProfile((prev) => ({
-                        ...prev,
-                        featuredLinks: e.target.value,
-                      }))
-                    }
-                    rows={4}
-                    placeholder={
-                      "Menu|https://example.com/menu\nCatering|https://example.com/catering"
-                    }
-                  />
-                </div>
-
-                <div>
-                  <Label>Gallery image URLs (one per line)</Label>
-                  <Textarea
-                    value={profile.galleryUrls}
-                    onChange={(e) =>
-                      setProfile((prev) => ({
-                        ...prev,
-                        galleryUrls: e.target.value,
-                      }))
-                    }
-                    rows={4}
-                    placeholder={
-                      "https://.../image1.jpg\nhttps://.../image2.jpg"
-                    }
-                  />
-                  <div className="mt-2">
-                    <Input
-                      type="file"
-                      accept="image/*"
-                      disabled={uploadingGallery}
-                      onChange={(event) => {
-                        const file = event.target.files?.[0];
-                        if (file) void uploadGalleryImage(file);
-                        event.currentTarget.value = "";
-                      }}
-                    />
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Upload directly to your profile gallery (max 12 images).
-                    </p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Active upload provider:{" "}
-                      {data?.media?.provider || "unknown"}{" "}
-                      {data?.media?.configured
-                        ? "(configured)"
-                        : "(not configured)"}
-                    </p>
-                  </div>
-                </div>
-
-                <div>
-                  <Label>Section order</Label>
-                  <div className="mt-2 space-y-2 rounded-md border p-3">
-                    {getSectionOrderList().map((section) => (
-                      <div
-                        key={section}
-                        draggable
-                        onDragStart={() => setDragSection(section)}
-                        onDragOver={(event) => {
-                          event.preventDefault();
-                        }}
-                        onDrop={(event) => {
-                          event.preventDefault();
-                          if (dragSection)
-                            reorderSections(dragSection, section);
-                          setDragSection(null);
-                        }}
-                        onDragEnd={() => setDragSection(null)}
-                        className={`flex cursor-move items-center justify-between rounded border px-3 py-2 text-sm ${
-                          dragSection === section ? "opacity-50" : ""
-                        }`}
-                      >
-                        <span className="font-medium capitalize">
-                          {section}
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          Drag to reorder
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="grid gap-3 md:grid-cols-3">
-                  <div className="flex items-center justify-between rounded-md border p-3">
-                    <Label>Show address</Label>
-                    <Switch
-                      checked={profile.showAddress}
-                      onCheckedChange={(checked) =>
-                        setProfile((prev) => ({
-                          ...prev,
-                          showAddress: checked,
-                        }))
-                      }
-                    />
-                  </div>
-                  <div className="flex items-center justify-between rounded-md border p-3">
-                    <Label>Show contact</Label>
-                    <Switch
-                      checked={profile.showContact}
-                      onCheckedChange={(checked) =>
-                        setProfile((prev) => ({
-                          ...prev,
-                          showContact: checked,
-                        }))
-                      }
-                    />
-                  </div>
-                  <div className="flex items-center justify-between rounded-md border p-3">
-                    <Label>Show hours</Label>
-                    <Switch
-                      checked={profile.showHours}
-                      onCheckedChange={(checked) =>
-                        setProfile((prev) => ({ ...prev, showHours: checked }))
-                      }
-                    />
-                  </div>
-                </div>
-                <div className="flex items-center justify-between rounded-md border p-3">
-                  <Label>Hide profile badge</Label>
-                  <Switch
-                    checked={profile.hideProfileBadge}
-                    onCheckedChange={(checked) =>
-                      setProfile((prev) => ({
-                        ...prev,
-                        hideProfileBadge: checked,
-                      }))
-                    }
-                  />
-                </div>
-
-                <div className="flex justify-end">
-                  <Button
-                    onClick={saveProfile}
-                    disabled={
-                      savingProfile || isLoading || !hydratedRef.current
-                    }
-                  >
-                    <Save className="w-4 h-4 mr-2" />
-                    {savingProfile ? "Saving..." : "Save Profile Studio"}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Your Public Links</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {Array.isArray(data?.profileLinks) &&
-                data.profileLinks.length > 0 ? (
-                  data.profileLinks.map((row) => (
-                    <div
-                      key={`${row.entity}-${row.id}`}
-                      className="flex items-center justify-between rounded-md border p-3"
-                    >
-                      <div>
-                        <p className="text-sm font-medium">{row.title}</p>
-                        <p className="text-xs text-muted-foreground">
-                          /{row.path.replace(/^\//, "")}
-                        </p>
-                      </div>
-                      <a
-                        href={row.path}
-                        target="_blank"
-                        rel="noreferrer noopener"
-                      >
-                        <Button variant="outline" size="sm">
-                          <Globe className="w-4 h-4 mr-2" />
-                          Open
-                        </Button>
-                      </a>
-                    </div>
-                  ))
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    Create a restaurant, host, or supplier profile to generate
-                    public links.
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="general" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Regional Preferences</CardTitle>
-              </CardHeader>
-              <CardContent className="grid gap-4 md:grid-cols-2">
-                <div>
-                  <Label>Language</Label>
-                  <Select
-                    value={general.language}
-                    onValueChange={(value) => {
-                      setGeneral((prev) => ({ ...prev, language: value }));
-                      setLocale(localeFromLanguageSetting(value));
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="english">English</SelectItem>
-                      <SelectItem value="spanish">Spanish</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label>Currency</Label>
-                  <Select
-                    value={general.currency}
-                    onValueChange={(value) =>
-                      setGeneral((prev) => ({ ...prev, currency: value }))
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="usd">USD</SelectItem>
-                      <SelectItem value="eur">EUR</SelectItem>
-                      <SelectItem value="gbp">GBP</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="md:col-span-2 flex justify-end">
-                  <Button
-                    onClick={saveGeneral}
-                    disabled={
-                      savingGeneral || isLoading || !hydratedRef.current
-                    }
-                  >
-                    <Save className="w-4 h-4 mr-2" />
-                    {savingGeneral ? "Saving..." : "Save General Settings"}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Custom Domain</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <Label>Your domain</Label>
-                  <Input
-                    value={general.customDomainHost}
-                    onChange={(e) =>
-                      setGeneral((prev) => ({
-                        ...prev,
-                        customDomainHost: e.target.value,
-                      }))
-                    }
-                    placeholder="profile.yourdomain.com"
-                  />
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Add a CNAME from your domain to the target shown after
-                    verification.
+              ) : (
+                <div className="flex gap-3 rounded-2xl bg-stone-50 p-4 text-stone-600">
+                  <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
+                  <p className="text-sm leading-6">
+                    No active owned public profiles are linked to this account yet.
                   </p>
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={verifyCustomDomain}
-                    disabled={verifyingDomain}
-                  >
-                    {verifyingDomain ? "Verifying..." : "Verify DNS"}
-                  </Button>
-                  <Button
-                    onClick={saveGeneral}
-                    disabled={
-                      savingGeneral || isLoading || !hydratedRef.current
-                    }
-                  >
-                    <Save className="w-4 h-4 mr-2" />
-                    Save Domain
-                  </Button>
-                </div>
-                {data?.accountSettings?.customDomain?.hostname ? (
-                  <div className="rounded-md border p-3 text-sm">
-                    <p>
-                      <span className="font-medium">Status:</span>{" "}
-                      {String(
-                        data.accountSettings.customDomain.status ||
-                          "unverified",
-                      )}
-                    </p>
-                    {data.accountSettings.customDomain.expectedTarget ? (
-                      <p className="mt-1 text-muted-foreground">
-                        Expected target:{" "}
-                        {data.accountSettings.customDomain.expectedTarget}
-                      </p>
-                    ) : null}
-                    {data.accountSettings.customDomain.diagnostics ? (
-                      <p className="mt-1 text-muted-foreground">
-                        {data.accountSettings.customDomain.diagnostics}
-                      </p>
-                    ) : null}
-                  </div>
-                ) : null}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="notifications">
-            <NotificationSettings />
-          </TabsContent>
-
-          <TabsContent value="privacy" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Privacy Controls</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium">Location Services</p>
-                    <p className="text-sm text-muted-foreground">
-                      Enable nearby discovery and map context
-                    </p>
-                  </div>
-                  <Switch
-                    checked={general.locationServices}
-                    onCheckedChange={(checked) =>
-                      setGeneral((prev) => ({
-                        ...prev,
-                        locationServices: checked,
-                      }))
-                    }
-                  />
-                </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium">Analytics</p>
-                    <p className="text-sm text-muted-foreground">
-                      Help improve product quality and performance
-                    </p>
-                  </div>
-                  <Switch
-                    checked={general.analytics}
-                    onCheckedChange={(checked) =>
-                      setGeneral((prev) => ({ ...prev, analytics: checked }))
-                    }
-                  />
-                </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium">Marketing Communications</p>
-                    <p className="text-sm text-muted-foreground">
-                      Receive product updates and offers
-                    </p>
-                  </div>
-                  <Switch
-                    checked={general.marketing}
-                    onCheckedChange={(checked) =>
-                      setGeneral((prev) => ({ ...prev, marketing: checked }))
-                    }
-                  />
-                </div>
-                <div className="flex justify-end">
-                  <Button
-                    onClick={saveGeneral}
-                    disabled={
-                      savingGeneral || isLoading || !hydratedRef.current
-                    }
-                  >
-                    <Save className="w-4 h-4 mr-2" />
-                    {savingGeneral ? "Saving..." : "Save Privacy Settings"}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
-      </div>
-
-      <Navigation />
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
+
+  return renderSettingsFrame(content);
 }

@@ -13,6 +13,7 @@ const requiredFiles = [
   "client/src/pages/account-setup.tsx",
   "client/src/pages/post-verification.tsx",
   "client/src/pages/restaurant-owner-dashboard.tsx",
+  "client/src/components/business-workspace-shell.tsx",
   "client/src/pages/parking-pass.tsx",
   "client/src/components/dashboard-switcher.tsx",
   "server/unifiedAuth.ts",
@@ -28,7 +29,9 @@ const requiredFiles = [
 
 for (const file of requiredFiles) {
   if (!existsSync(file)) {
-    throw new Error(`Account lifecycle discovery audit missing required file: ${file}`);
+    throw new Error(
+      `Account lifecycle discovery audit missing required file: ${file}`,
+    );
   }
 }
 
@@ -42,6 +45,9 @@ const login = read("client/src/pages/login.tsx");
 const accountSetup = read("client/src/pages/account-setup.tsx");
 const postVerification = read("client/src/pages/post-verification.tsx");
 const ownerDashboard = read("client/src/pages/restaurant-owner-dashboard.tsx");
+const businessWorkspace = read(
+  "client/src/components/business-workspace-shell.tsx",
+);
 const parkingPass = read("client/src/pages/parking-pass.tsx");
 const dashboardSwitcher = read("client/src/components/dashboard-switcher.tsx");
 const unifiedAuth = read("server/unifiedAuth.ts");
@@ -109,9 +115,17 @@ function requireIncludes(source: string, snippet: string, label = snippet) {
   "Do not rename routes, roles, events, files, or user-facing product concepts",
   "Do not add roles or invent a new diner user type",
   "Do not create fake users, fake contractors, fake analytics, placeholder records, or sample data",
-].forEach((snippet) => requireIncludes(audit, snippet, `audit snippet ${snippet}`));
+].forEach((snippet) =>
+  requireIncludes(audit, snippet, `audit snippet ${snippet}`),
+);
 
-for (const forbidden of ["[cite:", "create placeholder", "add sample", "invented contractor", "invented analytics"]) {
+for (const forbidden of [
+  "[cite:",
+  "create placeholder",
+  "add sample",
+  "invented contractor",
+  "invented analytics",
+]) {
   if (audit.toLowerCase().includes(forbidden.toLowerCase())) {
     throw new Error(`Audit must not contain forbidden scope: ${forbidden}`);
   }
@@ -122,7 +136,9 @@ for (const forbidden of ["[cite:", "create placeholder", "add sample", "invented
   "Status: `DONE`",
   "Inserted stabilization audit; C8, C9, and C10 are now complete.",
   "did not rename, advance, or imply completion of unrelated runtime work",
-].forEach((snippet) => requireIncludes(cleanupMap, snippet, `cleanup map snippet ${snippet}`));
+].forEach((snippet) =>
+  requireIncludes(cleanupMap, snippet, `cleanup map snippet ${snippet}`),
+);
 
 requireIncludes(app, '"/scout"', "public /scout prefix");
 requireIncludes(app, '"/customer-signup"', "public customer signup prefix");
@@ -131,13 +147,21 @@ requireIncludes(app, '"/claim-truck"', "public claim truck prefix");
 requireIncludes(app, '"/parking-pass"', "public parking pass prefix");
 requireIncludes(app, '"/account-setup"', "public account setup prefix");
 requireIncludes(app, '"/post-verification"', "public post verification prefix");
-requireIncludes(app, 'path="/p/:profileType/:profileId"', "public profile route");
-requireIncludes(app, '<Route path="/parking-pass-manage" component={ParkingPassManage} />', "authenticated parking pass management route");
+requireIncludes(
+  app,
+  'path="/p/:profileType/:profileId"',
+  "public profile route",
+);
+requireIncludes(
+  app,
+  '<Route path="/parking-pass-manage" component={ParkingPassManage} />',
+  "authenticated parking pass management route",
+);
 
 [
   "function captureUrlAffiliateRef",
   'urlParams.get("ref")',
-  "extractPathAffiliateRef(window.location.pathname || \"\")",
+  'extractPathAffiliateRef(window.location.pathname || "")',
   "isLikelyCleanAffiliateTagSegment(ref)",
   "setAffiliateRef(ref)",
   "oauthConfirmationPending",
@@ -147,7 +171,9 @@ requireIncludes(app, '<Route path="/parking-pass-manage" component={ParkingPassM
   "isInternalAdmin",
   "setAffiliateRef(null)",
   'setLocation("/change-password")',
-].forEach((snippet) => requireIncludes(useAuth, snippet, `useAuth snippet ${snippet}`));
+].forEach((snippet) =>
+  requireIncludes(useAuth, snippet, `useAuth snippet ${snippet}`),
+);
 
 [
   'id: "diner"',
@@ -165,7 +191,13 @@ requireIncludes(app, '<Route path="/parking-pass-manage" component={ParkingPassM
   'params.set("claim", "1")',
   '"/event-coordinator/dashboard?setup=onboarding"',
   '"/supplier/dashboard"',
-].forEach((snippet) => requireIncludes(customerSignup, snippet, `customer signup snippet ${snippet}`));
+].forEach((snippet) =>
+  requireIncludes(
+    customerSignup,
+    snippet,
+    `customer signup snippet ${snippet}`,
+  ),
+);
 
 [
   'fetchJsonWithRetry<Record<string, any>>("/api/auth/login"',
@@ -174,9 +206,14 @@ requireIncludes(app, '<Route path="/parking-pass-manage" component={ParkingPassM
   'href="/forgot-password"',
   'data-recovery-action="navigate-only"',
   "Invalid email or password. If you cannot sign in, reset your password.",
-].forEach((snippet) => requireIncludes(login, snippet, `login snippet ${snippet}`));
+].forEach((snippet) =>
+  requireIncludes(login, snippet, `login snippet ${snippet}`),
+);
 
-if (login.includes('"/api/auth/forgot-password"') || login.includes("createPasswordResetToken")) {
+if (
+  login.includes('"/api/auth/forgot-password"') ||
+  login.includes("createPasswordResetToken")
+) {
   throw new Error("Login page must not trigger password reset email flow");
 }
 
@@ -186,23 +223,48 @@ if (login.includes('"/api/auth/forgot-password"') || login.includes("createPassw
   "This account setup link is invalid or has expired.",
   "This account setup link has expired or has already been used.",
   '"/api/auth/complete-setup"',
-].forEach((snippet) => requireIncludes(accountSetup, snippet, `account setup snippet ${snippet}`));
+].forEach((snippet) =>
+  requireIncludes(accountSetup, snippet, `account setup snippet ${snippet}`),
+);
 
 [
   "getSafePath",
   'path === "/account-setup"',
-  "if (!params.get(\"token\")) return null;",
+  'if (!params.get("token")) return null;',
   '"/api/auth/resend-verification"',
   '"/api/auth/verification-status"',
-].forEach((snippet) => requireIncludes(postVerification, snippet, `post verification snippet ${snippet}`));
+].forEach((snippet) =>
+  requireIncludes(
+    postVerification,
+    snippet,
+    `post verification snippet ${snippet}`,
+  ),
+);
 
 [
   'user?.userType === "restaurant_owner"',
   'user?.userType === "food_truck"',
-  "setupMode === \"schedule\"",
-  'buildOwnerSetupHref("schedule"',
+  'setupMode === "schedule"',
   'href="/parking-pass-manage"',
-].forEach((snippet) => requireIncludes(ownerDashboard, snippet, `owner dashboard snippet ${snippet}`));
+].forEach((snippet) =>
+  requireIncludes(
+    ownerDashboard,
+    snippet,
+    `owner dashboard snippet ${snippet}`,
+  ),
+);
+
+[
+  'setup: "schedule"',
+  "label: availabilityLabel",
+  'isFoodTruck ? { truck: "1" } : {}',
+].forEach((snippet) =>
+  requireIncludes(
+    businessWorkspace,
+    snippet,
+    `business workspace snippet ${snippet}`,
+  ),
+);
 
 [
   'user?.userType === "food_truck"',
@@ -211,16 +273,24 @@ if (login.includes('"/api/auth/forgot-password"') || login.includes("createPassw
   "Connect or claim your business to continue.",
   'setLocation("/host/dashboard")',
   "/api/bookings/truck/",
-].forEach((snippet) => requireIncludes(parkingPass, snippet, `parking pass snippet ${snippet}`));
+].forEach((snippet) =>
+  requireIncludes(parkingPass, snippet, `parking pass snippet ${snippet}`),
+);
 
 [
   "label: 'Admin View'",
   "label: 'Customer View'",
   "label: 'Restaurant View'",
-  "{ label: \"Host\", href: \"/host/dashboard\"",
-  "{ label: \"Coordinator\", href: \"/event-coordinator/dashboard\"",
-  "{ label: \"Supplier\", href: \"/supplier/dashboard\"",
-].forEach((snippet) => requireIncludes(dashboardSwitcher, snippet, `dashboard switcher snippet ${snippet}`));
+  '{ label: "Host", href: "/host/dashboard"',
+  '{ label: "Coordinator", href: "/event-coordinator/dashboard"',
+  '{ label: "Supplier", href: "/supplier/dashboard"',
+].forEach((snippet) =>
+  requireIncludes(
+    dashboardSwitcher,
+    snippet,
+    `dashboard switcher snippet ${snippet}`,
+  ),
+);
 
 [
   'app.post("/api/auth/customer/register"',
@@ -236,54 +306,81 @@ if (login.includes('"/api/auth/forgot-password"') || login.includes("createPassw
   "if (isAdminUserType(user.userType)) return;",
   'app.get("/api/auth/validate-setup-token"',
   'app.post("/api/auth/complete-setup"',
-].forEach((snippet) => requireIncludes(unifiedAuth, snippet, `unified auth snippet ${snippet}`));
+].forEach((snippet) =>
+  requireIncludes(unifiedAuth, snippet, `unified auth snippet ${snippet}`),
+);
 
 [
   'app.get("/api/auth/user"',
   "requiresPasswordReset: true",
   'continuationPath: "/change-password"',
-].forEach((snippet) => requireIncludes(authAccountRoutes, snippet, `auth account route snippet ${snippet}`));
+].forEach((snippet) =>
+  requireIncludes(
+    authAccountRoutes,
+    snippet,
+    `auth account route snippet ${snippet}`,
+  ),
+);
 
 [
   'app.get("/api/truck-claims/public-search"',
   'app.post("/api/truck-claims/request"',
   'app.post("/api/truck-claims", isAuthenticated',
   'await storage.updateUserType(req.user.id, "food_truck")',
-].forEach((snippet) => requireIncludes(truckClaimRoutes, snippet, `truck claim snippet ${snippet}`));
+].forEach((snippet) =>
+  requireIncludes(truckClaimRoutes, snippet, `truck claim snippet ${snippet}`),
+);
 
 [
   "Parking Pass bookings are only available for food trucks.",
   "truck.insuranceVerified === true",
   "Verify your email and submit business insurance to book Parking Pass spots.",
-].forEach((snippet) => requireIncludes(hostRoutes, snippet, `host route snippet ${snippet}`));
+].forEach((snippet) =>
+  requireIncludes(hostRoutes, snippet, `host route snippet ${snippet}`),
+);
 
 [
   'app.get("/api/bookings/my-truck"',
   'app.get("/api/bookings/my-host"',
   '"/api/trucks/:truckId/manual-schedule"',
   '"/api/bookings/truck/:truckId/schedule"',
-].forEach((snippet) => requireIncludes(bookingRoutes, snippet, `booking route snippet ${snippet}`));
+].forEach((snippet) =>
+  requireIncludes(bookingRoutes, snippet, `booking route snippet ${snippet}`),
+);
 
 [
   'continuationPath: "/account-setup"',
   '"/restaurant-signup?businessType=food_truck&source=auth&claim=1"',
   'continuationPath = "/restaurant-owner-dashboard?setup=schedule"',
   'continuationPath = "/restaurant-owner-dashboard?setup=verification"',
-].forEach((snippet) => requireIncludes(loginContinuation, snippet, `login continuation snippet ${snippet}`));
+].forEach((snippet) =>
+  requireIncludes(
+    loginContinuation,
+    snippet,
+    `login continuation snippet ${snippet}`,
+  ),
+);
 
 [
   "Connect or claim your business to continue.",
   "getBusinessAccessContext",
-].forEach((snippet) => requireIncludes(businessTeamAccess, snippet, `business access snippet ${snippet}`));
+].forEach((snippet) =>
+  requireIncludes(
+    businessTeamAccess,
+    snippet,
+    `business access snippet ${snippet}`,
+  ),
+);
 
 [
   '"source": "/api/(.*)"',
   '"destination": "https://mealscout.onrender.com/api/$1"',
-].forEach((snippet) => requireIncludes(vercel, snippet, `vercel api proxy snippet ${snippet}`));
+].forEach((snippet) =>
+  requireIncludes(vercel, snippet, `vercel api proxy snippet ${snippet}`),
+);
 
-[
-  "name: mealscout",
-  "autoDeploy: true",
-].forEach((snippet) => requireIncludes(render, snippet, `render deploy snippet ${snippet}`));
+["name: mealscout", "autoDeploy: true"].forEach((snippet) =>
+  requireIncludes(render, snippet, `render deploy snippet ${snippet}`),
+);
 
 console.log("mealscout-account-lifecycle-discovery-audit.contract: PASS");

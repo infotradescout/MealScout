@@ -1,0 +1,16 @@
+{
+  "restaurantId": "bfe24073-7362-4975-83ba-43c096f782e3",
+  "slug": "the-spot-tavern",
+  "description": "The Spot Tavern — Milton, FL's neighborhood dive bar since 2015. Cold beer, two pool tables, karaoke Thursday through Saturday, free pool and live music Wednesdays, darts Mondays, and a pool tournament every Friday. Drink specials nightly from 8-12.",
+  "phone": "(850) 665-4355",
+  "city": "Milton",
+  "state": "FL",
+  "operatingHours": {
+    "tue": [{ "open": "12:00", "close": "02:30" }],
+    "wed": [{ "open": "12:00", "close": "02:30" }],
+    "thu": [{ "open": "12:00", "close": "02:30" }],
+    "fri": [{ "open": "12:00", "close": "02:30" }],
+    "sat": [{ "open": "12:00", "close": "02:30" }],
+    "sun": [{ "open": "12:00", "close": "00:00" }]
+  }
+}

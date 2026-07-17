@@ -21,12 +21,19 @@ for (const snippet of requiredScoutSnippets) {
   }
 }
 
-if (!navigation.includes("className=\"fixed left-0 right-0 z-[1100] lg:hidden\"")) {
+if (
+  !navigation.includes('isBusinessWorkspaceRoute ? "hidden" : "fixed"') ||
+  !navigation.includes("inset-x-0 bottom-0 z-[1100] border-t border-[color:var(--border-subtle)] lg:hidden")
+) {
   throw new Error("Global mobile nav z-index contract missing (expected z-[1100]).");
 }
 
 if (!navigation.includes("style={{ bottom: 0 }}")) {
   throw new Error("Global mobile nav bottom anchor missing (expected bottom: 0).");
+}
+
+if (navigation.includes("useScoutNavSearch") || navigation.includes("{scoutNavSearch}")) {
+  throw new Error("Global navigation must not own the Scout search surface.");
 }
 
 console.log("scout-search-nav-collision.contract: PASS");

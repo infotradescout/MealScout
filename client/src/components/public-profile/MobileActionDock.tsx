@@ -100,7 +100,7 @@ export function MobileActionDock({
       aria-label="Quick actions"
       data-mobile-action-dock="true"
     >
-      <div className="border-t border-white/10 bg-[#0b0908]/96 backdrop-blur-md px-3 py-2.5">
+      <div className="border-t border-[color:var(--profile-border)] bg-white/95 px-3 py-2.5 shadow-[0_-12px_34px_rgba(96,46,20,0.12)] backdrop-blur-md">
         <div className={`grid gap-2 ${gridClass}`}>
           {/* Primary action — full orange */}
           <a
@@ -108,7 +108,7 @@ export function MobileActionDock({
             target={primary.cta.type === "external" || primary.cta.type === "map" ? "_blank" : undefined}
             rel={primary.cta.type === "external" || primary.cta.type === "map" ? "noopener noreferrer" : undefined}
             onClick={() => onAction?.(primary.cta.type, primary.cta.href)}
-            className="flex items-center justify-center gap-1.5 rounded-xl bg-orange-500 px-3 py-2.5 text-sm font-bold text-black active:bg-orange-400"
+            className="profile-action-primary flex items-center justify-center gap-1.5 rounded-xl px-3 py-2.5 text-sm font-bold active:opacity-90"
           >
             <primary.icon className="h-4 w-4 flex-none" />
             <span className="truncate">{primary.label}</span>
@@ -122,7 +122,7 @@ export function MobileActionDock({
               target={action.cta.type === "external" || action.cta.type === "map" ? "_blank" : undefined}
               rel={action.cta.type === "external" || action.cta.type === "map" ? "noopener noreferrer" : undefined}
               onClick={() => onAction?.(action.cta.type, action.cta.href)}
-              className="flex flex-col items-center justify-center gap-0.5 rounded-xl border border-white/15 bg-white/5 px-2 py-2 text-white active:bg-white/10"
+              className="profile-action-secondary flex flex-col items-center justify-center gap-0.5 rounded-xl px-2 py-2 active:bg-orange-50"
             >
               <action.icon className="h-4 w-4 flex-none" />
               <span className="text-[10px] font-semibold leading-none truncate max-w-full">

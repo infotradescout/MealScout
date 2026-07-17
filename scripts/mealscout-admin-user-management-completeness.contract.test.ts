@@ -40,7 +40,7 @@ const requiredDashboardSnippets = [
   "Public Profile Link",
   "Copy Public Link",
   "Open Public Link",
-  "Open Scout Discovery",
+  "Scout as a diner",
   "LINKED ENTITIES",
   "Restaurants/Trucks:",
   "Hosts:",

@@ -24,7 +24,7 @@ requireIncludes(
 );
 requireIncludes(
   publicProfile,
-  'restaurantProfile?.profileType === "truck" ? (',
+  'restaurantProfile.profileType === "truck" ? (',
   "Truck hero must render only for truck public profiles.",
 );
 requireIncludes(

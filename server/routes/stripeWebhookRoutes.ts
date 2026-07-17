@@ -1353,23 +1353,18 @@ export function registerStripeWebhookRoutes(
                   .where(eq(restaurants.id, truckId));
 
                 if (truck?.ownerId) {
-                  const { debitCredit, getUserCreditBalance } =
-                    await import("../creditService");
-                  const balance = await getUserCreditBalance(truck.ownerId);
-                  const availableCents = Math.max(0, Math.floor(balance * 100));
-                  const debitCents = Math.min(
-                    creditAppliedCents,
-                    availableCents,
+                  const { debitCredit } = await import("../creditService");
+                  // Stripe has already honored the metadata discount. Record
+                  // that exact committed value instead of silently shrinking
+                  // the debit when another concurrent spend changed balance.
+                  await debitCredit(
+                    truck.ownerId,
+                    creditAppliedCents / 100,
+                    "booking_credit",
+                    paymentIntent.id,
+                    "booking",
+                    { externalValueAlreadyCommitted: true },
                   );
-                  if (debitCents > 0) {
-                    await debitCredit(
-                      truck.ownerId,
-                      debitCents / 100,
-                      "booking_credit",
-                      paymentIntent.id,
-                      "booking",
-                    );
-                  }
                 }
               }
             } catch (creditError) {

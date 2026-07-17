@@ -1,8 +1,8 @@
 import { useEffect, useMemo } from "react";
+import { CalendarDays } from "lucide-react";
 import { useLocation } from "wouter";
-import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
-import EventsPage from "@/pages/events";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function EventsRouter() {
   const { user, isLoading } = useAuth();
@@ -18,75 +18,68 @@ export default function EventsRouter() {
     }
 
     const isEventCoordinator = roles.has("event_coordinator");
-    const isTruck =
-      roles.has("food_truck") || roles.has("restaurant_owner");
+    const isTruck = roles.has("food_truck") || roles.has("restaurant_owner");
     const isMultiRole = Number(isEventCoordinator) + Number(isTruck) > 1;
 
     return { isEventCoordinator, isTruck, isMultiRole };
   }, [user]);
 
   useEffect(() => {
-    if (isLoading || !user) return;
-    if (roleState.isMultiRole) return;
-    // Keep event coordinators on /events so posting lives on the Events page.
-    if (roleState.isTruck) {
-      setLocation("/truck-discovery");
-    }
-  }, [isLoading, roleState, setLocation, user]);
+    if (isLoading || roleState.isMultiRole) return;
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
-      </div>
-    );
-  }
-
-  if (!user || (!roleState.isEventCoordinator && !roleState.isTruck)) {
-    return <EventsPage />;
-  }
+    const destination = roleState.isEventCoordinator
+      ? "/event-coordinator/dashboard"
+      : roleState.isTruck
+        ? "/truck-discovery"
+        : "/events/public";
+    setLocation(destination, { replace: true });
+  }, [isLoading, roleState, setLocation]);
 
   if (roleState.isMultiRole) {
     return (
-      <div className="max-w-xl mx-auto px-4 py-8 space-y-4">
-        <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-6 space-y-2">
-          <h1 className="text-lg font-semibold text-[color:var(--text-primary)]">Events</h1>
-          <p className="text-sm text-[color:var(--text-muted)]">
-            Choose the events experience you want to use right now.
+      <main className="min-h-screen bg-[var(--bg-layered)] px-4 py-8">
+        <div className="mx-auto max-w-xl rounded-[1.75rem] border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-6 shadow-clean-lg sm:p-8">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[color:var(--accent-text)]/10 text-[color:var(--accent-text)]">
+            <CalendarDays className="h-6 w-6" aria-hidden="true" />
+          </div>
+          <h1 className="mt-5 text-2xl font-black text-[color:var(--text-primary)]">
+            Events
+          </h1>
+          <p className="mt-2 text-sm leading-6 text-[color:var(--text-muted)]">
+            Choose the event work you need, or browse the public event list.
           </p>
-        </div>
-        <div className="grid gap-3">
-          {roleState.isEventCoordinator && (
+          <div className="mt-6 grid gap-3">
             <Button
-              className="justify-start"
+              className="min-h-11 justify-start"
               onClick={() => setLocation("/event-coordinator/dashboard")}
             >
-              Organizer events
+              Manage organizer events
             </Button>
-          )}
-          {roleState.isTruck && (
             <Button
-              className="justify-start"
+              className="min-h-11 justify-start"
+              variant="secondary"
               onClick={() => setLocation("/truck-discovery")}
             >
-              Truck events
+              Find truck opportunities
             </Button>
-          )}
-          <Button
-            variant="outline"
-            className="justify-start"
-            onClick={() => setLocation("/events/public")}
-          >
-            Public event listings
-          </Button>
+            <Button
+              variant="outline"
+              className="min-h-11 justify-start"
+              onClick={() => setLocation("/events/public")}
+            >
+              Browse food events
+            </Button>
+          </div>
         </div>
-      </div>
+      </main>
     );
   }
 
-  return <EventsPage />;
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-[var(--bg-layered)] px-4 text-center">
+      <p className="text-sm text-[color:var(--text-muted)]">
+        {isLoading ? "Loading events…" : "Opening events…"}
+      </p>
+    </main>
+  );
 }
-
-
-
-

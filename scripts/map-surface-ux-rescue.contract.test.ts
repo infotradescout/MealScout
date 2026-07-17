@@ -6,10 +6,10 @@ const source = readFileSync("client/src/pages/map.tsx", "utf8");
 const requiredPhrases = [
   "Nearby Food Map",
   "Use my location",
-  "Open Scout",
+  "Scout",
   "Browse nearby",
   "No nearby food is pinned in this part of the map yet",
-  "Pan or zoom out to check another area, or open Scout for more food options nearby.",
+  "Pan or zoom out to check another area, or scout for more food options.",
   "Worth discovering",
 ];
 

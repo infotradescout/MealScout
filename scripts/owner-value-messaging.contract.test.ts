@@ -4,6 +4,7 @@ const ownerDashboard = readFileSync(
   "client/src/pages/restaurant-owner-dashboard.tsx",
   "utf8",
 );
+const normalizedOwnerDashboard = ownerDashboard.replace(/\s+/g, " ");
 
 const requiredSnippets = [
   "Attribution summary",
@@ -17,14 +18,16 @@ const requiredSnippets = [
 ];
 
 for (const snippet of requiredSnippets) {
-  if (!ownerDashboard.includes(snippet)) {
+  if (!normalizedOwnerDashboard.includes(snippet)) {
     throw new Error(`PDA-2.5 owner messaging contract missing: ${snippet}`);
   }
 }
 
 const attributionSummaryStart = ownerDashboard.indexOf("Attribution summary");
 if (attributionSummaryStart < 0) {
-  throw new Error("PDA-2.5 owner messaging contract could not locate Attribution summary block");
+  throw new Error(
+    "PDA-2.5 owner messaging contract could not locate Attribution summary block",
+  );
 }
 const attributionSummarySlice = ownerDashboard
   .slice(attributionSummaryStart, attributionSummaryStart + 2200)

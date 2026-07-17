@@ -142,7 +142,7 @@ export const SCOUT_HORIZONTAL_ROW_REGISTRY: ScoutHorizontalRowDefinition[] = [
     priority: 10,
     maxCards: 10,
     hideWhenEmpty: true,
-    dedupPolicy: "content_entity",
+    dedupPolicy: "strict_business",
   },
   {
     id: "hot_deals",
@@ -329,6 +329,97 @@ export function getScoutBusinessKey(source: unknown, route?: string | null): str
   const name = readString(source, ["businessName", "restaurantName", "name", "title"]);
   const normalizedName = slugKey(name);
   return normalizedName ? `name:${normalizedName}` : null;
+}
+
+export const SCOUT_MIN_MENU_BUSINESS_DIVERSITY = 2;
+
+/**
+ * Groups duplicate business records by their human-facing identity before
+ * falling back to database ids. This keeps punctuation-only listing variants
+ * from occupying multiple positions in the same discovery category.
+ */
+export function getScoutCanonicalBusinessKey(
+  source: unknown,
+  route?: string | null,
+): string | null {
+  if (!source || typeof source !== "object") {
+    return getScoutBusinessKey(source, route);
+  }
+
+  const explicitBusinessName = readString(source, [
+    "businessName",
+    "restaurantName",
+  ]);
+  const parentBusinessId = readString(source, [
+    "businessId",
+    "restaurantId",
+    "truckId",
+    "profileId",
+    "entityId",
+  ]);
+  const displayName =
+    explicitBusinessName ||
+    (parentBusinessId ? null : readString(source, ["name", "title"]));
+  const normalizedName = slugKey(displayName);
+
+  return normalizedName
+    ? `identity:${normalizedName}`
+    : getScoutBusinessKey(source, route);
+}
+
+export function selectDistinctScoutMenuBusinesses<T>(
+  items: readonly T[],
+  limit = 10,
+  claimedBusinessKeys: Set<string> = new Set<string>(),
+): T[] {
+  const normalizedLimit = Math.max(0, Math.floor(limit));
+  if (normalizedLimit === 0) return [];
+
+  const selected: T[] = [];
+  for (const item of items) {
+    const key = getScoutCanonicalBusinessKey(item);
+    if (key && claimedBusinessKeys.has(key)) continue;
+    if (key) claimedBusinessKeys.add(key);
+    selected.push(item);
+    if (selected.length >= normalizedLimit) break;
+  }
+  return selected;
+}
+
+function hashScoutRotationSeed(seedKey: string): number {
+  let hash = 2166136261;
+  for (let index = 0; index < seedKey.length; index += 1) {
+    hash ^= seedKey.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+export function rotateScoutSpots<T>(
+  items: readonly T[],
+  seedKey: string,
+  getKey: (item: T) => string | null,
+  limit = 8,
+): T[] {
+  const normalizedLimit = Math.max(0, Math.floor(limit));
+  if (normalizedLimit === 0 || items.length === 0) return [];
+
+  const seenKeys = new Set<string>();
+  const uniqueItems: T[] = [];
+  items.forEach((item, index) => {
+    const key = getKey(item) || `unkeyed:${index}`;
+    if (seenKeys.has(key)) return;
+    seenKeys.add(key);
+    uniqueItems.push(item);
+  });
+
+  if (uniqueItems.length <= 1) return uniqueItems.slice(0, normalizedLimit);
+
+  const offset = hashScoutRotationSeed(seedKey) % uniqueItems.length;
+  return uniqueItems
+    .slice(offset)
+    .concat(uniqueItems.slice(0, offset))
+    .slice(0, normalizedLimit);
 }
 
 export function filterUniqueScoutBusinessCards<T>(

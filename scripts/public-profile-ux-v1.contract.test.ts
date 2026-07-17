@@ -4,7 +4,6 @@ import { readFileSync } from "node:fs";
 const publicProfilePage = readFileSync("client/src/pages/public-profile.tsx", "utf8");
 const elevatedTruckHero = readFileSync("client/src/components/public-profile/ElevatedTruckHero.tsx", "utf8");
 const elevatedProfileHero = readFileSync("client/src/components/public-profile/ElevatedProfileHero.tsx", "utf8");
-const whyGoNow = readFileSync("client/src/components/public-profile/WhyGoNowPanel.tsx", "utf8");
 const menuHighlights = readFileSync("client/src/components/public-profile/MenuHighlightsRail.tsx", "utf8");
 const truckSchedule = readFileSync("client/src/components/public-profile/TruckSchedulePanel.tsx", "utf8");
 const restaurantHours = readFileSync("client/src/components/public-profile/RestaurantHoursPanel.tsx", "utf8");
@@ -18,7 +17,6 @@ const relatedScoutRail = readFileSync("client/src/components/public-profile/Rela
 for (const snippet of [
   "ElevatedTruckHero",
   "ElevatedProfileHero",
-  "WhyGoNowPanel",
   "MenuHighlightsRail",
   "TruckSchedulePanel",
   "RestaurantHoursPanel",
@@ -47,17 +45,17 @@ for (const snippet of [
 }
 
 assert.ok(
-  publicProfilePage.includes("<QuickActionRow profile={data} safeCtas={safeCtas} />") &&
+  decisionBar.includes("pickDecisionAction") &&
     mobileDock.includes("Directions") &&
     mobileDock.includes("Menu"),
-  "Truck/restaurant profiles must expose Directions/Menu actions through the action row and mobile dock.",
+  "Truck/restaurant profiles must expose entity-aware actions through the decision bar and mobile dock.",
 );
 
 for (const snippet of [
   'data-public-profile-decision-bar="true"',
   'data-profile-kind={profile.profileType}',
   "What to order",
-  "Best action",
+  "At a glance",
   "Schedule not posted yet",
   "Hours not posted yet",
   "Menu not posted yet",
@@ -85,7 +83,10 @@ for (const snippet of [
   assert.ok(elevatedProfileHero.includes(snippet), `Elevated restaurant hero missing restaurant decision cue: ${snippet}`);
 }
 
-assert.ok(whyGoNow.includes("Why go now"), "Why Go Now panel must keep the decision-oriented section label.");
+assert.ok(
+  !publicProfilePage.includes("<WhyGoNowPanel"),
+  "Profile flow must not repeat hours, schedule, deals, and events in a second signal panel.",
+);
 assert.ok(menuHighlights.includes("overflow-x-auto"), "Menu highlights must render as a horizontal rail.");
 assert.ok(truckSchedule.includes("Current stop") || truckSchedule.includes("Today"), "Truck schedule panel must answer stop/today context.");
 assert.ok(restaurantHours.includes("Hours"), "Restaurant hours panel must preserve hours context.");

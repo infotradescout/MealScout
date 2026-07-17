@@ -43,13 +43,13 @@ function StopRow({ label, stop, isCurrent = false }: StopRowProps) {
     <div
       className={`rounded-2xl border p-4 space-y-2 ${
         isCurrent
-          ? "border-orange-400/35 bg-orange-500/10"
-          : "border-white/10 bg-black/20"
+          ? "border-orange-200 bg-orange-50"
+          : "border-[color:var(--profile-border)] bg-white"
       }`}
     >
       <p
         className={`text-[10px] font-bold uppercase tracking-[0.18em] ${
-          isCurrent ? "text-orange-200/80" : "text-white/45"
+          isCurrent ? "text-orange-800" : "text-[color:var(--profile-muted)]"
         }`}
       >
         {label}
@@ -57,29 +57,29 @@ function StopRow({ label, stop, isCurrent = false }: StopRowProps) {
 
       {locationName ? (
         <p
-          className={`text-base font-bold leading-snug ${isCurrent ? "text-white" : "text-white/90"}`}
+          className="text-base font-bold leading-snug text-[color:var(--profile-ink)]"
         >
           {locationName}
         </p>
       ) : null}
 
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-white/70">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-[color:var(--profile-muted)]">
         {timeLabel ? (
           <span className="flex items-center gap-1">
-            <Clock3 className="h-3.5 w-3.5 flex-none text-orange-200/70" />
+            <Clock3 className="h-3.5 w-3.5 flex-none text-[color:var(--profile-accent)]" />
             {timeLabel}
           </span>
         ) : null}
         {stop.addressPublicLabel && stop.addressPublicLabel !== locationName ? (
           <span className="flex items-center gap-1">
-            <MapPin className="h-3.5 w-3.5 flex-none text-orange-200/70" />
+            <MapPin className="h-3.5 w-3.5 flex-none text-[color:var(--profile-accent)]" />
             {stop.addressPublicLabel}
           </span>
         ) : null}
       </div>
 
       {stop.notice ? (
-        <p className="text-xs text-white/60 italic">{stop.notice}</p>
+        <p className="text-xs italic text-[color:var(--profile-muted)]">{stop.notice}</p>
       ) : null}
 
       {directionsHref ? (
@@ -89,7 +89,7 @@ function StopRow({ label, stop, isCurrent = false }: StopRowProps) {
           rel="noopener noreferrer"
           data-analytics-action="directions_click"
           data-analytics-target-type="truck_schedule"
-          className="inline-flex items-center gap-1 text-xs font-semibold text-orange-300 hover:text-orange-200"
+          className="inline-flex items-center gap-1 text-xs font-semibold text-[#b93619] hover:text-[#8f2a14]"
         >
           Get directions <ExternalLink className="h-3 w-3" />
         </a>
@@ -120,11 +120,11 @@ export function TruckSchedulePanel({
   return (
     <section aria-label="Truck schedule" className="space-y-3">
       <div className="flex items-center justify-between">
-        <p className="text-xs font-bold uppercase tracking-[0.18em] text-white/45">
+        <p className="profile-section-label">
           Schedule
         </p>
         {statusBadge ? (
-          <span className="rounded-full border border-orange-400/30 bg-orange-500/10 px-2 py-0.5 text-[10px] font-bold text-orange-200">
+          <span className="rounded-full border border-orange-200 bg-orange-50 px-2.5 py-1 text-[10px] font-bold text-orange-800">
             {statusBadge}
           </span>
         ) : null}
@@ -144,22 +144,22 @@ export function TruckSchedulePanel({
 
           {upcomingStops.length > 0 ? (
             <div className="space-y-2">
-              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/35 pt-1">
+              <p className="profile-section-label pt-1 text-[10px]">
                 Upcoming
               </p>
               {upcomingStops.map((stop, i) => (
                 <div
                   key={`${stop.stopId || stop.date || "stop"}:${i}`}
-                  className="flex items-start gap-3 rounded-xl border border-white/8 bg-black/15 px-3 py-2.5"
+                  className="flex items-start gap-3 rounded-xl border border-[color:var(--profile-border)] bg-white px-3 py-2.5"
                 >
-                  <CalendarDays className="mt-0.5 h-4 w-4 flex-none text-white/40" />
+                  <CalendarDays className="mt-0.5 h-4 w-4 flex-none text-[color:var(--profile-accent)]" />
                   <div className="min-w-0">
-                    <p className="text-sm font-medium text-white/85 truncate">
+                    <p className="truncate text-sm font-medium text-[color:var(--profile-ink)]">
                       {stop.locationName ||
                         stop.addressPublicLabel ||
                         "Scheduled stop"}
                     </p>
-                    <p className="text-xs text-white/50">
+                    <p className="text-xs text-[color:var(--profile-muted)]">
                       {[stop.date, stop.timeWindowLabel]
                         .filter(Boolean)
                         .join(" · ")}
@@ -171,20 +171,20 @@ export function TruckSchedulePanel({
           ) : null}
 
           {schedule?.notice ? (
-            <p className="rounded-xl border border-white/10 bg-black/15 px-3 py-2.5 text-xs text-white/70">
+            <p className="rounded-xl border border-[color:var(--profile-border)] bg-[color:var(--profile-surface-soft)] px-3 py-2.5 text-xs text-[color:var(--profile-muted)]">
               {schedule.notice}
             </p>
           ) : null}
         </div>
       ) : (
         /* Thin state — no schedule posted */
-        <div className="rounded-2xl border border-white/8 bg-black/15 px-4 py-5 text-center space-y-2">
-          <p className="text-sm text-white/55">
+        <div className="space-y-2 rounded-2xl border border-[color:var(--profile-border)] bg-[color:var(--profile-surface-soft)] px-4 py-5 text-center">
+          <p className="text-sm text-[color:var(--profile-muted)]">
             {getTruckScheduleEmptyStateLabel()}
           </p>
           <a
             href="/claim-business"
-            className="inline-block text-xs font-semibold text-orange-300 hover:text-orange-200"
+            className="inline-block text-xs font-semibold text-[#b93619] hover:text-[#8f2a14]"
           >
             Own this truck? Add your schedule →
           </a>

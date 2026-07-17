@@ -119,7 +119,7 @@ export function ProfileHeroMedia({
       : "text-2xl font-black text-orange-100";
 
   return (
-    <div className={containerClassName}>
+    <div className={containerClassName} data-profile-hero-media="true">
       {showCoverImage ? (
         <img
           src={coverImageUrl || undefined}

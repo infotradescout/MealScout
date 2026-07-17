@@ -135,7 +135,11 @@ if (!signalClientBlock.includes("Quality telemetry must never affect public prof
 if (!profileBoundary.includes("export class ProfileErrorBoundary")) {
   throw new Error("Public profile error boundary must be present");
 }
-if (!profileBoundary.includes("Back to Scout") || !profileBoundary.includes("Refresh profile")) {
+if (
+  !profileBoundary.includes('href="/scout"') ||
+  !profileBoundary.includes("Refresh profile") ||
+  !profileBoundary.includes("profile-surface")
+) {
   throw new Error("Public profile error boundary must render a safe recovery state");
 }
 if (!publicProfile.includes("<ProfileErrorBoundary")) {

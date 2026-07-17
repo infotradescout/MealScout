@@ -10,7 +10,7 @@ export function ScoutEmptyState({ laneId }: { laneId: ScoutSceneId }) {
       : laneId === "deals"
         ? "No active deals nearby right now."
         : laneId === "food_trucks"
-          ? "No food trucks nearby right now."
+          ? "No live trucks right now."
           : laneId === "events"
             ? "No food events nearby right now."
             : "Nothing strong here yet.";
@@ -21,7 +21,7 @@ export function ScoutEmptyState({ laneId }: { laneId: ScoutSceneId }) {
       : laneId === "deals"
         ? "Try Nearby or New Menus for fresh local options."
         : laneId === "food_trucks"
-          ? "Try Restaurants, Events, or Worth Discovering."
+          ? "Live trucks appear only while they are actively serving."
           : laneId === "events"
             ? "Check Nearby or Worth Discovering."
             : "Try another scene or widen your area.";

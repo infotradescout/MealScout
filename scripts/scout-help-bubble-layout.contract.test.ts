@@ -22,7 +22,8 @@ const requiredNavigationSnippets = [
   "const isScoutRoute =",
   "const disableScoutHelpBubbles = isScoutRoute;",
   "disabled={disableScoutHelpBubbles}",
-  "className=\"fixed left-0 right-0 z-[1100] lg:hidden\"",
+  'isBusinessWorkspaceRoute ? "hidden" : "fixed"',
+  "inset-x-0 bottom-0 z-[1100] border-t border-[color:var(--border-subtle)] lg:hidden",
 ];
 
 for (const snippet of requiredNavigationSnippets) {

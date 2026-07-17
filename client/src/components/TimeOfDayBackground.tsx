@@ -1,12 +1,27 @@
 import { useEffect } from "react";
 
-// Dark mode is permanent and global — no light mode, no toggles, no time-based switching.
-export function TimeOfDayBackground() {
+type AppBackgroundAppearance = "day" | "night";
+
+export function TimeOfDayBackground({
+  appearance = "day",
+}: {
+  appearance?: AppBackgroundAppearance;
+}) {
   useEffect(() => {
     const root = document.documentElement;
     root.classList.remove("theme-day", "theme-night");
-    root.classList.add("theme-night");
-  }, []);
+    root.classList.add(appearance === "night" ? "theme-night" : "theme-day");
+  }, [appearance]);
+
+  if (appearance === "day") {
+    return (
+      <div
+        className="fixed inset-0 z-0 pointer-events-none"
+        style={{ background: "var(--bg-layered)" }}
+        aria-hidden="true"
+      />
+    );
+  }
 
   return (
     <>
@@ -26,6 +41,7 @@ export function TimeOfDayBackground() {
           backgroundImage:
             "linear-gradient(180deg, rgba(8, 8, 8, 0.75) 0%, rgba(8, 8, 8, 0.55) 50%, rgba(8, 8, 8, 0.7) 100%)",
         }}
+        aria-hidden="true"
       />
     </>
   );

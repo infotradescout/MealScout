@@ -1,0 +1,86 @@
+{
+  "restaurantId": "6ca08365-f8af-4c1d-9754-6c998c803869",
+  "slug": "all-gas-no-brakes-reloaded",
+  "logo": {
+    "localPath": "C:/Users/flavo/AppData/Local/Temp/claude/d--AAATraderCorner-TradeScout-MealScout/c8593945-b57a-430c-a58c-d155ce22739a/scratchpad/all-gas-no-brakes/logo.jpg"
+  },
+  "description": "Pensacola's own All Gas No Brakes Reloaded — a husband-and-wife food truck duo slinging crispy wings and stuffed egg rolls, finished with our signature sticky-spicy Hot Honey and Sweet Chili sauces. We're grateful for every week we get to serve this community. Come hungry, bring your family, and let us take care of the rest. Catering available for all types of events.",
+  "websiteUrl": "https://allgasnobrakesreloaded.com",
+  "instagramUrl": "https://www.instagram.com/all.gasnobrakesreloaded/",
+  "facebookPageUrl": "https://www.facebook.com/Allgasnobrakesfoodtruck111/",
+  "operatingHours": {
+    "wed": [{ "open": "17:00", "close": "19:30" }],
+    "thu": [{ "open": "17:00", "close": "19:30" }],
+    "fri": [{ "open": "17:00", "close": "22:00" }],
+    "sat": [{ "open": "10:00", "close": "18:00" }]
+  },
+  "menu": {
+    "name": "Menu",
+    "category": "Bottled Sauces",
+    "items": [
+      {
+        "name": "Hot Honey Sauce",
+        "description": "Our signature sticky-spicy hot honey — 16oz bottle.",
+        "priceCents": 1500,
+        "itemType": "merchandise",
+        "imageLocalPath": "C:/Users/flavo/AppData/Local/Temp/claude/d--AAATraderCorner-TradeScout-MealScout/c8593945-b57a-430c-a58c-d155ce22739a/scratchpad/all-gas-no-brakes/menu/hot-honey.png"
+      },
+      {
+        "name": "Sweet Chili Sauce",
+        "description": "Sweet and mild chili sauce — 16oz bottle.",
+        "priceCents": 1500,
+        "itemType": "merchandise",
+        "imageLocalPath": "C:/Users/flavo/AppData/Local/Temp/claude/d--AAATraderCorner-TradeScout-MealScout/c8593945-b57a-430c-a58c-d155ce22739a/scratchpad/all-gas-no-brakes/menu/sweet-chili.jpg"
+      },
+      {
+        "name": "Sauce Bundle (2x 16oz)",
+        "description": "One Hot Honey and one Sweet Chili, bundled and saved.",
+        "priceCents": 4999,
+        "itemType": "merchandise",
+        "imageLocalPath": "C:/Users/flavo/AppData/Local/Temp/claude/d--AAATraderCorner-TradeScout-MealScout/c8593945-b57a-430c-a58c-d155ce22739a/scratchpad/all-gas-no-brakes/menu/bundle.png"
+      }
+    ]
+  },
+  "manualSchedule": [
+    {
+      "date": "2026-07-15",
+      "startTime": "17:00",
+      "endTime": "19:30",
+      "locationName": "Azalea Bay Apartments",
+      "address": "3511 Gulf Breeze Pkwy",
+      "city": "Gulf Breeze",
+      "state": "FL",
+      "notes": "Source: owner's weekly schedule post, 2026-07-12"
+    },
+    {
+      "date": "2026-07-16",
+      "startTime": "17:00",
+      "endTime": "19:30",
+      "locationName": "The 52 Apartments",
+      "address": "8511 Myslak Wy",
+      "city": "Pensacola",
+      "state": "FL",
+      "notes": "Source: owner's weekly schedule post, 2026-07-12"
+    },
+    {
+      "date": "2026-07-17",
+      "startTime": "17:00",
+      "endTime": "22:00",
+      "locationName": "Happy Hour",
+      "address": "300 S Tarragona St",
+      "city": "Pensacola",
+      "state": "FL",
+      "notes": "Source: owner's weekly schedule post, 2026-07-12"
+    },
+    {
+      "date": "2026-07-18",
+      "startTime": "10:00",
+      "endTime": "18:00",
+      "locationName": "Five Flags Speedway — Pensacola Takeover 2.0",
+      "address": "7451 Pine Forest Rd",
+      "city": "Pensacola",
+      "state": "FL",
+      "notes": "Source: owner's weekly schedule post, 2026-07-12"
+    }
+  ]
+}

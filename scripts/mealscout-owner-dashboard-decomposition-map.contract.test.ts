@@ -241,7 +241,7 @@ function requireMatch(source: string, pattern: RegExp, label: string) {
   'queryKey: ["/api/business-access/me"]',
   'queryKey: ["/api/restaurants/my-restaurants"]',
   'queryKey: ["/api/subscription/status"]',
-  'queryKey: ["/api/bookings/my-truck"]',
+  'queryKey: ["/api/bookings/my-truck", selectedRestaurant]',
   "/api/owner/value-attribution",
   "/api/owner/profile-completion-action",
   "profileDraft",

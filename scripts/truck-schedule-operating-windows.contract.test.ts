@@ -7,7 +7,7 @@ const ownerDashboard = readFileSync(
 
 const requiredSnippets = [
   "const hasValidTruckOperatingWindow = (entries: any[]) => {",
-  "const isTruckLiveBySchedule = (entries: any[]) => {",
+  "const isTruckServingByScheduleNow = (entries: any[]) => {",
   "entry?.startTime || entry?.start || entry?.opensAt",
   "entry?.endTime || entry?.end || entry?.closesAt",
   "entry?.locationName ||",

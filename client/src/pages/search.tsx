@@ -8,7 +8,6 @@ import DealCard from "@/components/deal-card";
 import SmartSearch from "@/components/smart-search";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { BackHeader } from "@/components/back-header";
 import {
   Select,
   SelectContent,
@@ -684,6 +683,8 @@ export default function SearchPage() {
     }
     return best ? best.term : null;
   }, [searchQuery, suggestionTerms]);
+  const hasSearchIntent =
+    searchQuery.trim().length > 0 || selectedCategory !== "all";
 
   const searchTitle = searchQuery
     ? `${searchQuery} - Search Results`
@@ -821,7 +822,6 @@ export default function SearchPage() {
         canonicalUrl={searchCanonicalUrl}
         schemaData={searchSchemaData}
       />
-      <BackHeader title="Search" fallbackHref="/" />
       {/* Header */}
       <header className="px-4 sm:px-6 py-6 bg-[hsl(var(--background))/0.94] border-b border-[color:var(--border-subtle)] shadow-clean">
         <div className="mb-6 flex items-start justify-between gap-3">
@@ -858,24 +858,6 @@ export default function SearchPage() {
                   <ArrowDownToLine className="w-4 h-4" />
                 </Button>
               </Link>
-            )}
-            {!searchQuery && !userLocation && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={requestUserLocation}
-                disabled={isLocating}
-                data-testid="button-request-location"
-                aria-label="Use my location"
-                onPointerDown={() => {
-                  trackUxEvent("search_location_request_primary", {
-                    surface: "search_header",
-                  });
-                }}
-              >
-                <MapPin className="w-4 h-4 mr-1" />
-                {isLocating ? "Locating..." : "Use location"}
-              </Button>
             )}
             <Button
               variant="outline"
@@ -962,7 +944,7 @@ export default function SearchPage() {
                 }}
               >
                 <MapPin className="w-4 h-4 mr-1" />
-                Open Scout
+                Scout
               </Button>
             </Link>
           </div>
@@ -1400,18 +1382,18 @@ export default function SearchPage() {
               <Search className="w-8 h-8 text-muted-foreground" />
             </div>
             <h3 className="font-bold text-lg text-foreground mb-2">
-              {searchQuery &&
-              mergedRestaurants &&
-              mergedRestaurants.length > 0
+              {searchQuery && mergedRestaurants.length > 0
                 ? "No deals found yet"
-                : "No matches found"}
+                : hasSearchIntent
+                  ? "No matches found"
+                  : "Start with what sounds good"}
             </h3>
             <p className="text-muted-foreground">
-              {searchQuery &&
-              mergedRestaurants &&
-              mergedRestaurants.length > 0
+              {searchQuery && mergedRestaurants.length > 0
                 ? "Restaurants and trucks are listed above even without active deals."
-                : "Try adjusting your search terms to find restaurants, trucks, or deals."}
+                : hasSearchIntent
+                  ? "Try another dish, place, truck, or category."
+                  : "Search for a dish or place, choose a category, or scout."}
             </p>
             {didYouMean && (
               <div className="mt-3">
@@ -1432,59 +1414,62 @@ export default function SearchPage() {
                 </Button>
               </div>
             )}
-            <Button
-              onClick={() => {
-                setSearchQuery("");
-                setSelectedCategory("all");
-              }}
-              className="mt-4"
-              data-testid="button-clear-search"
-            >
-              Clear Search
-            </Button>
-            {!userLocation && !isLocating && (
+            {hasSearchIntent && (
               <Button
-                variant="outline"
-                onClick={requestUserLocation}
-                className="mt-2 ml-2"
-                data-testid="button-empty-use-location"
-                onPointerDown={() => {
-                  trackUxEvent("search_location_request_empty", {
-                    surface: "search_empty_state",
-                  });
+                onClick={() => {
+                  setSearchQuery("");
+                  setSelectedCategory("all");
                 }}
+                className="mt-4"
+                data-testid="button-clear-search"
               >
-                Use location
+                Clear Search
               </Button>
             )}
-            <Link href="/deals/featured">
-              <Button
-                variant="outline"
-                className="mt-2 ml-2"
-                data-testid="button-empty-featured"
-                onPointerDown={() => {
-                  trackUxEvent("search_featured_empty", {
-                    surface: "search_empty_state",
-                  });
-                }}
-              >
-                View featured deals
-              </Button>
-            </Link>
-            <Link href="/scout">
-              <Button
-                variant="outline"
-                className="mt-2 ml-2"
-                data-testid="button-empty-map"
-                onPointerDown={() => {
-                  trackUxEvent("search_open_map_empty", {
-                    surface: "search_empty_state",
-                  });
-                }}
-              >
-                Open Scout
-              </Button>
-            </Link>
+            {hasSearchIntent && (
+              <div className="mt-2 flex flex-wrap items-center justify-center gap-2">
+                {!userLocation && !isLocating && (
+                  <Button
+                    variant="outline"
+                    onClick={requestUserLocation}
+                    data-testid="button-empty-use-location"
+                    onPointerDown={() => {
+                      trackUxEvent("search_location_request_empty", {
+                        surface: "search_empty_state",
+                      });
+                    }}
+                  >
+                    Use location
+                  </Button>
+                )}
+                <Link href="/deals/featured">
+                  <Button
+                    variant="outline"
+                    data-testid="button-empty-featured"
+                    onPointerDown={() => {
+                      trackUxEvent("search_featured_empty", {
+                        surface: "search_empty_state",
+                      });
+                    }}
+                  >
+                    View featured deals
+                  </Button>
+                </Link>
+                <Link href="/scout">
+                  <Button
+                    variant="outline"
+                    data-testid="button-empty-map"
+                    onPointerDown={() => {
+                      trackUxEvent("search_open_map_empty", {
+                        surface: "search_empty_state",
+                      });
+                    }}
+                  >
+                    Scout
+                  </Button>
+                </Link>
+              </div>
+            )}
           </div>
         )}
 
@@ -1570,7 +1555,7 @@ export default function SearchPage() {
                     });
                   }}
                 >
-                  Open Scout
+                  Scout
                 </Button>
               </Link>
             </div>

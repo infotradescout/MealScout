@@ -1,0 +1,74 @@
+{
+  "restaurantId": "60475d81-2ef7-4de9-bfbc-a009f097cbd6",
+  "slug": "moroccos-tacos",
+  "description": "Morocco's Tacos — a fusion of authentic Moroccan flavors and classic Mexican food, serving tacos, chicken wings, and Mediterranean/Middle Eastern dishes from a mobile food truck covering the Lake Worth, FL area (60-mile service radius). Catering available.",
+  "phone": "+1 561-927-5729",
+  "websiteUrl": "https://moroccanfoodlakeworth.com/",
+  "instagramUrl": "https://www.instagram.com/moroccostacotruck/",
+  "logo": {
+    "localPath": "C:/Users/flavo/AppData/Local/Temp/claude/d--AAATraderCorner-TradeScout-MealScout/c8593945-b57a-430c-a58c-d155ce22739a/scratchpad/moroccos-tacos/logo.jpg"
+  },
+  "cover": {
+    "localPath": "C:/Users/flavo/AppData/Local/Temp/claude/d--AAATraderCorner-TradeScout-MealScout/c8593945-b57a-430c-a58c-d155ce22739a/scratchpad/moroccos-tacos/truck-front.jpg"
+  },
+  "menu": {
+    "name": "Menu",
+    "categories": [
+      {
+        "name": "Sahara Street Tacos (2 per order)",
+        "items": [
+          { "name": "Steak Street Taco", "priceCents": 1200, "itemType": "food" },
+          { "name": "Chicken Street Taco", "priceCents": 1100, "itemType": "food" },
+          { "name": "Shrimp Street Taco", "priceCents": 1200, "itemType": "food" },
+          { "name": "Ground Beef Street Taco", "priceCents": 1100, "itemType": "food" }
+        ]
+      },
+      {
+        "name": "Tacones and Burritos",
+        "items": [
+          { "name": "Fez Steak", "priceCents": 1700, "itemType": "food" },
+          { "name": "Casablanca Beef", "priceCents": 1500, "itemType": "food" },
+          { "name": "Marrakesh Chicken", "priceCents": 1500, "itemType": "food" },
+          { "name": "Baba Veggie", "priceCents": 1200, "itemType": "food" },
+          { "name": "Harrisa Shrimp", "priceCents": 1600, "itemType": "food" },
+          { "name": "Double Trouble", "priceCents": 1600, "itemType": "food" }
+        ]
+      },
+      {
+        "name": "Delights",
+        "items": [
+          {
+            "name": "MTS Harrisa Wings",
+            "description": "6 wings. Moroccan spiced wings tossed in harissa sauce.",
+            "priceCents": 1200,
+            "itemType": "food",
+            "imageLocalPath": "C:/Users/flavo/AppData/Local/Temp/claude/d--AAATraderCorner-TradeScout-MealScout/c8593945-b57a-430c-a58c-d155ce22739a/scratchpad/moroccos-tacos/menu3-dinner.jpg"
+          }
+        ]
+      },
+      {
+        "name": "Sides",
+        "items": [
+          { "name": "Loubia", "priceCents": 500, "itemType": "food" },
+          { "name": "Cous Cous", "priceCents": 500, "itemType": "food" },
+          { "name": "Fries", "priceCents": 500, "itemType": "food" }
+        ]
+      },
+      {
+        "name": "Desserts",
+        "items": [
+          { "name": "Tres Leches", "priceCents": 500, "itemType": "food" },
+          { "name": "Orange Slices", "priceCents": 200, "itemType": "food" }
+        ]
+      },
+      {
+        "name": "Drinks",
+        "items": [
+          { "name": "Cola", "priceCents": 200, "itemType": "food" },
+          { "name": "Diet Cola", "priceCents": 200, "itemType": "food" },
+          { "name": "Water", "priceCents": 200, "itemType": "food" }
+        ]
+      }
+    ]
+  }
+}

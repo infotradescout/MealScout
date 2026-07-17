@@ -59,7 +59,7 @@ export default function HelpSupportPage() {
       summary:
         "Use Scout, Search, Deals, and Events to discover local food quickly.",
       steps: [
-        "Open Scout and browse local spots.",
+        "Scout and browse local spots.",
         "Use Search to compare options nearby.",
         "Check Time-Sensitive Specials and Events.",
         "Save or share the best options.",

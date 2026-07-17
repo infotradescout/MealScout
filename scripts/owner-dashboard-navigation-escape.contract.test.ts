@@ -9,7 +9,7 @@ const requiredNavigationSnippets = [
   "href={buildOwnerToolHref(item.path)}",
   "{ path: \"/scout\", icon: Compass, label: \"Scout\" }",
   "{ path: \"/parking-pass\", icon: ParkingSquare, label: \"Parking Pass\" }",
-  "{ path: \"/orders\", icon: ShoppingCart, label: \"Orders\" }",
+  "{ path: \"/orders\", icon: ShoppingCart, label: \"Work\" }",
   "{ path: \"/kitchen\", icon: ChefHat, label: \"Kitchen\" }",
   "{ path: \"/share-hub\", icon: Share2, label: \"Share\" }",
 ];

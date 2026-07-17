@@ -36,38 +36,38 @@ export function RestaurantHoursPanel({
 
   return (
     <section aria-label="Hours" className="space-y-3">
-      <p className="text-xs font-bold uppercase tracking-[0.18em] text-white/45">
+      <p className="profile-section-label">
         Hours
       </p>
 
       {hasAnyHoursData ? (
-        <div className="rounded-2xl border border-white/10 bg-[#0f0d0b] overflow-hidden">
+        <div className="profile-surface overflow-hidden rounded-2xl">
           {statusLabel ? (
             <div
-              className={`flex items-center gap-2 px-4 py-3 border-b border-white/8 ${
+              className={`flex items-center gap-2 border-b border-[color:var(--profile-border)] px-4 py-3 ${
                 isOpen === true
-                  ? "bg-emerald-500/10"
+                  ? "bg-emerald-50"
                   : isOpen === false
-                    ? "bg-white/5"
-                    : "bg-black/10"
+                    ? "bg-stone-50"
+                    : "bg-[color:var(--profile-surface-soft)]"
               }`}
             >
               <span
                 className={`h-2 w-2 flex-none rounded-full ${
                   isOpen === true
-                    ? "bg-emerald-400"
+                    ? "bg-emerald-500"
                     : isOpen === false
-                      ? "bg-white/30"
-                      : "bg-white/20"
+                      ? "bg-stone-400"
+                      : "bg-amber-500"
                 }`}
               />
               <p
                 className={`text-sm font-semibold ${
                   isOpen === true
-                    ? "text-emerald-200"
+                    ? "text-emerald-800"
                     : isOpen === false
-                      ? "text-white/60"
-                      : "text-white/80"
+                      ? "text-stone-600"
+                      : "text-amber-800"
                 }`}
               >
                 {statusLabel}
@@ -77,8 +77,8 @@ export function RestaurantHoursPanel({
 
           {hours ? (
             <div className="flex items-start gap-3 px-4 py-3">
-              <Clock3 className="mt-0.5 h-4 w-4 flex-none text-orange-200/60" />
-              <p className="text-sm text-white/80 whitespace-pre-line leading-relaxed">
+              <Clock3 className="mt-0.5 h-4 w-4 flex-none text-[color:var(--profile-accent)]" />
+              <p className="whitespace-pre-line text-sm leading-relaxed text-[color:var(--profile-ink-soft)]">
                 {hours}
               </p>
             </div>
@@ -86,11 +86,11 @@ export function RestaurantHoursPanel({
         </div>
       ) : (
         /* Thin state */
-        <div className="rounded-2xl border border-white/8 bg-black/15 px-4 py-5 text-center space-y-2">
-          <p className="text-sm text-white/50">Hours not posted yet.</p>
+        <div className="rounded-2xl border border-[color:var(--profile-border)] bg-[color:var(--profile-surface-soft)] px-4 py-5 text-center space-y-2">
+          <p className="text-sm text-[color:var(--profile-muted)]">Hours not posted yet.</p>
           <a
             href="/claim-business"
-            className="inline-block text-xs font-semibold text-orange-300 hover:text-orange-200"
+            className="inline-block text-xs font-semibold text-[#b93619] hover:text-[#8f2a14]"
           >
             Own this place? Add your hours →
           </a>
