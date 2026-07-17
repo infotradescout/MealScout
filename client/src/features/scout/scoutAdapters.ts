@@ -53,7 +53,7 @@ export function adaptDealToSceneItem(deal: any): ScoutSceneItem {
     title: deal?.title || "Deal today",
     subtitle: deal?.restaurantName || deal?.description || null,
     imageUrl: deal?.imageUrl || null,
-    href: deal?.id ? `/deals/${deal.id}` : "/deals",
+    href: deal?.id ? `/deal/${deal.id}` : "/deals",
   };
 }
 

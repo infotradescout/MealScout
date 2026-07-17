@@ -69,6 +69,35 @@ export function registerDealManagementRoutes(
     queueSocialPost,
   }: DealManagementRouteDependencies,
 ) {
+  app.get(
+    "/api/owner/restaurants/:restaurantId/deals",
+    isAuthenticated,
+    async (req: any, res) => {
+      try {
+        const { restaurantId } = req.params;
+        const restaurant = await storage.getRestaurant(restaurantId);
+        if (!restaurant) {
+          return res.status(404).json({ message: "Business not found" });
+        }
+
+        const canManageDeals = await hasBusinessPermissionForRestaurant(
+          req.user.id,
+          restaurantId,
+          "manageDeals",
+        );
+        if (!canManageDeals) {
+          return res.status(403).json({ message: "Unauthorized" });
+        }
+
+        const deals = await storage.getDealsByRestaurant(restaurantId);
+        res.json(deals);
+      } catch (error) {
+        console.error("Error fetching owner deals:", error);
+        res.status(500).json({ message: "Failed to fetch deals" });
+      }
+    },
+  );
+
   app.get("/api/deals/claimed", isAuthenticated, async (req: any, res) => {
     try {
       const claimedDeals = await storage.getUserDealClaimsWithDetails(req.user.id);

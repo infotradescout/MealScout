@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
-import { Link, useLocation } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -40,11 +40,14 @@ import {
   Clock,
   Users,
   DollarSign,
+  Loader2,
 } from "lucide-react";
-import { BackHeader } from "@/components/back-header";
-import Navigation from "@/components/navigation";
+import BusinessWorkspaceShell from "@/components/business-workspace-shell";
 import { initFacebookSDK, postToFacebook } from "@/lib/facebook";
 import { authUrl } from "@/lib/api";
+import type { Restaurant } from "@shared/schema";
+import { isBarBusinessType, isTruckBusinessType } from "@shared/businessTypes";
+import { buildPublicProfilePath } from "@/lib/public-profile-path";
 
 const dealSchema = z
   .object({
@@ -119,6 +122,7 @@ const defaultSocialAutopostSettings: SocialAutopostSettings = {
 
 export default function DealCreation() {
   const [, setLocation] = useLocation();
+  const search = useSearch();
   const { toast } = useToast();
   const { user, isAuthenticated, isLoading } = useAuth();
   const queryClient = useQueryClient();
@@ -136,17 +140,41 @@ export default function DealCreation() {
   } | null>(null);
   const [isSharingDeal, setIsSharingDeal] = useState(false);
 
-  const { data: restaurants } = useQuery({
+  const { data: restaurants = [], isLoading: loadingRestaurants } = useQuery<
+    Restaurant[]
+  >({
     queryKey: ["/api/restaurants/my-restaurants"],
     enabled: isAuthenticated,
   });
+  const requestedRestaurantId = new URLSearchParams(search).get("restaurantId");
+  const selectedBusiness =
+    restaurants.find((restaurant) => restaurant.id === requestedRestaurantId) ||
+    restaurants[0] ||
+    null;
+  const dealsWorkspaceHref = selectedBusiness
+    ? `/restaurant-owner-dashboard?workspace=deals&restaurantId=${encodeURIComponent(selectedBusiness.id)}`
+    : "/restaurant-owner-dashboard?workspace=deals";
+  const selectedEntityType = selectedBusiness
+    ? selectedBusiness.isFoodTruck ||
+      isTruckBusinessType(selectedBusiness.businessType)
+      ? "truck"
+      : isBarBusinessType(selectedBusiness.businessType)
+        ? "bar"
+        : "restaurant"
+    : "restaurant";
+  const publicProfileHref = selectedBusiness
+    ? buildPublicProfilePath({
+        entityType: selectedEntityType,
+        id: selectedBusiness.id,
+        name: selectedBusiness.name,
+      })
+    : null;
+  const handleWorkspaceBusinessChange = (businessId: string) => {
+    setLocation(`/deal-creation?restaurantId=${encodeURIComponent(businessId)}`);
+  };
 
   const socialSettings = useMemo<SocialAutopostSettings>(() => {
-    const restaurant =
-      Array.isArray(restaurants) && restaurants.length > 0
-        ? restaurants[0]
-        : null;
-    const existing = (restaurant?.socialAutopostSettings ||
+    const existing = (selectedBusiness?.socialAutopostSettings ||
       {}) as Partial<SocialAutopostSettings>;
     return {
       ...defaultSocialAutopostSettings,
@@ -160,7 +188,7 @@ export default function DealCreation() {
         ...(existing.triggers || {}),
       },
     };
-  }, [restaurants]);
+  }, [selectedBusiness]);
 
   // Fetch subscription status for deal limits
   const {
@@ -178,6 +206,7 @@ export default function DealCreation() {
     permissions: {
       manageDeals: boolean;
       manageProfile?: boolean;
+      viewAnalytics?: boolean;
     };
   }>({
     queryKey: ["/api/business-access/me"],
@@ -308,7 +337,7 @@ export default function DealCreation() {
       }
       if (shouldClear) {
         setDealSharePrompt(null);
-        setLocation("/");
+        setLocation(dealsWorkspaceHref);
       }
     } catch (error) {
       toast({
@@ -337,7 +366,7 @@ export default function DealCreation() {
 
   const createDealMutation = useMutation({
     mutationFn: async (data: DealFormData) => {
-      if (!Array.isArray(restaurants) || restaurants.length === 0) {
+      if (!selectedBusiness) {
         throw new Error(
           "No restaurant found. Please register a restaurant first.",
         );
@@ -345,7 +374,7 @@ export default function DealCreation() {
 
       const dealData = {
         ...data,
-        restaurantId: restaurants[0].id,
+        restaurantId: selectedBusiness.id,
         discountValue: parseFloat(data.discountValue),
         minOrderAmount: data.minOrderAmount
           ? parseFloat(data.minOrderAmount)
@@ -364,7 +393,8 @@ export default function DealCreation() {
         isOngoing: data.isOngoing,
       };
 
-      return await apiRequest("POST", "/api/deals", dealData);
+      const response = await apiRequest("POST", "/api/deals", dealData);
+      return response.json();
     },
     onSuccess: (created: any) => {
       toast({
@@ -377,6 +407,13 @@ export default function DealCreation() {
         // ignore
       }
       queryClient.invalidateQueries({ queryKey: ["/api/deals"] });
+      queryClient.invalidateQueries({
+        queryKey: [
+          "/api/owner/restaurants",
+          selectedBusiness?.id,
+          "deals",
+        ],
+      });
       const hasTrigger = socialSettings.triggers.deal;
       const selectedPlatforms = { ...socialSettings.platforms };
       const hasPlatforms =
@@ -384,26 +421,22 @@ export default function DealCreation() {
         selectedPlatforms.instagram ||
         selectedPlatforms.x;
       if (hasTrigger && hasPlatforms) {
-        const restaurant =
-          Array.isArray(restaurants) && restaurants.length > 0
-            ? restaurants[0]
-            : null;
         const dealId = created?.id || created?.deal?.id;
         const link = dealId
           ? `${window.location.origin}/deal/${dealId}`
           : window.location.origin;
         const dealTitle = form.getValues("title") || "New deal";
-        const restaurantName = restaurant?.name || "our truck";
+        const restaurantName = selectedBusiness?.name || "your business";
         const message = `New deal at ${restaurantName}: ${dealTitle}. Check it out on MealScout.`;
         if (!socialSettings.promptBeforePost) {
           void handleDealSharePost({ message, link, selectedPlatforms });
-          setLocation("/");
+          setLocation(dealsWorkspaceHref);
           return;
         }
         setDealSharePrompt({ message, link, selectedPlatforms });
         return;
       }
-      setLocation("/");
+      setLocation(dealsWorkspaceHref);
     },
     onError: (error) => {
       if (isUnauthorizedError(error)) {
@@ -539,7 +572,15 @@ export default function DealCreation() {
     );
   }
 
-  if (!Array.isArray(restaurants) || restaurants.length === 0) {
+  if (loadingRestaurants) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[var(--bg-layered)]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" aria-label="Loading businesses" />
+      </div>
+    );
+  }
+
+  if (restaurants.length === 0 || !selectedBusiness) {
     return (
       <div className="max-w-md mx-auto bg-[var(--bg-layered)] min-h-screen flex items-center justify-center">
         <Card>
@@ -584,6 +625,17 @@ export default function DealCreation() {
     user?.userType === "restaurant_owner" ||
     user?.userType === "food_truck" ||
     businessAccess?.permissions?.manageProfile === true;
+  const isOwnerRole =
+    Boolean(isAdminOrStaff) ||
+    user?.userType === "restaurant_owner" ||
+    user?.userType === "food_truck";
+  const workspaceCapabilities = {
+    deals: canManageDeals,
+    audience:
+      isOwnerRole || businessAccess?.permissions?.viewAnalytics === true,
+    team: isOwnerRole,
+    payments: isOwnerRole,
+  };
   const hasAccess =
     canManageDeals &&
     (Boolean(isAdminOrStaff) ||
@@ -599,7 +651,15 @@ export default function DealCreation() {
       (subscription as any).status,
     );
     return (
-      <div className="max-w-md mx-auto bg-[var(--bg-layered)] min-h-screen flex items-center justify-center px-4">
+      <BusinessWorkspaceShell
+        activeModule="deals"
+        business={selectedBusiness}
+        businesses={restaurants}
+        onBusinessChange={handleWorkspaceBusinessChange}
+        publicProfileHref={publicProfileHref}
+        capabilities={workspaceCapabilities}
+      >
+        <div className="mx-auto flex min-h-[70vh] max-w-lg items-center px-4 py-10">
         <Card className="w-full shadow-clean-lg border-[color:var(--border-subtle)]">
           <CardContent className="p-6 text-center">
             <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-[color:var(--accent-text)]/12 text-[color:var(--accent-text)] text-2xl mb-3">
@@ -612,7 +672,7 @@ export default function DealCreation() {
               Unlock unlimited featured spots for your food truck or restaurant
               with a simple monthly plan.
             </p>
-            <Link href="/subscribe">
+            <Link href={`/subscribe?restaurantId=${encodeURIComponent(selectedBusiness.id)}`}>
               <Button
                 className="w-full"
                 data-testid="button-subscribe-to-create"
@@ -622,17 +682,47 @@ export default function DealCreation() {
             </Link>
           </CardContent>
         </Card>
-      </div>
+        </div>
+      </BusinessWorkspaceShell>
+    );
+  }
+
+  if (!canManageDeals) {
+    return (
+      <BusinessWorkspaceShell
+        activeModule="deals"
+        business={selectedBusiness}
+        businesses={restaurants}
+        onBusinessChange={handleWorkspaceBusinessChange}
+        publicProfileHref={publicProfileHref}
+        capabilities={workspaceCapabilities}
+      >
+        <div className="mx-auto flex min-h-[70vh] max-w-lg items-center px-4 py-10">
+          <Card className="w-full border-amber-200 bg-amber-50">
+            <CardContent className="p-6 text-center">
+              <h2 className="text-lg font-bold text-amber-950">Permission required</h2>
+              <p className="mt-2 text-sm text-amber-900/80">
+                Ask the business owner to grant you permission to manage deals.
+              </p>
+              <Button asChild variant="outline" className="mt-5">
+                <Link href={dealsWorkspaceHref}>Return to deals</Link>
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </BusinessWorkspaceShell>
     );
   }
 
   return (
-    <div className="max-w-md mx-auto bg-[var(--bg-layered)] min-h-screen">
-      <BackHeader
-        title="Create a new special"
-        fallbackHref="/restaurant-owner-dashboard"
-        icon={Sparkles}
-        rightActions={
+    <BusinessWorkspaceShell
+      activeModule="deals"
+      business={selectedBusiness}
+      businesses={restaurants}
+      onBusinessChange={handleWorkspaceBusinessChange}
+      publicProfileHref={publicProfileHref}
+      capabilities={workspaceCapabilities}
+      headerActions={
           <Button
             variant="outline"
             size="sm"
@@ -642,25 +732,24 @@ export default function DealCreation() {
             <Eye className="w-4 h-4 mr-2" />
             {showPreview ? "Hide" : "Preview"}
           </Button>
-        }
-      />
+      }
+    >
 
-      <div className="px-4 py-5 pb-24 space-y-4">
-        <div className="rounded-2xl bg-[var(--bg-card)]/80 backdrop-blur-sm border border-[color:var(--border-subtle)] px-4 py-3 flex items-start space-x-3">
-          <div className="mt-0.5">
-            <Sparkles className="w-4 h-4 text-[color:var(--accent-text)]" />
-          </div>
-          <div className="text-xs text-[color:var(--text-secondary)]">
-            <p className="font-semibold text-[color:var(--text-primary)] mb-1">
-              Turn one-time diners into regulars
+      <div className="mx-auto max-w-6xl space-y-5 px-4 py-5 pb-28 sm:px-6 lg:py-8">
+        <section className="flex flex-col gap-3 rounded-2xl border border-orange-200 bg-gradient-to-br from-orange-50 via-background to-amber-50 p-5 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.14em] text-orange-700">
+              {selectedBusiness.name}
             </p>
-            <p>
-              Short, time-bound specials work best for food trucks and busy
-              restaurants. Highlight your hero item and limit the window so it
-              feels special.
+            <h1 className="mt-1 text-2xl font-black tracking-tight">Create a special</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Set the offer, photo, dates, and claim limits customers will see.
             </p>
           </div>
-        </div>
+          <Button asChild variant="ghost" size="sm" className="self-start sm:self-auto">
+            <Link href={dealsWorkspaceHref}>Cancel</Link>
+          </Button>
+        </section>
 
         {/* Live Preview */}
         {showPreview && (
@@ -1360,19 +1449,13 @@ export default function DealCreation() {
             </Card>
 
             {/* Action Buttons */}
-            <div className="grid grid-cols-2 gap-4 pt-4">
-              <Button
-                type="button"
-                variant="outline"
-                className="py-3 px-4"
-                disabled={!canManageDeals}
-                data-testid="button-save-draft"
-              >
-                Save Draft
-              </Button>
+            <div className="flex flex-col gap-3 pt-4 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs text-muted-foreground">
+                Your draft saves automatically on this device.
+              </p>
               <Button
                 type="submit"
-                className="py-3 px-4"
+                className="px-6 py-3"
                 disabled={createDealMutation.isPending || !canManageDeals}
                 data-testid="button-publish-deal"
               >
@@ -1390,7 +1473,7 @@ export default function DealCreation() {
         onOpenChange={(open) => {
           if (!open) {
             setDealSharePrompt(null);
-            setLocation("/");
+            setLocation(dealsWorkspaceHref);
           }
         }}
       >
@@ -1453,7 +1536,7 @@ export default function DealCreation() {
               variant="outline"
               onClick={() => {
                 setDealSharePrompt(null);
-                setLocation("/");
+                setLocation(dealsWorkspaceHref);
               }}
             >
               Skip
@@ -1468,9 +1551,6 @@ export default function DealCreation() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {/* Bottom Navigation */}
-      <Navigation />
-    </div>
+    </BusinessWorkspaceShell>
   );
 }

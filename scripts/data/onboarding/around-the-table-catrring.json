@@ -1,0 +1,17 @@
+{
+  "restaurantId": "0a5ef5b8-852a-4bfd-8626-f06218d83b31",
+  "slug": "around-the-table-catrring",
+  "description": "Around The Table Catering — kosher, vegetarian and vegan Middle Eastern food in Kingston, PA. Falafel, tofu shawarma, shakshuka and more, all certified pareve (no meat or dairy). Voted Best Food Truck of the Lehigh Valley 2022. Catering available for weddings and events.",
+  "websiteUrl": "https://www.bestkosherfalafel.com/",
+  "instagramUrl": "https://www.instagram.com/aroundthetablecateringco/",
+  "facebookPageUrl": "https://www.facebook.com/aroundthetablecatering/",
+  "phone": "(570) 954-3028",
+  "address": "310 Market St, Kingston, PA 18704",
+  "operatingHours": {
+    "mon": [{ "open": "11:00", "close": "19:00" }],
+    "tue": [{ "open": "11:00", "close": "19:00" }],
+    "wed": [{ "open": "11:00", "close": "19:00" }],
+    "thu": [{ "open": "11:00", "close": "19:00" }],
+    "sun": [{ "open": "12:00", "close": "18:00" }]
+  }
+}

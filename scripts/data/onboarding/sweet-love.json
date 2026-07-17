@@ -1,0 +1,13 @@
+{
+  "restaurantId": "f3b76054-f355-43b0-a2d3-901277748557",
+  "slug": "sweet-love",
+  "facebookPageUrl": "https://www.facebook.com/ursweetlove.square.site/",
+  "operatingHours": {
+    "mon": [{ "open": "11:00", "close": "19:00" }],
+    "tue": [{ "open": "11:00", "close": "19:00" }],
+    "wed": [{ "open": "11:00", "close": "19:00" }],
+    "thu": [{ "open": "11:00", "close": "19:00" }],
+    "fri": [{ "open": "11:00", "close": "19:00" }],
+    "sat": [{ "open": "11:00", "close": "19:00" }]
+  }
+}

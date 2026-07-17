@@ -132,7 +132,7 @@ export async function notifyNearbyDealSubscribers(params: {
   lng: number;
 }) {
   const baseUrl = process.env.PUBLIC_BASE_URL || "http://localhost:5000";
-  const dealUrl = `${baseUrl.replace(/\/+$/, "")}/deals/${params.dealId}`;
+  const dealUrl = `${baseUrl.replace(/\/+$/, "")}/deal/${params.dealId}`;
 
   const candidates = await db
     .select({
@@ -206,7 +206,7 @@ export async function notifyRestaurantFollowersOfDeal(params: {
 }) {
   const baseUrl = process.env.PUBLIC_BASE_URL || "http://localhost:5000";
   const cleanBaseUrl = baseUrl.replace(/\/+$/, "");
-  const dealUrl = `${cleanBaseUrl}/deals/${params.dealId}`;
+  const dealUrl = `${cleanBaseUrl}/deal/${params.dealId}`;
   const settingsUrl = `${cleanBaseUrl}/profile/notifications`;
   const safeRestaurantName = escapeHtml(params.restaurantName);
   const safeDealTitle = escapeHtml(params.dealTitle);

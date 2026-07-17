@@ -194,7 +194,7 @@ export default function DealDetail() {
     "@type": "Offer",
     name: dealTitle,
     description: dealDescription,
-    url: `https://www.mealscout.us/deals/${dealId}`,
+    url: `https://www.mealscout.us/deal/${dealId}`,
     priceCurrency: "USD",
     price: dealType === "percentage" ? "0" : discountValue,
     discount:
@@ -221,7 +221,7 @@ export default function DealDetail() {
         keywords={`${restaurantName}, ${dealTitle}, food special, restaurant discount, ${
           (restaurant as Restaurant)?.cuisineType || "food"
         }`}
-        canonicalUrl={`https://www.mealscout.us/deals/${dealId}`}
+        canonicalUrl={`https://www.mealscout.us/deal/${dealId}`}
         schemaData={offerSchema}
       />
       <BackHeader
