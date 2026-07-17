@@ -32,6 +32,13 @@ import { resolveCityTimeZoneSync } from "../services/cityTimeZone";
 import { buildSlotDateTimes } from "../services/timeIntent";
 import { getSuppressedLocationResourceIds } from "../services/truckLocationTrust";
 import {
+  expandPublicMapBounds,
+  isPointInPublicMapBounds,
+  parsePublicMapBounds,
+  toBoundedPublicMapLocationsPayload,
+  toPublicMapLocationsPayload,
+} from "../publicProfiles/toPublicMapLocations";
+import {
   dealClaims,
   deals,
   dealViews,
@@ -49,12 +56,33 @@ import {
 
 let mapLocationsCache: {
   expiresAt: number;
+  capturedAt: number;
   payload: { hostLocations: any[]; eventLocations: any[]; supplierLocations: any[] };
 } | null = null;
 
 let mapLocationsLastGood: {
+  capturedAt: number;
   payload: { hostLocations: any[]; eventLocations: any[]; supplierLocations: any[] };
 } | null = null;
+
+const MAP_LOCATIONS_MAX_STALE_MS = Math.max(
+  60_000,
+  Number(process.env.MAP_LOCATIONS_MAX_STALE_MS || 15 * 60_000) || 15 * 60_000,
+);
+
+const getRecentMapLocationsLastGoodSnapshot = () => {
+  if (!mapLocationsLastGood) return null;
+  if (
+    Date.now() - mapLocationsLastGood.capturedAt >
+    MAP_LOCATIONS_MAX_STALE_MS
+  ) {
+    return null;
+  }
+  return mapLocationsLastGood;
+};
+
+const getRecentMapLocationsLastGood = () =>
+  getRecentMapLocationsLastGoodSnapshot()?.payload || null;
 
 const truckSightingRateLimits = new Map<string, number[]>();
 const COMMUNITY_TRUCK_SIGHTING_EVENT = "truck_community_sighting";
@@ -218,29 +246,10 @@ const toFiniteNumber = (value: unknown) => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
-const parseBounds = (raw: Record<string, unknown>): BoundsLike | null => {
-  const north = toFiniteNumber(raw.north);
-  const south = toFiniteNumber(raw.south);
-  const east = toFiniteNumber(raw.east);
-  const west = toFiniteNumber(raw.west);
-  if (
-    north === null ||
-    south === null ||
-    east === null ||
-    west === null ||
-    north < south
-  ) {
-    return null;
-  }
-  return { north, south, east, west };
-};
+const parseBounds = parsePublicMapBounds;
 
 const pointInBounds = (bounds: BoundsLike, lat: number, lng: number) => {
-  if (lat > bounds.north || lat < bounds.south) return false;
-  if (bounds.west <= bounds.east) {
-    return lng >= bounds.west && lng <= bounds.east;
-  }
-  return lng >= bounds.west || lng <= bounds.east;
+  return isPointInPublicMapBounds(bounds, lat, lng);
 };
 
 const estimateRadiusMetersFromBounds = (bounds: BoundsLike) => {
@@ -563,7 +572,10 @@ export function registerPublicMapRoutes(app: Express) {
 
   app.get("/api/parking-pass/intelligence-status", async (_req, res) => {
     try {
-      const payload = mapLocationsLastGood?.payload || mapLocationsCache?.payload;
+      const payload =
+        (mapLocationsCache && mapLocationsCache.expiresAt > Date.now()
+          ? mapLocationsCache.payload
+          : null) || getRecentMapLocationsLastGood();
       const hostLocations = Array.isArray(payload?.hostLocations) ? payload.hostLocations : [];
       const supplierLocations = Array.isArray(payload?.supplierLocations)
         ? payload.supplierLocations
@@ -655,14 +667,23 @@ export function registerPublicMapRoutes(app: Express) {
     }
   });
 
-  app.get("/api/map/locations", async (_req, res) => {
+  app.get("/api/map/locations", async (req, res) => {
+    const requestedBounds = parseBounds(req.query as Record<string, unknown>);
+    const hasBoundsQuery = ["north", "south", "east", "west"].some((field) =>
+      Object.prototype.hasOwnProperty.call(req.query, field),
+    );
+    if (hasBoundsQuery && !requestedBounds) {
+      return res.status(400).json({ message: "Valid bounds are required" });
+    }
+    const toRequestedMapPayload = (payload: unknown) =>
+      toBoundedPublicMapLocationsPayload(payload, requestedBounds);
     try {
       res.setHeader(
         "Cache-Control",
         "public, max-age=120, stale-while-revalidate=240",
       );
       if (mapLocationsCache && mapLocationsCache.expiresAt > Date.now()) {
-        return res.json(mapLocationsCache.payload);
+        return res.json(toRequestedMapPayload(mapLocationsCache.payload));
       }
 
       const VALID_US_STATE_ABBRS = new Set([
@@ -1540,27 +1561,38 @@ export function registerPublicMapRoutes(app: Express) {
         );
       }
 
-      const payload = { hostLocations, eventLocations, supplierLocations };
+      const payload = toPublicMapLocationsPayload({
+        hostLocations,
+        eventLocations,
+        supplierLocations,
+      });
+      const capturedAt = Date.now();
       mapLocationsCache = {
         payload,
+        capturedAt,
         expiresAt:
-          Date.now() +
+          capturedAt +
           (Math.max(
             0,
             Number(process.env.MAP_LOCATIONS_CACHE_TTL_MS || 0) || 0,
           ) || 300_000),
       };
-      mapLocationsLastGood = { payload };
-      res.json(payload);
+      mapLocationsLastGood = { payload, capturedAt };
+      res.json(toRequestedMapPayload(payload));
     } catch (error) {
       console.error("Error building map locations feed:", error);
-      if (mapLocationsLastGood?.payload) {
+      const recentLastGood = getRecentMapLocationsLastGood();
+      if (recentLastGood) {
         res.setHeader("X-MealScout-Stale", "1");
-        return res.json(mapLocationsLastGood.payload);
+        return res.json(toRequestedMapPayload(recentLastGood));
       }
-      res
-        .status(200)
-        .json({ hostLocations: [], eventLocations: [], supplierLocations: [] });
+      res.setHeader("Cache-Control", "no-store");
+      res.setHeader("X-MealScout-Degraded", "1");
+      res.setHeader("Retry-After", "30");
+      return res.status(503).json({
+        code: "MAP_LOCATIONS_UNAVAILABLE",
+        message: "Map locations are temporarily unavailable",
+      });
     }
   });
 
@@ -1750,76 +1782,36 @@ export function registerPublicMapRoutes(app: Express) {
       );
       const pad =
         zoom <= 9 ? 0.12 : zoom <= 12 ? 0.06 : zoom <= 15 ? 0.03 : 0.015;
-      const expandedBounds: BoundsLike = {
-        north: Math.min(90, bounds.north + pad),
-        south: Math.max(-90, bounds.south - pad),
-        east: bounds.east + pad,
-        west: bounds.west - pad,
-      };
+      const expandedBounds = expandPublicMapBounds(bounds, pad);
 
-      const rawPayloadSource = mapLocationsCache?.payload || mapLocationsLastGood?.payload;
-      const payloadSource = rawPayloadSource
-        ? {
-            hostLocations: Array.isArray(rawPayloadSource.hostLocations)
-              ? rawPayloadSource.hostLocations
-              : [],
-            eventLocations: Array.isArray(rawPayloadSource.eventLocations)
-              ? rawPayloadSource.eventLocations
-              : [],
-            supplierLocations: Array.isArray(rawPayloadSource.supplierLocations)
-              ? rawPayloadSource.supplierLocations
-              : [],
-          }
-        : {
-            hostLocations: [],
-            eventLocations: [],
-            supplierLocations: [],
-          };
+      const snapshot =
+        mapLocationsCache && mapLocationsCache.expiresAt > Date.now()
+          ? mapLocationsCache
+          : getRecentMapLocationsLastGoodSnapshot();
+      if (!snapshot) {
+        res.setHeader("Cache-Control", "no-store");
+        res.setHeader("X-MealScout-Degraded", "1");
+        res.setHeader("Retry-After", "30");
+        return res.status(503).json({
+          code: "MAP_LOCATIONS_UNAVAILABLE",
+          message: "Map locations are temporarily unavailable",
+        });
+      }
 
-      const parseCoord = (value?: string | number | null) => {
-        if (value === null || value === undefined) return null;
-        const parsed = typeof value === "string" ? Number(value) : value;
-        return Number.isFinite(parsed) ? parsed : null;
-      };
-
-      const hostLocations = (payloadSource.hostLocations || []).filter(
-        (host) => {
-          const lat = parseCoord(host?.latitude);
-          const lng = parseCoord(host?.longitude);
-          if (lat === null || lng === null) return false;
-          return pointInBounds(expandedBounds, lat, lng);
-        },
+      const boundedPayload = toBoundedPublicMapLocationsPayload(
+        snapshot.payload,
+        expandedBounds,
       );
-
-      const eventLocations = (payloadSource.eventLocations || []).filter(
-        (event) => {
-          const lat = parseCoord(event?.hostLatitude);
-          const lng = parseCoord(event?.hostLongitude);
-          if (lat === null || lng === null) {
-            return Boolean(String(event?.hostAddress || "").trim());
-          }
-          return pointInBounds(expandedBounds, lat, lng);
-        },
-      );
-      const supplierLocations = (payloadSource.supplierLocations || []).filter(
-        (supplier) => {
-          const lat = parseCoord(supplier?.latitude);
-          const lng = parseCoord(supplier?.longitude);
-          if (lat === null || lng === null) return false;
-          return pointInBounds(expandedBounds, lat, lng);
-        },
-      );
+      const hostLocations = boundedPayload.hostLocations;
+      const eventLocations = boundedPayload.eventLocations;
+      const supplierLocations = boundedPayload.supplierLocations;
 
       const maxPerLayer = zoom <= 9 ? 800 : zoom <= 12 ? 1200 : 2000;
       const clippedHosts = hostLocations.slice(0, maxPerLayer);
       const clippedEvents = eventLocations.slice(0, maxPerLayer);
       const clippedSuppliers = supplierLocations.slice(0, maxPerLayer);
 
-      const version = String(
-        mapLocationsCache?.expiresAt ||
-          mapLocationsLastGood?.payload?.hostLocations?.length ||
-          Date.now(),
-      );
+      const version = String(snapshot.capturedAt);
 
       res.setHeader("Cache-Control", "public, max-age=20");
       res.json({
@@ -1832,12 +1824,12 @@ export function registerPublicMapRoutes(app: Express) {
       });
     } catch (error) {
       console.error("Error building map overlays feed:", error);
-      res.status(200).json({
-        version: "fallback",
-        zoom: Number(req.query.zoom || 12) || 12,
-        hostLocations: [],
-        eventLocations: [],
-        supplierLocations: [],
+      res.setHeader("Cache-Control", "no-store");
+      res.setHeader("X-MealScout-Degraded", "1");
+      res.setHeader("Retry-After", "30");
+      return res.status(503).json({
+        code: "MAP_LOCATIONS_UNAVAILABLE",
+        message: "Map locations are temporarily unavailable",
       });
     }
   });

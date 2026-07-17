@@ -1,13 +1,10 @@
 /**
  * ThemedScoutMapV2
  * ----------------
- * Compact Scout mini-map for /scout-v2 only. Forked from themed-scout-map.tsx
- * so the /scout-v2 visual rebuild (dark warm theme, circular photo pins)
- * doesn't leak onto production /scout, which still uses the original file.
+ * Clear local-tile fallback for Scout when Google Maps is unavailable.
  *
- * This is the collapsed map element that lives on the Scout page: a dark,
- * food-forward street map with photo pins. Pulling down expands into the
- * full Google map for real pan/zoom/tap exploration.
+ * This must stay flat, readable, and truthful because it can become the full
+ * map during a provider outage; it is not a decorative substitute.
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -21,6 +18,7 @@ import type { MapAdapterMarker } from "./map-adapter.types";
 
 interface ThemedScoutMapV2Props {
   userLocation: { lat: number; lng: number };
+  showUserLocation?: boolean;
   markers: MapAdapterMarker[];
   onMarkerTap?: (marker: MapAdapterMarker) => void;
   zoom?: number;
@@ -30,13 +28,13 @@ interface ThemedScoutMapV2Props {
 const MINI_MAP_STYLE: StyleSpecification = {
   version: 8,
   sources: {
-    "carto-dark": {
+    "carto-light": {
       type: "raster",
       tiles: [
-        "https://a.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}@2x.png",
-        "https://b.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}@2x.png",
-        "https://c.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}@2x.png",
-        "https://d.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}@2x.png",
+        "https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png",
+        "https://b.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png",
+        "https://c.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png",
+        "https://d.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png",
       ],
       tileSize: 256,
       attribution:
@@ -48,19 +46,19 @@ const MINI_MAP_STYLE: StyleSpecification = {
       id: "background",
       type: "background",
       paint: {
-        "background-color": "#1a0f0a",
+        "background-color": "#f5f3ee",
       },
     },
     {
-      id: "carto-dark-tiles",
+      id: "carto-light-tiles",
       type: "raster",
-      source: "carto-dark",
+      source: "carto-light",
       paint: {
         "raster-opacity": 1,
-        "raster-brightness-min": 0.12,
+        "raster-brightness-min": 0,
         "raster-brightness-max": 1,
-        "raster-saturation": 0.18,
-        "raster-contrast": 0.12,
+        "raster-saturation": 0,
+        "raster-contrast": 0,
       },
     },
   ],
@@ -103,6 +101,7 @@ function getMarkerDistanceMiles(
 
 export function ThemedScoutMapV2({
   userLocation,
+  showUserLocation = false,
   markers,
   onMarkerTap,
   zoom = 13,
@@ -110,10 +109,9 @@ export function ThemedScoutMapV2({
 }: ThemedScoutMapV2Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MaplibreMap | null>(null);
+  const mapHasLoadedRef = useRef(false);
   const userMarkerRef = useRef<maplibregl.Marker | null>(null);
   const markerRefs = useRef<maplibregl.Marker[]>([]);
-  const driftRafRef = useRef<number | null>(null);
-  const driftStartRef = useRef<number | null>(null);
   const frameStateRef = useRef({ userLocation, markers, zoom });
   frameStateRef.current = { userLocation, markers, zoom };
   // Tracks either "no WebGL" (checked up front) or "tiles never loaded"
@@ -155,8 +153,8 @@ export function ThemedScoutMapV2({
           (Math.min(...latValues) + Math.max(...latValues)) / 2,
         ],
         zoom: Math.min(baseZoom, targetZoom),
-        pitch: 34,
-        bearing: 9,
+        pitch: 0,
+        bearing: 0,
         duration,
       });
       return;
@@ -164,8 +162,8 @@ export function ThemedScoutMapV2({
     map.easeTo({
       center: [frameLocation.lng, frameLocation.lat],
       zoom: baseZoom,
-      pitch: 34,
-      bearing: 9,
+      pitch: 0,
+      bearing: 0,
       duration,
     });
   };
@@ -178,8 +176,8 @@ export function ThemedScoutMapV2({
       style: MINI_MAP_STYLE,
       center: [frameStateRef.current.userLocation.lng, frameStateRef.current.userLocation.lat],
       zoom: frameStateRef.current.zoom,
-      pitch: 34,
-      bearing: 9,
+      pitch: 0,
+      bearing: 0,
       interactive,
       attributionControl: false,
       dragRotate: false,
@@ -205,40 +203,11 @@ export function ThemedScoutMapV2({
     const initialResizeFrame = requestAnimationFrame(resizeMap);
     const initialResizeTimeout = window.setTimeout(resizeMap, 250);
 
-    map.on("load", () => {
+    const handleLoad = () => {
+      mapHasLoadedRef.current = true;
       frameMap(0);
-
-      const userEl = document.createElement("div");
-      userEl.className = "msm-user-pin";
-      userEl.setAttribute("aria-label", "Your location");
-      userEl.innerHTML = `
-        <span class="msm-user-pin__pulse"></span>
-        <span class="msm-user-pin__pulse msm-user-pin__pulse--delay"></span>
-        <span class="msm-user-pin__core"></span>
-      `;
-      userMarkerRef.current = new maplibregl.Marker({
-        element: userEl,
-        anchor: "center",
-      })
-        .setLngLat([userLocation.lng, userLocation.lat])
-        .addTo(map);
-
-      if (!interactive) {
-        driftStartRef.current = performance.now();
-        const tick = () => {
-          const current = mapRef.current;
-          if (!current) return;
-          if (driftStartRef.current == null) {
-            driftStartRef.current = performance.now();
-          }
-          const t = (performance.now() - driftStartRef.current) / 1000;
-          current.setBearing(9 + Math.sin((t / 78) * Math.PI * 2) * 1.6);
-          current.setPitch(34 + Math.sin((t / 98) * Math.PI * 2) * 1.2);
-          driftRafRef.current = requestAnimationFrame(tick);
-        };
-        driftRafRef.current = requestAnimationFrame(tick);
-      }
-    });
+    };
+    map.on("load", handleLoad);
 
     const ro = new ResizeObserver(() => {
       const current = mapRef.current;
@@ -256,7 +225,7 @@ export function ThemedScoutMapV2({
     // placeholder rather than leaving a blank map on screen.
     let sawTileLoad = false;
     const handleSourceData = (e: any) => {
-      if (e?.sourceId === "carto-dark" && e.isSourceLoaded) {
+      if (e?.sourceId === "carto-light" && e.isSourceLoaded) {
         sawTileLoad = true;
       }
     };
@@ -270,15 +239,13 @@ export function ThemedScoutMapV2({
       cancelAnimationFrame(initialResizeFrame);
       window.clearTimeout(initialResizeTimeout);
       window.clearTimeout(tileWatchdog);
+      map.off("load", handleLoad);
       map.off("sourcedata", handleSourceData);
-      if (driftRafRef.current != null) {
-        cancelAnimationFrame(driftRafRef.current);
-        driftRafRef.current = null;
-      }
       markerRefs.current.forEach((marker) => marker.remove());
       markerRefs.current = [];
       userMarkerRef.current?.remove();
       userMarkerRef.current = null;
+      mapHasLoadedRef.current = false;
       mapRef.current?.remove();
       mapRef.current = null;
     };
@@ -296,7 +263,49 @@ export function ThemedScoutMapV2({
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    userMarkerRef.current?.setLngLat([userLocation.lng, userLocation.lat]);
+
+    const syncUserMarker = () => {
+      if (!showUserLocation) {
+        userMarkerRef.current?.remove();
+        userMarkerRef.current = null;
+        return;
+      }
+      if (userMarkerRef.current) {
+        userMarkerRef.current.setLngLat([userLocation.lng, userLocation.lat]);
+        return;
+      }
+      const userEl = document.createElement("div");
+      userEl.className = "msm-user-pin";
+      userEl.setAttribute("aria-label", "Your location");
+      userEl.innerHTML = `
+        <span class="msm-user-pin__pulse"></span>
+        <span class="msm-user-pin__pulse msm-user-pin__pulse--delay"></span>
+        <span class="msm-user-pin__core"></span>
+      `;
+      userMarkerRef.current = new maplibregl.Marker({
+        element: userEl,
+        anchor: "center",
+      })
+        .setLngLat([userLocation.lng, userLocation.lat])
+        .addTo(map);
+    };
+
+    if (mapHasLoadedRef.current) syncUserMarker();
+    else map.once("load", syncUserMarker);
+    return () => {
+      map.off("load", syncUserMarker);
+    };
+  }, [
+    interactive,
+    showUserLocation,
+    tilesUnavailable,
+    userLocation.lat,
+    userLocation.lng,
+  ]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
     if (!interactive) {
       frameMap(500);
     }
@@ -378,18 +387,24 @@ export function ThemedScoutMapV2({
       );
     });
     if (!interactive) {
+      let frameId: number | null = null;
+      const frameTimeoutIds: number[] = [];
       const runFrame = () => {
-        window.requestAnimationFrame(() => frameMap(420));
-        window.setTimeout(() => frameMap(420), 280);
-        window.setTimeout(() => frameMap(420), 900);
+        frameId = window.requestAnimationFrame(() => frameMap(420));
+        frameTimeoutIds.push(
+          window.setTimeout(() => frameMap(420), 280),
+          window.setTimeout(() => frameMap(420), 900),
+        );
       };
-      if (map.loaded()) {
+      if (mapHasLoadedRef.current) {
         runFrame();
       } else {
         map.once("load", runFrame);
       }
       return () => {
         map.off("load", runFrame);
+        if (frameId !== null) window.cancelAnimationFrame(frameId);
+        frameTimeoutIds.forEach((id) => window.clearTimeout(id));
       };
     }
   }, [interactive, markerKey, markers, onMarkerTap, zoom]);
@@ -405,7 +420,7 @@ export function ThemedScoutMapV2({
           // instead of leaving a blank/void-looking canvas.
           <div
             className="absolute inset-0 h-full w-full min-h-full"
-            style={{ backgroundColor: "#1a0f0a" }}
+            style={{ backgroundColor: "#f5f3ee" }}
           />
         ) : (
           <div
@@ -415,132 +430,10 @@ export function ThemedScoutMapV2({
           />
         )}
       </div>
-      {/* ── Warm daylight grade ── */}
-      <div aria-hidden="true" className="msm-map-grade absolute inset-0" />
-
-      {!interactive && (
-        <>
-          <div aria-hidden="true" className="msm-food-glow absolute inset-0 pointer-events-none">
-            <span className="msm-food-glow__spot msm-food-glow__spot--1" />
-            <span className="msm-food-glow__spot msm-food-glow__spot--2" />
-            <span className="msm-food-glow__spot msm-food-glow__spot--3" />
-          </div>
-        </>
-      )}
-
-      {/* ── LIVE badge ── */}
-      <div aria-label="Live map" className="msm-live-badge">
-        <span aria-hidden="true" className="msm-live-badge__dot" />
-        Open
-      </div>
 
       <style>{`
         .msm-map-canvas .maplibregl-canvas {
-          filter: saturate(1.1) contrast(1.05) brightness(1.15) sepia(0.04);
-        }
-        .msm-mode-interactive .msm-map-canvas .maplibregl-canvas {
-          filter: saturate(1.05) contrast(1.03) brightness(1.1) sepia(0.03);
-        }
-
-        .msm-map-grade {
-          pointer-events: none;
-          z-index: 2;
-          background:
-            radial-gradient(ellipse at 22% 18%, rgba(255, 150, 60, 0.22), transparent 34%),
-            radial-gradient(ellipse at 78% 26%, rgba(255, 90, 50, 0.16), transparent 32%);
-          mix-blend-mode: screen;
-          opacity: 0.85;
-        }
-        .msm-mode-interactive .msm-map-grade {
-          opacity: 0.55;
-        }
-        .msm-map-grade::after {
-          content: "";
-          position: absolute;
-          inset: 0;
-          background: radial-gradient(ellipse at center, transparent 55%, rgba(0, 0, 0, 0.32) 100%);
-          pointer-events: none;
-        }
-        .msm-mode-interactive .msm-map-grade::after {
-          background: radial-gradient(ellipse at center, transparent 58%, rgba(0, 0, 0, 0.22) 100%);
-        }
-
-        .msm-food-glow { z-index: 3; overflow: hidden; }
-        .msm-food-glow__spot {
-          position: absolute;
-          display: block;
-          border-radius: 999px;
-          filter: blur(2px);
-          opacity: 0.58;
-          animation: msm-food-float 8s ease-in-out infinite;
-        }
-        .msm-food-glow__spot--1 {
-          width: 132px;
-          height: 132px;
-          left: 8%;
-          top: 14%;
-          background: radial-gradient(circle, rgba(255, 188, 68, 0.32), transparent 64%);
-        }
-        .msm-food-glow__spot--2 {
-          width: 116px;
-          height: 116px;
-          right: 12%;
-          top: 30%;
-          background: radial-gradient(circle, rgba(255, 111, 72, 0.24), transparent 66%);
-          animation-delay: 1.4s;
-        }
-        .msm-food-glow__spot--3 {
-          width: 150px;
-          height: 150px;
-          left: 36%;
-          bottom: 3%;
-          background: radial-gradient(circle, rgba(52, 211, 153, 0.16), transparent 64%);
-          animation-delay: 2.2s;
-        }
-        @keyframes msm-food-float {
-          0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
-          50% { transform: translate3d(0, -8px, 0) scale(1.05); }
-        }
-
-        /* ── LIVE badge ── */
-        .msm-live-badge {
-          position: absolute;
-          top: 12px;
-          right: 12px;
-          z-index: 10;
-          display: flex;
-          align-items: center;
-          gap: 5px;
-          padding: 5px 11px 5px 9px;
-          border-radius: 999px;
-          background: rgba(255, 253, 244, 0.88);
-          border: 1px solid rgba(255, 142, 70, 0.38);
-          font-size: 10px;
-          font-weight: 800;
-          letter-spacing: 0.08em;
-          color: #8a2d0d;
-          text-transform: uppercase;
-          backdrop-filter: blur(8px);
-          pointer-events: none;
-          font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-          box-shadow: 0 10px 28px rgba(154, 72, 18, 0.18);
-        }
-        .msm-mode-interactive .msm-live-badge {
-          background: rgba(255, 253, 244, 0.78);
-          border-color: rgba(255, 142, 70, 0.30);
-        }
-        .msm-live-badge__dot {
-          width: 6px;
-          height: 6px;
-          border-radius: 50%;
-          flex-shrink: 0;
-          background: #22c55e;
-          box-shadow: 0 0 8px rgba(34, 197, 94, 0.75);
-          animation: msm-live-blink 1.6s ease-in-out infinite;
-        }
-        @keyframes msm-live-blink {
-          0%, 100% { opacity: 1; }
-          50%       { opacity: 0.18; }
+          filter: none;
         }
 
         /* ── User location pin ── */
@@ -619,8 +512,6 @@ export function ThemedScoutMapV2({
           inset: -6px;
           border-radius: 50% 50% 50% 0;
           background: rgba(255, 111, 60, 0.24);
-          filter: blur(8px);
-          animation: msm-pin-glow 2.8s ease-in-out infinite;
           pointer-events: none;
         }
         /* Restaurant / deal */
@@ -666,11 +557,6 @@ export function ThemedScoutMapV2({
           box-shadow: 0 2px 0 rgba(255,255,255,0.58) inset, 0 8px 18px rgba(5,150,105,0.24), 0 0 0 3px rgba(209,250,229,0.82);
         }
         .msm-map-pin--geo_ad .msm-map-pin__glow { background: rgba(52,211,153,0.24); }
-        @keyframes msm-pin-glow {
-          0%, 100% { opacity: 0.36; transform: scale(1); }
-          50%       { opacity: 0.92; transform: scale(1.36); }
-        }
-
         /* ── Circular photo pins ── */
         .msm-map-pin--photo {
           width: 64px;
@@ -684,8 +570,6 @@ export function ThemedScoutMapV2({
           height: 64px;
           border-radius: 9999px;
           background: radial-gradient(circle, rgba(255, 140, 60, 0.55), transparent 68%);
-          filter: blur(6px);
-          animation: msm-pin-glow 3.2s ease-in-out infinite;
           pointer-events: none;
         }
         .msm-map-pin__photo-ring {

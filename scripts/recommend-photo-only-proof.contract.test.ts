@@ -19,13 +19,30 @@ function assert(condition: unknown, message: string): asserts condition {
 }
 
 assert(
-  routeSource.includes('if (comment || proofPhoto?.cloudinaryUrl) {'),
+  routeSource.includes("if (comment || proofPhoto?.cloudinaryUrl)"),
   "recommend route must create a review when either comment or a photo proof is present, not comment alone",
 );
 
 assert(
   !/if \(comment\) \{\s*\n\s*const photoLine/.test(routeSource),
   "recommend route must not regress to gating review creation on comment text alone while still uploading a photo proof",
+);
+
+assert(
+  routeSource.includes('entityType: "restaurant_recommendation"'),
+  "photo-only proofs must retain a durable image-upload record",
+);
+
+assert(
+  routeSource.includes("contextSubmittedAt"),
+  "photo-only context must set the durable idempotency marker",
+);
+
+assert(
+  !routeSource.includes(
+    "`restaurant-recommendation-${restaurantId}-${userId}-${Date.now()}`",
+  ),
+  "public proof asset names must not embed internal restaurant/user identifiers",
 );
 
 console.log(

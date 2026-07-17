@@ -21,6 +21,7 @@ type GoogleMapSurfaceProps = {
   showRoadTrafficLayer?: boolean;
   userLocation: GeoPoint | null;
   isNightTheme: boolean;
+  useNativeMapStyle?: boolean;
   onBoundsChanged: (bounds: MapBoundsLike) => void;
   onZoomChanged: (zoom: number) => void;
   onCenterChanged?: (center: GeoPoint) => void;
@@ -35,6 +36,8 @@ type GoogleMapSurfaceProps = {
   onMarkerTap: (marker: MapAdapterMarker) => void;
   onFatalError?: (message: string) => void;
   interactive?: boolean;
+  showZoomControls?: boolean;
+  zoomControlsPosition?: "top" | "below-header";
 };
 
 type GoogleMapsWindow = Window & {
@@ -736,6 +739,7 @@ export function GoogleMapSurface({
   showRoadTrafficLayer = false,
   userLocation,
   isNightTheme,
+  useNativeMapStyle = false,
   onBoundsChanged,
   onZoomChanged,
   onCenterChanged,
@@ -745,6 +749,8 @@ export function GoogleMapSurface({
   onMarkerTap,
   onFatalError,
   interactive = true,
+  showZoomControls = true,
+  zoomControlsPosition = "top",
 }: GoogleMapSurfaceProps) {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
@@ -757,6 +763,8 @@ export function GoogleMapSurface({
   const [mapReadyVersion, setMapReadyVersion] = useState(0);
   const hasReportedFatalErrorRef = useRef(false);
   const onWindowResizeRef = useRef<(() => void) | null>(null);
+  const idleListenerRef = useRef<any>(null);
+  const layoutTimeoutIdsRef = useRef<number[]>([]);
   const onBoundsChangedRef = useRef(onBoundsChanged);
   const onZoomChangedRef = useRef(onZoomChanged);
   const onCenterChangedRef = useRef(onCenterChanged);
@@ -865,8 +873,8 @@ export function GoogleMapSurface({
             disableDefaultUI: true,
             zoomControl: false,
             clickableIcons: interactive,
-            tilt: isNightTheme ? 25 : 0,
-            heading: isNightTheme ? 8 : 0,
+            tilt: isNightTheme && !useNativeMapStyle ? 25 : 0,
+            heading: isNightTheme && !useNativeMapStyle ? 8 : 0,
             draggable: interactive,
             keyboardShortcuts: interactive,
             scrollwheel: interactive,
@@ -877,7 +885,10 @@ export function GoogleMapSurface({
                 : "cooperative"
               : "none",
           };
-          if (isNightTheme) {
+          if (useNativeMapStyle) {
+            mapOptions.mapTypeId = "roadmap";
+            mapOptions.styles = null;
+          } else if (isNightTheme) {
             mapOptions.mapTypeId = "roadmap";
             mapOptions.styles = mapStyleNeon;
           } else {
@@ -926,7 +937,11 @@ export function GoogleMapSurface({
             }
           };
 
-          mapRef.current.addListener("idle", emitViewportState);
+          idleListenerRef.current?.remove?.();
+          idleListenerRef.current = mapRef.current.addListener(
+            "idle",
+            emitViewportState,
+          );
 
           // Trigger resize whenever the container changes size (e.g. on
           // first pull-down expand). Without this the map renders blank
@@ -956,14 +971,23 @@ export function GoogleMapSurface({
           window.addEventListener("resize", onWindowResizeRef.current);
 
           setMapReadyVersion((v) => v + 1);
-          [0, 80, 240, 520].forEach((delay) => {
+          layoutTimeoutIdsRef.current.forEach((id) => window.clearTimeout(id));
+          layoutTimeoutIdsRef.current = [0, 80, 240, 520].map((delay) =>
             window.setTimeout(() => {
-              if (mapRef.current)
-                refreshGoogleMapLayout(googleMaps, mapRef.current);
-            }, delay);
-          });
+              const map = mapRef.current;
+              if (map) refreshGoogleMapLayout(googleMaps, map);
+            }, delay),
+          );
         } else {
-          if (isNightTheme) {
+          if (useNativeMapStyle) {
+            mapRef.current.setOptions({
+              mapId: undefined,
+              styles: null,
+              mapTypeId: "roadmap",
+              tilt: 0,
+              heading: 0,
+            });
+          } else if (isNightTheme) {
             mapRef.current.setOptions({
               mapId: undefined,
               styles: mapStyleNeon,
@@ -1013,7 +1037,7 @@ export function GoogleMapSurface({
     return () => {
       mounted = false;
     };
-  }, [apiKey, mapId, isNightTheme, interactive]);
+  }, [apiKey, mapId, isNightTheme, interactive, useNativeMapStyle]);
 
   useEffect(() => {
     if (!mapRef.current) return;
@@ -1233,9 +1257,15 @@ export function GoogleMapSurface({
   // Cleanup
   useEffect(() => {
     return () => {
-      Array.from(markerRefs.current.values()).forEach((instance) =>
-        removeMarkerFromMap(instance),
-      );
+      const googleMaps = (window as GoogleMapsWindow).google?.maps;
+      layoutTimeoutIdsRef.current.forEach((id) => window.clearTimeout(id));
+      layoutTimeoutIdsRef.current = [];
+      idleListenerRef.current?.remove?.();
+      idleListenerRef.current = null;
+      Array.from(markerRefs.current.values()).forEach((instance) => {
+        googleMaps?.event?.clearInstanceListeners?.(instance);
+        removeMarkerFromMap(instance);
+      });
       markerRefs.current.clear();
       Array.from(trafficCircleRefs.current.values()).forEach((i) =>
         i.setMap(null),
@@ -1256,6 +1286,9 @@ export function GoogleMapSurface({
         window.removeEventListener("resize", onWindowResizeRef.current);
         onWindowResizeRef.current = null;
       }
+      const map = mapRef.current;
+      if (map) googleMaps?.event?.clearInstanceListeners?.(map);
+      mapRef.current = null;
     };
   }, []);
 
@@ -1273,7 +1306,7 @@ export function GoogleMapSurface({
     const camera: Record<string, unknown> = { zoom: nextZoom };
 
     if (currentCenter) camera.center = currentCenter;
-    if (isNightTheme) {
+    if (isNightTheme && !useNativeMapStyle) {
       camera.tilt = 25;
       camera.heading = 8;
     }
@@ -1301,7 +1334,7 @@ export function GoogleMapSurface({
       </div>
 
       {/* Cinematic grade over the live map; no bitmap overlay, map stays interactive. */}
-      {isNightTheme && (
+      {isNightTheme && !useNativeMapStyle && (
         <>
           <div aria-hidden="true" className="ms-google-map-grade" />
           <style>{`
@@ -1343,8 +1376,12 @@ export function GoogleMapSurface({
         </>
       )}
 
-      {interactive && (
-        <div className="absolute top-5 right-5 flex flex-col gap-2 z-[1000]">
+      {interactive && showZoomControls && (
+        <div
+          className={`absolute right-5 flex flex-col gap-2 z-[1000] ${
+            zoomControlsPosition === "below-header" ? "top-20" : "top-5"
+          }`}
+        >
           <Button
             variant="secondary"
             size="sm"

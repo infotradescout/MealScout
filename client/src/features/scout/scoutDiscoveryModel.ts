@@ -208,7 +208,14 @@ export const SCOUT_PRIMARY_SECTION_PRIORITY: ScoutPrimarySectionId[] = [
   "popular_dishes",
 ];
 
-const LOCATION_TYPES = new Set(["host", "host_location", "location", "venue", "map_place"]);
+const LOCATION_TYPES = new Set([
+  "host",
+  "host_location",
+  "host_venue",
+  "location",
+  "venue",
+  "map_place",
+]);
 
 function readString(source: unknown, fields: string[]): string | null {
   if (!source || typeof source !== "object") return null;
@@ -247,28 +254,40 @@ export function normalizeScoutBusinessKind(
     return "food_truck";
   }
 
-  const explicit = readString(source, [
+  // Structural fields describe the card/entity itself. They take precedence
+  // over food-business aliases so an event venue remains a map place even
+  // though legacy restaurant rows used businessType="venue" for bars.
+  const structuralType = readString(source, [
     "cardKind",
     "entityKind",
     "entityType",
     "profileType",
-    "businessType",
     "type",
     "kind",
   ]);
 
-  if (explicit) {
-    const normalized = normalizeToken(explicit);
+  if (structuralType) {
+    const normalized = normalizeToken(structuralType);
+    if (LOCATION_TYPES.has(normalized)) return "map_place";
     const businessType = toCanonicalFoodBusinessType(normalized);
     if (businessType === "food_truck") return "food_truck";
     if (businessType) return "restaurant";
-    if (LOCATION_TYPES.has(normalized)) return "map_place";
     if (normalized === "truck_stop" || normalized === "scheduled_stop") return "truck_stop";
     if (normalized === "menu_item" || normalized === "dish") return "menu_item";
     if (normalized === "happy_hour") return "happy_hour";
     if (normalized === "deal") return "deal";
     if (normalized === "event" || normalized === "popup" || normalized === "pop_up") return "event";
     if (normalized === "community_pick" || normalized === "community") return "community_pick";
+    return "local_activity";
+  }
+
+  const explicitBusinessType = readString(source, ["businessType"]);
+  if (explicitBusinessType) {
+    const normalized = normalizeToken(explicitBusinessType);
+    const businessType = toCanonicalFoodBusinessType(normalized);
+    if (businessType === "food_truck") return "food_truck";
+    if (businessType) return "restaurant";
+    if (LOCATION_TYPES.has(normalized)) return "map_place";
     return "local_activity";
   }
 

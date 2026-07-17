@@ -5,8 +5,8 @@
 // host's contact phone, internal notes, Stripe Connect state, payout
 // settings, and Parking Pass pricing controls, none of which belong in a
 // response any anonymous caller can fetch.
-function toPublicEventHost(host: any): Record<string, unknown> {
-  if (!host || typeof host !== "object") return host;
+function toPublicEventHost(host: any): Record<string, unknown> | null {
+  if (!host || typeof host !== "object" || Array.isArray(host)) return null;
 
   const {
     id,
@@ -37,8 +37,19 @@ function toPublicEventHost(host: any): Record<string, unknown> {
   };
 }
 
+function toPublicEventSeries(
+  series: any,
+): Record<string, unknown> | null {
+  if (!series || typeof series !== "object" || Array.isArray(series)) {
+    return null;
+  }
+
+  const { id, name } = series;
+  return { id, name };
+}
+
 export function toPublicEventListing(event: any): Record<string, unknown> {
-  if (!event || typeof event !== "object") return event;
+  if (!event || typeof event !== "object" || Array.isArray(event)) return {};
 
   const {
     id,
@@ -95,7 +106,7 @@ export function toPublicEventListing(event: any): Record<string, unknown> {
     createdAt,
     updatedAt,
     host: toPublicEventHost(host),
-    series: series ?? null,
+    series: toPublicEventSeries(series),
   };
 }
 

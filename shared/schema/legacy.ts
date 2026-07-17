@@ -11,6 +11,7 @@ import {
   integer,
   boolean,
   unique,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
@@ -1322,6 +1323,15 @@ export const restaurantUserRecommendations = pgTable(
     valueScore: integer("value_score"),
     speedScore: integer("speed_score"),
     vibeScore: integer("vibe_score"),
+    // Durable idempotency marker for the optional contextual submission.
+    // A bare recommend can later receive exactly one context payload.
+    contextReviewId: varchar("context_review_id").references(() => reviews.id, {
+      onDelete: "set null",
+    }),
+    contextSubmittedAt: timestamp("context_submitted_at"),
+    contextPayloadFingerprint: varchar("context_payload_fingerprint", {
+      length: 64,
+    }),
     recommendedAt: timestamp("recommended_at").defaultNow(),
     createdAt: timestamp("created_at").defaultNow(),
   },
@@ -1334,10 +1344,13 @@ export const restaurantUserRecommendations = pgTable(
       table.userId,
       table.recommendedAt.desc(),
     ),
-    index("IDX_restaurant_user_recommendations_unique").on(
+    uniqueIndex("IDX_restaurant_user_recommendations_unique").on(
       table.restaurantId,
       table.userId,
     ),
+    uniqueIndex("idx_restaurant_recommendations_context_review")
+      .on(table.contextReviewId)
+      .where(sql`${table.contextReviewId} is not null`),
   ],
 );
 

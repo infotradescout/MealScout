@@ -37,6 +37,9 @@ jobs:
       - name: Scout Result View Model Contract
         run: npm run test:scout-result-view-model
 
+      - name: Scout Map Truth Contract
+        run: npm run test:map-truth
+
       - name: Public Profile Action Policy Contract
         run: npm run test:profile-action-policy
 
@@ -45,6 +48,18 @@ jobs:
 
       - name: Public Data Boundary Contract
         run: npm run test:public-data-boundary
+
+      - name: Frozen Cleanup Safety Contract
+        run: npm run test:frozen-cleanup-safety
+
+      - name: Quick Review Score Validation Contract
+        run: npm run test:quick-review-score-validation
+
+      - name: Quick Review Idempotency Contract
+        run: npm run test:quick-review-idempotency
+
+      - name: Recommendation Photo Proof Contract
+        run: npm run test:recommend-photo-only-proof
 
       - name: Build
         run: npm run build

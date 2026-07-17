@@ -50,6 +50,8 @@ import {
 } from "../services/cityTimeZone";
 import { isSlotPublic, type PublicSlot } from "../services/publicSlotGate";
 import { toPublicEventListingArray } from "../publicProfiles/toPublicEventListing";
+import { toPublicParkingPassListingArray } from "../publicProfiles/toPublicParkingPassListing";
+import { canExposeAnonymousEventDetail } from "../publicProfiles/publicEventDetailAccess";
 import { distributedRateLimit } from "../middleware/distributedRateLimit";
 import { dateKeyFromUnknown, dateKeyInZone } from "../services/dateKeys";
 
@@ -242,8 +244,6 @@ export function registerEventRoutes(
     if (host) {
       host.businessName = "Verified host";
       host.address = null;
-      host.phone = null;
-      host.email = null;
       host.latitude = roundCoord(hostLat, 2);
       host.longitude = roundCoord(hostLng, 2);
     }
@@ -474,11 +474,22 @@ export function registerEventRoutes(
         qualityFlags: computeParkingPassQualityFlags(event),
       }));
 
+    const publishedParkingPassSeriesIds = new Set(
+      (await storage.getParkingPassSeriesSafe().catch(() => []))
+        .filter(
+          (series: any) =>
+            normalizeParkingStatus(series?.status) === "published",
+        )
+        .map((series: any) => String(series?.id || "").trim())
+        .filter(Boolean),
+    );
     const legacyUpcoming = await storage.getAllUpcomingEvents();
     const legacyEvents = legacyUpcoming
       .filter(
         (event: any) =>
           event?.eventType === "parking_pass" &&
+          (!event?.seriesId ||
+            publishedParkingPassSeriesIds.has(String(event.seriesId))) &&
           isParkingPassFeedCandidate(event) &&
           isParkingPassPublicReady(event) &&
           isPublicHostProfile(event?.host, event),
@@ -758,6 +769,25 @@ export function registerEventRoutes(
       const upcomingEvents = await storage.getAllUpcomingEvents();
       let filtered = Array.isArray(upcomingEvents) ? upcomingEvents : [];
       if (hostIdFilter) {
+        const requestedHost = await storage.getHost(hostIdFilter);
+        if (!requestedHost) {
+          return res.status(404).json({ message: "Host not found" });
+        }
+        const role = String(req.user?.userType || req.user?.role || "")
+          .trim()
+          .toLowerCase();
+        const canInspectAnyHost = [
+          "staff",
+          "admin",
+          "duper_admin",
+          "super_admin",
+        ].includes(role);
+        if (
+          !canInspectAnyHost &&
+          String(requestedHost.userId || "") !== String(req.user.id || "")
+        ) {
+          return res.status(403).json({ message: "Not authorized" });
+        }
         filtered = filtered.filter(
           (event: any) => String(event?.hostId || "") === hostIdFilter,
         );
@@ -765,6 +795,7 @@ export function registerEventRoutes(
         filtered = filtered.filter(
           (event: any) => !Boolean(event?.requiresPayment),
         );
+        return res.json(toPublicEventListingArray(filtered));
       }
       res.json(filtered);
     } catch (error: any) {
@@ -797,8 +828,11 @@ export function registerEventRoutes(
           const payload = sanitizeParkingPassPublicFeedRows(
             parkingPassPublicFeedCache.payload,
           );
+          const publicPayload = toPublicParkingPassListingArray(payload);
           return res.json(
-            isAuthed ? payload : payload.map(redactParkingPassEventForGuest),
+            isAuthed
+              ? publicPayload
+              : publicPayload.map(redactParkingPassEventForGuest),
           );
         }
         const feedBuilder =
@@ -806,10 +840,11 @@ export function registerEventRoutes(
         const enhancedEvents = sanitizeParkingPassPublicFeedRows(
           await getParkingPassPublicFeed(feedBuilder),
         );
+        const publicEvents = toPublicParkingPassListingArray(enhancedEvents);
         res.json(
           isAuthed
-            ? enhancedEvents
-            : enhancedEvents.map(redactParkingPassEventForGuest),
+            ? publicEvents
+            : publicEvents.map(redactParkingPassEventForGuest),
         );
       } catch (error: any) {
         console.error("Error fetching parking pass listings:", error);
@@ -819,8 +854,11 @@ export function registerEventRoutes(
           const payload = sanitizeParkingPassPublicFeedRows(
             parkingPassPublicFeedLastGood.payload,
           );
+          const publicPayload = toPublicParkingPassListingArray(payload);
           return res.json(
-            isAuthed ? payload : payload.map(redactParkingPassEventForGuest),
+            isAuthed
+              ? publicPayload
+              : publicPayload.map(redactParkingPassEventForGuest),
           );
         }
         res.status(200).json([]);
@@ -843,11 +881,13 @@ export function registerEventRoutes(
         parkingPassHostStatusCacheByDate = new Map();
       }
 
-      const feed = sanitizeParkingPassPublicFeedRows(
-        parkingPassPublicFeedCache &&
-        parkingPassPublicFeedCache.expiresAt > Date.now()
-          ? parkingPassPublicFeedCache.payload
-          : await getParkingPassPublicFeed(buildParkingPassPublicFeed),
+      const feed = toPublicParkingPassListingArray(
+        sanitizeParkingPassPublicFeedRows(
+          parkingPassPublicFeedCache &&
+          parkingPassPublicFeedCache.expiresAt > Date.now()
+            ? parkingPassPublicFeedCache.payload
+            : await getParkingPassPublicFeed(buildParkingPassPublicFeed),
+        ),
       );
 
       const pensacolaEvents = (Array.isArray(feed) ? feed : []).filter(
@@ -865,7 +905,8 @@ export function registerEventRoutes(
 
       // One card per host location: pick the soonest upcoming occurrence per host.
       const byHost = new Map<string, any>();
-      for (const row of pensacolaEvents) {
+      for (const publicRow of pensacolaEvents) {
+        const row: any = publicRow;
         const hostId = String(row?.host?.id || "").trim();
         if (!hostId) continue;
         const existing = byHost.get(hostId);
@@ -1055,6 +1096,18 @@ export function registerEventRoutes(
         : null;
       const gateOk = slot ? isSlotPublic({ slot, now }) : false;
       const ended = dt ? dt.endUtc.getTime() < now.getTime() : false;
+      const isAuthed = Boolean(req.isAuthenticated?.() && req.user?.id);
+      if (
+        !isAuthed &&
+        !canExposeAnonymousEventDetail({
+          requiresPayment: row.requiresPayment,
+          status: row.status,
+          slotIsPublic: gateOk,
+        })
+      ) {
+        res.setHeader("Cache-Control", "private, no-store");
+        return res.status(404).json({ message: "Event not found" });
+      }
 
       const hostSlug = `${toSlug(row.hostName) || row.hostId}--${row.hostId}`;
       const hostPath = `/location/${encodeURIComponent(hostSlug)}`;
@@ -1064,7 +1117,10 @@ export function registerEventRoutes(
           ? `/truck/${encodeURIComponent(`${toSlug(row.truckName) || row.bookedRestaurantId}--${row.bookedRestaurantId}`)}`
           : null;
 
-      res.setHeader("Cache-Control", "public, max-age=60");
+      res.setHeader(
+        "Cache-Control",
+        isAuthed ? "private, no-store" : "public, max-age=60",
+      );
       res.json({
         id: row.id,
         title,
@@ -1240,19 +1296,19 @@ export function registerEventRoutes(
         const hostPricingIds = new Set<string>();
         try {
           const allHosts = await storage.getAllHosts();
-          const seriesHostIds = new Set(
+          const publishedSeriesHostIds = new Set(
             (await storage.getParkingPassSeriesSafe().catch(() => []))
+              .filter(
+                (series: any) =>
+                  normalizeParkingStatus(series?.status) === "published",
+              )
               .map((series: any) => String(series?.hostId || "").trim())
               .filter(Boolean),
           );
           for (const host of allHosts as any[]) {
             const hostId = String(host?.id || "").trim();
             if (!hostId) continue;
-            if (
-              !seriesHostIds.has(hostId) &&
-              !hasPositiveParkingPassHostPrice(host) &&
-              !hasParkingPassHostScheduleDefaults(host)
-            ) {
+            if (!publishedSeriesHostIds.has(hostId)) {
               continue;
             }
             const hostStatus = normalizeParkingStatus(host?.status || "");
@@ -1421,7 +1477,7 @@ export function registerEventRoutes(
       });
     const { occurrences } = await listParkingPassOccurrences({
       horizonDays: 30,
-      includeDraft: true,
+      includeDraft: false,
     });
     const virtualEvents = occurrences.filter((event: any) => {
       if (!isParkingPassPublicReady(event)) return false;
@@ -1430,9 +1486,25 @@ export function registerEventRoutes(
       return eventDate === dateKey;
     });
 
+    const publishedParkingPassSeriesIds = new Set(
+      (await storage.getParkingPassSeriesSafe().catch(() => []))
+        .filter(
+          (series: any) =>
+            normalizeParkingStatus(series?.status) === "published",
+        )
+        .map((series: any) => String(series?.id || "").trim())
+        .filter(Boolean),
+    );
     const legacyUpcoming = await storage.getAllUpcomingEvents();
     const legacyEvents = legacyUpcoming.filter((event: any) => {
       if (event?.eventType !== "parking_pass") return false;
+      if (
+        event?.seriesId &&
+        !publishedParkingPassSeriesIds.has(String(event.seriesId))
+      ) {
+        return false;
+      }
+      if (!isParkingPassFeedCandidate(event)) return false;
       if (!isParkingPassPublicReady(event)) return false;
       if (!isPublicHostProfile(event?.host, event)) return false;
       const eventDate = eventDateKey(event);

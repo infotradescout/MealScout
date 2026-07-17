@@ -33,6 +33,13 @@ export type LegacyTruckPresenceInput = {
   gpsAccuracy?: unknown;
 };
 
+export type TruckCoordinateInput = LegacyTruckPresenceInput & {
+  latitude?: unknown;
+  longitude?: unknown;
+  lat?: unknown;
+  lng?: unknown;
+};
+
 export type VisitStatus = {
   state:
     | "live_now"
@@ -51,8 +58,11 @@ export type VisitStatus = {
 };
 
 function finiteNumber(value: unknown): number | null {
-  if (value === null || value === undefined || value === "") return null;
-  const parsed = typeof value === "number" ? value : Number(value);
+  if (typeof value !== "number" && typeof value !== "string") return null;
+  const normalized = typeof value === "string" ? value.trim() : value;
+  if (normalized === "") return null;
+  const parsed =
+    typeof normalized === "number" ? normalized : Number(normalized);
   return Number.isFinite(parsed) ? parsed : null;
 }
 
@@ -68,6 +78,16 @@ function validCoordinates(
     longitude >= -180 &&
     longitude <= 180
   );
+}
+
+export function resolveCoordinatePair(
+  latitudeValue: unknown,
+  longitudeValue: unknown,
+): Coordinates | null {
+  const latitude = finiteNumber(latitudeValue);
+  const longitude = finiteNumber(longitudeValue);
+  if (!validCoordinates(latitude, longitude)) return null;
+  return { latitude, longitude: longitude as number };
 }
 
 function isoDate(value: string | Date | null | undefined): string | null {
@@ -170,6 +190,43 @@ export function deriveTruckPresence(
     liveUntilAt,
     reason: "fresh_broadcast",
   };
+}
+
+/**
+ * Resolves one trustworthy coordinate pair for a truck without ever mixing
+ * live and static axes. Fresh live coordinates win; otherwise a complete,
+ * valid static profile pair is used.
+ */
+export function resolveTruckCoordinates(
+  input: TruckCoordinateInput | null | undefined,
+  options: { now?: Date; freshnessMs: number },
+): Coordinates | null {
+  if (!input) return null;
+
+  const presence = deriveTruckPresence(
+    {
+      mobileOnline: input.mobileOnline,
+      liveBroadcasting: input.liveBroadcasting,
+      currentLatitude: input.currentLatitude,
+      currentLongitude: input.currentLongitude,
+      lastBroadcastAt: input.lastBroadcastAt,
+      liveUntilAt: input.liveUntilAt,
+      locationSource: input.locationSource,
+      gpsAccuracy: input.gpsAccuracy,
+    },
+    options,
+  );
+  if (presence.broadcastState === "live" && presence.location) {
+    return {
+      latitude: presence.location.latitude,
+      longitude: presence.location.longitude,
+    };
+  }
+
+  return (
+    resolveCoordinatePair(input.latitude, input.longitude) ??
+    resolveCoordinatePair(input.lat, input.lng)
+  );
 }
 
 export function visitStatusFromPresence(

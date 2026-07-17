@@ -103,5 +103,43 @@ assert.equal(selected[0]?.entityId, "active");
 assert.equal(normalizeScoutBusinessKind({ businessType: "brewery" }), "restaurant");
 assert.equal(normalizeScoutBusinessKind({ businessType: "private_chef" }), "restaurant");
 assert.equal(normalizeScoutBusinessKind({ businessType: "food-truck" }), "food_truck");
+assert.equal(
+  normalizeScoutBusinessKind({ businessType: "venue" }, "restaurant"),
+  "restaurant",
+  "A legacy food-business venue value retains its bar/restaurant-card meaning",
+);
+assert.equal(
+  normalizeScoutBusinessKind({ entityType: "venue" }, "location"),
+  "map_place",
+  "A structural venue entity remains a map place",
+);
+assert.equal(
+  normalizeScoutBusinessKind(
+    { entityType: "venue", businessType: "venue" },
+    "location",
+  ),
+  "map_place",
+  "Structural venue identity must take precedence over the legacy food alias",
+);
+assert.equal(
+  normalizeScoutBusinessKind({ type: "venue" }, "location"),
+  "map_place",
+  "A structural venue type remains a map place",
+);
+assert.equal(
+  normalizeScoutBusinessKind({ entityType: "host_venue" }, "location"),
+  "map_place",
+  "The canonical host/venue entity remains a map place",
+);
+assert.equal(
+  normalizeScoutBusinessKind({ type: "host_venue" }, "location"),
+  "map_place",
+  "The canonical host/venue type remains a map place",
+);
+assert.equal(
+  normalizeScoutBusinessKind({ businessType: "host_venue" }, "location"),
+  "map_place",
+  "Host/venue business records remain discoverable as map places",
+);
 
 console.log("MealScout canonical Scout discovery result contract: PASS");

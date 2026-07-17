@@ -15,7 +15,12 @@ export function parseQuickReviewScore(
   if (source === undefined || source === null || source === "") {
     return { value: null };
   }
-  const num = Number(source);
+  const num =
+    typeof source === "number"
+      ? source
+      : typeof source === "string" && /^\d+$/.test(source.trim())
+        ? Number(source.trim())
+        : Number.NaN;
   if (!Number.isInteger(num) || num < 1 || num > 100) {
     return { value: null, error: field };
   }

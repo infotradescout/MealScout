@@ -55,6 +55,20 @@ function assertEqual<T>(actual: T, expected: T, message: string) {
 
   const nonNumeric = parseQuickReviewScore("vibe", "not-a-number", undefined);
   assertEqual(nonNumeric.error, "vibe", "non-numeric score should error");
+
+  const booleanValue = parseQuickReviewScore("food", true, undefined);
+  assertEqual(
+    booleanValue.error,
+    "food",
+    "booleans must not coerce into numeric scores",
+  );
+
+  const arrayValue = parseQuickReviewScore("value", [75], undefined);
+  assertEqual(
+    arrayValue.error,
+    "value",
+    "arrays must not coerce into numeric scores",
+  );
 }
 
 // Legacy fallback field (e.g. body.foodScore) is honored when scores.food is absent.
