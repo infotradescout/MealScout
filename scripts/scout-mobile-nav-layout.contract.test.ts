@@ -40,9 +40,14 @@ for (const snippet of scoutRequired) {
 // navigation.tsx guessing at scout-specific spacing.
 const navRequired = [
   "const isScoutRoute =",
-  "currentPath === \"/scout\" || currentPath.startsWith(\"/scout/\")",
+  'currentPath === "/scout"',
+  'currentPath.startsWith("/scout/")',
+  'currentPath === "/scout-v2"',
+  'currentPath === "/directory"',
+  'currentPath.startsWith("/directory/")',
   "const disableScoutHelpBubbles = isScoutRoute;",
   "disabled={disableScoutHelpBubbles}",
+  'isScoutRoute ? "search-and-navigation" : undefined',
 ];
 
 for (const snippet of navRequired) {

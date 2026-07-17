@@ -23,7 +23,9 @@ const requiredNavigationSnippets = [
   "const disableScoutHelpBubbles = isScoutRoute;",
   "disabled={disableScoutHelpBubbles}",
   'isBusinessWorkspaceRoute ? "hidden" : "fixed"',
-  "inset-x-0 bottom-0 z-[1100] border-t border-[color:var(--border-subtle)] lg:hidden",
+  "inset-x-0 bottom-0 z-[1100]",
+  "data-scout-mobile-nav-shell={",
+  'isScoutRoute ? "search-and-navigation" : undefined',
 ];
 
 for (const snippet of requiredNavigationSnippets) {

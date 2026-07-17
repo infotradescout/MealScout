@@ -30,6 +30,8 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useI18n } from "@/lib/i18n";
 import LongPressHelp from "@/components/long-press-help";
+import { ScoutSearchDock } from "@/components/scout/ScoutSearchDock";
+import { useScoutNavSearch } from "@/components/scout/ScoutNavSearchContext";
 
 type NavItem = {
   path?: string;
@@ -42,6 +44,16 @@ type NavItem = {
 type NavigationProps = {
   scope?: "global" | "local";
 };
+
+type NavigationLane =
+  | "guest"
+  | "admin_staff"
+  | "event"
+  | "supplier"
+  | "food_truck"
+  | "restaurant"
+  | "host"
+  | "customer";
 
 const NAV_HELP: Record<string, string> = {
   Scout: "Discover local food or see MealScout as a customer.",
@@ -74,6 +86,15 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
   const [isReporting, setIsReporting] = useState(false);
   const { t } = useI18n();
   const sheetRef = useRef<HTMLDivElement>(null);
+  const {
+    searchMode,
+    query: scoutSearchQuery,
+    activeFilter: scoutSearchFilter,
+    openSearch,
+    closeSearch,
+    setQuery: setScoutSearchQuery,
+    setActiveFilter: setScoutSearchFilter,
+  } = useScoutNavSearch();
 
   useEffect(() => {
     if (isGlobalScope) {
@@ -231,7 +252,11 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
 
   const dashboardPath = "/dashboard";
   const isScoutRoute =
-    currentPath === "/scout" || currentPath.startsWith("/scout/");
+    currentPath === "/scout" ||
+    currentPath.startsWith("/scout/") ||
+    currentPath === "/scout-v2" ||
+    currentPath === "/directory" ||
+    currentPath.startsWith("/directory/");
   const isBusinessWorkspaceRoute =
     currentPath === "/restaurant-owner-dashboard" ||
     currentPath === "/menu-builder" ||
@@ -242,15 +267,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
       (isRestaurantOwner || isFoodTruck || isAdmin));
   const disableScoutHelpBubbles = isScoutRoute;
 
-  const lane:
-    | "guest"
-    | "admin_staff"
-    | "event"
-    | "supplier"
-    | "food_truck"
-    | "restaurant"
-    | "host"
-    | "customer" = !user
+  const accountLane: NavigationLane = !user
     ? "guest"
     : isAdmin || isStaff
       ? "admin_staff"
@@ -265,6 +282,13 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
               : isHost
                 ? "host"
                 : "customer";
+  // Discovery intent owns the shell on Scout. An operator or admin remains a
+  // diner here; business/admin navigation belongs to its own workspace.
+  const lane: NavigationLane = isScoutRoute
+    ? user
+      ? "customer"
+      : "guest"
+    : accountLane;
   const isRestaurantHostCapable = lane === "restaurant" && isHost;
   // A restaurant/food_truck-laned user who also has a real host row (verified
   // owning both, e.g. a bar operator who's also a venue host) needs a path to
@@ -552,6 +576,19 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     }
   };
 
+  const scoutNavSearch = isScoutRoute ? (
+    <ScoutSearchDock
+      placement="navigation"
+      searchMode={searchMode}
+      query={scoutSearchQuery}
+      activeFilter={scoutSearchFilter}
+      onOpen={openSearch}
+      onClose={closeSearch}
+      onQueryChange={setScoutSearchQuery}
+      onFilterChange={setScoutSearchFilter}
+    />
+  ) : null;
+
   return (
     <>
       <header
@@ -559,7 +596,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
         className={`fixed inset-x-0 top-0 z-[1100] hidden border-b border-[color:var(--border-subtle)] ${isBusinessWorkspaceRoute ? "" : "lg:block"}`}
         style={{ backgroundColor: "var(--bg-popup)" }}
       >
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-5 xl:px-8">
+        <div className="mx-auto flex min-h-16 max-w-7xl items-center justify-between gap-4 px-5 xl:px-8">
           <Link
             href="/scout"
             aria-label="Open MealScout"
@@ -570,6 +607,14 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
             </span>
             <span className="text-base font-black tracking-tight">MealScout</span>
           </Link>
+          {isScoutRoute ? (
+            <div
+              className="min-w-0 flex-1 overflow-hidden rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)]/75"
+              data-scout-desktop-search-nav="true"
+            >
+              {scoutNavSearch}
+            </div>
+          ) : null}
           <nav aria-label="Primary navigation" className="flex items-center gap-1">
             {primaryNav.map((item, idx) =>
               item.path ? (
@@ -629,80 +674,105 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
         aria-label="Primary navigation"
         className={`${
           isBusinessWorkspaceRoute ? "hidden" : "fixed"
-        } inset-x-0 bottom-0 z-[1100] border-t border-[color:var(--border-subtle)] lg:hidden`}
+        } inset-x-0 bottom-0 z-[1100] ${
+          isScoutRoute ? "" : "border-t border-[color:var(--border-subtle)]"
+        } lg:hidden`}
         style={{ bottom: 0 }}
       >
         <div
           data-scout-mobile-nav-shell={
-            isScoutRoute ? "navigation-only" : undefined
+            isScoutRoute ? "search-and-navigation" : undefined
           }
-          className="w-full"
+          className={
+            isScoutRoute
+              ? "mx-3 mb-2 overflow-hidden rounded-[1.35rem] border border-[color:var(--border-subtle)] shadow-[0_-10px_30px_rgba(65,29,10,0.20)] backdrop-blur-xl"
+              : "w-full"
+          }
           style={{ backgroundColor: "var(--bg-popup)" }}
         >
+          {isScoutRoute ? scoutNavSearch : null}
           <div
-            className="relative flex items-stretch justify-around gap-1 px-2 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_22px_rgba(36,18,8,0.10)]"
-            style={{ height: "var(--scout-nav-height, 58px)" }}
+            className={
+              isScoutRoute
+                ? "border-t border-[color:var(--border-subtle)]"
+                : undefined
+            }
           >
-            {primaryNav.map((item, index) => {
-              const active = item.path
-                ? isActive(item.path)
-                : item.label === "More"
-                  ? moreOpen
-                  : false;
+            <div
+              className="relative flex items-stretch justify-around gap-1 px-2 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_22px_rgba(36,18,8,0.10)]"
+              style={{ height: "var(--scout-nav-height, 58px)" }}
+            >
+              {primaryNav.map((item, index) => {
+                const active = item.path
+                  ? isActive(item.path)
+                  : item.label === "More"
+                    ? moreOpen
+                    : false;
 
-              if (item.path) {
+                if (item.path) {
+                  return (
+                    <LongPressHelp
+                      disabled={disableScoutHelpBubbles}
+                      key={`${item.path}-${index}`}
+                      description={
+                        NAV_HELP[item.label] || `${item.label} navigation`
+                      }
+                    >
+                      <Link
+                        href={buildOwnerToolHref(item.path)}
+                        aria-label={item.label}
+                        aria-current={active ? "page" : undefined}
+                        className={`flex h-full min-w-0 flex-1 flex-col items-center justify-center gap-1 transition-colors ${
+                          active
+                            ? "text-primary"
+                            : "text-[color:var(--text-muted)] hover:text-[color:var(--text-primary)]"
+                        }`}
+                      >
+                        <item.icon
+                          className="h-[18px] w-[18px]"
+                          aria-hidden="true"
+                        />
+                        <span className="max-w-full truncate text-[10px] font-semibold leading-none">
+                          {item.label}
+                        </span>
+                      </Link>
+                    </LongPressHelp>
+                  );
+                }
+
                 return (
                   <LongPressHelp
                     disabled={disableScoutHelpBubbles}
-                    key={`${item.path}-${index}`}
+                    key={`more-${index}`}
                     description={
-                      NAV_HELP[item.label] || `${item.label} navigation`
+                      NAV_HELP[item.label] || `${item.label} options`
                     }
                   >
-                    <Link
-                      href={buildOwnerToolHref(item.path)}
+                    <button
+                      type="button"
                       aria-label={item.label}
-                      aria-current={active ? "page" : undefined}
+                      aria-expanded={
+                        item.label === "More" ? moreOpen : undefined
+                      }
+                      onClick={item.onClick}
                       className={`flex h-full min-w-0 flex-1 flex-col items-center justify-center gap-1 transition-colors ${
                         active
                           ? "text-primary"
                           : "text-[color:var(--text-muted)] hover:text-[color:var(--text-primary)]"
                       }`}
                     >
-                      <item.icon className="h-[18px] w-[18px]" aria-hidden="true" />
-                      <span className="max-w-full truncate text-[10px] font-semibold leading-none">
+                      <item.icon
+                        className="h-[18px] w-[18px]"
+                        aria-hidden="true"
+                      />
+                      <span className="text-[10px] font-semibold leading-none">
                         {item.label}
                       </span>
-                    </Link>
+                    </button>
                   </LongPressHelp>
                 );
-              }
-
-              return (
-                <LongPressHelp
-                  disabled={disableScoutHelpBubbles}
-                  key={`more-${index}`}
-                  description={NAV_HELP[item.label] || `${item.label} options`}
-                >
-                  <button
-                    type="button"
-                    aria-label={item.label}
-                    aria-expanded={item.label === "More" ? moreOpen : undefined}
-                    onClick={item.onClick}
-                    className={`flex h-full min-w-0 flex-1 flex-col items-center justify-center gap-1 transition-colors ${
-                      active
-                        ? "text-primary"
-                        : "text-[color:var(--text-muted)] hover:text-[color:var(--text-primary)]"
-                    }`}
-                  >
-                    <item.icon className="h-[18px] w-[18px]" aria-hidden="true" />
-                    <span className="text-[10px] font-semibold leading-none">
-                      {item.label}
-                    </span>
-                  </button>
-                </LongPressHelp>
-              );
-            })}
+              })}
+            </div>
           </div>
         </div>
       </nav>
@@ -720,7 +790,11 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
           />
           <div
             ref={sheetRef}
-            className="absolute bottom-[calc(env(safe-area-inset-bottom)+5.5rem)] left-0 right-0 mx-4 overflow-hidden rounded-3xl border border-[color:var(--border-subtle)] bg-[var(--bg-popup)]/95 shadow-[0_-16px_48px_rgba(36,18,8,0.24)] backdrop-blur-2xl"
+            className={`absolute left-0 right-0 mx-4 overflow-hidden rounded-3xl border border-[color:var(--border-subtle)] bg-[var(--bg-popup)]/95 shadow-[0_-16px_48px_rgba(36,18,8,0.24)] backdrop-blur-2xl ${
+              isScoutRoute
+                ? "bottom-[calc(env(safe-area-inset-bottom)+8.75rem)]"
+                : "bottom-[calc(env(safe-area-inset-bottom)+5.5rem)]"
+            }`}
           >
             <div className="flex items-center justify-between px-5 pt-4 pb-2">
               <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-[color:var(--text-muted)]">

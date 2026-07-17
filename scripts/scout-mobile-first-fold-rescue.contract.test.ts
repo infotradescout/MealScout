@@ -8,10 +8,10 @@ const locationHook = readFileSync(
 );
 
 const requiredScoutSnippets = [
-  "Nearby food coverage is still growing, so Scout is showing the",
-  "closest real place first.",
-  "Browse nearby",
-  "Search nearby",
+  "Local food coverage is still growing, so the closest real place",
+  "stays first.",
+  "Browse food",
+  "Try a craving, category, or another map area.",
   'data-testid="scout-thin-market-state"',
   'data-testid="scout-compact-card-image-fallback"',
   "useEffectiveLocationContext(",
@@ -30,6 +30,8 @@ for (const snippet of requiredScoutSnippets) {
 const prohibitedScoutSnippets = [
   "local food signals",
   "widen the board",
+  "No nearby food yet",
+  "Search nearby food or move the map",
 ];
 
 for (const snippet of prohibitedScoutSnippets) {

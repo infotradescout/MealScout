@@ -70,10 +70,7 @@ import { SEOHead } from "@/components/seo-head";
 import { ScoutMapHero } from "@/components/scout/ScoutMapHero";
 import { PlaceAutocompleteInput } from "@/components/maps/place-autocomplete-input";
 import { ActiveScenePanel } from "@/components/scout/ActiveScenePanel";
-import {
-  ScoutSearchDock,
-  type ScoutSearchFilterId,
-} from "@/components/scout/ScoutSearchDock";
+import type { ScoutSearchFilterId } from "@/components/scout/ScoutSearchDock";
 import { useScoutNavSearch } from "@/components/scout/ScoutNavSearchContext";
 import { ScoutEmptyState as ScoutSceneEmptyState } from "@/components/scout/ScoutEmptyState";
 import {
@@ -1571,8 +1568,8 @@ function formatScoutCount(
 }
 
 function formatScoutResultSummary(count: number): string {
-  if (count <= 0) return "Search nearby food or widen your area";
-  return `${count} ${count === 1 ? "spot" : "spots"} nearby`;
+  if (count <= 0) return "Search or move the map";
+  return `${count} ${count === 1 ? "spot" : "spots"} in this area`;
 }
 
 function getRestaurantArea(restaurant: RestaurantSummary): string | null {
@@ -2634,10 +2631,7 @@ export default function ExplorePreview() {
     searchMode: scoutSearchMode,
     query: scoutSearchQuery,
     activeFilter: scoutSearchFilter,
-    openSearch: openScoutSearch,
     closeSearch: closeScoutSearch,
-    setQuery: setScoutSearchQuery,
-    setActiveFilter: setScoutSearchFilter,
   } = useScoutNavSearch();
   const [resultsSheet, setResultsSheet] =
     useState<ScoutResultsSheetData | null>(null);
@@ -5272,9 +5266,8 @@ export default function ExplorePreview() {
   const compactMapHeight = isThinScoutViewport
     ? "clamp(208px, 24dvh, 238px)"
     : "clamp(250px, 32dvh, 310px)";
-  const collapsedMapClass = isHighActivity
-    ? "mx-0 mt-0 rounded-b-[2rem] ring-1 ring-orange-200/25 bg-[#1f140c]"
-    : "mx-0 mt-0 rounded-b-[1.8rem] ring-1 ring-orange-100/20 bg-[#211610]";
+  const collapsedMapClass =
+    "mx-0 mt-0 rounded-b-[1.75rem] bg-[#f7ead0] ring-1 ring-orange-200/60";
   const railSectionClass = isHighActivity
     ? "pl-4 pr-0 pt-1 pb-5"
     : "pl-4 pr-0 pt-2 pb-6 sm:pl-5";
@@ -5371,15 +5364,14 @@ export default function ExplorePreview() {
         description="Discover food trucks, restaurants, dishes, events, and local food deals near you with MealScout."
       />
 
-      {/* Quiet page base. Warm espresso/roasted-brown wash instead of
-          crushing to near-black, so the food photography underneath still
-          reads instead of getting stacked into a flat dark panel. */}
+      {/* Scout is an everyday food surface. Photography and the map can carry
+          dark contrast; the application canvas stays warm and bright. */}
       <div
         aria-hidden="true"
-        className="pointer-events-none fixed inset-0 -z-20 bg-[#1c130c]"
+        className="pointer-events-none fixed inset-0 -z-20 bg-[#fff8ec]"
         style={{
           backgroundImage:
-            "radial-gradient(90% 50% at 50% -8%, rgba(255,150,72,0.24) 0%, rgba(28,19,12,0) 58%), linear-gradient(180deg, #241708 0%, #1b1109 62%, #170f0a 100%)",
+            "radial-gradient(85% 44% at 50% -8%, rgba(255,170,92,0.22) 0%, rgba(255,248,236,0) 62%), linear-gradient(180deg, #fff8ec 0%, #fffdf8 58%, #fff7e8 100%)",
         }}
       />
 
@@ -5390,29 +5382,6 @@ export default function ExplorePreview() {
             : "pb-[calc(8.5rem+env(safe-area-inset-bottom,0px))] md:mx-auto md:max-w-[1120px] md:px-4 md:pb-8 xl:max-w-[1280px]"
         }`}
       >
-        {sheetState !== "fullMap" ? (
-          <div
-            className="relative z-30 bg-[#1c130c] pt-3 md:pt-4"
-            data-scout-search-surface="top"
-          >
-            <ScoutSearchDock
-              placement="inline"
-              searchMode={scoutSearchMode}
-              query={scoutSearchQuery}
-              activeFilter={scoutSearchFilter}
-              resultSummary={
-                scoutSearchMode
-                  ? `${localSearchContentCount} local result${localSearchContentCount === 1 ? "" : "s"} near ${shortLocation}`
-                  : `Search near ${shortLocation}`
-              }
-              onOpen={openScoutSearch}
-              onClose={closeScoutSearch}
-              onQueryChange={setScoutSearchQuery}
-              onFilterChange={setScoutSearchFilter}
-            />
-          </div>
-        ) : null}
-
         {/* ============================================================
              SCOUT SURFACE
              Default: compact map accessory.
@@ -5424,7 +5393,7 @@ export default function ExplorePreview() {
             data-scout-mobile-thirds-map="true"
             className={`relative overflow-hidden ${
               sheetState === "fullMap"
-                ? "w-full bg-[#1a1108]"
+                ? "w-full bg-[#f7ead0]"
                 : collapsedMapClass
             }`}
             style={{
@@ -5434,9 +5403,7 @@ export default function ExplorePreview() {
               boxShadow:
                 sheetState === "fullMap"
                   ? undefined
-                  : isHighActivity
-                    ? "0 30px 82px rgba(0,0,0,0.74), 0 0 42px rgba(255,100,48,0.10), inset 0 -1px 0 rgba(255,220,170,0.12)"
-                    : "0 28px 70px rgba(0,0,0,0.68), 0 4px 22px rgba(255,138,60,0.08), inset 0 0 0 1px rgba(255,180,110,0.08)",
+                  : "0 14px 34px rgba(112,64,28,0.16)",
             }}
           >
             {/* Scout map surfaces
@@ -5467,7 +5434,7 @@ export default function ExplorePreview() {
                         showRoadTrafficLayer={false}
                         userLocation={verifiedMapUserLocation}
                         isNightTheme={false}
-                        useNativeMapStyle={true}
+                        useNativeMapStyle={false}
                         showZoomControls={false}
                         onBoundsChanged={handleMapBoundsChanged}
                         onZoomChanged={handleMapZoomChanged}
@@ -5522,10 +5489,10 @@ export default function ExplorePreview() {
                       markers={sceneFilteredMapMarkers}
                       showRoadTrafficLayer={false}
                       userLocation={verifiedMapUserLocation}
-                        isNightTheme={false}
-                        useNativeMapStyle={true}
-                        showZoomControls={true}
-                        zoomControlsPosition="below-header"
+                      isNightTheme={false}
+                      useNativeMapStyle={false}
+                      showZoomControls={true}
+                      zoomControlsPosition="below-header"
                       onBoundsChanged={handleMapBoundsChanged}
                       onZoomChanged={handleMapZoomChanged}
                       onCenterChanged={handleMapCenterChanged}
@@ -5913,13 +5880,13 @@ function SectionHeader({
 }) {
   const showLink = itemCount === undefined || itemCount > 1;
   const seeAllClassName =
-    "inline-flex w-fit shrink-0 items-center gap-1.5 rounded-full bg-orange-500/10 px-3 py-1.5 text-xs font-black uppercase tracking-[0.08em] text-orange-100 ring-1 ring-orange-200/20 transition-colors hover:bg-orange-500/16 sm:text-sm sm:normal-case sm:tracking-normal";
+    "inline-flex w-fit shrink-0 items-center gap-1.5 rounded-full bg-white/85 px-3 py-1.5 text-xs font-black uppercase tracking-[0.08em] text-orange-800 ring-1 ring-orange-200/80 shadow-sm transition-colors hover:bg-orange-50 sm:text-sm sm:normal-case sm:tracking-normal";
 
   return (
     <div className="mb-3 pr-5">
       <div className="flex items-end justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="text-lg font-black tracking-tight text-orange-50 sm:text-xl">
+          <h2 className="text-lg font-black tracking-tight text-[#32190d] sm:text-xl">
             {title}
           </h2>
         </div>
@@ -5940,7 +5907,7 @@ function SectionHeader({
         ) : null}
       </div>
       {subtitle ? (
-        <p className="mt-1 text-xs leading-snug text-orange-50/58 sm:text-sm">
+        <p className="mt-1 text-xs font-medium leading-snug text-stone-600 sm:text-sm">
           {subtitle}
         </p>
       ) : null}
@@ -6312,55 +6279,55 @@ const scoutRotatingRowFallbackCopy: Partial<
   Record<ScoutHorizontalRowId, { title: string; subtitle: string }>
 > = {
   food_trucks_today: {
-    title: "Scout Food Truck Profiles",
+    title: "Food Trucks to Explore",
     subtitle:
-      "No truck schedule is posted for today. These food-truck profiles rotate in instead.",
+      "No trucks are live or scheduled right now. Explore food-truck profiles instead.",
   },
   open_now_near_you: {
-    title: "Scout These Spots",
+    title: "Places to Try",
     subtitle:
-      "No open status is posted right now. These food spots rotate in instead.",
+      "No open status is posted right now. Other food businesses rotate in.",
   },
   popular_dishes: {
-    title: "Scout These Spots",
+    title: "Menus to Explore",
     subtitle:
-      "More menu variety is on the way. These food spots rotate in instead.",
+      "More menu variety is on the way. Explore other food businesses for now.",
   },
   hot_deals: {
-    title: "Scout These Spots",
+    title: "More Food to Explore",
     subtitle:
-      "No active deals are posted right now. These food spots rotate in instead.",
+      "No active deals are posted right now. Other food businesses rotate in.",
   },
   happy_hours: {
-    title: "Scout These Spots",
+    title: "Bars and Restaurants to Explore",
     subtitle:
-      "No happy hours are posted right now. These food spots rotate in instead.",
+      "No happy hours are posted right now. Other food businesses rotate in.",
   },
   events_popups: {
-    title: "Scout These Spots",
+    title: "Food Businesses to Explore",
     subtitle:
-      "No food events are posted right now. These food spots rotate in instead.",
+      "No food events are posted right now. Other food businesses rotate in.",
   },
   nearby_restaurants: {
-    title: "Scout These Spots",
-    subtitle: "No restaurant results are ready. These food spots rotate in instead.",
+    title: "Restaurants to Explore",
+    subtitle: "No local restaurant results are ready. Other restaurants rotate in.",
   },
   trending_this_week: {
-    title: "Scout These Spots",
-    subtitle: "No activity is trending yet. These food spots rotate in instead.",
+    title: "Worth a Look",
+    subtitle: "No activity is trending yet. Other food businesses rotate in.",
   },
   new_to_mealscout: {
-    title: "Scout These Spots",
-    subtitle: "No new listings are ready. These food spots rotate in instead.",
+    title: "More on MealScout",
+    subtitle: "No new listings are ready. Other food businesses rotate in.",
   },
   community_picks: {
-    title: "Scout These Spots",
+    title: "Community Food Spots",
     subtitle:
-      "No community picks are posted yet. These food spots rotate in instead.",
+      "No community picks are posted yet. Other food businesses rotate in.",
   },
   worth_discovering: {
-    title: "Scout These Spots",
-    subtitle: "Fresh food spots rotate in while discovery data is quiet.",
+    title: "More Worth Discovering",
+    subtitle: "More food businesses rotate in while activity is quiet.",
   },
 };
 
@@ -6427,8 +6394,8 @@ function ScoutHorizontalCategoryRail({
         </ul>
       </div>
       {row.cards.length > 2 ? (
-        <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-20 items-center justify-end bg-gradient-to-l from-[#24150e] via-[#24150e]/82 to-transparent pr-2 sm:flex lg:hidden">
-          <span className="rounded-full bg-white/10 px-2 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-white/68 ring-1 ring-white/10">
+        <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-20 items-center justify-end bg-gradient-to-l from-[#fff8ec] via-[#fff8ec]/88 to-transparent pr-2 sm:flex lg:hidden">
+          <span className="rounded-full bg-white/90 px-2 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-stone-500 ring-1 ring-orange-200/70">
             Scroll
           </span>
         </div>
@@ -6589,12 +6556,12 @@ function ScoutFirstScreenDecisionStack({
         data-scout-first-screen-decision-stack="true"
         data-scout-first-screen-empty="true"
       >
-        <div className="h-full rounded-[1.1rem] bg-[linear-gradient(145deg,#57301a_0%,#3b2114_52%,#2b180f_100%)] px-4 py-3 text-orange-50 ring-1 ring-orange-200/35 shadow-[0_12px_28px_rgba(52,25,11,0.26)]">
-          <p className="text-[11px] font-black uppercase tracking-[0.12em] text-orange-300">
-            No nearby food yet
+        <div className="h-full rounded-2xl bg-white/90 px-4 py-3 ring-1 ring-orange-200/70 shadow-[0_8px_24px_rgba(112,64,28,0.10)]">
+          <p className="text-[11px] font-black uppercase tracking-[0.12em] text-orange-700">
+            No food results yet
           </p>
-          <p className="mt-1 text-sm font-semibold text-orange-50/65">
-            Search nearby food or move the map
+          <p className="mt-1 text-sm font-semibold text-stone-600">
+            Try a craving, category, or another map area.
           </p>
           <ScoutRecoveryActions className="mt-3" />
         </div>
@@ -6608,32 +6575,27 @@ function ScoutFirstScreenDecisionStack({
       data-scout-first-screen-decision-stack="true"
       data-scout-decision-source-row={primary.sourceRowId}
     >
-      <div className="h-full rounded-[1.1rem] bg-[linear-gradient(145deg,#57301a_0%,#3b2114_52%,#2b180f_100%)] p-3 text-orange-50 ring-1 ring-orange-200/35 shadow-[0_14px_34px_rgba(52,25,11,0.28)]">
-        <div className="mb-2 flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-[11px] font-black uppercase tracking-[0.12em] text-orange-300">
-              {primary.sectionLabel}
-            </p>
-            <p className="mt-0.5 truncate text-xs font-semibold text-orange-50/65">
-              {primary.summary}
-            </p>
-          </div>
-          <span className="shrink-0 rounded-full bg-orange-300 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-[#35180a] ring-1 ring-orange-100/60">
-            Best now
-          </span>
+      <div className="h-full">
+        <div className="mb-2 min-w-0 px-0.5">
+          <p className="text-[11px] font-black uppercase tracking-[0.12em] text-orange-700">
+            {primary.sectionLabel}
+          </p>
+          <p className="mt-0.5 truncate text-xs font-semibold text-stone-600">
+            {primary.summary}
+          </p>
         </div>
         <ScoutImmediateCompactCard item={primary} />
         {thinMarket ? (
           <div
-            className="mt-3 rounded-2xl bg-white/70 px-3 py-3 ring-1 ring-orange-200/70"
+            className="mt-3 rounded-2xl bg-orange-50/85 px-3 py-3 ring-1 ring-orange-200/70"
             data-testid="scout-thin-market-state"
           >
             <p className="text-sm font-black text-[#251208]">
-              Nearby food coverage is still growing, so Scout is showing the
-              closest real place first.
+              Local food coverage is still growing, so the closest real place
+              stays first.
             </p>
             <p className="mt-1 text-xs font-semibold leading-relaxed text-stone-600">
-              Browse nearby or open the map while you widen your search.
+              Explore the map or try another craving.
             </p>
             <ScoutRecoveryActions className="mt-3" />
           </div>
@@ -6650,13 +6612,13 @@ function ScoutRecoveryActions({ className = "" }: { className?: string }) {
         href="/search"
         className="rounded-full bg-[#ff7945] px-3 py-1.5 text-[11px] font-black text-white ring-1 ring-white/20"
       >
-        Browse nearby
+        Browse food
       </Link>
       <Link
         href="/search"
-        className="rounded-full bg-white/[0.06] px-3 py-1.5 text-[11px] font-black text-white/90 ring-1 ring-white/20"
+        className="rounded-full bg-white px-3 py-1.5 text-[11px] font-black text-stone-700 ring-1 ring-orange-200/80"
       >
-        Search nearby
+        Search
       </Link>
     </div>
   );
@@ -6970,28 +6932,28 @@ function CompactDecisionCardShell({
   const showImage = Boolean(imageUrl) && !imageFailed;
   const shellClass =
     variant === "dish"
-      ? "rounded-[0.85rem] bg-[#2c1609]/82 ring-orange-200/25"
+      ? "bg-[#fffaf2] ring-orange-200/80"
       : variant === "truck"
-        ? "rounded-[1.3rem] bg-[#100806]/84 ring-orange-200/18"
+        ? "bg-white ring-orange-200/80"
         : variant === "deal"
-          ? "rounded-[0.95rem] bg-[#12200f]/72 ring-lime-200/20"
+          ? "bg-[#fbfff4] ring-lime-300/70"
           : variant === "event"
-            ? "rounded-[1rem] bg-[#0d1724]/72 ring-sky-200/20"
+            ? "bg-[#f6fbff] ring-sky-300/65"
             : variant === "host"
-              ? "rounded-[1rem] bg-[#201407]/78 ring-amber-200/30"
-              : "rounded-[0.95rem] bg-[#24140c]/92 ring-orange-200/24";
+              ? "bg-[#fffbf2] ring-amber-300/65"
+              : "bg-white ring-orange-200/75";
   const thumbClass =
     variant === "dish"
-      ? "rounded-full bg-orange-200/10 ring-orange-100/25"
+      ? "rounded-full bg-orange-50 ring-orange-200/70"
       : variant === "truck"
-        ? "rounded-2xl bg-orange-200/8 ring-orange-300/25"
+        ? "rounded-2xl bg-orange-50 ring-orange-200/70"
         : variant === "deal"
-          ? "rounded-lg bg-lime-200/8 ring-lime-200/20"
+          ? "rounded-lg bg-lime-50 ring-lime-200/70"
           : variant === "event"
-            ? "rounded-lg bg-sky-200/8 ring-sky-200/20"
+            ? "rounded-lg bg-sky-50 ring-sky-200/70"
             : variant === "host"
-              ? "rounded-xl bg-amber-200/10 ring-amber-200/25"
-              : "rounded-xl bg-orange-200/10 ring-orange-200/24";
+              ? "rounded-xl bg-amber-50 ring-amber-200/70"
+              : "rounded-xl bg-orange-50 ring-orange-200/70";
   const actionClass =
     variant === "deal"
       ? "bg-lime-300 text-[#102006]"
@@ -7002,12 +6964,12 @@ function CompactDecisionCardShell({
           : "bg-orange-400 text-[#1a0d08]";
   return (
     <div
-      className={`relative flex min-h-[98px] items-center gap-3 overflow-hidden p-2.5 ring-1 ${shellClass}`}
+      className={`relative flex min-h-[98px] items-center gap-3 overflow-hidden rounded-2xl p-2.5 ring-1 shadow-[0_8px_24px_rgba(112,64,28,0.12)] ${shellClass}`}
       data-scout-immediate-compact-card="true"
     >
       {variant === "dish" ? (
         <span
-          className="absolute inset-x-3 bottom-0 border-t border-dashed border-orange-100/20"
+          className="absolute inset-x-3 bottom-0 border-t border-dashed border-orange-200/70"
           aria-hidden="true"
         />
       ) : null}
@@ -7043,10 +7005,10 @@ function CompactDecisionCardShell({
         )}
       </div>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-[15px] font-black leading-tight text-white">
+        <p className="truncate text-[15px] font-black leading-tight text-[#2f180d]">
           {title}
         </p>
-        <p className="mt-1 truncate text-xs font-semibold text-white/58">
+        <p className="mt-1 truncate text-xs font-semibold text-stone-600">
           {meta}
         </p>
         <div className="mt-2 flex items-center gap-2">
@@ -7061,7 +7023,7 @@ function CompactDecisionCardShell({
               href={directionsUrl}
               target="_blank"
               rel="noreferrer"
-              className="rounded-full bg-white/[0.08] px-3 py-1.5 text-[11px] font-black text-white/82 ring-1 ring-white/10"
+              className="rounded-full bg-orange-50 px-3 py-1.5 text-[11px] font-black text-orange-800 ring-1 ring-orange-200/80"
             >
               Directions
             </a>
@@ -7786,12 +7748,12 @@ function ActiveSceneContent({
           : DISCOVERY_LAYERS.menuItems.title;
     const foodTrucksTodayRailTitle =
       primaryFirstScreenDecision?.sourceRowId === "food_trucks_today"
-        ? "More Trucks Nearby"
+        ? "More Food Trucks"
         : "Food Trucks Today";
     const foodTrucksTodayRailSubtitle =
       primaryFirstScreenDecision?.sourceRowId === "food_trucks_today"
-        ? "Other scheduled trucks and open-now options nearby."
-        : "Scheduled trucks and open-now options nearby.";
+        ? "Other scheduled trucks and open-now options."
+        : "Scheduled trucks and open-now options.";
     const firstScreenSuppressedBusinessKey =
       primaryFirstScreenDecision?.cardType === "truck" ||
       primaryFirstScreenDecision?.cardType === "restaurant"
@@ -8111,7 +8073,7 @@ function ActiveSceneContent({
         },
     ];
 
-    const claimedFallbackBusinessKeys = new Set<string>();
+    const claimedBaseBusinessKeys = new Set<string>();
     baseScoutRows.forEach((row) => {
       row.cards.forEach((card) => {
         if (card.cardType === "truck") {
@@ -8119,7 +8081,7 @@ function ActiveSceneContent({
             card.truck,
             getTruckProfilePath(card.truck),
           );
-          if (key) claimedFallbackBusinessKeys.add(key);
+          if (key) claimedBaseBusinessKeys.add(key);
           return;
         }
         if (card.cardType === "restaurant") {
@@ -8127,15 +8089,16 @@ function ActiveSceneContent({
             card.restaurant,
             getRestaurantProfilePath(card.restaurant),
           );
-          if (key) claimedFallbackBusinessKeys.add(key);
+          if (key) claimedBaseBusinessKeys.add(key);
           return;
         }
         if (card.cardType === "menu_item") {
           const key = getScoutMenuItemBusinessKey(card.item);
-          if (key) claimedFallbackBusinessKeys.add(key);
+          if (key) claimedBaseBusinessKeys.add(key);
         }
       });
     });
+    const claimedFallbackBusinessKeys = new Set<string>();
     const rotatingSpotsForRow = (rowId: ScoutHorizontalRowId) =>
       rowId === "food_trucks_today"
         ? rotatingSpots.filter(
@@ -8169,16 +8132,35 @@ function ActiveSceneContent({
           ),
         SCOUT_ROTATING_SPOT_LIMIT,
       );
-      const unseenSpots = rowSpotPool.filter((spot) => {
+      const unseenEverywhereSpots = rowSpotPool.filter((spot) => {
         const key = getScoutBusinessCardKey(
           spot.restaurant,
           getRestaurantProfilePath(spot.restaurant),
         );
-        return !key || !claimedFallbackBusinessKeys.has(key);
+        return (
+          !key ||
+          (!claimedBaseBusinessKeys.has(key) &&
+            !claimedFallbackBusinessKeys.has(key))
+        );
+      });
+      const unusedFallbackSpots = rowSpotPool.filter((spot) => {
+        const key = getScoutBusinessCardKey(
+          spot.restaurant,
+          getRestaurantProfilePath(spot.restaurant),
+        );
+        return (
+          (!key || !claimedFallbackBusinessKeys.has(key)) &&
+          !unseenEverywhereSpots.includes(spot)
+        );
       });
       const fallbackSpotOrder = [
-        ...unseenSpots,
-        ...rowSpotPool.filter((spot) => !unseenSpots.includes(spot)),
+        ...unseenEverywhereSpots,
+        ...unusedFallbackSpots,
+        ...rowSpotPool.filter(
+          (spot) =>
+            !unseenEverywhereSpots.includes(spot) &&
+            !unusedFallbackSpots.includes(spot),
+        ),
       ];
       const fallbackCards = fallbackSpotOrder
         .slice(0, 4)
@@ -8191,6 +8173,14 @@ function ActiveSceneContent({
             )[0]!,
         );
       if (fallbackCards.length === 0) return row;
+      fallbackCards.forEach((card) => {
+        if (card.cardType !== "restaurant") return;
+        const key = getScoutBusinessCardKey(
+          card.restaurant,
+          getRestaurantProfilePath(card.restaurant),
+        );
+        if (key) claimedFallbackBusinessKeys.add(key);
+      });
       return {
         ...row,
         title: copy.title,
@@ -8611,9 +8601,9 @@ function ActiveSceneContent({
           data-scout-row-fallback="new_menus"
         >
           <SectionHeader
-            title="Scout These Spots"
+            title="Food Businesses to Explore"
             linkHref="/search"
-            subtitle="More local menus are on the way. These food spots rotate in instead."
+            subtitle="More local menus are on the way. Other food businesses rotate in."
             itemCount={newMenuFallbackSpots.length}
           />
           <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
@@ -9616,11 +9606,10 @@ function LiveTruckCard({
   return (
     <Link
       href={cardHref}
-      className="group relative block overflow-hidden rounded-xl bg-[#100806]/90 ring-1 ring-orange-200/20 transition duration-200 hover:-translate-y-0.5 hover:ring-emerald-200/32 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70"
+      className="group relative block overflow-hidden rounded-2xl bg-white ring-1 ring-orange-200/75 transition duration-200 hover:-translate-y-0.5 hover:ring-emerald-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
       aria-label={`Open ${cardTitle}`}
       style={{
-        boxShadow:
-          "0 14px 36px rgba(0,0,0,0.48), inset 0 0 0 1px rgba(251,146,60,0.05)",
+        boxShadow: "0 10px 26px rgba(112,64,28,0.12)",
       }}
     >
       <div className="relative aspect-[16/11] w-full bg-[#120805]/60">
@@ -9680,16 +9669,16 @@ function LiveTruckCard({
           />
         </button>
       </div>
-      <div className="relative border-t border-orange-200/12 bg-[#190b06]/94 px-4 py-3 pl-7">
+      <div className="relative border-t border-orange-100 bg-white px-4 py-3 pl-7">
         <div className="flex items-start gap-2.5">
-          <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-orange-300/14 text-orange-200 ring-1 ring-orange-200/25">
+          <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-orange-700 ring-1 ring-orange-200/80">
             <TruckIcon className="h-4 w-4" aria-hidden="true" />
           </span>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-base font-black leading-tight text-white">
+            <p className="truncate text-base font-black leading-tight text-[#2f180d]">
               {cardTitle}
             </p>
-            <p className="mt-1 inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-orange-200/86">
+            <p className="mt-1 inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-orange-700">
               <Navigation2 className="h-3.5 w-3.5" aria-hidden="true" />
               <span>
                 {[wait, distance].filter(Boolean).join(" / ") ||
@@ -9698,8 +9687,8 @@ function LiveTruckCard({
             </p>
           </div>
         </div>
-        <p className="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-white/72">
-          <Flame className="h-4 w-4 text-orange-300" aria-hidden="true" />
+        <p className="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-stone-600">
+          <Flame className="h-4 w-4 text-orange-600" aria-hidden="true" />
           <span>{vibe.label}</span>
         </p>
         <div className="mt-2 flex flex-wrap gap-1">
@@ -9751,8 +9740,8 @@ function DealCard({
   return (
     <Link
       href={cardHref}
-      className="block overflow-hidden rounded-[1.05rem] bg-[#12200f]/82 ring-1 ring-lime-200/20 transition duration-200 hover:-translate-y-0.5 hover:ring-lime-200/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-lime-300/70"
-      style={{ boxShadow: "0 14px 36px rgba(0,0,0,0.5)" }}
+      className="block overflow-hidden rounded-2xl bg-white ring-1 ring-lime-200/70 transition duration-200 hover:-translate-y-0.5 hover:ring-lime-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-lime-400"
+      style={{ boxShadow: "0 10px 26px rgba(112,64,28,0.12)" }}
       aria-label={`Open deal ${cardTitle}`}
     >
       <div className="relative aspect-[4/5] w-full bg-[#120805]/60">
@@ -10030,8 +10019,8 @@ function LocalMenuItemCard({
           discoveryReasons: item.discoveryReasons,
         })
       }
-      className="block overflow-hidden rounded-xl bg-[#29170e]/94 ring-1 ring-orange-100/22 transition duration-200 hover:-translate-y-0.5 hover:ring-orange-200/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
-      style={{ boxShadow: "0 12px 28px rgba(0,0,0,0.38)" }}
+      className="block overflow-hidden rounded-2xl bg-white ring-1 ring-orange-200/75 transition duration-200 hover:-translate-y-0.5 hover:ring-orange-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-400"
+      style={{ boxShadow: "0 10px 26px rgba(112,64,28,0.12)" }}
       aria-label={`Open ${cardTitle} from ${item.restaurantName || "local menu"}`}
       data-testid="scout-local-menu-item-card"
     >
@@ -10060,18 +10049,18 @@ function LocalMenuItemCard({
         )}
       </div>
       <div className="px-3 pb-3 pt-2.5">
-        <p className="line-clamp-2 min-h-[2.25rem] text-sm font-bold leading-tight text-white">
+        <p className="line-clamp-2 min-h-[2.25rem] text-sm font-bold leading-tight text-[#2f180d]">
           {cardTitle}
         </p>
-        <p className="mt-1 truncate text-xs font-semibold text-orange-200/82">
+        <p className="mt-1 truncate text-xs font-semibold text-orange-800">
           {item.restaurantName || "Local spot"}
         </p>
-        <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-white/48">
+        <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-stone-500">
           {displayCategory && <span>{displayCategory}</span>}
           {distLabel && <span>{distLabel}</span>}
         </div>
         {item.description && (
-          <p className="mt-2 line-clamp-1 text-xs leading-snug text-white/62">
+          <p className="mt-2 line-clamp-1 text-xs leading-snug text-stone-600">
             {item.description}
           </p>
         )}
@@ -10083,8 +10072,8 @@ function LocalMenuItemCard({
             disabled={isTogglingRecommend}
             className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide disabled:opacity-60 ${
               hasRecommended
-                ? "text-emerald-300"
-                : "text-orange-300 hover:text-orange-200"
+                ? "text-emerald-700"
+                : "text-orange-700 hover:text-orange-800"
             }`}
           >
             <Heart
@@ -10193,8 +10182,8 @@ function EventCard({
   return (
     <Link
       href={cardHref}
-      className="block overflow-hidden rounded-[1.2rem] bg-[#0d1724]/82 ring-1 ring-sky-200/20 transition duration-200 hover:-translate-y-0.5 hover:ring-sky-200/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-300/70"
-      style={{ boxShadow: "0 16px 42px rgba(0,0,0,0.5)" }}
+      className="block overflow-hidden rounded-2xl bg-white ring-1 ring-sky-200/70 transition duration-200 hover:-translate-y-0.5 hover:ring-sky-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+      style={{ boxShadow: "0 10px 26px rgba(112,64,28,0.12)" }}
       aria-label={`Open event ${title}`}
     >
       <div className="relative aspect-[4/5] w-full bg-[#120805]/60">
@@ -10419,15 +10408,15 @@ function NearbyRestaurantCard({
     }),
   ];
   const cardShellClass = isFoodTruckEntity
-    ? "group relative block overflow-hidden rounded-xl bg-[#29170e]/94 ring-1 ring-orange-100/22 transition duration-200 hover:-translate-y-0.5 hover:ring-orange-200/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
-    : "group block overflow-hidden rounded-xl bg-[#28180f]/94 ring-1 ring-orange-100/20 transition duration-200 hover:-translate-y-0.5 hover:ring-orange-200/38 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70";
+    ? "group relative block overflow-hidden rounded-2xl bg-white ring-1 ring-orange-200/75 transition duration-200 hover:-translate-y-0.5 hover:ring-orange-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-400"
+    : "group block overflow-hidden rounded-2xl bg-white ring-1 ring-orange-200/70 transition duration-200 hover:-translate-y-0.5 hover:ring-orange-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-400";
   const labelPillClass = isFoodTruckEntity
     ? "bg-[#120805]/72 text-orange-100 ring-orange-200/20"
     : "bg-[#1b0e08]/76 text-orange-50 ring-orange-200/24";
   const statusDotClass = isFoodTruckEntity ? "bg-orange-400" : "bg-emerald-400";
   const statusTextClass = isFoodTruckEntity
-    ? "text-orange-200/85"
-    : "text-emerald-200/85";
+    ? "text-orange-700"
+    : "text-emerald-700";
   const placeIcon = isFoodTruckEntity ? (
     <TruckIcon className="h-5 w-5 text-white/80" aria-hidden="true" />
   ) : (
@@ -10588,11 +10577,11 @@ function NearbyRestaurantCard({
       href={profileHref}
       className={cardShellClass}
       aria-label={`Open ${name}`}
-      style={{ boxShadow: "0 12px 28px rgba(0,0,0,0.38)" }}
+      style={{ boxShadow: "0 10px 26px rgba(112,64,28,0.12)" }}
       data-testid="scout-restaurant-card"
     >
       {/* Image */}
-      <div className="relative aspect-[16/11] w-full bg-[#120805]/60">
+      <div className="relative aspect-[16/11] w-full bg-orange-50">
         <ScoutCardMedia
           imageUrl={img || null}
           imageObjectPosition={cardView.imageObjectPosition}
@@ -10638,7 +10627,7 @@ function NearbyRestaurantCard({
         }
       >
         <div className="flex items-start justify-between gap-2">
-          <p className="min-w-0 line-clamp-2 min-h-[2.25rem] text-sm font-bold leading-tight text-white">
+          <p className="min-w-0 line-clamp-2 min-h-[2.25rem] text-sm font-bold leading-tight text-[#2f180d]">
             {name}
           </p>
           {statusLabels.length > 0 && (
@@ -10661,29 +10650,29 @@ function NearbyRestaurantCard({
         <div className="mt-1 flex items-center gap-1.5 overflow-hidden text-[11px]">
           {cuisine && (
             <span
-              className="truncate text-orange-200/82"
+              className="truncate text-orange-800"
             >
               {cuisine}
             </span>
           )}
           {cuisine && (location || distLabel) && (
-            <span className="text-white/30 text-[11px]">·</span>
+            <span className="text-stone-300 text-[11px]">·</span>
           )}
           {location && (
-            <span className="truncate text-white/55">
+            <span className="truncate text-stone-600">
               {location}
             </span>
           )}
           {distLabel && (
             <>
-              <span className="text-white/30 text-[11px]">·</span>
-              <span className="shrink-0 text-white/50">{distLabel}</span>
+              <span className="text-stone-300 text-[11px]">·</span>
+              <span className="shrink-0 text-stone-500">{distLabel}</span>
             </>
           )}
         </div>
         {menuPreview.length > 0 && (
           <div
-            className="mt-2 flex items-center gap-2 rounded-lg bg-white/[0.04] p-1.5"
+            className="mt-2 flex items-center gap-2 rounded-xl bg-orange-50/80 p-1.5 ring-1 ring-orange-100"
             data-testid="scout-menu-preview"
           >
             <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded-md">
@@ -10691,7 +10680,7 @@ function NearbyRestaurantCard({
                 imageUrl={menuPreview[0].imageUrl || null}
                 fallbackIcon={
                   <Utensils
-                    className="h-3 w-3 text-white/70"
+                    className="h-3 w-3 text-orange-700"
                     aria-hidden="true"
                   />
                 }
@@ -10704,12 +10693,12 @@ function NearbyRestaurantCard({
               />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-[11px] font-semibold text-white/85">
+              <p className="truncate text-[11px] font-semibold text-stone-700">
                 {menuPreview[0].name}
               </p>
             </div>
             {formatPrice(menuPreview[0].priceCents) && (
-              <span className="shrink-0 text-[11px] font-semibold text-orange-200/85">
+              <span className="shrink-0 text-[11px] font-semibold text-orange-800">
                 {formatPrice(menuPreview[0].priceCents)}
               </span>
             )}
@@ -10722,13 +10711,13 @@ function NearbyRestaurantCard({
             aria-hidden={communityUpdates.length === 0}
           >
             {favoriteCount > 0 && (
-              <span className="inline-flex items-center gap-1 text-[10px] font-mono text-white/45">
+              <span className="inline-flex items-center gap-1 text-[10px] font-mono text-stone-500">
                 <Bookmark className="h-2.5 w-2.5" aria-hidden="true" />
                 {favoriteCount}
               </span>
             )}
             {followCount > 0 && (
-              <span className="inline-flex items-center gap-1 text-[10px] font-mono text-white/45">
+              <span className="inline-flex items-center gap-1 text-[10px] font-mono text-stone-500">
                 <Heart className="h-2.5 w-2.5" aria-hidden="true" />
                 {followCount}
               </span>
@@ -10747,7 +10736,7 @@ function NearbyRestaurantCard({
               className={`inline-flex h-7 w-7 items-center justify-center rounded-full transition ${
                 isRecommended
                   ? "bg-orange-300 text-[#1a0d08]"
-                  : "bg-white/8 text-white/70 hover:bg-white/12"
+                  : "bg-orange-50 text-stone-600 hover:bg-orange-100"
               }`}
               aria-pressed={isRecommended}
               aria-label={
@@ -11890,10 +11879,9 @@ function TruckCard({
         event.preventDefault();
         onSelect(truck);
       }}
-      className="relative block overflow-hidden rounded-xl bg-[#100806]/88 ring-1 ring-orange-200/18 transition duration-200 hover:-translate-y-0.5 hover:ring-orange-200/28 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
+      className="relative block overflow-hidden rounded-2xl bg-white ring-1 ring-orange-200/75 transition duration-200 hover:-translate-y-0.5 hover:ring-orange-300 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-400"
       style={{
-        boxShadow:
-          "0 14px 36px rgba(0,0,0,0.46), inset 0 0 0 1px rgba(251,146,60,0.05)",
+        boxShadow: "0 10px 26px rgba(112,64,28,0.12)",
       }}
     >
       {/* Hero image */}
@@ -11942,32 +11930,32 @@ function TruckCard({
         </span>
       </div>
       {/* Info */}
-      <div className="border-t border-orange-200/12 bg-[#190b06]/92 px-3 py-3 pl-7">
+      <div className="border-t border-orange-100 bg-white px-3 py-3 pl-7">
         <div className="flex items-start gap-2.5">
-          <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-orange-300/14 text-orange-200 ring-1 ring-orange-200/25">
+          <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-orange-700 ring-1 ring-orange-200/80">
             <TruckIcon className="h-4 w-4" aria-hidden="true" />
           </span>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-black leading-snug text-white">
+            <p className="truncate text-sm font-black leading-snug text-[#2f180d]">
               {name}
             </p>
             <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
               {cuisine && (
-                <span className="text-orange-300/80 text-[11px]">
+                <span className="text-orange-800 text-[11px]">
                   {cuisine}
                 </span>
               )}
               {cuisine && (distLabel || waitLabel) && (
-                <span className="text-white/30 text-[11px]">/</span>
+                <span className="text-stone-300 text-[11px]">/</span>
               )}
               {distLabel && (
-                <span className="text-white/60 text-[11px]">{distLabel}</span>
+                <span className="text-stone-600 text-[11px]">{distLabel}</span>
               )}
               {distLabel && waitLabel && (
-                <span className="text-white/30 text-[11px]">/</span>
+                <span className="text-stone-300 text-[11px]">/</span>
               )}
               {waitLabel && (
-                <span className="text-white/50 text-[11px]">
+                <span className="text-stone-500 text-[11px]">
                   {waitLabel} wait
                 </span>
               )}
@@ -12007,11 +11995,11 @@ function HorizontalSkeletonRow({
       <ul className="flex gap-4 pr-5" role="list" aria-label="Loading…">
         {Array.from({ length: count }).map((_, i) => (
           <li key={i} className="shrink-0" style={{ width }}>
-            <div className="rounded-2xl overflow-hidden bg-white/5 ring-1 ring-white/10">
-              <div className="aspect-[4/3] w-full animate-pulse bg-white/5" />
+            <div className="overflow-hidden rounded-2xl bg-white ring-1 ring-orange-200/70">
+              <div className="aspect-[4/3] w-full animate-pulse bg-orange-50" />
               <div className="p-3 space-y-2">
-                <div className="h-3 w-3/4 rounded bg-white/10 animate-pulse" />
-                <div className="h-2.5 w-1/2 rounded bg-white/8 animate-pulse" />
+                <div className="h-3 w-3/4 animate-pulse rounded bg-orange-100" />
+                <div className="h-2.5 w-1/2 animate-pulse rounded bg-stone-100" />
               </div>
             </div>
           </li>

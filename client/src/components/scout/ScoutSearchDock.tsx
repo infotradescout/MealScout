@@ -41,20 +41,30 @@ export function ScoutSearchDock({
   query: string;
   activeFilter: ScoutSearchFilterId | null;
   resultSummary?: string | null;
-  placement?: "fixed" | "inline";
+  placement?: "fixed" | "inline" | "navigation";
   onOpen: () => void;
   onClose: () => void;
   onQueryChange: (value: string) => void;
   onFilterChange: (filter: ScoutSearchFilterId | null) => void;
 }) {
-  const shellClassName =
-    placement === "inline"
+  const isNavigationPlacement = placement === "navigation";
+  const shellClassName = isNavigationPlacement
+    ? "w-full"
+    : placement === "inline"
       ? "px-4 pb-4 md:mx-auto md:max-w-[608px]"
       : "fixed inset-x-4 z-40 md:mx-auto md:max-w-[608px]";
   const shellStyle =
-    placement === "inline"
-      ? undefined
-      : { bottom: "calc(env(safe-area-inset-bottom, 0px) + 5.1rem)" };
+    placement === "fixed"
+      ? { bottom: "calc(env(safe-area-inset-bottom, 0px) + 5.1rem)" }
+      : undefined;
+
+  const formClassName = isNavigationPlacement
+    ? `overflow-hidden bg-transparent text-[color:var(--text-primary)] ${
+        searchMode ? "ring-1 ring-inset ring-primary/45" : ""
+      }`
+    : `overflow-hidden rounded-[1.4rem] bg-[#fff7ed]/94 text-[#241208] ring-1 backdrop-blur-xl shadow-[0_16px_34px_rgba(92,45,18,0.22)] ${
+        searchMode ? "ring-orange-300/70" : "ring-orange-200/70"
+      }`;
 
   const dockContent = (
     <div
@@ -69,12 +79,15 @@ export function ScoutSearchDock({
           event.preventDefault();
           onOpen();
         }}
-        className={`overflow-hidden rounded-[1.4rem] bg-[#fff7ed]/94 text-[#241208] ring-1 backdrop-blur-xl shadow-[0_16px_34px_rgba(92,45,18,0.22)] ${
-          searchMode ? "ring-orange-300/70" : "ring-orange-200/70"
-        }`}
+        className={formClassName}
       >
         <div className="flex min-h-12 w-full items-center gap-2 px-3">
-          <Search className="h-4 w-4 shrink-0 text-orange-600" aria-hidden="true" />
+          <Search
+            className={`h-4 w-4 shrink-0 ${
+              isNavigationPlacement ? "text-primary" : "text-orange-600"
+            }`}
+            aria-hidden="true"
+          />
           <input
             value={query}
             onFocus={onOpen}
@@ -82,7 +95,11 @@ export function ScoutSearchDock({
               onOpen();
               onQueryChange(event.target.value);
             }}
-            className="h-12 min-w-0 flex-1 bg-transparent text-[13px] font-semibold text-[#241208] outline-none placeholder:text-stone-500"
+            className={`h-12 min-w-0 flex-1 bg-transparent text-[13px] font-semibold outline-none ${
+              isNavigationPlacement
+                ? "text-[color:var(--text-primary)] placeholder:text-[color:var(--text-muted)]"
+                : "text-[#241208] placeholder:text-stone-500"
+            }`}
             placeholder="Search dishes, cravings, places, trucks, or events"
             aria-label="Search dishes, cravings, places, trucks, and events"
           />
@@ -90,7 +107,11 @@ export function ScoutSearchDock({
             <button
               type="button"
               onClick={onClose}
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-orange-100/80 text-orange-900 ring-1 ring-orange-200/70 active:bg-orange-200/90"
+              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
+                isNavigationPlacement
+                  ? "bg-[var(--bg-surface-muted)] text-[color:var(--text-primary)]"
+                  : "bg-orange-100/80 text-orange-900 ring-1 ring-orange-200/70 active:bg-orange-200/90"
+              }`}
               aria-label="Close Scout search"
               data-scout-search-close="true"
             >
@@ -100,9 +121,24 @@ export function ScoutSearchDock({
         </div>
 
         {searchMode ? (
-          <div className="border-t border-orange-200/60 px-3 pb-3 pt-2" data-scout-search-filters="true">
+          <div
+            className={`border-t px-3 pb-3 pt-2 ${
+              isNavigationPlacement
+                ? "border-[color:var(--border-subtle)]"
+                : "border-orange-200/60"
+            }`}
+            data-scout-search-filters="true"
+          >
             {resultSummary ? (
-              <p className="mb-2 text-[11px] font-semibold text-stone-600">{resultSummary}</p>
+              <p
+                className={`mb-2 text-[11px] font-semibold ${
+                  isNavigationPlacement
+                    ? "text-[color:var(--text-muted)]"
+                    : "text-stone-600"
+                }`}
+              >
+                {resultSummary}
+              </p>
             ) : null}
             <div className="flex gap-2 overflow-x-auto overscroll-x-contain pb-0.5 atmo-hide-scrollbar">
               {SEARCH_FILTERS.map((filter) => {
@@ -114,8 +150,10 @@ export function ScoutSearchDock({
                     onClick={() => onFilterChange(selected ? null : filter.id)}
                     className={`shrink-0 rounded-full px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.08em] ring-1 ${
                       selected
-                        ? "bg-orange-400 text-[#1c0d07] ring-orange-200/60"
-                        : "bg-white/72 text-stone-700 ring-orange-200/70"
+                        ? "bg-primary text-primary-foreground ring-primary/35"
+                        : isNavigationPlacement
+                          ? "bg-[var(--bg-surface-muted)] text-[color:var(--text-primary)] ring-[color:var(--border-subtle)]"
+                          : "bg-white/72 text-stone-700 ring-orange-200/70"
                     }`}
                     aria-pressed={selected}
                   >
@@ -125,11 +163,11 @@ export function ScoutSearchDock({
               })}
             </div>
           </div>
-        ) : (
+        ) : !isNavigationPlacement ? (
           <p className="border-t border-orange-200/50 px-4 pb-2 text-[11px] font-semibold text-stone-500">
             {resultSummary || "Fresh nearby picks update as you search."}
           </p>
-        )}
+        ) : null}
       </form>
     </div>
   );

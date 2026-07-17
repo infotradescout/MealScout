@@ -122,20 +122,20 @@ assert.match(
   "Desktop Scout rails must fill the available width with a four-card grid",
 );
 
-assert.doesNotMatch(
+assert.match(
   navigation,
   /useScoutNavSearch|\{scoutNavSearch\}/,
-  "Global navigation must not own or position Scout search",
+  "Global navigation must own Scout search so search and navigation remain one surface",
 );
 assert.match(
   navigation,
-  /data-scout-mobile-nav-shell=\{[\s\S]*isScoutRoute \? "navigation-only" : undefined[\s\S]*\}/,
-  "Mobile Scout navigation must remain a navigation-only shell",
+  /data-scout-mobile-nav-shell=\{[\s\S]*isScoutRoute \? "search-and-navigation" : undefined[\s\S]*\}/,
+  "Mobile Scout navigation must stack search with the consumer navigation shell",
 );
-assert.match(
+assert.doesNotMatch(
   scout,
   /data-scout-search-surface="top"[\s\S]*<ScoutSearchDock[\s\S]*placement="inline"/,
-  "Scout must render its own search surface above discovery content",
+  "Scout must not render a second search slab above the map",
 );
 
 console.log("MealScout Scout fallback and owned search contract: PASS");
