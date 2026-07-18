@@ -74,6 +74,9 @@ for (const snippet of [
   "new g.maps.Polyline",
   "<Polyline",
   'strokeColor: "#ea580c"',
+  "detachGoogleMarker(marker)",
+  'typeof marker.setPosition === "function"',
+  "marker.position = position",
 ]) {
   if (!mapPicker.includes(snippet)) {
     throw new Error("Route path renderer contract missing: " + snippet);
