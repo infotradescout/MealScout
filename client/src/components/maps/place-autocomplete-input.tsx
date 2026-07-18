@@ -125,7 +125,13 @@ export function PlaceAutocompleteInput({
               ? data.suggestions.filter((item) => Boolean(item?.placeId))
               : [],
           );
-          setIsOpen(true);
+          setIsOpen(
+            Boolean(
+              containerRef.current?.contains(
+                document.activeElement as Node | null,
+              ),
+            ),
+          );
           setActiveIndex(-1);
         }
       } catch {

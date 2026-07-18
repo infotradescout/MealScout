@@ -16,6 +16,7 @@ import {
   Calendar,
   Clock,
   Loader2,
+  Navigation,
   Plus,
   Share2,
   Truck,
@@ -336,6 +337,58 @@ type MapRouteSummaryResponse = {
   durationSeconds: number;
   travelMode: "DRIVE" | "WALK" | "BICYCLE";
   source: "google_routes";
+  encodedPolyline?: string | null;
+};
+
+type RouteCorridorHost = {
+  locationId: string;
+  hostId: string;
+  name: string;
+  address: string;
+  city: string;
+  state: string;
+  latitude: number;
+  longitude: number;
+  spotImageUrl: string | null;
+  distanceFromRouteMiles: number;
+  routeProgressMiles: number;
+  journeyDistanceMeters: number | null;
+  journeyDurationSeconds: number | null;
+  addedDistanceMeters: number | null;
+  addedDurationSeconds: number | null;
+  directionsUri: string;
+  source: "mealscout_parking_pass";
+};
+
+type RouteCorridorSupportPlace = OperatorSupportPlace & {
+  originToStopDistanceMeters: number | null;
+  originToStopDurationSeconds: number | null;
+  stopToDestinationDistanceMeters: number | null;
+  stopToDestinationDurationSeconds: number | null;
+  journeyDistanceMeters: number | null;
+  journeyDurationSeconds: number | null;
+  addedDistanceMeters: number | null;
+  addedDurationSeconds: number | null;
+  directionsUri: string;
+};
+
+type RouteCorridorResponse = {
+  available: boolean;
+  source: "google_routes_places";
+  fetchedAt: string;
+  route: {
+    distanceMeters: number;
+    durationSeconds: number;
+    encodedPolyline: string;
+    path: GeoPoint[];
+    directionsUri: string;
+  };
+  parkingPassHosts: RouteCorridorHost[];
+  categories: Record<OperatorSupportKind, RouteCorridorSupportPlace[]>;
+  corridor: {
+    hostRadiusMiles: number;
+    mapHostLocationsReady: boolean;
+  };
 };
 
 type OperationalSupportPin = {
@@ -532,6 +585,25 @@ const distanceMilesBetween = (from: GeoPoint, to: GeoPoint) => {
       Math.sin(dLng / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return earthRadiusMiles * c;
+};
+
+const formatJourneyDuration = (seconds: number) => {
+  const minutes = Math.max(1, Math.round(seconds / 60));
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  return remainder ? `${hours} hr ${remainder} min` : `${hours} hr`;
+};
+
+const formatJourneyMiles = (meters: number) =>
+  `${(Math.max(0, meters) / 1609.344).toFixed(1)} mi`;
+
+const formatJourneyDetour = (seconds: number | null) => {
+  if (seconds === null || !Number.isFinite(seconds)) {
+    return "Detour estimate unavailable";
+  }
+  if (seconds < 60) return "Under 1 min added";
+  return `+${Math.max(1, Math.round(seconds / 60))} min`;
 };
 
 const buildSlotOptions = (listing: ParkingPassListing) =>
@@ -931,6 +1003,40 @@ export default function ParkingPassPage() {
       setCityQuery(nextQuery);
     }
   }, [cityQuery, effectiveLocationContext]);
+  const [journeyOriginLabel, setJourneyOriginLabel] = useState("");
+  const [journeyOriginCoords, setJourneyOriginCoords] =
+    useState<GeoPoint | null>(null);
+  const [journeyDestinationLabel, setJourneyDestinationLabel] = useState("");
+  const [journeyDestinationCoords, setJourneyDestinationCoords] =
+    useState<GeoPoint | null>(null);
+  const [journeyResult, setJourneyResult] =
+    useState<RouteCorridorResponse | null>(null);
+  const [journeyError, setJourneyError] = useState("");
+  const [isJourneyPlanning, setIsJourneyPlanning] = useState(false);
+  const [journeySupportFilter, setJourneySupportFilter] = useState<
+    "all" | OperatorSupportKind
+  >("all");
+  const journeyOriginInitializedRef = useRef(false);
+  useEffect(() => {
+    if (journeyOriginInitializedRef.current) return;
+    const latitude = parseCoord(effectiveLocationContext?.latitude);
+    const longitude = parseCoord(effectiveLocationContext?.longitude);
+    if (latitude === null || longitude === null) return;
+    journeyOriginInitializedRef.current = true;
+    const locationLabel = [
+      String(effectiveLocationContext?.city || "").trim(),
+      String(effectiveLocationContext?.state || "").trim(),
+    ]
+      .filter(Boolean)
+      .join(", ");
+    setJourneyOriginCoords({ lat: latitude, lng: longitude });
+    setJourneyOriginLabel(locationLabel || "My current area");
+  }, [
+    effectiveLocationContext?.city,
+    effectiveLocationContext?.latitude,
+    effectiveLocationContext?.longitude,
+    effectiveLocationContext?.state,
+  ]);
   const [cartItems, setCartItems] = useState<
     Array<{ listing: ParkingPassListing; slotTypes: string[] }>
   >([]);
@@ -1846,6 +1952,108 @@ export default function ParkingPassPage() {
     }
     const payload = (await res.json()) as PlaceDetailsResponse;
     return payload.place;
+  };
+
+  const handleJourneyPlaceSelect = async (
+    field: "origin" | "destination",
+    suggestion: {
+      placeId: string;
+      text: string;
+      sessionToken?: string;
+    },
+  ) => {
+    try {
+      const place = await hydrateFromPlaceDetails(
+        suggestion.placeId,
+        suggestion.sessionToken,
+      );
+      if (
+        !place ||
+        typeof place.latitude !== "number" ||
+        typeof place.longitude !== "number"
+      ) {
+        throw new Error("Place coordinates unavailable");
+      }
+      const label = place.formattedAddress || suggestion.text;
+      const coords = { lat: place.latitude, lng: place.longitude };
+      if (field === "origin") {
+        journeyOriginInitializedRef.current = true;
+        setJourneyOriginLabel(label);
+        setJourneyOriginCoords(coords);
+      } else {
+        setJourneyDestinationLabel(label);
+        setJourneyDestinationCoords(coords);
+      }
+      setJourneyResult(null);
+      setJourneyError("");
+    } catch {
+      setJourneyError(
+        "Choose a mapped address so MealScout can plan the route.",
+      );
+    }
+  };
+
+  const handleUseJourneyCurrentLocation = () => {
+    const latitude = parseCoord(effectiveLocationContext?.latitude);
+    const longitude = parseCoord(effectiveLocationContext?.longitude);
+    if (latitude === null || longitude === null) {
+      setJourneyError(
+        "Share a current location first, or search for a starting address.",
+      );
+      return;
+    }
+    const label = [
+      String(effectiveLocationContext?.city || "").trim(),
+      String(effectiveLocationContext?.state || "").trim(),
+    ]
+      .filter(Boolean)
+      .join(", ");
+    journeyOriginInitializedRef.current = true;
+    setJourneyOriginLabel(label || "My current area");
+    setJourneyOriginCoords({ lat: latitude, lng: longitude });
+    setJourneyResult(null);
+    setJourneyError("");
+  };
+
+  const handlePlanJourney = async () => {
+    if (!journeyOriginCoords || !journeyDestinationCoords) {
+      setJourneyError("Select both a starting point and destination.");
+      return;
+    }
+    setIsJourneyPlanning(true);
+    setJourneyError("");
+    try {
+      const params = new URLSearchParams({
+        originLat: String(journeyOriginCoords.lat),
+        originLng: String(journeyOriginCoords.lng),
+        destLat: String(journeyDestinationCoords.lat),
+        destLng: String(journeyDestinationCoords.lng),
+      });
+      const response = await fetch(
+        apiUrl(`/api/map/route-corridor?${params.toString()}`),
+        { credentials: "include" },
+      );
+      const payload = (await response.json().catch(() => null)) as
+        | (RouteCorridorResponse & { message?: string })
+        | null;
+      if (!response.ok || !payload?.available) {
+        throw new Error(
+          payload?.message || "This route is unavailable right now.",
+        );
+      }
+      setJourneyResult(payload);
+      setJourneySupportFilter("all");
+      setViewMode("map");
+    } catch (error) {
+      setJourneyResult(null);
+      setJourneyError(
+        error instanceof Error
+          ? error.message
+          : "This route is unavailable right now.",
+      );
+    } finally {
+      setIsJourneyPlanning(false);
+    }
   };
 
   const handleNewLocationAddressSelect = async (suggestion: {
@@ -3771,6 +3979,121 @@ export default function ParkingPassPage() {
       : travelOriginCoords
         ? "Drive time unavailable"
         : "Share a current location to calculate drive time";
+  const journeyVisibleSupport = useMemo(() => {
+    if (!journeyResult) return [] as RouteCorridorSupportPlace[];
+    if (journeySupportFilter !== "all") {
+      return journeyResult.categories[journeySupportFilter] || [];
+    }
+    const kinds: OperatorSupportKind[] = [
+      "gas",
+      "propane",
+      "supply",
+      "support",
+    ];
+    return kinds.flatMap((kind) =>
+      (journeyResult.categories[kind] || []).slice(0, 2),
+    );
+  }, [journeyResult, journeySupportFilter]);
+  const journeyMapCenter =
+    journeyOriginCoords || journeyDestinationCoords || defaultMapCenter;
+  const journeyMapPins = useMemo<MapPickerPin[]>(() => {
+    if (!journeyResult || !journeyOriginCoords || !journeyDestinationCoords) {
+      return [];
+    }
+    const supportIcon: Record<OperatorSupportKind, string> = {
+      gas: "⛽",
+      propane: "🔥",
+      supply: "📦",
+      support: "🛠️",
+    };
+    return [
+      {
+        key: "journey-origin",
+        position: journeyOriginCoords,
+        popup: (
+          <div className="space-y-1 text-xs">
+            <p className="font-semibold text-orange-600">Trip start</p>
+            <p className="text-[color:var(--text-muted)]">
+              {journeyOriginLabel}
+            </p>
+          </div>
+        ),
+      },
+      {
+        key: "journey-destination",
+        position: journeyDestinationCoords,
+        popup: (
+          <div className="space-y-1 text-xs">
+            <p className="font-semibold text-orange-600">Destination</p>
+            <p className="text-[color:var(--text-muted)]">
+              {journeyDestinationLabel}
+            </p>
+          </div>
+        ),
+      },
+      ...journeyResult.parkingPassHosts.map(
+        (host): MapPickerPin => ({
+          key: `journey-host:${host.locationId}`,
+          position: { lat: host.latitude, lng: host.longitude },
+          popup: (
+            <div className="space-y-1.5 text-xs">
+              <p className="font-semibold text-orange-600">
+                Parking Pass · {host.name}
+              </p>
+              <p className="text-[color:var(--text-muted)]">
+                {buildAddressLabel(host.address, host.city, host.state)}
+              </p>
+              <p className="font-medium text-[color:var(--text-primary)]">
+                {formatJourneyDetour(host.addedDurationSeconds)} ·{" "}
+                {host.distanceFromRouteMiles.toFixed(1)} mi from route
+              </p>
+              <a
+                href={host.directionsUri}
+                target="_blank"
+                rel="noreferrer"
+                className="font-semibold text-orange-600 underline"
+              >
+                Open trip with this stop
+              </a>
+            </div>
+          ),
+        }),
+      ),
+      ...journeyVisibleSupport.map(
+        (place): MapPickerPin => ({
+          key: `journey-support:${place.kind}:${place.placeId}`,
+          position: { lat: place.latitude, lng: place.longitude },
+          occupied: true,
+          popup: (
+            <div className="space-y-1.5 text-xs">
+              <p className="font-semibold text-orange-600">
+                {supportIcon[place.kind]} {place.name}
+              </p>
+              <p className="text-[color:var(--text-muted)]">{place.address}</p>
+              <p className="font-medium text-[color:var(--text-primary)]">
+                {formatJourneyDetour(place.addedDurationSeconds)}
+              </p>
+              <a
+                href={place.directionsUri}
+                target="_blank"
+                rel="noreferrer"
+                className="font-semibold text-orange-600 underline"
+              >
+                Open trip with this stop
+              </a>
+            </div>
+          ),
+        }),
+      ),
+    ];
+  }, [
+    journeyDestinationCoords,
+    journeyDestinationLabel,
+    journeyOriginCoords,
+    journeyOriginLabel,
+    journeyResult,
+    journeyVisibleSupport,
+  ]);
   const selectedDateLabel = format(
     new Date(`${selectedDate}T00:00:00`),
     "EEE, MMM d",
@@ -7113,7 +7436,326 @@ export default function ParkingPassPage() {
                         </div>
                       </details>
                     )}
+                    <div className="rounded-xl border border-orange-200/80 bg-orange-50/70 p-3 sm:p-4">
+                      <div className="flex items-start gap-3">
+                        <span className="mt-0.5 rounded-full bg-orange-600 p-2 text-white">
+                          <Navigation className="h-4 w-4" />
+                        </span>
+                        <div>
+                          <p className="text-sm font-semibold text-orange-950">
+                            Plan along your route
+                          </p>
+                          <p className="mt-0.5 text-xs text-orange-800">
+                            Travel is a food truck’s advantage. Find Parking
+                            Pass hosts, fuel, propane, supplies, and repairs
+                            anywhere between start and destination.
+                          </p>
+                        </div>
+                      </div>
+                      <div className="mt-3 grid gap-3 md:grid-cols-2">
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <Label
+                              htmlFor="parking-pass-journey-origin"
+                              className="text-xs font-semibold text-orange-950"
+                            >
+                              Start
+                            </Label>
+                            <button
+                              type="button"
+                              className="text-[11px] font-semibold text-orange-700 underline underline-offset-2"
+                              onClick={handleUseJourneyCurrentLocation}
+                            >
+                              Use my location
+                            </button>
+                          </div>
+                          <PlaceAutocompleteInput
+                            id="parking-pass-journey-origin"
+                            value={journeyOriginLabel}
+                            onChange={(value) => {
+                              journeyOriginInitializedRef.current = true;
+                              setJourneyOriginLabel(value);
+                              setJourneyOriginCoords(null);
+                              setJourneyResult(null);
+                              setJourneyError("");
+                            }}
+                            onSelect={(suggestion) =>
+                              void handleJourneyPlaceSelect(
+                                "origin",
+                                suggestion,
+                              )
+                            }
+                            intent="destination"
+                            placeholder="Starting address or city"
+                            inputClassName="bg-white"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label
+                            htmlFor="parking-pass-journey-destination"
+                            className="text-xs font-semibold text-orange-950"
+                          >
+                            Destination
+                          </Label>
+                          <PlaceAutocompleteInput
+                            id="parking-pass-journey-destination"
+                            value={journeyDestinationLabel}
+                            onChange={(value) => {
+                              setJourneyDestinationLabel(value);
+                              setJourneyDestinationCoords(null);
+                              setJourneyResult(null);
+                              setJourneyError("");
+                            }}
+                            onSelect={(suggestion) =>
+                              void handleJourneyPlaceSelect(
+                                "destination",
+                                suggestion,
+                              )
+                            }
+                            intent="destination"
+                            placeholder="Where are you headed?"
+                            inputClassName="bg-white"
+                          />
+                        </div>
+                      </div>
+                      <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <p className="text-[11px] text-orange-800">
+                          Select a suggested place so the route uses exact map
+                          coordinates.
+                        </p>
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="shrink-0"
+                          onClick={() => void handlePlanJourney()}
+                          disabled={
+                            isJourneyPlanning ||
+                            !journeyOriginCoords ||
+                            !journeyDestinationCoords
+                          }
+                        >
+                          {isJourneyPlanning ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Finding stops…
+                            </>
+                          ) : (
+                            "Find stops on my route"
+                          )}
+                        </Button>
+                      </div>
+                      {journeyError && (
+                        <p className="mt-2 text-xs font-medium text-red-700">
+                          {journeyError}
+                        </p>
+                      )}
+                    </div>
                   </div>
+
+                  {journeyResult && (
+                    <div className="overflow-hidden rounded-2xl border border-orange-200 pp-glass shadow-clean">
+                      <div className="flex flex-col gap-3 border-b border-orange-200/70 bg-orange-50/60 p-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <p className="text-sm font-semibold text-orange-950">
+                            Your mobile service corridor
+                          </p>
+                          <p className="mt-1 text-xs text-orange-800">
+                            {formatJourneyDuration(
+                              journeyResult.route.durationSeconds,
+                            )}
+                            {" · "}
+                            {formatJourneyMiles(
+                              journeyResult.route.distanceMeters,
+                            )}
+                            {" · "}
+                            {journeyResult.parkingPassHosts.length} Parking Pass
+                            {journeyResult.parkingPassHosts.length === 1
+                              ? " host"
+                              : " hosts"}{" "}
+                            near this route
+                          </p>
+                        </div>
+                        <a
+                          href={journeyResult.route.directionsUri}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex shrink-0 items-center justify-center rounded-md border border-orange-300 bg-white px-3 py-2 text-xs font-semibold text-orange-800 hover:bg-orange-50"
+                        >
+                          Open full trip
+                        </a>
+                      </div>
+                      <div className="h-[320px] w-full bg-slate-100/60 sm:h-[400px]">
+                        <GoogleMapPicker
+                          center={journeyMapCenter}
+                          zoom={9}
+                          fitToPins
+                          pins={journeyMapPins}
+                          routePath={journeyResult.route.path}
+                          className="h-full w-full"
+                        />
+                      </div>
+                      <div className="space-y-4 border-t border-[color:var(--border-subtle)] p-4">
+                        <div>
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <p className="text-sm font-semibold text-[color:var(--text-primary)]">
+                              Parking Pass hosts along the way
+                            </p>
+                            <span className="text-[11px] text-[color:var(--text-muted)]">
+                              Within {journeyResult.corridor.hostRadiusMiles} mi
+                              of the route
+                            </span>
+                          </div>
+                          {journeyResult.parkingPassHosts.length > 0 ? (
+                            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                              {journeyResult.parkingPassHosts.map((host) => {
+                                const matchingGroup = locationGroups.find(
+                                  (group) =>
+                                    String(group.host.id) ===
+                                    String(host.hostId),
+                                );
+                                return (
+                                  <div
+                                    key={host.locationId}
+                                    className="rounded-xl border border-orange-200/70 bg-white/80 p-3"
+                                  >
+                                    <div className="flex items-start justify-between gap-3">
+                                      <div className="min-w-0">
+                                        <p className="truncate text-sm font-semibold text-[color:var(--text-primary)]">
+                                          {host.name}
+                                        </p>
+                                        <p className="mt-0.5 text-[11px] text-[color:var(--text-muted)]">
+                                          {buildAddressLabel(
+                                            host.address,
+                                            host.city,
+                                            host.state,
+                                          )}
+                                        </p>
+                                      </div>
+                                      <span className="shrink-0 rounded-full bg-orange-100 px-2 py-1 text-[11px] font-semibold text-orange-800">
+                                        {formatJourneyDetour(
+                                          host.addedDurationSeconds,
+                                        )}
+                                      </span>
+                                    </div>
+                                    <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px]">
+                                      <span className="text-[color:var(--text-muted)]">
+                                        {host.distanceFromRouteMiles.toFixed(1)}{" "}
+                                        mi from route
+                                      </span>
+                                      {matchingGroup ? (
+                                        <button
+                                          type="button"
+                                          className="font-semibold text-orange-700 underline underline-offset-2"
+                                          onClick={() => {
+                                            setCityQuery(
+                                              [host.city, host.state]
+                                                .filter(Boolean)
+                                                .join(", "),
+                                            );
+                                            setActiveLocationKey(
+                                              matchingGroup.key,
+                                            );
+                                            setViewMode("list");
+                                          }}
+                                        >
+                                          See availability
+                                        </button>
+                                      ) : (
+                                        <span className="font-medium text-[color:var(--text-muted)]">
+                                          Host pin · no open pass yet
+                                        </span>
+                                      )}
+                                      <a
+                                        href={host.directionsUri}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="font-semibold text-orange-700 underline underline-offset-2"
+                                      >
+                                        Add stop
+                                      </a>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <p className="mt-2 rounded-xl bg-[var(--bg-surface-muted)] p-3 text-xs text-[color:var(--text-muted)]">
+                              No current Parking Pass host pins fall within this
+                              route corridor yet. Essential stops are still
+                              shown below.
+                            </p>
+                          )}
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-[color:var(--text-primary)]">
+                            Truck essentials by added time
+                          </p>
+                          <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-5">
+                            {(
+                              [
+                                { key: "all", label: "All stops" },
+                                { key: "gas", label: "⛽ Gas" },
+                                { key: "propane", label: "🔥 Propane" },
+                                { key: "supply", label: "📦 Supply" },
+                                { key: "support", label: "🛠️ Repairs" },
+                              ] as const
+                            ).map((option) => (
+                              <Button
+                                key={option.key}
+                                type="button"
+                                size="sm"
+                                variant={
+                                  journeySupportFilter === option.key
+                                    ? "default"
+                                    : "outline"
+                                }
+                                onClick={() =>
+                                  setJourneySupportFilter(option.key)
+                                }
+                                className="w-full"
+                              >
+                                {option.label}
+                              </Button>
+                            ))}
+                          </div>
+                          {journeyVisibleSupport.length > 0 ? (
+                            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                              {journeyVisibleSupport.map((place) => (
+                                <a
+                                  key={place.kind + ":" + place.placeId}
+                                  href={place.directionsUri}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-3 transition hover:border-orange-300 hover:bg-orange-50/50"
+                                >
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0">
+                                      <p className="truncate text-sm font-semibold text-[color:var(--text-primary)]">
+                                        {place.name}
+                                      </p>
+                                      <p className="mt-0.5 line-clamp-2 text-[11px] text-[color:var(--text-muted)]">
+                                        {place.address}
+                                      </p>
+                                    </div>
+                                    <span className="shrink-0 rounded-full bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-700">
+                                      {formatJourneyDetour(
+                                        place.addedDurationSeconds,
+                                      )}
+                                    </span>
+                                  </div>
+                                </a>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="mt-2 text-xs text-[color:var(--text-muted)]">
+                              No provider-backed stops were found in this
+                              category along the route.
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {isLoading ? (
                     <div className="flex flex-col items-center justify-center py-8 space-y-3">

@@ -19,6 +19,7 @@ import {
   Marker,
   Popup,
   Circle,
+  Polyline,
   useMap,
   useMapEvents,
 } from "react-leaflet";
@@ -57,6 +58,8 @@ export interface GoogleMapPickerProps {
   fitToPins?: boolean;
   /** Optional owner planning heat cells rendered above the map */
   trafficCells?: MapTrafficCell[];
+  /** Optional route geometry rendered as a connected path */
+  routePath?: GeoPoint[];
   /** Called after viewport changes so callers can fetch viewport-scoped overlays */
   onBoundsChanged?: (bounds: MapBoundsLike) => void;
   /** If set, draws a circle around `center` with this radius in metres */
@@ -283,6 +286,7 @@ function GoogleMapRenderer({
   pins = [],
   fitToPins = false,
   trafficCells = [],
+  routePath = [],
   circleRadiusMetres,
   onMapClick,
   onPinDrag,
@@ -298,6 +302,7 @@ function GoogleMapRenderer({
   pins?: MapPickerPin[];
   fitToPins?: boolean;
   trafficCells?: MapTrafficCell[];
+  routePath?: GeoPoint[];
   circleRadiusMetres?: number;
   onMapClick?: (p: GeoPoint) => void;
   onPinDrag?: (key: string, p: GeoPoint) => void;
@@ -312,13 +317,16 @@ function GoogleMapRenderer({
   const markersRef = useRef<Map<string, any>>(new Map());
   const trafficCircleRefs = useRef<Map<string, any>>(new Map());
   const circleRef = useRef<any>(null);
+  const routePolylineRef = useRef<any>(null);
   const infoWindowRef = useRef<any>(null);
   const lastFittedPinSignatureRef = useRef("");
   const [loadError, setLoadError] = useState<string | null>(null);
   const [mapInstanceVersion, setMapInstanceVersion] = useState(0);
   // Portal state: the DOM node injected into the InfoWindow + the ReactNode to render there
-  const [infoPortalContainer, setInfoPortalContainer] = useState<HTMLDivElement | null>(null);
-  const [infoPortalContent, setInfoPortalContent] = useState<React.ReactNode>(null);
+  const [infoPortalContainer, setInfoPortalContainer] =
+    useState<HTMLDivElement | null>(null);
+  const [infoPortalContent, setInfoPortalContent] =
+    useState<React.ReactNode>(null);
 
   // Load SDK + initialise map
   useEffect(() => {
@@ -416,6 +424,10 @@ function GoogleMapRenderer({
         circleRef.current.setMap?.(null);
         circleRef.current = null;
       }
+      if (routePolylineRef.current) {
+        routePolylineRef.current.setMap?.(null);
+        routePolylineRef.current = null;
+      }
       resizeObserverRef.current?.disconnect();
       resizeObserverRef.current = null;
       infoWindowRef.current?.close?.();
@@ -452,7 +464,9 @@ function GoogleMapRenderer({
     // Add / update markers
     for (const pin of pins) {
       if (existing.has(pin.key)) {
-        existing.get(pin.key).setPosition({ lat: pin.position.lat, lng: pin.position.lng });
+        existing
+          .get(pin.key)
+          .setPosition({ lat: pin.position.lat, lng: pin.position.lng });
       } else {
         const AdvancedMarkerElement = g.maps.marker?.AdvancedMarkerElement;
         const useAdvanced = Boolean(AdvancedMarkerElement && mapId);
@@ -570,6 +584,29 @@ function GoogleMapRenderer({
   useEffect(() => {
     const g = (window as GoogleMapsWindow).google;
     if (!g?.maps || !mapRef.current) return;
+    if (routePolylineRef.current) {
+      routePolylineRef.current.setMap(null);
+      routePolylineRef.current = null;
+    }
+    const validPath = routePath.filter(
+      (point) => Number.isFinite(point.lat) && Number.isFinite(point.lng),
+    );
+    if (validPath.length < 2) return;
+    routePolylineRef.current = new g.maps.Polyline({
+      map: mapRef.current,
+      path: validPath,
+      clickable: false,
+      geodesic: true,
+      strokeColor: "#ea580c",
+      strokeOpacity: 0.92,
+      strokeWeight: 5,
+      zIndex: 2,
+    });
+  }, [mapInstanceVersion, routePath]);
+
+  useEffect(() => {
+    const g = (window as GoogleMapsWindow).google;
+    if (!g?.maps || !mapRef.current) return;
 
     const trafficCellColor = (cell: MapTrafficCell) =>
       cell.color ||
@@ -611,11 +648,13 @@ function GoogleMapRenderer({
       trafficCircleRefs.current.set(cell.id, circle);
     });
 
-    Array.from(trafficCircleRefs.current.entries()).forEach(([id, instance]) => {
+    Array.from(trafficCircleRefs.current.entries()).forEach(
+      ([id, instance]) => {
       if (usedIds.has(id)) return;
       instance.setMap(null);
       trafficCircleRefs.current.delete(id);
-    });
+      },
+    );
   }, [mapInstanceVersion, trafficCells]);
 
   if (loadError) return null; // caller falls back to Leaflet
@@ -639,6 +678,7 @@ function LeafletRenderer({
   pins = [],
   fitToPins = false,
   trafficCells = [],
+  routePath = [],
   circleRadiusMetres,
   onMapClick,
   onPinDrag,
@@ -651,6 +691,7 @@ function LeafletRenderer({
   pins?: MapPickerPin[];
   fitToPins?: boolean;
   trafficCells?: MapTrafficCell[];
+  routePath?: GeoPoint[];
   circleRadiusMetres?: number;
   onMapClick?: (p: GeoPoint) => void;
   onPinDrag?: (key: string, p: GeoPoint) => void;
@@ -687,6 +728,13 @@ function LeafletRenderer({
       {onBoundsChanged && (
         <LeafletBoundsWatcher onBoundsChanged={onBoundsChanged} />
       )}
+      {routePath.length >= 2 && (
+        <Polyline
+          positions={routePath.map((point) => [point.lat, point.lng])}
+          interactive={false}
+          pathOptions={{ color: "#ea580c", opacity: 0.92, weight: 5 }}
+        />
+      )}
       {trafficCells.map((cell) => (
         <Circle
           key={cell.id}
@@ -718,7 +766,9 @@ function LeafletRenderer({
           icon={pin.occupied ? pinIconOccupied : pinIcon}
           draggable={pin.draggable ?? false}
           eventHandlers={{
-            click: () => { if (onPinClick) onPinClick(pin.key); },
+            click: () => {
+              if (onPinClick) onPinClick(pin.key);
+            },
             ...(pin.draggable && onPinDrag
               ? {
                   dragend: (e: any) => {
@@ -731,7 +781,13 @@ function LeafletRenderer({
           }}
         >
           {pin.popup && (
-            <Popup maxWidth={320} minWidth={240} keepInView autoPan autoPanPadding={[16, 16]}>
+            <Popup
+              maxWidth={320}
+              minWidth={240}
+              keepInView
+              autoPan
+              autoPanPadding={[16, 16]}
+            >
               {pin.popup}
             </Popup>
           )}
@@ -741,7 +797,11 @@ function LeafletRenderer({
         <Circle
           center={[center.lat, center.lng]}
           radius={circleRadiusMetres}
-          pathOptions={{ color: "#f97316", fillColor: "#f97316", fillOpacity: 0.15 }}
+          pathOptions={{
+            color: "#f97316",
+            fillColor: "#f97316",
+            fillOpacity: 0.15,
+          }}
         />
       )}
     </MapContainer>
@@ -766,6 +826,7 @@ export function GoogleMapPicker({
   pins = [],
   fitToPins = false,
   trafficCells = [],
+  routePath = [],
   onBoundsChanged,
   circleRadiusMetres,
   className = "",
@@ -816,6 +877,7 @@ export function GoogleMapPicker({
           pins={pins}
           fitToPins={fitToPins}
           trafficCells={trafficCells}
+          routePath={routePath}
           circleRadiusMetres={circleRadiusMetres}
           onMapClick={onMapClick}
           onPinDrag={onPinDrag}
@@ -831,6 +893,7 @@ export function GoogleMapPicker({
           pins={pins}
           fitToPins={fitToPins}
           trafficCells={trafficCells}
+          routePath={routePath}
           circleRadiusMetres={circleRadiusMetres}
           onMapClick={onMapClick}
           onPinDrag={onPinDrag}
