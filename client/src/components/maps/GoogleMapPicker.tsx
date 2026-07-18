@@ -91,6 +91,24 @@ const pinIconOccupied = new L.DivIcon({
 
 // ─── Leaflet helpers ──────────────────────────────────────────────────────────
 
+const detachGoogleMarker = (marker: any) => {
+  if (!marker) return;
+  if (typeof marker.setMap === "function") {
+    marker.setMap(null);
+    return;
+  }
+  marker.map = null;
+};
+
+const updateGoogleMarkerPosition = (marker: any, position: GeoPoint) => {
+  if (!marker) return;
+  if (typeof marker.setPosition === "function") {
+    marker.setPosition(position);
+    return;
+  }
+  marker.position = position;
+};
+
 function LeafletCenterer({
   center,
   zoom,
@@ -413,7 +431,7 @@ function GoogleMapRenderer({
     return () => {
       cancelled = true;
       Array.from(markersRef.current.values()).forEach((marker) => {
-        marker.setMap?.(null);
+        detachGoogleMarker(marker);
       });
       markersRef.current.clear();
       Array.from(trafficCircleRefs.current.values()).forEach((circle) => {
@@ -456,7 +474,7 @@ function GoogleMapRenderer({
     const incomingKeys = new Set(pins.map((p) => p.key));
     for (const [key, marker] of existing) {
       if (!incomingKeys.has(key)) {
-        marker.setMap(null);
+        detachGoogleMarker(marker);
         existing.delete(key);
       }
     }
@@ -464,9 +482,7 @@ function GoogleMapRenderer({
     // Add / update markers
     for (const pin of pins) {
       if (existing.has(pin.key)) {
-        existing
-          .get(pin.key)
-          .setPosition({ lat: pin.position.lat, lng: pin.position.lng });
+        updateGoogleMarkerPosition(existing.get(pin.key), pin.position);
       } else {
         const AdvancedMarkerElement = g.maps.marker?.AdvancedMarkerElement;
         const useAdvanced = Boolean(AdvancedMarkerElement && mapId);
