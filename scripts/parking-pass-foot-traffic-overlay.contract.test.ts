@@ -4,16 +4,17 @@ const parkingPassPage = readFileSync("client/src/pages/parking-pass.tsx", "utf8"
 const mapPicker = readFileSync("client/src/components/maps/GoogleMapPicker.tsx", "utf8");
 
 const requiredParkingPassSnippets = [
-  "Foot traffic",
+  "Area activity",
   "spotFootTrafficCells",
   "showParkingScoutHeat",
   "/api/map/foot-traffic",
-  "Green stronger",
-  "Yellow moderate",
-  "Red weaker",
+  "MealScout movement",
+  "Scheduled activity",
+  "Food destinations",
+  "not measured pedestrian counts",
   "trafficCells={spotFootTrafficCells}",
-  "Select a spot to view foot traffic.",
-  "Foot traffic data is not available for this spot yet.",
+  "Select a spot to view area activity.",
+  "No provider or MealScout activity signals were found for this spot yet.",
 ];
 
 for (const snippet of requiredParkingPassSnippets) {
@@ -26,4 +27,4 @@ if (!mapPicker.includes("cell.color ||")) {
   throw new Error("Map renderer does not respect overlay color overrides");
 }
 
-console.log("Parking pass foot traffic overlay contract OK");
+console.log("Parking pass truthful area activity overlay contract OK");

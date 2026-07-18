@@ -10,6 +10,7 @@ type PlaceSuggestion = {
   text: string;
   mainText: string;
   secondaryText: string;
+  sessionToken?: string;
 };
 
 type AutocompleteResponse = {
@@ -26,6 +27,7 @@ type PlaceAutocompleteInputProps = {
   className?: string;
   inputClassName?: string;
   dataTestId?: string;
+  intent?: "destination" | "food";
 };
 
 /**
@@ -57,6 +59,7 @@ export function PlaceAutocompleteInput({
   className,
   inputClassName,
   dataTestId,
+  intent = "destination",
 }: PlaceAutocompleteInputProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
@@ -108,6 +111,7 @@ export function PlaceAutocompleteInput({
         const url = new URL("/api/map/place-autocomplete", window.location.origin);
         url.searchParams.set("input", trimmed);
         url.searchParams.set("sessionToken", sessionTokenRef.current);
+        url.searchParams.set("intent", intent);
 
         const res = await fetch(url.toString(), { credentials: "include" });
         if (!res.ok) {
@@ -136,7 +140,7 @@ export function PlaceAutocompleteInput({
     return () => {
       cancelled = true;
     };
-  }, [debouncedValue, disabled]);
+  }, [debouncedValue, disabled, intent]);
 
   const hasSuggestions = suggestions.length > 0;
   const optionIds = useMemo(
@@ -148,7 +152,7 @@ export function PlaceAutocompleteInput({
     onChange(suggestion.text);
     // Pass the current session token to the caller so they can include it in
     // the subsequent place-details request for billing grouping.
-    onSelect({ ...suggestion, _sessionToken: sessionTokenRef.current } as any);
+    onSelect({ ...suggestion, sessionToken: sessionTokenRef.current });
     setIsOpen(false);
     setActiveIndex(-1);
     // Rotate the session token — the next autocomplete session is a new billing unit

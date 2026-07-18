@@ -5869,6 +5869,7 @@ export default function ExplorePreview() {
             <div className="space-y-3">
               <PlaceAutocompleteInput
                 id="scout-place-request"
+                intent="food"
                 value={placeRequestQuery}
                 onChange={(value) => {
                   setPlaceRequestQuery(value);

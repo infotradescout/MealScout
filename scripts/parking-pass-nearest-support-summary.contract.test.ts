@@ -10,6 +10,8 @@ const requiredSnippets = [
   "Nearest propane:",
   "Nearest supply:",
   "Nearest support:",
+  "min drive",
+  "allOperationalSupportPins",
   "Select a spot",
   "Unavailable",
 ];

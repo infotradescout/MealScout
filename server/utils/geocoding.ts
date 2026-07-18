@@ -44,11 +44,7 @@ const shouldRetryStatus = (status: number) =>
   status === 408 || status === 429 || status >= 500;
 
 const getGoogleMapsApiKey = () =>
-  String(
-    process.env.GOOGLE_MAPS_API_KEY ||
-      process.env.VITE_GOOGLE_MAPS_WEB_API_KEY ||
-      "",
-  ).trim();
+  String(process.env.GOOGLE_MAPS_API_KEY || "").trim();
 
 async function fetchWithBackoff(
   url: string,

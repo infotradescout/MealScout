@@ -11,8 +11,9 @@ const requiredSnippets = [
   "Midgrade",
   "Premium",
   "Diesel",
-  "...gasPricePins.map((pin) => ({",
-  "parkingPassHostPinCount + supplierOverlayPins.length + gasPricePins.length",
+  "...(showGasLayer ? gasPricePins : []).map((pin) => ({",
+  "operationalSupportPins.length",
+  "showGasLayer ? gasPricePins.length : 0",
 ];
 
 for (const snippet of requiredSnippets) {
