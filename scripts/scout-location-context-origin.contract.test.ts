@@ -5,8 +5,8 @@ const source = readFileSync("client/src/lib/api.ts", "utf8");
 
 assert.match(
   source,
-  /normalizedPath\.startsWith\("\/api\/location\/context"\)/,
-  "MealScout API routing must keep /api/location/context same-origin on MealScout hosts",
+  /return normalizedPath\.startsWith\("\/api\/"\);/,
+  "MealScout API routing must keep every /api/* request same-origin on MealScout hosts",
 );
 
 console.log("scout-location-context-origin.contract: PASS");

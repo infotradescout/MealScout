@@ -10,6 +10,7 @@ import {
   getSlotWindowMinutesWithCleanup,
   isSlotWithinHours,
 } from "@shared/parkingPassSlots";
+import { isStaffOrAdminUserType } from "@shared/profileAccessPolicy";
 import {
   AlertCircle,
   Calendar,
@@ -619,16 +620,6 @@ export default function ParkingPassPage() {
   const { effectiveLocationContext } = useEffectiveLocationContext();
   const { toast } = useToast();
   const [location, setLocation] = useLocation();
-  const { data: subscription } = useQuery<{
-    status: string;
-    hasAccess: boolean;
-    trialAccess?: boolean;
-  }>({
-    queryKey: ["/api/subscription/status"],
-    enabled: !!user,
-    retry: false,
-    refetchOnWindowFocus: false,
-  });
   const { data: businessAccess } = useQuery<{
     hasAnyAccess: boolean;
     linkState?: "linked" | "not_attached";
@@ -644,12 +635,7 @@ export default function ParkingPassPage() {
     retry: false,
     refetchOnWindowFocus: false,
   });
-  const isAdminOrStaff = [
-    "admin",
-    "duper_admin",
-    "super_admin",
-    "staff",
-  ].includes(user?.userType || "");
+  const isAdminOrStaff = isStaffOrAdminUserType(user?.userType);
   const [adminParkingMode, setAdminParkingMode] = useState<
     "auto" | "truck" | "host"
   >("auto");
@@ -669,9 +655,7 @@ export default function ParkingPassPage() {
     user?.userType === "food_truck"
       ? "/restaurant-signup?businessType=food_truck&source=parking-pass&claim=1"
       : "/restaurant-signup?businessType=restaurant&source=parking-pass&claim=1";
-  const hasPremiumTruckTools =
-    canManageParkingPass &&
-    (isAdminOrStaff || Boolean(subscription?.hasAccess));
+  const hasPremiumTruckTools = canManageParkingPass;
   const [isLoading, setIsLoading] = useState(true);
   const [passListings, setPassListings] = useState<ParkingPassListing[]>([]);
   const [ownedFoodTrucks, setOwnedFoodTrucks] = useState<any[]>([]);
@@ -1809,12 +1793,10 @@ export default function ParkingPassPage() {
   const handleCreateSchedule = async () => {
     if (!hasPremiumTruckTools) {
       toast({
-        title: "Premium required",
-        description:
-          "Off-platform schedule stops require Premium. Parking pass bookings and menu browsing are always free.",
+        title: "Permission required",
+        description: "This account cannot manage the selected truck's schedule.",
         variant: "destructive",
       });
-      setLocation("/subscribe");
       return;
     }
 
@@ -1921,12 +1903,10 @@ export default function ParkingPassPage() {
   const handleDeleteSchedule = async (scheduleId: string) => {
     if (!hasPremiumTruckTools) {
       toast({
-        title: "Premium required",
-        description:
-          "Managing off-platform schedule stops requires Premium. Parking pass bookings and menu browsing are always free.",
+        title: "Permission required",
+        description: "This account cannot manage the selected truck's schedule.",
         variant: "destructive",
       });
-      setLocation("/subscribe");
       return;
     }
 
@@ -3177,12 +3157,10 @@ export default function ParkingPassPage() {
     }
     if (!hasPremiumTruckTools) {
       toast({
-        title: "Premium required",
-        description:
-          "Social auto-post settings require Premium. Parking pass bookings and menu browsing are always free.",
+        title: "Permission required",
+        description: "This account cannot manage the selected truck's social settings.",
         variant: "destructive",
       });
-      setLocation("/subscribe");
       return;
     }
 
@@ -3287,12 +3265,10 @@ export default function ParkingPassPage() {
     }
     if (!hasPremiumTruckTools) {
       toast({
-        title: "Premium required",
-        description:
-          "One-click live location sharing requires Premium. Parking pass bookings and menu browsing are always free.",
+        title: "Permission required",
+        description: "This account cannot share the selected truck's live location.",
         variant: "destructive",
       });
-      setLocation("/subscribe");
       return;
     }
 
@@ -4334,7 +4310,9 @@ export default function ParkingPassPage() {
                       {parkingReports.length === 1 ? "" : "s"}
                     </span>
                     <span className="rounded-lg border border-[var(--border-subtle)] px-2 py-1">
-                      {truck?.isVerified === false
+                      {isAdminOrStaff
+                        ? "Admin access"
+                        : truck?.isVerified === false
                         ? "Verification pending"
                         : "Booking ready"}
                     </span>
@@ -5872,10 +5850,8 @@ export default function ParkingPassPage() {
               <CardContent className="p-5 space-y-4">
                 {!hasPremiumTruckTools && (
                   <div className="rounded-xl border border-[color:var(--accent-text)]/25 bg-[color:var(--accent-text)]/8 p-4 text-sm text-[color:var(--text-secondary)]">
-                    Parking pass bookings and your booking calendar are always
-                    free. Upgrade to Premium to unlock off-platform schedule
-                    stops, one-tap live location sharing, and social share
-                    controls.
+                    Ask the business owner to grant schedule and profile
+                    permissions for this truck.
                   </div>
                 )}
                 {hasPremiumTruckTools && !canManageTruckProfile && (
@@ -6658,7 +6634,10 @@ export default function ParkingPassPage() {
             <div
               className={`space-y-5 pb-24 lg:pb-10${isTruckViewUser ? " order-first" : ""}`}
             >
-              {isTruckViewUser && truck && truck.isVerified === false && (
+              {!isAdminOrStaff &&
+                isTruckViewUser &&
+                truck &&
+                truck.isVerified === false && (
                 <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
                   <p className="font-semibold">Verification pending</p>
                   <p className="text-[11px]">
@@ -6672,7 +6651,7 @@ export default function ParkingPassPage() {
                     Complete verification
                   </a>
                 </div>
-              )}
+                )}
               {!canStartTruckCheckout && (
                 <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-3 text-sm text-[color:var(--text-primary)]">
                   <p className="font-semibold">Food truck profile required</p>

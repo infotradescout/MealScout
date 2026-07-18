@@ -38,9 +38,7 @@ function blurClass(locked: boolean) {
 }
 
 export default function PensacolaSpots() {
-  const { isAuthenticated, user } = useAuth();
-  const isTruckOperator =
-    user?.userType === "food_truck" || user?.userType === "restaurant_owner";
+  const { isAuthenticated } = useAuth();
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["/api/public/pensacola/parking-pass-leads", isAuthenticated],
@@ -55,16 +53,6 @@ export default function PensacolaSpots() {
     },
     staleTime: 30_000,
   });
-  const { data: subscription } = useQuery<{
-    status: string;
-    hasAccess: boolean;
-  }>({
-    queryKey: ["/api/subscription/status", "pensacola-spots"],
-    enabled: Boolean(isAuthenticated && isTruckOperator),
-    retry: false,
-    refetchOnWindowFocus: false,
-  });
-
   const locked = Boolean(data?.locked);
 
   const primaryCta = useMemo(() => {
@@ -116,17 +104,7 @@ export default function PensacolaSpots() {
                 </a>
               </Button>
             ) : null}
-            {isAuthenticated && isTruckOperator && !subscription?.hasAccess ? (
-              <Button variant="outline" asChild>
-                <a href="/subscribe">Start premium ($25/mo)</a>
-              </Button>
-            ) : null}
           </div>
-          {isAuthenticated && isTruckOperator && !subscription?.hasAccess ? (
-            <p className="text-sm text-muted-foreground">
-              Premium unlocks event interest actions and advanced booking tools for operators.
-            </p>
-          ) : null}
         </div>
 
         <div className="mt-8">

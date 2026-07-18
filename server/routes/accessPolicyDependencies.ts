@@ -8,6 +8,7 @@ import {
   ensurePremiumTrialForUser,
   isPremiumTrialActive,
 } from "../services/premiumTrial";
+import { UNIVERSAL_PROFILE_FREE_TRIAL_ACTIVE } from "@shared/profileAccessPolicy";
 
 export type RouteAccessPolicyDependencies = {
   ensureTrialForUser: typeof ensurePremiumTrialForUser;
@@ -122,6 +123,10 @@ export function createRouteAccessPolicyDependencies(
         return { hasAccess: false, error: "User not found" };
       }
 
+      if (UNIVERSAL_PROFILE_FREE_TRIAL_ACTIVE) {
+        return { hasAccess: true, subscriptionTier: "universal_trial" };
+      }
+
       const hydratedUser = await ensureTrialForUser(user);
 
       if (isTrialActive(hydratedUser)) {
@@ -180,6 +185,10 @@ export function createRouteAccessPolicyDependencies(
       const user = await storage.getUser(userId);
       if (!user) {
         return { isValid: false, error: "User not found" };
+      }
+
+      if (UNIVERSAL_PROFILE_FREE_TRIAL_ACTIVE) {
+        return { isValid: true, currentCount: 0, maxDeals: 999 };
       }
 
       const hydratedUser = await ensureTrialForUser(user);
@@ -273,7 +282,9 @@ export function createRouteAccessPolicyDependencies(
     try {
       const user = await storage.getUser(key);
       if (user) {
-        if (
+        if (UNIVERSAL_PROFILE_FREE_TRIAL_ACTIVE) {
+          hasAccess = true;
+        } else if (
           ["admin", "duper_admin", "super_admin"].includes(
             String(user.userType || ""),
           )

@@ -17,6 +17,7 @@ import {
   WebsiteImportError,
 } from "../utils/websiteProfileImport";
 import { users, telemetryEvents, insertRestaurantSchema, type User } from "@shared/schema";
+import { isStaffOrAdminUserType } from "@shared/profileAccessPolicy";
 
 type RestaurantSignupRouteDependencies = {
   ensureTrialForUser: (user: User) => Promise<User | null | undefined>;
@@ -135,7 +136,10 @@ export function registerRestaurantSignupRoutes(
           userType: user.userType,
         });
 
-        if (!user.emailVerified) {
+        if (
+          !user.emailVerified &&
+          !isStaffOrAdminUserType(user.userType)
+        ) {
           return res.status(403).json({
             message: "Please verify your email before continuing.",
             code: "email_not_verified",

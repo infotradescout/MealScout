@@ -78,6 +78,7 @@ import { requireIdempotencyKey } from "../middleware/idempotency";
 import { distributedRateLimit } from "../middleware/distributedRateLimit";
 import { registerHostProfileRoutes } from "./hosts/profileRoutes";
 import { registerHostParkingPassRoutes } from "./hosts/eventsRoutes";
+import { isStaffOrAdminUserType } from "@shared/profileAccessPolicy";
 
 const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
@@ -104,10 +105,7 @@ export function registerHostRoutes(app: Express) {
   });
 
   const isStaffOrAdminUser = (user: any) =>
-    user?.userType === "staff" ||
-    user?.userType === "admin" ||
-    user?.userType === "duper_admin" ||
-    user?.userType === "super_admin";
+    isStaffOrAdminUserType(user?.userType);
 
   app.get("/api/payments/stripe-config", (_req, res) => {
     const publishableKey = getStripePublishableKey();

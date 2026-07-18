@@ -72,8 +72,8 @@ assert.match(
   /const liveShareUrl = currentPublicProfileHref/,
 );
 
-// Existing contracts, mutation paths, and premium permission gates remain in
-// place. This slice changes presentation and navigation, not business rules.
+// Existing mutation paths remain in place. Tool access follows business
+// permissions while the universal profile trial is active.
 for (const endpoint of [
   "/api/restaurants/${selectedRestaurant}/truck-session/start",
   "/api/restaurants/${selectedRestaurant}/truck-session/end",
@@ -83,7 +83,8 @@ for (const endpoint of [
   assert.ok(owner.includes(endpoint), `Missing preserved endpoint: ${endpoint}`);
 }
 assert.match(owner, /if \(!hasPremiumLocationTools\)/);
-assert.match(owner, /setLocation\("\/subscribe"\)/);
+assert.match(owner, /const hasPremiumLocationTools = canManageParkingPass/);
+assert.doesNotMatch(owner, /Upgrade to use live location|setLocation\("\/subscribe"\)/);
 assert.match(owner, /navigator\.geolocation\.watchPosition/);
 assert.match(owner, /stopFoodTruckSessionMutation\.mutate\(\)/);
 assert.match(owner, /operatingHoursForm\.handleSubmit/);
