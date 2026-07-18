@@ -11,7 +11,7 @@ const requiredSnippets = [
   "Premium ",
   "Diesel ",
   "Gas prices:",
-  "Gas: ${selectedSpotGasPriceSummary}",
+  "Gas: {selectedSpotGasPriceSummary}",
 ];
 
 for (const snippet of requiredSnippets) {
