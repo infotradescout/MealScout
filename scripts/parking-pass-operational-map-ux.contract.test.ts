@@ -22,6 +22,9 @@ const requiredUiSnippets = [
   "group.key === activeLocationKey || bookings.length > 0",
   "unlistedHostPins",
   "parkingPassHostPinCount",
+  "parkingPassMapLocations",
+  "Show every active, mappable host.",
+  "Host pins",
   "fitToPins",
   "Results are not limited to your",
   'apiUrl("/api/map/locations")',
@@ -30,6 +33,17 @@ const requiredUiSnippets = [
 for (const snippet of requiredUiSnippets) {
   if (!parkingPassPage.includes(snippet)) {
     throw new Error(`Operational parking map UX snippet missing: ${snippet}`);
+  }
+}
+
+for (const forbiddenSnippet of [
+  "only show paid/priced host locations",
+  "return listingHostIds.has(hostId) || bookableHostIds.has(hostId)",
+]) {
+  if (parkingPassPage.includes(forbiddenSnippet)) {
+    throw new Error(
+      `Parking Pass must not hide unlisted map hosts: ${forbiddenSnippet}`,
+    );
   }
 }
 
