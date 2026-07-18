@@ -7,17 +7,20 @@ const autocomplete = readFileSync(
 );
 const parkingPass = readFileSync("client/src/pages/parking-pass.tsx", "utf8");
 
-const serverKeyBlock = routes.slice(
-  routes.indexOf("const getGoogleMapsApiKey"),
+const dedicatedServerKeyBlock = routes.slice(
+  routes.indexOf("const getDedicatedGoogleMapsApiKey"),
   routes.indexOf("const getGoogleMapsWebApiKey"),
 );
-if (serverKeyBlock.includes("VITE_")) {
-  throw new Error("Server Google key resolver must not fall back to a browser key");
+if (dedicatedServerKeyBlock.includes("VITE_")) {
+  throw new Error("Dedicated server Google key resolver must not use a browser key");
 }
 
 const requiredRouteSnippets = [
   "const getGoogleMapsWebApiKey",
+  "const getDedicatedGoogleMapsApiKey",
+  "getDedicatedGoogleMapsApiKey() || getGoogleMapsWebApiKey()",
   "const googleMapsApiKey = getGoogleMapsWebApiKey()",
+  "usingBrowserKeyServerFallback",
   'app.get("/api/map/place-intelligence"',
   'app.get("/api/map/operator-support"',
   "fuelOptions",

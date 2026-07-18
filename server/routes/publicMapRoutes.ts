@@ -304,16 +304,15 @@ const isMissingRelationError = (error: unknown, relationName?: string) => {
   return err.message?.includes(`"${relationName}"`) ?? false;
 };
 
-const getGoogleMapsApiKey = () =>
+const getDedicatedGoogleMapsApiKey = () =>
   String(
     process.env.GOOGLE_MAPS_API_KEY ||
       process.env.GOOGLE_API_KEY ||
       "",
   ).trim();
 
-// Browser and server keys must remain separate. The browser key is expected to
-// be HTTP-referrer restricted; the server key must never be returned to a
-// client and should be restricted by API and server egress/IP where possible.
+// The browser key is expected to be HTTP-referrer restricted. It is safe to
+// return this key to a browser; a dedicated server credential is never returned.
 const getGoogleMapsWebApiKey = () =>
   String(
     process.env.VITE_GOOGLE_MAPS_WEB_API_KEY ||
@@ -321,6 +320,12 @@ const getGoogleMapsWebApiKey = () =>
       process.env.VITE_GOOGLE_API_KEY ||
       "",
   ).trim();
+
+// Compatibility bridge for deployments that currently have only the public
+// browser key configured. Prefer a dedicated server key, but keep existing
+// Places/Routes features operating while production credentials are split.
+const getGoogleMapsApiKey = () =>
+  getDedicatedGoogleMapsApiKey() || getGoogleMapsWebApiKey();
 
 type PlaceAutocompletePrediction = {
   placeId: string;
@@ -917,6 +922,8 @@ export function registerPublicMapRoutes(app: Express) {
     try {
       const googleMapsApiKey = getGoogleMapsWebApiKey();
       const hasServerMapsKey = getGoogleMapsApiKey().length > 0;
+      const hasDedicatedServerMapsKey =
+        getDedicatedGoogleMapsApiKey().length > 0;
       const googleMapsMapId = String(
         process.env.GOOGLE_MAPS_MAP_ID ||
           process.env.VITE_GOOGLE_MAPS_MAP_ID ||
@@ -938,6 +945,9 @@ export function registerPublicMapRoutes(app: Express) {
           addressValidation: hasServerMapsKey,
           placeIntelligence: hasServerMapsKey,
           operatorSupportDiscovery: hasServerMapsKey,
+          dedicatedServerKey: hasDedicatedServerMapsKey,
+          usingBrowserKeyServerFallback:
+            hasServerMapsKey && !hasDedicatedServerMapsKey,
         },
       });
     } catch {
@@ -953,6 +963,8 @@ export function registerPublicMapRoutes(app: Express) {
           addressValidation: false,
           placeIntelligence: false,
           operatorSupportDiscovery: false,
+          dedicatedServerKey: false,
+          usingBrowserKeyServerFallback: false,
         },
       });
     }

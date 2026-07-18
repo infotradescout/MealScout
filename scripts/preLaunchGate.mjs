@@ -95,7 +95,7 @@ section("Step 1b: Google Maps API Keys");
 const serverMapsKey = String(process.env.GOOGLE_MAPS_API_KEY || "").trim();
 const webMapsKey = String(process.env.VITE_GOOGLE_MAPS_WEB_API_KEY || "").trim();
 if (!serverMapsKey) {
-  warn("GOOGLE_MAPS_API_KEY is not set — geocoding, Places autocomplete, Routes, Address Validation, place intelligence, and area-activity context will be disabled.");
+  warn("GOOGLE_MAPS_API_KEY is not set — server-side Google features will use the browser key compatibility fallback when available. Add a dedicated API-restricted server key.");
 } else {
   pass("GOOGLE_MAPS_API_KEY is set.");
 }
