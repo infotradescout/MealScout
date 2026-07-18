@@ -3930,7 +3930,7 @@ export default function ParkingPassPage() {
       ? paidMapLocations.supplierLocations
       : [];
     return raw
-      .map((loc) => {
+      .map((loc): OperationalSupportPin | null => {
         const lat = parseCoord(loc.latitude);
         const lng = parseCoord(loc.longitude);
         if (lat === null || lng === null) return null;
