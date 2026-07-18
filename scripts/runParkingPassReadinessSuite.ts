@@ -20,6 +20,20 @@ function runStep(name: string, cmd: string, args: string[]) {
 function main() {
   const steps: Array<{ name: string; cmd: string; args: string[]; optional?: boolean }> = [
     { name: "typecheck", cmd: "npm", args: ["run", "-s", "check"] },
+    {
+      name: "listing revenue contract",
+      cmd: "node",
+      args: [
+        "--import",
+        "tsx",
+        "scripts/parking-pass-listing-revenue.contract.test.ts",
+      ],
+    },
+    {
+      name: "public listing feed",
+      cmd: "node",
+      args: ["--import", "tsx", "scripts/smokeParkingPassPublicFeed.ts"],
+    },
     { name: "datekeys", cmd: "npm", args: ["run", "-s", "test:parking-pass-datekeys"] },
     { name: "webhook audit", cmd: "npm", args: ["run", "-s", "audit:parking-pass-webhooks"] },
     { name: "demand funnel audit", cmd: "npm", args: ["run", "-s", "audit:demand-funnel"] },
