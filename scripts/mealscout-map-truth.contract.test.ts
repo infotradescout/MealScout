@@ -242,7 +242,30 @@ assert.doesNotMatch(
 );
 assert.match(
   scout,
-  /parkingStatus:\s*parkedTrucks\.length\s*>\s*0\s*\?\s*"occupied"\s*:\s*null/,
+  /parkingStatus:\s*parkedTrucks\.length\s*>\s*0\s*\?\s*"occupied"\s*:\s*"available"/,
+  "Public-ready Parking Pass hosts must remain visible without a parked truck.",
+);
+assert.match(scout, /apiUrl\("\/api\/parking-pass\/host-ids"\)/);
+const parkingPassHostFallback = between(
+  scout,
+  "const visibleParkingPassHosts = useMemo",
+  "const parkedTrucksByHostKey",
+);
+assert.match(parkingPassHostFallback, /Array\.isArray\(parkingPassData\)/);
+assert.match(parkingPassHostFallback, /isWithinScoutRadius/);
+assert.match(parkingPassHostFallback, /\.\.\.mapHostLocations, \.\.\.visibleParkingPassHosts/);
+assert.match(parkingPassHostFallback, /getScoutHostMarkerKey\(host\)/);
+const hostMarkers = between(
+  scout,
+  "const hostMarkers = useMemo",
+  "const dealMarkers",
+);
+assert.match(hostMarkers, /parkingPassHostIds\.has\(hostId\)/);
+assert.match(hostMarkers, /scoutMapHostLocations/);
+assert.match(
+  hostMarkers,
+  /!isParkingPassHost\s*&&\s*parkedTrucks\.length\s*===\s*0/,
+  "Scout may show an idle host pin only when the host is Parking Pass eligible.",
 );
 assert.match(
   scout,
@@ -252,7 +275,10 @@ assert.match(
   scout,
   /\.filter\(\(event\) => isTodayDate\(getEventCalendarDay\(event\)\)\)/,
 );
-assert.match(markerFilter, /hasParkedTruck\s*&&[\s\S]*activeMapLayers\.happeningToday/);
+assert.match(
+  markerFilter,
+  /\(hasParkedTruck\s*\|\|\s*isBookableHost\)\s*&&[\s\S]*activeMapLayers\.happeningToday/,
+);
 
 const allMapMarkers = between(
   scout,

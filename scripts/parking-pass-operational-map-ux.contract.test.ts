@@ -17,6 +17,11 @@ const requiredUiSnippets = [
   "📦 ",
   "🛠️ ",
   "group.key === activeLocationKey || bookings.length > 0",
+  "unlistedHostPins",
+  "parkingPassHostPinCount",
+  "fitToPins",
+  "Results are not limited to your",
+  'apiUrl("/api/map/locations")',
 ];
 
 for (const snippet of requiredUiSnippets) {
@@ -30,6 +35,8 @@ const requiredMapSnippets = [
   "? 0.1",
   "? 0.14",
   ": 0.12",
+  "map.fitBounds(bounds, 48)",
+  "LeafletPinFitter",
 ];
 
 for (const snippet of requiredMapSnippets) {
