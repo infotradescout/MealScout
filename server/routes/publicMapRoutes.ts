@@ -225,6 +225,7 @@ const mapRouteSummaryCache = new Map<
       durationSeconds: number;
       travelMode: "DRIVE" | "WALK" | "BICYCLE";
       source: "google_routes";
+      encodedPolyline: string | null;
     };
   }
 >();
@@ -295,6 +296,104 @@ const parseDurationSeconds = (value: unknown) => {
   if (!match) return null;
   const parsed = Number(match[1]);
   return Number.isFinite(parsed) ? Math.max(0, Math.round(parsed)) : null;
+};
+
+type RoutePoint = { lat: number; lng: number };
+
+type GoogleRouteResult = {
+  distanceMeters: number;
+  durationSeconds: number;
+  encodedPolyline: string | null;
+};
+
+const decodeGooglePolyline = (encoded: string): RoutePoint[] => {
+  if (!encoded) return [];
+  const points: RoutePoint[] = [];
+  let index = 0;
+  let latitude = 0;
+  let longitude = 0;
+
+  const readValue = () => {
+    let result = 0;
+    let shift = 0;
+    let byte = 0;
+    do {
+      if (index >= encoded.length) return null;
+      byte = encoded.charCodeAt(index++) - 63;
+      result |= (byte & 0x1f) << shift;
+      shift += 5;
+    } while (byte >= 0x20 && shift < 35);
+    return result & 1 ? ~(result >> 1) : result >> 1;
+  };
+
+  while (index < encoded.length) {
+    const latitudeDelta = readValue();
+    const longitudeDelta = readValue();
+    if (latitudeDelta === null || longitudeDelta === null) break;
+    latitude += latitudeDelta;
+    longitude += longitudeDelta;
+    points.push({ lat: latitude / 1e5, lng: longitude / 1e5 });
+  }
+  return points;
+};
+
+const locatePointAlongRoute = (point: RoutePoint, path: RoutePoint[]) => {
+  if (!path.length) {
+    return { distanceKm: Number.POSITIVE_INFINITY, progressKm: 0 };
+  }
+  if (path.length === 1) {
+    return {
+      distanceKm: distanceKmBetween(
+        point.lat,
+        point.lng,
+        path[0].lat,
+        path[0].lng,
+      ),
+      progressKm: 0,
+    };
+  }
+
+  const kmPerLatitudeDegree = 110.574;
+  const kmPerLongitudeDegree = Math.max(
+    111.32 * Math.cos((point.lat * Math.PI) / 180),
+    1,
+  );
+  let bestDistanceKm = Number.POSITIVE_INFINITY;
+  let bestProgressKm = 0;
+  let traversedKm = 0;
+
+  for (let index = 0; index < path.length - 1; index += 1) {
+    const start = path[index];
+    const end = path[index + 1];
+    const startX = (start.lng - point.lng) * kmPerLongitudeDegree;
+    const startY = (start.lat - point.lat) * kmPerLatitudeDegree;
+    const endX = (end.lng - point.lng) * kmPerLongitudeDegree;
+    const endY = (end.lat - point.lat) * kmPerLatitudeDegree;
+    const segmentX = endX - startX;
+    const segmentY = endY - startY;
+    const lengthSquared = segmentX * segmentX + segmentY * segmentY;
+    const projection =
+      lengthSquared > 0
+        ? Math.max(
+            0,
+            Math.min(
+              1,
+              -(startX * segmentX + startY * segmentY) / lengthSquared,
+            ),
+          )
+        : 0;
+    const projectedX = startX + projection * segmentX;
+    const projectedY = startY + projection * segmentY;
+    const distanceKm = Math.hypot(projectedX, projectedY);
+    const segmentKm = distanceKmBetween(start.lat, start.lng, end.lat, end.lng);
+    if (distanceKm < bestDistanceKm) {
+      bestDistanceKm = distanceKm;
+      bestProgressKm = traversedKm + segmentKm * projection;
+    }
+    traversedKm += segmentKm;
+  }
+
+  return { distanceKm: bestDistanceKm, progressKm: bestProgressKm };
 };
 
 const isMissingRelationError = (error: unknown, relationName?: string) => {
@@ -392,6 +491,91 @@ const fetchWithTimeout = async (
   }
 };
 
+const routeWaypoint = (point: RoutePoint) => ({
+  location: {
+    latLng: {
+      latitude: point.lat,
+      longitude: point.lng,
+    },
+  },
+});
+
+const computeGoogleRoute = async (params: {
+  apiKey: string;
+  origin: RoutePoint;
+  destination: RoutePoint;
+  travelMode?: "DRIVE" | "WALK" | "BICYCLE";
+  intermediate?: RoutePoint;
+}): Promise<GoogleRouteResult | null> => {
+  const travelMode = params.travelMode || "DRIVE";
+  const body: Record<string, unknown> = {
+    origin: routeWaypoint(params.origin),
+    destination: routeWaypoint(params.destination),
+    travelMode,
+    routingPreference:
+      travelMode === "DRIVE" ? "TRAFFIC_AWARE_OPTIMAL" : undefined,
+    computeAlternativeRoutes: false,
+    languageCode: "en-US",
+    units: "METRIC",
+    polylineQuality: "OVERVIEW",
+    polylineEncoding: "ENCODED_POLYLINE",
+  };
+  if (params.intermediate) {
+    body.intermediates = [routeWaypoint(params.intermediate)];
+  }
+
+  const response = await fetchWithTimeout(
+    "https://routes.googleapis.com/directions/v2:computeRoutes",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": params.apiKey,
+        "X-Goog-FieldMask":
+          "routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline",
+      },
+      body: JSON.stringify(body),
+    },
+    MAP_PROVIDER_TIMEOUT_MS,
+  );
+  if (!response.ok) return null;
+
+  const data = (await response.json().catch(() => ({}))) as any;
+  const route = Array.isArray(data?.routes) ? data.routes[0] : null;
+  const distanceMeters = Number(route?.distanceMeters);
+  const durationSeconds = parseDurationSeconds(route?.duration);
+  if (!Number.isFinite(distanceMeters) || durationSeconds === null) return null;
+  const encodedPolyline =
+    String(route?.polyline?.encodedPolyline || "").trim() || null;
+  return {
+    distanceMeters: Math.max(0, Math.round(distanceMeters)),
+    durationSeconds,
+    encodedPolyline,
+  };
+};
+
+const buildGoogleDirectionsUrl = (params: {
+  origin: RoutePoint;
+  destination: RoutePoint;
+  waypoint?: RoutePoint;
+}) => {
+  const url = new URL("https://www.google.com/maps/dir/");
+  url.searchParams.set("api", "1");
+  url.searchParams.set("origin", `${params.origin.lat},${params.origin.lng}`);
+  url.searchParams.set(
+    "destination",
+    `${params.destination.lat},${params.destination.lng}`,
+  );
+  if (params.waypoint) {
+    url.searchParams.set(
+      "waypoints",
+      `${params.waypoint.lat},${params.waypoint.lng}`,
+    );
+  }
+  url.searchParams.set("travelmode", "driving");
+  return url.toString();
+};
+
 const extractAddressComponent = (
   components:
     | Array<{ longText?: string; shortText?: string; types?: string[] }>
@@ -478,6 +662,38 @@ type OperatorSupportPlace = {
   source: "google_places";
 };
 
+type RouteCorridorSupportPlace = OperatorSupportPlace & {
+  originToStopDistanceMeters: number | null;
+  originToStopDurationSeconds: number | null;
+  stopToDestinationDistanceMeters: number | null;
+  stopToDestinationDurationSeconds: number | null;
+  journeyDistanceMeters: number | null;
+  journeyDurationSeconds: number | null;
+  addedDistanceMeters: number | null;
+  addedDurationSeconds: number | null;
+  directionsUri: string;
+};
+
+type RouteCorridorHost = {
+  locationId: string;
+  hostId: string;
+  name: string;
+  address: string;
+  city: string;
+  state: string;
+  latitude: number;
+  longitude: number;
+  spotImageUrl: string | null;
+  distanceFromRouteMiles: number;
+  routeProgressMiles: number;
+  journeyDistanceMeters: number | null;
+  journeyDurationSeconds: number | null;
+  addedDistanceMeters: number | null;
+  addedDurationSeconds: number | null;
+  directionsUri: string;
+  source: "mealscout_parking_pass";
+};
+
 type PlaceIntelligencePayload = {
   available: boolean;
   source: "google_places";
@@ -513,6 +729,9 @@ type PlaceIntelligencePayload = {
 
 const PLACE_INTELLIGENCE_TTL_MS = 60 * 60_000;
 const OPERATOR_SUPPORT_TTL_MS = 30 * 60_000;
+const ROUTE_CORRIDOR_TTL_MS = 30 * 60_000;
+const ROUTE_CORRIDOR_HOST_RADIUS_MILES = 15;
+const ROUTE_CORRIDOR_MAX_HOSTS = 6;
 
 const normalizeCacheText = (value: unknown) =>
   String(value || "")
@@ -901,6 +1120,11 @@ export function registerPublicMapRoutes(app: Express) {
             records: supportProviders.length,
             discoveryEnabled: googleDiscoveryEnabled,
           },
+          routeCorridor: {
+            status: googleDiscoveryEnabled ? "available" : "unavailable",
+            endpoint: "/api/map/route-corridor",
+            discoveryEnabled: googleDiscoveryEnabled,
+          },
         },
       });
     } catch (error) {
@@ -913,6 +1137,7 @@ export function registerPublicMapRoutes(app: Express) {
           propaneSuppliers: { status: "unavailable" },
           restaurantSupplyStores: { status: "unavailable" },
           operatorSupportPois: { status: "unavailable" },
+          routeCorridor: { status: "unavailable" },
         },
       });
     }
@@ -945,6 +1170,7 @@ export function registerPublicMapRoutes(app: Express) {
           addressValidation: hasServerMapsKey,
           placeIntelligence: hasServerMapsKey,
           operatorSupportDiscovery: hasServerMapsKey,
+          routeCorridorDiscovery: hasServerMapsKey,
           dedicatedServerKey: hasDedicatedServerMapsKey,
           usingBrowserKeyServerFallback:
             hasServerMapsKey && !hasDedicatedServerMapsKey,
@@ -963,6 +1189,7 @@ export function registerPublicMapRoutes(app: Express) {
           addressValidation: false,
           placeIntelligence: false,
           operatorSupportDiscovery: false,
+          routeCorridorDiscovery: false,
           dedicatedServerKey: false,
           usingBrowserKeyServerFallback: false,
         },
@@ -2195,63 +2422,22 @@ export function registerPublicMapRoutes(app: Express) {
     }
 
     try {
-      const response = await fetchWithTimeout(
-        "https://routes.googleapis.com/directions/v2:computeRoutes",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Goog-Api-Key": apiKey,
-            "X-Goog-FieldMask": "routes.duration,routes.distanceMeters",
-          },
-          body: JSON.stringify({
-            origin: {
-              location: {
-                latLng: {
-                  latitude: originLat,
-                  longitude: originLng,
-                },
-              },
-            },
-            destination: {
-              location: {
-                latLng: {
-                  latitude: destLat,
-                  longitude: destLng,
-                },
-              },
-            },
-            travelMode,
-            routingPreference:
-              travelMode === "DRIVE" ? "TRAFFIC_AWARE_OPTIMAL" : undefined,
-            computeAlternativeRoutes: false,
-            languageCode: "en-US",
-            units: "METRIC",
-          }),
-        },
-        MAP_PROVIDER_TIMEOUT_MS,
-      );
-
-      if (!response.ok) {
-        const text = await response.text().catch(() => "");
-        return res.status(502).json({
-          message: text || "Unable to compute route",
-        });
-      }
-
-      const data = (await response.json().catch(() => ({}))) as any;
-      const route = Array.isArray(data?.routes) ? data.routes[0] : null;
-      const distanceMeters = Number(route?.distanceMeters);
-      const durationSeconds = parseDurationSeconds(route?.duration);
-      if (!Number.isFinite(distanceMeters) || durationSeconds === null) {
+      const route = await computeGoogleRoute({
+        apiKey,
+        origin: { lat: originLat, lng: originLng },
+        destination: { lat: destLat, lng: destLng },
+        travelMode,
+      });
+      if (!route) {
         return res.status(404).json({ message: "Route not available" });
       }
 
       const payload = {
-        distanceMeters: Math.max(0, Math.round(distanceMeters)),
-        durationSeconds,
+        distanceMeters: route.distanceMeters,
+        durationSeconds: route.durationSeconds,
         travelMode,
         source: "google_routes" as const,
+        encodedPolyline: route.encodedPolyline,
       };
       mapRouteSummaryCache.set(cacheKey, {
         expiresAt: Date.now() + 10 * 60_000, // 10-minute TTL
@@ -2262,6 +2448,487 @@ export function registerPublicMapRoutes(app: Express) {
     } catch (error) {
       console.error("[map.route-summary] failed", error);
       return res.status(500).json({ message: "Unable to compute route" });
+    }
+  });
+
+  app.get("/api/map/route-corridor", async (req, res) => {
+    const originLat = parseAutocompleteCoordinate(req.query.originLat, 90);
+    const originLng = parseAutocompleteCoordinate(req.query.originLng, 180);
+    const destLat = parseAutocompleteCoordinate(req.query.destLat, 90);
+    const destLng = parseAutocompleteCoordinate(req.query.destLng, 180);
+    if (
+      originLat === null ||
+      originLng === null ||
+      destLat === null ||
+      destLng === null
+    ) {
+      return res.status(400).json({
+        message: "Valid origin and destination coordinates are required",
+      });
+    }
+
+    const apiKey = getGoogleMapsApiKey();
+    if (!apiKey) {
+      return res.status(503).json({
+        available: false,
+        message: "Google Maps routes are not configured",
+      });
+    }
+
+    const origin = { lat: originLat, lng: originLng };
+    const destination = { lat: destLat, lng: destLng };
+    const cacheKey = [
+      originLat.toFixed(3),
+      originLng.toFixed(3),
+      destLat.toFixed(3),
+      destLng.toFixed(3),
+      "drive-v1",
+    ].join(":");
+    const cached = await getCached<any>("route_corridor", cacheKey);
+    if (cached) {
+      res.setHeader("Cache-Control", "public, max-age=900");
+      return res.status(200).json(cached);
+    }
+
+    try {
+      const route = await computeGoogleRoute({
+        apiKey,
+        origin,
+        destination,
+        travelMode: "DRIVE",
+      });
+      if (!route?.encodedPolyline) {
+        return res.status(404).json({
+          available: false,
+          message: "A drivable route was not found",
+        });
+      }
+
+      const routePath = decodeGooglePolyline(route.encodedPolyline);
+      if (routePath.length < 2) {
+        return res.status(404).json({
+          available: false,
+          message: "Route geometry was not available",
+        });
+      }
+
+      const mapSnapshot =
+        mapLocationsCache && mapLocationsCache.expiresAt > Date.now()
+          ? mapLocationsCache
+          : getRecentMapLocationsLastGoodSnapshot();
+      const snapshotHostRows = Array.isArray(mapSnapshot?.payload?.hostLocations)
+        ? mapSnapshot!.payload.hostLocations
+        : [];
+      const storedHosts = (await storage.getAllHosts().catch(() => [])) as any[];
+      const storedHostUserIds = Array.from(
+        new Set(
+          storedHosts
+            .map((host) => String(host?.userId || "").trim())
+            .filter(Boolean),
+        ),
+      );
+      const activeStoredHostRows =
+        storedHostUserIds.length > 0
+          ? await db
+              .select({ id: users.id })
+              .from(users)
+              .where(
+                and(
+                  inArray(users.id, storedHostUserIds),
+                  or(eq(users.isDisabled, false), isNull(users.isDisabled)),
+                ),
+              )
+              .catch(() => null)
+          : null;
+      const activeStoredHostUserIds = Array.isArray(activeStoredHostRows)
+        ? new Set(activeStoredHostRows.map((row: { id: string }) => row.id))
+        : null;
+      const storedHostRows = storedHosts
+        .filter((host) => {
+          if (
+            !isHostProfileMapEligible({
+              businessName: host?.businessName,
+              address: host?.address,
+              city: host?.city,
+              state: host?.state,
+            })
+          ) {
+            return false;
+          }
+          if (!activeStoredHostUserIds) return true;
+          const userId = String(host?.userId || "").trim();
+          return userId ? activeStoredHostUserIds.has(userId) : true;
+        })
+        .map((host) => ({
+          id: host.id,
+          hostId: host.id,
+          name: host.businessName,
+          address: host.address,
+          city: host.city ?? null,
+          state: host.state ?? null,
+          latitude: host.latitude ?? null,
+          longitude: host.longitude ?? null,
+          spotImageUrl: host.spotImageUrl ?? null,
+        }));
+      const hostRowsById = new Map<string, any>();
+      [...snapshotHostRows, ...storedHostRows].forEach((row: any) => {
+        const rowId =
+          String(row?.id || "").trim() ||
+          `${String(row?.hostId || "")}:${String(row?.latitude || "")}:${String(
+            row?.longitude || "",
+          )}`;
+        if (rowId) hostRowsById.set(rowId, row);
+      });
+      const hostRows = Array.from(hostRowsById.values());
+      const seenLocationIds = new Set<string>();
+      const hostCandidates = hostRows
+        .map((row: any) => {
+          const latitude = toFiniteNumber(row?.latitude);
+          const longitude = toFiniteNumber(row?.longitude);
+          const hostId = String(row?.hostId || "").trim();
+          if (latitude === null || longitude === null || !hostId) return null;
+          const locationId =
+            String(row?.id || "").trim() ||
+            `${hostId}:${latitude.toFixed(5)}:${longitude.toFixed(5)}`;
+          if (seenLocationIds.has(locationId)) return null;
+          seenLocationIds.add(locationId);
+          const routeLocation = locatePointAlongRoute(
+            { lat: latitude, lng: longitude },
+            routePath,
+          );
+          const distanceFromRouteMiles = routeLocation.distanceKm * 0.621371;
+          if (distanceFromRouteMiles > ROUTE_CORRIDOR_HOST_RADIUS_MILES) {
+            return null;
+          }
+          return {
+            locationId,
+            hostId,
+            name: String(row?.name || "Parking Pass host").trim(),
+            address: String(row?.address || "").trim(),
+            city: String(row?.city || "").trim(),
+            state: String(row?.state || "").trim(),
+            latitude,
+            longitude,
+            spotImageUrl: String(row?.spotImageUrl || "").trim() || null,
+            distanceFromRouteMiles: Number(distanceFromRouteMiles.toFixed(1)),
+            routeProgressMiles: Number(
+              (routeLocation.progressKm * 0.621371).toFixed(1),
+            ),
+          };
+        })
+        .filter(
+          (
+            row,
+          ): row is {
+            locationId: string;
+            hostId: string;
+            name: string;
+            address: string;
+            city: string;
+            state: string;
+            latitude: number;
+            longitude: number;
+            spotImageUrl: string | null;
+            distanceFromRouteMiles: number;
+            routeProgressMiles: number;
+          } => row !== null,
+        );
+
+      const selectedHostCandidates = (() => {
+        if (hostCandidates.length <= ROUTE_CORRIDOR_MAX_HOSTS) {
+          return [...hostCandidates].sort(
+            (left, right) => left.routeProgressMiles - right.routeProgressMiles,
+          );
+        }
+        const directRouteMiles = Math.max(route.distanceMeters / 1609.344, 1);
+        const selected = new Map<string, (typeof hostCandidates)[number]>();
+        for (let bucket = 0; bucket < ROUTE_CORRIDOR_MAX_HOSTS; bucket += 1) {
+          const start = (directRouteMiles * bucket) / ROUTE_CORRIDOR_MAX_HOSTS;
+          const end =
+            (directRouteMiles * (bucket + 1)) / ROUTE_CORRIDOR_MAX_HOSTS;
+          const best = hostCandidates
+            .filter(
+              (candidate) =>
+                candidate.routeProgressMiles >= start &&
+                (bucket === ROUTE_CORRIDOR_MAX_HOSTS - 1
+                  ? candidate.routeProgressMiles <= end
+                  : candidate.routeProgressMiles < end),
+            )
+            .sort(
+              (left, right) =>
+                left.distanceFromRouteMiles - right.distanceFromRouteMiles,
+            )[0];
+          if (best) selected.set(best.locationId, best);
+        }
+        if (selected.size < ROUTE_CORRIDOR_MAX_HOSTS) {
+          [...hostCandidates]
+            .sort(
+              (left, right) =>
+                left.distanceFromRouteMiles - right.distanceFromRouteMiles,
+            )
+            .forEach((candidate) => {
+              if (selected.size >= ROUTE_CORRIDOR_MAX_HOSTS) return;
+              selected.set(candidate.locationId, candidate);
+            });
+        }
+        return Array.from(selected.values()).sort(
+          (left, right) => left.routeProgressMiles - right.routeProgressMiles,
+        );
+      })();
+
+      const enrichHosts = async (): Promise<RouteCorridorHost[]> =>
+        Promise.all(
+          selectedHostCandidates.map(async (host) => {
+            const waypoint = { lat: host.latitude, lng: host.longitude };
+            const viaRoute = await computeGoogleRoute({
+              apiKey,
+              origin,
+              destination,
+              intermediate: waypoint,
+            }).catch(() => null);
+            const addedDistanceMeters = viaRoute
+              ? Math.max(0, viaRoute.distanceMeters - route.distanceMeters)
+              : null;
+            const addedDurationSeconds = viaRoute
+              ? Math.max(0, viaRoute.durationSeconds - route.durationSeconds)
+              : null;
+            return {
+              ...host,
+              journeyDistanceMeters: viaRoute?.distanceMeters ?? null,
+              journeyDurationSeconds: viaRoute?.durationSeconds ?? null,
+              addedDistanceMeters,
+              addedDurationSeconds,
+              directionsUri: buildGoogleDirectionsUrl({
+                origin,
+                destination,
+                waypoint,
+              }),
+              source: "mealscout_parking_pass" as const,
+            };
+          }),
+        );
+
+      const searches: Array<{
+        kind: OperatorSupportKind;
+        textQuery: string;
+      }> = [
+        { kind: "gas", textQuery: "gas station" },
+        { kind: "propane", textQuery: "propane supplier" },
+        { kind: "supply", textQuery: "restaurant supply store" },
+        { kind: "support", textQuery: "commercial kitchen equipment repair" },
+      ];
+
+      const searchAlongRoute = async ({
+        kind,
+        textQuery,
+      }: (typeof searches)[number]): Promise<RouteCorridorSupportPlace[]> => {
+        const runSearch = async (includeRouting: boolean) => {
+          const body: Record<string, unknown> = {
+            textQuery,
+            maxResultCount: 4,
+            languageCode: "en",
+            regionCode: "US",
+            searchAlongRouteParameters: {
+              polyline: { encodedPolyline: route.encodedPolyline },
+            },
+          };
+          if (includeRouting) {
+            body.routingParameters = {
+              origin: { latitude: origin.lat, longitude: origin.lng },
+              travelMode: "DRIVE",
+            };
+          }
+          const fieldMask = [
+            "places.id",
+            "places.displayName",
+            "places.formattedAddress",
+            "places.location",
+            "places.primaryType",
+            "places.types",
+            "places.businessStatus",
+            "places.nationalPhoneNumber",
+            "places.googleMapsUri",
+            ...(includeRouting ? ["routingSummaries"] : []),
+          ].join(",");
+          const response = await fetchWithTimeout(
+            "https://places.googleapis.com/v1/places:searchText",
+            {
+              method: "POST",
+              headers: buildPlacesHeaders(apiKey, fieldMask),
+              body: JSON.stringify(body),
+            },
+            MAP_PROVIDER_TIMEOUT_MS,
+          );
+          if (!response.ok) return null;
+          return (await response.json().catch(() => null)) as any;
+        };
+
+        const data = (await runSearch(true)) || (await runSearch(false));
+        const places = Array.isArray(data?.places) ? data.places : [];
+        const routingSummaries = Array.isArray(data?.routingSummaries)
+          ? data.routingSummaries
+          : [];
+        return places
+          .map((place: any, index: number) => {
+            const latitude = toFiniteNumber(place?.location?.latitude);
+            const longitude = toFiniteNumber(place?.location?.longitude);
+            if (latitude === null || longitude === null) return null;
+            const businessStatus =
+              String(place?.businessStatus || "").trim() || null;
+            if (businessStatus && businessStatus !== "OPERATIONAL") return null;
+
+            const summary = routingSummaries[index];
+            const legs = Array.isArray(summary?.legs) ? summary.legs : [];
+            const firstLegDistance = Number(legs[0]?.distanceMeters);
+            const secondLegDistance = Number(legs[1]?.distanceMeters);
+            const firstLegDuration = parseDurationSeconds(legs[0]?.duration);
+            const secondLegDuration = parseDurationSeconds(legs[1]?.duration);
+            const hasTwoLegDistance =
+              Number.isFinite(firstLegDistance) &&
+              Number.isFinite(secondLegDistance);
+            const hasTwoLegDuration =
+              firstLegDuration !== null && secondLegDuration !== null;
+            const journeyDistanceMeters = hasTwoLegDistance
+              ? Math.max(0, Math.round(firstLegDistance + secondLegDistance))
+              : null;
+            const journeyDurationSeconds = hasTwoLegDuration
+              ? firstLegDuration! + secondLegDuration!
+              : null;
+            const waypoint = { lat: latitude, lng: longitude };
+            return {
+              placeId: String(place?.id || "").trim(),
+              kind,
+              name: String(place?.displayName?.text || textQuery).trim(),
+              address: String(place?.formattedAddress || "").trim(),
+              latitude,
+              longitude,
+              primaryType: String(place?.primaryType || "").trim() || null,
+              businessStatus,
+              phone: String(place?.nationalPhoneNumber || "").trim() || null,
+              googleMapsUri: String(place?.googleMapsUri || "").trim() || null,
+              straightLineMiles: Number(
+                (
+                  distanceKmBetween(
+                    origin.lat,
+                    origin.lng,
+                    latitude,
+                    longitude,
+                  ) * 0.621371
+                ).toFixed(1),
+              ),
+              driveDistanceMeters: Number.isFinite(firstLegDistance)
+                ? Math.max(0, Math.round(firstLegDistance))
+                : null,
+              driveDurationSeconds: firstLegDuration,
+              originToStopDistanceMeters: Number.isFinite(firstLegDistance)
+                ? Math.max(0, Math.round(firstLegDistance))
+                : null,
+              originToStopDurationSeconds: firstLegDuration,
+              stopToDestinationDistanceMeters: Number.isFinite(
+                secondLegDistance,
+              )
+                ? Math.max(0, Math.round(secondLegDistance))
+                : null,
+              stopToDestinationDurationSeconds: secondLegDuration,
+              journeyDistanceMeters,
+              journeyDurationSeconds,
+              addedDistanceMeters:
+                journeyDistanceMeters === null
+                  ? null
+                  : Math.max(0, journeyDistanceMeters - route.distanceMeters),
+              addedDurationSeconds:
+                journeyDurationSeconds === null
+                  ? null
+                  : Math.max(0, journeyDurationSeconds - route.durationSeconds),
+              directionsUri:
+                String(summary?.directionsUri || "").trim() ||
+                buildGoogleDirectionsUrl({
+                  origin,
+                  destination,
+                  waypoint,
+                }),
+              source: "google_places" as const,
+            } satisfies RouteCorridorSupportPlace;
+          })
+          .filter(
+            (
+              place: RouteCorridorSupportPlace | null,
+            ): place is RouteCorridorSupportPlace => place !== null,
+          )
+          .sort(
+            (
+              left: RouteCorridorSupportPlace,
+              right: RouteCorridorSupportPlace,
+            ) => {
+              const leftDetour =
+                left.addedDurationSeconds ?? Number.POSITIVE_INFINITY;
+              const rightDetour =
+                right.addedDurationSeconds ?? Number.POSITIVE_INFINITY;
+              if (leftDetour !== rightDetour) return leftDetour - rightDetour;
+              return (
+                (left.originToStopDurationSeconds ?? Number.POSITIVE_INFINITY) -
+                (right.originToStopDurationSeconds ?? Number.POSITIVE_INFINITY)
+              );
+            },
+          )
+          .slice(0, 4);
+      };
+
+      const [parkingPassHosts, ...supportResults] = await Promise.all([
+        enrichHosts(),
+        ...searches.map(searchAlongRoute),
+      ]);
+      const categories = searches.reduce(
+        (acc, search, index) => {
+          acc[search.kind] = supportResults[index] || [];
+          return acc;
+        },
+        {
+          gas: [] as RouteCorridorSupportPlace[],
+          propane: [] as RouteCorridorSupportPlace[],
+          supply: [] as RouteCorridorSupportPlace[],
+          support: [] as RouteCorridorSupportPlace[],
+        },
+      );
+      const pathStride = Math.max(1, Math.ceil(routePath.length / 600));
+      const displayPath = routePath.filter(
+        (_point, index) =>
+          index === 0 ||
+          index === routePath.length - 1 ||
+          index % pathStride === 0,
+      );
+      const payload = {
+        available: true,
+        source: "google_routes_places" as const,
+        fetchedAt: new Date().toISOString(),
+        route: {
+          distanceMeters: route.distanceMeters,
+          durationSeconds: route.durationSeconds,
+          encodedPolyline: route.encodedPolyline,
+          path: displayPath,
+          directionsUri: buildGoogleDirectionsUrl({ origin, destination }),
+        },
+        parkingPassHosts,
+        categories,
+        corridor: {
+          hostRadiusMiles: ROUTE_CORRIDOR_HOST_RADIUS_MILES,
+          mapHostLocationsReady: hostRows.length > 0,
+        },
+      };
+      await setCached(
+        "route_corridor",
+        cacheKey,
+        payload,
+        hostRows.length > 0 ? ROUTE_CORRIDOR_TTL_MS : 5 * 60_000,
+      );
+      res.setHeader("Cache-Control", "public, max-age=900");
+      return res.status(200).json(payload);
+    } catch (error) {
+      console.warn("[map.route-corridor] failed", error);
+      return res.status(500).json({
+        available: false,
+        message: "Unable to plan this route right now",
+      });
     }
   });
 
