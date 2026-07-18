@@ -14,7 +14,7 @@ const requiredSnippets = [
   "propane_dealer",
   "equipment_supplier",
   "Operator support",
-  "mapPins.length + supplierOverlayPins.length",
+  "parkingPassHostPinCount + supplierOverlayPins.length",
 ];
 
 for (const snippet of requiredSnippets) {

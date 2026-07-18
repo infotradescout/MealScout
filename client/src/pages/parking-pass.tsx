@@ -3696,6 +3696,18 @@ export default function ParkingPassPage() {
         ),
     [paidMapLocations, normalizedCityQuery],
   );
+  const representedMapHostIds = useMemo(
+    () => new Set(filteredLocations.map((group) => String(group.host.id))),
+    [filteredLocations],
+  );
+  const unlistedHostPins = useMemo(
+    () =>
+      fallbackHostPins.filter(
+        (pin) => !representedMapHostIds.has(String(pin.hostId)),
+      ),
+    [fallbackHostPins, representedMapHostIds],
+  );
+  const parkingPassHostPinCount = mapPins.length + unlistedHostPins.length;
   const supplierOverlayPins = useMemo(() => {
     const raw = Array.isArray(paidMapLocations?.supplierLocations)
       ? paidMapLocations.supplierLocations
@@ -3856,8 +3868,19 @@ export default function ParkingPassPage() {
       (activeHostLocations && activeHostLocations.length > 0
         ? activeHostLocations[0].coords
         : null);
-    return activeCoords || mapPins[0]?.coords || defaultMapCenter;
-  }, [activeLocation, hostLocationsByHostId, mapPins, parkingCoords]);
+    return (
+      activeCoords ||
+      mapPins[0]?.coords ||
+      unlistedHostPins[0]?.coords ||
+      defaultMapCenter
+    );
+  }, [
+    activeLocation,
+    hostLocationsByHostId,
+    mapPins,
+    parkingCoords,
+    unlistedHostPins,
+  ]);
 
   useEffect(() => {
     if (geocodeInFlight.current) return;
@@ -6614,7 +6637,9 @@ export default function ParkingPassPage() {
                     Find a parking spot
                   </p>
                   <p className="max-w-2xl text-sm text-[color:var(--text-muted)]">
-                    Choose a host location, date, and available time.
+                    Search any city or address, then choose a host location,
+                    date, and available time. Results are not limited to your
+                    current location.
                   </p>
                 </div>
                 <div className="hidden rounded-2xl pp-glass-muted px-4 py-3 text-xs text-[color:var(--text-muted)] shadow-clean lg:grid lg:grid-cols-3 lg:gap-5">
@@ -6632,7 +6657,7 @@ export default function ParkingPassPage() {
                     </p>
                     <p className="mt-1 text-lg font-semibold text-[color:var(--text-primary)]">
                       {viewMode === "map"
-                        ? mapPins.length + supplierOverlayPins.length + gasPricePins.length
+                        ? parkingPassHostPinCount + supplierOverlayPins.length + gasPricePins.length
                         : filteredLocations.length}
                     </p>
                   </div>
@@ -6774,6 +6799,7 @@ export default function ParkingPassPage() {
                             <GoogleMapPicker
                               center={fallbackMapCenter}
                               zoom={13}
+                              fitToPins
                               interactionsEnabled={mapInteractionsEnabled}
                               trafficCells={spotFootTrafficCells}
                               pins={[
@@ -6943,6 +6969,7 @@ export default function ParkingPassPage() {
                           <GoogleMapPicker
                             center={mapCenter}
                             zoom={13}
+                            fitToPins
                             interactionsEnabled={mapInteractionsEnabled}
                             trafficCells={spotFootTrafficCells}
                             onPinClick={(pinKey) => {
@@ -7251,6 +7278,32 @@ export default function ParkingPassPage() {
                                   } satisfies MapPickerPin;
                                 },
                               ),
+                              ...unlistedHostPins.map((pin) => ({
+                                key: pin.key,
+                                position: pin.coords,
+                                popup: (
+                                  <div className="space-y-2 text-xs">
+                                    <p className="font-semibold text-orange-600">
+                                      {pin.name}
+                                    </p>
+                                    <p className="text-[color:var(--text-muted)]">
+                                      {pin.addressLabel}
+                                    </p>
+                                    {pin.spotImageUrl && (
+                                      <img
+                                        src={pin.spotImageUrl}
+                                        alt={`${pin.name} parking spot`}
+                                        className="h-24 w-full rounded-lg border border-border/50 object-cover"
+                                        loading="lazy"
+                                      />
+                                    )}
+                                    <p className="text-[11px] text-[color:var(--text-muted)]">
+                                      Parking Pass host location. Open dates appear
+                                      in the list when inventory is available.
+                                    </p>
+                                  </div>
+                                ),
+                              } satisfies MapPickerPin)),
                               ...supplierOverlayPins.map((pin) => ({
                                 key: pin.key,
                                 position: pin.position,
@@ -7359,7 +7412,7 @@ export default function ParkingPassPage() {
                               )}
                             </div>
                           )}
-                          {mapPins.length === 0 && (
+                          {parkingPassHostPinCount === 0 && (
                             <div className="absolute inset-0 flex items-center justify-center text-sm text-[color:var(--text-muted)] pointer-events-none">
                               No mappable locations yet.
                             </div>
@@ -8667,4 +8720,3 @@ export default function ParkingPassPage() {
     </div>
   );
 }
-

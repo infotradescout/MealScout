@@ -53,6 +53,8 @@ export interface GoogleMapPickerProps {
   onPinClick?: (key: string) => void;
   /** Pins to render on the map */
   pins?: MapPickerPin[];
+  /** Fit the viewport whenever the rendered pin set changes */
+  fitToPins?: boolean;
   /** Optional owner planning heat cells rendered above the map */
   trafficCells?: MapTrafficCell[];
   /** Called after viewport changes so callers can fetch viewport-scoped overlays */
@@ -150,6 +152,60 @@ function LeafletBoundsWatcher({
   return null;
 }
 
+function LeafletPinFitter({
+  enabled,
+  pins,
+  zoom,
+}: {
+  enabled: boolean;
+  pins: MapPickerPin[];
+  zoom?: number;
+}) {
+  const map = useMap();
+  const lastSignatureRef = useRef("");
+
+  useEffect(() => {
+    if (!enabled) {
+      lastSignatureRef.current = "";
+      return;
+    }
+
+    const validPins = pins.filter(
+      (pin) =>
+        Number.isFinite(pin.position.lat) && Number.isFinite(pin.position.lng),
+    );
+    if (validPins.length === 0) return;
+
+    const signature = validPins
+      .map(
+        (pin) =>
+          `${pin.key}:${pin.position.lat.toFixed(6)}:${pin.position.lng.toFixed(6)}`,
+      )
+      .sort()
+      .join("|");
+    if (signature === lastSignatureRef.current) return;
+    lastSignatureRef.current = signature;
+
+    if (validPins.length === 1) {
+      map.setView(
+        [validPins[0].position.lat, validPins[0].position.lng],
+        Math.min(zoom ?? 13, 14),
+        { animate: true },
+      );
+      return;
+    }
+
+    map.fitBounds(
+      L.latLngBounds(
+        validPins.map((pin) => [pin.position.lat, pin.position.lng]),
+      ),
+      { animate: true, maxZoom: 14, padding: [28, 28] },
+    );
+  }, [enabled, map, pins, zoom]);
+
+  return null;
+}
+
 // ─── Google Maps loader (shared singleton) ────────────────────────────────────
 
 type GoogleMapsWindow = Window & {
@@ -225,6 +281,7 @@ function GoogleMapRenderer({
   center,
   zoom = 13,
   pins = [],
+  fitToPins = false,
   trafficCells = [],
   circleRadiusMetres,
   onMapClick,
@@ -239,6 +296,7 @@ function GoogleMapRenderer({
   center: GeoPoint;
   zoom?: number;
   pins?: MapPickerPin[];
+  fitToPins?: boolean;
   trafficCells?: MapTrafficCell[];
   circleRadiusMetres?: number;
   onMapClick?: (p: GeoPoint) => void;
@@ -255,7 +313,9 @@ function GoogleMapRenderer({
   const trafficCircleRefs = useRef<Map<string, any>>(new Map());
   const circleRef = useRef<any>(null);
   const infoWindowRef = useRef<any>(null);
+  const lastFittedPinSignatureRef = useRef("");
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [mapInstanceVersion, setMapInstanceVersion] = useState(0);
   // Portal state: the DOM node injected into the InfoWindow + the ReactNode to render there
   const [infoPortalContainer, setInfoPortalContainer] = useState<HTMLDivElement | null>(null);
   const [infoPortalContent, setInfoPortalContent] = useState<React.ReactNode>(null);
@@ -278,6 +338,7 @@ function GoogleMapRenderer({
           ...(mapId ? { mapId } : {}),
         });
         mapRef.current = map;
+        setMapInstanceVersion((version) => version + 1);
         const refreshLayout = () => {
           const currentMap = mapRef.current;
           if (!currentMap) return;
@@ -369,7 +430,7 @@ function GoogleMapRenderer({
     if (!g?.maps) return;
     mapRef.current.panTo({ lat: center.lat, lng: center.lng });
     mapRef.current.setZoom(zoom ?? 13);
-  }, [center.lat, center.lng, zoom]);
+  }, [center.lat, center.lng, mapInstanceVersion, zoom]);
 
   // Sync pins
   useEffect(() => {
@@ -445,7 +506,44 @@ function GoogleMapRenderer({
         existing.set(pin.key, marker);
       }
     }
-  }, [pins, onPinDrag]);
+  }, [mapInstanceVersion, onPinDrag, pins]);
+
+  useEffect(() => {
+    if (!fitToPins) {
+      lastFittedPinSignatureRef.current = "";
+      return;
+    }
+
+    const g = (window as GoogleMapsWindow).google;
+    const map = mapRef.current;
+    if (!g?.maps || !map) return;
+
+    const validPins = pins.filter(
+      (pin) =>
+        Number.isFinite(pin.position.lat) && Number.isFinite(pin.position.lng),
+    );
+    if (validPins.length === 0) return;
+
+    const signature = validPins
+      .map(
+        (pin) =>
+          `${pin.key}:${pin.position.lat.toFixed(6)}:${pin.position.lng.toFixed(6)}`,
+      )
+      .sort()
+      .join("|");
+    if (signature === lastFittedPinSignatureRef.current) return;
+    lastFittedPinSignatureRef.current = signature;
+
+    if (validPins.length === 1) {
+      map.panTo(validPins[0].position);
+      map.setZoom(Math.min(zoom ?? 13, 14));
+      return;
+    }
+
+    const bounds = new g.maps.LatLngBounds();
+    validPins.forEach((pin) => bounds.extend(pin.position));
+    map.fitBounds(bounds, 48);
+  }, [fitToPins, mapInstanceVersion, pins, zoom]);
 
   // Circle overlay
   useEffect(() => {
@@ -467,7 +565,7 @@ function GoogleMapRenderer({
         fillOpacity: 0.15,
       });
     }
-  }, [center.lat, center.lng, circleRadiusMetres]);
+  }, [center.lat, center.lng, circleRadiusMetres, mapInstanceVersion]);
 
   useEffect(() => {
     const g = (window as GoogleMapsWindow).google;
@@ -518,7 +616,7 @@ function GoogleMapRenderer({
       instance.setMap(null);
       trafficCircleRefs.current.delete(id);
     });
-  }, [trafficCells]);
+  }, [mapInstanceVersion, trafficCells]);
 
   if (loadError) return null; // caller falls back to Leaflet
 
@@ -539,6 +637,7 @@ function LeafletRenderer({
   center,
   zoom = 13,
   pins = [],
+  fitToPins = false,
   trafficCells = [],
   circleRadiusMetres,
   onMapClick,
@@ -550,6 +649,7 @@ function LeafletRenderer({
   center: GeoPoint;
   zoom?: number;
   pins?: MapPickerPin[];
+  fitToPins?: boolean;
   trafficCells?: MapTrafficCell[];
   circleRadiusMetres?: number;
   onMapClick?: (p: GeoPoint) => void;
@@ -582,6 +682,7 @@ function LeafletRenderer({
     >
       <TileLayer attribution={attribution} url={tileUrl} />
       <LeafletCenterer center={center} zoom={zoom} />
+      <LeafletPinFitter enabled={fitToPins} pins={pins} zoom={zoom} />
       {onMapClick && <LeafletClickHandler onMapClick={onMapClick} />}
       {onBoundsChanged && (
         <LeafletBoundsWatcher onBoundsChanged={onBoundsChanged} />
@@ -663,6 +764,7 @@ export function GoogleMapPicker({
   onPinDrag,
   onPinClick,
   pins = [],
+  fitToPins = false,
   trafficCells = [],
   onBoundsChanged,
   circleRadiusMetres,
@@ -712,6 +814,7 @@ export function GoogleMapPicker({
           center={center}
           zoom={zoom}
           pins={pins}
+          fitToPins={fitToPins}
           trafficCells={trafficCells}
           circleRadiusMetres={circleRadiusMetres}
           onMapClick={onMapClick}
@@ -726,6 +829,7 @@ export function GoogleMapPicker({
           center={center}
           zoom={zoom}
           pins={pins}
+          fitToPins={fitToPins}
           trafficCells={trafficCells}
           circleRadiusMetres={circleRadiusMetres}
           onMapClick={onMapClick}
