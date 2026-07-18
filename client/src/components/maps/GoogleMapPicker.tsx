@@ -56,6 +56,8 @@ export interface GoogleMapPickerProps {
   pins?: MapPickerPin[];
   /** Fit the viewport whenever the rendered pin set changes */
   fitToPins?: boolean;
+  /** Fan out markers that would otherwise occupy the same screen pixels */
+  separateOverlappingPins?: boolean;
   /** Optional owner planning heat cells rendered above the map */
   trafficCells?: MapTrafficCell[];
   /** Optional route geometry rendered as a connected path */
@@ -303,6 +305,7 @@ function GoogleMapRenderer({
   zoom = 13,
   pins = [],
   fitToPins = false,
+  separateOverlappingPins = false,
   trafficCells = [],
   routePath = [],
   circleRadiusMetres,
@@ -319,6 +322,7 @@ function GoogleMapRenderer({
   zoom?: number;
   pins?: MapPickerPin[];
   fitToPins?: boolean;
+  separateOverlappingPins?: boolean;
   trafficCells?: MapTrafficCell[];
   routePath?: GeoPoint[];
   circleRadiusMetres?: number;
@@ -538,6 +542,98 @@ function GoogleMapRenderer({
     }
   }, [mapInstanceVersion, onPinDrag, pins]);
 
+  // A statewide fit can place several distinct addresses within the same
+  // 36px marker footprint. Keep their real coordinates for bounds and data,
+  // but fan the rendered markers into a compact ring so every host remains
+  // visible and clickable. Recalculate after pan/zoom so markers return to
+  // their true positions as soon as there is enough screen space.
+  useEffect(() => {
+    const g = (window as GoogleMapsWindow).google;
+    const map = mapRef.current;
+    if (!(separateOverlappingPins || fitToPins) || !g?.maps || !map) return;
+
+    const layoutMarkers = () => {
+      const projection = map.getProjection?.();
+      const zoomLevel = Number(map.getZoom?.());
+      if (!projection || !Number.isFinite(zoomLevel)) return;
+
+      const scale = 2 ** zoomLevel;
+      const positioned = pins
+        .map((pin) => {
+          const marker = markersRef.current.get(pin.key);
+          const worldPoint = projection.fromLatLngToPoint(
+            new g.maps.LatLng(pin.position.lat, pin.position.lng),
+          );
+          if (!marker || !worldPoint) return null;
+          return {
+            pin,
+            marker,
+            x: worldPoint.x * scale,
+            y: worldPoint.y * scale,
+          };
+        })
+        .filter(Boolean) as Array<{
+          pin: MapPickerPin;
+          marker: any;
+          x: number;
+          y: number;
+        }>;
+
+      const remaining = new Set(positioned.map((_, index) => index));
+      const groups: number[][] = [];
+      while (remaining.size > 0) {
+        const seed = remaining.values().next().value as number;
+        remaining.delete(seed);
+        const group = [seed];
+        const queue = [seed];
+        while (queue.length > 0) {
+          const current = positioned[queue.shift()!];
+          for (const candidateIndex of Array.from(remaining)) {
+            const candidate = positioned[candidateIndex];
+            if (Math.hypot(current.x - candidate.x, current.y - candidate.y) < 42) {
+              remaining.delete(candidateIndex);
+              group.push(candidateIndex);
+              queue.push(candidateIndex);
+            }
+          }
+        }
+        groups.push(group);
+      }
+
+      groups.forEach((group) => {
+        if (group.length === 1) {
+          const item = positioned[group[0]];
+          updateGoogleMarkerPosition(item.marker, item.pin.position);
+          return;
+        }
+        const centerX =
+          group.reduce((sum, index) => sum + positioned[index].x, 0) /
+          group.length;
+        const centerY =
+          group.reduce((sum, index) => sum + positioned[index].y, 0) /
+          group.length;
+        const radius = Math.max(28, Math.min(76, group.length * 7));
+        group.forEach((positionedIndex, ringIndex) => {
+          const angle = -Math.PI / 2 + (2 * Math.PI * ringIndex) / group.length;
+          const worldPoint = new g.maps.Point(
+            (centerX + Math.cos(angle) * radius) / scale,
+            (centerY + Math.sin(angle) * radius) / scale,
+          );
+          const latLng = projection.fromPointToLatLng(worldPoint);
+          if (!latLng) return;
+          updateGoogleMarkerPosition(positioned[positionedIndex].marker, {
+            lat: latLng.lat(),
+            lng: latLng.lng(),
+          });
+        });
+      });
+    };
+
+    const listener = map.addListener("idle", layoutMarkers);
+    window.setTimeout(layoutMarkers, 0);
+    return () => listener.remove?.();
+  }, [fitToPins, mapInstanceVersion, pins, separateOverlappingPins]);
+
   useEffect(() => {
     if (!fitToPins) {
       lastFittedPinSignatureRef.current = "";
@@ -693,6 +789,7 @@ function LeafletRenderer({
   zoom = 13,
   pins = [],
   fitToPins = false,
+  separateOverlappingPins = false,
   trafficCells = [],
   routePath = [],
   circleRadiusMetres,
@@ -892,6 +989,7 @@ export function GoogleMapPicker({
           zoom={zoom}
           pins={pins}
           fitToPins={fitToPins}
+          separateOverlappingPins={separateOverlappingPins}
           trafficCells={trafficCells}
           routePath={routePath}
           circleRadiusMetres={circleRadiusMetres}
