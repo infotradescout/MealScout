@@ -57,6 +57,10 @@ import LongPressHelp from "@/components/long-press-help";
 import { initFacebookSDK, postToFacebook } from "@/lib/facebook";
 import { apiUrl } from "@/lib/api";
 import { apiRequest } from "@/lib/queryClient";
+import {
+  normalizeParkingPassLocationSearch,
+  parkingPassLocationMatches,
+} from "@/lib/parkingPassSearch";
 import { formatRelativeTime } from "@/lib/relative-time";
 import {
   ParkingScheduleCalendar,
@@ -842,7 +846,9 @@ export default function ParkingPassPage() {
   const [checkoutQueue, setCheckoutQueue] = useState<
     Array<{ listing: ParkingPassListing; slotTypes: string[] }>
   >([]);
-  const [viewMode, setViewMode] = useState<"map" | "list">("map");
+  const [viewMode, setViewMode] = useState<"map" | "list">(() =>
+    window.matchMedia("(max-width: 639px)").matches ? "list" : "map",
+  );
   const [showParkingScoutHeat, setShowParkingScoutHeat] = useState(false);
   const [showPropaneLayer, setShowPropaneLayer] = useState(false);
   const [showSupplyLayer, setShowSupplyLayer] = useState(false);
@@ -3451,7 +3457,7 @@ export default function ParkingPassPage() {
       setTopTab(preferred);
     }
   }, [availableTabs, canHostTab, canUseTruckSide, topTab]);
-  const normalizedCityQuery = cityQuery.trim().toLowerCase();
+  const normalizedCityQuery = normalizeParkingPassLocationSearch(cityQuery);
   const locationGroups = useMemo(() => {
     const byHost = new Map<string, ParkingPassLocationGroup>();
     passListings.forEach((listing) => {
@@ -3473,18 +3479,14 @@ export default function ParkingPassPage() {
 
   const filteredLocations = useMemo(() => {
     const filtered = normalizedCityQuery
-      ? locationGroups.filter((group) => {
-          const locationText = [
+      ? locationGroups.filter((group) =>
+          parkingPassLocationMatches(normalizedCityQuery, [
             group.host.city,
             group.host.state,
             group.host.address,
             group.host.businessName,
-          ]
-            .filter(Boolean)
-            .join(" ")
-            .toLowerCase();
-          return locationText.includes(normalizedCityQuery);
-        })
+          ]),
+        )
       : locationGroups;
 
     return [...filtered].sort((a, b) => {
@@ -3655,14 +3657,16 @@ export default function ParkingPassPage() {
           const hostId = String(loc.hostId || "").trim();
           if (!hostId) return null;
 
-          if (normalizedCityQuery) {
-            const searchable = [loc.name, loc.address, loc.city, loc.state]
-              .filter(Boolean)
-              .join(" ")
-              .toLowerCase();
-            if (!searchable.includes(normalizedCityQuery)) {
+          if (
+            normalizedCityQuery &&
+            !parkingPassLocationMatches(normalizedCityQuery, [
+              loc.name,
+              loc.address,
+              loc.city,
+              loc.state,
+            ])
+          ) {
               return null;
-            }
           }
 
           return {
@@ -4211,156 +4215,101 @@ export default function ParkingPassPage() {
 
   return (
     <div className="min-h-screen bg-transparent parking-pass-page">
-      <div className="mx-auto max-w-[1520px] px-4 py-6 sm:px-6 xl:px-8 space-y-6">
-        <div>
+      <div className="mx-auto max-w-[1520px] space-y-4 px-4 py-5 sm:px-6 sm:py-6 xl:px-8">
+        <div className="space-y-1">
           <h1 className="text-2xl font-bold text-[color:var(--text-primary)]">
             Parking Pass
           </h1>
-          <p className="text-xs text-[color:var(--text-muted)]">
-            Find spots, book parking, and run your operating schedule from one place.
-          </p>
-          <p className="mt-1 text-xs text-[color:var(--text-muted)]">
-            You are here as{" "}
-            <span className="font-semibold text-[color:var(--text-primary)]">
-              {topTab === "host"
-                ? "Host"
-                : isTruckViewUser
-                  ? "Food truck"
-                  : isAdminOrStaff
-                    ? "Admin/staff"
-                    : "Operator"}
-            </span>
-            . Start with <span className="font-semibold text-[color:var(--text-primary)]">Find &amp; Book</span> to secure a spot, then use{" "}
-            <span className="font-semibold text-[color:var(--text-primary)]">My Schedule</span> to run your day.
+          <p className="text-sm text-[color:var(--text-muted)]">
+            Book a host location or manage your parking availability.
           </p>
           {isAdminOrStaff && (
-            <div className="mt-3 flex flex-wrap gap-2">
-              <Button
-                size="sm"
-                variant={adminParkingMode === "auto" ? "default" : "outline"}
-                onClick={() => setAdminMode("auto")}
-              >
-                Admin Auto
-              </Button>
-              <Button
-                size="sm"
-                variant={adminParkingMode === "truck" ? "default" : "outline"}
-                onClick={() => setAdminMode("truck")}
-              >
-                Truck Permission
-              </Button>
-              <Button
-                size="sm"
-                variant={adminParkingMode === "host" ? "default" : "outline"}
-                onClick={() => setAdminMode("host")}
-              >
-                Host Permission
-              </Button>
-            </div>
+            <details className="mt-3 rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)] px-3 py-2 text-xs text-[color:var(--text-secondary)]">
+              <summary className="cursor-pointer font-semibold text-[color:var(--text-primary)]">
+                Admin view: {adminParkingMode === "auto" ? "Automatic" : adminParkingMode === "truck" ? "Food truck" : "Host"}
+              </summary>
+              <p className="mt-2 text-[11px] text-[color:var(--text-muted)]">
+                {isAdminOrStaff ? "Admin access" : "Operator access"}
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  variant={adminParkingMode === "auto" ? "default" : "outline"}
+                  onClick={() => setAdminMode("auto")}
+                >
+                  Automatic
+                </Button>
+                <Button
+                  size="sm"
+                  variant={adminParkingMode === "truck" ? "default" : "outline"}
+                  onClick={() => setAdminMode("truck")}
+                >
+                  Food truck
+                </Button>
+                <Button
+                  size="sm"
+                  variant={adminParkingMode === "host" ? "default" : "outline"}
+                  onClick={() => setAdminMode("host")}
+                >
+                  Host
+                </Button>
+              </div>
+            </details>
           )}
         </div>
 
         <Tabs value={topTab} onValueChange={(value) => setTopTab(value as any)}>
-          <TabsList className="w-full justify-start pp-glass-muted rounded-xl p-1">
-            <TabsTrigger value="book" className="text-sm">
+          <TabsList
+            className="grid w-full rounded-xl p-1 pp-glass-muted"
+            style={{
+              gridTemplateColumns: `repeat(${availableTabs.length}, minmax(0, 1fr))`,
+            }}
+          >
+            <TabsTrigger value="book" className="text-xs sm:text-sm">
               Find & Book
             </TabsTrigger>
             {canScheduleTab && (
-              <TabsTrigger value="schedule" className="text-sm">
+              <TabsTrigger value="schedule" className="text-xs sm:text-sm">
                 My Schedule
               </TabsTrigger>
             )}
             {canHostTab && (
-              <TabsTrigger value="host" className="text-sm">
+              <TabsTrigger value="host" className="text-xs sm:text-sm">
                 Host tools
               </TabsTrigger>
             )}
           </TabsList>
         </Tabs>
 
-        {((topTab === "book" && isTruckViewUser) ||
-          (topTab === "host" && canHostTab)) && (
+        {topTab === "host" && canHostTab && (
           <div className="grid gap-3 md:grid-cols-2">
-            {topTab === "book" && isTruckViewUser && (
-              <Card className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)]">
-                <CardContent className="p-4 space-y-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-semibold text-[color:var(--text-primary)]">
-                        Find & Book
-                      </p>
-                      <p className="text-xs text-[color:var(--text-muted)]">
-                        Map + list search, date and slot selection, and checkout for
-                        paid host spots.
-                      </p>
-                    </div>
-                    <Truck className="h-5 w-5 text-orange-500" />
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 text-[11px]">
-                    <span className="rounded-lg border border-[var(--border-subtle)] px-2 py-1">
-                      {bookedSchedule.length} booked stop
-                      {bookedSchedule.length === 1 ? "" : "s"}
-                    </span>
-                    <span className="rounded-lg border border-[var(--border-subtle)] px-2 py-1">
-                      {manualSchedules.length} manual stop
-                      {manualSchedules.length === 1 ? "" : "s"}
-                    </span>
-                    <span className="rounded-lg border border-[var(--border-subtle)] px-2 py-1">
-                      {parkingReports.length} day report
-                      {parkingReports.length === 1 ? "" : "s"}
-                    </span>
-                    <span className="rounded-lg border border-[var(--border-subtle)] px-2 py-1">
-                      {isAdminOrStaff
-                        ? "Admin access"
-                        : truck?.isVerified === false
-                        ? "Verification pending"
-                        : "Booking ready"}
-                    </span>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <Button size="sm" onClick={() => setTopTab("book")}>
-                      Open Find & Book
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setTopTab("schedule")}
-                    >
-                      Open My Schedule
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {topTab === "host" && canHostTab && (
-              <Card className="rounded-2xl border border-orange-200 bg-orange-50/70">
+              <Card className="rounded-2xl border border-[color:var(--border-subtle)] pp-glass">
                 <CardContent className="p-4 space-y-3">
                   <div>
-                    <p className="text-sm font-semibold text-orange-950">
+                    <p className="text-sm font-semibold text-[color:var(--text-primary)]">
                         Host tools
                       </p>
-                    <p className="text-xs text-orange-800">
+                    <p className="text-xs text-[color:var(--text-muted)]">
                       Publish where trucks can park, set pricing and
                       availability, block blackout dates, and manage payout
                       readiness.
                     </p>
                   </div>
-                  <div className="grid grid-cols-2 gap-2 text-[11px] text-orange-950">
-                    <span className="rounded-lg border border-orange-200 bg-white/60 px-2 py-1">
+                  <div className="grid grid-cols-2 gap-2 text-[11px] text-[color:var(--text-primary)]">
+                    <span className="rounded-lg pp-glass-muted px-2 py-1">
                       {hosts.length} host location
                       {hosts.length === 1 ? "" : "s"}
                     </span>
-                    <span className="rounded-lg border border-orange-200 bg-white/60 px-2 py-1">
+                    <span className="rounded-lg pp-glass-muted px-2 py-1">
                       {hostPassListings.length} pass listing
                       {hostPassListings.length === 1 ? "" : "s"}
                     </span>
-                    <span className="rounded-lg border border-orange-200 bg-white/60 px-2 py-1">
+                    <span className="rounded-lg pp-glass-muted px-2 py-1">
                       {hasActiveParkingPass
                         ? "Availability live"
                         : "No active pass"}
                     </span>
-                    <span className="rounded-lg border border-orange-200 bg-white/60 px-2 py-1">
+                    <span className="rounded-lg pp-glass-muted px-2 py-1">
                       {host?.stripeConnectAccountId &&
                       host?.stripePayoutsEnabled
                         ? "Payouts enabled"
@@ -4390,7 +4339,6 @@ export default function ParkingPassPage() {
                   </div>
                 </CardContent>
               </Card>
-            )}
           </div>
         )}
 
@@ -6632,7 +6580,7 @@ export default function ParkingPassPage() {
 
           {topTab === "book" && (
             <div
-              className={`space-y-5 pb-24 lg:pb-10${isTruckViewUser ? " order-first" : ""}`}
+              className={`space-y-4 pb-24 lg:pb-10${isTruckViewUser ? " order-first" : ""}`}
             >
               {!isAdminOrStaff &&
                 isTruckViewUser &&
@@ -6652,7 +6600,7 @@ export default function ParkingPassPage() {
                   </a>
                 </div>
                 )}
-              {!canStartTruckCheckout && (
+              {!canStartTruckCheckout && !isAdminOrStaff && (
                 <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-3 text-sm text-[color:var(--text-primary)]">
                   <p className="font-semibold">Food truck profile required</p>
                   <p className="text-xs text-[color:var(--text-muted)]">
@@ -6663,11 +6611,10 @@ export default function ParkingPassPage() {
               <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                 <div>
                   <p className="text-lg font-semibold text-[color:var(--text-primary)] font-display">
-                    Find spots and book now
+                    Find a parking spot
                   </p>
                   <p className="max-w-2xl text-sm text-[color:var(--text-muted)]">
-                    Search by city or address. Pick a spot first, then choose
-                    from its open dates.
+                    Choose a host location, date, and available time.
                   </p>
                 </div>
                 <div className="hidden rounded-2xl pp-glass-muted px-4 py-3 text-xs text-[color:var(--text-muted)] shadow-clean lg:grid lg:grid-cols-3 lg:gap-5">
@@ -6701,127 +6648,115 @@ export default function ParkingPassPage() {
               </div>
               <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_380px] xl:grid-cols-[minmax(0,1fr)_430px]">
                 <div className="min-w-0 space-y-4 order-1 lg:order-none">
-                  <div className="rounded-2xl pp-glass p-4 shadow-clean space-y-3 lg:p-5">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-xs font-semibold text-slate-800">
-                          Search + availability
-                        </p>
-                        <p className="text-[11px] text-slate-500">
-                          Choose a spot, then pick an open date and time slot.
-                        </p>
-                      </div>
-                      <div className="hidden sm:flex items-center gap-2">
-                        <Button
-                          size="sm"
-                          variant={viewMode === "map" ? "default" : "outline"}
-                          onClick={() => setViewMode("map")}
-                        >
-                          Map
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant={viewMode === "list" ? "default" : "outline"}
-                          onClick={() => setViewMode("list")}
-                        >
-                          List
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant={showParkingScoutHeat ? "default" : "outline"}
-                          onClick={() =>
-                            setShowParkingScoutHeat((value) => !value)
-                          }
-                          disabled={viewMode !== "map"}
-                        >
-                          Scout heat
-                        </Button>
-                      </div>
-                    </div>
-                    <div className="space-y-1 lg:max-w-2xl">
-                      <p className="text-[11px] font-semibold text-[color:var(--text-muted)]">
+                  <div className="space-y-3 rounded-2xl pp-glass p-3 shadow-clean sm:p-4 lg:p-5">
+                    <div className="flex items-center justify-between gap-3">
+                      <Label
+                        htmlFor="parking-pass-location-search"
+                        className="text-xs font-semibold text-[color:var(--text-primary)]"
+                      >
                         City or address
-                      </p>
+                      </Label>
+                      <span className="text-[11px] text-[color:var(--text-muted)]">
+                        {filteredLocations.length} of {locationGroups.length} locations
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
                       <Input
-                        type="text"
+                        id="parking-pass-location-search"
+                        type="search"
                         className="pp-field"
-                        placeholder="Austin, TX or 123 Main St"
+                        placeholder="City, state, or street address"
                         value={cityQuery}
                         onChange={(event) => setCityQuery(event.target.value)}
                       />
+                      {normalizedCityQuery && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="shrink-0"
+                          onClick={() => setCityQuery("")}
+                        >
+                          View all
+                        </Button>
+                      )}
                     </div>
-                    <div className="flex sm:hidden items-center gap-2">
+                    <div className="grid grid-cols-2 gap-2 sm:max-w-sm">
                       <Button
+                        type="button"
                         size="sm"
-                        className="flex-1"
                         variant={viewMode === "map" ? "default" : "outline"}
                         onClick={() => setViewMode("map")}
                       >
                         Map
                       </Button>
                       <Button
+                        type="button"
                         size="sm"
-                        className="flex-1"
                         variant={viewMode === "list" ? "default" : "outline"}
                         onClick={() => setViewMode("list")}
                       >
                         List
                       </Button>
                     </div>
-                    <Button
-                      size="sm"
-                      variant={showParkingScoutHeat ? "default" : "outline"}
-                      onClick={() =>
-                        setShowParkingScoutHeat((value) => !value)
-                      }
-                      disabled={viewMode !== "map"}
-                      className="w-full sm:hidden"
-                    >
-                      Foot traffic
-                    </Button>
-                    <div className="grid grid-cols-3 gap-2 sm:w-auto">
-                      <Button
-                        size="sm"
-                        variant={showPropaneLayer ? "default" : "outline"}
-                        onClick={() => setShowPropaneLayer((value) => !value)}
-                        disabled={supplierLayerCounts.propane === 0}
-                        className="w-full"
-                      >
-                        {`Propane (${supplierLayerSummary.propane})`}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant={showSupplyLayer ? "default" : "outline"}
-                        onClick={() => setShowSupplyLayer((value) => !value)}
-                        disabled={supplierLayerCounts.supply === 0}
-                        className="w-full"
-                      >
-                        {`Supply (${supplierLayerSummary.supply})`}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant={showSupportLayer ? "default" : "outline"}
-                        onClick={() => setShowSupportLayer((value) => !value)}
-                        disabled={supplierLayerCounts.support === 0}
-                        className="w-full"
-                      >
-                        {`Support (${supplierLayerSummary.support})`}
-                      </Button>
-                    </div>
-                    <div className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)]/85 px-3 py-2 text-[11px] text-[color:var(--text-muted)]">
-                      <p className="font-medium text-[color:var(--text-primary)]">
-                        Layer availability
-                      </p>
-                      <p className="mt-1">
-                        {`Propane: ${supplierLayerSummary.propane} · Supply: ${supplierLayerSummary.supply} · Support: ${supplierLayerSummary.support}`}
-                      </p>
-                      <p className="mt-1">
-                        {bookingWeatherData?.available
-                          ? "Weather: available for selected booking window."
-                          : "Weather: unavailable or not yet in provider forecast window."}
-                      </p>
-                      <p className="mt-1">{`Gas: ${selectedSpotGasPriceSummary}`}</p>
-                    </div>
+                    {viewMode === "map" && (
+                      <details className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)] px-3 py-2 text-xs text-[color:var(--text-secondary)]">
+                        <summary className="cursor-pointer font-semibold text-[color:var(--text-primary)]">
+                          Map tools
+                        </summary>
+                        <div className="mt-3 space-y-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={showParkingScoutHeat ? "default" : "outline"}
+                            onClick={() =>
+                              setShowParkingScoutHeat((value) => !value)
+                            }
+                            className="w-full sm:w-auto"
+                          >
+                            Foot traffic
+                          </Button>
+                          <div className="grid grid-cols-3 gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant={showPropaneLayer ? "default" : "outline"}
+                              onClick={() => setShowPropaneLayer((value) => !value)}
+                              disabled={supplierLayerCounts.propane === 0}
+                              className="w-full"
+                            >
+                              {`Propane (${supplierLayerSummary.propane})`}
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant={showSupplyLayer ? "default" : "outline"}
+                              onClick={() => setShowSupplyLayer((value) => !value)}
+                              disabled={supplierLayerCounts.supply === 0}
+                              className="w-full"
+                            >
+                              {`Supply (${supplierLayerSummary.supply})`}
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant={showSupportLayer ? "default" : "outline"}
+                              onClick={() => setShowSupportLayer((value) => !value)}
+                              disabled={supplierLayerCounts.support === 0}
+                              className="w-full"
+                            >
+                              {`Support (${supplierLayerSummary.support})`}
+                            </Button>
+                          </div>
+                          <p className="text-[11px] text-[color:var(--text-muted)]">
+                            {bookingWeatherData?.available
+                              ? "Weather is available for the selected booking window."
+                              : "Weather is not available for this booking window."}{" "}
+                            Gas: {selectedSpotGasPriceSummary}.
+                          </p>
+                        </div>
+                      </details>
+                    )}
                   </div>
 
                   {isLoading ? (
@@ -6835,7 +6770,7 @@ export default function ParkingPassPage() {
                     viewMode === "map" && fallbackHostPins.length > 0 ? (
                       <div className="space-y-3">
                         <div className="rounded-2xl pp-glass shadow-clean overflow-hidden">
-                          <div className="relative h-[430px] w-full bg-slate-100/60 lg:h-[min(68vh,640px)] xl:h-[min(72vh,720px)]">
+                          <div className="relative h-[320px] w-full bg-slate-100/60 sm:h-[380px] lg:h-[min(68vh,640px)] xl:h-[min(72vh,720px)]">
                             <GoogleMapPicker
                               center={fallbackMapCenter}
                               zoom={13}
@@ -7004,7 +6939,7 @@ export default function ParkingPassPage() {
                   ) : viewMode === "map" ? (
                     <div className="space-y-3">
                       <div className="rounded-2xl pp-glass shadow-clean overflow-hidden">
-                        <div className="relative h-[430px] w-full bg-slate-100/60 lg:h-[min(68vh,640px)] xl:h-[min(72vh,720px)]">
+                        <div className="relative h-[320px] w-full bg-slate-100/60 sm:h-[380px] lg:h-[min(68vh,640px)] xl:h-[min(72vh,720px)]">
                           <GoogleMapPicker
                             center={mapCenter}
                             zoom={13}
@@ -8160,8 +8095,19 @@ export default function ParkingPassPage() {
                         );
                       })}
                       {filteredLocations.length === 0 && (
-                        <div className="rounded-2xl pp-glass-muted p-6 text-center text-sm text-slate-700">
-                          No host spots match that search.
+                        <div className="rounded-2xl pp-glass-muted p-6 text-center text-sm text-[color:var(--text-secondary)]">
+                          <p>No parking spots match that search.</p>
+                          {normalizedCityQuery && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="mt-3"
+                              onClick={() => setCityQuery("")}
+                            >
+                              View all {locationGroups.length} locations
+                            </Button>
+                          )}
                         </div>
                       )}
                     </div>
@@ -8247,7 +8193,7 @@ export default function ParkingPassPage() {
 
                   <Card
                     id="parking-pass-details"
-                    className="rounded-2xl pp-glass shadow-clean"
+                    className="hidden rounded-2xl pp-glass shadow-clean lg:block"
                   >
                     <CardContent className="p-5 space-y-3">
                       <div>

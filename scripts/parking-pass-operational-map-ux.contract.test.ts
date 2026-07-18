@@ -4,7 +4,7 @@ const parkingPassPage = readFileSync("client/src/pages/parking-pass.tsx", "utf8"
 const mapPicker = readFileSync("client/src/components/maps/GoogleMapPicker.tsx", "utf8");
 
 const requiredUiSnippets = [
-  "Layer availability",
+  "Map tools",
   "Propane (",
   "Supply (",
   "Support (",
