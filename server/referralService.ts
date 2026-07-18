@@ -16,6 +16,7 @@ import {
 } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { resolveAffiliateUserId } from "./affiliateTagService";
+import { mirrorInfinitySignup } from "./integrations/infinityShadow";
 
 /**
  * PHASE 1: Record a click on an affiliate link
@@ -100,6 +101,12 @@ export async function attachReferralToSignup(
         .where(eq(referrals.id, referral.id))
         .returning();
 
+      void mirrorInfinitySignup({
+        partnerId: referral.affiliateUserId,
+        referralProofId: referral.id,
+        restaurantId: newRestaurantId,
+      });
+
       return updated[0];
     }
 
@@ -132,6 +139,14 @@ export async function attachReferralToSignup(
         status: "signed_up",
       })
       .returning();
+
+    if (created[0]) {
+      void mirrorInfinitySignup({
+        partnerId: affiliateUserId,
+        referralProofId: created[0].id,
+        restaurantId: newRestaurantId,
+      });
+    }
 
     return created[0];
   } catch (error) {
