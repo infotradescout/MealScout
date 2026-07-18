@@ -99,18 +99,8 @@ requireIncludes(
 
 requireIncludes(
   apiClient,
-  'normalizedPath.startsWith("/api/truck-claims")',
-  "Truck claim onboarding calls must stay same-origin on MealScout hosts.",
-);
-requireIncludes(
-  apiClient,
-  'normalizedPath === "/api/restaurants/signup"',
-  "Create Free Profile submission must stay same-origin on MealScout hosts.",
-);
-requireIncludes(
-  apiClient,
-  "/^\\/api\\/restaurants\\/[^/]+\\/verification\\/request",
-  "Business verification submission must stay same-origin on MealScout hosts.",
+  'return normalizedPath.startsWith("/api/");',
+  "Every MealScout API call, including signup, claims, and verification, must stay same-origin.",
 );
 
 requireIncludes(

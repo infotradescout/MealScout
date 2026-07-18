@@ -7,35 +7,9 @@ const IS_DEV = import.meta.env.DEV;
 const SHARED_API_FALLBACK = "https://www.mealscout.us";
 const MEALSCOUT_API_ORIGIN_FALLBACK = "https://mealscout.onrender.com";
 
-const isProtectedAccountPath = (path: string): boolean =>
-  path.startsWith("/api/affiliate/") ||
-  path.startsWith("/api/business-access/");
-
 function isMealScoutSameOriginPath(path: string): boolean {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-  const isAuthPath = normalizedPath.startsWith("/api/auth/");
-  const isAdminPath = normalizedPath.startsWith("/api/admin/");
-  const shouldUseSameOrigin =
-    isAuthPath || isAdminPath || isProtectedAccountPath(normalizedPath);
-
-  if (
-    shouldUseSameOrigin ||
-    normalizedPath.startsWith("/api/location/context")
-  ) {
-    return true;
-  }
-
-  // Owner onboarding depends on the active MealScout session cookie.
-  if (
-    normalizedPath.startsWith("/api/truck-claims") ||
-    normalizedPath === "/api/restaurants/signup"
-  ) {
-    return true;
-  }
-
-  return /^\/api\/restaurants\/[^/]+\/verification\/request(?:\/)?(?:\?|$)/.test(
-    normalizedPath,
-  );
+  return normalizedPath.startsWith("/api/");
 }
 
 function resolveApiBaseUrl() {
@@ -84,8 +58,8 @@ export function apiUrl(path: string): string {
       host === "www.mealscout.us" ||
       host === "mealscout.us" ||
       host.endsWith(".mealscout.us");
-    // Keep auth and protected account routes same-origin on MealScout hosts so
-    // session cookies remain first-party and survive mobile browser privacy rules.
+    // Every MealScout API request stays same-origin. The production host proxies
+    // /api/* to the backend, preserving the active first-party session cookie.
     if (isMealScoutHost && isMealScoutSameOriginPath(path)) {
       return path.startsWith("/") ? path : `/${path}`;
     }

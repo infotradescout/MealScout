@@ -126,10 +126,9 @@ if (!app.includes('"/scout"')) {
 ].forEach((snippet) => requireIncludes(unifiedAuth, snippet, `server affiliate guard ${snippet}`));
 
 [
-  "const isProtectedAccountPath =",
-  'path.startsWith("/api/affiliate/")',
-  'path.startsWith("/api/business-access/")',
-].forEach((snippet) => requireIncludes(api, snippet, `api protected account guard ${snippet}`));
+  'return normalizedPath.startsWith("/api/");',
+  "if (isMealScoutHost && isMealScoutSameOriginPath(path))",
+].forEach((snippet) => requireIncludes(api, snippet, `api same-origin account guard ${snippet}`));
 
 [
   "Protected account endpoints such as `/api/affiliate/tag` and `/api/business-access/me` must wait for confirmed auth",

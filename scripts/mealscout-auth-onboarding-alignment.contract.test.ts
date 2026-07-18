@@ -225,12 +225,10 @@ if (!login.includes("session_not_completed") || !login.includes("Login Session N
 }
 
 if (
-  !api.includes("isProtectedAccountPath") ||
-  !api.includes("path.startsWith(\"/api/affiliate/\")") ||
-  !api.includes("path.startsWith(\"/api/business-access/\")") ||
-  !api.includes("isAuthPath || isAdminPath || isProtectedAccountPath")
+  !api.includes('return normalizedPath.startsWith("/api/");') ||
+  !api.includes("if (isMealScoutHost && isMealScoutSameOriginPath(path))")
 ) {
-  throw new Error("Protected affiliate/business-access calls must use same-origin routing on MealScout hosts");
+  throw new Error("All MealScout APIs, including protected account calls, must use same-origin routing");
 }
 
 const routeInventory = [

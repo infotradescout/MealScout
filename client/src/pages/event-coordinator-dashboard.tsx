@@ -564,16 +564,6 @@ export default function EventCoordinatorDashboard() {
     typeof window !== "undefined"
       ? new URLSearchParams(window.location.search)
       : new URLSearchParams();
-  const { data: subscription } = useQuery<{
-    status: string;
-    hasAccess: boolean;
-  }>({
-    queryKey: ["/api/subscription/status"],
-    enabled: isAuthenticated && user?.userType === "event_coordinator",
-    retry: false,
-    refetchOnWindowFocus: false,
-  });
-
   const [isLoadingPage, setIsLoadingPage] = useState(true);
   const [events, setEvents] = useState<EventItem[]>([]);
   const [isCreating, setIsCreating] = useState(false);
@@ -613,10 +603,6 @@ export default function EventCoordinatorDashboard() {
       setLocation("/");
       return;
     }
-    if (subscription && !subscription.hasAccess) {
-      setIsLoadingPage(false);
-      return;
-    }
     const loadEvents = async () => {
       setIsLoadingPage(true);
       try {
@@ -637,7 +623,7 @@ export default function EventCoordinatorDashboard() {
       }
     };
     loadEvents();
-  }, [isLoading, isAuthenticated, setLocation, subscription, toast, user]);
+  }, [isLoading, isAuthenticated, setLocation, toast, user]);
 
   const handleSummaryChange = useCallback(
     (eventId: string, newSummary: InterestSummary) => {
@@ -754,25 +740,6 @@ export default function EventCoordinatorDashboard() {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Loader2 className="h-8 w-8 animate-spin text-[color:var(--accent-text)]" />
-      </div>
-    );
-  }
-
-  if (subscription && !subscription.hasAccess) {
-    return (
-      <div className="max-w-xl mx-auto px-4 py-12 min-h-screen bg-[var(--bg-layered)]">
-        <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-6 space-y-4 shadow-clean">
-          <h1 className="text-2xl font-bold text-[color:var(--text-primary)]">
-            Premium Required
-          </h1>
-          <p className="text-sm text-[color:var(--text-secondary)]">
-            Event coordinator access is a paid feature. Upgrade to post events
-            and manage truck interest.
-          </p>
-          <Button onClick={() => setLocation("/subscribe")}>
-            View subscription
-          </Button>
-        </div>
       </div>
     );
   }

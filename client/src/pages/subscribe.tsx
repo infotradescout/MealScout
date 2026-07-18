@@ -83,6 +83,7 @@ interface ApiSubscriptionStatus {
   status: string;
   hasAccess?: boolean;
   trialAccess?: boolean;
+  universalTrial?: boolean;
   trialEndsAt?: string | Date | null;
   lifetimeAccess?: boolean;
   message?: string;
@@ -416,13 +417,16 @@ const SubscriptionManagement = () => {
   }
 
   const status = String(subscriptionStatus.status || "none").toLowerCase();
+  const isUniversalTrial = subscriptionStatus.universalTrial === true;
   const isTrial = subscriptionStatus.trialAccess === true;
   const isLifetime = subscriptionStatus.lifetimeAccess === true;
   const isPaidActive = status === "active" && !isTrial && !isLifetime;
   const periodEnd = formatTimestamp(subscriptionStatus.currentPeriodEnd);
   const trialEnd = formatDateValue(subscriptionStatus.trialEndsAt);
-  const statusLabel = isTrial
-    ? "Trial active"
+  const statusLabel = isUniversalTrial
+    ? "Free trial active"
+    : isTrial
+      ? "Trial active"
     : isLifetime
       ? "Lifetime access"
       : status === "past_due"
@@ -430,8 +434,10 @@ const SubscriptionManagement = () => {
         : status === "active"
           ? "Active"
           : status.replace(/_/g, " ");
-  const planLabel = isTrial
-    ? "Premium trial"
+  const planLabel = isUniversalTrial
+    ? "MealScout free trial"
+    : isTrial
+      ? "Premium trial"
     : isLifetime
       ? "Premium partner access"
       : "MealScout Premium";

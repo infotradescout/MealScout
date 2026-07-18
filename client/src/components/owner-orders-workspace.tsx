@@ -587,9 +587,6 @@ export default function OwnerOrdersWorkspace({ view }: OwnerOrdersWorkspaceProps
   const error = view === "kitchen" ? queueQuery.error : historyQuery.error;
   const isLoading =
     view === "kitchen" ? queueQuery.isLoading : historyQuery.isLoading;
-  const isSubscriptionBlocked = String((error as Error | null)?.message || "")
-    .toLowerCase()
-    .includes("subscription");
   const isUnauthorized = /not authorized|access required|forbidden/i.test(
     String((error as Error | null)?.message || ""),
   );
@@ -699,26 +696,7 @@ export default function OwnerOrdersWorkspace({ view }: OwnerOrdersWorkspaceProps
           </div>
         </section>
 
-        {isSubscriptionBlocked ? (
-          <Card className="mt-5 border-amber-200 bg-amber-50">
-            <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-start gap-3">
-                <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
-                <div>
-                  <h3 className="font-black text-amber-950">Online ordering is not active</h3>
-                  <p className="mt-1 text-sm text-amber-900">
-                    Activate ordering for this business to receive and manage customer orders.
-                  </p>
-                </div>
-              </div>
-              <Button asChild>
-                <Link href={`/subscribe?restaurantId=${encodeURIComponent(restaurantId)}`}>
-                  Review plan
-                </Link>
-              </Button>
-            </CardContent>
-          </Card>
-        ) : isUnauthorized ? (
+        {isUnauthorized ? (
           <Card className="mt-5 border-red-200 bg-red-50">
             <CardContent className="flex items-start gap-3 p-5">
               <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-700" />

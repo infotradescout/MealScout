@@ -1,6 +1,6 @@
 # MealScout Owner Dashboard Decomposition Map
 
-This map documents how to understand and eventually decompose `client/src/pages/restaurant-owner-dashboard.tsx` without changing runtime behavior. It is docs/contracts only and does not authorize owner dashboard refactors, route changes, login/onboarding changes, Parking Pass changes, menu writes, schedule writes, verification changes, or subscription gating changes.
+This map documents how to understand and eventually decompose `client/src/pages/restaurant-owner-dashboard.tsx` without changing runtime behavior. It is docs/contracts only and does not authorize owner dashboard refactors, route changes, login/onboarding changes, Parking Pass changes, menu writes, schedule writes, verification changes, or profile-access policy changes without explicit product approval.
 
 ## 1. Current File
 
@@ -30,7 +30,7 @@ Why it should not be refactored casually:
 - **Selected restaurant state**: `selectedRestaurant`, `requestedRestaurantId`, setup query params, and restaurant selector behavior decide which owner entity every profile, menu, schedule, analytics, and mutation panel addresses.
 - **Business access state**: `/api/business-access/me`, `manageDeals`, `manageParkingPass`, `isRestaurantOwner`, `isFoodTruck`, staff/admin access, and delegated business permissions gate owner/truck tools without changing role values.
 - **Dashboard tabs**: `TabsContent` sections for active/inactive deals, analytics, credits, bookings, and food truck tools are dashboard routing state and must not be moved during mapping.
-- **Restaurant owner surfaces**: `restaurant_owner` access, `/api/restaurants/my-restaurants`, profile setup, profile basics, address/location, operating hours, media/gallery/logo/cover upload, subscription status, and owner completion actions.
+- **Restaurant owner surfaces**: `restaurant_owner` access, `/api/restaurants/my-restaurants`, profile setup, profile basics, address/location, operating hours, media/gallery/logo/cover upload, universal trial access, billing utilities, and owner completion actions.
 - **Food truck owner/operator surfaces**: `food_truck` access, truck profile display, live truck session start/end, booking inquiries, schedule setup prompts, truck-specific Parking Pass entry points, and truck-session location writes.
 - **Menu/profile setup surfaces**: setup prompts for profile, profile-media, menu, verification, and schedule; links to `/menu-builder?restaurantId=...`; public profile QR kit; public profile readiness and discoverability hints.
 - **Profile setup/editing**: `profileDraft`, profile basics inputs, profile action links, `updateProfileBasicsMutation`, local form state, and profile save payloads are risky because stale local state could overwrite current business data.
@@ -194,7 +194,7 @@ Use this safe order:
 - Do not change truck-session start/end behavior.
 - Do not change media upload/delete behavior.
 - Do not change media upload/approval behavior.
-- Do not change subscription gating.
+- Do not change the profile-access policy without explicit product approval.
 - Do not change verification, insurance, or claim semantics.
 - Do not introduce new features.
 - Do not run live owner/menu/schedule/deal/booking/truck-session/media mutations without fixtures, staging, or explicit approval.

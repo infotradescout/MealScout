@@ -49,6 +49,7 @@ import {
   type MenuItemVariant,
   type MenuItemModifier,
 } from "@shared/schema";
+import { UNIVERSAL_PROFILE_FREE_TRIAL_ACTIVE } from "@shared/profileAccessPolicy";
 import {
   eq,
   and,
@@ -200,6 +201,8 @@ async function getOrderingSubscriptionReady(
   ownerId: string,
   restaurantId: string,
 ) {
+  if (UNIVERSAL_PROFILE_FREE_TRIAL_ACTIVE) return true;
+
   const [activeSub] = await db
     .select({ id: restaurantSubscriptions.id })
     .from(restaurantSubscriptions)

@@ -34,7 +34,6 @@ for (const expected of [
   "Ready",
   "Completed",
   "Cancel this order?",
-  "Online ordering is not active",
   "Orders could not be loaded",
   "No orders yet",
   "Load older orders",
@@ -42,6 +41,7 @@ for (const expected of [
 ]) {
   assert.ok(workspace.includes(expected), `Missing Orders behavior: ${expected}`);
 }
+assert.doesNotMatch(workspace, /subscription|Review plan/i);
 assert.match(workspace, /requestedRestaurantId/);
 assert.match(workspace, /payload\?\.order \|\| payload/);
 assert.match(workspace, /selectedVariant\?\.label/);

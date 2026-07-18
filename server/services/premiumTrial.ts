@@ -1,12 +1,18 @@
 import type { User } from "@shared/schema";
+import { UNIVERSAL_PROFILE_FREE_TRIAL_ACTIVE } from "@shared/profileAccessPolicy";
 import { storage } from "../storage";
 
 export function isPremiumTrialActive(user: User | null): boolean {
+  if (user && UNIVERSAL_PROFILE_FREE_TRIAL_ACTIVE) return true;
   if (!user?.trialEndsAt) return false;
   return user.trialEndsAt.getTime() > Date.now();
 }
 
 export async function ensurePremiumTrialForUser(user: User): Promise<User> {
+  if (UNIVERSAL_PROFILE_FREE_TRIAL_ACTIVE) {
+    return user;
+  }
+
   if (user.stripeSubscriptionId) {
     return user;
   }

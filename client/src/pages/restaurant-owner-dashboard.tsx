@@ -334,22 +334,8 @@ export default function RestaurantOwnerDashboard() {
     enabled: !!user,
   });
 
-  // Fetch subscription status (no aggressive retries to avoid 503 spam)
-  const { data: subscription } = useQuery<{
-    status: string;
-    hasAccess: boolean;
-  }>({
-    queryKey: ["/api/subscription/status"],
-    enabled: !!user,
-    retry: false,
-    refetchOnWindowFocus: false,
-  });
-  const hasPremiumLocationTools =
-    canManageParkingPass &&
-    (isAdmin || isStaff || Boolean(subscription?.hasAccess));
-  const hasAnalyticsAccess =
-    canViewAnalytics &&
-    (isAdmin || isStaff || Boolean(subscription?.hasAccess));
+  const hasPremiumLocationTools = canManageParkingPass;
+  const hasAnalyticsAccess = canViewAnalytics;
   // The routed Audience workspace owns served analytics. Keep the legacy query
   // definitions inert until their hidden JSX is removed in the cleanup pass.
   const legacyAnalyticsEnabled = false;
@@ -1473,11 +1459,10 @@ export default function RestaurantOwnerDashboard() {
   const handleStartBroadcasting = () => {
     if (!hasPremiumLocationTools) {
       toast({
-        title: "Premium required",
-        description: "Upgrade to use live location broadcasting.",
+        title: "Permission required",
+        description: "This account cannot broadcast this truck's location.",
         variant: "destructive",
       });
-      setLocation("/subscribe");
       return;
     }
 
@@ -1534,11 +1519,10 @@ export default function RestaurantOwnerDashboard() {
   const handleUpdateRestaurantLocation = () => {
     if (!hasPremiumLocationTools) {
       toast({
-        title: "Premium required",
-        description: "Upgrade to use one-click live location updates.",
+        title: "Permission required",
+        description: "This account cannot update this business location.",
         variant: "destructive",
       });
-      setLocation("/subscribe");
       return;
     }
 
@@ -3736,9 +3720,8 @@ export default function RestaurantOwnerDashboard() {
           </div>
         )}
 
-        {/* Post-Upgrade Onboarding Checklist — shown to subscribed users until all items are complete */}
+        {/* Business onboarding checklist */}
         {activeWorkspaceModule === "overview" &&
-          subscription?.hasAccess &&
           currentRestaurant &&
           (() => {
             const hasBasics = Boolean(
@@ -4313,7 +4296,7 @@ export default function RestaurantOwnerDashboard() {
                 <div className="mb-3 flex items-center justify-between">
                   <div>
                     <h2 className="text-base font-semibold text-blue-900">
-                      Get the most out of your subscription
+                      Finish setting up your business
                     </h2>
                     <p className="text-xs text-blue-700 mt-0.5">
                       {completedCount} of {checklistItems.length} steps complete
@@ -4370,12 +4353,6 @@ export default function RestaurantOwnerDashboard() {
             restaurantId={selectedRestaurant}
             businessName={currentRestaurant.name}
             canManageDeals={canManageDeals}
-            hasPublishingAccess={Boolean(
-              isAdmin ||
-                isStaff ||
-                (subscription as any)?.status === "active" ||
-                (subscription as any)?.hasAccess === true,
-            )}
             stats={stats}
           />
         ) : null}
@@ -4774,7 +4751,7 @@ export default function RestaurantOwnerDashboard() {
                     </div>
                   )}
 
-                  {/* Premium Analytics Cards - Favorites & Recommendations */}
+                  {/* Audience analytics cards */}
                   {hasAnalyticsAccess ? (
                     <div className="grid grid-cols-2 gap-4 mt-4">
                       <Card className="border-yellow-200 dark:border-yellow-800">
@@ -4844,23 +4821,12 @@ export default function RestaurantOwnerDashboard() {
                           <div className="flex items-center gap-2 text-muted-foreground">
                             <CreditCard className="h-5 w-5" />
                             <span className="text-sm font-medium">
-                              Premium Analytics
+                              Audience analytics
                             </span>
                           </div>
                           <p className="text-sm text-muted-foreground max-w-md">
-                            Upgrade for premium analytics on special performance
-                            and growth trends.
+                            Ask the business owner for analytics permission.
                           </p>
-                          <Link href="/subscribe">
-                            <Button
-                              size="sm"
-                              className="mt-2"
-                              data-testid="button-upgrade-for-analytics"
-                            >
-                              <TrendingUp className="h-4 w-4 mr-2" />
-                              Upgrade Plan
-                            </Button>
-                          </Link>
                         </div>
                       </CardContent>
                     </Card>
@@ -5471,7 +5437,7 @@ export default function RestaurantOwnerDashboard() {
                                 )}
                                 {hasPremiumLocationTools
                                   ? "Go live"
-                                  : "Upgrade to go live"}
+                                  : "Location permission required"}
                               </Button>
                             ) : (
                               <Button
@@ -5601,7 +5567,7 @@ export default function RestaurantOwnerDashboard() {
                             )}
                             {hasPremiumLocationTools
                               ? "Use current location"
-                              : "Upgrade location tools"}
+                              : "Location permission required"}
                           </Button>
                         </div>
 

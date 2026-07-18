@@ -2310,8 +2310,8 @@ export default function RestaurantSignup() {
                 <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
                   <strong>Verification recommended</strong> —{" "}
                   {COPY.verification.pendingBanner} You can skip this step and
-                  submit documents later, but parking pass bookings and
-                  premium features stay locked until then.
+                  submit documents later. Profile tools remain available during
+                  the free trial.
                 </div>
               )}
               <div className="rounded-xl border border-dashed border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)] p-4">

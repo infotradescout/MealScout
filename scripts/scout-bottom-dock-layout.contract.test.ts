@@ -22,8 +22,16 @@ for (const snippet of requiredScoutLayoutSnippets) {
   }
 }
 
-if (!navigation.includes("height: \"var(--scout-nav-height, 58px)\"")) {
-  throw new Error("Navigation must read shared Scout nav height variable.");
+for (const snippet of [
+  "height: isScoutRoute",
+  '? "52px"',
+  ': "var(--scout-nav-height, 58px)"',
+]) {
+  if (!navigation.includes(snippet)) {
+    throw new Error(
+      `Navigation must preserve the served Scout/non-Scout height branch: ${snippet}`,
+    );
+  }
 }
 
 console.log("scout-bottom-dock-layout.contract: PASS");
