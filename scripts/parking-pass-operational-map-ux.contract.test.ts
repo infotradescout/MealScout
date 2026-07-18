@@ -4,7 +4,14 @@ const parkingPassPage = readFileSync("client/src/pages/parking-pass.tsx", "utf8"
 const mapPicker = readFileSync("client/src/components/maps/GoogleMapPicker.tsx", "utf8");
 
 const requiredUiSnippets = [
-  "Map tools",
+  "Tools",
+  "View dates and prices",
+  "getParkingListingPriceLabel",
+  "Road traffic",
+  'surfaceMode="parking"',
+  "showMapTypeControl={true}",
+  "showRoadTrafficLayer={showRoadTrafficLayer}",
+  "markerPriceLabel",
   "Propane (",
   "Supply (",
   "Support (",
@@ -26,6 +33,7 @@ for (const snippet of requiredUiSnippets) {
 }
 
 const requiredMapSnippets = [
+  'zoomControlsPosition="bottom"',
   "Math.max(110, Math.min(1200, (cell.weight || 1) * 10))",
   "? 0.1",
   "? 0.14",

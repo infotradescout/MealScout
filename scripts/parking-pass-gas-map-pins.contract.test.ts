@@ -12,7 +12,7 @@ const requiredSnippets = [
   "Premium",
   "Diesel",
   "...gasPricePins.map((pin) => ({",
-  "mapPins.length + supplierOverlayPins.length + gasPricePins.length",
+  "...adminSetupPins.map((pin) => ({",
 ];
 
 for (const snippet of requiredSnippets) {

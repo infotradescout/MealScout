@@ -79,6 +79,100 @@
   --radius: 18px;
 }
 
+/* Scout's discovery cards share one food-led surface system. Image overlays
+   remain high-contrast, while decision text and actions use the warm page
+   palette. Night values stay available for a future explicit theme choice;
+   Scout's default route is the day system. */
+.mealscout-scout {
+  --scout-card-surface: rgba(255, 255, 255, 0.98);
+  --scout-card-surface-soft: #fff4eb;
+  --scout-card-ink: #2b160d;
+  --scout-card-meta: #806657;
+  --scout-card-accent: #b54b2e;
+  --scout-card-border: rgba(150, 87, 50, 0.2);
+  --scout-card-divider: rgba(107, 69, 50, 0.34);
+  --scout-card-action: #fff1e6;
+  --scout-card-action-hover: #ffe4d2;
+  --scout-card-shadow: 0 12px 28px rgba(82, 46, 24, 0.12);
+}
+
+.theme-night .mealscout-scout {
+  --scout-card-surface: rgba(42, 27, 20, 0.98);
+  --scout-card-surface-soft: #21150f;
+  --scout-card-ink: #fff7ed;
+  --scout-card-meta: rgba(255, 237, 213, 0.68);
+  --scout-card-accent: #fdba74;
+  --scout-card-border: rgba(254, 215, 170, 0.18);
+  --scout-card-divider: rgba(255, 255, 255, 0.24);
+  --scout-card-action: rgba(255, 255, 255, 0.08);
+  --scout-card-action-hover: rgba(255, 255, 255, 0.13);
+  --scout-card-shadow: 0 12px 28px rgba(0, 0, 0, 0.28);
+}
+
+.mealscout-scout .scout-result-card {
+  color: var(--scout-card-ink);
+  border: 1px solid var(--scout-card-border);
+  background: var(--scout-card-surface);
+  box-shadow: var(--scout-card-shadow) !important;
+}
+
+.mealscout-scout .scout-result-card:hover {
+  border-color: color-mix(in srgb, var(--scout-card-accent) 42%, transparent);
+}
+
+.mealscout-scout .scout-result-card-body {
+  color: var(--scout-card-ink);
+  border-color: var(--scout-card-border);
+  background: var(--scout-card-surface);
+}
+
+.mealscout-scout .scout-result-card-title {
+  color: var(--scout-card-ink);
+}
+
+.mealscout-scout .scout-result-card-meta {
+  color: var(--scout-card-meta);
+}
+
+.mealscout-scout .scout-result-card-accent {
+  color: var(--scout-card-accent);
+}
+
+.mealscout-scout .scout-result-card-divider {
+  color: var(--scout-card-divider);
+}
+
+.mealscout-scout .scout-result-card-preview {
+  border-color: var(--scout-card-border);
+  background: var(--scout-card-surface-soft);
+}
+
+.mealscout-scout .scout-result-card-action,
+.mealscout-scout .scout-owner-action {
+  color: var(--scout-card-accent);
+  border-color: var(--scout-card-border);
+  background: var(--scout-card-action);
+}
+
+.mealscout-scout .scout-result-card-action:hover,
+.mealscout-scout .scout-owner-action:hover {
+  background: var(--scout-card-action-hover);
+}
+
+.mealscout-scout .scout-result-card-icon {
+  color: var(--scout-card-accent);
+  border-color: var(--scout-card-border);
+  background: var(--scout-card-surface-soft);
+}
+
+.mealscout-scout .scout-result-card-status--truck {
+  color: #c2410c;
+}
+
+.mealscout-scout .scout-result-card-status--place {
+  color: #167447;
+}
+
 /* Public business profiles use a bright, food-led palette even when the rest
    of the app is following the evening theme. The scoped compatibility rules
    keep older profile sections visually coherent while they are moved onto the
@@ -421,40 +515,12 @@
     /* Slightly softer so text/cards stay crisp on dark photography */
     mix-blend-mode: soft-light;
     opacity: 0.38;
-  }/* Leaflet popup: default is white; in night mode it clashes with our light text overrides. */
+  }
 
   .theme-day body::before {
     mix-blend-mode: normal;
     opacity: 0.12;
   }
-  .theme-night .leaflet-popup-content-wrapper,
-  .theme-night .leaflet-popup-tip {
-    background: rgba(16, 14, 12, 0.92) !important;
-    color: rgba(255, 255, 255, 0.92) !important;
-    border: 1px solid rgba(255, 255, 255, 0.14) !important;
-    box-shadow: 0 26px 70px rgba(0, 0, 0, 0.65) !important;
-  }
-
-  .theme-night .leaflet-popup-content p,
-  .theme-night .leaflet-popup-content div,
-  .theme-night .leaflet-popup-content span {
-    color: inherit;
-  }
-
-  .theme-day .leaflet-popup-content-wrapper,
-  .theme-day .leaflet-popup-tip {
-    background: rgba(255, 255, 255, 0.98) !important;
-    color: rgba(15, 23, 42, 0.92) !important;
-    border: 1px solid rgba(15, 23, 42, 0.16) !important;
-    box-shadow: 0 18px 52px rgba(15, 23, 42, 0.18) !important;
-  }
-
-  .theme-day .leaflet-popup-content p,
-  .theme-day .leaflet-popup-content div,
-  .theme-day .leaflet-popup-content span {
-    color: inherit;
-  }
-
   /* Parking Pass: consistent "glass" surfaces + readable text in night mode */
   .pp-glass {
     background: rgba(255, 255, 255, 0.92);
@@ -1121,33 +1187,6 @@
     color: var(--text-primary);
   }
 
-  .theme-day .leaflet-tile {
-    filter: contrast(1.12) saturate(1.06);
-  }
-
-  .theme-day .leaflet-control-zoom a,
-  .theme-day .leaflet-bar a {
-    background: rgba(255, 255, 255, 0.92);
-    color: rgba(15, 23, 42, 0.92);
-    border-color: rgba(15, 23, 42, 0.18);
-  }
-
-  .theme-day .leaflet-control-attribution {
-    background: rgba(255, 255, 255, 0.82) !important;
-    color: rgba(15, 23, 42, 0.78) !important;
-    border-top: 1px solid rgba(15, 23, 42, 0.12);
-  }
-
-  /* Ensure popups/tooltips render above map controls (attribution was overlapping popups). */
-  .leaflet-pane.leaflet-popup-pane {
-    z-index: 1100 !important;
-  }
-
-  .leaflet-top,
-  .leaflet-bottom {
-    z-index: 900 !important;
-  }
-
   .theme-night .filter-pill {
     background: rgba(0, 0, 0, 0.55);
     color: #ffffff;
@@ -1284,9 +1323,7 @@
   .theme-night .pp-glass [class*="text-slate-"],
   .theme-night .pp-glass [class*="text-gray-"],
   .theme-night .pp-glass-muted [class*="text-slate-"],
-  .theme-night .pp-glass-muted [class*="text-gray-"],
-  .theme-night .leaflet-popup-content [class*="text-slate-"],
-  .theme-night .leaflet-popup-content [class*="text-gray-"] {
+  .theme-night .pp-glass-muted [class*="text-gray-"] {
     color: #e5e7eb !important;
   }
 
@@ -1384,40 +1421,6 @@
     background: #f59e0b;
     border: 2px solid #7c2d12;
     box-shadow: 0 2px 4px rgba(15, 23, 42, 0.3);
-  }
-
-  .leaflet-marker-icon {
-    filter: drop-shadow(0 2px 4px rgba(15, 23, 42, 0.35));
-  }
-
-  .pp-pin {
-    background: transparent !important;
-    border: 0 !important;
-  }
-
-  .pp-pin__wrap {
-    position: relative;
-    width: 36px;
-    height: 36px;
-  }
-
-  .pp-pin__img {
-    width: 36px;
-    height: 36px;
-    display: block;
-    filter: drop-shadow(0 3px 6px rgba(15, 23, 42, 0.32));
-  }
-
-  .pp-pin__dot {
-    position: absolute;
-    right: 2px;
-    top: 2px;
-    width: 10px;
-    height: 10px;
-    border-radius: 999px;
-    background: #f59e0b;
-    border: 2px solid rgba(124, 45, 18, 0.9);
-    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.3);
   }
 
   @keyframes map-user-pulse {

@@ -9,7 +9,7 @@ Entry routes:
 - `/` - guest welcome; authenticated users redirect toward `/scout`.
 - `/scout` - primary customer discovery surface. Routes to `ScoutPageV2` from `client/src/pages/explore-preview-v2.tsx`.
 - `/search` - customer search.
-- `/map` - public map entry. `client/src/App.tsx` routes this to `RedirectToScout`, which redirects to `/scout`; the live surface is `client/src/pages/explore-preview-v2.tsx`, not `client/src/pages/map.tsx`.
+- `/map` - compatibility entry. `client/src/App.tsx` routes this to `RedirectToScout`; Scout owns the public map.
 - `/trending` - legacy discovery entry. `client/src/App.tsx` routes this to `RedirectToScout`, which redirects to `/scout`.
 - `/deals`, `/deals/featured`, `/deals/:city`, `/deal/:id` - deal discovery/detail.
 - `/restaurant/:id`, `/truck/:slug`, `/bar/:slug`, `/location/:slug` - public detail pages.
@@ -26,7 +26,8 @@ Public route source inventory:
 | Route family | Current frontend source | Notes |
 | --- | --- | --- |
 | `/scout`, `/scout/:refTag`, `/directory`, `/directory/:refTag`, `/scout-v2` | `client/src/pages/explore-preview-v2.tsx` (`ScoutPageV2`) | Canonical public Scout discovery surface. |
-| `/map` | `RedirectToScout` in `client/src/App.tsx`, then `client/src/pages/explore-preview-v2.tsx` | Production `/map` does not mount `client/src/pages/map.tsx`. |
+| `/scout-prototype` | `RedirectToScout` in `client/src/App.tsx` | Compatibility redirect; the prototype implementation has been retired. |
+| `/map` | `RedirectToScout` in `client/src/App.tsx`, then `client/src/pages/explore-preview-v2.tsx` | Scout owns the public Google map; there is no standalone map implementation. |
 | `/trending` | `RedirectToScout` in `client/src/App.tsx`, then `client/src/pages/explore-preview-v2.tsx` | Legacy entry preserved as redirect. |
 | `/sitemap` | `client/src/pages/sitemap.tsx` | Public content/discovery index. |
 | `/restaurant/:id`, `/restaurant/:id/:profileSlug`, `/truck/:slug`, `/bar/:slug`, `/location/:slug`, `/p/:profileType/:profileId`, `/p/:profileType/:profileId/:profileSlug` | `client/src/pages/public-profile.tsx` | Public profile route families. |
@@ -36,11 +37,11 @@ Public route source inventory:
 | `/city/:city/:mode` | `client/src/pages/city-discovery.tsx` | Generic city discovery mode route; keep route ordering in mind when auditing `/city/:city/food`. |
 | `/profile-setup` | `client/src/pages/profile-setup.tsx` | Public profile setup offer page. |
 
-Legacy/dead-looking public surfaces to verify before editing:
+Retired public implementations:
 
-- `client/src/pages/map.tsx` currently exists but is not mounted by `client/src/App.tsx`; `/map` redirects to `/scout` and uses `client/src/pages/explore-preview-v2.tsx`.
-- `client/src/pages/explore-preview.tsx` is legacy/quarantined; `ScoutPageV2` is the canonical Scout route.
-- `client/src/pages/trending.tsx` exists, but `/trending` redirects to `/scout` and is not mounted as a standalone public page.
+- The old `explore-preview.tsx`, `scout-prototype.tsx`, `map.tsx`, and `trending.tsx` page implementations were removed after their routes were verified against `client/src/App.tsx` and internal navigation references.
+- `/scout-prototype`, `/map`, and `/trending` remain compatibility redirects to `/scout`.
+- Scout and Parking Pass use the shared Google map implementation. The themed-tile, SVG-street, and Leaflet runtime fallbacks were removed so tests cannot validate an implementation users never receive.
 
 Main backend groups:
 

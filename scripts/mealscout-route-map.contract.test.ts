@@ -34,7 +34,7 @@ function requireMatch(pattern: RegExp, label: string) {
   "Validation Routes",
   "Trace Examples",
   "Public route source inventory",
-  "Legacy/dead-looking public surfaces to verify before editing",
+  "Retired public implementations",
 ].forEach((snippet) => requireIncludes(snippet));
 
 [
@@ -53,14 +53,13 @@ function requireMatch(pattern: RegExp, label: string) {
 [
   "`/scout`, `/scout/:refTag`, `/directory`, `/directory/:refTag`, `/scout-v2` | `client/src/pages/explore-preview-v2.tsx`",
   "`/map` | `RedirectToScout` in `client/src/App.tsx`, then `client/src/pages/explore-preview-v2.tsx`",
-  "Production `/map` does not mount `client/src/pages/map.tsx`.",
+  "Scout owns the public Google map; there is no standalone map implementation.",
+  "`/scout-prototype` | `RedirectToScout` in `client/src/App.tsx`",
   "`/sitemap` | `client/src/pages/sitemap.tsx`",
   "`/restaurant/:id`, `/restaurant/:id/:profileSlug`, `/truck/:slug`, `/bar/:slug`, `/location/:slug`, `/p/:profileType/:profileId`, `/p/:profileType/:profileId/:profileSlug` | `client/src/pages/public-profile.tsx`",
   "`/city/:city/food`, `/food-trucks-today/:city`, `/deals-today/:city`, `/events-today/:city`, `/locations-with-trucks/:city`, `/cuisine/:cuisine/:city` | `client/src/pages/public-seo-landing.tsx`",
   "`/profile-setup` | `client/src/pages/profile-setup.tsx`",
-  "`client/src/pages/map.tsx` currently exists but is not mounted by `client/src/App.tsx`",
-  "`client/src/pages/explore-preview.tsx` is legacy/quarantined",
-  "`client/src/pages/trending.tsx` exists, but `/trending` redirects to `/scout`",
+  "The old `explore-preview.tsx`, `scout-prototype.tsx`, `map.tsx`, and `trending.tsx` page implementations were removed",
 ].forEach((snippet) => requireIncludes(snippet, `public route source inventory ${snippet}`));
 
 [
@@ -69,6 +68,7 @@ function requireMatch(pattern: RegExp, label: string) {
   '<Route path="/scout/:refTag" component={ScoutPageV2} />',
   '<Route path="/directory" component={ScoutPageV2} />',
   '<Route path="/scout-v2" component={ScoutPageV2} />',
+  '<Route path="/scout-prototype" component={RedirectToScout} />',
   '<Route path="/map" component={RedirectToScout} />',
   '<Route path="/trending" component={RedirectToScout} />',
   '<Route path="/sitemap" component={Sitemap} />',

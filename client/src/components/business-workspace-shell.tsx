@@ -3,12 +3,14 @@ import { Link } from "wouter";
 import {
   BarChart3,
   Clock3,
+  Compass,
   CreditCard,
   Eye,
   Image,
   LayoutDashboard,
   MapPin,
   MoreHorizontal,
+  ParkingSquare,
   Radio,
   Settings,
   ShoppingBag,
@@ -234,19 +236,54 @@ export default function BusinessWorkspaceShell({
     },
   ];
   const modules = allModules.filter((module) => module.visible);
-  const mobilePrimaryModuleIds = new Set<BusinessWorkspaceModuleId>([
-    "overview",
+  const overviewModule = modules.find((module) => module.id === "overview");
+  const workModule = modules.find((module) => module.id === "work");
+  const mobileManageModuleIds = new Set<BusinessWorkspaceModuleId>([
     "profile",
     "menu",
     "availability",
+    "media",
+    "deals",
   ]);
-  const mobilePrimaryModules = modules.filter((module) =>
-    mobilePrimaryModuleIds.has(module.id),
+  const mobileManageModules = modules.filter((module) =>
+    mobileManageModuleIds.has(module.id),
   );
-  const mobileSecondaryModules = modules.filter(
-    (module) => !mobilePrimaryModuleIds.has(module.id),
+  const mobileMoreModules = modules.filter(
+    (module) =>
+      module.id !== "overview" &&
+      module.id !== "work" &&
+      !mobileManageModuleIds.has(module.id),
   );
-  const isMobileSecondaryActive = mobileSecondaryModules.some(
+  const mobileWorkDestinations = [
+    ...(workModule ? [workModule] : []),
+    {
+      id: "kitchen",
+      label: "Kitchen",
+      description: "Prepare and fulfill active orders",
+      href: buildWorkspaceHref("/kitchen", business.id),
+      icon: UtensilsCrossed,
+      visible: true,
+    },
+    ...(isFoodTruck
+      ? [
+          {
+            id: "parking-pass",
+            label: "Parking Pass",
+            description: "Book spots and manage parking",
+            href: buildWorkspaceHref("/parking-pass", business.id, {
+              tab: "schedule",
+            }),
+            icon: ParkingSquare,
+            visible: true,
+          },
+        ]
+      : []),
+  ];
+  const isMobileWorkActive = activeModule === "work";
+  const isMobileManageActive = mobileManageModules.some(
+    (module) => module.id === activeModule,
+  );
+  const isMobileMoreActive = mobileMoreModules.some(
     (module) => module.id === activeModule,
   );
 
@@ -431,46 +468,139 @@ export default function BusinessWorkspaceShell({
           className="flex items-stretch px-1 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_22px_rgba(36,18,8,0.10)]"
           style={{ height: "var(--scout-nav-height, 58px)" }}
         >
-          {mobilePrimaryModules.map((module) => {
-            const Icon = module.icon;
-            const isActive = module.id === activeModule;
-            const mobileLabel =
-              module.id === "profile"
-                ? "Profile"
-                : module.id === "availability" && isFoodTruck
-                  ? "Schedule"
-                  : module.label;
-            return (
-              <Link
-                key={module.id}
-                href={module.href}
-                aria-current={isActive ? "page" : undefined}
-                className={`flex min-w-0 flex-1 flex-col items-center justify-center gap-1 px-1 transition-colors ${
-                  isActive
-                    ? "text-orange-700"
-                    : "text-[color:var(--text-muted)]"
-                }`}
-                data-testid={`workspace-mobile-nav-${module.id}`}
-              >
-                <Icon className="h-[18px] w-[18px]" aria-hidden="true" />
-                <span className="max-w-full truncate text-[10px] font-semibold leading-none">
-                  {mobileLabel}
-                </span>
-              </Link>
-            );
-          })}
+          {overviewModule ? (
+            <Link
+              href={overviewModule.href}
+              aria-current={activeModule === "overview" ? "page" : undefined}
+              className={`flex min-w-0 flex-1 flex-col items-center justify-center gap-1 px-1 transition-colors ${
+                activeModule === "overview"
+                  ? "text-orange-700"
+                  : "text-[color:var(--text-muted)]"
+              }`}
+              data-testid="workspace-mobile-nav-overview"
+            >
+              <LayoutDashboard className="h-[18px] w-[18px]" aria-hidden="true" />
+              <span className="text-[10px] font-semibold leading-none">Overview</span>
+            </Link>
+          ) : null}
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
                 className={`flex min-w-0 flex-1 flex-col items-center justify-center gap-1 px-1 transition-colors ${
-                  isMobileSecondaryActive
+                  isMobileWorkActive
+                    ? "text-orange-700"
+                    : "text-[color:var(--text-muted)]"
+                }`}
+                aria-label="Work"
+                aria-current={isMobileWorkActive ? "page" : undefined}
+                data-testid="workspace-mobile-nav-work"
+              >
+                <ShoppingBag className="h-[18px] w-[18px]" aria-hidden="true" />
+                <span className="text-[10px] font-semibold leading-none">Work</span>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              side="top"
+              align="center"
+              sideOffset={10}
+              className="mb-[env(safe-area-inset-bottom)] w-72 rounded-2xl p-2"
+            >
+              <DropdownMenuLabel className="px-3 py-2 text-xs uppercase tracking-[0.12em] text-[color:var(--text-muted)]">
+                Work
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {mobileWorkDestinations.map((destination) => {
+                const Icon = destination.icon;
+                return (
+                  <DropdownMenuItem key={destination.id} asChild>
+                    <Link
+                      href={destination.href}
+                      className="flex min-h-12 items-center gap-3 rounded-xl px-3 py-2"
+                      data-testid={`workspace-mobile-work-${destination.id}`}
+                    >
+                      <Icon className="h-4 w-4" aria-hidden="true" />
+                      <span className="min-w-0">
+                        <span className="block text-sm font-bold">
+                          {destination.label}
+                        </span>
+                        <span className="block truncate text-xs text-[color:var(--text-muted)]">
+                          {destination.description}
+                        </span>
+                      </span>
+                    </Link>
+                  </DropdownMenuItem>
+                );
+              })}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className={`flex min-w-0 flex-1 flex-col items-center justify-center gap-1 px-1 transition-colors ${
+                  isMobileManageActive
+                    ? "text-orange-700"
+                    : "text-[color:var(--text-muted)]"
+                }`}
+                aria-label="Manage"
+                aria-current={isMobileManageActive ? "page" : undefined}
+                data-testid="workspace-mobile-nav-manage"
+              >
+                <Store className="h-[18px] w-[18px]" aria-hidden="true" />
+                <span className="text-[10px] font-semibold leading-none">Manage</span>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              side="top"
+              align="center"
+              sideOffset={10}
+              className="mb-[env(safe-area-inset-bottom)] w-72 rounded-2xl p-2"
+            >
+              <DropdownMenuLabel className="px-3 py-2 text-xs uppercase tracking-[0.12em] text-[color:var(--text-muted)]">
+                Manage
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {mobileManageModules.map((module) => {
+                const Icon = module.icon;
+                const isActive = module.id === activeModule;
+                return (
+                  <DropdownMenuItem key={module.id} asChild>
+                    <Link
+                      href={module.href}
+                      aria-current={isActive ? "page" : undefined}
+                      className={`flex min-h-12 items-center gap-3 rounded-xl px-3 py-2 ${
+                        isActive ? "bg-orange-50 text-orange-950" : ""
+                      }`}
+                      data-testid={`workspace-mobile-manage-${module.id}`}
+                    >
+                      <Icon className="h-4 w-4" aria-hidden="true" />
+                      <span className="min-w-0">
+                        <span className="block text-sm font-bold">{module.label}</span>
+                        <span className="block truncate text-xs text-[color:var(--text-muted)]">
+                          {module.description}
+                        </span>
+                      </span>
+                    </Link>
+                  </DropdownMenuItem>
+                );
+              })}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className={`flex min-w-0 flex-1 flex-col items-center justify-center gap-1 px-1 transition-colors ${
+                  isMobileMoreActive
                     ? "text-orange-700"
                     : "text-[color:var(--text-muted)]"
                 }`}
                 aria-label="More business tools"
-                aria-current={isMobileSecondaryActive ? "page" : undefined}
+                aria-current={isMobileMoreActive ? "page" : undefined}
                 data-testid="workspace-mobile-nav-more"
               >
                 <MoreHorizontal className="h-[18px] w-[18px]" aria-hidden="true" />
@@ -487,7 +617,7 @@ export default function BusinessWorkspaceShell({
                 Business tools
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              {mobileSecondaryModules.map((module) => {
+              {mobileMoreModules.map((module) => {
                 const Icon = module.icon;
                 const isActive = module.id === activeModule;
                 return (
@@ -511,8 +641,24 @@ export default function BusinessWorkspaceShell({
                       </span>
                     </Link>
                   </DropdownMenuItem>
-                );
+                  );
               })}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem asChild>
+                <Link
+                  href="/scout"
+                  className="flex min-h-12 items-center gap-3 rounded-xl px-3 py-2"
+                  data-testid="workspace-mobile-more-scout"
+                >
+                  <Compass className="h-4 w-4" aria-hidden="true" />
+                  <span className="min-w-0">
+                    <span className="block text-sm font-bold">Scout</span>
+                    <span className="block truncate text-xs text-[color:var(--text-muted)]">
+                      Switch to food discovery
+                    </span>
+                  </span>
+                </Link>
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

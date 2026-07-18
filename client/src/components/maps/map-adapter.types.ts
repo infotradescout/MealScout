@@ -3,6 +3,7 @@ export type MapProvider = "legacy" | "google";
 export type MapMarkerKind =
   | "user"
   | "truck"
+  | "business"
   | "restaurant"
   | "parking"
   | "event"
@@ -18,6 +19,16 @@ export interface MapAdapterMarker {
   lng: number;
   title?: string;
   subtitle?: string;
+  /** Canonical MealScout destination for markers that represent a profile. */
+  href?: string | null;
+  /** Keeps generic profile pins searchable without pretending they are live. */
+  businessType?: string | null;
+  /** Describes what the coordinate means so mobile profiles are not treated as live. */
+  locationSemantics?: "live" | "business_address" | "profile_area" | null;
+  /** Short decision label rendered on the marker, such as a parking price. */
+  label?: string;
+  /** Keeps the currently selected MealScout result visually tied to its pin. */
+  selected?: boolean;
   color?: string;
   imageUrl?: string | null;
   address?: string | null;

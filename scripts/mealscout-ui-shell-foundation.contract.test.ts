@@ -16,6 +16,10 @@ const scout = readFileSync(
 );
 const menu = readFileSync("client/src/pages/online-menu.tsx", "utf8");
 const search = readFileSync("client/src/pages/search.tsx", "utf8");
+const routeSurface = readFileSync(
+  "client/src/lib/app-route-surface.ts",
+  "utf8",
+);
 
 assert.match(background, /appearance = "day"/);
 assert.match(background, /root\.classList\.add\([\s\S]*"theme-night" : "theme-day"/);
@@ -58,11 +62,23 @@ assert.match(navigation, /isScoutRoute[\s\S]*\? "customer"[\s\S]*: "guest"/);
 
 assert.doesNotMatch(scout, /data-scout-search-surface="top"/);
 assert.doesNotMatch(scout, /<ScoutSearchDock[\s\S]*placement="inline"/);
-assert.match(
+assert.doesNotMatch(
   app,
-  /const usesCinematicBackground =[\s\S]*currentPath === "\/scout"[\s\S]*currentPath\.startsWith\("\/directory\/"\)/,
-  "Scout and its aliases must retain the warm night application theme.",
+  /const usesCinematicBackground =[\s\S]{0,320}isScoutRoutePath\(currentPath\)/,
+  "Scout must use its warm day discovery shell instead of inheriting the forced night application theme.",
 );
+for (const routeSnippet of [
+  'pathname === "/scout"',
+  'pathname.startsWith("/scout/")',
+  'pathname === "/scout-v2"',
+  'pathname === "/directory"',
+  'pathname.startsWith("/directory/")',
+]) {
+  assert.ok(
+    routeSurface.includes(routeSnippet),
+    `Shared Scout route ownership is missing ${routeSnippet}`,
+  );
+}
 
 assert.match(menu, /const publicProfileHref =/);
 assert.match(menu, /restaurantName \|\| "Menu"/);

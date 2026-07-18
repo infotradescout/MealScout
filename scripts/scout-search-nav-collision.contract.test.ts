@@ -1,26 +1,7 @@
 import { readFileSync } from "node:fs";
 
-const scoutPrototype = readFileSync("client/src/pages/scout-prototype.tsx", "utf8");
 const navigation = readFileSync("client/src/components/navigation.tsx", "utf8");
 const liveScout = readFileSync("client/src/pages/explore-preview-v2.tsx", "utf8");
-
-const requiredScoutSnippets = [
-  "data-scout-layout-contract=\"true\"",
-  "\"--scout-safe-bottom\": \"env(safe-area-inset-bottom, 0px)\"",
-  "\"--scout-nav-height\": \"58px\"",
-  "const scoutDockBottom = \"calc(var(--scout-safe-bottom) + var(--scout-nav-height) + var(--scout-dock-gap))\"",
-  "const feedBottomClearance =",
-  "\"calc(var(--scout-nav-height) + var(--scout-dock-gap) + var(--scout-bottom-dock-height) + 28px)\"",
-  "data-scout-search-dock=\"true\"",
-  "data-scout-feed=\"true\"",
-  "className=\"fixed inset-x-0 z-[1000] pointer-events-none\"",
-];
-
-for (const snippet of requiredScoutSnippets) {
-  if (!scoutPrototype.includes(snippet)) {
-    throw new Error(`Missing Scout nav/search collision guard snippet: ${snippet}`);
-  }
-}
 
 if (
   !navigation.includes('isBusinessWorkspaceRoute ? "hidden" : "fixed"') ||
@@ -51,6 +32,10 @@ for (const snippet of requiredNavigationSearchSnippets) {
 
 if (liveScout.includes('placement="inline"')) {
   throw new Error("Live Scout must not render a second inline search surface.");
+}
+
+if (liveScout.includes("data-scout-search-dock")) {
+  throw new Error("Live Scout must not own a second mobile search dock.");
 }
 
 console.log("scout-search-nav-collision.contract: PASS");

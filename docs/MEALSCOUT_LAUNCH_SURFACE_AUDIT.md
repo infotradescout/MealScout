@@ -73,12 +73,11 @@ Core product doctrine:
 - `client/src/components/share-hub.tsx`
 - `client/src/components/share-button.tsx`
 - `client/src/components/ShareButton.tsx`
-- `client/src/pages/map.tsx`
+- `client/src/pages/explore-preview-v2.tsx`
 - `client/src/pages/city-landing.tsx`
 - `client/src/pages/deals-city.tsx`
 - `client/src/pages/deal-detail.tsx`
 - `client/src/pages/restaurant-owner-dashboard.tsx`
-- `client/src/pages/scout-prototype.tsx`
 - `server/routes/locationUtilityRoutes.ts`
 - `server/routes/restaurantOperationsRoutes.ts`
 - `server/routes/publicDiscoveryRoutes.ts`
@@ -87,7 +86,7 @@ Core product doctrine:
 - `server/shareTargetPolicy.ts`
 - `scripts/mealscout-native-share-attribution.contract.test.ts`
 - `scripts/public-profile-menu-logo-schedule.contract.test.ts`
-- `scripts/unified-truck-discoverability.contract.test.ts`
+- `scripts/scout-obsolete-surface-removal.contract.test.ts`
 - `scripts/owner-discoverability-menu-state.contract.test.ts`
 
 Production routes checked:
@@ -111,7 +110,7 @@ rg -n "deal.*(required|visibility|appear|Scout|discover)|Scout.*deal|coming soon
 npm run check
 npx --yes tsx scripts/mealscout-native-share-attribution.contract.test.ts
 npx --yes tsx scripts/public-profile-menu-logo-schedule.contract.test.ts
-npx --yes tsx scripts/unified-truck-discoverability.contract.test.ts
+npx --yes tsx scripts/scout-horizontal-rails-ux.contract.test.ts
 npx --yes tsx scripts/owner-discoverability-menu-state.contract.test.ts
 node scripts/smokeScoutSurface.mjs
 Invoke-WebRequest https://www.mealscout.us/api/version
@@ -248,7 +247,7 @@ Owner/admin trust protections confirmed by code inspection and existing contract
 - Shared completion doctrine:
   `scripts/owner-profile-completion-status.contract.test.ts` protects the shared completion-status adapter used by owner UI and reconciliation logic. Deals are tracked as optional completion context and not as a gate for profile existence.
 - Public discoverability and menu-state safeguards:
-  `scripts/owner-discoverability-menu-state.contract.test.ts`, `scripts/unified-truck-discoverability.contract.test.ts`, and `scripts/public-profile-menu-logo-schedule.contract.test.ts` confirm discoverability and public-profile honesty without requiring deals.
+  `scripts/owner-discoverability-menu-state.contract.test.ts`, `scripts/scout-horizontal-rails-ux.contract.test.ts`, `scripts/scout-truck-menu-schedule-regression.contract.test.ts`, and `scripts/public-profile-menu-logo-schedule.contract.test.ts` confirm discoverability and public-profile honesty without requiring deals.
 - Claim-to-useful-profile reconciliation:
   `scripts/mealscout-claim-profile-update-reconciliation.contract.test.ts` protects launch reporting around claimed profiles becoming useful with real menu, schedule, contact, and photo evidence, while forbidding fake/sample/generated data markers.
 

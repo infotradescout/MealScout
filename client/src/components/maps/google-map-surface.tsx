@@ -5,6 +5,7 @@ import type {
   MapBoundsLike,
   MapTrafficCell,
 } from "./map-adapter.types";
+import { isUsableMapCenter } from "./map-coordinate-truth";
 import mealScoutIcon from "@assets/meal-scout-icon.png";
 
 type GeoPoint = { lat: number; lng: number };
@@ -37,7 +38,12 @@ type GoogleMapSurfaceProps = {
   onFatalError?: (message: string) => void;
   interactive?: boolean;
   showZoomControls?: boolean;
-  zoomControlsPosition?: "top" | "below-header";
+  zoomControlsPosition?: "top" | "below-header" | "bottom";
+  /** Fit the camera when the geography of the MealScout results changes. */
+  fitMarkers?: boolean;
+  fitMarkerPadding?: number;
+  /** Parking Pass exposes road/aerial views so operators can inspect lots. */
+  showMapTypeControl?: boolean;
 };
 
 type GoogleMapsWindow = Window & {
@@ -456,6 +462,8 @@ const markerColor = (marker: MapAdapterMarker): string => {
       return "#3b82f6"; // blue
     case "truck":
       return "#f97316"; // amber-orange
+    case "business":
+      return "#0f766e"; // teal profile pin; not a live-location claim
     case "restaurant":
       return "#fbbf24"; // amber-yellow (distinct from truck)
     case "parking":
@@ -475,6 +483,8 @@ const markerGlyph = (marker: MapAdapterMarker): string => {
   switch (marker.kind) {
     case "truck":
       return "T";
+    case "business":
+      return "P";
     case "restaurant":
       return "F";
     case "parking":
@@ -493,12 +503,48 @@ const markerGlyph = (marker: MapAdapterMarker): string => {
 const svgDataUrl = (svg: string) =>
   `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
 
+const escapeSvgText = (value: string) =>
+  value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+
 /* ─── Glowing SVG dot marker (AdvancedMarker content) ───────────────────── */
 const buildGlowDotElement = (marker: MapAdapterMarker): HTMLElement => {
   if (marker.kind === "parking") {
     const wrapper = document.createElement("div");
-    wrapper.style.cssText =
-      "position:relative;width:38px;height:38px;display:flex;align-items:center;justify-content:center;cursor:pointer;";
+    wrapper.style.cssText = [
+      "position:relative",
+      marker.label ? "min-width:68px" : "width:38px",
+      "height:42px",
+      "display:flex",
+      "align-items:center",
+      "justify-content:center",
+      "cursor:pointer",
+      marker.selected ? "transform:scale(1.08)" : "transform:scale(1)",
+      "transition:transform 160ms ease",
+    ].join(";");
+    if (marker.label) {
+      const label = document.createElement("span");
+      label.textContent = marker.label;
+      label.style.cssText = [
+        "position:absolute",
+        "left:50%",
+        "top:-16px",
+        "transform:translateX(-50%)",
+        "white-space:nowrap",
+        "border-radius:999px",
+        "padding:4px 8px",
+        `background:${marker.selected ? "#f97316" : markerColor(marker)}`,
+        "color:#fff",
+        "font:900 11px/1 Arial,sans-serif",
+        "border:2px solid #fff7ed",
+        "box-shadow:0 5px 14px rgba(0,0,0,0.32)",
+      ].join(";");
+      wrapper.appendChild(label);
+    }
     const img = document.createElement("img");
     img.src = mealScoutIcon;
     img.alt = marker.title || "Host location";
@@ -607,6 +653,32 @@ const buildGlowDotElement = (marker: MapAdapterMarker): HTMLElement => {
 /* ─── Legacy Marker icon (fallback when no Map ID) ──────────────────────── */
 const buildLegacyIcon = (googleMaps: any, marker: MapAdapterMarker) => {
   const color = markerColor(marker);
+  if (marker.kind === "parking" && marker.label) {
+    const label = escapeSvgText(marker.label.slice(0, 12));
+    const fill = marker.selected ? "#f97316" : color;
+    const stroke = marker.selected ? "#fff7ed" : "#ffffff";
+    const svg = `
+      <svg width="92" height="64" viewBox="0 0 92 64" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <filter id="shadow" x="-40%" y="-40%" width="180%" height="200%">
+            <feDropShadow dx="0" dy="5" stdDeviation="4" flood-color="#000000" flood-opacity="0.34"/>
+          </filter>
+        </defs>
+        <g filter="url(#shadow)">
+          <rect x="5" y="4" width="82" height="39" rx="19.5" fill="${fill}" stroke="${stroke}" stroke-width="3"/>
+          <path d="M40 42 L46 58 L52 42 Z" fill="${fill}" stroke="${stroke}" stroke-width="2" stroke-linejoin="round"/>
+          <circle cx="23" cy="23.5" r="11" fill="#1b0d05" fill-opacity="0.9"/>
+          <text x="23" y="28" text-anchor="middle" font-family="Arial, sans-serif" font-size="13" font-weight="900" fill="#fff7ed">P</text>
+          <text x="57" y="28" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="900" fill="#ffffff">${label}</text>
+        </g>
+      </svg>
+    `;
+    return {
+      url: svgDataUrl(svg),
+      scaledSize: new googleMaps.Size(74, 52),
+      anchor: new googleMaps.Point(37, 52),
+    };
+  }
   if (marker.kind !== "user") {
     const glyph = markerGlyph(marker);
     const parkedTruckCount = marker.parkedTrucks?.length || 0;
@@ -751,6 +823,9 @@ export function GoogleMapSurface({
   interactive = true,
   showZoomControls = true,
   zoomControlsPosition = "top",
+  fitMarkers = false,
+  fitMarkerPadding = 56,
+  showMapTypeControl = false,
 }: GoogleMapSurfaceProps) {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
@@ -777,6 +852,7 @@ export function GoogleMapSurface({
   const popupAnchorRef = useRef<GeoPoint | null>(popupAnchor || null);
   const centerRef = useRef(center);
   const zoomRef = useRef(zoom);
+  const lastFitSignatureRef = useRef("");
 
   const renderedMarkers = useMemo<MapAdapterMarker[]>(() => {
     if (!userLocation) return markers;
@@ -837,8 +913,7 @@ export function GoogleMapSurface({
           prev();
         } catch {}
       }
-      const msg =
-        "Google Maps authorization failed for this domain. Falling back to legacy map.";
+      const msg = "Google Maps authorization failed for this domain.";
       setLoadError(msg);
       if (!hasReportedFatalErrorRef.current) {
         hasReportedFatalErrorRef.current = true;
@@ -875,6 +950,14 @@ export function GoogleMapSurface({
             zoom: zoomRef.current,
             disableDefaultUI: true,
             zoomControl: false,
+            mapTypeControl: showMapTypeControl,
+            mapTypeControlOptions: showMapTypeControl
+              ? {
+                  position: googleMaps.ControlPosition.LEFT_BOTTOM,
+                  style: googleMaps.MapTypeControlStyle.HORIZONTAL_BAR,
+                  mapTypeIds: ["roadmap", "satellite"],
+                }
+              : undefined,
             clickableIcons: interactive,
             tilt: isNightTheme && !useNativeMapStyle ? 25 : 0,
             heading: isNightTheme && !useNativeMapStyle ? 8 : 0,
@@ -913,11 +996,17 @@ export function GoogleMapSurface({
               onZoomChangedRef.current?.(z);
             }
             const c = map.getCenter?.();
-            if (c && onCenterChangedRef.current) {
-              onCenterChangedRef.current({
+            const nextCenter = c
+              ? {
                 lat: Number(c.lat()),
                 lng: Number(c.lng()),
-              });
+                }
+              : null;
+            if (
+              isUsableMapCenter(nextCenter) &&
+              onCenterChangedRef.current
+            ) {
+              onCenterChangedRef.current(nextCenter);
             }
             if (bounds && onBoundsChangedRef.current) {
               const ne = bounds.getNorthEast();
@@ -1035,9 +1124,7 @@ export function GoogleMapSurface({
         setLoadError(null);
       } catch (error: any) {
         if (!mounted) return;
-        const msg =
-          error?.message ||
-          "Unable to load Google Maps. Falling back to legacy map.";
+        const msg = error?.message || "Unable to load Google Maps.";
         setLoadError(msg);
         if (!hasReportedFatalErrorRef.current) {
           hasReportedFatalErrorRef.current = true;
@@ -1049,10 +1136,18 @@ export function GoogleMapSurface({
     return () => {
       mounted = false;
     };
-  }, [apiKey, mapId, isNightTheme, interactive, useNativeMapStyle]);
+  }, [
+    apiKey,
+    mapId,
+    isNightTheme,
+    interactive,
+    showMapTypeControl,
+    useNativeMapStyle,
+  ]);
 
   useEffect(() => {
     if (!mapRef.current) return;
+    if (!isUsableMapCenter(center)) return;
     const current = mapRef.current.getCenter?.();
     if (!current) {
       mapRef.current.setCenter(center);
@@ -1076,6 +1171,51 @@ export function GoogleMapSurface({
     const cur = Number(mapRef.current.getZoom?.() || 0);
     if (!Number.isFinite(cur) || cur !== zoom) mapRef.current.setZoom(zoom);
   }, [zoom]);
+
+  const fitSignature = useMemo(
+    () =>
+      fitMarkers
+        ? markers
+            .map(
+              (marker) =>
+                `${marker.id}:${marker.lat.toFixed(5)}:${marker.lng.toFixed(5)}`,
+            )
+            .sort()
+            .join("|")
+        : "",
+    [fitMarkers, markers],
+  );
+
+  useEffect(() => {
+    const googleMaps = (window as GoogleMapsWindow).google?.maps;
+    const map = mapRef.current;
+    if (!fitMarkers || !googleMaps || !map || mapReadyVersion === 0) return;
+    if (!fitSignature || lastFitSignatureRef.current === fitSignature) return;
+
+    const validMarkers = markers.filter((marker) =>
+      isUsableMapCenter({ lat: marker.lat, lng: marker.lng }),
+    );
+    if (validMarkers.length === 0) return;
+
+    lastFitSignatureRef.current = fitSignature;
+    if (validMarkers.length === 1) {
+      map.setCenter({ lat: validMarkers[0].lat, lng: validMarkers[0].lng });
+      if (Number(map.getZoom?.() || 0) < 15) map.setZoom(15);
+      return;
+    }
+
+    const bounds = new googleMaps.LatLngBounds();
+    validMarkers.forEach((marker) =>
+      bounds.extend({ lat: marker.lat, lng: marker.lng }),
+    );
+    map.fitBounds(bounds, fitMarkerPadding);
+  }, [
+    fitMarkerPadding,
+    fitMarkers,
+    fitSignature,
+    mapReadyVersion,
+    markers,
+  ]);
 
   useEffect(() => {
     const googleMaps = (window as GoogleMapsWindow).google?.maps;
@@ -1114,6 +1254,8 @@ export function GoogleMapSurface({
         marker.color || "",
         marker.title || "",
         marker.subtitle || "",
+        marker.label || "",
+        marker.selected ? "selected" : "",
         marker.parkingStatus || "",
         (marker.parkedTrucks || [])
           .map((truck) => `${truck.id || ""}:${truck.name}`)
@@ -1136,6 +1278,9 @@ export function GoogleMapSurface({
         } else if (typeof existing.setIcon === "function") {
           existing.setIcon(buildLegacyIcon(googleMaps, marker));
         }
+        if (typeof existing.setZIndex === "function") {
+          existing.setZIndex(marker.selected ? 1000 : undefined);
+        }
         markerSignatureRefs.current.set(marker.id, signature);
         return;
       }
@@ -1152,6 +1297,7 @@ export function GoogleMapSurface({
             position: { lat: marker.lat, lng: marker.lng },
             title: marker.title || marker.subtitle || marker.kind,
             icon: buildLegacyIcon(googleMaps, marker),
+            zIndex: marker.selected ? 1000 : undefined,
           });
 
       if (typeof instance.addEventListener === "function") {
@@ -1437,7 +1583,11 @@ export function GoogleMapSurface({
       {interactive && showZoomControls && (
         <div
           className={`absolute right-5 flex flex-col gap-2 z-[1000] ${
-            zoomControlsPosition === "below-header" ? "top-20" : "top-5"
+            zoomControlsPosition === "bottom"
+              ? "bottom-40"
+              : zoomControlsPosition === "below-header"
+                ? "top-20"
+                : "top-5"
           }`}
         >
           <Button

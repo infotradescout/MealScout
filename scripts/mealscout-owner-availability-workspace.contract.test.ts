@@ -7,16 +7,23 @@ const owner = read("client/src/pages/restaurant-owner-dashboard.tsx");
 const shell = read("client/src/components/business-workspace-shell.tsx");
 const navigation = read("client/src/components/navigation.tsx");
 
-// The business shell owns mobile navigation on workspace routes. Four daily
-// destinations stay visible; secondary tools live behind one More control.
-assert.match(shell, /const mobilePrimaryModuleIds = new Set/);
-for (const moduleId of ["overview", "profile", "menu", "availability"]) {
+// The business shell owns mobile navigation on workspace routes. The four
+// stable destinations are Overview, Work, Manage, and More; modules are
+// grouped under the job they serve instead of competing as global tabs.
+assert.match(shell, /const mobileManageModuleIds = new Set/);
+for (const moduleId of ["profile", "menu", "availability", "media", "deals"]) {
   assert.match(shell, new RegExp(`"${moduleId}"`));
 }
 assert.match(shell, /data-workspace-mobile-switcher="true"/);
+assert.match(shell, /data-testid="workspace-mobile-nav-overview"/);
+assert.match(shell, /data-testid="workspace-mobile-nav-work"/);
+assert.match(shell, /data-testid="workspace-mobile-nav-manage"/);
 assert.match(shell, /data-testid="workspace-mobile-nav-more"/);
 assert.match(shell, /More business tools/);
-assert.match(shell, /mobileSecondaryModules\.map/);
+assert.match(shell, /mobileManageModules\.map/);
+assert.match(shell, /mobileMoreModules\.map/);
+assert.match(shell, /id: "parking-pass"/);
+assert.match(shell, /data-testid=\{`workspace-mobile-work-\$\{destination\.id\}`\}/);
 assert.match(
   navigation,
   /isBusinessWorkspaceRoute \? "hidden" : "fixed"/,

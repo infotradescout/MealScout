@@ -28,9 +28,9 @@ No route should be removed in the first implementation slice. Legacy retirement 
 - Signed-in `/` redirects to Scout; signed-out `/` renders Welcome.
 - `/map` and `/trending` already redirect to Scout.
 - Public restaurant, truck, bar, location, supplier, generic profile, and clean-slug routes converge on `PublicProfilePage` or `CleanPublicProfileRoute`.
-- `explore-preview.tsx` contains an explicit dead-surface comment and is retained because contract tests read it by path. It is not the served Scout implementation.
+- The obsolete `explore-preview.tsx`, `scout-prototype.tsx`, standalone map/trending pages, and non-Google map fallbacks were retired on 2026-07-18 after route and reference verification. Compatibility entries redirect to Scout.
 - `/truck-discovery` is routed and has active inbound links from the dashboard switcher, events router, and Pensacola spots surface. It is not orphaned.
-- `/food-truck-rush`, `/golden-plate-winners`, and `/scout-prototype` are routed but have no inbound references in `client/src` outside their route declarations and own files. That makes them confirmed **unlinked routes**, not automatically safe to delete.
+- `/food-truck-rush` and `/golden-plate-winners` are routed but have no inbound references in `client/src` outside their route declarations and own files. That makes them confirmed **unlinked routes**, not automatically safe to delete.
 - `/pensacola/report` and `/pensacola/spots` cross-link and are campaign/lead-generation surfaces. Absence from primary navigation does not prove they are unused externally.
 
 ### Current navigation
@@ -102,7 +102,7 @@ The live product includes these recurring state families:
 
 These are stop conditions for destructive or behavior-changing work, not blockers to the first visual-shell slice:
 
-1. External traffic and conversion data for unlinked routes (`/food-truck-rush`, `/golden-plate-winners`, `/scout-prototype`) is not established.
+1. External traffic and conversion data for unlinked routes (`/food-truck-rush`, `/golden-plate-winners`) is not established.
 2. External campaign dependencies for Pensacola, comparison, and marketing routes are not established.
 3. The exact canonical clean-slug policy and collision behavior for `/:businessSlug` needs runtime/API confirmation before changing profile aliases.
 4. Whether “follow” and “favorite” are intentionally different user concepts or should be presented as one Saved model needs product confirmation from existing mutations/analytics.
@@ -431,7 +431,7 @@ Evidence codes: **R** routed in `App.tsx`; **N** current navigation/reference co
 | `/search` | Search | Separate explicit search | Scout search state | Merge; preserve URL entry | R,P | High |
 | `/map` | RedirectToScout | Legacy discovery entry | Scout map state | Keep redirect | R,A | Low |
 | `/trending` | RedirectToScout | Legacy discovery entry | Scout trending context | Keep redirect | R,A | Low |
-| `/scout-prototype` | ScoutPrototype | Alternate prototype | No canonical public destination | Investigate, then retire | R,U | Medium |
+| `/scout-prototype` | RedirectToScout | Compatibility entry for retired prototype | Scout | Keep redirect; implementation retired | R,U | Low |
 | `/food-truck-rush` | FoodTruckRush | Browser game/promotion | Campaign archive or explicit promo area | Investigate, then move/retire | R,U | Low |
 | `/restaurant/:id` | PublicProfilePage | Restaurant decision | Canonical public profile | Keep | R,P | High |
 | `/restaurant/:id/:profileSlug` | PublicProfilePage | Profile alias/SEO | Canonical public profile | Keep/normalize canonical metadata | R,A | Medium |

@@ -39,3 +39,12 @@ playwright-report/
 
 # Runtime integration logs
 pda_int.log
+
+# Generated point-in-time audits and local visual-review output. These become
+# false source-of-truth inputs as the live routes evolve; Git history already
+# preserves any deliberately reviewed snapshot.
+api_raw_call_*.json
+api_raw_call_*.txt
+api_raw_fetch_calls.txt
+audit_snapshot/
+artifacts/scout-mobile-thirds-hotfix/

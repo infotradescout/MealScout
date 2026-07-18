@@ -65,6 +65,7 @@ for (const requiredSnippet of [
   "scoutRotatingRowFallbackCopy",
   "emptyRowsEligibleForRotation",
   "rowsWithRotatingFallback",
+  "rotatingMapDecisionItems",
   '`fallback-spots:${row.id}:${spotRotationBucket}`',
   "row.rotatingFallbackFor",
   'scope: "nearby" as const',
@@ -84,8 +85,18 @@ assert.match(
 );
 assert.match(
   scoutPage,
-  /rowId === "food_trucks_today" \? \[\] : rotatingSpots/,
+  /if \(rowId === "food_trucks_today"\) return \[\];/,
   "Food Trucks Today must never substitute ordinary profiles for live truck truth.",
+);
+assert.match(
+  scoutPage,
+  /rowId === "nearby_restaurants"[\s\S]*?getRestaurantEntityType\(restaurant\) === "restaurant"/,
+  "Restaurant fallback rows must contain restaurants only.",
+);
+assert.match(
+  scoutPage,
+  /rowId === "happy_hours"[\s\S]*?entityType === "restaurant" \|\| entityType === "bar"/,
+  "Bars-and-restaurants fallback rows must exclude food trucks and other business types.",
 );
 assert.match(
   scoutPage,

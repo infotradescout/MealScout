@@ -56,6 +56,11 @@ assert.match(
   /Showing related picks from active areas/,
   "Fallback copy must describe network activity without naming a fixed city",
 );
+assert.match(
+  scout,
+  /normalizedQuery[\s\S]*No related “\$\{normalizedQuery\}” picks are active right now[\s\S]*No active MealScout picks are available right now/,
+  "An empty discovery query must not render empty quotation marks in the fallback notice",
+);
 
 assert.match(scout, /from "@shared\/scoutSearchIntent"/);
 assert.match(publicSearch, /from "@shared\/scoutSearchIntent"/);

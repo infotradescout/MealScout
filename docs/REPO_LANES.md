@@ -14,6 +14,9 @@ MealScout
 - Missing menu, schedule, and location states must be honest and actionable.
 - Every share/copy/QR final payload must use canonical attributed URLs when attribution exists.
 - Do not import doctrine, copy, naming, or assumptions from another Thomas / TradeScout brand.
+- `npm` and `package-lock.json` are the only package-manager source of truth. Do not add a secondary lockfile.
+- Point-in-time API scans, dependency snapshots, local Vite logs, and visual-review captures are output, not source. Keep them outside tracked runtime paths unless a current contract explicitly consumes them.
+- Route and surface decisions come from `client/src/App.tsx`, `client/src/lib/app-route-surface.ts`, and the currently served implementation. Historical screenshots and removed components cannot override them.
 
 ## Safe Parallel Lanes
 
@@ -130,7 +133,9 @@ Banned unless explicitly assigned:
 
 Allowed:
 
-- `client/src/pages/map.tsx`
+- `client/src/pages/explore-preview-v2.tsx`
+- `client/src/components/maps/google-map-surface.tsx`
+- `client/src/components/maps/GoogleMapPicker.tsx`
 - `client/src/pages/city-landing.tsx`
 - `client/src/pages/deals-city.tsx` only for share/copy or city link behavior named in the lane
 - map/city discovery contracts

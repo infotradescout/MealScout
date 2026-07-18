@@ -3,6 +3,11 @@
 > Read-only truth/control lane. No runtime changes, no UI changes, no refactors, no deletions.
 > Purpose: prove what production actually serves, find stale/dead/duplicate surfaces, locate the
 > files that own the bad UI, and define a narrow first implementation lane.
+>
+> **Superseded implementation note (2026-07-18):** the obsolete Scout prototype, dead Scout page,
+> standalone map/trending pages, non-Google map implementations, and their source-coupled contracts
+> were retired. `/scout-prototype`, `/map`, and `/trending` now resolve to canonical Scout. Do not
+> recreate the removed files from this historical audit; use `MEALSCOUT_ROUTE_MAP.md` as route truth.
 
 ---
 
@@ -13,9 +18,8 @@
 The repository-side truth is now mapped (routes, owners, deploy topology, token system). Three
 facts still require live confirmation that only the operator can produce (deployed commit SHA,
 which host serves human traffic, and production screenshots). Until those three are confirmed,
-UI rebuild work must not start, because the largest Scout file in the repo
-(`client/src/pages/explore-preview.tsx`) is **no longer routed** and polishing it would be wasted
-or harmful effort.
+UI rebuild work was initially blocked because the then-largest Scout file was not routed. That
+obsolete implementation has since been removed; `explore-preview-v2.tsx` is the only Scout page.
 
 > **Update (follow-up cleanup lane):** the §2 working-tree blockers were resolved. The in-progress
 > recenter-button collision fix was committed as its own narrow bugfix lane
@@ -81,9 +85,9 @@ but likely superseded; **UNKNOWN** = needs live confirmation.
 | `/scout`, `/scout/:refTag` | **Primary public discovery** | `client/src/pages/explore-preview-v2.tsx` | `ScoutPageV2` | LIVE | App.tsx L435-438, 465-468 | Map overlay + dark cards (operator report) | **High** (core surface) | **P1** |
 | `/directory`, `/directory/:refTag` | Discovery alias | `explore-preview-v2.tsx` | `ScoutPageV2` | DUPLICATE | App.tsx L437-438 | same as /scout | High | follows /scout |
 | `/scout-v2` | Discovery alias | `explore-preview-v2.tsx` | `ScoutPageV2` | DUPLICATE | App.tsx L440,470 | same as /scout | Low | consider consolidating (later) |
-| `/scout-prototype` | Old prototype | `client/src/pages/scout-prototype.tsx` | `ScoutPrototype` | STALE? (routed, reachable) | App.tsx L439,469 | prototype styling | Low | do-not-touch (deprecate later) |
+| `/scout-prototype` | Retired prototype entry | — | `RedirectToScout` | REDIRECT → /scout | App.tsx | canonical Scout | Low | keep compatibility redirect |
 | `/map`, `/trending` | Legacy map/trending | — | `RedirectToScout` | REDIRECT → /scout | App.tsx L283-284 | n/a (no standalone map surface) | Low | — |
-| (old `/scout` owner) | Superseded discovery | `client/src/pages/explore-preview.tsx` | `ScoutPage` | **DEAD (imported, not routed)** | imported App.tsx L145; **no `<Route ... component={ScoutPage}>` exists** | N/A — not served | n/a | **DO NOT POLISH** |
+| (old `/scout` owner) | Superseded discovery | removed | — | RETIRED | removal guard contract | N/A — not served | n/a | do not recreate |
 | Public profiles: `/restaurant/:id`, `/truck/:slug`, `/bar/:slug`, `/location/:slug`, `/supplier/:slug`, `/p/:type/:id`, clean `/:businessSlug` | Business profile | `client/src/pages/public-profile.tsx` | `PublicProfilePage` | LIVE | App.tsx SharedPublicRoutes L300-345, L455-458 | Unknown until prod screenshot | **High** | **P2** |
 | `/search` | Search results | `client/src/pages/search.tsx` | `Search` | LIVE | App.tsx L282 | Unknown | Med | **P3** |
 | `/claim-business`, `/claim-truck` (+`/:refTag`) | Claim/update profile | `client/src/pages/claim-truck.tsx` | `ClaimTruckPage` | LIVE | App.tsx L443-448, 473-478 | Unknown | Med | **P4** |
@@ -129,12 +133,8 @@ Key token finding: the warm-vs-black inconsistency is **at the token level** (`-
 
 ## 6. Stale / dead / duplicate / conflict findings
 
-1. **DEAD CODE (high signal): `client/src/pages/explore-preview.tsx` (`ScoutPage`) is imported but
-   not routed.** All `/scout`, `/directory`, `/scout-v2` routes now point to `ScoutPageV2`
-   (`explore-preview-v2.tsx`). `ScoutPage` remains lazily imported at App.tsx L145 with zero
-   `<Route>` usages. **Implication:** any "make Scout look better" effort spent in
-   `explore-preview.tsx` is wasted — it is not served. Do not delete in this lane; flag for a
-   later cleanup lane.
+1. **DEAD CODE (resolved 2026-07-18):** the obsolete `explore-preview.tsx` import and file were
+   removed. All `/scout`, `/directory`, and `/scout-v2` routes use `ScoutPageV2`.
 2. **STALE CONTRACT TESTS reference the old route wiring (RESOLVED 2026-07-08).** Several contract tests
    previously asserted `<Route path="/scout" component={ScoutPage} />` /
    `/directory/:refTag component={ScoutPage}`:
@@ -150,9 +150,9 @@ Key token finding: the warm-vs-black inconsistency is **at the token level** (`-
 4. **DUPLICATE DISCOVERY ALIASES:** `/scout`, `/directory`, `/scout-v2` all render the same
    `ScoutPageV2`. Not harmful, but three public aliases of one surface can dilute canonical URLs;
    revisit for SEO canonicalization later (not a UI-rebuild blocker).
-5. **PROTOTYPE STILL REACHABLE:** `/scout-prototype` → `scout-prototype.tsx` remains routed and is
-   referenced by multiple contract tests (`scout-*.contract.test.ts`). Treat as deprecated-but-live;
-   do not touch during the UI rebuild.
+5. **PROTOTYPE REACHABILITY (resolved 2026-07-18):** `/scout-prototype` redirects to `/scout`.
+   Prototype-only contracts and implementation files were removed; canonical behavior is tested
+   against `explore-preview-v2.tsx` and shared Scout models.
 6. **VERCEL/RENDER SERVING AMBIGUITY (see §3):** two builds of the frontend exist —
    Vercel `build:client` (client/dist, human traffic) and Render `build:platform` (dist/, API +
    bot SSR). A UI change only shows to humans once **Vercel** redeploys; verifying via
@@ -189,12 +189,11 @@ Key token finding: the warm-vs-black inconsistency is **at the token level** (`-
 
 ## 9. Files that MUST NOT be touched yet
 
-- `client/src/pages/explore-preview.tsx` (DEAD — not served; do not polish, do not delete in a UI lane)
-- `client/src/pages/scout-prototype.tsx` (deprecated-but-live; contract-test bound)
+- Removed Scout/map implementations (do not recreate them from Git history)
 - All `server/**` (no runtime/API/auth/payment changes)
 - `shared/schema/**` (no schema changes)
 - `vercel.json`, `render.yaml`, deploy scripts (no deploy-topology changes)
-- Any `scripts/*.contract.test.ts` (referral/auth drift is a separate, operator-decided lane)
+- Contracts that protect active API/auth behavior; update source-coupled tests when ownership moves
 - Public profile, search, claim, login/signup, admin surfaces (later priorities P2–P7)
 
 ---
@@ -213,7 +212,7 @@ Perform these against **production** and record results before UI work starts:
 - [ ] Hard-refresh (cache-bust) each and confirm the screenshots reflect the current SHA, not a
       cached shell.
 - [ ] Note whether the "dead black card" appears in night mode specifically (confirms §5 token finding).
-- [ ] Confirm `/scout-prototype` and any `explore-preview.tsx`-era screen are NOT what production serves.
+- [ ] Confirm `/scout-prototype`, `/map`, and `/trending` redirect to canonical Scout.
 
 ## 11. Gemini audit checklist (objector)
 
@@ -221,7 +220,7 @@ Perform these against **production** and record results before UI work starts:
 - [ ] Confirm branch/HEAD SHA and deploy topology (Vercel SPA + Render API/SSR) are correctly stated.
 - [ ] Confirm the live/stale/dead/duplicate route table is backed by file:line evidence.
 - [ ] Confirm confirmed-facts vs unknowns are cleanly separated (esp. deployed SHA, host mapping, screenshots).
-- [ ] Confirm the DEAD `explore-preview.tsx` finding and the stale referral/auth contract-test drift are correctly characterized.
+- [ ] Confirm removed Scout/map files remain absent and active contracts read canonical sources.
 - [ ] Confirm the first lane is narrow (`/scout` + nav + one token), not a broad rewrite.
 - [ ] Confirm no generic SaaS/dashboard assumptions were introduced.
 - [ ] Confirm working capabilities are preserved (no deletions, no route rewrites).

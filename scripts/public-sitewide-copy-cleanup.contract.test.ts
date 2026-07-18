@@ -4,11 +4,8 @@ import { readFileSync } from "node:fs";
 const publicUiFiles = [
   "client/src/components/navigation.tsx",
   "client/src/components/scout/ScoutEmptyState.tsx",
-  "client/src/pages/map.tsx",
-  "client/src/pages/explore-preview.tsx",
+  "client/src/pages/explore-preview-v2.tsx",
   "client/src/pages/public-profile.tsx",
-  "client/src/pages/scout-prototype.tsx",
-  "client/src/pages/trending.tsx",
 ];
 
 const protectedPhraseAllowlist = new Set([

@@ -1,6 +1,7 @@
 {
   "name": "mealscout",
   "version": "1.0.0",
+  "packageManager": "npm@11.11.0",
   "type": "module",
   "engines": {
     "node": ">=20 <25"
@@ -8,6 +9,7 @@
   "license": "MIT",
   "scripts": {
     "dev": "vite",
+    "dev:review": "cross-env MEALSCOUT_LOCAL_MAP_RUNTIME_PROXY_TARGET=https://mealscout.onrender.com vite --host 127.0.0.1",
     "dev:server": "cross-env NODE_ENV=development tsx server/index.ts",
     "dev:server:static": "cross-env NODE_ENV=production PORT=5000 tsx server/index.ts",
     "build": "node scripts/platformBuild.mjs",
@@ -62,7 +64,7 @@
     "smoke:mobile-deeplinks:with-server": "node scripts/mobileDeepLinkSmokeWithServer.mjs",
     "smoke:referral-live-attribution": "tsx scripts/mealscout-referral-live-attribution-smoke.ts",
     "test:referral-live-attribution-contract": "npx --yes tsx scripts/mealscout-referral-live-attribution-smoke.contract.test.ts",
-    "test:live-exposure-guardrails": "npx --yes tsx scripts/mealscout-live-exposure-guardrails.contract.test.ts",
+    "test:scout-surface-ownership": "npx --yes tsx scripts/scout-obsolete-surface-removal.contract.test.ts",
     "verify:deal-writes": "npx dotenv-cli -e .env -- npx tsx scripts/verifyDealWrites.ts",
     "test:incidents": "npx --yes tsx scripts/testIncidents.ts",
     "checklist:incidents": "node scripts/runIncidentStagingChecklist.mjs",
@@ -156,7 +158,6 @@
     "@types/compression": "^1.8.1",
     "@types/d3-geo": "^3.1.0",
     "@types/helmet": "^0.0.48",
-    "@types/leaflet": "^1.9.20",
     "@types/memoizee": "^0.4.12",
     "@types/multer": "^2.0.0",
     "@types/passport-facebook": "^3.0.3",
@@ -190,10 +191,8 @@
     "html2canvas": "^1.4.1",
     "input-otp": "^1.4.2",
     "jsonwebtoken": "^9.0.2",
-    "leaflet": "^1.9.4",
     "lucide-react": "^0.453.0",
     "luxon": "^3.7.2",
-    "maplibre-gl": "^5.24.0",
     "memoizee": "^0.4.17",
     "multer": "^2.0.2",
     "nanoid": "^5.1.6",
@@ -208,7 +207,6 @@
     "react-day-picker": "^8.10.1",
     "react-dom": "^18.3.1",
     "react-hook-form": "^7.55.0",
-    "react-leaflet": "^4.2.1",
     "react-resizable-panels": "^2.1.7",
     "recharts": "^2.15.2",
     "socket.io": "^4.8.1",

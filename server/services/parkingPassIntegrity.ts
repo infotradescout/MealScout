@@ -3,7 +3,10 @@ import { db } from "../db";
 import { storage } from "../storage";
 import { eventSeries, hosts } from "@shared/schema";
 import { PARKING_PASS_MEAL_WINDOWS } from "@shared/parkingPassSlots";
-import { computeParkingPassQualityFlags } from "./parkingPassQuality";
+import {
+  computeParkingPassQualityFlags,
+  isParkingPassPublicReady,
+} from "./parkingPassQuality";
 
 type IntegrityOptions = {
   dryRun?: boolean;
@@ -74,7 +77,11 @@ export async function runParkingPassIntegrity(options?: IntegrityOptions) {
     flags.forEach((flag) =>
       flagCounts.set(flag, (flagCounts.get(flag) ?? 0) + 1),
     );
-    const publicReady = flags.length === 0;
+    // Diagnostics may include non-blocking operational flags such as a local
+    // Stripe configuration being absent. Publication must use the same
+    // readiness rule as the public feed so integrity runs cannot silently
+    // unpublish otherwise bookable inventory.
+    const publicReady = isParkingPassPublicReady(listing as any);
     const nextStatus = publicReady ? "published" : "draft";
 
     if (String(series.status) !== nextStatus) {
@@ -107,4 +114,3 @@ export async function runParkingPassIntegrity(options?: IntegrityOptions) {
       .sort((a, b) => b.count - a.count),
   };
 }
-

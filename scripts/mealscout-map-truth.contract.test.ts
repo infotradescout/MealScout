@@ -7,6 +7,7 @@ import {
   getScoutRecenterDecision,
   shouldShowRestaurantMarker,
 } from "../client/src/lib/scoutMapTruth";
+import { isUsableMapCenter } from "../client/src/components/maps/map-coordinate-truth";
 import {
   expandPublicMapBounds,
   parsePublicMapBounds,
@@ -24,9 +25,9 @@ const googleMap = readFileSync(
   ),
   "utf8",
 );
-const fallbackMap = readFileSync(
+const googleMapPicker = readFileSync(
   new URL(
-    "../client/src/components/maps/themed-scout-map-v2.tsx",
+    "../client/src/components/maps/GoogleMapPicker.tsx",
     import.meta.url,
   ),
   "utf8",
@@ -47,18 +48,13 @@ const between = (source: string, start: string, end: string) => {
 const compactMap = between(
   scout,
   'data-testid="scout-map-preview"',
-  "{/* GoogleMapSurface:",
+  "{/* GoogleMapSurface is the single",
 );
 const compactGoogleIndex = compactMap.indexOf("<GoogleMapSurface");
-const compactFallbackIndex = compactMap.indexOf("<ThemedScoutMap");
 assert.ok(compactGoogleIndex >= 0, "Compact Scout must render Google Maps.");
 assert.ok(
-  compactFallbackIndex >= 0,
-  "Compact Scout must retain a no-key/error fallback.",
-);
-assert.ok(
-  compactGoogleIndex < compactFallbackIndex,
-  "The local-tile map must be a fallback, not the primary compact renderer.",
+  compactMap.includes("<HeroMapFallback"),
+  "Compact Scout must retain an honest unavailable/loading state.",
 );
 assert.match(
   compactMap,
@@ -70,12 +66,17 @@ assert.doesNotMatch(
   /decorative teaser|Premium overlay frame|rgba\(11,8,6,0\.62\)/i,
   "The customer map must not be decoration or covered by the dark teaser grade.",
 );
+assert.doesNotMatch(
+  scout,
+  /ThemedScoutMap|themed-scout-map|rastertiles|OpenStreetMap|react-leaflet/,
+  "Served Scout must have one geographic implementation: Google Maps.",
+);
 
 const googleTags = scout.match(/<GoogleMapSurface[\s\S]*?\/>/g) || [];
 assert.equal(googleTags.length, 2, "Scout must have compact and full Google maps.");
 for (const tag of googleTags) {
   assert.match(tag, /useNativeMapStyle=\{false\}/);
-  assert.match(tag, /isNightTheme=\{true\}/);
+  assert.match(tag, /isNightTheme=\{false\}/);
 }
 assert.match(googleTags[0], /showZoomControls=\{false\}/);
 assert.match(googleTags[1], /showZoomControls=\{true\}/);
@@ -88,24 +89,8 @@ assert.match(googleMap, /layoutTimeoutIdsRef\.current[\s\S]*clearTimeout/);
 assert.match(googleMap, /clearInstanceListeners/);
 assert.match(googleMap, /mapRef\.current\s*=\s*null/);
 
-for (const distortion of [
-  "dark_all",
-  "driftRafRef",
-  "mix-blend-mode: screen",
-  'aria-label="Live map"',
-]) {
-  assert.ok(
-    !fallbackMap.includes(distortion),
-    `Fallback map must not restore visual/status distortion: ${distortion}`,
-  );
-}
-assert.doesNotMatch(fallbackMap, /filter:\s*blur\(/);
-assert.doesNotMatch(fallbackMap, /pitch:\s*(?:[1-9]|-[1-9])/);
-assert.doesNotMatch(fallbackMap, /bearing:\s*(?:[1-9]|-[1-9])/);
-assert.match(fallbackMap, /rastertiles\/voyager/);
-assert.match(fallbackMap, /showUserLocation\s*=\s*false/);
-assert.match(fallbackMap, /mapHasLoadedRef\.current/);
-assert.doesNotMatch(fallbackMap, /map\.loaded\(\)/);
+assert.doesNotMatch(googleMapPicker, /react-leaflet|LeafletRenderer|OpenStreetMap/);
+assert.match(googleMapPicker, /Google Maps is temporarily unavailable/);
 
 const resolvedLocation = between(
   scout,
@@ -121,6 +106,16 @@ assert.match(
   scout,
   /resolvedScoutLocation\?\.source === "device" \? resolvedScoutCoords : null/,
   "Only verified device coordinates may create a You-are-here pin.",
+);
+assert.match(
+  scout,
+  /const hasCoords = isUsableMapCenter\(\{ lat, lng \}\)/,
+  "Saved zero coordinates must not replace the launch market.",
+);
+assert.match(
+  resolvedLocation,
+  /if \(isUsableMapCenter\(deviceCoords\)\)/,
+  "A transient browser geolocation at Null Island must not replace the market.",
 );
 assert.deepEqual(
   getScoutRecenterDecision({
@@ -143,6 +138,19 @@ assert.equal(
 assert.match(
   scout,
   /getScoutRecenterDecision\([\s\S]*shiftCenterForRightQuadrant/,
+);
+assert.equal(isUsableMapCenter({ lat: 30.4213, lng: -87.2169 }), true);
+assert.equal(isUsableMapCenter({ lat: 0, lng: 0 }), false);
+assert.equal(isUsableMapCenter({ lat: Number.NaN, lng: -87.2169 }), false);
+assert.match(
+  scout,
+  /handleMapCenterChanged[\s\S]*if \(!isUsableMapCenter\(c\)\) return/,
+  "Scout must never replace its market center with Google's transient Null Island value.",
+);
+assert.match(
+  googleMap,
+  /isUsableMapCenter\(nextCenter\)/,
+  "The shared Google surface must reject invalid idle centers before notifying consumers.",
 );
 
 const openStateCases: Array<[unknown, ReturnType<typeof getRestaurantOpenState>]> = [
@@ -199,6 +207,17 @@ assert.equal(
   true,
   "A closed restaurant may appear only as a truthful deal result.",
 );
+assert.equal(
+  shouldShowRestaurantMarker({
+    openState: "unknown",
+    hasDeal: false,
+    showOpenNow: true,
+    showDeals: true,
+    showAllRestaurants: true,
+  }),
+  true,
+  "General Scout discovery must retain truthful restaurant pins even when hours are unknown.",
+);
 
 assert.equal(
   getEventCalendarDay({
@@ -224,11 +243,23 @@ assert.match(truckMarkers, /\.filter\(isTruckBroadcastLive\)/);
 const restaurantMarkers = between(
   scout,
   "const restaurantMarkers = useMemo",
-  "const eventMarkers",
+  "const businessProfileMarkers",
 );
 assert.match(restaurantMarkers, /resolveCoordinatePair\(r\.latitude, r\.longitude\)/);
 assert.match(restaurantMarkers, /isOpen:\s*openState === "open"/);
 assert.doesNotMatch(restaurantMarkers, /isOpen:\s*true/);
+
+const businessProfileMarkers = between(
+  scout,
+  "const businessProfileMarkers = useMemo",
+  "const eventMarkers",
+);
+assert.match(businessProfileMarkers, /kind:\s*"business" as const/);
+assert.match(businessProfileMarkers, /map-profile:/);
+assert.match(businessProfileMarkers, /rotateScoutSpots/);
+assert.match(businessProfileMarkers, /locationSemantics:\s*isFoodTruckProfile/);
+assert.match(businessProfileMarkers, /"profile_area" as const/);
+assert.match(businessProfileMarkers, /getRestaurantProfilePath\(business\)/);
 
 const markerFilter = between(
   scout,
@@ -236,13 +267,10 @@ const markerFilter = between(
   "const sceneFilteredMapMarkers",
 );
 assert.match(markerFilter, /shouldShowRestaurantMarker/);
+assert.match(markerFilter, /showAllRestaurants:\s*showAllRestaurantPins/);
 assert.doesNotMatch(
   scout,
   /nearbyHosts\.length\s*>\s*0\s*\?\s*nearbyHosts\s*:\s*rows/,
-);
-assert.match(
-  scout,
-  /parkingStatus:\s*parkedTrucks\.length\s*>\s*0\s*\?\s*"occupied"\s*:\s*null/,
 );
 assert.match(
   scout,
@@ -252,14 +280,35 @@ assert.match(
   scout,
   /\.filter\(\(event\) => isTodayDate\(getEventCalendarDay\(event\)\)\)/,
 );
-assert.match(markerFilter, /hasParkedTruck\s*&&[\s\S]*activeMapLayers\.happeningToday/);
+assert.doesNotMatch(
+  scout,
+  /sectionLabel:\s*"Host Locations"/,
+  "A bare parking host must never become Scout's primary food decision.",
+);
 
 const allMapMarkers = between(
   scout,
   "const allMapMarkers = useMemo",
   "const scoutDebugCounts",
 );
+assert.doesNotMatch(
+  allMapMarkers,
+  /hostMarkers/,
+  "Parking Pass hosts must not become consumer Scout food pins.",
+);
 assert.doesNotMatch(allMapMarkers, /activityFallback|network/);
+assert.match(allMapMarkers, /\.\.\.businessProfileMarkers/);
+
+const sceneMarkerFilter = between(
+  scout,
+  "const sceneFilteredMapMarkers = useMemo",
+  "const sceneMapMarkerCounts",
+);
+assert.match(
+  sceneMarkerFilter,
+  /activeSceneLaneId === "food_trucks"[\s\S]*marker\.kind === "truck"/,
+  "The Food Trucks lane must remain live-truck-only.",
+);
 
 const markerCounts = between(
   scout,
@@ -267,7 +316,7 @@ const markerCounts = between(
   "const toggleMapLayer",
 );
 assert.match(markerCounts, /pinCount:\s*sceneFilteredMapMarkers\.length/);
-for (const kind of ["truck", "restaurant", "deal", "event"]) {
+for (const kind of ["truck", "business", "restaurant", "deal", "event"]) {
   assert.match(markerCounts, new RegExp(`marker\\.kind === "${kind}"`));
 }
 const hudCall = between(scout, "<ScoutMapHud", "/>");

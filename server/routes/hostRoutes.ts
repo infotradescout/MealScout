@@ -106,6 +106,12 @@ export function registerHostRoutes(app: Express) {
 
   const isStaffOrAdminUser = (user: any) =>
     isStaffOrAdminUserType(user?.userType);
+  const canManageHost = (user: any, host: any) =>
+    Boolean(
+      host &&
+        (isStaffOrAdminUser(user) ||
+          String(host.userId || "") === String(user?.id || "")),
+    );
 
   app.get("/api/payments/stripe-config", (_req, res) => {
     const publishableKey = getStripePublishableKey();
@@ -215,9 +221,8 @@ export function registerHostRoutes(app: Express) {
       }
       try {
         const { hostId } = req.params;
-        const userId = req.user.id;
         const host = await storage.getHost(hostId);
-        if (!host || host.userId !== userId) {
+        if (!host || !canManageHost(req.user, host)) {
           return res.status(404).json({ message: "Host profile not found" });
         }
         res.json(host);
@@ -265,7 +270,7 @@ export function registerHostRoutes(app: Express) {
       const { hostId } = req.params;
       const userId = req.user.id;
       const host = await storage.getHost(hostId);
-      if (!host || host.userId !== userId) {
+      if (!host || !canManageHost(req.user, host)) {
         return res.status(404).json({ message: "Host profile not found" });
       }
 
@@ -499,9 +504,7 @@ export function registerHostRoutes(app: Express) {
           return res.status(404).json({ message: "Host profile not found" });
         }
 
-        const allowed =
-          isStaffOrAdminUser(req.user) ||
-          String(host.userId) === String(userId);
+        const allowed = canManageHost(req.user, host);
         if (!allowed) {
           return res.status(403).json({ message: "Not authorized" });
         }
@@ -560,9 +563,8 @@ export function registerHostRoutes(app: Express) {
     async (req: any, res) => {
       try {
         const { hostId } = req.params;
-        const userId = req.user.id;
         const host = await storage.getHost(hostId);
-        if (!host || host.userId !== userId) {
+        if (!host || !canManageHost(req.user, host)) {
           return res.status(404).json({ message: "Host profile not found" });
         }
 
@@ -597,9 +599,8 @@ export function registerHostRoutes(app: Express) {
     async (req: any, res) => {
       try {
         const { hostId } = req.params;
-        const userId = req.user.id;
         const host = await storage.getHost(hostId);
-        if (!host || host.userId !== userId) {
+        if (!host || !canManageHost(req.user, host)) {
           return res.status(404).json({ message: "Host profile not found" });
         }
 
@@ -643,9 +644,8 @@ export function registerHostRoutes(app: Express) {
     async (req: any, res) => {
       try {
         const { hostId } = req.params;
-        const userId = req.user.id;
         const host = await storage.getHost(hostId);
-        if (!host || host.userId !== userId) {
+        if (!host || !canManageHost(req.user, host)) {
           return res.status(404).json({ message: "Host profile not found" });
         }
         const seriesId = await getActiveParkingPassSeriesId(hostId);
@@ -677,9 +677,8 @@ export function registerHostRoutes(app: Express) {
     async (req: any, res) => {
       try {
         const { hostId } = req.params;
-        const userId = req.user.id;
         const host = await storage.getHost(hostId);
-        if (!host || host.userId !== userId) {
+        if (!host || !canManageHost(req.user, host)) {
           return res.status(404).json({ message: "Host profile not found" });
         }
 
@@ -718,9 +717,8 @@ export function registerHostRoutes(app: Express) {
     async (req: any, res) => {
       try {
         const { hostId } = req.params;
-        const userId = req.user.id;
         const host = await storage.getHost(hostId);
-        if (!host || host.userId !== userId) {
+        if (!host || !canManageHost(req.user, host)) {
           return res.status(404).json({ message: "Host profile not found" });
         }
 
@@ -759,9 +757,8 @@ export function registerHostRoutes(app: Express) {
   app.delete("/api/hosts/:hostId", isAuthenticated, async (req: any, res) => {
     try {
       const { hostId } = req.params;
-      const userId = req.user.id;
       const host = await storage.getHost(hostId);
-      if (!host || host.userId !== userId) {
+      if (!host || !canManageHost(req.user, host)) {
         return res.status(404).json({ message: "Host profile not found" });
       }
 

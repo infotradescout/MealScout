@@ -7,6 +7,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = __dirname;
 const clientRoot = path.resolve(repoRoot, "client");
+const localMapRuntimeProxyTarget =
+  process.env.MEALSCOUT_LOCAL_MAP_RUNTIME_PROXY_TARGET ||
+  "http://localhost:5200";
 
 export default defineConfig({
   define: {
@@ -28,6 +31,10 @@ export default defineConfig({
   server: {
     port: 5174,
     proxy: {
+      "/api/map/runtime": {
+        target: localMapRuntimeProxyTarget,
+        changeOrigin: true,
+      },
       "/api": {
         target: "http://localhost:5200",
         changeOrigin: true,

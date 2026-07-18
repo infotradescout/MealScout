@@ -94,6 +94,9 @@ interface Host {
     updatedAt?: string | null;
     source?: string | null;
   } | null;
+  rep?: {
+    isDisabled?: boolean | null;
+  } | null;
 }
 
 interface HostPassListing {
@@ -499,6 +502,32 @@ const getFeeCentsForSlots = (slotTypes: string[]) => {
   return 1000 * bookingDays;
 };
 
+const getParkingListingPriceLabel = (
+  listing: ParkingPassListing | null | undefined,
+) => {
+  if (!listing) return null;
+  const lowestSlot = buildSlotOptions(listing).reduce<
+    ReturnType<typeof buildSlotOptions>[number] | null
+  >((lowest, slot) => {
+    if (!lowest) return slot;
+    const slotTotal =
+      Number(slot.priceCents || 0) + getFeeCentsForSlots([slot.type]);
+    const lowestTotal =
+      Number(lowest.priceCents || 0) + getFeeCentsForSlots([lowest.type]);
+    return slotTotal < lowestTotal ? slot : lowest;
+  }, null);
+  if (!lowestSlot) return null;
+  const totalDollars =
+    (Number(lowestSlot.priceCents || 0) +
+      getFeeCentsForSlots([lowestSlot.type])) /
+    100;
+  return `$${
+    Number.isInteger(totalDollars)
+      ? totalDollars.toFixed(0)
+      : totalDollars.toFixed(2)
+  }`;
+};
+
 const parseCoord = (value: number | string | null | undefined) => {
   if (value === null || value === undefined) return null;
   const parsed = typeof value === "string" ? Number.parseFloat(value) : value;
@@ -831,6 +860,8 @@ export default function ParkingPassPage() {
       return "";
     }
   });
+  const [locationSearchCenter, setLocationSearchCenter] =
+    useState<GeoPoint | null>(null);
   useEffect(() => {
     if (cityQuery.trim()) return;
     const city = String(effectiveLocationContext?.city || "").trim();
@@ -846,10 +877,9 @@ export default function ParkingPassPage() {
   const [checkoutQueue, setCheckoutQueue] = useState<
     Array<{ listing: ParkingPassListing; slotTypes: string[] }>
   >([]);
-  const [viewMode, setViewMode] = useState<"map" | "list">(() =>
-    window.matchMedia("(max-width: 639px)").matches ? "list" : "map",
-  );
+  const [viewMode, setViewMode] = useState<"map" | "list">("map");
   const [showParkingScoutHeat, setShowParkingScoutHeat] = useState(false);
+  const [showRoadTrafficLayer, setShowRoadTrafficLayer] = useState(false);
   const [showPropaneLayer, setShowPropaneLayer] = useState(false);
   const [showSupplyLayer, setShowSupplyLayer] = useState(false);
   const [showSupportLayer, setShowSupportLayer] = useState(false);
@@ -1037,8 +1067,10 @@ export default function ParkingPassPage() {
         ) {
           return false;
         }
-        // Primary source of truth: if we have a visible listing for the host, show it.
-        // Fallback to host-id feed for hosts with map records but no current listing payload.
+        // Staff/admin need the complete active host inventory so incomplete
+        // locations can be repaired. Truck and guest views remain limited to
+        // hosts with public, priced Parking Pass inventory.
+        if (isAdminOrStaff) return true;
         return listingHostIds.has(hostId) || bookableHostIds.has(hostId);
       },
     );
@@ -1046,7 +1078,7 @@ export default function ParkingPassPage() {
       (loc: any) => String(loc?.type || "").toLowerCase() === "supplier",
     );
     return { ...baseMapLocations, hostLocations, supplierLocations };
-  }, [baseMapLocations, bookableHostIds, passListings]);
+  }, [baseMapLocations, bookableHostIds, isAdminOrStaff, passListings]);
   const [geocodeCache, setGeocodeCache] = useState<Record<string, GeoPoint>>(
     {},
   );
@@ -1084,20 +1116,64 @@ export default function ParkingPassPage() {
     const setup = String(params.get("setup") || params.get("tab") || "")
       .trim()
       .toLowerCase();
+    const requestedHostTool = String(params.get("hostTool") || "")
+      .trim()
+      .toLowerCase();
     if (setup === "schedule" || setup === "truck") {
       setTopTab("schedule");
       return;
     }
-    if (setup === "host" || setup === "location") {
+    if (
+      setup === "host" ||
+      setup === "location" ||
+      requestedHostTool === "location"
+    ) {
       setTopTab("host");
-      setHostToolsTab(setup === "location" ? "location" : "listings");
+      setHostToolsTab(
+        setup === "location" || requestedHostTool === "location"
+          ? "location"
+          : requestedHostTool === "payments"
+            ? "payments"
+            : "listings",
+      );
       return;
     }
-    if (setup === "payments") {
+    if (setup === "payments" || requestedHostTool === "payments") {
       setTopTab("host");
       setHostToolsTab("payments");
+      return;
     }
-  }, []);
+    setTopTab("book");
+  }, [location]);
+
+  const selectTopTab = (
+    nextTab: "book" | "schedule" | "host",
+    nextHostTool?: "listings" | "location" | "payments",
+  ) => {
+    setTopTab(nextTab);
+    if (nextHostTool) setHostToolsTab(nextHostTool);
+
+    const params = new URLSearchParams(window.location.search);
+    params.delete("setup");
+    if (nextTab === "book") {
+      params.delete("tab");
+      params.delete("hostTool");
+    } else {
+      params.set("tab", nextTab);
+      if (nextTab === "host" && nextHostTool) {
+        params.set("hostTool", nextHostTool);
+      } else if (nextTab !== "host") {
+        params.delete("hostTool");
+      }
+    }
+
+    const query = params.toString();
+    window.history.replaceState(
+      {},
+      "",
+      `${window.location.pathname}${query ? `?${query}` : ""}`,
+    );
+  };
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -1324,10 +1400,17 @@ export default function ParkingPassPage() {
             setTruckId(null);
             setTruck(null);
           }
-          const hostRes = await fetch(apiUrl("/api/hosts"));
+          const hostRes = await fetch(
+            apiUrl(isAdminOrStaff ? "/api/admin/hosts" : "/api/hosts"),
+          );
           if (hostRes.ok) {
-            const hostList = await hostRes.json();
-            if (!cancelled && Array.isArray(hostList) && hostList.length > 0) {
+            const payload = await hostRes.json();
+            const hostList = Array.isArray(payload)
+              ? payload.filter(
+                  (item: Host) => item?.rep?.isDisabled !== true,
+                )
+              : [];
+            if (!cancelled && hostList.length > 0) {
               setHasHostProfile(true);
               setHosts(hostList);
             } else if (!cancelled) {
@@ -1366,7 +1449,7 @@ export default function ParkingPassPage() {
     return () => {
       cancelled = true;
     };
-  }, [isAuthenticated, toast]);
+  }, [isAdminOrStaff, isAuthenticated, toast]);
 
   useEffect(() => {
     if (!truck) return;
@@ -1748,6 +1831,28 @@ export default function ParkingPassPage() {
     }
     const payload = (await res.json()) as PlaceDetailsResponse;
     return payload.place;
+  };
+
+  const handleParkingLocationSelect = async (suggestion: {
+    placeId: string;
+    text: string;
+  }) => {
+    setCityQuery(suggestion.text);
+    try {
+      const place = await hydrateFromPlaceDetails(suggestion.placeId);
+      if (
+        place &&
+        typeof place.latitude === "number" &&
+        typeof place.longitude === "number"
+      ) {
+        setLocationSearchCenter({
+          lat: place.latitude,
+          lng: place.longitude,
+        });
+      }
+    } catch {
+      setLocationSearchCenter(null);
+    }
   };
 
   const handleNewLocationAddressSelect = async (suggestion: {
@@ -2387,11 +2492,18 @@ export default function ParkingPassPage() {
     if (!host) return;
     setIsSavingAmenities(true);
     try {
-      const res = await fetch(apiUrl(`/api/hosts/${host.id}`), {
+      const res = await fetch(
+        apiUrl(
+          isAdminOrStaff
+            ? `/api/admin/hosts/${host.id}`
+            : `/api/hosts/${host.id}`,
+        ),
+        {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ amenities }),
-      });
+        },
+      );
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.message || "Failed to update amenities");
@@ -2539,7 +2651,13 @@ export default function ParkingPassPage() {
     }
     setIsUpdatingLocation(true);
     try {
-      const res = await fetch(apiUrl(`/api/hosts/${host.id}`), {
+      const res = await fetch(
+        apiUrl(
+          isAdminOrStaff
+            ? `/api/admin/hosts/${host.id}`
+            : `/api/hosts/${host.id}`,
+        ),
+        {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -2552,7 +2670,8 @@ export default function ParkingPassPage() {
           latitude: pinPosition.lat,
           longitude: pinPosition.lng,
         }),
-      });
+        },
+      );
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.message || "Failed to update location");
@@ -2621,7 +2740,11 @@ export default function ParkingPassPage() {
     if (!host || !pinPosition) return;
     setIsSavingPin(true);
     try {
-      const res = await fetch(apiUrl(`/api/hosts/${host.id}/coordinates`), {
+      const res = await fetch(apiUrl(
+        isAdminOrStaff
+          ? `/api/admin/hosts/${host.id}/coordinates`
+          : `/api/hosts/${host.id}/coordinates`,
+      ), {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -2696,7 +2819,14 @@ export default function ParkingPassPage() {
 
     setIsDeletingLocation(true);
     try {
-      const res = await fetch(apiUrl(`/api/hosts/${host.id}`), { method: "DELETE" });
+      const res = await fetch(
+        apiUrl(
+          isAdminOrStaff
+            ? `/api/admin/hosts/${host.id}`
+            : `/api/hosts/${host.id}`,
+        ),
+        { method: "DELETE" },
+      );
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.message || "Failed to delete location");
@@ -3478,18 +3608,25 @@ export default function ParkingPassPage() {
   }, [passListings]);
 
   const filteredLocations = useMemo(() => {
-    const filtered = normalizedCityQuery
-      ? locationGroups.filter((group) =>
-          parkingPassLocationMatches(normalizedCityQuery, [
-            group.host.city,
-            group.host.state,
-            group.host.address,
-            group.host.businessName,
-          ]),
-        )
-      : locationGroups;
-
-    return [...filtered].sort((a, b) => {
+    // Location input focuses and ranks the Google map; it must never silently
+    // remove valid inventory. Exact city-token filtering was the reason a
+    // Pensacola search showed only 7 of 14 configured locations.
+    return [...locationGroups].sort((a, b) => {
+      if (normalizedCityQuery) {
+        const aMatches = parkingPassLocationMatches(normalizedCityQuery, [
+          a.host.city,
+          a.host.state,
+          a.host.address,
+          a.host.businessName,
+        ]);
+        const bMatches = parkingPassLocationMatches(normalizedCityQuery, [
+          b.host.city,
+          b.host.state,
+          b.host.address,
+          b.host.businessName,
+        ]);
+        if (aMatches !== bMatches) return aMatches ? -1 : 1;
+      }
       const cityA = (a.host.city || "").toLowerCase();
       const cityB = (b.host.city || "").toLowerCase();
       if (cityA && cityB && cityA !== cityB) {
@@ -3554,6 +3691,7 @@ export default function ParkingPassPage() {
     ) ||
     activeLocation?.listings[0] ||
     null;
+  const activeSpotPriceLabel = getParkingListingPriceLabel(activeListing);
   const selectedDateLabel = format(
     new Date(`${selectedDate}T00:00:00`),
     "EEE, MMM d",
@@ -3657,18 +3795,6 @@ export default function ParkingPassPage() {
           const hostId = String(loc.hostId || "").trim();
           if (!hostId) return null;
 
-          if (
-            normalizedCityQuery &&
-            !parkingPassLocationMatches(normalizedCityQuery, [
-              loc.name,
-              loc.address,
-              loc.city,
-              loc.state,
-            ])
-          ) {
-              return null;
-          }
-
           return {
             key: `host:${loc.id}`,
             hostId,
@@ -3694,7 +3820,25 @@ export default function ParkingPassPage() {
             spotImageUrl: string | null;
           } => item !== null,
         ),
-    [paidMapLocations, normalizedCityQuery],
+    [paidMapLocations],
+  );
+  const bookableLocationHostIds = useMemo(
+    () => new Set(locationGroups.map((group) => String(group.host.id))),
+    [locationGroups],
+  );
+  const adminSetupPins = useMemo(() => {
+    if (!isAdminOrStaff) return [];
+    return fallbackHostPins.filter(
+      (pin) => !bookableLocationHostIds.has(pin.hostId),
+    );
+  }, [bookableLocationHostIds, fallbackHostPins, isAdminOrStaff]);
+  const hostInventoryCount = useMemo(
+    () =>
+      new Set([
+        ...locationGroups.map((group) => String(group.host.id)),
+        ...adminSetupPins.map((pin) => pin.hostId),
+      ]).size,
+    [adminSetupPins, locationGroups],
   );
   const supplierOverlayPins = useMemo(() => {
     const raw = Array.isArray(paidMapLocations?.supplierLocations)
@@ -3856,8 +4000,31 @@ export default function ParkingPassPage() {
       (activeHostLocations && activeHostLocations.length > 0
         ? activeHostLocations[0].coords
         : null);
-    return activeCoords || mapPins[0]?.coords || defaultMapCenter;
-  }, [activeLocation, hostLocationsByHostId, mapPins, parkingCoords]);
+    return (
+      locationSearchCenter ||
+      activeCoords ||
+      mapPins[0]?.coords ||
+      adminSetupPins[0]?.coords ||
+      defaultMapCenter
+    );
+  }, [
+    activeLocation,
+    adminSetupPins,
+    hostLocationsByHostId,
+    locationSearchCenter,
+    mapPins,
+    parkingCoords,
+  ]);
+
+  const parkingUserLocation = useMemo<GeoPoint | null>(() => {
+    const lat = Number(effectiveLocationContext?.latitude);
+    const lng = Number(effectiveLocationContext?.longitude);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    return { lat, lng };
+  }, [
+    effectiveLocationContext?.latitude,
+    effectiveLocationContext?.longitude,
+  ]);
 
   useEffect(() => {
     if (geocodeInFlight.current) return;
@@ -4258,7 +4425,12 @@ export default function ParkingPassPage() {
           )}
         </div>
 
-        <Tabs value={topTab} onValueChange={(value) => setTopTab(value as any)}>
+        <Tabs
+          value={topTab}
+          onValueChange={(value) =>
+            selectTopTab(value as "book" | "schedule" | "host")
+          }
+        >
           <TabsList
             className="grid w-full rounded-xl p-1 pp-glass-muted"
             style={{
@@ -4320,8 +4492,7 @@ export default function ParkingPassPage() {
                     <Button
                       size="sm"
                       onClick={() => {
-                        setTopTab("host");
-                        setHostToolsTab("listings");
+                        selectTopTab("host", "listings");
                       }}
                     >
                       Publish availability
@@ -4330,8 +4501,7 @@ export default function ParkingPassPage() {
                       size="sm"
                       variant="outline"
                       onClick={() => {
-                        setTopTab("host");
-                        setHostToolsTab("location");
+                        selectTopTab("host", "location");
                       }}
                     >
                       Location/settings
@@ -6617,39 +6787,39 @@ export default function ParkingPassPage() {
                     Choose a host location, date, and available time.
                   </p>
                 </div>
-                <div className="hidden rounded-2xl pp-glass-muted px-4 py-3 text-xs text-[color:var(--text-muted)] shadow-clean lg:grid lg:grid-cols-3 lg:gap-5">
-                  <div>
-                    <p className="text-[10px] font-semibold uppercase tracking-wide">
-                      Locations
-                    </p>
-                    <p className="mt-1 text-lg font-semibold text-[color:var(--text-primary)]">
-                      {filteredLocations.length}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-semibold uppercase tracking-wide">
-                      Map pins
-                    </p>
-                    <p className="mt-1 text-lg font-semibold text-[color:var(--text-primary)]">
-                      {viewMode === "map"
-                        ? mapPins.length + supplierOverlayPins.length + gasPricePins.length
-                        : filteredLocations.length}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-semibold uppercase tracking-wide">
-                      Cart
-                    </p>
-                    <p className="mt-1 text-lg font-semibold text-[color:var(--text-primary)]">
-                      {cartItems.length}
-                    </p>
-                  </div>
-                </div>
               </div>
-              <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_380px] xl:grid-cols-[minmax(0,1fr)_430px]">
-                <div className="min-w-0 space-y-4 order-1 lg:order-none">
-                  <div className="space-y-3 rounded-2xl pp-glass p-3 shadow-clean sm:p-4 lg:p-5">
-                    <div className="flex items-center justify-between gap-3">
+              <div
+                data-parking-pass-map-workspace={
+                  viewMode === "map" ? "integrated" : "list"
+                }
+                className={`grid items-start lg:grid-cols-[minmax(0,1fr)_380px] xl:grid-cols-[minmax(0,1fr)_430px] ${
+                  viewMode === "map"
+                    ? "overflow-hidden rounded-[1.75rem] border border-[color:var(--border-subtle)] bg-[var(--bg-card)] shadow-[0_22px_60px_rgba(72,45,29,0.14)]"
+                    : "gap-5"
+                }`}
+              >
+                <div
+                  className={`relative min-w-0 order-1 lg:order-none ${
+                    viewMode === "map" ? "min-h-[540px]" : "space-y-4"
+                  }`}
+                >
+                  <div
+                    data-parking-pass-map-controls={
+                      viewMode === "map" ? "overlay" : "list"
+                    }
+                    className={`space-y-3 ${
+                      viewMode === "map"
+                        ? "absolute inset-x-3 top-3 z-[30] rounded-2xl border border-white/70 bg-white/94 p-2.5 shadow-[0_16px_40px_rgba(60,38,24,0.18)] backdrop-blur-xl sm:left-4 sm:right-auto sm:top-4 sm:w-[min(460px,calc(100%-2rem))]"
+                        : "rounded-2xl pp-glass p-3 shadow-clean sm:p-4 lg:p-5"
+                    }`}
+                  >
+                    <div
+                      className={
+                        viewMode === "map"
+                          ? "sr-only"
+                          : "flex items-center justify-between gap-3"
+                      }
+                    >
                       <Label
                         htmlFor="parking-pass-location-search"
                         className="text-xs font-semibold text-[color:var(--text-primary)]"
@@ -6657,17 +6827,24 @@ export default function ParkingPassPage() {
                         City or address
                       </Label>
                       <span className="text-[11px] text-[color:var(--text-muted)]">
-                        {filteredLocations.length} of {locationGroups.length} locations
+                        {hostInventoryCount} host locations · {locationGroups.length} bookable
+                        {isAdminOrStaff && adminSetupPins.length > 0
+                          ? ` · ${adminSetupPins.length} need setup`
+                          : ""}
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Input
+                      <PlaceAutocompleteInput
                         id="parking-pass-location-search"
-                        type="search"
-                        className="pp-field"
-                        placeholder="City, state, or street address"
                         value={cityQuery}
-                        onChange={(event) => setCityQuery(event.target.value)}
+                        className="min-w-0 flex-1"
+                        inputClassName="pp-field"
+                        placeholder="Center map on a city or address"
+                        onChange={(value) => {
+                          setCityQuery(value);
+                          setLocationSearchCenter(null);
+                        }}
+                        onSelect={handleParkingLocationSelect}
                       />
                       {normalizedCityQuery && (
                         <Button
@@ -6675,47 +6852,88 @@ export default function ParkingPassPage() {
                           size="sm"
                           variant="outline"
                           className="shrink-0"
-                          onClick={() => setCityQuery("")}
+                          onClick={() => {
+                            setCityQuery("");
+                            setLocationSearchCenter(null);
+                          }}
                         >
                           View all
                         </Button>
                       )}
                     </div>
-                    <div className="grid grid-cols-2 gap-2 sm:max-w-sm">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant={viewMode === "map" ? "default" : "outline"}
-                        onClick={() => setViewMode("map")}
+                    <div
+                      className={
+                        viewMode === "map"
+                          ? "flex items-center gap-2"
+                          : "space-y-3"
+                      }
+                    >
+                      <p className="min-w-0 flex-1 truncate text-[11px] font-medium text-[color:var(--text-secondary)]">
+                        {hostInventoryCount} host locations · {locationGroups.length} bookable
+                        {isAdminOrStaff && adminSetupPins.length > 0
+                          ? ` · ${adminSetupPins.length} need setup`
+                          : ""}
+                      </p>
+                      <div
+                        className={
+                          viewMode === "map"
+                            ? "grid w-28 shrink-0 grid-cols-2 gap-1"
+                            : "grid grid-cols-2 gap-2 sm:max-w-sm"
+                        }
                       >
-                        Map
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant={viewMode === "list" ? "default" : "outline"}
-                        onClick={() => setViewMode("list")}
-                      >
-                        List
-                      </Button>
-                    </div>
-                    {viewMode === "map" && (
-                      <details className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)] px-3 py-2 text-xs text-[color:var(--text-secondary)]">
-                        <summary className="cursor-pointer font-semibold text-[color:var(--text-primary)]">
-                          Map tools
-                        </summary>
-                        <div className="mt-3 space-y-2">
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant={showParkingScoutHeat ? "default" : "outline"}
-                            onClick={() =>
-                              setShowParkingScoutHeat((value) => !value)
-                            }
-                            className="w-full sm:w-auto"
-                          >
-                            Foot traffic
-                          </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={viewMode === "map" ? "default" : "outline"}
+                          onClick={() => setViewMode("map")}
+                          className={viewMode === "map" ? "h-8 px-2" : undefined}
+                        >
+                          Map
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={viewMode === "list" ? "default" : "outline"}
+                          onClick={() => setViewMode("list")}
+                          className={viewMode === "map" ? "h-8 px-2" : undefined}
+                        >
+                          List
+                        </Button>
+                      </div>
+                      {viewMode === "map" && (
+                        <details className="group relative shrink-0 text-xs text-[color:var(--text-secondary)]">
+                          <summary className="flex h-8 cursor-pointer list-none items-center rounded-lg border border-[color:var(--border-subtle)] bg-white px-2 font-semibold text-[color:var(--text-primary)] shadow-sm marker:content-none">
+                            Tools
+                          </summary>
+                          <div className="absolute right-0 top-[calc(100%+0.5rem)] z-[40] w-[min(330px,calc(100vw-3rem))] space-y-2 rounded-xl border border-[color:var(--border-subtle)] bg-white/98 p-3 shadow-[0_18px_48px_rgba(60,38,24,0.2)] backdrop-blur-xl">
+                          <div className="grid grid-cols-2 gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant={
+                                showParkingScoutHeat ? "default" : "outline"
+                              }
+                              onClick={() =>
+                                setShowParkingScoutHeat((value) => !value)
+                              }
+                              className="w-full"
+                            >
+                              Foot traffic
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant={
+                                showRoadTrafficLayer ? "default" : "outline"
+                              }
+                              onClick={() =>
+                                setShowRoadTrafficLayer((value) => !value)
+                              }
+                              className="w-full"
+                            >
+                              Road traffic
+                            </Button>
+                          </div>
                           <div className="grid grid-cols-3 gap-2">
                             <Button
                               type="button"
@@ -6754,9 +6972,10 @@ export default function ParkingPassPage() {
                               : "Weather is not available for this booking window."}{" "}
                             Gas: {selectedSpotGasPriceSummary}.
                           </p>
-                        </div>
-                      </details>
-                    )}
+                          </div>
+                        </details>
+                      )}
+                    </div>
                   </div>
 
                   {isLoading ? (
@@ -6768,12 +6987,17 @@ export default function ParkingPassPage() {
                     </div>
                   ) : passListings.length === 0 ? (
                     viewMode === "map" && fallbackHostPins.length > 0 ? (
-                      <div className="space-y-3">
-                        <div className="rounded-2xl pp-glass shadow-clean overflow-hidden">
-                          <div className="relative h-[320px] w-full bg-slate-100/60 sm:h-[380px] lg:h-[min(68vh,640px)] xl:h-[min(72vh,720px)]">
+                      <div>
+                        <div className="overflow-hidden bg-slate-100/60" data-parking-pass-map-canvas="integrated">
+                          <div className="relative h-[min(68dvh,760px)] min-h-[540px] w-full bg-slate-100/60 sm:min-h-[620px] lg:h-[min(76vh,820px)]">
                             <GoogleMapPicker
                               center={fallbackMapCenter}
                               zoom={13}
+                              surfaceMode="parking"
+                              fitPins={true}
+                              showMapTypeControl={true}
+                              showRoadTrafficLayer={showRoadTrafficLayer}
+                              userLocation={parkingUserLocation}
                               interactionsEnabled={mapInteractionsEnabled}
                               trafficCells={spotFootTrafficCells}
                               pins={[
@@ -6789,6 +7013,13 @@ export default function ParkingPassPage() {
                                     ({
                                       key,
                                       position: coords,
+                                      markerKind: "parking",
+                                      markerTitle: name,
+                                      markerSubtitle: addressLabel,
+                                      markerLabel: "Host",
+                                      markerColor: "#64748b",
+                                      markerSelected: hostId === requestedHostId,
+                                      markerStatus: "scheduled",
                                       popup: (
                                         <div className="space-y-2 text-xs">
                                           <p className="font-semibold text-orange-600">
@@ -6817,6 +7048,10 @@ export default function ParkingPassPage() {
                                   key: pin.key,
                                   position: pin.position,
                                   occupied: true,
+                                  markerKind: "supplier" as const,
+                                  markerTitle: pin.name,
+                                  markerSubtitle: pin.categoryLabel,
+                                  markerColor: "#2563eb",
                                   popup: (
                                     <div className="space-y-1.5 text-xs">
                                       <p className="font-semibold text-orange-600">
@@ -6850,6 +7085,10 @@ export default function ParkingPassPage() {
                                   key: pin.key,
                                   position: pin.position,
                                   occupied: true,
+                                  markerKind: "supplier" as const,
+                                  markerTitle: pin.name,
+                                  markerSubtitle: "Fuel prices",
+                                  markerColor: "#ca8a04",
                                   popup: (
                                     <div className="space-y-1.5 text-xs">
                                       <p className="font-semibold text-orange-600">
@@ -6937,12 +7176,17 @@ export default function ParkingPassPage() {
                       </div>
                     )
                   ) : viewMode === "map" ? (
-                    <div className="space-y-3">
-                      <div className="rounded-2xl pp-glass shadow-clean overflow-hidden">
-                        <div className="relative h-[320px] w-full bg-slate-100/60 sm:h-[380px] lg:h-[min(68vh,640px)] xl:h-[min(72vh,720px)]">
+                      <div>
+                      <div className="overflow-hidden bg-slate-100/60" data-parking-pass-map-canvas="integrated">
+                        <div className="relative h-[min(68dvh,760px)] min-h-[540px] w-full bg-slate-100/60 sm:min-h-[620px] lg:h-[min(76vh,820px)]">
                           <GoogleMapPicker
                             center={mapCenter}
                             zoom={13}
+                            surfaceMode="parking"
+                            fitPins={!normalizedCityQuery}
+                            showMapTypeControl={true}
+                            showRoadTrafficLayer={showRoadTrafficLayer}
+                            userLocation={parkingUserLocation}
                             interactionsEnabled={mapInteractionsEnabled}
                             trafficCells={spotFootTrafficCells}
                             onPinClick={(pinKey) => {
@@ -7037,6 +7281,9 @@ export default function ParkingPassPage() {
                                     hasAvailability &&
                                     canStartTruckCheckout,
                                 );
+                                const markerPriceLabel =
+                                  getParkingListingPriceLabel(bookingListing) ||
+                                  "Spot";
 
                                 const pinPopup = (
                                   <div className="space-y-2 text-xs">
@@ -7247,14 +7494,63 @@ export default function ParkingPassPage() {
                                     position: coords,
                                     occupied:
                                       group.key === activeLocationKey || bookings.length > 0,
+                                    markerKind: "parking",
+                                    markerTitle: group.host.businessName,
+                                    markerSubtitle: addressLabel,
+                                    markerLabel: markerPriceLabel,
+                                    markerColor: hasAvailability
+                                      ? "#16a34a"
+                                      : "#64748b",
+                                    markerSelected:
+                                      group.key === activeLocationKey,
+                                    markerStatus: hasAvailability
+                                      ? "available"
+                                      : "scheduled",
                                     popup: pinPopup,
                                   } satisfies MapPickerPin;
                                 },
                               ),
+                              ...adminSetupPins.map((pin) => ({
+                                key: pin.key,
+                                position: pin.coords,
+                                markerKind: "parking" as const,
+                                markerTitle: pin.name,
+                                markerSubtitle: pin.addressLabel,
+                                markerLabel: "Setup",
+                                markerColor: "#64748b",
+                                markerStatus: "scheduled" as const,
+                                popup: (
+                                  <div className="space-y-2 text-xs">
+                                    <p className="font-semibold text-[color:var(--text-primary)]">
+                                      {pin.name}
+                                    </p>
+                                    <p className="text-[color:var(--text-muted)]">
+                                      {pin.addressLabel}
+                                    </p>
+                                    <p className="font-medium text-amber-700">
+                                      Needs Parking Pass pricing or availability.
+                                    </p>
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      onClick={() => {
+                                        setSelectedHostId(pin.hostId);
+                                        selectTopTab("host", "listings");
+                                      }}
+                                    >
+                                      Manage spot
+                                    </Button>
+                                  </div>
+                                ),
+                              })),
                               ...supplierOverlayPins.map((pin) => ({
                                 key: pin.key,
                                 position: pin.position,
                                 occupied: true,
+                                markerKind: "supplier" as const,
+                                markerTitle: pin.name,
+                                markerSubtitle: pin.categoryLabel,
+                                markerColor: "#2563eb",
                                 popup: (
                                   <div className="space-y-1.5 text-xs">
                                     <p className="font-semibold text-orange-600">
@@ -7288,6 +7584,10 @@ export default function ParkingPassPage() {
                                 key: pin.key,
                                 position: pin.position,
                                 occupied: true,
+                                markerKind: "supplier" as const,
+                                markerTitle: pin.name,
+                                markerSubtitle: "Fuel prices",
+                                markerColor: "#ca8a04",
                                 popup: (
                                   <div className="space-y-1.5 text-xs">
                                     <p className="font-semibold text-orange-600">
@@ -7312,6 +7612,41 @@ export default function ParkingPassPage() {
                             ]}
                             className="h-full w-full"
                           />
+                          {activeLocation && (
+                            <div className="absolute bottom-16 left-3 right-3 z-[25] rounded-2xl border border-white/80 bg-white/96 p-3 shadow-[0_18px_48px_rgba(60,38,24,0.22)] backdrop-blur-xl lg:hidden">
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <p className="truncate text-sm font-semibold text-[color:var(--text-primary)] font-display">
+                                    {activeLocation.host.businessName}
+                                  </p>
+                                  <p className="truncate text-xs text-[color:var(--text-muted)]">
+                                    {activeLocation.host.address ||
+                                      "Parking location"}
+                                  </p>
+                                </div>
+                                {activeSpotPriceLabel && (
+                                  <span className="shrink-0 rounded-full bg-[#ff5a2f] px-2.5 py-1 text-xs font-black text-white">
+                                    from {activeSpotPriceLabel}
+                                  </span>
+                                )}
+                              </div>
+                              <Button
+                                type="button"
+                                size="sm"
+                                className="mt-3 w-full"
+                                onClick={() =>
+                                  document
+                                    .getElementById("parking-pass-details")
+                                    ?.scrollIntoView({
+                                      behavior: "smooth",
+                                      block: "start",
+                                    })
+                                }
+                              >
+                                View dates and prices
+                              </Button>
+                            </div>
+                          )}
                           {showParkingScoutHeat && (
                             <div className="pointer-events-none absolute bottom-3 left-3 max-w-[min(270px,calc(100%-1.5rem))] rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)]/95 px-3 py-2 text-xs text-[color:var(--text-primary)] shadow-clean backdrop-blur">
                               <p className="font-semibold">
@@ -7365,373 +7700,9 @@ export default function ParkingPassPage() {
                             </div>
                           )}
                         </div>
-                        <div className="border-t border-[color:var(--border-subtle)] px-4 py-2 text-xs text-[color:var(--text-muted)]">
-                          Select a location below to update the map and the details panel.
+                        <div className="hidden border-t border-[color:var(--border-subtle)] bg-white/92 px-4 py-2 text-xs text-[color:var(--text-muted)] lg:block">
+                          Tap a price pin to compare the spot, schedule, and booking details.
                         </div>
-                      </div>
-                      <div className="grid gap-3 xl:grid-cols-2">
-                        {filteredLocations.map((group) => {
-                          const effectiveDateKey =
-                            group.key === activeLocationKey
-                              ? selectedDate
-                              : nextBookableDateByGroup.get(group.key);
-                          const groupDateKeys = Array.from(
-                            new Set(
-                              group.listings.map((listing) =>
-                                getListingDateKey(listing.date),
-                              ),
-                            ),
-                          ).sort();
-                          const selectedGroupDateKey =
-                            effectiveDateKey ||
-                            groupDateKeys[0] ||
-                            selectedDate;
-                          const listingForDate = effectiveDateKey
-                            ? group.listings.find(
-                                (listing) =>
-                                  getListingDateKey(listing.date) ===
-                                  effectiveDateKey,
-                              )
-                            : null;
-                          const fallbackDateKey =
-                            effectiveDateKey || todayDateKey;
-                          const displayListing =
-                            listingForDate ||
-                            group.listings.find(
-                              (listing) =>
-                                getListingDateKey(listing.date) >=
-                                fallbackDateKey,
-                            ) ||
-                            group.listings[0] ||
-                            null;
-                          const bookingListing =
-                            listingForDate || displayListing;
-                          const paymentsReady = Boolean(platformPaymentsReady);
-                          const slotOptions = listingForDate
-                            ? buildSlotOptions(listingForDate)
-                            : [];
-                          const selectedSlots = listingForDate
-                            ? selectedSlotsByListing[listingForDate.id] || []
-                            : [];
-                          const selectedTotalCents = selectedSlots.reduce(
-                            (sum, slot) => {
-                              const price =
-                                slotOptions.find((item) => item.type === slot)
-                                  ?.priceCents || 0;
-                              return sum + price;
-                            },
-                            0,
-                          );
-                          const selectedFeeCents =
-                            getFeeCentsForSlots(selectedSlots);
-                          const selectedTotalWithFee =
-                            selectedSlots.length > 0
-                              ? selectedTotalCents + selectedFeeCents
-                              : 0;
-                          const hasAvailability = Boolean(
-                            listingForDate &&
-                            listingHasAvailability(listingForDate),
-                          );
-                          const bookingModeLabel = canStartTruckCheckout
-                            ? hasAvailability && listingForDate?.status === "open"
-                              ? "Bookable"
-                              : listingForDate
-                                ? "Requestable"
-                                : "View only"
-                            : "View only";
-                          const canBook = Boolean(
-                            paymentsReady &&
-                              hasAvailability &&
-                              canStartTruckCheckout,
-                          );
-                          const bookings = Array.isArray(
-                            bookingListing?.bookings,
-                          )
-                            ? (bookingListing?.bookings ?? [])
-                            : [];
-                          const isActive = activeLocation?.key === group.key;
-                          const groupCoords =
-                            parkingCoords[group.key] ||
-                            getLocationCoords(group.host) ||
-                            null;
-                          const routeUrl = groupCoords
-                            ? `https://www.google.com/maps/dir/?api=1&destination=${groupCoords.lat},${groupCoords.lng}&travelmode=driving`
-                            : null;
-                          const shareDate = displayListing
-                            ? getListingDateKey(displayListing.date)
-                            : selectedDate;
-                          const shareListingId = displayListing?.id || "";
-
-                          return (
-                            <div
-                              key={group.key}
-                              role="button"
-                              tabIndex={0}
-                              aria-pressed={isActive}
-                              onClick={() => focusLocation(group.key, true)}
-                              onKeyDown={(keyboardEvent) => {
-                                if (
-                                  keyboardEvent.key === "Enter" ||
-                                  keyboardEvent.key === " "
-                                ) {
-                                  keyboardEvent.preventDefault();
-                                  setActiveLocationKey(group.key);
-                                }
-                              }}
-                              className={`w-full rounded-2xl border px-4 py-3 space-y-2 transition cursor-pointer shadow-clean ${
-                                isActive
-                                  ? "border-orange-300 pp-glass ring-2 ring-orange-200"
-                                  : "border-[color:var(--border-subtle)] pp-glass-muted hover:opacity-95"
-                              }`}
-                            >
-                              <div className="flex items-center justify-between">
-                                <div>
-                                  <span className="text-[15px] font-semibold text-orange-500 font-display">
-                                    {group.host.businessName}
-                                  </span>
-                                  <div className="text-xs text-[color:var(--text-muted)]">
-                                    {displayListing
-                                      ? format(
-                                          new Date(displayListing.date),
-                                          "EEE, MMM d",
-                                        )
-                                      : "No dates listed"}
-                                  </div>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={(event) => {
-                                      event.stopPropagation();
-                                      focusLocation(group.key, true);
-                                    }}
-                                  >
-                                    View Host
-                                  </Button>
-                                  {routeUrl ? (
-                                    <a
-                                      href={routeUrl}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                      className="inline-flex h-8 items-center rounded-md border border-[color:var(--border-subtle)] px-3 text-xs font-medium text-[color:var(--text-primary)]"
-                                      onClick={(event) => event.stopPropagation()}
-                                    >
-                                      Route
-                                    </a>
-                                  ) : null}
-                                </div>
-                              </div>
-                              {groupDateKeys.length > 1 && (
-                                <div className="flex items-center justify-between gap-2">
-                                  <span className="text-[11px] text-[color:var(--text-muted)]">
-                                    Date
-                                  </span>
-                                  <select
-                                    className="rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-card)] px-2 py-1 text-xs text-[color:var(--text-primary)]"
-                                    value={selectedGroupDateKey}
-                                    onClick={(event) => event.stopPropagation()}
-                                    onChange={(event) => {
-                                      event.stopPropagation();
-                                      setSelectedDate(event.target.value);
-                                      focusLocation(group.key, true);
-                                    }}
-                                  >
-                                    {groupDateKeys.slice(0, 14).map((key) => (
-                                      <option key={key} value={key}>
-                                        {format(
-                                          new Date(`${key}T00:00:00`),
-                                          "EEE, MMM d",
-                                        )}
-                                      </option>
-                                    ))}
-                                  </select>
-                                </div>
-                              )}
-                              <div className="text-xs text-slate-700 space-y-1">
-                                <div className="mb-1 flex flex-wrap items-center gap-1.5">
-                                  <span className="rounded-full pp-chip px-2 py-0.5 text-[10px] font-semibold">
-                                    {bookingModeLabel}
-                                  </span>
-                                  {displayListing?.maxTrucks ? (
-                                    <span className="rounded-full pp-chip px-2 py-0.5 text-[10px] font-semibold">
-                                      Capacity {displayListing.maxTrucks}
-                                    </span>
-                                  ) : null}
-                                  {slotOptions.length > 0 ? (
-                                    <span className="rounded-full pp-chip px-2 py-0.5 text-[10px] font-semibold">
-                                      {`From $${(((slotOptions[0]?.priceCents || 0) + getFeeCentsForSlots([slotOptions[0]?.type || "daily"])) / 100).toFixed(2)}`}
-                                    </span>
-                                  ) : null}
-                                </div>
-                                <p>{group.host.address}</p>
-                                {displayListing && (
-                                  <p>
-                                    {displayListing.startTime === "00:00" &&
-                                    displayListing.endTime === "23:59"
-                                      ? "Any time"
-                                      : `${displayListing.startTime} - ${displayListing.endTime}`}
-                                  </p>
-                                )}
-                                {!listingForDate && (
-                                  <p className="text-[11px] text-amber-700">
-                                    {effectiveDateKey
-                                      ? `No slots on ${format(
-                                          new Date(
-                                            `${effectiveDateKey}T00:00:00`,
-                                          ),
-                                          "EEE, MMM d",
-                                        )}.`
-                                      : "No open dates right now."}
-                                  </p>
-                                )}
-                                {listingForDate?.hardCapEnabled &&
-                                  listingForDate?.availableSpotNumbers && (
-                                  <p className="text-[11px] text-[color:var(--text-muted)]">
-                                    {listingForDate.availableSpotNumbers
-                                      .length > 0
-                                      ? `Open spot${listingForDate.availableSpotNumbers.length > 1 ? "s" : ""}: ${listingForDate.availableSpotNumbers.join(", ")}`
-                                      : "Fully booked"}
-                                  </p>
-                                )}
-                                {bookings.length > 0 ? (
-                                  <div className="text-[11px] text-[color:var(--text-muted)]">
-                                    Booked trucks:{" "}
-                                    {bookings
-                                      .slice(0, 2)
-                                      .map((booking) => booking.truckName)
-                                      .join(", ")}
-                                    {bookings.length > 2
-                                      ? ` +${bookings.length - 2} more`
-                                      : ""}
-                                  </div>
-                                ) : (
-                                  <div className="text-[11px] text-[color:var(--text-muted)]">
-                                    No bookings yet
-                                  </div>
-                                )}
-                              </div>
-                              {shareListingId && (
-                                <div>
-                                  <ShareButton
-                                    url={`/parking-pass?date=${encodeURIComponent(
-                                      shareDate,
-                                    )}&pass=${shareListingId}`}
-                                    title={`Parking Pass at ${group.host.businessName}`}
-                                    description={`${group.host.address}${
-                                      group.host.city
-                                        ? `, ${group.host.city}`
-                                        : ""
-                                    }${group.host.state ? `, ${group.host.state}` : ""}`}
-                                    size="sm"
-                                    variant="outline"
-                                  />
-                                </div>
-                              )}
-                              {isActive &&
-                                listingForDate &&
-                                slotOptions.length > 0 && (
-                                  <div className="grid grid-cols-2 gap-2 pt-1">
-                                    {slotOptions.map((slot) => {
-                                      const feeCents = getFeeCentsForSlots([
-                                        slot.type,
-                                      ]);
-                                      const totalPrice =
-                                        ((slot.priceCents || 0) + feeCents) /
-                                        100;
-                                      const isSelected = selectedSlots.includes(
-                                        slot.type,
-                                      );
-                                      return (
-                                        <Button
-                                          key={slot.type}
-                                          variant={
-                                            isSelected ? "default" : "outline"
-                                          }
-                                          size="sm"
-                                          className="justify-between"
-                                          disabled={!hasAvailability}
-                                          onClick={() =>
-                                            handleSelect(
-                                              listingForDate,
-                                              slot.type,
-                                            )
-                                          }
-                                        >
-                                          <span>{slot.label}</span>
-                                          <span>${totalPrice.toFixed(2)}</span>
-                                        </Button>
-                                      );
-                                    })}
-                                  </div>
-                                )}
-                              {hasAvailability ? (
-                                <div className="flex items-center justify-between gap-3 pt-2">
-                                  <p className="text-[11px] text-[color:var(--text-muted)]">
-                                    Includes a $10/day MealScout fee per host.
-                                    Cleanup time is 30 minutes after the end
-                                    time.
-                                  </p>
-                                  {isActive && listingForDate && (
-                                    <LongPressHelp description="Reserve this selected slot and continue to checkout.">
-                                      <Button
-                                        size="sm"
-                                        type="button"
-                                        onClick={(event) => {
-                                          event.preventDefault();
-                                          event.stopPropagation();
-                                          handleBookSelected(listingForDate);
-                                        }}
-                                        disabled={selectedSlots.length === 0}
-                                      >
-                                        Book Spot
-                                        {selectedTotalWithFee > 0 && (
-                                          <span className="ml-2 text-xs">
-                                            $
-                                            {(
-                                              (selectedTotalWithFee || 0) / 100
-                                            ).toFixed(2)}
-                                          </span>
-                                        )}
-                                      </Button>
-                                    </LongPressHelp>
-                                  )}
-                                </div>
-                              ) : (
-                                <div className="flex items-center justify-between gap-3">
-                                  <p className="text-[11px] text-[color:var(--text-muted)]">
-                                    {listingForDate
-                                      ? "Fully booked."
-                                      : "No open dates right now."}
-                                  </p>
-                                  {canStartTruckCheckout && (
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      type="button"
-                                      onClick={(event) => {
-                                        event.preventDefault();
-                                        event.stopPropagation();
-                                        toast({
-                                          title: "Request Spot",
-                                          description:
-                                            "Use View Host to request this location.",
-                                        });
-                                      }}
-                                    >
-                                      Request Spot
-                                    </Button>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                        {filteredLocations.length === 0 && (
-                          <div className="rounded-2xl pp-glass-muted p-6 text-center text-sm text-slate-700">
-                            No host spots match that search.
-                          </div>
-                        )}
                       </div>
                     </div>
                   ) : (
@@ -8114,7 +8085,16 @@ export default function ParkingPassPage() {
                   )}
                 </div>
 
-                <div className="space-y-4 order-2 lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)] lg:overflow-y-auto lg:pr-1 lg:order-none">
+                <div
+                  className={`order-2 min-w-0 max-w-full space-y-4 ${
+                    viewMode === "map"
+                      ? "border-t border-[color:var(--border-subtle)] bg-[#fffaf5] p-4 lg:order-none lg:sticky lg:top-0 lg:h-[min(76vh,820px)] lg:overflow-y-auto lg:border-l lg:border-t-0 lg:p-5"
+                      : "lg:order-none lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)] lg:overflow-y-auto lg:pr-1"
+                  }`}
+                  data-parking-pass-selection-panel={
+                    viewMode === "map" ? "integrated" : "list"
+                  }
+                >
                   {canStartTruckCheckout && cartItems.length > 0 && (
                     <div className="rounded-2xl pp-glass p-4 shadow-clean space-y-3">
                       <div className="flex items-center justify-between">
@@ -8193,9 +8173,13 @@ export default function ParkingPassPage() {
 
                   <Card
                     id="parking-pass-details"
-                    className="hidden rounded-2xl pp-glass shadow-clean lg:block"
+                    className={
+                      viewMode === "map"
+                        ? "min-w-0 max-w-full overflow-hidden rounded-none border-0 bg-transparent shadow-none"
+                        : "min-w-0 max-w-full overflow-hidden rounded-2xl pp-glass shadow-clean"
+                    }
                   >
-                    <CardContent className="p-5 space-y-3">
+                    <CardContent className="min-w-0 space-y-3 p-4 sm:p-5">
                       <div>
                         <p className="text-base font-semibold text-slate-900 font-display">
                           {activeLocation?.host.businessName ||
@@ -8225,7 +8209,7 @@ export default function ParkingPassPage() {
                             </span>
                           </div>
                           <div className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2">
-                            <div className="flex items-center justify-between gap-2">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
                               <p className="text-xs font-semibold text-[color:var(--text-primary)]">
                                 Booking essentials
                               </p>

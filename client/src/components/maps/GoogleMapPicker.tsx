@@ -1,8 +1,7 @@
 /**
  * GoogleMapPicker
  *
- * A reusable map component that renders Google Maps when a key is available
- * and automatically falls back to Leaflet/OpenStreetMap when no key is present.
+ * A reusable Google Maps component for pin editing and Parking Pass browsing.
  *
  * Supports:
  *  - Click-to-place a draggable pin
@@ -11,21 +10,17 @@
  *  - Controlled center + zoom
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import {
-  MapContainer,
-  TileLayer,
-  Marker,
-  Popup,
-  Circle,
-  useMap,
-  useMapEvents,
-} from "react-leaflet";
-import L from "leaflet";
 import { useQuery } from "@tanstack/react-query";
 import mealScoutIcon from "@assets/meal-scout-icon.png";
-import type { MapBoundsLike, MapTrafficCell } from "./map-adapter.types";
+import { GoogleMapSurface } from "./google-map-surface";
+import type {
+  MapAdapterMarker,
+  MapBoundsLike,
+  MapMarkerKind,
+  MapTrafficCell,
+} from "./map-adapter.types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -36,10 +31,18 @@ export interface MapPickerPin {
   position: GeoPoint;
   /** If provided the pin is draggable and calls onPinDrag when released */
   draggable?: boolean;
-  /** Popup content rendered inside a Leaflet Popup / Google InfoWindow */
+  /** Popup content rendered inside a Google Maps InfoWindow */
   popup?: React.ReactNode;
   /** Whether this pin uses the "occupied" (dot) variant */
   occupied?: boolean;
+  /** MealScout decision metadata used by the Parking Pass browse map. */
+  markerKind?: MapMarkerKind;
+  markerTitle?: string;
+  markerSubtitle?: string;
+  markerLabel?: string;
+  markerColor?: string;
+  markerSelected?: boolean;
+  markerStatus?: "available" | "occupied" | "scheduled" | null;
 }
 
 export interface GoogleMapPickerProps {
@@ -65,89 +68,12 @@ export interface GoogleMapPickerProps {
   interactionsEnabled?: boolean;
   /** Google Maps Map ID — required for Advanced Markers; from VITE_GOOGLE_MAPS_MAP_ID */
   mapId?: string;
-}
-
-// ─── Shared assets ────────────────────────────────────────────────────────────
-
-const pinIcon = new L.Icon({
-  iconUrl: mealScoutIcon,
-  iconSize: [36, 36],
-  iconAnchor: [18, 36],
-  popupAnchor: [0, -30],
-});
-
-const pinIconOccupied = new L.DivIcon({
-  className: "pp-pin",
-  html: `<div class="pp-pin__wrap"><img class="pp-pin__img" src="${mealScoutIcon}" alt="" /><span class="pp-pin__dot" aria-hidden="true"></span></div>`,
-  iconSize: [36, 36],
-  iconAnchor: [18, 36],
-  popupAnchor: [0, -30],
-});
-
-// ─── Leaflet helpers ──────────────────────────────────────────────────────────
-
-function LeafletCenterer({
-  center,
-  zoom,
-}: {
-  center: GeoPoint;
-  zoom?: number;
-}) {
-  const map = useMap();
-  useEffect(() => {
-    map.setView([center.lat, center.lng], zoom ?? map.getZoom(), {
-      animate: true,
-    });
-  }, [center.lat, center.lng, map, zoom]);
-  return null;
-}
-
-function LeafletClickHandler({
-  onMapClick,
-}: {
-  onMapClick: (p: GeoPoint) => void;
-}) {
-  useMapEvents({
-    click: (e) => onMapClick({ lat: e.latlng.lat, lng: e.latlng.lng }),
-  });
-  return null;
-}
-
-function LeafletBoundsWatcher({
-  onBoundsChanged,
-}: {
-  onBoundsChanged: (bounds: MapBoundsLike) => void;
-}) {
-  const map = useMap();
-  useEffect(() => {
-    const emitBounds = () => {
-      const bounds = map.getBounds();
-      const north = bounds.getNorth();
-      const south = bounds.getSouth();
-      const east = bounds.getEast();
-      const west = bounds.getWest();
-      onBoundsChanged({
-        north,
-        south,
-        east,
-        west,
-        contains: ([lat, lng]) => {
-          const withinLat = lat <= north && lat >= south;
-          const crossesDateLine = west > east;
-          const withinLng = crossesDateLine
-            ? lng >= west || lng <= east
-            : lng >= west && lng <= east;
-          return withinLat && withinLng;
-        },
-      });
-    };
-    emitBounds();
-    map.on("moveend zoomend", emitBounds);
-    return () => {
-      map.off("moveend zoomend", emitBounds);
-    };
-  }, [map, onBoundsChanged]);
-  return null;
+  /** Browse mode uses the canonical MealScout Google surface, not the pin editor. */
+  surfaceMode?: "picker" | "parking";
+  fitPins?: boolean;
+  showRoadTrafficLayer?: boolean;
+  showMapTypeControl?: boolean;
+  userLocation?: GeoPoint | null;
 }
 
 // ─── Google Maps loader (shared singleton) ────────────────────────────────────
@@ -520,7 +446,7 @@ function GoogleMapRenderer({
     });
   }, [trafficCells]);
 
-  if (loadError) return null; // caller falls back to Leaflet
+  if (loadError) return null;
 
   return (
     <>
@@ -530,120 +456,6 @@ function GoogleMapRenderer({
         ? createPortal(infoPortalContent, infoPortalContainer)
         : null}
     </>
-  );
-}
-
-// ─── Leaflet fallback renderer ────────────────────────────────────────────────
-
-function LeafletRenderer({
-  center,
-  zoom = 13,
-  pins = [],
-  trafficCells = [],
-  circleRadiusMetres,
-  onMapClick,
-  onPinDrag,
-  onPinClick,
-  onBoundsChanged,
-  interactionsEnabled = true,
-}: {
-  center: GeoPoint;
-  zoom?: number;
-  pins?: MapPickerPin[];
-  trafficCells?: MapTrafficCell[];
-  circleRadiusMetres?: number;
-  onMapClick?: (p: GeoPoint) => void;
-  onPinDrag?: (key: string, p: GeoPoint) => void;
-  onPinClick?: (key: string) => void;
-  onBoundsChanged?: (bounds: MapBoundsLike) => void;
-  interactionsEnabled?: boolean;
-}) {
-  const isNightTheme =
-    typeof document !== "undefined" &&
-    document.documentElement.classList.contains("theme-night");
-  const tileUrl = isNightTheme
-    ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-    : "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png";
-  const attribution =
-    '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
-
-  return (
-    <MapContainer
-      center={[center.lat, center.lng]}
-      zoom={zoom}
-      zoomControl={false}
-      scrollWheelZoom={interactionsEnabled}
-      dragging={interactionsEnabled}
-      touchZoom={interactionsEnabled}
-      doubleClickZoom={interactionsEnabled}
-      boxZoom={interactionsEnabled}
-      keyboard={interactionsEnabled}
-      className="h-full w-full"
-    >
-      <TileLayer attribution={attribution} url={tileUrl} />
-      <LeafletCenterer center={center} zoom={zoom} />
-      {onMapClick && <LeafletClickHandler onMapClick={onMapClick} />}
-      {onBoundsChanged && (
-        <LeafletBoundsWatcher onBoundsChanged={onBoundsChanged} />
-      )}
-      {trafficCells.map((cell) => (
-        <Circle
-          key={cell.id}
-          center={[cell.lat, cell.lng]}
-          radius={Math.max(110, Math.min(1200, (cell.weight || 1) * 10))}
-          interactive={false}
-          pathOptions={{
-            stroke: false,
-            fillColor:
-              cell.color ||
-              (cell.source === "google_places"
-                ? "#60a5fa"
-                : cell.source === "supply_signal"
-                  ? "#ef4444"
-                  : "#f97316"),
-            fillOpacity:
-              cell.source === "google_places"
-                ? 0.1
-                : cell.source === "supply_signal"
-                  ? 0.14
-                  : 0.12,
-          }}
-        />
-      ))}
-      {pins.map((pin) => (
-        <Marker
-          key={pin.key}
-          position={[pin.position.lat, pin.position.lng]}
-          icon={pin.occupied ? pinIconOccupied : pinIcon}
-          draggable={pin.draggable ?? false}
-          eventHandlers={{
-            click: () => { if (onPinClick) onPinClick(pin.key); },
-            ...(pin.draggable && onPinDrag
-              ? {
-                  dragend: (e: any) => {
-                    const m = e.target as L.Marker;
-                    const ll = m.getLatLng();
-                    onPinDrag(pin.key, { lat: ll.lat, lng: ll.lng });
-                  },
-                }
-              : {}),
-          }}
-        >
-          {pin.popup && (
-            <Popup maxWidth={320} minWidth={240} keepInView autoPan autoPanPadding={[16, 16]}>
-              {pin.popup}
-            </Popup>
-          )}
-        </Marker>
-      ))}
-      {circleRadiusMetres && circleRadiusMetres > 0 && (
-        <Circle
-          center={[center.lat, center.lng]}
-          radius={circleRadiusMetres}
-          pathOptions={{ color: "#f97316", fillColor: "#f97316", fillOpacity: 0.15 }}
-        />
-      )}
-    </MapContainer>
   );
 }
 
@@ -669,8 +481,14 @@ export function GoogleMapPicker({
   className = "",
   interactionsEnabled = true,
   mapId: mapIdProp,
+  surfaceMode = "picker",
+  fitPins = false,
+  showRoadTrafficLayer = false,
+  showMapTypeControl = false,
+  userLocation = null,
 }: GoogleMapPickerProps) {
-  const { data: mapRuntime } = useQuery<MapRuntimeResponse>({
+  const { data: mapRuntime, isLoading: mapRuntimeLoading } =
+    useQuery<MapRuntimeResponse>({
     queryKey: ["/api/map/runtime"],
     queryFn: async () => {
       const res = await fetch("/api/map/runtime");
@@ -679,7 +497,7 @@ export function GoogleMapPicker({
     },
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
-  });
+    });
 
   // Build-time key takes priority; runtime key is a fallback for server-injected keys
   const buildTimeKey = String(
@@ -702,6 +520,94 @@ export function GoogleMapPicker({
 
   const [googleFailed, setGoogleFailed] = useState(false);
   const useGoogle = apiKey.length > 0 && !googleFailed;
+  const [surfaceCenter, setSurfaceCenter] = useState(center);
+  const [surfaceZoom, setSurfaceZoom] = useState(zoom);
+  const [isNightTheme, setIsNightTheme] = useState(() =>
+    typeof document !== "undefined"
+      ? document.documentElement.classList.contains("theme-night")
+      : false,
+  );
+
+  useEffect(() => {
+    setSurfaceCenter(center);
+  }, [center.lat, center.lng]);
+
+  useEffect(() => {
+    setSurfaceZoom(zoom);
+  }, [zoom]);
+
+  useEffect(() => {
+    if (surfaceMode !== "parking" || typeof document === "undefined") return;
+    const root = document.documentElement;
+    const syncTheme = () =>
+      setIsNightTheme(root.classList.contains("theme-night"));
+    syncTheme();
+    const observer = new MutationObserver(syncTheme);
+    observer.observe(root, { attributes: true, attributeFilter: ["class"] });
+    return () => observer.disconnect();
+  }, [surfaceMode]);
+
+  const surfaceMarkers = useMemo<MapAdapterMarker[]>(
+    () =>
+      pins.map((pin) => ({
+        id: pin.key,
+        sourceId: pin.key,
+        kind: pin.markerKind || "parking",
+        lat: pin.position.lat,
+        lng: pin.position.lng,
+        title: pin.markerTitle,
+        subtitle: pin.markerSubtitle,
+        label: pin.markerLabel,
+        color: pin.markerColor,
+        selected: pin.markerSelected,
+        parkingStatus: pin.markerStatus ?? null,
+      })),
+    [pins],
+  );
+
+  if (surfaceMode === "parking") {
+    return (
+      <div
+        className={`relative h-full w-full ${className}`}
+        data-parking-pass-google-map="true"
+      >
+        {useGoogle ? (
+          <GoogleMapSurface
+            apiKey={apiKey}
+            mapId={mapId}
+            center={surfaceCenter}
+            zoom={surfaceZoom}
+            markers={surfaceMarkers}
+            trafficCells={trafficCells}
+            showRoadTrafficLayer={showRoadTrafficLayer}
+            userLocation={userLocation}
+            isNightTheme={isNightTheme}
+            useNativeMapStyle={true}
+            interactive={interactionsEnabled}
+            showZoomControls={true}
+            zoomControlsPosition="bottom"
+            fitMarkers={fitPins}
+            fitMarkerPadding={72}
+            showMapTypeControl={showMapTypeControl}
+            onBoundsChanged={(bounds) => onBoundsChanged?.(bounds)}
+            onZoomChanged={setSurfaceZoom}
+            onCenterChanged={setSurfaceCenter}
+            onMarkerTap={(marker) => onPinClick?.(marker.sourceId)}
+            onFatalError={() => setGoogleFailed(true)}
+          />
+        ) : mapRuntimeLoading && !googleFailed ? (
+          <div className="flex h-full items-center justify-center bg-[var(--bg-surface-muted)] text-sm text-[color:var(--text-muted)]">
+            Loading Google map...
+          </div>
+        ) : (
+          <div className="flex h-full items-center justify-center bg-[var(--bg-surface-muted)] px-6 text-center text-sm text-[color:var(--text-muted)]">
+            The parking map is temporarily unavailable. Spot listings remain
+            available below.
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className={`relative h-full w-full ${className}`}>
@@ -721,19 +627,14 @@ export function GoogleMapPicker({
           interactionsEnabled={interactionsEnabled}
           onLoadError={() => setGoogleFailed(true)}
         />
+      ) : mapRuntimeLoading && !googleFailed ? (
+        <div className="flex h-full items-center justify-center bg-[var(--bg-surface-muted)] text-sm text-[color:var(--text-muted)]">
+          Loading Google map...
+        </div>
       ) : (
-        <LeafletRenderer
-          center={center}
-          zoom={zoom}
-          pins={pins}
-          trafficCells={trafficCells}
-          circleRadiusMetres={circleRadiusMetres}
-          onMapClick={onMapClick}
-          onPinDrag={onPinDrag}
-          onPinClick={onPinClick}
-          onBoundsChanged={onBoundsChanged}
-          interactionsEnabled={interactionsEnabled}
-        />
+        <div className="flex h-full items-center justify-center bg-[var(--bg-surface-muted)] px-6 text-center text-sm text-[color:var(--text-muted)]">
+          Google Maps is temporarily unavailable.
+        </div>
       )}
     </div>
   );

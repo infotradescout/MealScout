@@ -33,6 +33,8 @@ import { PARKING_PASS_MEAL_WINDOWS } from "@shared/parkingPassSlots";
 import {
   computeHostProfileQualityFlags,
   computeParkingPassQualityFlags,
+  getHostProfileBlockingQualityFlags,
+  getParkingPassBlockingQualityFlags,
   isHostProfileMapEligible,
   isParkingPassPublicReady,
   normalizeUsStateAbbr,
@@ -460,6 +462,34 @@ export function registerEventRoutes(
         city: host?.city || event?.hostCity || event?.city,
         state: host?.state || event?.hostState || event?.state,
       });
+    const legacyUpcoming = await storage.getAllUpcomingEvents();
+    const occurrenceHostUserIds = Array.from(
+      new Set(
+        [...occurrences, ...legacyUpcoming]
+          .map((event: any) => String(event?.host?.userId || "").trim())
+          .filter(Boolean),
+      ),
+    );
+    const activeHostUserIds =
+      occurrenceHostUserIds.length > 0
+        ? new Set(
+            (
+              await db
+                .select({ id: users.id })
+                .from(users)
+                .where(
+                  and(
+                    inArray(users.id, occurrenceHostUserIds),
+                    sql`${users.isDisabled} is not true`,
+                  ),
+                )
+            ).map((row: { id: string }) => String(row.id)),
+          )
+        : new Set<string>();
+    const isActiveHostAccount = (host: any) => {
+      const userId = String(host?.userId || "").trim();
+      return !userId || activeHostUserIds.has(userId);
+    };
 
     // NOTE: Public feed must only show Parking Pass listings that have pricing
     // and a clean, geocodable address. Draft/incomplete listings can exist
@@ -469,6 +499,7 @@ export function registerEventRoutes(
         (event: any) =>
           isParkingPassFeedCandidate(event) &&
           isParkingPassPublicReady(event) &&
+          isActiveHostAccount(event?.host) &&
           isPublicHostProfile(event?.host, event),
       )
       .map((event: any) => ({
@@ -486,7 +517,6 @@ export function registerEventRoutes(
         .map((series: any) => String(series?.id || "").trim())
         .filter(Boolean),
     );
-    const legacyUpcoming = await storage.getAllUpcomingEvents();
     const legacyEvents = legacyUpcoming
       .filter(
         (event: any) =>
@@ -495,6 +525,7 @@ export function registerEventRoutes(
             publishedParkingPassSeriesIds.has(String(event.seriesId))) &&
           isParkingPassFeedCandidate(event) &&
           isParkingPassPublicReady(event) &&
+          isActiveHostAccount(event?.host) &&
           isPublicHostProfile(event?.host, event),
       )
       .map((event: any) => ({
@@ -1299,6 +1330,29 @@ export function registerEventRoutes(
         const hostPricingIds = new Set<string>();
         try {
           const allHosts = await storage.getAllHosts();
+          const hostUserIds = Array.from(
+            new Set(
+              (allHosts as any[])
+                .map((host: any) => String(host?.userId || "").trim())
+                .filter(Boolean),
+            ),
+          );
+          const activeHostUserIds =
+            hostUserIds.length > 0
+              ? new Set(
+                  (
+                    await db
+                      .select({ id: users.id })
+                      .from(users)
+                      .where(
+                        and(
+                          inArray(users.id, hostUserIds),
+                          sql`${users.isDisabled} is not true`,
+                        ),
+                      )
+                  ).map((row: { id: string }) => String(row.id)),
+                )
+              : new Set<string>();
           const publishedSeriesHostIds = new Set(
             (await storage.getParkingPassSeriesSafe().catch(() => []))
               .filter(
@@ -1311,6 +1365,8 @@ export function registerEventRoutes(
           for (const host of allHosts as any[]) {
             const hostId = String(host?.id || "").trim();
             if (!hostId) continue;
+            const hostUserId = String(host?.userId || "").trim();
+            if (hostUserId && !activeHostUserIds.has(hostUserId)) continue;
             if (!publishedSeriesHostIds.has(hostId)) {
               continue;
             }
@@ -1899,9 +1955,9 @@ export function registerEventRoutes(
             nextDate: null,
           };
           prev.total += 1;
-          const flags = computeParkingPassQualityFlags(event);
+          const flags = getParkingPassBlockingQualityFlags(event);
           flags.forEach((flag) => prev.qualityFlags.add(flag));
-          if (flags.length === 0) {
+          if (isParkingPassPublicReady(event)) {
             prev.publicReady += 1;
           }
           const dateKey = String(event?.date || "").slice(0, 10);
@@ -1962,12 +2018,13 @@ export function registerEventRoutes(
               Math.abs(lng) <= 180;
             const hasAddress = Boolean(String(host?.address || "").trim());
             const isDisabled = Boolean(host?.isDisabled);
-            const hostQualityFlags = computeHostProfileQualityFlags({
+            const hostProfile = {
               businessName: host?.businessName,
               address: host?.address,
               city: host?.city,
               state: host?.state,
-            });
+            };
+            const hostQualityFlags = getHostProfileBlockingQualityFlags(hostProfile);
 
             const reasons: string[] = [];
             if (!host) reasons.push("missing_host_profile");
@@ -1987,10 +2044,11 @@ export function registerEventRoutes(
               host &&
               !isDisabled &&
               hasAddress &&
-              hostQualityFlags.length === 0,
+              isHostProfileMapEligible(hostProfile),
             );
             const parkingPassFeedVisible =
-              occurrences.publicReady > 0 || legacy.publicReady > 0;
+              !isDisabled &&
+              (occurrences.publicReady > 0 || legacy.publicReady > 0);
 
             return {
               hostId,

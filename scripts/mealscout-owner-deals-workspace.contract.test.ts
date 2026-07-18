@@ -13,6 +13,7 @@ const scoutAdapters = read("client/src/features/scout/scoutAdapters.ts");
 const dealDependencies = read("server/routes/dealRouteDependencies.ts");
 const app = read("client/src/App.tsx");
 const navigation = read("client/src/components/navigation.tsx");
+const routeSurface = read("client/src/lib/app-route-surface.ts");
 
 const ownerRouteStart = managementRoutes.indexOf(
   '"/api/owner/restaurants/:restaurantId/deals"',
@@ -80,10 +81,10 @@ assert.match(
 );
 assert.doesNotMatch(edit, /restaurantId: restaurants\[0\]\.id/);
 
-for (const source of [app, navigation]) {
-  assert.match(source, /currentPath === "\/deal-creation"/);
-  assert.match(source, /currentPath\.startsWith\("\/deal-edit\/"\)/);
-}
+assert.match(app, /isBusinessWorkspaceRoutePath\(/);
+assert.match(navigation, /isBusinessWorkspaceRoutePath\(/);
+assert.match(routeSurface, /pathname === "\/deal-creation"/);
+assert.match(routeSurface, /pathname\.startsWith\("\/deal-edit\/"\)/);
 
 assert.doesNotMatch(owner, /hasPublishingAccess|subscription\?\.hasAccess/);
 

@@ -12,6 +12,7 @@ const routes = read("server/routes/pickupOrderRoutes.ts");
 const websocket = read("server/websocket.ts");
 const app = read("client/src/App.tsx");
 const navigation = read("client/src/components/navigation.tsx");
+const routeSurface = read("client/src/lib/app-route-surface.ts");
 const profile = read("client/src/pages/profile.tsx");
 
 assert.match(orders, /isBusinessOrderOperator\(user\?\.userType\)/);
@@ -78,10 +79,11 @@ assert.match(confirmation, /payload\?\.items/);
 assert.match(confirmation, /selectedVariant\?\.label/);
 assert.doesNotMatch(confirmation, /setOrder\(data\)/);
 
-for (const source of [app, navigation]) {
-  assert.match(source, /currentPath === "\/orders"/);
-  assert.match(source, /currentPath === "\/kitchen"/);
-}
+assert.match(app, /isBusinessWorkspaceRoutePath\(/);
+assert.match(navigation, /isBusinessWorkspaceRoutePath\(/);
+assert.match(routeSurface, /pathname === "\/orders"/);
+assert.match(routeSurface, /pathname === "\/kitchen"/);
+assert.match(routeSurface, /hasFoodBusinessAuthority/);
 assert.match(navigation, /path: "\/orders", icon: Receipt, label: "Activity"/);
 assert.match(profile, /label: "Activity"[\s\S]*?href: "\/orders"/);
 

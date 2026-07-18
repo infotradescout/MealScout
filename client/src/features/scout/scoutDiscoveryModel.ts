@@ -21,7 +21,6 @@ export type ScoutHorizontalRowId =
   | "saved_favorites"
   | "following"
   | "order_again"
-  | "host_locations"
   | "popular_dishes"
   | "hot_deals"
   | "happy_hours"
@@ -69,15 +68,6 @@ export const SCOUT_HORIZONTAL_ROW_REGISTRY: ScoutHorizontalRowDefinition[] = [
     acceptedCardKinds: ["restaurant", "food_truck", "map_place", "local_activity"],
     priority: 3,
     maxCards: 12,
-    hideWhenEmpty: true,
-    dedupPolicy: "strict_business",
-  },
-  {
-    id: "host_locations",
-    title: "Host Locations Nearby",
-    acceptedCardKinds: ["map_place"],
-    priority: 4,
-    maxCards: 10,
     hideWhenEmpty: true,
     dedupPolicy: "strict_business",
   },

@@ -11,6 +11,10 @@ import { apiUrl } from "@/lib/api";
 import { TimeOfDayBackground } from "@/components/TimeOfDayBackground";
 import { useToast } from "@/hooks/use-toast";
 import { parseCleanAffiliateBusinessRoute } from "@shared/cleanAffiliateLinks";
+import {
+  isBusinessWorkspaceRoutePath,
+  isScoutRoutePath,
+} from "@/lib/app-route-surface";
 
 // Eager load only critical pages (welcome, login) - everything else lazy loads
 import NotFound from "@/pages/not-found";
@@ -143,9 +147,7 @@ const KitchenDisplayPage = lazy(() => import("@/pages/kitchen-display"));
 const OnlineMenuPage = lazy(() => import("@/pages/online-menu"));
 const PickupCheckoutPage = lazy(() => import("@/pages/pickup-checkout"));
 const OrderConfirmationPage = lazy(() => import("@/pages/order-confirmation"));
-const ScoutPage = lazy(() => import("@/pages/explore-preview"));
 const ScoutPageV2 = lazy(() => import("@/pages/explore-preview-v2"));
-const ScoutPrototype = lazy(() => import("@/pages/scout-prototype"));
 const FoodTruckRush = lazy(() => import("@/pages/food-truck-rush"));
 const HiringPage = lazy(() => import("@/pages/hiring"));
 const ForRestaurants = lazy(() => import("@/pages/for-restaurants"));
@@ -486,7 +488,7 @@ function Router() {
             <Route path="/scout/:refTag" component={ScoutPageV2} />
             <Route path="/directory" component={ScoutPageV2} />
             <Route path="/directory/:refTag" component={ScoutPageV2} />
-            <Route path="/scout-prototype" component={ScoutPrototype} />
+            <Route path="/scout-prototype" component={RedirectToScout} />
             <Route path="/scout-v2" component={ScoutPageV2} />
             <Route path="/food-truck-rush" component={FoodTruckRush} />
             <Route path="/login" component={Login} />
@@ -517,7 +519,7 @@ function Router() {
             <Route path="/scout/:refTag" component={ScoutPageV2} />
             <Route path="/directory" component={ScoutPageV2} />
             <Route path="/directory/:refTag" component={ScoutPageV2} />
-            <Route path="/scout-prototype" component={ScoutPrototype} />
+            <Route path="/scout-prototype" component={RedirectToScout} />
             <Route path="/scout-v2" component={ScoutPageV2} />
             <Route path="/food-truck-rush" component={FoodTruckRush} />
             <Route path="/login" component={Login} />
@@ -628,8 +630,9 @@ function Router() {
   );
 }
 
-function App() {
+function AppFrame() {
   const [location] = useLocation();
+  const { user } = useAuth();
   const currentPath = location.split("?")[0];
   const isShellNotFound = shouldRenderShellNotFound(currentPath);
   const isPublicProfilePath =
@@ -643,69 +646,61 @@ function App() {
     currentPath.startsWith("/menu/") ||
     currentPath.startsWith("/checkout/") ||
     currentPath.startsWith("/order-confirmation/");
+  const usesScoutDiscoveryShell = isScoutRoutePath(currentPath);
   const usesCinematicBackground =
-    currentPath === "/" ||
-    currentPath === "/food-truck-rush" ||
-    currentPath === "/scout" ||
-    currentPath.startsWith("/scout/") ||
-    currentPath === "/scout-v2" ||
-    currentPath === "/directory" ||
-    currentPath.startsWith("/directory/");
-  const usesBusinessWorkspace =
-    currentPath === "/restaurant-owner-dashboard" ||
-    currentPath === "/menu-builder" ||
-    currentPath === "/deal-creation" ||
-    currentPath.startsWith("/deal-edit/") ||
-    currentPath === "/orders" ||
-    currentPath === "/kitchen";
+    !usesScoutDiscoveryShell &&
+    (currentPath === "/" || currentPath === "/food-truck-rush");
+  const usesBusinessWorkspace = isBusinessWorkspaceRoutePath(currentPath, {
+    userType: user?.userType,
+  });
 
   if (isShellNotFound) {
     return (
-      <QueryClientProvider client={queryClient}>
-        <TooltipProvider>
-          <ScoutNavSearchProvider>
-            <TimeOfDayBackground appearance="day" />
-            <div className="app-background app-content min-h-screen pb-[calc(var(--scout-nav-height,58px)+env(safe-area-inset-bottom,0px))] lg:pb-0 lg:pt-16 relative z-10">
-              <Toaster />
-              <NotFound />
-              <Navigation scope="global" />
-            </div>
-          </ScoutNavSearchProvider>
-        </TooltipProvider>
-      </QueryClientProvider>
+      <ScoutNavSearchProvider>
+        <TimeOfDayBackground appearance="day" />
+        <div className="app-background app-content min-h-screen pb-[calc(var(--scout-nav-height,58px)+env(safe-area-inset-bottom,0px))] lg:pb-0 lg:pt-16 relative z-10">
+          <Toaster />
+          <NotFound />
+          <Navigation scope="global" />
+        </div>
+      </ScoutNavSearchProvider>
     );
   }
 
   if (usesSelfContainedConsumerShell) {
     return (
-      <QueryClientProvider client={queryClient}>
-        <TooltipProvider>
-          <TimeOfDayBackground appearance="day" />
-          <div className="relative z-10 min-h-screen">
-            <Toaster />
-            <Router />
-          </div>
-        </TooltipProvider>
-      </QueryClientProvider>
+      <>
+        <TimeOfDayBackground appearance="day" />
+        <div className="relative z-10 min-h-screen">
+          <Toaster />
+          <Router />
+        </div>
+      </>
     );
   }
 
   return (
+    <ScoutNavSearchProvider>
+      <TimeOfDayBackground
+        appearance={usesCinematicBackground ? "night" : "day"}
+      />
+      <div
+        data-app-surface={usesCinematicBackground ? "cinematic" : "day"}
+        className={`app-background app-content min-h-screen pb-[calc(var(--scout-nav-height,58px)+env(safe-area-inset-bottom,0px))] lg:pb-0 relative z-10 ${usesBusinessWorkspace ? "lg:pt-0" : "lg:pt-16"}`}
+      >
+        <Toaster />
+        <Router />
+        <Navigation scope="global" />
+      </div>
+    </ScoutNavSearchProvider>
+  );
+}
+
+function App() {
+  return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <ScoutNavSearchProvider>
-          <TimeOfDayBackground
-            appearance={usesCinematicBackground ? "night" : "day"}
-          />
-          <div
-            data-app-surface={usesCinematicBackground ? "cinematic" : "day"}
-            className={`app-background app-content min-h-screen pb-[calc(var(--scout-nav-height,58px)+env(safe-area-inset-bottom,0px))] lg:pb-0 relative z-10 ${usesBusinessWorkspace ? "lg:pt-0" : "lg:pt-16"}`}
-          >
-            <Toaster />
-            <Router />
-            <Navigation scope="global" />
-          </div>
-        </ScoutNavSearchProvider>
+        <AppFrame />
       </TooltipProvider>
     </QueryClientProvider>
   );

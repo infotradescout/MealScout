@@ -5,13 +5,19 @@ export function shouldShowRestaurantMarker({
   hasDeal,
   showOpenNow,
   showDeals,
+  showAllRestaurants = false,
 }: {
   openState: RestaurantOpenState;
   hasDeal: boolean;
   showOpenNow: boolean;
   showDeals: boolean;
+  showAllRestaurants?: boolean;
 }): boolean {
-  return (openState === "open" && showOpenNow) || (hasDeal && showDeals);
+  return (
+    showAllRestaurants ||
+    (openState === "open" && showOpenNow) ||
+    (hasDeal && showDeals)
+  );
 }
 
 export function getScoutRecenterDecision({

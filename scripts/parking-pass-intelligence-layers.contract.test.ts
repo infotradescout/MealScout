@@ -14,7 +14,8 @@ const requiredSnippets = [
   "propane_dealer",
   "equipment_supplier",
   "Operator support",
-  "mapPins.length + supplierOverlayPins.length",
+  "...supplierOverlayPins.map((pin) => ({",
+  "...adminSetupPins.map((pin) => ({",
 ];
 
 for (const snippet of requiredSnippets) {

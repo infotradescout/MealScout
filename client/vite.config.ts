@@ -2,6 +2,10 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
 
+const localMapRuntimeProxyTarget =
+  process.env.MEALSCOUT_LOCAL_MAP_RUNTIME_PROXY_TARGET ||
+  "http://localhost:5200";
+
 export default defineConfig({
   // When this config is loaded from the repo root (`vite build --config client/vite.config.ts`),
   // Vite otherwise defaults to process.cwd() and looks for /index.html in the wrong place.
@@ -36,6 +40,10 @@ export default defineConfig({
   server: {
     port: 5174,
     proxy: {
+      "/api/map/runtime": {
+        target: localMapRuntimeProxyTarget,
+        changeOrigin: true,
+      },
       "/api": {
         target: "http://localhost:5200",
         changeOrigin: true,

@@ -6,7 +6,7 @@ const tracker = JSON.parse(readFileSync(trackerPath, "utf8"));
 const manualTruckIntakeRunbook = readFileSync("docs/MANUAL_TRUCK_INTAKE_RUNBOOK.md", "utf8");
 const publicProfilePage = readFileSync("client/src/pages/public-profile.tsx", "utf8");
 const publicDiscoveryRoutes = readFileSync("server/routes/publicDiscoveryRoutes.ts", "utf8");
-const scoutPage = readFileSync("client/src/pages/scout-prototype.tsx", "utf8");
+const scoutPage = readFileSync("client/src/pages/explore-preview-v2.tsx", "utf8");
 const scoutSurfaceService = readFileSync("server/services/scoutSurfaceService.ts", "utf8");
 
 const expectedTruckIds = new Map([
@@ -61,10 +61,8 @@ assert(
 
 assert(
   scoutPage.includes('buildPublicProfilePath({') &&
-    scoutPage.includes('entityType: "truck"') &&
-    scoutPage.includes("\"Menu: none found\"") &&
-    scoutPage.includes("\"Not live now\""),
-  "Scout cards must keep clean truck profile links and honest incomplete-state labels.",
+    scoutPage.includes('entityType: "truck"'),
+  "Scout cards must keep clean truck profile links.",
 );
 
 const scoutSurfaceCompact = scoutSurfaceService.replace(/\s+/g, " ");

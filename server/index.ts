@@ -524,11 +524,9 @@ if (process.env.NODE_ENV === "production") {
           imgSrc: ["'self'", "data:", "https:"],
           connectSrc: ["'self'", "https:", "ws:", "wss:"],
           fontSrc: ["'self'", "https:", "data:"],
-          // MapLibre GL (themed-scout-map.tsx / -v2.tsx) creates its internal
-          // tile-processing worker from a blob: URL. Without this, it falls
-          // back to script-src 'self' and gets silently blocked, breaking
-          // map tile rendering entirely - this was happening in production
-          // independent of any Scout page changes.
+          // Keep blob workers available for browser libraries that create
+          // isolated workers at runtime. Google Maps remains the only
+          // application map renderer.
           workerSrc: ["'self'", "blob:"],
           childSrc: ["'self'", "blob:"],
         },

@@ -29,6 +29,11 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useI18n } from "@/lib/i18n";
+import {
+  isBusinessWorkspaceRoutePath,
+  isParkingPassRoutePath,
+  isScoutRoutePath,
+} from "@/lib/app-route-surface";
 import LongPressHelp from "@/components/long-press-help";
 import { ScoutSearchDock } from "@/components/scout/ScoutSearchDock";
 import { useScoutNavSearch } from "@/components/scout/ScoutNavSearchContext";
@@ -53,6 +58,7 @@ type NavigationLane =
   | "food_truck"
   | "restaurant"
   | "host"
+  | "parking"
   | "customer";
 
 const NAV_HELP: Record<string, string> = {
@@ -251,20 +257,12 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
   if (!isGlobalScope && !showLocalNav) return null;
 
   const dashboardPath = "/dashboard";
-  const isScoutRoute =
-    currentPath === "/scout" ||
-    currentPath.startsWith("/scout/") ||
-    currentPath === "/scout-v2" ||
-    currentPath === "/directory" ||
-    currentPath.startsWith("/directory/");
-  const isBusinessWorkspaceRoute =
-    currentPath === "/restaurant-owner-dashboard" ||
-    currentPath === "/menu-builder" ||
-    currentPath === "/deal-creation" ||
-    currentPath.startsWith("/deal-edit/") ||
-    currentPath === "/kitchen" ||
-    (currentPath === "/orders" &&
-      (isRestaurantOwner || isFoodTruck || isAdmin));
+  const isScoutRoute = isScoutRoutePath(currentPath);
+  const isParkingPassRoute = isParkingPassRoutePath(currentPath);
+  const isBusinessWorkspaceRoute = isBusinessWorkspaceRoutePath(currentPath, {
+    userType: user?.userType,
+    hasBusinessAccess: hasBusinessTeamAccess,
+  });
   const disableScoutHelpBubbles = isScoutRoute;
 
   const accountLane: NavigationLane = !user
@@ -288,14 +286,40 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     ? user
       ? "customer"
       : "guest"
-    : accountLane;
-  const isRestaurantHostCapable = lane === "restaurant" && isHost;
+    : isParkingPassRoute
+      ? "parking"
+      : accountLane;
+  const capabilityLane = lane === "parking" ? accountLane : lane;
+  const isRestaurantHostCapable =
+    capabilityLane === "restaurant" && isHost;
   // A restaurant/food_truck-laned user who also has a real host row (verified
   // owning both, e.g. a bar operator who's also a venue host) needs a path to
   // their host management surface too - /host/dashboard, not /parking-pass
   // (that's the public discovery/booking page, already handled above).
   const hasSecondaryHostLink =
-    isHost && (lane === "restaurant" || lane === "food_truck");
+    isHost &&
+    (capabilityLane === "restaurant" || capabilityLane === "food_truck");
+
+  const parkingOverviewPath =
+    accountLane === "admin_staff"
+      ? "/admin/dashboard"
+      : accountLane === "guest"
+        ? "/scout"
+        : dashboardPath;
+  const parkingManagePath =
+    accountLane === "admin_staff"
+      ? "/admin/dashboard?tab=hosts"
+      : accountLane === "host"
+        ? "/host/dashboard"
+        : accountLane === "food_truck" || accountLane === "restaurant"
+          ? "/restaurant-owner-dashboard"
+          : accountLane === "event"
+            ? "/event-coordinator/dashboard"
+            : accountLane === "supplier"
+              ? "/supplier/dashboard"
+              : accountLane === "guest"
+                ? "/login?redirect=%2Fparking-pass"
+                : "/profile";
 
   const primaryNavigationByLane: Record<typeof lane, NavItem[]> = {
     guest: [
@@ -341,6 +365,25 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
       { path: "/parking-pass", icon: ParkingSquare, label: "Work" },
       { path: "/host/dashboard", icon: Store, label: "Manage" },
     ],
+    parking: !user
+      ? [
+          { path: "/scout", icon: Compass, label: "Scout" },
+          { path: "/parking-pass", icon: ParkingSquare, label: "Work" },
+          {
+            path: "/login?redirect=%2Fparking-pass",
+            icon: User,
+            label: "Account",
+          },
+        ]
+      : [
+          {
+            path: parkingOverviewPath,
+            icon: LayoutDashboard,
+            label: "Overview",
+          },
+          { path: "/parking-pass", icon: ParkingSquare, label: "Work" },
+          { path: parkingManagePath, icon: Store, label: "Manage" },
+        ],
     event: [
       { path: dashboardPath, icon: LayoutDashboard, label: "Overview" },
       {
@@ -387,8 +430,9 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
 
   const buildMoreItems = (): NavItem[] => {
     const items: NavItem[] = [];
+    const moreLane = lane === "parking" ? accountLane : lane;
 
-    if (lane === "guest") {
+    if (moreLane === "guest") {
       items.push(
         { path: "/events", icon: Calendar, label: "Events" },
         { path: "/deals", icon: Tag, label: "Deals" },
@@ -399,7 +443,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
         },
         { path: "/claim-business", icon: Truck, label: "Claim Business" },
       );
-    } else if (lane === "customer") {
+    } else if (moreLane === "customer") {
       items.push(
         { path: "/orders", icon: Receipt, label: "Activity" },
         { path: "/events", icon: Calendar, label: "Events" },
@@ -407,7 +451,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
         { path: "/video", icon: Clapperboard, label: "Video" },
         { path: "/share-hub", icon: Share2, label: "Share" },
       );
-    } else if (lane === "food_truck") {
+    } else if (moreLane === "food_truck") {
       items.push(
         { path: "/scout", icon: Compass, label: "Scout" },
         { path: dashboardPath, icon: LayoutDashboard, label: "Dashboard" },
@@ -436,7 +480,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
           : []),
         { path: "/profile", icon: User, label: "Profile" },
       );
-    } else if (lane === "restaurant") {
+    } else if (moreLane === "restaurant") {
       items.push(
         { path: "/scout", icon: Compass, label: "Scout" },
         ...(isRestaurantHostCapable
@@ -472,21 +516,21 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
           : []),
         { path: "/profile", icon: User, label: "Profile" },
       );
-    } else if (lane === "host") {
+    } else if (moreLane === "host") {
       items.push(
         { path: "/scout", icon: Compass, label: "Scout" },
         { path: "/events", icon: Calendar, label: "Events" },
         { path: "/share-hub", icon: Share2, label: "Share" },
         { path: "/profile", icon: User, label: "Profile" },
       );
-    } else if (lane === "event") {
+    } else if (moreLane === "event") {
       items.push(
         { path: "/scout", icon: Compass, label: "Scout" },
         { path: "/video", icon: Clapperboard, label: "Video" },
         { path: "/share-hub", icon: Share2, label: "Share" },
         { path: "/profile", icon: User, label: "Profile" },
       );
-    } else if (lane === "supplier") {
+    } else if (moreLane === "supplier") {
       items.push(
         { path: "/scout", icon: Compass, label: "Scout" },
         { path: "/events", icon: Calendar, label: "Events" },

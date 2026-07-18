@@ -1210,6 +1210,7 @@ export function registerUserAdminRoutes(
                     email: row.user.email,
                     phone: row.user.phone,
                     userType: row.user.userType,
+                    isDisabled: row.user.isDisabled,
                     affiliateTag: row.user.affiliateTag,
                     affiliateCloserUserId: row.user.affiliateCloserUserId,
                     affiliateBookerUserId: row.user.affiliateBookerUserId,

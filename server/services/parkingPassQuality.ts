@@ -19,6 +19,22 @@ type HostProfileQualityFlag =
   | "bad_address_format"
   | "suspicious_address";
 
+const NON_BLOCKING_HOST_PROFILE_QUALITY_FLAGS = new Set<HostProfileQualityFlag>([
+  "bad_address_format",
+]);
+
+const NON_BLOCKING_PARKING_PASS_QUALITY_FLAGS =
+  new Set<ParkingPassQualityFlag>([
+    "missing_coords",
+    "invalid_coords",
+    "payments_disabled",
+    "invalid_state",
+    "bad_address_format",
+    "invalid_time_window",
+    "missing_spots",
+    "invalid_spots",
+  ]);
+
 const normalize = (value?: string | number | null) =>
   String(value ?? "").trim();
 
@@ -130,11 +146,11 @@ export function computeHostProfileQualityFlags(profile: {
   if (!businessName) {
     flags.push("missing_business_name");
   } else {
-    const compactName = businessName.replace(/\s+/g, "");
+    const isSingleTokenName = !/\s/.test(businessName);
     if (
       SUSPICIOUS_TEST_TOKEN.test(businessName) ||
       SUSPICIOUS_PRIVATE_HOST_NAME.test(businessName) ||
-      LONG_GIBBERISH_TOKEN.test(compactName)
+      (isSingleTokenName && LONG_GIBBERISH_TOKEN.test(businessName))
     ) {
       flags.push("suspicious_business_name");
     }
@@ -157,14 +173,14 @@ export function computeHostProfileQualityFlags(profile: {
 export function isHostProfileMapEligible(
   profile: Parameters<typeof computeHostProfileQualityFlags>[0],
 ) {
-  const blockingFlags = new Set<HostProfileQualityFlag>([
-    "missing_business_name",
-    "suspicious_business_name",
-    "missing_address",
-    "suspicious_address",
-  ]);
-  return computeHostProfileQualityFlags(profile).every(
-    (flag) => !blockingFlags.has(flag),
+  return getHostProfileBlockingQualityFlags(profile).length === 0;
+}
+
+export function getHostProfileBlockingQualityFlags(
+  profile: Parameters<typeof computeHostProfileQualityFlags>[0],
+) {
+  return computeHostProfileQualityFlags(profile).filter(
+    (flag) => !NON_BLOCKING_HOST_PROFILE_QUALITY_FLAGS.has(flag),
   );
 }
 
@@ -302,7 +318,6 @@ export function computeParkingPassQualityFlags(listing: {
 export function isParkingPassPublicReady(
   listing: Parameters<typeof computeParkingPassQualityFlags>[0],
 ) {
-  const flags = computeParkingPassQualityFlags(listing);
   // Public-ready (pins/bookability) should match the simple model:
   // if a host has an address and any pricing, show it and allow booking.
   //
@@ -311,15 +326,13 @@ export function isParkingPassPublicReady(
   // - payments/coords: operational or best-effort
   // - invalid_state/bad_address_format: legacy/dirty data is common
   // - invalid_time_window/spots: downstream logic defaults these safely
-  const nonBlocking = new Set<ParkingPassQualityFlag>([
-    "missing_coords",
-    "invalid_coords",
-    "payments_disabled",
-    "invalid_state",
-    "bad_address_format",
-    "invalid_time_window",
-    "missing_spots",
-    "invalid_spots",
-  ]);
-  return flags.filter((flag) => !nonBlocking.has(flag)).length === 0;
+  return getParkingPassBlockingQualityFlags(listing).length === 0;
+}
+
+export function getParkingPassBlockingQualityFlags(
+  listing: Parameters<typeof computeParkingPassQualityFlags>[0],
+) {
+  return computeParkingPassQualityFlags(listing).filter(
+    (flag) => !NON_BLOCKING_PARKING_PASS_QUALITY_FLAGS.has(flag),
+  );
 }

@@ -1,11 +1,6 @@
 import { readFileSync } from "node:fs";
 
-// The live /scout surface is ScoutPageV2 (explore-preview-v2.tsx), not
-// scout-prototype.tsx (a secondary /scout-prototype page). It was rewritten
-// onto a card/surface-based architecture that no longer contains the old
-// inline isBarBusinessType pattern this test originally checked, but it
-// does still route bars correctly, just via buildPublicProfilePath with an
-// explicit "bar" entityType instead.
+// The live /scout surface is ScoutPageV2 (explore-preview-v2.tsx).
 const scout = readFileSync("client/src/pages/explore-preview-v2.tsx", "utf8");
 const adminUsers = readFileSync("server/routes/admin/userAdminRoutes.ts", "utf8");
 const ownerDashboard = readFileSync(

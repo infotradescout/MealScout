@@ -27,9 +27,9 @@ assert.ok(
 );
 
 assert.ok(
-  scoutPage.includes('md:max-w-[1120px]') &&
-    scoutPage.includes('xl:max-w-[1280px]'),
-  "Scout layout must widen on desktop/tablet instead of staying trapped in a phone-width column.",
+  scoutPage.includes("scout-discovery-page relative z-10 w-full") &&
+    !scoutPage.includes("md:max-w-[1120px]"),
+  "Scout must keep its primary Google map full-bleed instead of trapping it in a card-width column.",
 );
 
 assert.ok(

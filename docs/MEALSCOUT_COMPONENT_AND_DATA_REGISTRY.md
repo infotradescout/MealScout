@@ -5,8 +5,7 @@ Living registry for mapping visual targets to real app surfaces.
 ## Scout page
 - Likely files:
 - `client/src/pages/explore-preview-v2.tsx` (canonical owner for `/scout`, `/directory`, and `/scout-v2`)
-- `client/src/pages/explore-preview.tsx` (dead/quarantined legacy surface; do not treat as canonical)
-- `client/src/pages/map.tsx` (related map surface patterns)
+- `client/src/components/maps/google-map-surface.tsx` (canonical geographic surface)
 - `client/src/components/navigation.tsx`
 - Likely APIs/data sources:
 - `/api/events/public`
@@ -115,7 +114,8 @@ Living registry for mapping visual targets to real app surfaces.
 ## Map surfaces
 - Likely files:
 - `client/src/pages/explore-preview-v2.tsx`
-- `client/src/pages/map.tsx`
+- `client/src/pages/parking-pass.tsx`
+- `client/src/components/maps/google-map-surface.tsx`
 - `client/src/components/maps/GoogleMapPicker.tsx`
 - `server/routes/publicMapRoutes.ts`
 - Likely APIs/data sources:
