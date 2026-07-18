@@ -408,11 +408,9 @@ export function registerRestaurantOperationsRoutes(
           });
         };
 
-        if (isAdminLikeUserType(req.user?.userType)) {
-          const allRestaurants = await storage.getAllRestaurants();
-          return res.json(await attachVerificationState(allRestaurants as any[]));
-        }
-
+        // This endpoint is account-scoped for every role. Admin inventory has
+        // dedicated routes; returning the full restaurant table here can make
+        // ordinary owner tools serialize an unbounded payload.
         const restaurantsByOwner = await storage.getRestaurantsByOwner(req.user.id);
         const context = await getBusinessAccessContext(req.user.id);
 
