@@ -93,8 +93,30 @@ const run = async () => {
       }),
       parkingPassRow({
         id: "full-row",
+        hardCapEnabled: true,
         availableSpotNumbers: [],
         bookedSpots: 2,
+      }),
+      parkingPassRow({
+        id: "legacy-unlimited-row",
+        hardCapEnabled: false,
+        availableSpotNumbers: [],
+      }),
+      parkingPassRow({
+        id: "zero-price-row",
+        dailyPriceCents: 0,
+        host: {
+          id: "zero-price-host",
+          businessName: "Zero Price Host",
+          address: "102 Zero Price Ave",
+          city: "Pensacola",
+          state: "FL",
+          latitude: "30.4213",
+          longitude: "-87.2169",
+          stripeConnectAccountId: "acct_zero",
+          stripeChargesEnabled: true,
+          parkingPassDailyPriceCents: 0,
+        },
       }),
       parkingPassRow({
         id: "active-host",
@@ -123,8 +145,8 @@ const run = async () => {
     const rows = (await response.json()) as Array<{ id?: string }>;
     const ids = rows.map((row) => row.id).sort();
 
-    assert.deepEqual(ids, ["active-host"]);
-    assert.equal(rows.length, 1);
+    assert.deepEqual(ids, ["active-host", "legacy-unlimited-row"]);
+    assert.equal(rows.length, 2);
 
     console.log("parking-pass public API smoke passed");
   } finally {

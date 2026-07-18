@@ -98,6 +98,12 @@ export const isParkingPassFeedCandidate = (event: any) => {
 };
 
 export const hasParkingPassAvailability = (event: any) => {
+  // Legacy listings may not have capacity enforcement enabled. In that mode
+  // an empty availableSpotNumbers array means "not enumerated", not "full".
+  // New Parking Pass listings always enforce their configured spot count.
+  if (!Boolean(event?.hardCapEnabled)) {
+    return true;
+  }
   if (Array.isArray(event?.availableSpotNumbers)) {
     return event.availableSpotNumbers.length > 0;
   }
@@ -108,9 +114,6 @@ export const hasParkingPassAvailability = (event: any) => {
   const booked = Number(event?.bookedSpots ?? 0);
   if (Number.isFinite(maxSpots) && maxSpots > 0 && Number.isFinite(booked)) {
     if (maxSpots - booked <= 0) return false;
-  }
-  if (!Boolean(event?.hardCapEnabled)) {
-    return true;
   }
   if (!Number.isFinite(maxSpots) || maxSpots <= 0) return false;
   if (!Number.isFinite(booked)) return true;

@@ -290,7 +290,7 @@ export function computeParkingPassQualityFlags(listing: {
       value !== null &&
       value !== undefined &&
       Number.isFinite(Number(value)) &&
-      Number(value) >= 0,
+      Number(value) > 0,
   );
   if (!hasPricing) flags.push("missing_price");
 

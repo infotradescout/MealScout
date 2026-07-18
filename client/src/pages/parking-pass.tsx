@@ -784,7 +784,7 @@ export default function ParkingPassPage() {
   const [endTime, setEndTime] = useState<string>(defaultHostEndTime);
   const [anyTime, setAnyTime] = useState(false);
   const [maxTrucks, setMaxTrucks] = useState(1);
-  const [hardCapEnabled, setHardCapEnabled] = useState(false);
+  const hardCapEnabled = true;
   const [createError, setCreateError] = useState("");
   const [breakfastPrice, setBreakfastPrice] = useState("");
   const [lunchPrice, setLunchPrice] = useState("");
@@ -2946,7 +2946,6 @@ export default function ParkingPassPage() {
       setEndTime(defaultHostEndTime);
       setAnyTime(false);
       setMaxTrucks(1);
-      setHardCapEnabled(false);
       setBreakfastPrice("");
       setLunchPrice("");
       setDinnerPrice("");
@@ -5645,27 +5644,16 @@ export default function ParkingPassPage() {
                         </div>
                       </div>
 
-                      <div className="flex items-center space-x-4 border p-4 rounded-xl border-[var(--border-subtle)] bg-[var(--bg-surface)]">
-                        <Switch
-                          id="hard-cap"
-                          checked={hardCapEnabled}
-                          onCheckedChange={setHardCapEnabled}
-                        />
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            <Label htmlFor="hard-cap" className="font-semibold">
-                              Capacity Guard v2.2
-                            </Label>
-                            <Badge variant="secondary" className="text-xs">
-                              New
-                            </Badge>
-                          </div>
-                          <p className="text-sm text-slate-500">
-                            Strictly enforces the max trucks limit. Once you
-                            accept enough trucks to hit the limit, no further
-                            approvals will be allowed.
-                          </p>
-                        </div>
+                      <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4">
+                        <p className="text-sm font-semibold text-slate-900">
+                          {maxTrucks} truck{" "}
+                          {maxTrucks === 1 ? "spot" : "spots"} available per
+                          time slot
+                        </p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          Booking closes automatically when every spot is
+                          reserved.
+                        </p>
                       </div>
 
                       <div className="flex flex-col gap-2 pt-2 sm:flex-row sm:items-center sm:justify-between">
@@ -5752,17 +5740,6 @@ export default function ParkingPassPage() {
                                         {formatCents(listing.weeklyPriceCents)}{" "}
                                         / Monthly{" "}
                                         {formatCents(listing.monthlyPriceCents)}
-                                      </span>
-                                    )}
-                                    {listing.hardCapEnabled && (
-                                      <span
-                                        title="Capacity Guard v2.2 Enabled"
-                                        className="flex items-center gap-1 text-xs bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100"
-                                      >
-                                        <AlertCircle className="h-3 w-3 text-emerald-600" />
-                                        <span className="text-emerald-700 font-medium">
-                                          Strict Cap
-                                        </span>
                                       </span>
                                     )}
                                   </div>
