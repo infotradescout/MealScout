@@ -12,6 +12,8 @@
  *   - "reverse_geocode"      "lat:lng" key  → { city, state }
  *   - "county_lookup"        lat/lng or address key → { countyFips, countyName, stateCode }
  *   - "address_validation"   address string → AddressValidationResult
+ *   - "place_intelligence"   place/address → normalized Places profile
+ *   - "operator_support"     rounded origin → nearby operational POIs
  */
 
 import { db } from "../db";
@@ -21,7 +23,9 @@ export type CacheType =
   | "forward_geocode"
   | "reverse_geocode"
   | "county_lookup"
-  | "address_validation";
+  | "address_validation"
+  | "place_intelligence"
+  | "operator_support";
 
 // In-process L1 cache to avoid hitting Postgres on every hot path
 const l1: Map<string, { value: unknown; expiresAt: number | null }> = new Map();

@@ -9,9 +9,9 @@ const requiredSnippets = [
   "scheduleWindowMinutes",
   "enabled: canLoadScheduleFootTraffic",
   "spotFootTrafficCells",
-  "Select a spot to view foot traffic.",
-  "Foot traffic data is not available for this spot yet.",
-  "h spot window",
+  "Select a spot to view area activity.",
+  "spotActivitySummary",
+  "destinationCells",
 ];
 
 for (const snippet of requiredSnippets) {
@@ -32,4 +32,4 @@ for (const snippet of forbiddenSnippets) {
   }
 }
 
-console.log("Parking pass per-spot foot traffic contract OK");
+console.log("Parking pass per-spot area activity contract OK");

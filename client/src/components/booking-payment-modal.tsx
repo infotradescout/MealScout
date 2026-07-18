@@ -601,10 +601,10 @@ export function BookingPaymentModal({
                       </p>
                     </div>
                     <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-card)] p-2">
-                      <p className="text-[11px] font-semibold text-[color:var(--text-primary)]">Foot traffic</p>
+                      <p className="text-[11px] font-semibold text-[color:var(--text-primary)]">Area activity</p>
                       <p className="text-xs text-[color:var(--text-muted)]">
                         {bookingContext.footTraffic.loading
-                          ? "Loading foot traffic..."
+                          ? "Loading area activity..."
                           : bookingContext.footTraffic.summary}
                       </p>
                     </div>
@@ -769,4 +769,3 @@ export function BookingPaymentModal({
     </Dialog>
   );
 }
-

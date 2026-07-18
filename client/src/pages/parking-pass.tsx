@@ -186,6 +186,14 @@ type MapFootTrafficResponse = {
     error: string | null;
     cells: MapTrafficCell[];
   };
+  firstParty?: {
+    totalPings: number;
+    totalUniqueActors: number;
+    cells: MapTrafficCell[];
+  };
+  supplySignals?: {
+    cells: MapTrafficCell[];
+  };
   cells: MapTrafficCell[];
 };
 
@@ -262,6 +270,89 @@ interface TruckParkingReport {
 }
 
 type GeoPoint = { lat: number; lng: number };
+
+type PlaceIntelligenceResponse = {
+  available: boolean;
+  source: "google_places";
+  fetchedAt: string;
+  reason?: string;
+  place?: {
+    placeId: string;
+    name: string;
+    formattedAddress: string;
+    latitude: number | null;
+    longitude: number | null;
+    primaryType: string | null;
+    types: string[];
+    businessStatus: string | null;
+    phone: string | null;
+    websiteUri: string | null;
+    googleMapsUri: string | null;
+    openNow: boolean | null;
+    weekdayDescriptions: string[];
+    fuelPrices: {
+      regularCents: number | null;
+      midgradeCents: number | null;
+      premiumCents: number | null;
+      dieselCents: number | null;
+      updatedAt: string | null;
+      source: "google_places";
+    } | null;
+    parkingOptions: Record<string, boolean> | null;
+    restroom: boolean | null;
+    accessibilityOptions: Record<string, boolean> | null;
+  };
+};
+
+type OperatorSupportKind = "gas" | "propane" | "supply" | "support";
+
+type OperatorSupportPlace = {
+  placeId: string;
+  kind: OperatorSupportKind;
+  name: string;
+  address: string;
+  latitude: number;
+  longitude: number;
+  primaryType: string | null;
+  businessStatus: string | null;
+  phone: string | null;
+  googleMapsUri: string | null;
+  straightLineMiles: number;
+  driveDistanceMeters: number | null;
+  driveDurationSeconds: number | null;
+  source: "google_places";
+};
+
+type OperatorSupportResponse = {
+  available: boolean;
+  source: "google_places";
+  fetchedAt: string;
+  reason?: string;
+  categories: Record<OperatorSupportKind, OperatorSupportPlace[]>;
+};
+
+type MapRouteSummaryResponse = {
+  distanceMeters: number;
+  durationSeconds: number;
+  travelMode: "DRIVE" | "WALK" | "BICYCLE";
+  source: "google_routes";
+};
+
+type OperationalSupportPin = {
+  key: string;
+  position: GeoPoint;
+  name: string;
+  addressLabel: string;
+  categoryLabel: string;
+  profileUrl: string | null;
+  googleMapsUri: string | null;
+  contactPhone: string | null;
+  contactEmail: string | null;
+  kind: OperatorSupportKind;
+  source: "mealscout_partner" | "google_places";
+  distanceMiles: number | null;
+  driveDurationSeconds: number | null;
+};
 
 type PlaceDetailsResponse = {
   place?: {
@@ -850,6 +941,7 @@ export default function ParkingPassPage() {
     window.matchMedia("(max-width: 639px)").matches ? "list" : "map",
   );
   const [showParkingScoutHeat, setShowParkingScoutHeat] = useState(false);
+  const [showGasLayer, setShowGasLayer] = useState(false);
   const [showPropaneLayer, setShowPropaneLayer] = useState(false);
   const [showSupplyLayer, setShowSupplyLayer] = useState(false);
   const [showSupportLayer, setShowSupportLayer] = useState(false);
@@ -1737,8 +1829,14 @@ export default function ParkingPassPage() {
     }));
   };
 
-  const hydrateFromPlaceDetails = async (placeId: string) => {
-    const res = await fetch(apiUrl(`/api/map/place-details/${encodeURIComponent(placeId)}`),
+  const hydrateFromPlaceDetails = async (
+    placeId: string,
+    sessionToken?: string,
+  ) => {
+    const params = new URLSearchParams();
+    if (sessionToken) params.set("sessionToken", sessionToken);
+    const query = params.toString();
+    const res = await fetch(apiUrl(`/api/map/place-details/${encodeURIComponent(placeId)}${query ? `?${query}` : ""}`),
       {
         credentials: "include",
       },
@@ -1753,9 +1851,13 @@ export default function ParkingPassPage() {
   const handleNewLocationAddressSelect = async (suggestion: {
     placeId: string;
     text: string;
+    sessionToken?: string;
   }) => {
     try {
-      const place = await hydrateFromPlaceDetails(suggestion.placeId);
+      const place = await hydrateFromPlaceDetails(
+        suggestion.placeId,
+        suggestion.sessionToken,
+      );
       if (!place) return;
       setNewLocationForm((current) => ({
         ...current,
@@ -1781,9 +1883,13 @@ export default function ParkingPassPage() {
   const handleScheduleAddressSelect = async (suggestion: {
     placeId: string;
     text: string;
+    sessionToken?: string;
   }) => {
     try {
-      const place = await hydrateFromPlaceDetails(suggestion.placeId);
+      const place = await hydrateFromPlaceDetails(
+        suggestion.placeId,
+        suggestion.sessionToken,
+      );
       if (!place) return;
       setScheduleForm((current) => ({
         ...current,
@@ -3554,6 +3660,117 @@ export default function ParkingPassPage() {
     ) ||
     activeLocation?.listings[0] ||
     null;
+  const selectedSpotHost =
+    (activeListingForDate || activeListing)?.host ||
+    activeLocation?.host ||
+    null;
+  const selectedSpotCoords = useMemo<GeoPoint | null>(() => {
+    const lat = parseCoord(selectedSpotHost?.latitude);
+    const lng = parseCoord(selectedSpotHost?.longitude);
+    if (lat === null || lng === null) return null;
+    return { lat, lng };
+  }, [selectedSpotHost?.latitude, selectedSpotHost?.longitude]);
+  const selectedSpotAddressLabel = selectedSpotHost
+    ? buildAddressLabel(
+        selectedSpotHost.address,
+        selectedSpotHost.city || "",
+        selectedSpotHost.state || "",
+      )
+    : "";
+  const { data: placeIntelligenceData, isFetching: isPlaceIntelligenceFetching } =
+    useQuery<PlaceIntelligenceResponse>({
+      queryKey: [
+        "/api/map/place-intelligence",
+        selectedSpotHost?.id || null,
+        selectedSpotHost?.businessName || null,
+        selectedSpotAddressLabel,
+        selectedSpotCoords?.lat || null,
+        selectedSpotCoords?.lng || null,
+      ],
+      enabled: Boolean(selectedSpotHost && selectedSpotAddressLabel),
+      queryFn: async () => {
+        const params = new URLSearchParams({
+          name: String(selectedSpotHost?.businessName || ""),
+          address: selectedSpotAddressLabel,
+        });
+        if (selectedSpotCoords) {
+          params.set("lat", String(selectedSpotCoords.lat));
+          params.set("lng", String(selectedSpotCoords.lng));
+        }
+        const response = await fetch(
+          apiUrl(`/api/map/place-intelligence?${params.toString()}`),
+        );
+        if (!response.ok) throw new Error("Failed to load place intelligence");
+        return response.json();
+      },
+      staleTime: 30 * 60 * 1000,
+      refetchOnWindowFocus: false,
+    });
+  const { data: operatorSupportData, isFetching: isOperatorSupportFetching } =
+    useQuery<OperatorSupportResponse>({
+      queryKey: [
+        "/api/map/operator-support",
+        selectedSpotCoords?.lat || null,
+        selectedSpotCoords?.lng || null,
+      ],
+      enabled: Boolean(selectedSpotCoords),
+      queryFn: async () => {
+        const params = new URLSearchParams({
+          lat: String(selectedSpotCoords!.lat),
+          lng: String(selectedSpotCoords!.lng),
+        });
+        const response = await fetch(
+          apiUrl(`/api/map/operator-support?${params.toString()}`),
+        );
+        if (!response.ok) throw new Error("Failed to load operator support");
+        return response.json();
+      },
+      staleTime: 30 * 60 * 1000,
+      refetchOnWindowFocus: false,
+    });
+  const travelOriginCoords = useMemo<GeoPoint | null>(() => {
+    const lat = parseCoord(effectiveLocationContext?.latitude);
+    const lng = parseCoord(effectiveLocationContext?.longitude);
+    if (lat === null || lng === null) return null;
+    return { lat, lng };
+  }, [
+    effectiveLocationContext?.latitude,
+    effectiveLocationContext?.longitude,
+  ]);
+  const { data: selectedSpotRouteSummary, isFetching: isRouteSummaryFetching } =
+    useQuery<MapRouteSummaryResponse>({
+      queryKey: [
+        "/api/map/route-summary",
+        travelOriginCoords?.lat || null,
+        travelOriginCoords?.lng || null,
+        selectedSpotCoords?.lat || null,
+        selectedSpotCoords?.lng || null,
+      ],
+      enabled: Boolean(travelOriginCoords && selectedSpotCoords),
+      queryFn: async () => {
+        const params = new URLSearchParams({
+          originLat: String(travelOriginCoords!.lat),
+          originLng: String(travelOriginCoords!.lng),
+          destLat: String(selectedSpotCoords!.lat),
+          destLng: String(selectedSpotCoords!.lng),
+          travelMode: "DRIVE",
+        });
+        const response = await fetch(
+          apiUrl(`/api/map/route-summary?${params.toString()}`),
+        );
+        if (!response.ok) throw new Error("Failed to load route summary");
+        return response.json();
+      },
+      staleTime: 10 * 60 * 1000,
+      refetchOnWindowFocus: false,
+    });
+  const selectedSpotTravelSummary = selectedSpotRouteSummary
+    ? `${Math.max(1, Math.round(selectedSpotRouteSummary.durationSeconds / 60))} min · ${(selectedSpotRouteSummary.distanceMeters / 1609.344).toFixed(1)} mi drive`
+    : isRouteSummaryFetching
+      ? "Calculating drive time…"
+      : travelOriginCoords
+        ? "Drive time unavailable"
+        : "Share a current location to calculate drive time";
   const selectedDateLabel = format(
     new Date(`${selectedDate}T00:00:00`),
     "EEE, MMM d",
@@ -3708,7 +3925,7 @@ export default function ParkingPassPage() {
     [fallbackHostPins, representedMapHostIds],
   );
   const parkingPassHostPinCount = mapPins.length + unlistedHostPins.length;
-  const supplierOverlayPins = useMemo(() => {
+  const partnerSupportPins = useMemo<OperationalSupportPin[]>(() => {
     const raw = Array.isArray(paidMapLocations?.supplierLocations)
       ? paidMapLocations.supplierLocations
       : [];
@@ -3721,7 +3938,11 @@ export default function ParkingPassPage() {
         const isPropane = category === "propane_dealer";
         const isSupply =
           category === "supplier" || category === "equipment_supplier";
-        const isSupport = !isPropane && !isSupply;
+        const kind: OperatorSupportKind = isPropane
+          ? "propane"
+          : isSupply
+            ? "supply"
+            : "support";
         return {
           key: `supplier:${String(loc.id || loc.supplierId || `${lat}:${lng}`)}`,
           position: { lat, lng },
@@ -3733,71 +3954,104 @@ export default function ParkingPassPage() {
           ),
           categoryLabel: String(loc.categoryLabel || "Operator support"),
           profileUrl: String(loc.profileUrl || "").trim() || null,
+          googleMapsUri: null,
           contactPhone: String(loc.contactPhone || "").trim() || null,
           contactEmail: String(loc.contactEmail || "").trim() || null,
-          isPropane,
-          isSupply,
-          isSupport,
+          kind,
+          source: "mealscout_partner" as const,
+          distanceMiles: null,
+          driveDurationSeconds: null,
         };
       })
       .filter(
-        (
-          item,
-        ): item is {
-          key: string;
-          position: GeoPoint;
-          name: string;
-          addressLabel: string;
-          categoryLabel: string;
-          profileUrl: string | null;
-          contactPhone: string | null;
-          contactEmail: string | null;
-          isPropane: boolean;
-          isSupply: boolean;
-          isSupport: boolean;
-        } => item !== null,
-      )
-      .filter((pin) => {
-        if (pin.isPropane && showPropaneLayer) return true;
-        if (pin.isSupply && showSupplyLayer) return true;
-        if (pin.isSupport && showSupportLayer) return true;
-        return false;
-      });
-  }, [
-    paidMapLocations?.supplierLocations,
-    showPropaneLayer,
-    showSupplyLayer,
-    showSupportLayer,
-  ]);
+        (item): item is OperationalSupportPin => item !== null,
+      );
+  }, [paidMapLocations?.supplierLocations]);
+  const discoveredSupportPins = useMemo<OperationalSupportPin[]>(() => {
+    const categories = operatorSupportData?.categories;
+    const kinds: OperatorSupportKind[] = [
+      "gas",
+      "propane",
+      "supply",
+      "support",
+    ];
+    const labelByKind: Record<OperatorSupportKind, string> = {
+      gas: "Nearby gas station",
+      propane: "Nearby propane supplier",
+      supply: "Nearby restaurant supply",
+      support: "Nearby kitchen repair",
+    };
+    return kinds.flatMap((kind) =>
+      (categories?.[kind] || []).map((place) => ({
+        key: `google-support:${kind}:${place.placeId}`,
+        position: { lat: place.latitude, lng: place.longitude },
+        name: place.name,
+        addressLabel: place.address,
+        categoryLabel: labelByKind[kind],
+        profileUrl: null,
+        googleMapsUri: place.googleMapsUri,
+        contactPhone: place.phone,
+        contactEmail: null,
+        kind,
+        source: "google_places" as const,
+        distanceMiles: place.straightLineMiles,
+        driveDurationSeconds: place.driveDurationSeconds,
+      })),
+    );
+  }, [operatorSupportData?.categories]);
+  const allOperationalSupportPins = useMemo(
+    () => [...partnerSupportPins, ...discoveredSupportPins],
+    [discoveredSupportPins, partnerSupportPins],
+  );
+  const operationalSupportPins = useMemo(
+    () =>
+      allOperationalSupportPins.filter((pin) => {
+        if (pin.kind === "gas") return showGasLayer;
+        if (pin.kind === "propane") return showPropaneLayer;
+        if (pin.kind === "supply") return showSupplyLayer;
+        return showSupportLayer;
+      }),
+    [
+      allOperationalSupportPins,
+      showGasLayer,
+      showPropaneLayer,
+      showSupplyLayer,
+      showSupportLayer,
+    ],
+  );
   const supplierLayerCounts = useMemo(() => {
-    const raw = Array.isArray(paidMapLocations?.supplierLocations)
-      ? paidMapLocations.supplierLocations
-      : [];
+    let gas = 0;
     let propane = 0;
     let supply = 0;
     let support = 0;
-    raw.forEach((loc) => {
-      const category = String(loc?.category || "").trim().toLowerCase();
-      if (category === "propane_dealer") {
-        propane += 1;
-        return;
-      }
-      if (category === "supplier" || category === "equipment_supplier") {
-        supply += 1;
-        return;
-      }
-      support += 1;
+    allOperationalSupportPins.forEach((pin) => {
+      if (pin.kind === "gas") gas += 1;
+      if (pin.kind === "propane") propane += 1;
+      if (pin.kind === "supply") supply += 1;
+      if (pin.kind === "support") support += 1;
     });
-    return { propane, supply, support };
-  }, [paidMapLocations?.supplierLocations]);
+    return { gas, propane, supply, support };
+  }, [allOperationalSupportPins]);
   const supplierLayerSummary = useMemo(() => {
-    const statusFor = (count: number) => (count > 0 ? String(count) : "Unavailable");
+    const statusFor = (count: number) =>
+      count > 0
+        ? String(count)
+        : isOperatorSupportFetching
+          ? "Loading"
+          : "Unavailable";
     return {
+      gas: statusFor(supplierLayerCounts.gas),
       propane: statusFor(supplierLayerCounts.propane),
       supply: statusFor(supplierLayerCounts.supply),
       support: statusFor(supplierLayerCounts.support),
     };
-  }, [supplierLayerCounts.propane, supplierLayerCounts.supply, supplierLayerCounts.support]);
+  }, [
+    isOperatorSupportFetching,
+    supplierLayerCounts.gas,
+    supplierLayerCounts.propane,
+    supplierLayerCounts.supply,
+    supplierLayerCounts.support,
+  ]);
   const gasPricePins = useMemo(() => {
     const raw = Array.isArray(paidMapLocations?.hostLocations)
       ? paidMapLocations.hostLocations
@@ -4086,20 +4340,24 @@ export default function ParkingPassPage() {
       staleTime: 5 * 60 * 1000,
       refetchOnWindowFocus: false,
     });
-  const selectedSpotHost = (activeListingForDate || activeListing)?.host || activeLocation?.host || null;
-  const selectedSpotFuelPrices = selectedSpotHost?.fuelPrices || null;
-  const selectedSpotCoords = useMemo<GeoPoint | null>(() => {
-    const lat = parseCoord(selectedSpotHost?.latitude);
-    const lng = parseCoord(selectedSpotHost?.longitude);
-    if (lat === null || lng === null) return null;
-    return { lat, lng };
-  }, [selectedSpotHost?.latitude, selectedSpotHost?.longitude]);
+  const selectedSpotFuelPrices =
+    selectedSpotHost?.showFuelPrices === true && selectedSpotHost?.fuelPrices
+      ? selectedSpotHost.fuelPrices
+      : placeIntelligenceData?.place?.fuelPrices || null;
+  const selectedSpotFuelSource =
+    selectedSpotHost?.showFuelPrices === true && selectedSpotHost?.fuelPrices
+      ? "MealScout host"
+      : placeIntelligenceData?.place?.fuelPrices
+        ? "Google Places"
+        : null;
   const selectedSpotGasPriceSummary = useMemo(() => {
     if (!activeLocation) {
       return "Select a spot to view gas prices.";
     }
-    if (selectedSpotHost?.showFuelPrices !== true || !selectedSpotFuelPrices) {
-      return "Gas prices are not available for this spot yet.";
+    if (!selectedSpotFuelPrices) {
+      return isPlaceIntelligenceFetching
+        ? "Checking Google Places for current prices…"
+        : "No current provider prices were found for this spot.";
     }
     const regular = formatFuelCents(selectedSpotFuelPrices.regularCents);
     const midgrade = formatFuelCents(selectedSpotFuelPrices.midgradeCents);
@@ -4112,10 +4370,15 @@ export default function ParkingPassPage() {
       diesel ? `Diesel ${diesel}` : null,
     ].filter(Boolean) as string[];
     if (!parts.length) {
-      return "Gas prices are not available for this spot yet.";
+      return "No current provider prices were found for this spot.";
     }
-    return parts.join(" · ");
-  }, [activeLocation, selectedSpotFuelPrices, selectedSpotHost?.showFuelPrices]);
+    return `${parts.join(" · ")} · ${selectedSpotFuelSource || "provider"}`;
+  }, [
+    activeLocation,
+    isPlaceIntelligenceFetching,
+    selectedSpotFuelPrices,
+    selectedSpotFuelSource,
+  ]);
   const nearestOperationalSupport = useMemo(() => {
     if (!selectedSpotCoords) {
       return {
@@ -4126,47 +4389,83 @@ export default function ParkingPassPage() {
       };
     }
     const nearestLabel = (
-      points: Array<{ name: string; position: GeoPoint }>,
+      points: Array<{
+        name: string;
+        position: GeoPoint;
+        driveDurationSeconds?: number | null;
+      }>,
       fallback: string,
     ) => {
       if (!points.length) return fallback;
-      let nearest = points[0];
-      let minDistance = distanceMilesBetween(selectedSpotCoords, points[0].position);
-      for (let index = 1; index < points.length; index += 1) {
-        const candidate = points[index];
-        const miles = distanceMilesBetween(selectedSpotCoords, candidate.position);
-        if (miles < minDistance) {
-          minDistance = miles;
-          nearest = candidate;
-        }
-      }
-      return `${nearest.name} · ${minDistance.toFixed(1)} mi`;
+      const ranked = points
+        .map((point) => ({
+          ...point,
+          miles: distanceMilesBetween(selectedSpotCoords, point.position),
+        }))
+        .sort((left, right) => {
+          if (left.driveDurationSeconds && right.driveDurationSeconds) {
+            return left.driveDurationSeconds - right.driveDurationSeconds;
+          }
+          return left.miles - right.miles;
+        });
+      const nearest = ranked[0];
+      const travelLabel = nearest.driveDurationSeconds
+        ? `${Math.max(1, Math.round(nearest.driveDurationSeconds / 60))} min drive`
+        : `${nearest.miles.toFixed(1)} mi`;
+      return `${nearest.name} · ${travelLabel}`;
     };
-    const propanePoints = supplierOverlayPins
-      .filter((pin) => pin.isPropane)
-      .map((pin) => ({ name: pin.name, position: pin.position }));
-    const supplyPoints = supplierOverlayPins
-      .filter((pin) => pin.isSupply)
-      .map((pin) => ({ name: pin.name, position: pin.position }));
-    const supportPoints = supplierOverlayPins
-      .filter((pin) => pin.isSupport)
-      .map((pin) => ({ name: pin.name, position: pin.position }));
-    const gasPoints = gasPricePins.map((pin) => ({
-      name: pin.name,
-      position: pin.position,
-    }));
+    const byKind = (kind: OperatorSupportKind) =>
+      allOperationalSupportPins
+        .filter((pin) => pin.kind === kind)
+        .map((pin) => ({
+          name: pin.name,
+          position: pin.position,
+          driveDurationSeconds: pin.driveDurationSeconds,
+        }));
+    const propanePoints = byKind("propane");
+    const supplyPoints = byKind("supply");
+    const supportPoints = byKind("support");
+    const gasPoints = [
+      ...byKind("gas"),
+      ...gasPricePins.map((pin) => ({
+        name: pin.name,
+        position: pin.position,
+        driveDurationSeconds: null,
+      })),
+    ];
     return {
-      gas: nearestLabel(gasPoints, "Unavailable"),
-      propane: nearestLabel(propanePoints, "Unavailable"),
-      supply: nearestLabel(supplyPoints, "Unavailable"),
-      support: nearestLabel(supportPoints, "Unavailable"),
+      gas: nearestLabel(
+        gasPoints,
+        isOperatorSupportFetching ? "Searching nearby" : "Unavailable",
+      ),
+      propane: nearestLabel(
+        propanePoints,
+        isOperatorSupportFetching ? "Searching nearby" : "Unavailable",
+      ),
+      supply: nearestLabel(
+        supplyPoints,
+        isOperatorSupportFetching ? "Searching nearby" : "Unavailable",
+      ),
+      support: nearestLabel(
+        supportPoints,
+        isOperatorSupportFetching ? "Searching nearby" : "Unavailable",
+      ),
     };
-  }, [gasPricePins, selectedSpotCoords, supplierOverlayPins]);
+  }, [
+    allOperationalSupportPins,
+    gasPricePins,
+    isOperatorSupportFetching,
+    selectedSpotCoords,
+  ]);
   const spotFootTrafficCells = useMemo<MapTrafficCell[]>(() => {
     if (!showParkingScoutHeat || !canManageParkingPass || !activeLocation) return [];
     return (scheduleFootTrafficData?.cells || []).slice(0, 120).map((cell) => {
-      const weight = Number(cell.weight || 0);
-      const color = weight >= 67 ? "#22c55e" : weight >= 34 ? "#eab308" : "#ef4444";
+      const color =
+        cell.source === "first_party"
+          ? "#2563eb"
+          : cell.source === "supply_signal"
+            ? "#f97316"
+            : "#8b5cf6";
       return { ...cell, color };
     });
   }, [
@@ -4176,8 +4475,24 @@ export default function ParkingPassPage() {
     showParkingScoutHeat,
   ]);
   const spotFootTrafficCellCount = spotFootTrafficCells.length;
-  const spotFootTrafficSignalLabel =
-    scheduleFootTrafficData?.signalQuality?.tier || null;
+  const spotActivityBreakdown = useMemo(
+    () => ({
+      mealScoutPings: scheduleFootTrafficData?.firstParty?.totalPings || 0,
+      mealScoutCells: scheduleFootTrafficData?.firstParty?.cells?.length || 0,
+      scheduledCells: scheduleFootTrafficData?.supplySignals?.cells?.length || 0,
+      destinationCells: scheduleFootTrafficData?.googlePlaces?.cells?.length || 0,
+    }),
+    [scheduleFootTrafficData],
+  );
+  const spotActivityTitle =
+    spotActivityBreakdown.mealScoutCells > 0
+      ? "MealScout and area activity"
+      : spotActivityBreakdown.destinationCells > 0
+        ? "Food destination density"
+        : spotActivityBreakdown.scheduledCells > 0
+          ? "Scheduled area activity"
+          : "No area activity signals yet";
+  const spotActivitySummary = `${spotActivityBreakdown.mealScoutPings} MealScout pings · ${spotActivityBreakdown.scheduledCells} scheduled cells · ${spotActivityBreakdown.destinationCells} food-destination cells`;
 
   const nextBookableDateByGroup = useMemo(() => {
     const map = new Map<string, string | null>();
@@ -6657,7 +6972,9 @@ export default function ParkingPassPage() {
                     </p>
                     <p className="mt-1 text-lg font-semibold text-[color:var(--text-primary)]">
                       {viewMode === "map"
-                        ? parkingPassHostPinCount + supplierOverlayPins.length + gasPricePins.length
+                        ? parkingPassHostPinCount +
+                          operationalSupportPins.length +
+                          (showGasLayer ? gasPricePins.length : 0)
                         : filteredLocations.length}
                     </p>
                   </div>
@@ -6739,9 +7056,19 @@ export default function ParkingPassPage() {
                             }
                             className="w-full sm:w-auto"
                           >
-                            Foot traffic
+                            Area activity
                           </Button>
-                          <div className="grid grid-cols-3 gap-2">
+                          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant={showGasLayer ? "default" : "outline"}
+                              onClick={() => setShowGasLayer((value) => !value)}
+                              disabled={supplierLayerCounts.gas === 0}
+                              className="w-full"
+                            >
+                              {`Gas (${supplierLayerSummary.gas})`}
+                            </Button>
                             <Button
                               type="button"
                               size="sm"
@@ -6774,6 +7101,10 @@ export default function ParkingPassPage() {
                             </Button>
                           </div>
                           <p className="text-[11px] text-[color:var(--text-muted)]">
+                            Blue is MealScout movement, orange is scheduled
+                            host/truck activity, and purple is nearby food
+                            destination density. These are opportunity signals,
+                            not measured pedestrian counts. {" "}
                             {bookingWeatherData?.available
                               ? "Weather is available for the selected booking window."
                               : "Weather is not available for this booking window."}{" "}
@@ -6839,16 +7170,18 @@ export default function ParkingPassPage() {
                                       ),
                                     }) satisfies MapPickerPin,
                                 ),
-                                ...supplierOverlayPins.map((pin) => ({
+                                ...operationalSupportPins.map((pin) => ({
                                   key: pin.key,
                                   position: pin.position,
                                   occupied: true,
                                   popup: (
                                     <div className="space-y-1.5 text-xs">
                                       <p className="font-semibold text-orange-600">
-                                        {pin.isPropane
+                                        {pin.kind === "gas"
+                                          ? "⛽ "
+                                          : pin.kind === "propane"
                                           ? "🔥 "
-                                          : pin.isSupply
+                                          : pin.kind === "supply"
                                             ? "📦 "
                                             : "🛠️ "}
                                         {pin.name}
@@ -6869,10 +7202,30 @@ export default function ParkingPassPage() {
                                           {pin.contactEmail}
                                         </p>
                                       )}
+                                      <p className="text-[11px] text-[color:var(--text-muted)]">
+                                        {pin.source === "google_places"
+                                          ? "Nearby place from Google"
+                                          : "MealScout partner"}
+                                        {pin.driveDurationSeconds
+                                          ? ` · ${Math.max(1, Math.round(pin.driveDurationSeconds / 60))} min drive`
+                                          : pin.distanceMiles !== null
+                                            ? ` · ${pin.distanceMiles.toFixed(1)} mi away`
+                                            : ""}
+                                      </p>
+                                      {pin.googleMapsUri && (
+                                        <a
+                                          href={pin.googleMapsUri}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          className="font-semibold text-orange-600 underline"
+                                        >
+                                          Open directions
+                                        </a>
+                                      )}
                                     </div>
                                   ),
                                 })),
-                                ...gasPricePins.map((pin) => ({
+                                ...(showGasLayer ? gasPricePins : []).map((pin) => ({
                                   key: pin.key,
                                   position: pin.position,
                                   occupied: true,
@@ -6904,35 +7257,32 @@ export default function ParkingPassPage() {
                               <div className="pointer-events-none absolute bottom-3 left-3 max-w-[min(270px,calc(100%-1.5rem))] rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)]/95 px-3 py-2 text-xs text-[color:var(--text-primary)] shadow-clean backdrop-blur">
                                 <p className="font-semibold">
                                   {isScheduleFootTrafficFetching
-                                    ? "Loading foot traffic"
+                                    ? "Loading area activity"
                                     : spotFootTrafficCellCount > 0
-                                    ? "Spot foot traffic"
+                                    ? spotActivityTitle
                                       : activeLocation
-                                        ? "No spot traffic signals yet"
-                                        : "Select a spot to view foot traffic"}
+                                        ? "No area activity signals yet"
+                                        : "Select a spot to view area activity"}
                                 </p>
                                 <p className="mt-1 text-[color:var(--text-muted)]">
                                   {spotFootTrafficCellCount > 0
-                                    ? `${spotFootTrafficCellCount} cells - ${spotFootTrafficSignalLabel || "sparse"} signal - ${Math.round(
-                                        (scheduleFootTrafficData?.windowMinutes ||
-                                          720) / 60,
-                                      )}h spot window`
+                                    ? spotActivitySummary
                                     : activeLocation
-                                      ? "Foot traffic data is not available for this spot yet."
-                                      : "Select a spot to view foot traffic."}
+                                      ? "No provider or MealScout activity signals were found for this spot yet."
+                                      : "Select a spot to view area activity."}
                                 </p>
-                                <div className="mt-2 flex items-center gap-3 text-[11px]">
+                                <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px]">
                                   <span className="inline-flex items-center gap-1">
-                                    <span className="h-2.5 w-2.5 rounded-full bg-green-500" />
-                                    Green stronger
+                                    <span className="h-2.5 w-2.5 rounded-full bg-blue-600" />
+                                    MealScout movement
                                   </span>
                                   <span className="inline-flex items-center gap-1">
-                                    <span className="h-2.5 w-2.5 rounded-full bg-yellow-500" />
-                                    Yellow moderate
+                                    <span className="h-2.5 w-2.5 rounded-full bg-orange-500" />
+                                    Scheduled activity
                                   </span>
                                   <span className="inline-flex items-center gap-1">
-                                    <span className="h-2.5 w-2.5 rounded-full bg-red-500" />
-                                    Red weaker
+                                    <span className="h-2.5 w-2.5 rounded-full bg-violet-500" />
+                                    Food destinations
                                   </span>
                                 </div>
                                 {spotFootTrafficCellCount === 0 && (
@@ -6941,8 +7291,8 @@ export default function ParkingPassPage() {
                                       intelligenceStatusData?.layers?.footTraffic?.status ||
                                         "unavailable",
                                     ) === "available"
-                                      ? "Foot traffic data is not available for this spot yet."
-                                      : "Foot traffic is not configured or unavailable right now."}
+                                      ? "Area activity is available when MealScout or provider signals exist."
+                                      : "Area activity providers are unavailable right now."}
                                   </p>
                                 )}
                               </div>
@@ -7304,16 +7654,18 @@ export default function ParkingPassPage() {
                                   </div>
                                 ),
                               } satisfies MapPickerPin)),
-                              ...supplierOverlayPins.map((pin) => ({
+                              ...operationalSupportPins.map((pin) => ({
                                 key: pin.key,
                                 position: pin.position,
                                 occupied: true,
                                 popup: (
                                   <div className="space-y-1.5 text-xs">
                                     <p className="font-semibold text-orange-600">
-                                      {pin.isPropane
+                                      {pin.kind === "gas"
+                                        ? "⛽ "
+                                        : pin.kind === "propane"
                                         ? "🔥 "
-                                        : pin.isSupply
+                                        : pin.kind === "supply"
                                           ? "📦 "
                                           : "🛠️ "}
                                       {pin.name}
@@ -7334,10 +7686,30 @@ export default function ParkingPassPage() {
                                         {pin.contactEmail}
                                       </p>
                                     )}
+                                    <p className="text-[11px] text-[color:var(--text-muted)]">
+                                      {pin.source === "google_places"
+                                        ? "Nearby place from Google"
+                                        : "MealScout partner"}
+                                      {pin.driveDurationSeconds
+                                        ? ` · ${Math.max(1, Math.round(pin.driveDurationSeconds / 60))} min drive`
+                                        : pin.distanceMiles !== null
+                                          ? ` · ${pin.distanceMiles.toFixed(1)} mi away`
+                                          : ""}
+                                    </p>
+                                    {pin.googleMapsUri && (
+                                      <a
+                                        href={pin.googleMapsUri}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="font-semibold text-orange-600 underline"
+                                      >
+                                        Open directions
+                                      </a>
+                                    )}
                                   </div>
                                 ),
                               })),
-                              ...gasPricePins.map((pin) => ({
+                              ...(showGasLayer ? gasPricePins : []).map((pin) => ({
                                 key: pin.key,
                                 position: pin.position,
                                 occupied: true,
@@ -7369,35 +7741,32 @@ export default function ParkingPassPage() {
                             <div className="pointer-events-none absolute bottom-3 left-3 max-w-[min(270px,calc(100%-1.5rem))] rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)]/95 px-3 py-2 text-xs text-[color:var(--text-primary)] shadow-clean backdrop-blur">
                               <p className="font-semibold">
                                 {isScheduleFootTrafficFetching
-                                  ? "Loading foot traffic"
+                                  ? "Loading area activity"
                                   : spotFootTrafficCellCount > 0
-                                    ? "Spot foot traffic"
+                                    ? spotActivityTitle
                                     : activeLocation
-                                      ? "No spot traffic signals yet"
-                                      : "Select a spot to view foot traffic"}
+                                      ? "No area activity signals yet"
+                                      : "Select a spot to view area activity"}
                               </p>
                               <p className="mt-1 text-[color:var(--text-muted)]">
                                 {spotFootTrafficCellCount > 0
-                                  ? `${spotFootTrafficCellCount} cells - ${spotFootTrafficSignalLabel || "sparse"} signal - ${Math.round(
-                                      (scheduleFootTrafficData?.windowMinutes ||
-                                        720) / 60,
-                                    )}h spot window`
+                                  ? spotActivitySummary
                                   : activeLocation
-                                    ? "Foot traffic data is not available for this spot yet."
-                                    : "Select a spot to view foot traffic."}
+                                    ? "No provider or MealScout activity signals were found for this spot yet."
+                                    : "Select a spot to view area activity."}
                               </p>
-                              <div className="mt-2 flex items-center gap-3 text-[11px]">
+                              <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px]">
                                 <span className="inline-flex items-center gap-1">
-                                  <span className="h-2.5 w-2.5 rounded-full bg-green-500" />
-                                  Green stronger
+                                  <span className="h-2.5 w-2.5 rounded-full bg-blue-600" />
+                                  MealScout movement
                                 </span>
                                 <span className="inline-flex items-center gap-1">
-                                  <span className="h-2.5 w-2.5 rounded-full bg-yellow-500" />
-                                  Yellow moderate
+                                  <span className="h-2.5 w-2.5 rounded-full bg-orange-500" />
+                                  Scheduled activity
                                 </span>
                                 <span className="inline-flex items-center gap-1">
-                                  <span className="h-2.5 w-2.5 rounded-full bg-red-500" />
-                                  Red weaker
+                                  <span className="h-2.5 w-2.5 rounded-full bg-violet-500" />
+                                  Food destinations
                                 </span>
                               </div>
                               {spotFootTrafficCellCount === 0 && (
@@ -7406,8 +7775,8 @@ export default function ParkingPassPage() {
                                     intelligenceStatusData?.layers?.footTraffic?.status ||
                                       "unavailable",
                                   ) === "available"
-                                    ? "Foot traffic data is not available for this spot yet."
-                                    : "Foot traffic is not configured or unavailable right now."}
+                                    ? "Area activity is available when MealScout or provider signals exist."
+                                    : "Area activity providers are unavailable right now."}
                                 </p>
                               )}
                             </div>
@@ -8266,7 +8635,7 @@ export default function ParkingPassPage() {
                               {activeListing.host.locationType || "Location"}
                             </span>
                             <span className="rounded-full pp-chip px-2 py-1">
-                              Foot traffic:{" "}
+                              Host traffic estimate:{" "}
                               {activeListing.host.expectedFootTraffic ||
                                 "Not shared"}
                             </span>
@@ -8302,12 +8671,15 @@ export default function ParkingPassPage() {
                                   : "Weather unavailable"}{" "}
                               ·{" "}
                               {isScheduleFootTrafficFetching
-                                ? "Foot traffic loading..."
+                                ? "Area activity loading..."
                                 : typeof scheduleFootTrafficData?.cells?.length ===
                                       "number" &&
                                     scheduleFootTrafficData.cells.length > 0
-                                  ? `Foot traffic: ${scheduleFootTrafficData.cells.length} nearby cells`
-                                  : "Foot traffic unavailable"}
+                                  ? `Area activity: ${spotActivitySummary}`
+                                  : "Area activity unavailable"}
+                              <span className="block pt-1">
+                                Travel: {selectedSpotTravelSummary}
+                              </span>
                             </div>
                           </div>
                           {showSpotInsights && (
@@ -8342,16 +8714,70 @@ export default function ParkingPassPage() {
                               </div>
                               <div className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2 text-xs">
                                 <p className="font-semibold text-[color:var(--text-primary)]">
+                                  Provider-backed place details
+                                </p>
+                                {isPlaceIntelligenceFetching ? (
+                                  <p className="mt-1 text-[color:var(--text-muted)]">
+                                    Matching this host with Google Places…
+                                  </p>
+                                ) : placeIntelligenceData?.available &&
+                                  placeIntelligenceData.place ? (
+                                  <div className="mt-1 space-y-1 text-[color:var(--text-muted)]">
+                                    <p>
+                                      {placeIntelligenceData.place.name ||
+                                        selectedSpotHost?.businessName}
+                                      {placeIntelligenceData.place.businessStatus
+                                        ? ` · ${placeIntelligenceData.place.businessStatus.toLowerCase().replace(/_/g, " ")}`
+                                        : ""}
+                                      {typeof placeIntelligenceData.place.openNow ===
+                                      "boolean"
+                                        ? placeIntelligenceData.place.openNow
+                                          ? " · open now"
+                                          : " · closed now"
+                                        : ""}
+                                    </p>
+                                    <p>
+                                      Parking: {placeIntelligenceData.place.parkingOptions
+                                        ? Object.entries(
+                                            placeIntelligenceData.place.parkingOptions,
+                                          )
+                                            .filter(([, enabled]) => enabled)
+                                            .map(([key]) =>
+                                              key.replace(/([A-Z])/g, " $1").toLowerCase(),
+                                            )
+                                            .join(", ") || "not listed"
+                                        : "not listed"}
+                                      {" · "}Restroom: {placeIntelligenceData.place.restroom ===
+                                      true
+                                        ? "yes"
+                                        : placeIntelligenceData.place.restroom === false
+                                          ? "no"
+                                          : "not listed"}
+                                    </p>
+                                    <p>
+                                      Source: Google Places · refreshed {formatRelativeTime(
+                                        placeIntelligenceData.fetchedAt,
+                                      )}
+                                    </p>
+                                  </div>
+                                ) : (
+                                  <p className="mt-1 text-[color:var(--text-muted)]">
+                                    No provider profile matched this host yet.
+                                  </p>
+                                )}
+                              </div>
+                              <div className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2 text-xs">
+                                <p className="font-semibold text-[color:var(--text-primary)]">
                                   Intelligence layers
                                 </p>
                                 <div className="mt-1 space-y-1 text-[color:var(--text-muted)]">
                                   <p>
-                                    Foot traffic:{" "}
+                                    Area activity:{" "}
                                     {isScheduleFootTrafficFetching
                                       ? "loading"
                                       : typeof scheduleFootTrafficData?.cells?.length === "number"
                                         ? scheduleFootTrafficData.cells.length > 0
-                                          ? `${scheduleFootTrafficData.cells.length} nearby cells`
+                                          ? spotActivitySummary
                                           : "unavailable for this schedule window"
                                         : String(
                                             intelligenceStatusData?.layers?.footTraffic?.status ||
@@ -8363,24 +8789,15 @@ export default function ParkingPassPage() {
                                   </p>
                                   <p>
                                     Propane suppliers:{" "}
-                                    {String(
-                                      intelligenceStatusData?.layers?.propaneSuppliers?.status ||
-                                        "unavailable",
-                                    )}
+                                    {supplierLayerSummary.propane}
                                   </p>
                                   <p>
                                     Restaurant supply stores:{" "}
-                                    {String(
-                                      intelligenceStatusData?.layers?.restaurantSupplyStores
-                                        ?.status || "unavailable",
-                                    )}
+                                    {supplierLayerSummary.supply}
                                   </p>
                                   <p>
                                     Operator-support POIs:{" "}
-                                    {String(
-                                      intelligenceStatusData?.layers?.operatorSupportPois?.status ||
-                                        "unavailable",
-                                    )}
+                                    {supplierLayerSummary.support}
                                   </p>
                                 </div>
                               </div>
@@ -8692,12 +9109,12 @@ export default function ParkingPassPage() {
               footTraffic: {
                 loading: isScheduleFootTrafficFetching,
                 summary: isScheduleFootTrafficFetching
-                  ? "Loading nearby traffic cells..."
+                  ? "Loading area activity signals..."
                   : typeof scheduleFootTrafficData?.cells?.length === "number"
                     ? scheduleFootTrafficData.cells.length > 0
-                      ? `${scheduleFootTrafficData.cells.length} nearby traffic cells detected`
-                      : "No nearby cells detected for this schedule window"
-                    : "Foot traffic unavailable",
+                      ? `${spotActivitySummary}. This is opportunity context, not measured pedestrian traffic.`
+                      : "No area activity signals detected for this schedule window"
+                    : "Area activity unavailable",
               },
               truckActivity: {
                 summary:

@@ -91,13 +91,14 @@ export default function SmartSearch({
   });
 
   const { data: placeSuggestions } = useQuery<PlaceSuggestion[]>({
-    queryKey: ["/api/map/place-autocomplete", debouncedValue],
+    queryKey: ["/api/map/place-autocomplete", "food", debouncedValue],
     enabled: debouncedValue.length >= 2,
     staleTime: 5 * 60 * 1000, // match server-side cache TTL
     queryFn: async () => {
       const url = new URL("/api/map/place-autocomplete", window.location.origin);
       url.searchParams.set("input", debouncedValue);
       url.searchParams.set("sessionToken", _smartSearchSessionToken);
+      url.searchParams.set("intent", "food");
       const res = await fetch(url.toString(), { credentials: "include" });
       if (!res.ok) return [];
       const data = (await res.json()) as {
@@ -438,4 +439,3 @@ export default function SmartSearch({
     </div>
   );
 }
-

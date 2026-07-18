@@ -33,11 +33,7 @@ export type AddressValidationResult = {
 };
 
 const getGoogleMapsApiKey = () =>
-  String(
-    process.env.GOOGLE_MAPS_API_KEY ||
-      process.env.VITE_GOOGLE_MAPS_WEB_API_KEY ||
-      "",
-  ).trim();
+  String(process.env.GOOGLE_MAPS_API_KEY || "").trim();
 
 const pickAddressPart = (
   parts: Array<{
