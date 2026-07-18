@@ -1144,68 +1144,9 @@ export default function ParkingPassPage() {
     );
   }, [mapLocationsData, cachedMapLocations]);
 
-  // Keep Parking Pass maps in sync with the main map: only show paid/priced host locations.
-  const BOOKABLE_HOST_CACHE_KEY = "mealscout:parking-pass:bookableHostIds:v2";
-  const [cachedBookableHostIds, setCachedBookableHostIds] = useState<
-    Set<string>
-  >(() => {
-    try {
-      const raw = localStorage.getItem(BOOKABLE_HOST_CACHE_KEY);
-      if (!raw) return new Set<string>();
-      const parsed = JSON.parse(raw);
-      const hostIds = Array.isArray(parsed?.hostIds) ? parsed.hostIds : [];
-      return new Set(hostIds.map((id: any) => String(id)));
-    } catch {
-      return new Set<string>();
-    }
-  });
-  const { data: bookableHostIdPayload } = useQuery<
-    { generatedAt: string; hostIds: string[] } | undefined
-  >({
-    queryKey: ["/api/parking-pass/host-ids"],
-    queryFn: async () => {
-      const res = await fetch(apiUrl("/api/parking-pass/host-ids"));
-      if (!res.ok) throw new Error("Failed to load bookable hosts");
-      return res.json();
-    },
-    staleTime: 5 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
-    refetchOnWindowFocus: false,
-  });
-  useEffect(() => {
-    if (!bookableHostIdPayload || !Array.isArray(bookableHostIdPayload.hostIds)) {
-      return;
-    }
-    const next = new Set(bookableHostIdPayload.hostIds.map((id) => String(id)));
-    setCachedBookableHostIds(next);
-    try {
-      localStorage.setItem(
-        BOOKABLE_HOST_CACHE_KEY,
-        JSON.stringify({
-          hostIds: Array.from(next),
-          generatedAt: bookableHostIdPayload.generatedAt,
-          updatedAt: Date.now(),
-        }),
-      );
-    } catch {
-      // ignore
-    }
-  }, [bookableHostIdPayload]);
-
-  const bookableHostIds = useMemo(() => {
-    const serverIds = Array.isArray(bookableHostIdPayload?.hostIds)
-      ? bookableHostIdPayload.hostIds
-      : null;
-    if (serverIds) return new Set(serverIds.map((id) => String(id)));
-    return cachedBookableHostIds;
-  }, [bookableHostIdPayload, cachedBookableHostIds]);
-
-  const paidMapLocations = useMemo(() => {
-    const listingHostIds = new Set(
-      (passListings || [])
-        .map((listing) => String(listing?.host?.id || "").trim())
-        .filter(Boolean),
-    );
+  // Show every active, mappable host. Booking inventory controls the cards and
+  // checkout actions, but it must not hide a valid place where a truck can park.
+  const parkingPassMapLocations = useMemo(() => {
     const hostLocations = (baseMapLocations.hostLocations || []).filter(
       (loc: any) => {
         const hostId = String(loc?.hostId || "").trim();
@@ -1235,16 +1176,14 @@ export default function ParkingPassPage() {
         ) {
           return false;
         }
-        // Primary source of truth: if we have a visible listing for the host, show it.
-        // Fallback to host-id feed for hosts with map records but no current listing payload.
-        return listingHostIds.has(hostId) || bookableHostIds.has(hostId);
+        return true;
       },
     );
     const supplierLocations = (baseMapLocations.supplierLocations || []).filter(
       (loc: any) => String(loc?.type || "").toLowerCase() === "supplier",
     );
     return { ...baseMapLocations, hostLocations, supplierLocations };
-  }, [baseMapLocations, bookableHostIds, passListings]);
+  }, [baseMapLocations]);
   const [geocodeCache, setGeocodeCache] = useState<Record<string, GeoPoint>>(
     {},
   );
@@ -4118,7 +4057,7 @@ export default function ParkingPassPage() {
       string,
       Array<PublicMapLocation & { coords: GeoPoint; addressLabel: string }>
     >();
-    const locations = paidMapLocations?.hostLocations ?? [];
+    const locations = parkingPassMapLocations?.hostLocations ?? [];
     locations.forEach((loc: PublicMapLocation) => {
       if (loc.type !== "host_location" || !loc.hostId) return;
       const lat = parseCoord(loc.latitude);
@@ -4141,7 +4080,7 @@ export default function ParkingPassPage() {
       }
     });
     return map;
-  }, [paidMapLocations]);
+  }, [parkingPassMapLocations]);
 
   const mapPins = useMemo(
     () =>
@@ -4188,7 +4127,7 @@ export default function ParkingPassPage() {
   );
   const fallbackHostPins = useMemo(
     () =>
-      (paidMapLocations?.hostLocations ?? [])
+      (parkingPassMapLocations?.hostLocations ?? [])
         .map((loc) => {
           const lat = parseCoord(loc.latitude);
           const lng = parseCoord(loc.longitude);
@@ -4234,7 +4173,7 @@ export default function ParkingPassPage() {
             spotImageUrl: string | null;
           } => item !== null,
         ),
-    [paidMapLocations, normalizedCityQuery],
+    [parkingPassMapLocations, normalizedCityQuery],
   );
   const representedMapHostIds = useMemo(
     () => new Set(filteredLocations.map((group) => String(group.host.id))),
@@ -4249,8 +4188,8 @@ export default function ParkingPassPage() {
   );
   const parkingPassHostPinCount = mapPins.length + unlistedHostPins.length;
   const partnerSupportPins = useMemo<OperationalSupportPin[]>(() => {
-    const raw = Array.isArray(paidMapLocations?.supplierLocations)
-      ? paidMapLocations.supplierLocations
+    const raw = Array.isArray(parkingPassMapLocations?.supplierLocations)
+      ? parkingPassMapLocations.supplierLocations
       : [];
     return raw
       .map((loc): OperationalSupportPin | null => {
@@ -4289,7 +4228,7 @@ export default function ParkingPassPage() {
       .filter(
         (item): item is OperationalSupportPin => item !== null,
       );
-  }, [paidMapLocations?.supplierLocations]);
+  }, [parkingPassMapLocations?.supplierLocations]);
   const discoveredSupportPins = useMemo<OperationalSupportPin[]>(() => {
     const categories = operatorSupportData?.categories;
     const kinds: OperatorSupportKind[] = [
@@ -4376,8 +4315,8 @@ export default function ParkingPassPage() {
     supplierLayerCounts.support,
   ]);
   const gasPricePins = useMemo(() => {
-    const raw = Array.isArray(paidMapLocations?.hostLocations)
-      ? paidMapLocations.hostLocations
+    const raw = Array.isArray(parkingPassMapLocations?.hostLocations)
+      ? parkingPassMapLocations.hostLocations
       : [];
     return raw
       .map((loc) => {
@@ -4423,7 +4362,7 @@ export default function ParkingPassPage() {
           updatedAt: string | null;
         } => item !== null,
       );
-  }, [paidMapLocations?.hostLocations]);
+  }, [parkingPassMapLocations?.hostLocations]);
   const fallbackMapCenter = useMemo(() => {
     const requestedPin = requestedHostId
       ? fallbackHostPins.find((pin) => pin.hostId === requestedHostId)
@@ -7291,13 +7230,11 @@ export default function ParkingPassPage() {
                   </div>
                   <div>
                     <p className="text-[10px] font-semibold uppercase tracking-wide">
-                      Map pins
+                      Host pins
                     </p>
                     <p className="mt-1 text-lg font-semibold text-[color:var(--text-primary)]">
                       {viewMode === "map"
-                        ? parkingPassHostPinCount +
-                          operationalSupportPins.length +
-                          (showGasLayer ? gasPricePins.length : 0)
+                        ? parkingPassHostPinCount
                         : filteredLocations.length}
                     </p>
                   </div>
