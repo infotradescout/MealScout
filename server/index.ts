@@ -35,6 +35,7 @@ import { and, eq } from "drizzle-orm";
 import { registerAcquisitionPrerenderRoutes } from "./seo/acquisitionPrerender";
 import { registerPublicProfilePrerenderRoutes } from "./seo/publicProfilePrerender";
 import { resolvePublicBusinessSlug } from "./publicProfiles/publicBusinessSlugResolver";
+import { mirrorInfinityTouch } from "./integrations/infinityShadow";
 
 validateEnv();
 
@@ -1131,6 +1132,12 @@ app.use((req, res, next) => {
           req.ip || undefined,
         );
         referralRecordId = result?.referralId || null;
+        void mirrorInfinityTouch({
+          partnerId: affiliateUserId,
+          affiliateTag: ref,
+          canonicalPath: req.originalUrl || "/",
+          carrier: queryRef ? "query_ref" : "path_segment",
+        });
       }
     } catch (error) {
       console.error("[affiliate] Failed to record referral click:", error);
@@ -1321,5 +1328,4 @@ app.use((req, res, next) => {
     }
   );
 })();
-
 
