@@ -58,6 +58,15 @@ const readJson = <T,>(key: string, fallback: T): T => {
   }
 };
 
+const writeJson = (key: string, value: unknown) => {
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value));
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 const priceLabel = (cents: number | null) =>
   cents === null ? "Price pending" : `$${(cents / 100).toFixed(0)}`;
 
@@ -152,14 +161,14 @@ export function ParkingPassTripPlanner({
     };
     if (next.opportunitiesDiscovered !== metrics.opportunitiesDiscovered) {
       setMetrics(next);
-      localStorage.setItem(METRICS_KEY, JSON.stringify(next));
+      writeJson(METRICS_KEY, next);
     }
   }, [hosts.length]);
 
   const persistMetrics = (patch: Partial<ValueMetrics>) => {
     const next = { ...metrics, ...patch };
     setMetrics(next);
-    localStorage.setItem(METRICS_KEY, JSON.stringify(next));
+    writeJson(METRICS_KEY, next);
   };
 
   const addStop = (host: TripPlannerHost) => {
@@ -210,7 +219,7 @@ export function ParkingPassTripPlanner({
     };
     const next = [nextRoute, ...savedRoutes].slice(0, 20);
     setSavedRoutes(next);
-    localStorage.setItem(ROUTES_KEY, JSON.stringify(next));
+    writeJson(ROUTES_KEY, next);
     persistMetrics({
       tripsPlanned: metrics.tripsPlanned + 1,
       milesPlanned: Math.round((metrics.milesPlanned + routeMiles) * 10) / 10,
