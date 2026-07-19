@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
 
 import {
+  mirrorInfinitySelectiveInheritance,
   mirrorInfinitySignup,
   mirrorInfinityTouch,
   sanitizeInfinityAffiliateTag,
   sanitizeInfinityCanonicalPath,
 } from "../server/integrations/infinityShadow";
+import { mealScoutSelectiveInheritancePolicy } from "../server/integrations/infinitySelectiveInheritance";
 
 const envNames = [
   "INFINITY_API_URL",
@@ -38,6 +40,36 @@ assert.equal(
   }),
   "disabled",
 );
+
+assert.equal(
+  await mirrorInfinitySelectiveInheritance({
+    evaluationId: "inheritance-1",
+    profileId: "restaurant-1",
+    targetVersion: "profile-v1",
+    candidates: [],
+  }),
+  "disabled",
+);
+
+const inheritancePolicy = mealScoutSelectiveInheritancePolicy("tenant-1");
+assert.equal(inheritancePolicy.defaultAction, "exclude");
+assert.equal(
+  inheritancePolicy.fields.find((field) => field.field === "menu")?.action,
+  "inherit",
+);
+for (const protectedField of [
+  "liveAvailability",
+  "ordering",
+  "payment",
+  "commission",
+  "ownerIdentity",
+]) {
+  assert.equal(
+    inheritancePolicy.fields.find((field) => field.field === protectedField)
+      ?.action,
+    "exclude",
+  );
+}
 
 assert.equal(
   sanitizeInfinityCanonicalPath(
@@ -126,6 +158,52 @@ try {
     "disabled",
   );
   assert.equal(calls.length, 1, "Unsafe attribution must not call Infinity");
+
+  assert.equal(
+    await mirrorInfinitySelectiveInheritance({
+      evaluationId: "inheritance-2",
+      profileId: "restaurant-1",
+      targetVersion: "profile-v1",
+      candidates: [
+        {
+          field: "menu",
+          value: { sections: [] },
+          sourceKind: "owner_verified",
+          sourceReference: "owner-packet:menu-1",
+          evidenceDigest: "sha256:menu",
+          observedAt: "2026-07-19T15:00:00.000Z",
+          confidence: 1,
+          verified: true,
+        },
+        {
+          field: "payment",
+          value: { account: "must-not-cross" },
+          sourceKind: "product_record",
+          sourceReference: "private:payment",
+          evidenceDigest: "sha256:payment",
+          observedAt: "2026-07-19T15:00:00.000Z",
+          confidence: 1,
+          verified: true,
+        },
+      ],
+    }),
+    "sent",
+  );
+  assert.equal(calls.length, 2);
+  assert.equal(
+    calls[1].url,
+    "https://infinity.example/v1/selective-inheritance/evaluations",
+  );
+  const inheritanceBody = JSON.parse(calls[1].body);
+  assert.equal(inheritanceBody.policy.defaultAction, "exclude");
+  assert.deepEqual(
+    inheritanceBody.candidates.map(
+      (candidate: { field: string }) => candidate.field,
+    ),
+    ["menu"],
+  );
+  assert.equal(inheritanceBody.candidates[0].value.sections.length, 0);
+  assert.ok(!calls[1].body.includes("must-not-cross"));
 } finally {
   globalThis.fetch = originalFetch;
   for (const name of envNames) {
