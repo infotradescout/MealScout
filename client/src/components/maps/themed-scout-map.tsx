@@ -122,6 +122,7 @@ function isWebglAvailable(): boolean {
 }
 
 const PREVIEW_FRAME_MARKER_MILES = 18;
+const FALLBACK_PIN_LIMIT = 60;
 
 function getMarkerDistanceMiles(
   a: { lat: number; lng: number },
@@ -137,6 +138,95 @@ function getMarkerDistanceMiles(
     Math.sin(dLat / 2) ** 2 +
     Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
   return 2 * earthRadiusMiles * Math.asin(Math.min(1, Math.sqrt(hav)));
+}
+
+const MAP_PIN_KIND_ICONS: Record<string, string> = {
+  truck: "T",
+  restaurant: "R",
+  parking: "H",
+  event: "E",
+  deal: "$",
+  geo_ad: "◆",
+  supplier: "S",
+};
+
+// Plain equirectangular projection onto the visible box - fine at the local
+// (single metro area) scale this fallback operates at, and it only needs to
+// place pins close enough to tap, not survey-accurate.
+function projectFallbackPositions(
+  userLocation: { lat: number; lng: number },
+  markers: MapAdapterMarker[],
+): Array<{ marker: MapAdapterMarker; leftPct: number; topPct: number }> {
+  const finite = markers.filter(
+    (marker) => Number.isFinite(marker.lat) && Number.isFinite(marker.lng),
+  );
+  if (finite.length === 0) return [];
+
+  const nearest = [...finite]
+    .sort(
+      (a, b) =>
+        getMarkerDistanceMiles(userLocation, a) -
+        getMarkerDistanceMiles(userLocation, b),
+    )
+    .slice(0, FALLBACK_PIN_LIMIT);
+
+  const lats = [userLocation.lat, ...nearest.map((marker) => marker.lat)];
+  const lngs = [userLocation.lng, ...nearest.map((marker) => marker.lng)];
+  const minLat = Math.min(...lats);
+  const maxLat = Math.max(...lats);
+  const minLng = Math.min(...lngs);
+  const maxLng = Math.max(...lngs);
+  const latSpan = Math.max(maxLat - minLat, 0.006);
+  const lngSpan = Math.max(maxLng - minLng, 0.006);
+  const pad = 0.14;
+
+  return nearest.map((marker) => {
+    const xRatio = (marker.lng - minLng) / lngSpan;
+    const yRatio = (marker.lat - minLat) / latSpan;
+    return {
+      marker,
+      leftPct: (pad + xRatio * (1 - 2 * pad)) * 100,
+      topPct: (pad + (1 - yRatio) * (1 - 2 * pad)) * 100,
+    };
+  });
+}
+
+function FallbackMapPin({
+  marker,
+  leftPct,
+  topPct,
+  onTap,
+}: {
+  marker: MapAdapterMarker;
+  leftPct: number;
+  topPct: number;
+  onTap?: (marker: MapAdapterMarker) => void;
+}) {
+  const icon = MAP_PIN_KIND_ICONS[marker.kind || "truck"] ?? "·";
+  const truckBadge = (marker.parkedTrucks?.length || 0) > 0;
+
+  return (
+    <button
+      type="button"
+      className={`msm-map-pin msm-map-pin--${marker.kind || "truck"} msm-fallback-pin`}
+      style={{ left: `${leftPct}%`, top: `${topPct}%` }}
+      aria-label={marker.title ? `${marker.title} pin` : "MealScout map pin"}
+      onClick={(event) => {
+        event.stopPropagation();
+        onTap?.(marker);
+      }}
+    >
+      <span className="msm-map-pin__drop" aria-hidden="true">
+        <span className="msm-map-pin__icon">{icon}</span>
+        <span className="msm-map-pin__glow" />
+      </span>
+      {truckBadge && (
+        <span className="msm-map-pin__truck-badge" aria-hidden="true">
+          T
+        </span>
+      )}
+    </button>
+  );
 }
 
 export function ThemedScoutMap({
@@ -430,6 +520,14 @@ export function ThemedScoutMap({
     }
   }, [interactive, markerKey, markers, onMarkerTap, zoom]);
 
+  const fallbackPositions = useMemo(
+    () =>
+      tilesUnavailable
+        ? projectFallbackPositions(userLocation, markers)
+        : [],
+    [tilesUnavailable, userLocation, markerKey, markers],
+  );
+
   return (
     <div
       className={`absolute inset-0 h-full w-full min-h-full ${interactive ? "msm-mode-interactive" : "msm-mode-preview"} ${isNightTone ? "msm-tone-night" : "msm-tone-day"}`}
@@ -437,12 +535,31 @@ export function ThemedScoutMap({
       <div className="absolute inset-0">
         {tilesUnavailable ? (
           // No WebGL, or tiles never loaded (ad-blocker/CDN interference) -
-          // show the same warm background the map style would have used
-          // instead of leaving a blank/void-looking canvas.
+          // show the same warm background the map style would have used,
+          // but keep every pin clickable instead of leaving a dead rectangle.
           <div
             className="absolute inset-0 h-full w-full min-h-full"
             style={{ backgroundColor: isNightTone ? "#120805" : "#fff7df" }}
-          />
+          >
+            <span
+              className="msm-user-pin msm-fallback-user-pin"
+              aria-label="Your location"
+              style={{ left: "50%", top: "50%" }}
+            >
+              <span className="msm-user-pin__pulse" />
+              <span className="msm-user-pin__pulse msm-user-pin__pulse--delay" />
+              <span className="msm-user-pin__core" />
+            </span>
+            {fallbackPositions.map(({ marker, leftPct, topPct }) => (
+              <FallbackMapPin
+                key={marker.id}
+                marker={marker}
+                leftPct={leftPct}
+                topPct={topPct}
+                onTap={onMarkerTap}
+              />
+            ))}
+          </div>
         ) : (
           <div
             ref={containerRef}
@@ -482,6 +599,20 @@ export function ThemedScoutMap({
         }
         .msm-tone-night .msm-map-canvas .maplibregl-canvas {
           filter: saturate(1.08) contrast(1.08) brightness(1.16) sepia(0.04);
+        }
+
+        /* ── No-tiles fallback pins (positioned by lat/lng ratio, not MapLibre) ──
+           Compound selectors so these win over the base .msm-map-pin /
+           .msm-user-pin position:relative rules regardless of declaration order. */
+        .msm-map-pin.msm-fallback-pin {
+          position: absolute;
+          transform: translate(-50%, -100%);
+          z-index: 4;
+        }
+        .msm-user-pin.msm-fallback-user-pin {
+          position: absolute;
+          transform: translate(-50%, -50%);
+          z-index: 3;
         }
 
         .msm-map-grade {
