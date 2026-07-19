@@ -787,11 +787,39 @@ type CravingBoardItem = {
   truckId?: string | null;
   dealId?: string | null;
   imageUrl?: string | null;
+  priceCents?: number | null;
   meta?: string | null;
   reason?: string | null;
   freshnessMeta?: FreshnessMeta;
   score: number;
 };
+
+function getDecisionMarker(
+  item: CravingBoardItem,
+  markers: MapAdapterMarker[],
+): MapAdapterMarker | null {
+  const expectedKind =
+    item.kind === "Truck"
+      ? "truck"
+      : item.kind === "Deal"
+        ? "deal"
+        : item.kind === "Event"
+          ? "event"
+          : "restaurant";
+  const sourceId =
+    item.truckId ||
+    item.dealId ||
+    item.restaurantId ||
+    (item.kind === "Event" ? item.id.replace(/^event-/, "") : null);
+  if (!sourceId) return null;
+  return (
+    markers.find(
+      (marker) =>
+        marker.kind === expectedKind &&
+        String(marker.sourceId) === String(sourceId),
+    ) || null
+  );
+}
 
 type LocalActivityItem = {
   id: string;
@@ -1812,6 +1840,7 @@ function buildCravingBoardItems({
       href: getMenuItemProfilePath(item),
       restaurantId: String(item.restaurantId),
       imageUrl: item.imageUrl,
+      priceCents: item.priceCents,
       meta: formatMiles(item.distanceMiles) || item.cuisineType || "Menu",
       reason: getMenuItemSearchReason(item),
       freshnessMeta: {
@@ -4388,6 +4417,7 @@ export default function ExplorePreview() {
     useState<LiveTruckSummary | null>(null);
   const [selectedMapMarker, setSelectedMapMarker] =
     useState<MapAdapterMarker | null>(null);
+  const [selectedMarkerId, setSelectedMarkerId] = useState<string | null>(null);
   const [mapBounds, setMapBounds] = useState<MapBoundsLike | null>(null);
   const googleMapContainerRef = useRef<HTMLDivElement | null>(null);
   const [googleMapFailed, setGoogleMapFailed] = useState(false);
@@ -4432,8 +4462,6 @@ export default function ExplorePreview() {
 
   const collapseScoutMap = useCallback(() => {
     setSheetState("default");
-    setSelectedLiveTruck(null);
-    setSelectedMapMarker(null);
   }, []);
 
   useEffect(() => {
@@ -4523,6 +4551,7 @@ export default function ExplorePreview() {
   );
   const handleMarkerTap = useCallback(
     (marker: MapAdapterMarker) => {
+      setSelectedMarkerId(marker.id);
       if (marker.kind === "truck") {
         const truck = liveTruckById.get(String(marker.sourceId));
         if (truck) {
@@ -4548,10 +4577,19 @@ export default function ExplorePreview() {
   const handlePreviewMarkerTap = useCallback(
     (marker: MapAdapterMarker) => {
       setGoogleMapFailed(false);
-      setSheetState("fullMap");
-      handleMarkerTap(marker);
+      setSelectedMarkerId(marker.id);
+      setMapCenter({ lat: marker.lat, lng: marker.lng });
+      setMapZoom(Math.max(mapZoom, 15));
+      if (marker.kind === "truck") {
+        const truck = liveTruckById.get(String(marker.sourceId));
+        setSelectedLiveTruck(truck || null);
+        setSelectedMapMarker(null);
+      } else {
+        setSelectedLiveTruck(null);
+        setSelectedMapMarker(marker);
+      }
     },
-    [handleMarkerTap],
+    [liveTruckById, mapZoom],
   );
 
   /* --------- pull-down-to-fullscreen sheet --------- */
@@ -5145,6 +5183,57 @@ export default function ExplorePreview() {
     }
     return items.slice(0, 7);
   }, [activeSceneLaneId, cravingBoardItems]);
+  const spatialDecisionItems = useMemo(
+    () =>
+      sceneMixedFeedItems
+        .map((item) => ({
+          item,
+          marker: getDecisionMarker(item, sceneFilteredMapMarkers),
+        }))
+        .filter(
+          (
+            entry,
+          ): entry is { item: CravingBoardItem; marker: MapAdapterMarker } =>
+            Boolean(entry.marker),
+        )
+        .slice(0, 6),
+    [sceneFilteredMapMarkers, sceneMixedFeedItems],
+  );
+  const compactDecisionMarkers = useMemo(
+    () => spatialDecisionItems.map(({ marker }) => marker),
+    [spatialDecisionItems],
+  );
+  useEffect(() => {
+    if (spatialDecisionItems.length === 0) {
+      setSelectedMarkerId(null);
+      return;
+    }
+    if (
+      !selectedMarkerId ||
+      !sceneFilteredMapMarkers.some(
+        (marker) => marker.id === selectedMarkerId,
+      )
+    ) {
+      setSelectedMarkerId(spatialDecisionItems[0].marker.id);
+    }
+  }, [sceneFilteredMapMarkers, selectedMarkerId, spatialDecisionItems]);
+  const selectSpatialDecision = useCallback(
+    (marker: MapAdapterMarker) => {
+      setSelectedMarkerId(marker.id);
+      setMapCenter({ lat: marker.lat, lng: marker.lng });
+      setMapZoom((current) => Math.max(current, 15));
+      if (marker.kind === "truck") {
+        setSelectedLiveTruck(
+          liveTruckById.get(String(marker.sourceId)) || null,
+        );
+        setSelectedMapMarker(null);
+      } else {
+        setSelectedLiveTruck(null);
+        setSelectedMapMarker(marker);
+      }
+    },
+    [liveTruckById],
+  );
   const featuredRestaurantIds = useMemo(
     () =>
       new Set(
@@ -5337,10 +5426,10 @@ export default function ExplorePreview() {
     topLocalFavoriteRestaurants.length > 0;
   const isThinScoutViewport = isLowActivity && localActivityCount <= 1;
   const compactMapHeight = isThinScoutViewport
-    ? "clamp(150px, 18dvh, 178px)"
-    : "clamp(176px, 22dvh, 208px)";
+    ? "clamp(340px, 48dvh, 430px)"
+    : "clamp(360px, 52dvh, 470px)";
   const collapsedMapClass =
-    "mx-0 mt-0 rounded-b-[1.5rem] bg-[#17110d] ring-1 ring-orange-200/16";
+    "mx-0 mt-0 bg-[#17110d] md:mt-4 md:rounded-[2rem] md:ring-1 md:ring-orange-200/16";
   const railSectionClass = isHighActivity
     ? "pl-4 pr-0 pt-1 pb-4"
     : "pl-4 pr-0 pt-2 pb-4 sm:pl-5";
@@ -5503,7 +5592,8 @@ export default function ExplorePreview() {
                         mapId={effectiveGoogleMapsMapId || undefined}
                         center={mapCenter}
                         zoom={mapZoom}
-                        markers={sceneFilteredMapMarkers}
+                        markers={compactDecisionMarkers}
+                        selectedMarkerId={selectedMarkerId}
                         showRoadTrafficLayer={false}
                         userLocation={verifiedMapUserLocation}
                         isNightTheme={true}
@@ -5521,7 +5611,8 @@ export default function ExplorePreview() {
                       <ThemedScoutMap
                         userLocation={resolvedScoutCoords}
                         showUserLocation={Boolean(verifiedMapUserLocation)}
-                        markers={sceneFilteredMapMarkers}
+                        markers={compactDecisionMarkers}
+                        selectedMarkerId={selectedMarkerId}
                         zoom={13}
                         onMarkerTap={handlePreviewMarkerTap}
                       />
@@ -5560,6 +5651,7 @@ export default function ExplorePreview() {
                       center={mapCenter}
                       zoom={mapZoom}
                       markers={sceneFilteredMapMarkers}
+                      selectedMarkerId={selectedMarkerId}
                       showRoadTrafficLayer={false}
                       userLocation={verifiedMapUserLocation}
                       isNightTheme={true}
@@ -5591,6 +5683,7 @@ export default function ExplorePreview() {
                           userLocation={resolvedScoutCoords}
                           showUserLocation={Boolean(verifiedMapUserLocation)}
                           markers={sceneFilteredMapMarkers}
+                          selectedMarkerId={selectedMarkerId}
                           zoom={13}
                           interactive={true}
                           onMarkerTap={handlePreviewMarkerTap}
@@ -5726,14 +5819,6 @@ export default function ExplorePreview() {
                   />
                 </button>
 
-                <MapActivityPips
-                  mode={scoutActivityMode}
-                  truckCount={sceneMapMarkerCounts.liveTruckCount}
-                  restaurantCount={sceneMapMarkerCounts.restaurantCount}
-                  dealCount={sceneMapMarkerCounts.dealCount}
-                  eventCount={sceneMapMarkerCounts.eventCount}
-                />
-
                 {/* Bottom gradient */}
                 <div
                   aria-hidden="true"
@@ -5744,19 +5829,12 @@ export default function ExplorePreview() {
                   }}
                 />
 
-                {/* Bottom center: pull-down cue */}
-                <button
-                  type="button"
-                  onClick={openScoutMap}
-                  aria-label="Open full map"
-                  className="absolute bottom-7 left-1/2 z-20 -translate-x-1/2 inline-flex items-center gap-1.5 rounded-full bg-[#100c0a]/84 px-3.5 py-1.5 text-[11px] font-black text-white/86 ring-1 ring-white/14 backdrop-blur-xl"
-                >
-                  Open full map
-                  <ChevronDown
-                    className="h-3.5 w-3.5 text-white/60"
-                    aria-hidden="true"
-                  />
-                </button>
+                <SpatialDecisionRail
+                  decisions={spatialDecisionItems}
+                  selectedMarkerId={selectedMarkerId}
+                  onSelect={selectSpatialDecision}
+                  onExpandMap={openScoutMap}
+                />
 
                 {/* Debug overlay (admin only) */}
                 {showScoutPreviewDebug && (
@@ -8797,6 +8875,168 @@ function ActiveSceneContent({
         <ScoutSceneEmptyState laneId={laneId} />
       ) : null}
     </>
+  );
+}
+
+function SpatialDecisionRail({
+  decisions,
+  selectedMarkerId,
+  onSelect,
+  onExpandMap,
+}: {
+  decisions: Array<{ item: CravingBoardItem; marker: MapAdapterMarker }>;
+  selectedMarkerId: string | null;
+  onSelect: (marker: MapAdapterMarker) => void;
+  onExpandMap: () => void;
+}) {
+  const scrollFrameRef = useRef<number | null>(null);
+  if (decisions.length === 0) return null;
+  const actionLabel = (item: CravingBoardItem) => {
+    if (item.kind === "Menu") return "View menu";
+    if (item.kind === "Truck") return "Follow truck";
+    if (item.kind === "Deal") return "View deal";
+    if (item.kind === "Event") return "View event";
+    return "Open profile";
+  };
+
+  return (
+    <div
+      className="absolute inset-x-0 bottom-0 z-20 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:left-auto md:right-4 md:w-[min(430px,42%)]"
+      data-testid="scout-spatial-decision-rail"
+    >
+      <div className="mb-2 flex items-center justify-between px-3 md:px-0">
+        <p className="text-[11px] font-black uppercase tracking-[0.13em] text-orange-100/90">
+          Eat around here
+        </p>
+        <button
+          type="button"
+          onClick={onExpandMap}
+          className="inline-flex items-center gap-1 rounded-full bg-[#fff7ed]/92 px-3 py-1.5 text-[11px] font-black text-[#5b230e] shadow-lg ring-1 ring-white/70 transition hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300 motion-reduce:transition-none"
+        >
+          <Maximize2 className="h-3 w-3" aria-hidden="true" />
+          Expand map
+        </button>
+      </div>
+      <ul
+        className="flex snap-x snap-mandatory gap-2.5 overflow-x-auto px-3 pb-1 [scrollbar-width:none] md:flex-col md:overflow-visible md:px-0"
+        aria-label="Food shown on the map"
+        role="listbox"
+        onScroll={(event) => {
+          if (scrollFrameRef.current !== null) {
+            window.cancelAnimationFrame(scrollFrameRef.current);
+          }
+          const rail = event.currentTarget;
+          scrollFrameRef.current = window.requestAnimationFrame(() => {
+            const center = rail.getBoundingClientRect().left + rail.clientWidth / 2;
+            const cards = Array.from(
+              rail.querySelectorAll<HTMLElement>("[data-spatial-marker-id]"),
+            );
+            const nearest = cards.sort((a, b) => {
+              const aRect = a.getBoundingClientRect();
+              const bRect = b.getBoundingClientRect();
+              return (
+                Math.abs(aRect.left + aRect.width / 2 - center) -
+                Math.abs(bRect.left + bRect.width / 2 - center)
+              );
+            })[0];
+            const markerId = nearest?.dataset.spatialMarkerId;
+            const decision = decisions.find(
+              ({ marker }) => marker.id === markerId,
+            );
+            if (decision && decision.marker.id !== selectedMarkerId) {
+              onSelect(decision.marker);
+            }
+          });
+        }}
+      >
+        {decisions.map(({ item, marker }) => {
+          const selected = marker.id === selectedMarkerId;
+          const price =
+            typeof item.priceCents === "number"
+              ? `$${(item.priceCents / 100).toFixed(2)}`
+              : null;
+          const statusDotClass =
+            item.kind === "Truck" || item.kind === "Place"
+              ? "bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.7)]"
+              : item.kind === "Deal"
+                ? "bg-lime-300"
+                : item.kind === "Event"
+                  ? "bg-sky-300"
+                  : "bg-orange-300";
+          return (
+            <li
+              key={`${item.id}-${marker.id}`}
+              className={`w-[86vw] max-w-[370px] shrink-0 snap-center md:w-full ${
+                selected ? "md:block" : "md:hidden"
+              }`}
+              role="option"
+              aria-selected={selected}
+              data-spatial-marker-id={marker.id}
+            >
+              <article
+                tabIndex={0}
+                onClick={() => onSelect(marker)}
+                onFocus={() => onSelect(marker)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    onSelect(marker);
+                  }
+                }}
+                className={`flex min-h-[112px] cursor-pointer gap-3 overflow-hidden rounded-[1.35rem] p-2.5 text-white backdrop-blur-xl transition duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-200 motion-reduce:transition-none ${
+                  selected
+                    ? "translate-y-0 bg-[#32190d]/96 ring-2 ring-orange-300 shadow-[0_18px_40px_rgba(0,0,0,0.48),0_0_24px_rgba(255,111,45,0.22)]"
+                    : "bg-[#160e09]/88 ring-1 ring-white/14 opacity-90"
+                }`}
+                data-testid={`scout-spatial-decision-${marker.id}`}
+              >
+                <div className="h-[92px] w-[92px] shrink-0 overflow-hidden rounded-2xl bg-orange-100/10 ring-1 ring-orange-100/20">
+                  {item.imageUrl ? (
+                    <img
+                      src={item.imageUrl}
+                      alt=""
+                      className="h-full w-full object-cover"
+                      loading="eager"
+                    />
+                  ) : (
+                    <div className="flex h-full items-center justify-center bg-gradient-to-br from-orange-500/40 to-amber-200/10">
+                      <Utensils className="h-7 w-7 text-orange-100" aria-hidden="true" />
+                    </div>
+                  )}
+                </div>
+                <div className="min-w-0 flex-1 py-0.5">
+                  <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.1em] text-orange-200">
+                    <span
+                      className={`h-2 w-2 rounded-full ${statusDotClass}`}
+                      aria-hidden="true"
+                    />
+                    {item.reason || (item.kind === "Truck" ? "Serving now" : "Nearby")}
+                  </div>
+                  <h2 className="mt-1 truncate text-lg font-black leading-tight">
+                    {item.title}
+                  </h2>
+                  <p className="mt-0.5 truncate text-xs font-semibold text-white/70">
+                    {item.subtitle}
+                  </p>
+                  <div className="mt-2 flex items-center justify-between gap-2">
+                    <span className="truncate text-xs font-bold text-white/68">
+                      {[item.meta, price].filter(Boolean).join(" · ")}
+                    </span>
+                    <Link
+                      href={item.href}
+                      onClick={(event) => event.stopPropagation()}
+                      className="shrink-0 rounded-full bg-[#ff6a35] px-3 py-1.5 text-[11px] font-black text-white shadow-sm ring-1 ring-orange-100/30 hover:bg-[#ff7b4d] focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                    >
+                      {actionLabel(item)}
+                    </Link>
+                  </div>
+                </div>
+              </article>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 }
 

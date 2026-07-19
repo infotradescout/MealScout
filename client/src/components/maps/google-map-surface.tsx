@@ -17,6 +17,7 @@ type GoogleMapSurfaceProps = {
   center: GeoPoint;
   zoom: number;
   markers: MapAdapterMarker[];
+  selectedMarkerId?: string | null;
   trafficCells?: MapTrafficCell[];
   showRoadTrafficLayer?: boolean;
   userLocation: GeoPoint | null;
@@ -605,7 +606,11 @@ const buildGlowDotElement = (marker: MapAdapterMarker): HTMLElement => {
 };
 
 /* ─── Legacy Marker icon (fallback when no Map ID) ──────────────────────── */
-const buildLegacyIcon = (googleMaps: any, marker: MapAdapterMarker) => {
+const buildLegacyIcon = (
+  googleMaps: any,
+  marker: MapAdapterMarker,
+  selected = false,
+) => {
   const color = markerColor(marker);
   if (marker.kind !== "user") {
     const glyph = markerGlyph(marker);
@@ -615,8 +620,12 @@ const buildLegacyIcon = (googleMaps: any, marker: MapAdapterMarker) => {
         ? `<circle cx="40" cy="14" r="9" fill="#fb923c" stroke="#fff7ed" stroke-width="2"/>
          <text x="40" y="18" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="900" fill="#1b0b02">T</text>`
         : "";
+    const selectedRing = selected
+      ? `<circle cx="27" cy="25" r="23" fill="none" stroke="#fff7ed" stroke-width="4" opacity="0.98"/>
+         <circle cx="27" cy="25" r="27" fill="none" stroke="${color}" stroke-width="3" opacity="0.55"/>`
+      : "";
     const svg = `
-      <svg width="54" height="66" viewBox="0 0 54 66" xmlns="http://www.w3.org/2000/svg">
+      <svg width="62" height="74" viewBox="-4 -4 62 74" xmlns="http://www.w3.org/2000/svg">
         <defs>
           <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
             <feGaussianBlur stdDeviation="4" result="blur"/>
@@ -625,6 +634,7 @@ const buildLegacyIcon = (googleMaps: any, marker: MapAdapterMarker) => {
           </filter>
         </defs>
         <ellipse cx="27" cy="59" rx="12" ry="4" fill="#000" opacity="0.42"/>
+        ${selectedRing}
         <path filter="url(#glow)" d="M27 3C15.4 3 6 12.4 6 24c0 15.8 21 38 21 38s21-22.2 21-38C48 12.4 38.6 3 27 3z" fill="${color}" stroke="#ffd08a" stroke-width="2"/>
         <circle cx="27" cy="24" r="13" fill="#1b0d05" opacity="0.9" stroke="#fff3d6" stroke-width="1.5"/>
         <text x="27" y="29" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="900" fill="#fff3d6">${glyph}</text>
@@ -633,8 +643,8 @@ const buildLegacyIcon = (googleMaps: any, marker: MapAdapterMarker) => {
     `;
     return {
       url: svgDataUrl(svg),
-      scaledSize: new googleMaps.Size(42, 52),
-      anchor: new googleMaps.Point(21, 52),
+      scaledSize: new googleMaps.Size(selected ? 52 : 42, selected ? 62 : 52),
+      anchor: new googleMaps.Point(selected ? 26 : 21, selected ? 62 : 52),
     };
   }
   return {
@@ -735,6 +745,7 @@ export function GoogleMapSurface({
   center,
   zoom,
   markers,
+  selectedMarkerId = null,
   trafficCells = [],
   showRoadTrafficLayer = false,
   userLocation,
@@ -1107,6 +1118,7 @@ export function GoogleMapSurface({
     renderedMarkers.forEach((marker) => {
       usedIds.add(marker.id);
       const existing = markerRefs.current.get(marker.id);
+      const isSelected = marker.id === selectedMarkerId;
       const signature = [
         marker.kind,
         marker.lat.toFixed(6),
@@ -1115,6 +1127,7 @@ export function GoogleMapSurface({
         marker.title || "",
         marker.subtitle || "",
         marker.parkingStatus || "",
+        isSelected ? "selected" : "idle",
         (marker.parkedTrucks || [])
           .map((truck) => `${truck.id || ""}:${truck.name}`)
           .join(","),
@@ -1134,7 +1147,8 @@ export function GoogleMapSurface({
         if (useAdvanced && "content" in existing) {
           existing.content = buildGlowDotElement(marker);
         } else if (typeof existing.setIcon === "function") {
-          existing.setIcon(buildLegacyIcon(googleMaps, marker));
+          existing.setIcon(buildLegacyIcon(googleMaps, marker, isSelected));
+          existing.setZIndex?.(isSelected ? 1000 : undefined);
         }
         markerSignatureRefs.current.set(marker.id, signature);
         return;
@@ -1151,7 +1165,8 @@ export function GoogleMapSurface({
             map: mapRef.current,
             position: { lat: marker.lat, lng: marker.lng },
             title: marker.title || marker.subtitle || marker.kind,
-            icon: buildLegacyIcon(googleMaps, marker),
+            icon: buildLegacyIcon(googleMaps, marker, isSelected),
+            zIndex: isSelected ? 1000 : undefined,
           });
 
       if (typeof instance.addEventListener === "function") {
@@ -1195,7 +1210,13 @@ export function GoogleMapSurface({
       markerRefs.current.delete(id);
       markerSignatureRefs.current.delete(id);
     });
-  }, [renderedMarkers, markerIndex, mapReadyVersion, interactive]);
+  }, [
+    renderedMarkers,
+    markerIndex,
+    mapReadyVersion,
+    interactive,
+    selectedMarkerId,
+  ]);
 
   // Traffic cells
   useEffect(() => {
