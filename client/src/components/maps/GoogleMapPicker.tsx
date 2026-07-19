@@ -784,11 +784,125 @@ function GoogleMapRenderer({
 
 // ─── Leaflet fallback renderer ────────────────────────────────────────────────
 
+function LeafletPins({
+  pins,
+  separateOverlappingPins,
+  onPinClick,
+  onPinDrag,
+}: {
+  pins: MapPickerPin[];
+  separateOverlappingPins: boolean;
+  onPinClick?: (key: string) => void;
+  onPinDrag?: (key: string, point: GeoPoint) => void;
+}) {
+  const map = useMap();
+  const [layoutVersion, setLayoutVersion] = useState(0);
+
+  useEffect(() => {
+    if (!separateOverlappingPins) return;
+    const refresh = () => setLayoutVersion((version) => version + 1);
+    map.on("moveend zoomend", refresh);
+    return () => {
+      map.off("moveend zoomend", refresh);
+    };
+  }, [map, separateOverlappingPins]);
+
+  const displayedPins = (() => {
+    if (!separateOverlappingPins) return pins;
+    const zoomLevel = map.getZoom();
+    const positioned = pins.map((pin) => {
+      const point = map.project([pin.position.lat, pin.position.lng], zoomLevel);
+      return { pin, x: point.x, y: point.y };
+    });
+    const remaining = new Set(positioned.map((_, index) => index));
+    const displayPositions = new Map<string, GeoPoint>();
+
+    while (remaining.size > 0) {
+      const seed = remaining.values().next().value as number;
+      remaining.delete(seed);
+      const group = [seed];
+      const queue = [seed];
+      while (queue.length > 0) {
+        const current = positioned[queue.shift()!];
+        for (const candidateIndex of Array.from(remaining)) {
+          const candidate = positioned[candidateIndex];
+          if (Math.hypot(current.x - candidate.x, current.y - candidate.y) < 42) {
+            remaining.delete(candidateIndex);
+            group.push(candidateIndex);
+            queue.push(candidateIndex);
+          }
+        }
+      }
+
+      if (group.length === 1) continue;
+      const centerX =
+        group.reduce((sum, index) => sum + positioned[index].x, 0) /
+        group.length;
+      const centerY =
+        group.reduce((sum, index) => sum + positioned[index].y, 0) /
+        group.length;
+      const radius = Math.max(28, Math.min(76, group.length * 7));
+      group.forEach((positionedIndex, ringIndex) => {
+        const angle = -Math.PI / 2 + (2 * Math.PI * ringIndex) / group.length;
+        const latLng = map.unproject(
+          L.point(
+            centerX + Math.cos(angle) * radius,
+            centerY + Math.sin(angle) * radius,
+          ),
+          zoomLevel,
+        );
+        displayPositions.set(positioned[positionedIndex].pin.key, {
+          lat: latLng.lat,
+          lng: latLng.lng,
+        });
+      });
+    }
+
+    return pins.map((pin) => ({
+      ...pin,
+      position: displayPositions.get(pin.key) || pin.position,
+    }));
+  })();
+  void layoutVersion;
+
+  return (
+    <>
+      {displayedPins.map((pin) => (
+        <Marker
+          key={pin.key}
+          position={[pin.position.lat, pin.position.lng]}
+          icon={pin.occupied ? pinIconOccupied : pinIcon}
+          draggable={pin.draggable ?? false}
+          eventHandlers={{
+            click: () => onPinClick?.(pin.key),
+            ...(pin.draggable && onPinDrag
+              ? {
+                  dragend: (e: any) => {
+                    const marker = e.target as L.Marker;
+                    const latLng = marker.getLatLng();
+                    onPinDrag(pin.key, { lat: latLng.lat, lng: latLng.lng });
+                  },
+                }
+              : {}),
+          }}
+        >
+          {pin.popup && (
+            <Popup maxWidth={320} minWidth={240} keepInView autoPan autoPanPadding={[16, 16]}>
+              {pin.popup}
+            </Popup>
+          )}
+        </Marker>
+      ))}
+    </>
+  );
+}
+
 function LeafletRenderer({
   center,
   zoom = 13,
   pins = [],
   fitToPins = false,
+  separateOverlappingPins = false,
   trafficCells = [],
   routePath = [],
   circleRadiusMetres,
@@ -802,6 +916,7 @@ function LeafletRenderer({
   zoom?: number;
   pins?: MapPickerPin[];
   fitToPins?: boolean;
+  separateOverlappingPins?: boolean;
   trafficCells?: MapTrafficCell[];
   routePath?: GeoPoint[];
   circleRadiusMetres?: number;
@@ -871,40 +986,12 @@ function LeafletRenderer({
           }}
         />
       ))}
-      {pins.map((pin) => (
-        <Marker
-          key={pin.key}
-          position={[pin.position.lat, pin.position.lng]}
-          icon={pin.occupied ? pinIconOccupied : pinIcon}
-          draggable={pin.draggable ?? false}
-          eventHandlers={{
-            click: () => {
-              if (onPinClick) onPinClick(pin.key);
-            },
-            ...(pin.draggable && onPinDrag
-              ? {
-                  dragend: (e: any) => {
-                    const m = e.target as L.Marker;
-                    const ll = m.getLatLng();
-                    onPinDrag(pin.key, { lat: ll.lat, lng: ll.lng });
-                  },
-                }
-              : {}),
-          }}
-        >
-          {pin.popup && (
-            <Popup
-              maxWidth={320}
-              minWidth={240}
-              keepInView
-              autoPan
-              autoPanPadding={[16, 16]}
-            >
-              {pin.popup}
-            </Popup>
-          )}
-        </Marker>
-      ))}
+      <LeafletPins
+        pins={pins}
+        separateOverlappingPins={separateOverlappingPins || fitToPins}
+        onPinClick={onPinClick}
+        onPinDrag={onPinDrag}
+      />
       {circleRadiusMetres && circleRadiusMetres > 0 && (
         <Circle
           center={[center.lat, center.lng]}
@@ -1006,6 +1093,7 @@ export function GoogleMapPicker({
           zoom={zoom}
           pins={pins}
           fitToPins={fitToPins}
+          separateOverlappingPins={separateOverlappingPins}
           trafficCells={trafficCells}
           routePath={routePath}
           circleRadiusMetres={circleRadiusMetres}
