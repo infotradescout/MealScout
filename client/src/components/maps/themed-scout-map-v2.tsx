@@ -83,6 +83,7 @@ function isWebglAvailable(): boolean {
 }
 
 const PREVIEW_FRAME_MARKER_MILES = 18;
+const FALLBACK_PIN_LIMIT = 60;
 
 function getMarkerDistanceMiles(
   a: { lat: number; lng: number },
@@ -98,6 +99,126 @@ function getMarkerDistanceMiles(
     Math.sin(dLat / 2) ** 2 +
     Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
   return 2 * earthRadiusMiles * Math.asin(Math.min(1, Math.sqrt(hav)));
+}
+
+// Browsers block (or silently drop) http:// image requests on an https://
+// page as mixed content. Owner-submitted photo URLs occasionally predate
+// the site's HTTPS-only rollout, so upgrade the scheme instead of letting
+// the pin photo fail closed with no visible error.
+function resolveSecureImageUrl(url?: string | null): string | null {
+  if (!url) return null;
+  if (url.startsWith("http://")) return `https://${url.slice("http://".length)}`;
+  return url;
+}
+
+const MAP_PIN_KIND_ICONS: Record<string, string> = {
+  truck: "T",
+  restaurant: "R",
+  parking: "H",
+  event: "E",
+  deal: "$",
+  geo_ad: "◆",
+  supplier: "S",
+};
+
+// Plain equirectangular projection onto the visible box - fine at the local
+// (single metro area) scale this fallback operates at, and it only needs to
+// place pins close enough to tap, not survey-accurate.
+function projectFallbackPositions(
+  userLocation: { lat: number; lng: number },
+  markers: MapAdapterMarker[],
+): Array<{ marker: MapAdapterMarker; leftPct: number; topPct: number }> {
+  const finite = markers.filter(
+    (marker) => Number.isFinite(marker.lat) && Number.isFinite(marker.lng),
+  );
+  if (finite.length === 0) return [];
+
+  const nearest = [...finite]
+    .sort(
+      (a, b) =>
+        getMarkerDistanceMiles(userLocation, a) -
+        getMarkerDistanceMiles(userLocation, b),
+    )
+    .slice(0, FALLBACK_PIN_LIMIT);
+
+  const lats = [userLocation.lat, ...nearest.map((marker) => marker.lat)];
+  const lngs = [userLocation.lng, ...nearest.map((marker) => marker.lng)];
+  const minLat = Math.min(...lats);
+  const maxLat = Math.max(...lats);
+  const minLng = Math.min(...lngs);
+  const maxLng = Math.max(...lngs);
+  const latSpan = Math.max(maxLat - minLat, 0.006);
+  const lngSpan = Math.max(maxLng - minLng, 0.006);
+  const pad = 0.14;
+
+  return nearest.map((marker) => {
+    const xRatio = (marker.lng - minLng) / lngSpan;
+    const yRatio = (marker.lat - minLat) / latSpan;
+    return {
+      marker,
+      leftPct: (pad + xRatio * (1 - 2 * pad)) * 100,
+      topPct: (pad + (1 - yRatio) * (1 - 2 * pad)) * 100,
+    };
+  });
+}
+
+function FallbackMapPin({
+  marker,
+  leftPct,
+  topPct,
+  onTap,
+}: {
+  marker: MapAdapterMarker;
+  leftPct: number;
+  topPct: number;
+  onTap?: (marker: MapAdapterMarker) => void;
+}) {
+  const secureImageUrl = resolveSecureImageUrl(marker.imageUrl);
+  const [photoFailed, setPhotoFailed] = useState(false);
+  const showPhoto = !!secureImageUrl && !photoFailed;
+  const icon = MAP_PIN_KIND_ICONS[marker.kind || "truck"] ?? "·";
+  const truckBadge = (marker.parkedTrucks?.length || 0) > 0;
+
+  return (
+    <button
+      type="button"
+      className={`msm-map-pin msm-map-pin--${marker.kind || "truck"} msm-fallback-pin ${showPhoto ? "msm-map-pin--photo" : ""}`}
+      style={{ left: `${leftPct}%`, top: `${topPct}%` }}
+      aria-label={marker.title ? `${marker.title} pin` : "MealScout map pin"}
+      onClick={(event) => {
+        event.stopPropagation();
+        onTap?.(marker);
+      }}
+    >
+      {showPhoto ? (
+        <>
+          <span className="msm-map-pin__photo-glow" aria-hidden="true" />
+          <span className="msm-map-pin__photo-ring" aria-hidden="true">
+            <img
+              className="msm-map-pin__photo"
+              alt=""
+              loading="lazy"
+              src={secureImageUrl ?? undefined}
+              onError={() => setPhotoFailed(true)}
+            />
+          </span>
+          <span className="msm-map-pin__photo-point" aria-hidden="true" />
+        </>
+      ) : (
+        <>
+          <span className="msm-map-pin__drop" aria-hidden="true">
+            <span className="msm-map-pin__icon">{icon}</span>
+            <span className="msm-map-pin__glow" />
+          </span>
+          {truckBadge && (
+            <span className="msm-map-pin__truck-badge" aria-hidden="true">
+              T
+            </span>
+          )}
+        </>
+      )}
+    </button>
+  );
 }
 
 export function ThemedScoutMapV2({
@@ -377,7 +498,7 @@ export function ThemedScoutMapV2({
         img.className = "msm-map-pin__photo";
         img.alt = "";
         img.loading = "lazy";
-        img.src = marker.imageUrl;
+        img.src = resolveSecureImageUrl(marker.imageUrl) as string;
         img.addEventListener("error", () => renderIconPin(el, marker), {
           once: true,
         });
@@ -420,6 +541,14 @@ export function ThemedScoutMapV2({
     }
   }, [interactive, markerKey, markers, onMarkerTap, selectedMarkerId, zoom]);
 
+  const fallbackPositions = useMemo(
+    () =>
+      tilesUnavailable
+        ? projectFallbackPositions(userLocation, markers)
+        : [],
+    [tilesUnavailable, userLocation, markerKey, markers],
+  );
+
   return (
     <div
       className={`absolute inset-0 h-full w-full min-h-full ${interactive ? "msm-mode-interactive" : "msm-mode-preview"}`}
@@ -427,12 +556,33 @@ export function ThemedScoutMapV2({
       <div className="absolute inset-0">
         {tilesUnavailable ? (
           // No WebGL, or tiles never loaded (ad-blocker/CDN interference) -
-          // show the same warm background the map style would have used
-          // instead of leaving a blank/void-looking canvas.
+          // show the same warm background the map style would have used,
+          // but keep every pin clickable instead of leaving a dead rectangle.
           <div
             className="absolute inset-0 h-full w-full min-h-full"
             style={{ backgroundColor: "#211710" }}
-          />
+          >
+            {showUserLocation && (
+              <span
+                className="msm-user-pin msm-fallback-user-pin"
+                aria-label="Your location"
+                style={{ left: "50%", top: "50%" }}
+              >
+                <span className="msm-user-pin__pulse" />
+                <span className="msm-user-pin__pulse msm-user-pin__pulse--delay" />
+                <span className="msm-user-pin__core" />
+              </span>
+            )}
+            {fallbackPositions.map(({ marker, leftPct, topPct }) => (
+              <FallbackMapPin
+                key={marker.id}
+                marker={marker}
+                leftPct={leftPct}
+                topPct={topPct}
+                onTap={onMarkerTap}
+              />
+            ))}
+          </div>
         ) : (
           <div
             ref={containerRef}
@@ -445,6 +595,20 @@ export function ThemedScoutMapV2({
       <style>{`
         .msm-map-canvas .maplibregl-canvas {
           filter: brightness(0.48) saturate(0.72) sepia(0.18) contrast(1.12);
+        }
+
+        /* ── No-tiles fallback pins (positioned by lat/lng ratio, not MapLibre) ──
+           Compound selectors so these win over the base .msm-map-pin /
+           .msm-user-pin position:relative rules regardless of declaration order. */
+        .msm-map-pin.msm-fallback-pin {
+          position: absolute;
+          transform: translate(-50%, -100%);
+          z-index: 4;
+        }
+        .msm-user-pin.msm-fallback-user-pin {
+          position: absolute;
+          transform: translate(-50%, -50%);
+          z-index: 3;
         }
 
         /* ── User location pin ── */
