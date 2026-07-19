@@ -20,6 +20,7 @@ interface ThemedScoutMapV2Props {
   userLocation: { lat: number; lng: number };
   showUserLocation?: boolean;
   markers: MapAdapterMarker[];
+  selectedMarkerId?: string | null;
   onMarkerTap?: (marker: MapAdapterMarker) => void;
   zoom?: number;
   interactive?: boolean;
@@ -103,6 +104,7 @@ export function ThemedScoutMapV2({
   userLocation,
   showUserLocation = false,
   markers,
+  selectedMarkerId = null,
   onMarkerTap,
   zoom = 13,
   interactive = false,
@@ -255,9 +257,14 @@ export function ThemedScoutMapV2({
   const markerKey = useMemo(
     () =>
       markers
-        .map((marker) => `${marker.id}:${marker.lat.toFixed(5)},${marker.lng.toFixed(5)}`)
+        .map(
+          (marker) =>
+            `${marker.id}:${marker.lat.toFixed(5)},${marker.lng.toFixed(5)}:${
+              marker.id === selectedMarkerId ? "selected" : "idle"
+            }`,
+        )
         .join("|"),
-    [markers],
+    [markers, selectedMarkerId],
   );
 
   useEffect(() => {
@@ -344,6 +351,10 @@ export function ThemedScoutMapV2({
       const el = document.createElement("button");
       el.type = "button";
       el.className = `msm-map-pin msm-map-pin--${marker.kind || "truck"}`;
+      if (marker.id === selectedMarkerId) {
+        el.classList.add("msm-map-pin--selected");
+        el.style.zIndex = "20";
+      }
       el.setAttribute(
         "aria-label",
         marker.title ? `${marker.title} pin` : "MealScout map pin",
@@ -407,7 +418,7 @@ export function ThemedScoutMapV2({
         frameTimeoutIds.forEach((id) => window.clearTimeout(id));
       };
     }
-  }, [interactive, markerKey, markers, onMarkerTap, zoom]);
+  }, [interactive, markerKey, markers, onMarkerTap, selectedMarkerId, zoom]);
 
   return (
     <div
@@ -480,6 +491,21 @@ export function ThemedScoutMapV2({
           display: flex;
           align-items: flex-start;
           justify-content: center;
+        }
+        .msm-map-pin--selected {
+          transform: translateY(-5px) scale(1.24);
+          filter: drop-shadow(0 0 8px rgba(255,255,255,0.95)) drop-shadow(0 0 18px rgba(249,115,22,0.8));
+        }
+        .msm-map-pin--selected::before {
+          content: "";
+          position: absolute;
+          inset: -7px;
+          border: 3px solid #fff7ed;
+          border-radius: 999px;
+          pointer-events: none;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .msm-map-pin, .msm-map-pin * { animation: none !important; transition: none !important; }
         }
         .msm-map-pin__drop {
           position: relative;
