@@ -3939,13 +3939,18 @@ export default function ParkingPassPage() {
   }, [journeyResult, journeySupportFilter]);
   const journeyPlannerHosts = useMemo<TripPlannerHost[]>(() => {
     if (!journeyResult) return [];
+    const isPlannerListingAvailable = (listing: ParkingPassListing) => {
+      if (String(listing.status || "").toLowerCase() !== "open") return false;
+      if (!listing.hardCapEnabled) return true;
+      return !Array.isArray(listing.availableSpotNumbers) || listing.availableSpotNumbers.length > 0;
+    };
     return journeyResult.parkingPassHosts.map((host) => {
       const matchingGroup = locationGroups.find(
         (group) => String(group.host.id) === String(host.hostId),
       );
       const matchingListing = matchingGroup?.listings.find(
         (listing) => getListingDateKey(listing.date) === selectedDate,
-      ) || matchingGroup?.listings.find((listing) => listingHasAvailability(listing)) || null;
+      ) || matchingGroup?.listings.find(isPlannerListingAvailable) || null;
       const prices = matchingListing
         ? [
             matchingListing.breakfastPriceCents,
@@ -3973,7 +3978,7 @@ export default function ParkingPassPage() {
         routeProgressMiles: host.routeProgressMiles,
         addedDurationSeconds: host.addedDurationSeconds,
         directionsUri: host.directionsUri,
-        available: Boolean(matchingListing && listingHasAvailability(matchingListing)),
+        available: Boolean(matchingListing && isPlannerListingAvailable(matchingListing)),
         priceCents: prices.length > 0 ? Math.min(...prices) : null,
         traffic,
       };
