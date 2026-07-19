@@ -243,9 +243,13 @@ assert.doesNotMatch(
 assert.match(
   scout,
   /parkingStatus:\s*parkedTrucks\.length\s*>\s*0\s*\?\s*"occupied"\s*:\s*"available"/,
-  "Public-ready Parking Pass hosts must remain visible without a parked truck.",
+  "Host locations must remain visible for planning without a parked truck.",
 );
-assert.match(scout, /apiUrl\("\/api\/parking-pass\/host-ids"\)/);
+assert.doesNotMatch(
+  scout,
+  /apiUrl\("\/api\/parking-pass\/host-ids"\)/,
+  "Scout host visibility must not be gated by the currently bookable host-ID feed.",
+);
 const parkingPassHostFallback = between(
   scout,
   "const visibleParkingPassHosts = useMemo",
@@ -260,12 +264,11 @@ const hostMarkers = between(
   "const hostMarkers = useMemo",
   "const dealMarkers",
 );
-assert.match(hostMarkers, /parkingPassHostIds\.has\(hostId\)/);
 assert.match(hostMarkers, /scoutMapHostLocations/);
-assert.match(
+assert.doesNotMatch(
   hostMarkers,
-  /!isParkingPassHost\s*&&\s*parkedTrucks\.length\s*===\s*0/,
-  "Scout may show an idle host pin only when the host is Parking Pass eligible.",
+  /isParkingPassHost|parkingPassHostIds/,
+  "Planning-map host pins must not disappear when a host has no active listing.",
 );
 assert.match(
   scout,
