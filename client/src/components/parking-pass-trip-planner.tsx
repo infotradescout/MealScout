@@ -15,6 +15,8 @@ export type TripPlannerHost = {
   routeProgressMiles: number;
   addedDurationSeconds: number | null;
   directionsUri: string;
+  latitude: number;
+  longitude: number;
   available: boolean;
   priceCents: number | null;
   traffic: "high" | "medium" | "low" | "unknown";
@@ -85,6 +87,8 @@ export function ParkingPassTripPlanner({
   destination,
   routeMiles,
   routeDurationSeconds,
+  originCoords,
+  destinationCoords,
   selectedDate,
   onSeeAvailability,
 }: {
@@ -93,6 +97,8 @@ export function ParkingPassTripPlanner({
   destination: string;
   routeMiles: number;
   routeDurationSeconds: number;
+  originCoords: { lat: number; lng: number };
+  destinationCoords: { lat: number; lng: number };
   selectedDate: string;
   onSeeAvailability: (host: TripPlannerHost) => void;
 }) {
@@ -105,6 +111,7 @@ export function ParkingPassTripPlanner({
   const [routeName, setRouteName] = useState("");
   const [recurring, setRecurring] = useState(true);
   const [newHostAlerts, setNewHostAlerts] = useState<string[]>([]);
+  const [accountSyncStatus, setAccountSyncStatus] = useState<"checking" | "synced" | "local">("checking");
   const [metrics, setMetrics] = useState<ValueMetrics>(() =>
     readJson<ValueMetrics>(METRICS_KEY, {
       tripsPlanned: 0,
@@ -135,6 +142,36 @@ export function ParkingPassTripPlanner({
       })
       .sort((a, b) => b.score - a.score || a.routeProgressMiles - b.routeProgressMiles);
   }, [scopedHosts]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/parking-pass/routes", { credentials: "include" })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("local");
+        const payload = await response.json();
+        if (cancelled) return;
+        const serverRoutes = Array.isArray(payload?.routes) ? payload.routes : [];
+        if (serverRoutes.length > 0) {
+          setSavedRoutes(serverRoutes.map((route: any) => ({
+            id: String(route.id), name: String(route.name), origin: String(route.originLabel),
+            destination: String(route.destinationLabel), scope: route.scope as Scope,
+            recurring: Boolean(route.recurring), knownHostIds: Array.isArray(route.hostSnapshot)
+              ? route.hostSnapshot.map((host: any) => String(host.locationId)) : [],
+            savedAt: String(route.updatedAt || route.createdAt || new Date().toISOString()),
+          })));
+        }
+        setAccountSyncStatus("synced");
+      })
+      .catch(() => !cancelled && setAccountSyncStatus("local"));
+    return () => { cancelled = true; };
+  }, []);
+
+  const recordEvent = (eventName: string, properties: Record<string, unknown>) => {
+    void fetch("/api/parking-pass/routes/events", {
+      method: "POST", credentials: "include", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ eventName, properties }),
+    }).catch(() => undefined);
+  };
 
   useEffect(() => {
     const currentIds = new Set(hosts.map((host) => host.locationId));
@@ -178,6 +215,7 @@ export function ParkingPassTripPlanner({
     );
     setSchedule(next);
     persistMetrics({ stopsScheduled: metrics.stopsScheduled + 1 });
+    recordEvent("route_stop_selected", { hostId: host.hostId, locationId: host.locationId });
   };
 
   const moveStop = (index: number, direction: -1 | 1) => {
@@ -206,7 +244,7 @@ export function ParkingPassTripPlanner({
     });
   }, [departureTime, routeDurationSeconds, routeMiles, schedule]);
 
-  const saveRoute = () => {
+  const saveRoute = async () => {
     const nextRoute: SavedRoute = {
       id: `${Date.now()}`,
       name: routeName.trim() || `${origin} → ${destination}`,
@@ -224,6 +262,34 @@ export function ParkingPassTripPlanner({
       tripsPlanned: metrics.tripsPlanned + 1,
       milesPlanned: Math.round((metrics.milesPlanned + routeMiles) * 10) / 10,
     });
+    try {
+      const response = await fetch("/api/parking-pass/routes", {
+        method: "POST", credentials: "include", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: nextRoute.name, originLabel: origin, destinationLabel: destination,
+          origin: originCoords, destination: destinationCoords, scope, recurring,
+          schedule: schedule.map((stop) => ({
+            locationId: stop.locationId, hostId: stop.hostId, name: stop.name,
+            serviceMinutes: stop.serviceMinutes, routeProgressMiles: stop.routeProgressMiles,
+          })),
+          hostSnapshot: hosts.map((host) => ({
+            locationId: host.locationId, hostId: host.hostId, name: host.name,
+            priceCents: host.priceCents, available: host.available,
+            latitude: host.latitude, longitude: host.longitude,
+          })),
+        }),
+      });
+      if (response.ok) {
+        const payload = await response.json();
+        const alerts = Array.isArray(payload?.alerts) ? payload.alerts : [];
+        if (alerts.length > 0) setNewHostAlerts(alerts.map((alert: any) => String(alert.host?.name || "Host update")));
+        setAccountSyncStatus("synced");
+      } else if (response.status === 401) {
+        setAccountSyncStatus("local");
+      }
+    } catch {
+      setAccountSyncStatus("local");
+    }
     setRouteName("");
   };
 
@@ -236,6 +302,9 @@ export function ParkingPassTripPlanner({
           </p>
           <p className="mt-1 text-xs text-orange-800">
             Build the schedule here. Open navigation only when you are ready to leave.
+          </p>
+          <p className="mt-1 text-[11px] text-orange-700">
+            {accountSyncStatus === "synced" ? "Synced to your MealScout account" : accountSyncStatus === "checking" ? "Checking account sync…" : "Saved on this device · sign in to sync everywhere"}
           </p>
         </div>
         <div className="flex flex-wrap gap-1.5">
@@ -289,9 +358,10 @@ export function ParkingPassTripPlanner({
                   </Button>
                   <Button type="button" size="sm" variant="outline" onClick={() => {
                     persistMetrics({ bookingStarts: metrics.bookingStarts + 1 });
+                    recordEvent("route_booking_started", { hostId: host.hostId, locationId: host.locationId });
                     onSeeAvailability(host);
                   }}>
-                    Availability
+                    {host.available ? "Book this stop" : "Watch availability"}
                   </Button>
                 </div>
               </div>
@@ -335,7 +405,7 @@ export function ParkingPassTripPlanner({
           <label className="flex shrink-0 items-center gap-2 rounded-md border bg-white px-3 text-xs">
             <input type="checkbox" checked={recurring} onChange={(event) => setRecurring(event.target.checked)} /> Alert me when new hosts appear
           </label>
-          <Button type="button" onClick={saveRoute}><Save className="mr-2 h-4 w-4" /> Save route</Button>
+          <Button type="button" onClick={() => void saveRoute()}><Save className="mr-2 h-4 w-4" /> Save route</Button>
         </div>
         <div className="flex flex-wrap gap-2 text-center">
           <div className="rounded-lg border bg-white px-3 py-2"><p className="text-lg font-bold">{metrics.milesPlanned.toFixed(1)}</p><p className="text-[10px] text-muted-foreground">miles planned</p></div>

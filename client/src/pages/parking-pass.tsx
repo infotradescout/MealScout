@@ -72,6 +72,7 @@ import {
   ParkingPassTripPlanner,
   type TripPlannerHost,
 } from "@/components/parking-pass-trip-planner";
+import { AdminRouteConversionCard, HostRouteDemandCard } from "@/components/parking-route-demand-cards";
 
 interface Host {
   id: string;
@@ -3978,6 +3979,8 @@ export default function ParkingPassPage() {
         routeProgressMiles: host.routeProgressMiles,
         addedDurationSeconds: host.addedDurationSeconds,
         directionsUri: host.directionsUri,
+        latitude: host.latitude,
+        longitude: host.longitude,
         available: Boolean(matchingListing && isPlannerListingAvailable(matchingListing)),
         priceCents: prices.length > 0 ? Math.min(...prices) : null,
         traffic,
@@ -4932,8 +4935,11 @@ export default function ParkingPassPage() {
           </TabsList>
         </Tabs>
 
+        {isAdminOrStaff && <AdminRouteConversionCard />}
+
         {topTab === "host" && canHostTab && (
           <div className="grid gap-3 md:grid-cols-2">
+              <HostRouteDemandCard />
               <Card className="rounded-2xl border border-[color:var(--border-subtle)] pp-glass">
                 <CardContent className="p-4 space-y-3">
                   <div>
@@ -7589,6 +7595,8 @@ export default function ParkingPassPage() {
                           destination={journeyDestinationLabel}
                           routeMiles={journeyResult.route.distanceMeters / 1609.344}
                           routeDurationSeconds={journeyResult.route.durationSeconds}
+                          originCoords={journeyOriginCoords!}
+                          destinationCoords={journeyDestinationCoords!}
                           selectedDate={selectedDate}
                           onSeeAvailability={(host) => {
                             const matchingGroup = locationGroups.find(
