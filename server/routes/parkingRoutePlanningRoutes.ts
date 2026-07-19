@@ -3,7 +3,7 @@ import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db";
 import { isAuthenticated, isStaffOrAdmin } from "../unifiedAuth";
-import { parkingRoutePlans, telemetryEvents } from "@shared/schema";
+import { eventBookings, parkingRoutePlans, telemetryEvents } from "@shared/schema";
 import { getHostByUserId } from "../services/hostOwnership";
 
 const pointSchema = z.object({ lat: z.number().min(-90).max(90), lng: z.number().min(-180).max(180) });
@@ -120,6 +120,9 @@ export function registerParkingRoutePlanningRoutes(app: Express) {
       .where(inArray(telemetryEvents.eventName, names)).groupBy(telemetryEvents.eventName);
     const counts = Object.fromEntries(names.map((name) => [name, 0]));
     rows.forEach((row: any) => { counts[row.eventName] = Number(row.count); });
-    res.json({ generatedAt: new Date().toISOString(), counts });
+    const [fees] = await db.select({
+      platformFeeCents: sql<number>`coalesce(sum(${eventBookings.platformFeeCents}), 0)::int`,
+    }).from(eventBookings).where(eq(eventBookings.status, "confirmed"));
+    res.json({ generatedAt: new Date().toISOString(), counts, platformFeeCents: Number(fees?.platformFeeCents || 0) });
   });
 }
