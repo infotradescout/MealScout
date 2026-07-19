@@ -343,11 +343,6 @@ type MapLocationsResponse = {
   supplierLocations?: unknown[];
 } | null;
 
-type ParkingPassHostIdsResponse = {
-  generatedAt?: string | null;
-  hostIds?: string[];
-};
-
 interface RestaurantSummary {
   id: string;
   businessName?: string | null;
@@ -3172,43 +3167,6 @@ export default function ExplorePreview() {
     retry: false,
   });
 
-  const { data: parkingPassHostIdsData } =
-    useQuery<ParkingPassHostIdsResponse>({
-      queryKey: ["/api/parking-pass/host-ids", "scout-map"],
-      enabled: !!resolvedScoutLocation,
-      queryFn: async () => {
-        const response = await fetch(apiUrl("/api/parking-pass/host-ids"), {
-          credentials: "include",
-        });
-        if (!response.ok) return { hostIds: [] };
-        return response.json();
-      },
-      staleTime: 60_000,
-      retry: false,
-    });
-
-  const parkingPassHostIds = useMemo(() => {
-    const ids = new Set(
-      (Array.isArray(parkingPassHostIdsData?.hostIds)
-        ? parkingPassHostIdsData.hostIds
-        : []
-      )
-        .map((id) => String(id || "").trim())
-        .filter(Boolean),
-    );
-
-    for (const listing of Array.isArray(parkingPassData)
-      ? parkingPassData
-      : []) {
-      const hostId = String(
-        listing.host?.hostId || listing.host?.id || "",
-      ).trim();
-      if (hostId) ids.add(hostId);
-    }
-
-    return ids;
-  }, [parkingPassData, parkingPassHostIdsData]);
-
   const visibleParkingPassListings = useMemo<ScoutParkingPassListing[]>(() => {
     const rows = Array.isArray(parkingPassData) ? parkingPassData : [];
     return rows.filter((listing) => {
@@ -4033,11 +3991,6 @@ export default function ExplorePreview() {
         if (lat === null || lng === null) return null;
         const hostKey = getScoutHostMarkerKey(host);
         const parkedTrucks = parkedTrucksByHostKey.get(hostKey) || [];
-        const hostId = String(host.hostId || host.id || "").trim();
-        const isParkingPassHost = Boolean(
-          hostId && parkingPassHostIds.has(hostId),
-        );
-        if (!isParkingPassHost && parkedTrucks.length === 0) return null;
         const address = [host.address, host.city, host.state]
           .filter(Boolean)
           .join(", ");
@@ -4075,7 +4028,7 @@ export default function ExplorePreview() {
         } as MapAdapterMarker;
       })
       .filter((m): m is MapAdapterMarker => Boolean(m && m.sourceId));
-  }, [parkedTrucksByHostKey, parkingPassHostIds, scoutMapHostLocations]);
+  }, [parkedTrucksByHostKey, scoutMapHostLocations]);
 
   const dealMarkers = useMemo<MapAdapterMarker[]>(() => {
     return nearbyDeals
