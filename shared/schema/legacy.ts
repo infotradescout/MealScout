@@ -4990,6 +4990,34 @@ export const telemetryEvents = pgTable(
 export type TelemetryEvent = typeof telemetryEvents.$inferSelect;
 export type InsertTelemetryEvent = typeof telemetryEvents.$inferInsert;
 
+// Account-synced Parking Pass route plans, schedules, and alert snapshots.
+export const parkingRoutePlans = pgTable(
+  "parking_route_plans",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    name: varchar("name").notNull(),
+    originLabel: varchar("origin_label").notNull(),
+    destinationLabel: varchar("destination_label").notNull(),
+    origin: jsonb("origin").notNull(),
+    destination: jsonb("destination").notNull(),
+    scope: varchar("scope").notNull().default("nationwide"),
+    recurring: boolean("recurring").notNull().default(true),
+    schedule: jsonb("schedule").notNull().default(sql`'[]'::jsonb`),
+    hostSnapshot: jsonb("host_snapshot").notNull().default(sql`'[]'::jsonb`),
+    lastCheckedAt: timestamp("last_checked_at").defaultNow(),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_parking_route_plans_user").on(table.userId),
+    index("idx_parking_route_plans_updated").on(table.updatedAt),
+  ],
+);
+
+export type ParkingRoutePlan = typeof parkingRoutePlans.$inferSelect;
+export type InsertParkingRoutePlan = typeof parkingRoutePlans.$inferInsert;
+
 // Request logs for admin reporting (48-hour retention)
 export const requestLogs = pgTable(
   "request_logs",
