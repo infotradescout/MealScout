@@ -1,7 +1,4 @@
-export type GoogleMarkerRenderer =
-  | "advanced"
-  | "legacy"
-  | "unavailable";
+export type GoogleMarkerRenderer = "advanced" | "unavailable";
 
 export function resolveGoogleMarkerRenderer(input: {
   mapId?: string | null;
@@ -14,22 +11,19 @@ export function resolveGoogleMarkerRenderer(input: {
   ) {
     return "advanced";
   }
-  if (typeof input.LegacyMarker === "function") return "legacy";
+  // A callable legacy Marker constructor does not guarantee that pins render.
+  // Scout only trusts AdvancedMarker with a real production Map ID; otherwise
+  // its populated map must fail over to the local MapLibre surface.
   return "unavailable";
 }
 
 export function createGoogleMarkerInstance(input: {
   renderer: GoogleMarkerRenderer;
   AdvancedMarkerElement?: any;
-  LegacyMarker?: any;
   advancedOptions: Record<string, unknown>;
-  legacyOptions: Record<string, unknown>;
 }): any | null {
   if (input.renderer === "advanced") {
     return new input.AdvancedMarkerElement(input.advancedOptions);
-  }
-  if (input.renderer === "legacy") {
-    return new input.LegacyMarker(input.legacyOptions);
   }
   return null;
 }
