@@ -6,6 +6,10 @@ import type {
   MapTrafficCell,
 } from "./map-adapter.types";
 import mealScoutIcon from "@assets/meal-scout-icon.png";
+import {
+  createGoogleMarkerInstance,
+  resolveGoogleMarkerRenderer,
+} from "./google-marker-runtime";
 
 type GeoPoint = { lat: number; lng: number };
 type ScreenPoint = { x: number; y: number };
@@ -923,7 +927,13 @@ export function GoogleMapSurface({
                 : "cooperative"
               : "none",
           };
-          if (useNativeMapStyle) {
+          const configuredMapId = String(mapId || "").trim();
+          if (configuredMapId) {
+            // AdvancedMarkerElement requires a map ID. A map ID also owns its
+            // cloud style, so legacy JSON styles must not be supplied.
+            mapOptions.mapId = configuredMapId;
+            mapOptions.mapTypeId = "roadmap";
+          } else if (useNativeMapStyle) {
             mapOptions.mapTypeId = "roadmap";
             mapOptions.styles = null;
           } else if (isNightTheme) {
@@ -1026,7 +1036,9 @@ export function GoogleMapSurface({
             }, delay),
           );
         } else {
-          if (useNativeMapStyle) {
+          if (mapId) {
+            // mapId is immutable after construction; retain its cloud style.
+          } else if (useNativeMapStyle) {
             mapRef.current.setOptions({
               mapId: undefined,
               styles: null,
@@ -1133,13 +1145,33 @@ export function GoogleMapSurface({
     const googleMaps = (window as GoogleMapsWindow).google?.maps;
     if (!googleMaps || !mapRef.current || mapReadyVersion === 0) return;
 
-    // AdvancedMarkerElement requires a mapId — since we strip mapId for
-    // neon style support, we always use classic Markers on this surface.
     const AdvancedMarkerElement = googleMaps.marker?.AdvancedMarkerElement;
-    const useAdvanced = false;
+    const LegacyMarker = googleMaps.Marker;
+    const markerRenderer = resolveGoogleMarkerRenderer({
+      mapId,
+      AdvancedMarkerElement,
+      LegacyMarker,
+    });
+    const useAdvanced = markerRenderer === "advanced";
+    const failMarkerRuntime = (detail?: string) => {
+      const msg = detail
+        ? `Google Maps marker rendering failed (${detail}). Falling back to the local map.`
+        : "Google Maps loaded without a supported marker renderer. Falling back to the local map.";
+      setLoadError(msg);
+      if (!hasReportedFatalErrorRef.current) {
+        hasReportedFatalErrorRef.current = true;
+        onFatalErrorRef.current?.(msg);
+      }
+    };
+    if (markerRenderer === "unavailable" && renderedMarkers.length > 0) {
+      failMarkerRuntime();
+      return;
+    }
     const usedIds = new Set<string>();
+    let markerRuntimeFailed = false;
 
     renderedMarkers.forEach((marker) => {
+      if (markerRuntimeFailed) return;
       usedIds.add(marker.id);
       const existing = markerRefs.current.get(marker.id);
       const isSelected = marker.id === selectedMarkerId;
@@ -1178,20 +1210,35 @@ export function GoogleMapSurface({
         return;
       }
 
-      const instance = useAdvanced
-        ? new AdvancedMarkerElement({
+      let instance: any | null = null;
+      try {
+        instance = createGoogleMarkerInstance({
+          renderer: markerRenderer,
+          AdvancedMarkerElement,
+          LegacyMarker,
+          advancedOptions: {
             map: mapRef.current,
             position: { lat: marker.lat, lng: marker.lng },
             title: marker.title || marker.subtitle || marker.kind,
             content: buildGlowDotElement(marker, isSelected),
-          })
-        : new googleMaps.Marker({
+            gmpClickable: interactive && marker.id !== "__user-location",
+          },
+          legacyOptions: {
             map: mapRef.current,
             position: { lat: marker.lat, lng: marker.lng },
             title: marker.title || marker.subtitle || marker.kind,
             icon: buildLegacyIcon(googleMaps, marker, isSelected),
             zIndex: isSelected ? 1000 : undefined,
-          });
+          },
+        });
+      } catch (error) {
+        markerRuntimeFailed = true;
+        failMarkerRuntime(
+          error instanceof Error ? error.message : "constructor unavailable",
+        );
+        return;
+      }
+      if (!instance) return;
 
       if (typeof instance.addEventListener === "function") {
         instance.addEventListener("gmp-click", () => {
@@ -1240,6 +1287,7 @@ export function GoogleMapSurface({
     mapReadyVersion,
     interactive,
     selectedMarkerId,
+    mapId,
   ]);
 
   // Traffic cells
