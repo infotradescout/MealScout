@@ -49,21 +49,14 @@ const compactMap = between(
   'data-testid="scout-map-preview"',
   "{/* GoogleMapSurface:",
 );
-const compactGoogleIndex = compactMap.indexOf("<GoogleMapSurface");
 const compactFallbackIndex = compactMap.indexOf("<ThemedScoutMap");
-assert.ok(compactGoogleIndex >= 0, "Compact Scout must render Google Maps.");
 assert.ok(
   compactFallbackIndex >= 0,
-  "Compact Scout must retain a no-key/error fallback.",
+  "Compact Scout must render the deterministic MapLibre decision surface.",
 );
 assert.ok(
-  compactGoogleIndex < compactFallbackIndex,
-  "The local-tile map must be a fallback, not the primary compact renderer.",
-);
-assert.match(
-  compactMap,
-  /hasMapKey\s*&&\s*!googleMapFailed\s*&&\s*mapCenter\s*\?/,
-  "Compact Scout must prefer the real map whenever Google Maps is healthy.",
+  !compactMap.includes("<GoogleMapSurface"),
+  "Compact Scout must not depend on Google marker runtime health.",
 );
 assert.doesNotMatch(
   scout,
@@ -72,13 +65,12 @@ assert.doesNotMatch(
 );
 
 const googleTags = scout.match(/<GoogleMapSurface[\s\S]*?\/>/g) || [];
-assert.equal(googleTags.length, 2, "Scout must have compact and full Google maps.");
+assert.equal(googleTags.length, 1, "Scout must reserve Google Maps for full-map mode.");
 for (const tag of googleTags) {
   assert.match(tag, /useNativeMapStyle=\{false\}/);
   assert.match(tag, /isNightTheme=\{true\}/);
 }
-assert.match(googleTags[0], /showZoomControls=\{false\}/);
-assert.match(googleTags[1], /showZoomControls=\{true\}/);
+assert.match(googleTags[0], /showZoomControls=\{true\}/);
 assert.match(googleMap, /useNativeMapStyle[\s\S]*styles\s*=\s*null/);
 assert.match(googleMap, /mapStyleFoodDay/);
 assert.match(googleMap, /data-google-map-loading="true"/);
