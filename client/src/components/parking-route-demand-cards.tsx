@@ -41,6 +41,10 @@ export function AdminRouteConversionCard() {
             <div key={String(label)} className="rounded-lg bg-violet-50 p-2"><p className="text-lg font-bold text-violet-950">{Number(value || 0)}</p><p className="text-[10px] text-violet-800">{label}</p></div>
           ))}
         </div>
+        <div className="rounded-xl bg-emerald-50 p-3">
+          <p className="text-[11px] text-emerald-800">Confirmed MealScout fees</p>
+          <p className="text-xl font-bold text-emerald-950">${(Number(funnel.data?.platformFeeCents || 0) / 100).toFixed(2)}</p>
+        </div>
         <div className="flex flex-wrap gap-2 text-[11px]">
           {(heatmap.data?.cells || []).slice(0, 8).map((cell: any) => (
             <span key={`${cell.lat}:${cell.lng}`} className="rounded-full border border-violet-200 bg-white px-2 py-1">{cell.lat.toFixed(1)}, {cell.lng.toFixed(1)} · {cell.routeCount} route{cell.routeCount === 1 ? "" : "s"} · {cell.hostOpportunities === 0 ? "supply gap" : `${cell.hostOpportunities} host matches`}</span>
