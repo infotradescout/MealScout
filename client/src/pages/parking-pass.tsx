@@ -68,6 +68,10 @@ import {
   type ParkingScheduleItem,
 } from "@/components/parking-schedule-calendar";
 import { PlaceAutocompleteInput } from "@/components/maps/place-autocomplete-input";
+import {
+  ParkingPassTripPlanner,
+  type TripPlannerHost,
+} from "@/components/parking-pass-trip-planner";
 
 interface Host {
   id: string;
@@ -3933,6 +3937,48 @@ export default function ParkingPassPage() {
       (journeyResult.categories[kind] || []).slice(0, 2),
     );
   }, [journeyResult, journeySupportFilter]);
+  const journeyPlannerHosts = useMemo<TripPlannerHost[]>(() => {
+    if (!journeyResult) return [];
+    return journeyResult.parkingPassHosts.map((host) => {
+      const matchingGroup = locationGroups.find(
+        (group) => String(group.host.id) === String(host.hostId),
+      );
+      const matchingListing = matchingGroup?.listings.find(
+        (listing) => getListingDateKey(listing.date) === selectedDate,
+      ) || matchingGroup?.listings.find((listing) => listingHasAvailability(listing)) || null;
+      const prices = matchingListing
+        ? [
+            matchingListing.breakfastPriceCents,
+            matchingListing.lunchPriceCents,
+            matchingListing.dinnerPriceCents,
+            matchingListing.dailyPriceCents,
+          ].filter((value): value is number => typeof value === "number" && value > 0)
+        : [];
+      const trafficText = String(matchingGroup?.host.expectedFootTraffic || "").toLowerCase();
+      const traffic: TripPlannerHost["traffic"] = trafficText.includes("high")
+        ? "high"
+        : trafficText.includes("medium") || trafficText.includes("moderate")
+          ? "medium"
+          : trafficText.includes("low")
+            ? "low"
+            : "unknown";
+      return {
+        locationId: host.locationId,
+        hostId: host.hostId,
+        name: host.name,
+        address: host.address,
+        city: host.city,
+        state: host.state,
+        distanceFromRouteMiles: host.distanceFromRouteMiles,
+        routeProgressMiles: host.routeProgressMiles,
+        addedDurationSeconds: host.addedDurationSeconds,
+        directionsUri: host.directionsUri,
+        available: Boolean(matchingListing && listingHasAvailability(matchingListing)),
+        priceCents: prices.length > 0 ? Math.min(...prices) : null,
+        traffic,
+      };
+    });
+  }, [journeyResult, locationGroups, selectedDate]);
   const journeyMapCenter =
     journeyOriginCoords || journeyDestinationCoords || defaultMapCenter;
   const journeyMapPins = useMemo<MapPickerPin[]>(() => {
@@ -7532,6 +7578,23 @@ export default function ParkingPassPage() {
                         />
                       </div>
                       <div className="space-y-4 border-t border-[color:var(--border-subtle)] p-4">
+                        <ParkingPassTripPlanner
+                          hosts={journeyPlannerHosts}
+                          origin={journeyOriginLabel}
+                          destination={journeyDestinationLabel}
+                          routeMiles={journeyResult.route.distanceMeters / 1609.344}
+                          routeDurationSeconds={journeyResult.route.durationSeconds}
+                          selectedDate={selectedDate}
+                          onSeeAvailability={(host) => {
+                            const matchingGroup = locationGroups.find(
+                              (group) => String(group.host.id) === String(host.hostId),
+                            );
+                            if (!matchingGroup) return;
+                            setCityQuery([host.city, host.state].filter(Boolean).join(", "));
+                            setActiveLocationKey(matchingGroup.key);
+                            setViewMode("list");
+                          }}
+                        />
                         <div>
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <p className="text-sm font-semibold text-[color:var(--text-primary)]">
