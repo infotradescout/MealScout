@@ -32,6 +32,11 @@ assert.equal(missing.serverAuthorized, false);
 assert.equal(missing.serverCredentialMode, "missing");
 
 const routes = readFileSync("server/routes/publicMapRoutes.ts", "utf8");
+const geocoding = readFileSync("server/utils/geocoding.ts", "utf8");
+const addressValidation = readFileSync(
+  "server/utils/addressValidation.ts",
+  "utf8",
+);
 const autocomplete = readFileSync(
   "client/src/components/maps/place-autocomplete-input.tsx",
   "utf8",
@@ -43,6 +48,22 @@ assert.doesNotMatch(
   /getGoogleMapsServerApiKey\(\)\s*\|\|\s*getGoogleMapsWebApiKey\(\)/,
   "A referrer-restricted browser key must never authorize a server request.",
 );
+
+for (const [name, utility] of [
+  ["geocoding", geocoding],
+  ["address validation", addressValidation],
+] as const) {
+  assert.match(
+    utility,
+    /getGoogleMapsServerApiKey/,
+    `${name} must use the shared server-only Google credential resolver.`,
+  );
+  assert.doesNotMatch(
+    utility,
+    /VITE_GOOGLE/,
+    `${name} must never fall back to an HTTP-referrer-restricted browser key.`,
+  );
+}
 assert.doesNotMatch(
   routes,
   /const getGoogleMapsApiKey/,

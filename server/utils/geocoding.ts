@@ -1,4 +1,5 @@
 import { getCached, setCached } from "./googleApiCache";
+import { getGoogleMapsServerApiKey } from "../services/googleMapsCredentials";
 
 type ReverseGeocodeResult = {
   city?: string;
@@ -43,12 +44,7 @@ const sleep = (ms: number) =>
 const shouldRetryStatus = (status: number) =>
   status === 408 || status === 429 || status >= 500;
 
-const getGoogleMapsApiKey = () =>
-  String(
-    process.env.GOOGLE_MAPS_API_KEY ||
-      process.env.VITE_GOOGLE_MAPS_WEB_API_KEY ||
-      "",
-  ).trim();
+const getGoogleMapsApiKey = getGoogleMapsServerApiKey;
 
 async function fetchWithBackoff(
   url: string,

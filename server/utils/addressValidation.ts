@@ -1,4 +1,5 @@
 import { getCached, setCached } from "./googleApiCache";
+import { getGoogleMapsServerApiKey } from "../services/googleMapsCredentials";
 
 // Cache address validation results for 30 days — addresses rarely change and
 // validation is expensive ($0.005/call on the Address Validation API).
@@ -32,12 +33,7 @@ export type AddressValidationResult = {
   };
 };
 
-const getGoogleMapsApiKey = () =>
-  String(
-    process.env.GOOGLE_MAPS_API_KEY ||
-      process.env.VITE_GOOGLE_MAPS_WEB_API_KEY ||
-      "",
-  ).trim();
+const getGoogleMapsApiKey = getGoogleMapsServerApiKey;
 
 const pickAddressPart = (
   parts: Array<{
