@@ -10,6 +10,10 @@ Set `INFINITY_API_URL`, `INFINITY_API_KEY`, `INFINITY_TENANT_ID`, and
 Requests time out after 1.5 seconds, fail open, and run outside the user-facing
 success path. Production endpoints must use HTTPS.
 
-The mirrored payload includes an internal partner reference, affiliate tag,
-route, event type, and opaque restaurant/route hashes. It excludes IP address,
-user agent, email, payment value, and commission percentage.
+The mirrored payload allowlists an internal partner reference, a validated
+affiliate tag, its carrier, a query-free canonical route, event type, and
+opaque restaurant/route hashes. Raw query strings are never forwarded. Unknown
+parameters and query values such as tokens, emails, phone numbers, authorization
+codes, and login codes are discarded before the payload is built. Email- or
+phone-like path segments are redacted as a second boundary. The adapter also
+excludes IP address, user agent, payment value, and commission percentage.

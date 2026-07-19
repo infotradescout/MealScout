@@ -242,8 +242,8 @@ assert.doesNotMatch(
 );
 assert.match(
   scout,
-  /parkingStatus:\s*parkedTrucks\.length\s*>\s*0\s*\?\s*"occupied"\s*:\s*"available"/,
-  "Host locations must remain visible for planning without a parked truck.",
+  /const parkingStatus =\s*parkedTrucks\.length > 0 \? "occupied" : inventoryStatus/,
+  "Host bookability must come from verified inventory rather than host existence.",
 );
 assert.doesNotMatch(
   scout,
@@ -280,8 +280,10 @@ assert.match(
 );
 assert.match(
   markerFilter,
-  /\(hasParkedTruck\s*\|\|\s*isBookableHost\)\s*&&[\s\S]*activeMapLayers\.happeningToday/,
+  /marker\.kind === "parking"[\s\S]*activeMapLayers\.happeningToday \|\| activeMapLayers\.foodTrucks/,
+  "Ordinary host pins must remain visible for route planning.",
 );
+assert.doesNotMatch(markerFilter, /hasParkedTruck|isBookableHost/);
 
 const allMapMarkers = between(
   scout,

@@ -680,11 +680,13 @@ function App() {
     return (
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
-          <TimeOfDayBackground appearance="day" />
-          <div className="relative z-10 min-h-screen">
-            <Toaster />
-            <Router />
-          </div>
+          <ScoutNavSearchProvider>
+            <TimeOfDayBackground appearance="day" />
+            <div className="relative z-10 min-h-screen">
+              <Toaster />
+              <Router />
+            </div>
+          </ScoutNavSearchProvider>
         </TooltipProvider>
       </QueryClientProvider>
     );

@@ -33,6 +33,10 @@ import { buildSlotDateTimes } from "../services/timeIntent";
 import { getSuppressedLocationResourceIds } from "../services/truckLocationTrust";
 import { getCached, setCached } from "../utils/googleApiCache";
 import {
+  getGoogleMapsServerApiKey,
+  resolveGoogleMapsCredentials,
+} from "../services/googleMapsCredentials";
+import {
   expandPublicMapBounds,
   isPointInPublicMapBounds,
   parsePublicMapBounds,
@@ -402,29 +406,6 @@ const isMissingRelationError = (error: unknown, relationName?: string) => {
   if (!relationName) return true;
   return err.message?.includes(`"${relationName}"`) ?? false;
 };
-
-const getDedicatedGoogleMapsApiKey = () =>
-  String(
-    process.env.GOOGLE_MAPS_API_KEY ||
-      process.env.GOOGLE_API_KEY ||
-      "",
-  ).trim();
-
-// The browser key is expected to be HTTP-referrer restricted. It is safe to
-// return this key to a browser; a dedicated server credential is never returned.
-const getGoogleMapsWebApiKey = () =>
-  String(
-    process.env.VITE_GOOGLE_MAPS_WEB_API_KEY ||
-      process.env.VITE_GOOGLE_MAPS_API_KEY ||
-      process.env.VITE_GOOGLE_API_KEY ||
-      "",
-  ).trim();
-
-// Compatibility bridge for deployments that currently have only the public
-// browser key configured. Prefer a dedicated server key, but keep existing
-// Places/Routes features operating while production credentials are split.
-const getGoogleMapsApiKey = () =>
-  getDedicatedGoogleMapsApiKey() || getGoogleMapsWebApiKey();
 
 type PlaceAutocompletePrediction = {
   placeId: string;
@@ -1076,7 +1057,7 @@ export function registerPublicMapRoutes(app: Express) {
           "equipment_supplier",
         ].includes(category);
       });
-      const googleDiscoveryEnabled = getGoogleMapsApiKey().length > 0;
+      const googleDiscoveryEnabled = getGoogleMapsServerApiKey().length > 0;
 
       return res.status(200).json({
         generatedAt: new Date().toISOString(),
@@ -1145,10 +1126,9 @@ export function registerPublicMapRoutes(app: Express) {
 
   app.get("/api/map/runtime", async (_req, res) => {
     try {
-      const googleMapsApiKey = getGoogleMapsWebApiKey();
-      const hasServerMapsKey = getGoogleMapsApiKey().length > 0;
-      const hasDedicatedServerMapsKey =
-        getDedicatedGoogleMapsApiKey().length > 0;
+      const credentials = resolveGoogleMapsCredentials();
+      const googleMapsApiKey = credentials.browserApiKey;
+      const hasServerMapsKey = credentials.serverAuthorized;
       const googleMapsMapId = String(
         process.env.GOOGLE_MAPS_MAP_ID ||
           process.env.VITE_GOOGLE_MAPS_MAP_ID ||
@@ -1171,9 +1151,10 @@ export function registerPublicMapRoutes(app: Express) {
           placeIntelligence: hasServerMapsKey,
           operatorSupportDiscovery: hasServerMapsKey,
           routeCorridorDiscovery: hasServerMapsKey,
-          dedicatedServerKey: hasDedicatedServerMapsKey,
-          usingBrowserKeyServerFallback:
-            hasServerMapsKey && !hasDedicatedServerMapsKey,
+          serverAuthorized: hasServerMapsKey,
+          serverCredentialMode: credentials.serverCredentialMode,
+          dedicatedServerKey: hasServerMapsKey,
+          usingBrowserKeyServerFallback: false,
         },
       });
     } catch {
@@ -1190,6 +1171,8 @@ export function registerPublicMapRoutes(app: Express) {
           placeIntelligence: false,
           operatorSupportDiscovery: false,
           routeCorridorDiscovery: false,
+          serverAuthorized: false,
+          serverCredentialMode: "missing",
           dedicatedServerKey: false,
           usingBrowserKeyServerFallback: false,
         },
@@ -1359,7 +1342,7 @@ export function registerPublicMapRoutes(app: Express) {
           Number(process.env.MAP_LOCATIONS_COORD_CALIBRATION_METERS || 0) || 0,
         ) || 120;
       const useGoogleCalibration =
-        !launchDegradedMode && getGoogleMapsApiKey().length > 0;
+        !launchDegradedMode && getGoogleMapsServerApiKey().length > 0;
 
       const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number) => {
         if (timeoutMs <= 0) return promise;
@@ -2414,7 +2397,7 @@ export function registerPublicMapRoutes(app: Express) {
       return res.json(cached.payload);
     }
 
-    const apiKey = getGoogleMapsApiKey();
+    const apiKey = getGoogleMapsServerApiKey();
     if (!apiKey) {
       return res
         .status(503)
@@ -2467,7 +2450,7 @@ export function registerPublicMapRoutes(app: Express) {
       });
     }
 
-    const apiKey = getGoogleMapsApiKey();
+    const apiKey = getGoogleMapsServerApiKey();
     if (!apiKey) {
       return res.status(503).json({
         available: false,
@@ -2938,7 +2921,7 @@ export function registerPublicMapRoutes(app: Express) {
       return res.json({ suggestions: [] as PlaceAutocompletePrediction[] });
     }
 
-    const apiKey = getGoogleMapsApiKey();
+    const apiKey = getGoogleMapsServerApiKey();
     if (!apiKey) {
       return res.json({ suggestions: [] as PlaceAutocompletePrediction[] });
     }
@@ -3071,7 +3054,7 @@ export function registerPublicMapRoutes(app: Express) {
       return res.status(400).json({ message: "placeId is required" });
     }
 
-    const apiKey = getGoogleMapsApiKey();
+    const apiKey = getGoogleMapsServerApiKey();
     if (!apiKey) {
       return res
         .status(503)
@@ -3156,7 +3139,7 @@ export function registerPublicMapRoutes(app: Express) {
       } satisfies PlaceIntelligencePayload);
     }
 
-    const apiKey = getGoogleMapsApiKey();
+    const apiKey = getGoogleMapsServerApiKey();
     if (!apiKey) {
       return res.status(200).json({
         available: false,
@@ -3293,7 +3276,7 @@ export function registerPublicMapRoutes(app: Express) {
       return res.status(400).json({ message: "Valid lat and lng are required" });
     }
 
-    const apiKey = getGoogleMapsApiKey();
+    const apiKey = getGoogleMapsServerApiKey();
     if (!apiKey) {
       return res.status(200).json({
         available: false,
@@ -4128,7 +4111,7 @@ export function registerPublicMapRoutes(app: Express) {
       cells: [] as TrafficCell[],
     };
 
-    const googleApiKey = getGoogleMapsApiKey();
+    const googleApiKey = getGoogleMapsServerApiKey();
     if (googlePlacesRequested) {
       googlePlaces.enabled = true;
       if (!googleApiKey) {

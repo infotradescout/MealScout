@@ -61,6 +61,19 @@ jobs:
       - name: Recommendation Photo Proof Contract
         run: npm run test:recommend-photo-only-proof
 
+      - name: Runtime Safety Contracts
+        run: |
+          npx --yes tsx scripts/parking-pass-google-api-capabilities.contract.test.ts
+          npx --yes tsx scripts/mealscout-infinity-shadow.contract.test.ts
+          npx --yes tsx scripts/scout-parking-pass-host-truth.contract.test.ts
+          npx --yes tsx scripts/parking-pass-capacity-concurrency.contract.test.ts
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Reviews Route Application Tree Regression
+        run: npm run test:reviews-route
+
       - name: Build
         run: npm run build
 

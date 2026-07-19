@@ -40,6 +40,7 @@
     "db:generate:sql": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
     "test:flows:e2e": "playwright test",
+    "test:reviews-route": "playwright test playwright/reviews-route.spec.ts",
     "test:staff-rbac": "npx --yes tsx scripts/testStaffRBAC.ts",
     "test:staff-rbac-guardrails": "npx --yes tsx scripts/staff-rbac-guardrails.contract.test.ts",
     "test:admin-manual-provisioning": "npx --yes tsx scripts/testAdminManualProvisioning.ts",
