@@ -245,8 +245,12 @@ export function ParkingPassTripPlanner({
   }, [departureTime, routeDurationSeconds, routeMiles, schedule]);
 
   const saveRoute = async () => {
+    const existingAccountRoute = savedRoutes.find((route) =>
+      route.origin === origin && route.destination === destination &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(route.id),
+    );
     const nextRoute: SavedRoute = {
-      id: `${Date.now()}`,
+      id: existingAccountRoute?.id || `${Date.now()}`,
       name: routeName.trim() || `${origin} → ${destination}`,
       origin,
       destination,
@@ -266,6 +270,7 @@ export function ParkingPassTripPlanner({
       const response = await fetch("/api/parking-pass/routes", {
         method: "POST", credentials: "include", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          id: existingAccountRoute?.id,
           name: nextRoute.name, originLabel: origin, destinationLabel: destination,
           origin: originCoords, destination: destinationCoords, scope, recurring,
           schedule: schedule.map((stop) => ({
@@ -281,6 +286,12 @@ export function ParkingPassTripPlanner({
       });
       if (response.ok) {
         const payload = await response.json();
+        if (payload?.route?.id) {
+          const syncedRoute = { ...nextRoute, id: String(payload.route.id) };
+          const synced = [syncedRoute, ...next.filter((route) => route.id !== nextRoute.id)].slice(0, 20);
+          setSavedRoutes(synced);
+          writeJson(ROUTES_KEY, synced);
+        }
         const alerts = Array.isArray(payload?.alerts) ? payload.alerts : [];
         if (alerts.length > 0) setNewHostAlerts(alerts.map((alert: any) => String(alert.host?.name || "Host update")));
         setAccountSyncStatus("synced");
@@ -359,6 +370,11 @@ export function ParkingPassTripPlanner({
                   <Button type="button" size="sm" variant="outline" onClick={() => {
                     persistMetrics({ bookingStarts: metrics.bookingStarts + 1 });
                     recordEvent("route_booking_started", { hostId: host.hostId, locationId: host.locationId });
+                    try {
+                      sessionStorage.setItem("mealscout_route_booking_context", JSON.stringify({
+                        hostId: host.hostId, locationId: host.locationId,
+                      }));
+                    } catch {}
                     onSeeAvailability(host);
                   }}>
                     {host.available ? "Book this stop" : "Watch availability"}
