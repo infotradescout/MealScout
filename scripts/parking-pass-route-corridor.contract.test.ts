@@ -23,7 +23,6 @@ for (const snippet of [
   "decodeGooglePolyline",
   "locatePointAlongRoute",
   'getCached<any>("route_corridor"',
-  'setCached(\n        "route_corridor"',
   "ROUTE_CORRIDOR_HOST_RADIUS_MILES",
   "ROUTE_CORRIDOR_MAX_HOSTS",
   "storage.getAllHosts()",
@@ -41,6 +40,10 @@ for (const snippet of [
   if (!routes.includes(snippet)) {
     throw new Error("Route corridor server contract missing: " + snippet);
   }
+}
+
+if (!/setCached\(\s*"route_corridor"/.test(routes)) {
+  throw new Error("Route corridor cache write is missing");
 }
 
 if (corridorRoute.includes("googleMapsApiKey:")) {

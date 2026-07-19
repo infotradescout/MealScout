@@ -1135,7 +1135,7 @@ app.use((req, res, next) => {
         void mirrorInfinityTouch({
           partnerId: affiliateUserId,
           affiliateTag: ref,
-          canonicalPath: req.originalUrl || "/",
+          canonicalPath: req.path || "/",
           carrier: queryRef ? "query_ref" : "path_segment",
         });
       }

@@ -181,7 +181,7 @@ export function createParkingPassRepository(deps: ParkingPassRepoDeps) {
         defaultStartTime: startTime || defaultStartTime,
         defaultEndTime: endTime || defaultEndTime,
         defaultMaxTrucks: spotCount,
-        defaultHardCapEnabled: false,
+        defaultHardCapEnabled: true,
         seriesType: "parking_pass",
         parkingPassDaysOfWeek: Array.isArray(daysOfWeek)
           ? (daysOfWeek as any)
@@ -398,7 +398,7 @@ export function createParkingPassRepository(deps: ParkingPassRepoDeps) {
             recurrenceRule: null,
             startDate: today,
             endDate: null,
-            defaultHardCapEnabled: false,
+            defaultHardCapEnabled: true,
             seriesType: "parking_pass",
             ...updates,
           } as any)

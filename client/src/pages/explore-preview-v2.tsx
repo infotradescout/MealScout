@@ -86,6 +86,11 @@ import {
   getScoutRecenterDecision,
   shouldShowRestaurantMarker,
 } from "@/lib/scoutMapTruth";
+import {
+  getScoutHostParkingCopy,
+  getScoutParkingInventoryStatus,
+  type ScoutParkingInventoryStatus,
+} from "@/lib/scoutParkingPassTruth";
 import { toast } from "@/hooks/use-toast";
 import { buildPublicProfilePath } from "@/lib/public-profile-path";
 import {
@@ -328,6 +333,18 @@ interface ScoutParkingPassListing {
   startTime?: string | null;
   endTime?: string | null;
   status?: string | null;
+  hardCapEnabled?: boolean | null;
+  maxTrucks?: number | null;
+  spotCount?: number | null;
+  bookedSpots?: number | null;
+  availableSpotNumbers?: number[] | null;
+  hostPriceCents?: number | null;
+  breakfastPriceCents?: number | null;
+  lunchPriceCents?: number | null;
+  dinnerPriceCents?: number | null;
+  dailyPriceCents?: number | null;
+  weeklyPriceCents?: number | null;
+  monthlyPriceCents?: number | null;
   host?: ScoutHostLocation | null;
   bookings?: Array<{
     truckId?: string | null;
@@ -3172,7 +3189,14 @@ export default function ExplorePreview() {
     return rows.filter((listing) => {
       const host = listing.host;
       if (!host) return false;
-      if (!isScoutMapWindowActiveNow(listing)) return false;
+      if (
+        getScoutParkingInventoryStatus(
+          listing,
+          isScoutMapWindowActiveNow(listing),
+        ) !== "available"
+      ) {
+        return false;
+      }
       return isWithinScoutRadius(
         resolvedScoutCoords,
         readNumberField(host, ["latitude", "lat"]),
@@ -3180,6 +3204,27 @@ export default function ExplorePreview() {
         discoveryRadiusKm,
       );
     });
+  }, [discoveryRadiusKm, parkingPassData, resolvedScoutCoords]);
+
+  const parkingPassStatusByHostKey = useMemo(() => {
+    const byHost = new Map<string, Exclude<ScoutParkingInventoryStatus, null>>();
+    const rows = Array.isArray(parkingPassData) ? parkingPassData : [];
+    for (const listing of rows) {
+      const host = listing.host;
+      if (!host) continue;
+      const lat = readNumberField(host, ["latitude", "lat"]);
+      const lng = readNumberField(host, ["longitude", "lng"]);
+      if (!isWithinScoutRadius(resolvedScoutCoords, lat, lng, discoveryRadiusKm)) {
+        continue;
+      }
+      const key = getScoutHostMarkerKey(host);
+      const status = getScoutParkingInventoryStatus(
+        listing,
+        isScoutMapWindowActiveNow(listing),
+      );
+      if (status === "available" || !byHost.has(key)) byHost.set(key, status);
+    }
+    return byHost;
   }, [discoveryRadiusKm, parkingPassData, resolvedScoutCoords]);
 
   const visibleParkingPassHosts = useMemo<ScoutHostLocation[]>(() => {
@@ -3991,6 +4036,10 @@ export default function ExplorePreview() {
         if (lat === null || lng === null) return null;
         const hostKey = getScoutHostMarkerKey(host);
         const parkedTrucks = parkedTrucksByHostKey.get(hostKey) || [];
+        const inventoryStatus = parkingPassStatusByHostKey.get(hostKey) || null;
+        const parkingStatus =
+          parkedTrucks.length > 0 ? "occupied" : inventoryStatus;
+        const parkingCopy = getScoutHostParkingCopy(parkingStatus);
         const address = [host.address, host.city, host.state]
           .filter(Boolean)
           .join(", ");
@@ -4009,7 +4058,7 @@ export default function ExplorePreview() {
                   "truck parked here",
                   "trucks parked here",
                 )
-              : getMapMarkerSubtitle(address || "Host location", {
+              : getMapMarkerSubtitle(parkingCopy.description, {
                   kind: "host",
                   updatedAt: readStringField(host, [
                     "updatedAt",
@@ -4024,11 +4073,11 @@ export default function ExplorePreview() {
           address,
           spotImageUrl: host.spotImageUrl || null,
           parkedTrucks,
-          parkingStatus: parkedTrucks.length > 0 ? "occupied" : "available",
+          parkingStatus,
         } as MapAdapterMarker;
       })
       .filter((m): m is MapAdapterMarker => Boolean(m && m.sourceId));
-  }, [parkedTrucksByHostKey, scoutMapHostLocations]);
+  }, [parkedTrucksByHostKey, parkingPassStatusByHostKey, scoutMapHostLocations]);
 
   const dealMarkers = useMemo<MapAdapterMarker[]>(() => {
     return nearbyDeals
@@ -4162,11 +4211,8 @@ export default function ExplorePreview() {
       if (marker.kind === "event")
         layerAllowed = activeMapLayers.happeningToday;
       if (marker.kind === "parking") {
-        const hasParkedTruck = Boolean(marker.parkedTrucks?.length);
-        const isBookableHost = marker.parkingStatus === "available";
         layerAllowed =
-          (hasParkedTruck || isBookableHost) &&
-          (activeMapLayers.happeningToday || activeMapLayers.foodTrucks);
+          activeMapLayers.happeningToday || activeMapLayers.foodTrucks;
       }
       if (marker.kind === "deal") layerAllowed = activeMapLayers.deals;
       if (marker.kind === "restaurant") {
@@ -11230,11 +11276,13 @@ function MapPlaceCard({
   if (marker.kind === "parking") {
     const parkedTrucks = marker.parkedTrucks || [];
     const hasParkedTrucks = parkedTrucks.length > 0;
+    const parkingCopy = getScoutHostParkingCopy(marker.parkingStatus);
     const hostDestination = `/events?hostId=${encodeURIComponent(String(marker.sourceId))}`;
 
     return (
       <div
         data-scout-map-card-kind="host"
+        data-parking-truth={marker.parkingStatus || "host"}
         className="absolute left-3 right-3 bottom-[calc(env(safe-area-inset-bottom)+7.25rem)] z-30 rounded-2xl bg-[#1b1008]/94 p-3 text-white ring-1 ring-amber-300/45 backdrop-blur-xl"
         style={{
           boxShadow:
@@ -11259,7 +11307,7 @@ function MapPlaceCard({
           )}
           <div className="min-w-0 flex-1">
             <div className="inline-flex items-center gap-1.5 rounded-full bg-amber-400/20 px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.12em] text-amber-100 ring-1 ring-amber-300/25">
-              {hasParkedTrucks ? "Truck parked" : "Host location"}
+              {parkingCopy.badge}
             </div>
             <h3 className="mt-1.5 truncate text-base font-black">
               {marker.title || "Host location"}
@@ -11319,7 +11367,7 @@ function MapPlaceCard({
           </div>
         ) : (
           <p className="mt-3 rounded-xl bg-white/5 px-3 py-2 text-xs font-bold text-amber-50/70 ring-1 ring-white/10">
-            Host spot available for Parking Pass visits.
+            {parkingCopy.description}
           </p>
         )}
 
