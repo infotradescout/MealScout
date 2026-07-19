@@ -33,6 +33,24 @@ function getStripePromise(publicKey: string) {
   return promise;
 }
 
+function recordRouteBookingConfirmed(passId: string) {
+  try {
+    const raw = sessionStorage.getItem("mealscout_route_booking_context");
+    if (!raw) return;
+    const context = JSON.parse(raw);
+    sessionStorage.removeItem("mealscout_route_booking_context");
+    void fetch("/api/parking-pass/routes/events", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        eventName: "route_booking_confirmed",
+        properties: { ...context, passId },
+      }),
+    });
+  } catch {}
+}
+
 interface BookingPaymentModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -173,6 +191,7 @@ function PaymentForm({
               ? "Payment received. Your booking will appear shortly."
               : "Your parking spot has been reserved.",
         });
+        recordRouteBookingConfirmed(passId);
         onSuccess(status);
       }
     } catch (err: any) {
@@ -470,6 +489,7 @@ export function BookingPaymentModal({
           title: "Parking Pass Confirmed!",
           description: "Your parking spot has been reserved.",
         });
+        recordRouteBookingConfirmed(passId);
         handleSuccess("confirmed");
         return;
       }
