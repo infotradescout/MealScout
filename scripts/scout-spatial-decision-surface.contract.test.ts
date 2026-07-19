@@ -45,6 +45,18 @@ assert(
   "Google markers must visibly elevate the selected food result.",
 );
 assert(
+  googleMap.includes("buildGlowDotElement(marker, isSelected)") &&
+    googleMap.includes("ms-google-marker--selected"),
+  "Google AdvancedMarker content must render the same selected treatment.",
+);
+assert(
+  scout.includes('if (sheetState === "fullMap") return;') &&
+    scout.includes(
+      "!spatialDecisionItems.some(\n        ({ marker }) => marker.id === selectedMarkerId",
+    ),
+  "Collapsing the map must reset contextual pins to a visible compact decision.",
+);
+assert(
   fallbackMap.includes("msm-map-pin--selected") &&
     fallbackMap.includes("prefers-reduced-motion: reduce"),
   "Fallback markers must have an active treatment that respects reduced motion.",

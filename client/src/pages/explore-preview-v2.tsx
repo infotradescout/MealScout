@@ -5204,19 +5204,20 @@ export default function ExplorePreview() {
     [spatialDecisionItems],
   );
   useEffect(() => {
+    if (sheetState === "fullMap") return;
     if (spatialDecisionItems.length === 0) {
       setSelectedMarkerId(null);
       return;
     }
     if (
       !selectedMarkerId ||
-      !sceneFilteredMapMarkers.some(
-        (marker) => marker.id === selectedMarkerId,
+      !spatialDecisionItems.some(
+        ({ marker }) => marker.id === selectedMarkerId,
       )
     ) {
       setSelectedMarkerId(spatialDecisionItems[0].marker.id);
     }
-  }, [sceneFilteredMapMarkers, selectedMarkerId, spatialDecisionItems]);
+  }, [selectedMarkerId, sheetState, spatialDecisionItems]);
   const selectSpatialDecision = useCallback(
     (marker: MapAdapterMarker) => {
       setSelectedMarkerId(marker.id);
@@ -8956,13 +8957,19 @@ function SpatialDecisionRail({
               ? `$${(item.priceCents / 100).toFixed(2)}`
               : null;
           const statusDotClass =
-            item.kind === "Truck" || item.kind === "Place"
+            item.freshnessMeta?.isOpen === true
               ? "bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.7)]"
               : item.kind === "Deal"
                 ? "bg-lime-300"
                 : item.kind === "Event"
                   ? "bg-sky-300"
                   : "bg-orange-300";
+          const statusLabel =
+            item.freshnessMeta?.isOpen === true
+              ? item.kind === "Truck"
+                ? item.reason || "Serving now"
+                : "Open now"
+              : item.reason || "Nearby";
           return (
             <li
               key={`${item.id}-${marker.id}`}
@@ -9010,7 +9017,7 @@ function SpatialDecisionRail({
                       className={`h-2 w-2 rounded-full ${statusDotClass}`}
                       aria-hidden="true"
                     />
-                    {item.reason || (item.kind === "Truck" ? "Serving now" : "Nearby")}
+                    {statusLabel}
                   </div>
                   <h2 className="mt-1 truncate text-lg font-black leading-tight">
                     {item.title}

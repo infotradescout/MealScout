@@ -495,11 +495,21 @@ const svgDataUrl = (svg: string) =>
   `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
 
 /* ─── Glowing SVG dot marker (AdvancedMarker content) ───────────────────── */
-const buildGlowDotElement = (marker: MapAdapterMarker): HTMLElement => {
+const buildGlowDotElement = (
+  marker: MapAdapterMarker,
+  selected = false,
+): HTMLElement => {
   if (marker.kind === "parking") {
     const wrapper = document.createElement("div");
+    wrapper.className = selected
+      ? "ms-google-marker ms-google-marker--selected"
+      : "ms-google-marker";
     wrapper.style.cssText =
-      "position:relative;width:38px;height:38px;display:flex;align-items:center;justify-content:center;cursor:pointer;";
+      `position:relative;width:38px;height:38px;display:flex;align-items:center;justify-content:center;cursor:pointer;${
+        selected
+          ? "transform:translateY(-5px) scale(1.22);filter:drop-shadow(0 0 8px rgba(255,255,255,.95)) drop-shadow(0 0 18px rgba(249,115,22,.8));outline:3px solid #fff7ed;outline-offset:4px;border-radius:999px;"
+          : ""
+      }`;
     const img = document.createElement("img");
     img.src = mealScoutIcon;
     img.alt = marker.title || "Host location";
@@ -539,6 +549,9 @@ const buildGlowDotElement = (marker: MapAdapterMarker): HTMLElement => {
   const glowSpread = isUser ? 14 : 10;
 
   const wrapper = document.createElement("div");
+  wrapper.className = selected
+    ? "ms-google-marker ms-google-marker--selected"
+    : "ms-google-marker";
   wrapper.style.cssText = `
     position:relative;
     width:${outerSize}px;
@@ -547,6 +560,11 @@ const buildGlowDotElement = (marker: MapAdapterMarker): HTMLElement => {
     align-items:center;
     justify-content:center;
     cursor:pointer;
+    ${
+      selected
+        ? "transform:translateY(-5px) scale(1.28);filter:drop-shadow(0 0 8px rgba(255,255,255,.95));outline:3px solid #fff7ed;outline-offset:3px;border-radius:999px;"
+        : ""
+    }
   `;
 
   // Pulse ring (CSS animation via injected keyframes)
@@ -597,6 +615,12 @@ const buildGlowDotElement = (marker: MapAdapterMarker): HTMLElement => {
         0%   { transform:scale(0.5); opacity:0.6; }
         70%  { transform:scale(1.8); opacity:0; }
         100% { transform:scale(0.5); opacity:0; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .ms-google-marker, .ms-google-marker * {
+          animation: none !important;
+          transition: none !important;
+        }
       }
     `;
     document.head.appendChild(style);
@@ -1145,7 +1169,7 @@ export function GoogleMapSurface({
         }
         // Update icon
         if (useAdvanced && "content" in existing) {
-          existing.content = buildGlowDotElement(marker);
+          existing.content = buildGlowDotElement(marker, isSelected);
         } else if (typeof existing.setIcon === "function") {
           existing.setIcon(buildLegacyIcon(googleMaps, marker, isSelected));
           existing.setZIndex?.(isSelected ? 1000 : undefined);
@@ -1159,7 +1183,7 @@ export function GoogleMapSurface({
             map: mapRef.current,
             position: { lat: marker.lat, lng: marker.lng },
             title: marker.title || marker.subtitle || marker.kind,
-            content: buildGlowDotElement(marker),
+            content: buildGlowDotElement(marker, isSelected),
           })
         : new googleMaps.Marker({
             map: mapRef.current,
