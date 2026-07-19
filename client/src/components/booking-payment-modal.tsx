@@ -89,6 +89,7 @@ interface BookingPaymentModalProps {
 interface PaymentFormProps {
   clientSecret: string;
   paymentIntentId: string;
+  passId: string;
   truckId: string;
   totalCents: number;
   breakdown: {
@@ -105,6 +106,7 @@ interface PaymentFormProps {
 function PaymentForm({
   clientSecret,
   paymentIntentId,
+  passId,
   truckId,
   totalCents,
   breakdown,
@@ -777,6 +779,7 @@ export function BookingPaymentModal({
             <PaymentForm
               clientSecret={clientSecret}
               paymentIntentId={paymentIntentId}
+              passId={passId}
               truckId={truckId}
               totalCents={bookingData.totalCents}
               breakdown={bookingData.breakdown}
