@@ -6,16 +6,13 @@ import {
 } from "../client/src/components/maps/google-marker-runtime";
 
 let advancedCount = 0;
-let legacyCount = 0;
 class AdvancedMarkerMock {
   constructor(public options: Record<string, unknown>) {
     advancedCount += 1;
   }
 }
 class LegacyMarkerMock {
-  constructor(public options: Record<string, unknown>) {
-    legacyCount += 1;
-  }
+  constructor(public options: Record<string, unknown>) {}
 }
 
 const modernRuntime = resolveGoogleMarkerRenderer({
@@ -54,7 +51,6 @@ const instances = Array.from({ length: expectedMarkers }, (_, index) =>
     renderer: modernRuntime,
     AdvancedMarkerElement: AdvancedMarkerMock,
     advancedOptions: { position: { lat: 30 + index, lng: -87 } },
-    legacyOptions: {},
   }),
 );
 assert.equal(instances.filter(Boolean).length, expectedMarkers);
@@ -69,16 +65,18 @@ const legacyRuntime = resolveGoogleMarkerRenderer({
   AdvancedMarkerElement: AdvancedMarkerMock,
   LegacyMarker: LegacyMarkerMock,
 });
-assert.equal(legacyRuntime, "legacy");
-assert.ok(
+assert.equal(
+  legacyRuntime,
+  "unavailable",
+  "A missing Map ID must trigger MapLibre fallback even when legacy Marker is callable, because that runtime can silently render zero pins.",
+);
+assert.equal(
   createGoogleMarkerInstance({
     renderer: legacyRuntime,
-    LegacyMarker: LegacyMarkerMock,
     advancedOptions: {},
-    legacyOptions: { position: { lat: 30, lng: -87 } },
   }),
+  null,
 );
-assert.equal(legacyCount, 1);
 
 assert.equal(
   resolveGoogleMarkerRenderer({

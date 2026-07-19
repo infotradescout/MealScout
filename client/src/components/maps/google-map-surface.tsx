@@ -633,58 +633,6 @@ const buildGlowDotElement = (
   return wrapper;
 };
 
-/* ─── Legacy Marker icon (fallback when no Map ID) ──────────────────────── */
-const buildLegacyIcon = (
-  googleMaps: any,
-  marker: MapAdapterMarker,
-  selected = false,
-) => {
-  const color = markerColor(marker);
-  if (marker.kind !== "user") {
-    const glyph = markerGlyph(marker);
-    const parkedTruckCount = marker.parkedTrucks?.length || 0;
-    const parkedTruckBadge =
-      parkedTruckCount > 0
-        ? `<circle cx="40" cy="14" r="9" fill="#fb923c" stroke="#fff7ed" stroke-width="2"/>
-         <text x="40" y="18" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="900" fill="#1b0b02">T</text>`
-        : "";
-    const selectedRing = selected
-      ? `<circle cx="27" cy="25" r="23" fill="none" stroke="#fff7ed" stroke-width="4" opacity="0.98"/>
-         <circle cx="27" cy="25" r="27" fill="none" stroke="${color}" stroke-width="3" opacity="0.55"/>`
-      : "";
-    const svg = `
-      <svg width="62" height="74" viewBox="-4 -4 62 74" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
-            <feGaussianBlur stdDeviation="4" result="blur"/>
-            <feColorMatrix in="blur" type="matrix" values="1 0 0 0 1 0 0.38 0 0 0.32 0 0 0.08 0 0 0 0 0.75 0"/>
-            <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
-          </filter>
-        </defs>
-        <ellipse cx="27" cy="59" rx="12" ry="4" fill="#000" opacity="0.42"/>
-        ${selectedRing}
-        <path filter="url(#glow)" d="M27 3C15.4 3 6 12.4 6 24c0 15.8 21 38 21 38s21-22.2 21-38C48 12.4 38.6 3 27 3z" fill="${color}" stroke="#ffd08a" stroke-width="2"/>
-        <circle cx="27" cy="24" r="13" fill="#1b0d05" opacity="0.9" stroke="#fff3d6" stroke-width="1.5"/>
-        <text x="27" y="29" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="900" fill="#fff3d6">${glyph}</text>
-        ${parkedTruckBadge}
-      </svg>
-    `;
-    return {
-      url: svgDataUrl(svg),
-      scaledSize: new googleMaps.Size(selected ? 52 : 42, selected ? 62 : 52),
-      anchor: new googleMaps.Point(selected ? 26 : 21, selected ? 62 : 52),
-    };
-  }
-  return {
-    path: googleMaps.SymbolPath.CIRCLE,
-    scale: 10,
-    fillColor: color,
-    fillOpacity: 0.95,
-    strokeColor: "#dbeafe",
-    strokeWeight: 3,
-  };
-};
-
 const removeMarkerFromMap = (instance: any) => {
   if (!instance) return;
   if (typeof instance.setMap === "function") {
@@ -1146,11 +1094,9 @@ export function GoogleMapSurface({
     if (!googleMaps || !mapRef.current || mapReadyVersion === 0) return;
 
     const AdvancedMarkerElement = googleMaps.marker?.AdvancedMarkerElement;
-    const LegacyMarker = googleMaps.Marker;
     const markerRenderer = resolveGoogleMarkerRenderer({
       mapId,
       AdvancedMarkerElement,
-      LegacyMarker,
     });
     const useAdvanced = markerRenderer === "advanced";
     const failMarkerRuntime = (detail?: string) => {
@@ -1202,9 +1148,7 @@ export function GoogleMapSurface({
         // Update icon
         if (useAdvanced && "content" in existing) {
           existing.content = buildGlowDotElement(marker, isSelected);
-        } else if (typeof existing.setIcon === "function") {
-          existing.setIcon(buildLegacyIcon(googleMaps, marker, isSelected));
-          existing.setZIndex?.(isSelected ? 1000 : undefined);
+          existing.zIndex = isSelected ? 1000 : undefined;
         }
         markerSignatureRefs.current.set(marker.id, signature);
         return;
@@ -1215,19 +1159,12 @@ export function GoogleMapSurface({
         instance = createGoogleMarkerInstance({
           renderer: markerRenderer,
           AdvancedMarkerElement,
-          LegacyMarker,
           advancedOptions: {
             map: mapRef.current,
             position: { lat: marker.lat, lng: marker.lng },
             title: marker.title || marker.subtitle || marker.kind,
             content: buildGlowDotElement(marker, isSelected),
             gmpClickable: interactive && marker.id !== "__user-location",
-          },
-          legacyOptions: {
-            map: mapRef.current,
-            position: { lat: marker.lat, lng: marker.lng },
-            title: marker.title || marker.subtitle || marker.kind,
-            icon: buildLegacyIcon(googleMaps, marker, isSelected),
             zIndex: isSelected ? 1000 : undefined,
           },
         });
