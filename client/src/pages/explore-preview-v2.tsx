@@ -5571,7 +5571,7 @@ export default function ExplorePreview() {
           >
             {/* Scout map surfaces
               ------------------
-              DEFAULT state: compact interactive Google map surface.
+              DEFAULT state: deterministic compact MapLibre decision surface.
               FULLMAP state: interactive Google Map widget for real
                 pan/zoom/tap-pin exploration.
           */}
@@ -5586,39 +5586,16 @@ export default function ExplorePreview() {
                 }}
               >
                 {sheetState === "default" && resolvedScoutCoords ? (
-                  hasMapKey && !googleMapFailed && mapCenter ? (
-                    <MapErrorBoundary>
-                      <GoogleMapSurface
-                        apiKey={effectiveGoogleMapsApiKey}
-                        mapId={effectiveGoogleMapsMapId || undefined}
-                        center={mapCenter}
-                        zoom={mapZoom}
-                        markers={compactDecisionMarkers}
-                        selectedMarkerId={selectedMarkerId}
-                        showRoadTrafficLayer={false}
-                        userLocation={verifiedMapUserLocation}
-                        isNightTheme={true}
-                        useNativeMapStyle={false}
-                        showZoomControls={false}
-                        onBoundsChanged={handleMapBoundsChanged}
-                        onZoomChanged={handleMapZoomChanged}
-                        onCenterChanged={handleMapCenterChanged}
-                        onMarkerTap={handlePreviewMarkerTap}
-                        onFatalError={() => setGoogleMapFailed(true)}
-                      />
-                    </MapErrorBoundary>
-                  ) : (
-                    <Suspense fallback={<HeroMapFallback reason="loading" />}>
-                      <ThemedScoutMap
-                        userLocation={resolvedScoutCoords}
-                        showUserLocation={Boolean(verifiedMapUserLocation)}
-                        markers={compactDecisionMarkers}
-                        selectedMarkerId={selectedMarkerId}
-                        zoom={13}
-                        onMarkerTap={handlePreviewMarkerTap}
-                      />
-                    </Suspense>
-                  )
+                  <Suspense fallback={<HeroMapFallback reason="loading" />}>
+                    <ThemedScoutMap
+                      userLocation={resolvedScoutCoords}
+                      showUserLocation={Boolean(verifiedMapUserLocation)}
+                      markers={compactDecisionMarkers}
+                      selectedMarkerId={selectedMarkerId}
+                      zoom={13}
+                      onMarkerTap={handlePreviewMarkerTap}
+                    />
+                  </Suspense>
                 ) : sheetState === "default" ? (
                   <HeroMapFallback
                     reason={locationStatus === "denied" ? "denied" : "loading"}
@@ -5627,8 +5604,8 @@ export default function ExplorePreview() {
               </div>
 
               {/* GoogleMapSurface:
-                - Used for compact and full interactive exploration.
-                - The local tile surface is only a no-key/error fallback.
+                - Reserved for full interactive exploration.
+                - The compact decision surface always uses local MapLibre.
             */}
               {sheetState === "fullMap" &&
               hasMapKey &&

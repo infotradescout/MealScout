@@ -32,6 +32,19 @@ assert(
   "A compact pin tap must select its decision without forcing a mode change.",
 );
 
+const compactMapBranch = scout.slice(
+  scout.indexOf('data-testid="scout-map-preview"'),
+  scout.indexOf("{/* GoogleMapSurface:"),
+);
+assert(
+  compactMapBranch.includes("<ThemedScoutMap") &&
+    compactMapBranch.includes("markers={compactDecisionMarkers}") &&
+    compactMapBranch.includes("selectedMarkerId={selectedMarkerId}") &&
+    compactMapBranch.includes("onMarkerTap={handlePreviewMarkerTap}") &&
+    !compactMapBranch.includes("<GoogleMapSurface"),
+  "The compact Scout decision surface must always use MapLibre with canonical markers and selection; Google is full-map only.",
+);
+
 for (const source of [googleMap, fallbackMap]) {
   assert(
     source.includes("selectedMarkerId"),
