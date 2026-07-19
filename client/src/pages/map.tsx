@@ -831,7 +831,8 @@ function LegacyMapSurface({
   return (
     <MapContainer
       center={[center.lat, center.lng]}
-      zoom={zoom}
+      zoom={Math.max(3, zoom)}
+      minZoom={3}
       zoomControl={false}
       className="h-full w-full"
       scrollWheelZoom
@@ -1658,7 +1659,7 @@ export default function MapPage() {
           Math.abs(lng) <= 180
         ) {
           setMapCenter({ lat, lng });
-          if (Number.isFinite(z) && z >= 1 && z <= 20) {
+          if (Number.isFinite(z) && z >= 3 && z <= 20) {
             setZoomLevel(Math.round(z));
             lastZoomLevelRef.current = Math.round(z);
           }
@@ -1965,7 +1966,9 @@ export default function MapPage() {
   };
 
   // Fetch host + event locations for map
-  const MAP_LOCATIONS_CACHE_KEY = "mealscout:map:locations:v3";
+  // v4 invalidates older installed-app snapshots that could contain only the
+  // small subset of hosts with an active listing at the time of caching.
+  const MAP_LOCATIONS_CACHE_KEY = "mealscout:map:locations:v4";
   const MAP_LOCATIONS_CACHE_TTL_MS = 30 * 60 * 1000;
   const [cachedMapLocations, setCachedMapLocations] =
     useState<MapLocationsResponse | null>(() => {
@@ -2141,8 +2144,9 @@ export default function MapPage() {
     return mapLocations;
   }, [hasViewportOverlayData, viewportOverlaysData, mapLocations]);
 
-  // Hosts with unpriced/unbookable Parking Pass listings must not appear on maps.
-  // Use a lightweight host-id endpoint + localStorage cache so the map can render immediately.
+  // Booking status is presentation metadata, not a visibility gate. Planning
+  // maps must show every host location so trucks can plan ahead and watch for
+  // future availability.
   const BOOKABLE_HOST_CACHE_KEY = "mealscout:map:bookableHostIds:v1";
   const [cachedBookableHostIds, setCachedBookableHostIds] = useState<
     Set<string>
@@ -2411,16 +2415,6 @@ export default function MapPage() {
         host.showFuelPrices && fuelPriceSummary(host.fuelPrices),
       );
       if (!hostId && !hasPublicFuelPrices) return false;
-      if (
-        effectiveBookableHostIds.size > 0 &&
-        !effectiveBookableHostIds.has(hostId) &&
-        !hasPublicFuelPrices
-      ) {
-        return false;
-      }
-      if (effectiveBookableHostIds.size === 0 && !hasPublicFuelPrices) {
-        return false;
-      }
       const coords = resolveHostCoords(host);
       if (!coords) return false;
       if (boundsForPins && !boundsForPins.contains([coords.lat, coords.lng])) {
@@ -2433,7 +2427,6 @@ export default function MapPage() {
     hostCoords,
     mapBounds,
     appliedMapBounds,
-    effectiveBookableHostIds,
   ]);
 
   const getHostAvailabilityLabel = useCallback(
@@ -4206,7 +4199,7 @@ export default function MapPage() {
                 userLocation={userLocation}
                 isNightTheme={isNightTheme}
                 onBoundsChanged={setMapBounds}
-                onZoomChanged={setZoomLevel}
+                onZoomChanged={(nextZoom) => setZoomLevel(Math.max(3, nextZoom))}
                 onCenterChanged={handleMapCenterChanged}
                 onMarkerTap={handleAdapterMarkerTap}
                 onMarkerHover={(marker, position) => {
@@ -4259,7 +4252,7 @@ export default function MapPage() {
               userLocation={userLocation}
               isNightTheme={isNightTheme}
               onBoundsChanged={setMapBounds}
-              onZoomChanged={setZoomLevel}
+              onZoomChanged={(nextZoom) => setZoomLevel(Math.max(3, nextZoom))}
               onCenterChanged={handleMapCenterChanged}
               onMarkerTap={handleAdapterMarkerTap}
             />
