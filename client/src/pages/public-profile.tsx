@@ -2951,7 +2951,10 @@ export default function PublicProfilePage() {
 
   if (!data) {
     return (
-      <div className="mealscout-public-profile flex min-h-screen items-center justify-center px-4">
+      <div
+        className="mealscout-public-profile flex min-h-screen items-center justify-center px-4"
+        data-testid="public-profile-not-found"
+      >
         <div className="profile-surface w-full max-w-lg rounded-[1.75rem] p-6 text-center sm:p-8">
           <p className="profile-section-label">MealScout</p>
           <h1 className="mt-2 text-3xl font-black tracking-tight text-[color:var(--profile-ink)]">

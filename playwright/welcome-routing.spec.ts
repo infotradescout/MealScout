@@ -125,7 +125,11 @@ test.describe("welcome and Scout routing law", () => {
     await expect(page.getByTestId("scout-map-container")).toHaveCount(0);
   });
 
-  test("welcome signup opens role-aware signup paths", async ({ page }) => {
+  // Business flows now hand off to restaurant-signup's account-creation
+  // gate, not directly to a business-details form (that form is behind
+  // account creation) — the title says "account creation" rather than
+  // "signup paths" so it doesn't overclaim reaching the business form.
+  test("welcome signup opens role-aware paths into account creation", async ({ page }) => {
     await mockGuest(page);
 
     await page.goto(`${FRONTEND}/`, { waitUntil: "domcontentloaded" });
@@ -180,9 +184,11 @@ test.describe("welcome and Scout routing law", () => {
     await page.goto(`${FRONTEND}/explore`, { waitUntil: "domcontentloaded" });
 
     await expect(page).toHaveURL(/\/explore$/);
-    await expect(
-      page.getByRole("heading", { name: "Profile not found" }),
-    ).toBeVisible();
+    // Assert the intentional not-found outcome via its stable testid
+    // (public-profile.tsx), not the catch-all's incidental copy — and
+    // confirm it did not silently render as Scout.
+    await expect(page.getByTestId("public-profile-not-found")).toBeVisible();
+    await expect(page.getByTestId("scout-map-container")).toHaveCount(0);
     await expect(page.getByRole("link", { name: "Scout" })).toHaveAttribute(
       "href",
       "/scout",
@@ -198,9 +204,8 @@ test.describe("welcome and Scout routing law", () => {
     });
 
     await expect(page).toHaveURL(/\/explore-preview$/);
-    await expect(
-      page.getByRole("heading", { name: "Profile not found" }),
-    ).toBeVisible();
+    await expect(page.getByTestId("public-profile-not-found")).toBeVisible();
+    await expect(page.getByTestId("scout-map-container")).toHaveCount(0);
     await expect(page.getByRole("link", { name: "Scout" })).toHaveAttribute(
       "href",
       "/scout",
