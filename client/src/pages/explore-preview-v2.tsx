@@ -5427,10 +5427,10 @@ export default function ExplorePreview() {
     topLocalFavoriteRestaurants.length > 0;
   const isThinScoutViewport = isLowActivity && localActivityCount <= 1;
   const compactMapHeight = isThinScoutViewport
-    ? "clamp(340px, 48dvh, 430px)"
-    : "clamp(360px, 52dvh, 470px)";
+    ? "clamp(170px, 25dvh, 220px)"
+    : "clamp(180px, 25dvh, 230px)";
   const collapsedMapClass =
-    "mx-0 mt-0 bg-[#17110d] md:mt-4 md:rounded-[2rem] md:ring-1 md:ring-orange-200/16";
+    "mx-0 mt-0 bg-[#17110d] md:mt-4 md:ring-1 md:ring-orange-200/16";
   const railSectionClass = isHighActivity
     ? "pl-4 pr-0 pt-1 pb-4"
     : "pl-4 pr-0 pt-2 pb-4 sm:pl-5";

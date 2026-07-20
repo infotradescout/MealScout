@@ -111,7 +111,7 @@ for (const snippet of [
   "overflow-x-hidden",
   'data-scout-mobile-thirds-map="true"',
   "const compactMapHeight = isThinScoutViewport",
-  '"clamp(360px, 52dvh, 470px)"',
+  '"clamp(180px, 25dvh, 230px)"',
   'data-testid="scout-spatial-decision-rail"',
   "scoutSearchMode",
   "scoutSearchIntent",
