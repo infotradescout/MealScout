@@ -68,11 +68,11 @@ jobs:
           npx --yes tsx scripts/scout-parking-pass-host-truth.contract.test.ts
           npx --yes tsx scripts/parking-pass-capacity-concurrency.contract.test.ts
 
-      - name: Install Playwright Chromium
-        run: npx playwright install --with-deps chromium
+      - name: Install Playwright Browsers
+        run: npx playwright install --with-deps chromium firefox webkit
 
-      - name: Reviews Route Application Tree Regression
-        run: npm run test:reviews-route
+      - name: Cross-Browser Route Regression (Chromium/Firefox/WebKit + Mobile)
+        run: npm run test:flows:e2e:no-creds
 
       - name: Build
         run: npm run build
