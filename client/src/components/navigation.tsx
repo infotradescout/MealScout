@@ -602,9 +602,11 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
             aria-label="Open MealScout"
             className="inline-flex items-center gap-2 text-[color:var(--text-primary)]"
           >
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-              <Compass className="h-4 w-4" aria-hidden="true" />
-            </span>
+            <img
+              src="/brand/mealscout-logo-pin.png"
+              alt="MealScout"
+              className="h-9 w-9 object-contain"
+            />
             <span className="text-base font-black tracking-tight">MealScout</span>
           </Link>
           {isScoutRoute ? (
