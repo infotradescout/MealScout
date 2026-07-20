@@ -74,6 +74,19 @@ test.describe("verification handoff routing", () => {
 
     const truckIntent = "/restaurant-signup?businessType=food_truck&claim=1";
 
+    // Commit 4c8d34a0 ("enforce email verification check in post-verification
+    // handoff") replaced the static login link with a button that confirms
+    // verification server-side before navigating, so the redirect target is
+    // no longer readable off a static href — it only resolves after the
+    // check-status call succeeds and the app performs the redirect itself.
+    await page.route("**/api/auth/verification-status", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ verified: true }),
+      });
+    });
+
     await page.goto(`${FRONTEND}/post-verification?status=check-email`, {
       waitUntil: "domcontentloaded",
     });
@@ -81,6 +94,10 @@ test.describe("verification handoff routing", () => {
       window.sessionStorage.setItem(
         "mealscout:post-verification-redirect",
         path,
+      );
+      window.sessionStorage.setItem(
+        "mealscout:lastSignupEmail",
+        "truck-driver@example.test",
       );
     }, truckIntent);
 
@@ -92,17 +109,14 @@ test.describe("verification handoff routing", () => {
     );
     await dismissBetaDisclaimer(page);
 
-    const loginLink = page.getByRole("link", {
-      name: /i verified, log in|log in to continue/i,
-    });
+    await page.getByRole("button", { name: /i verified, log in/i }).click();
 
-    await expect(loginLink).toHaveAttribute(
-      "href",
+    await page.waitForURL(
       new RegExp(
-        encodeURIComponent(truckIntent).replace(
+        `/login\\?redirect=${encodeURIComponent(truckIntent).replace(
           /[.*+?^${}()|[\]\\]/g,
           "\\$&",
-        ),
+        )}`,
       ),
     );
   });
@@ -166,7 +180,9 @@ test.describe("verification handoff routing", () => {
     await expect(page.getByTestId("button-resend-verification")).toBeVisible();
     await page.getByTestId("button-resend-verification").click();
 
-    expect(resendPayload).toEqual({
+    // resendPayload is set by the mocked route handler asynchronously;
+    // checking it synchronously races that network round-trip.
+    await expect.poll(() => resendPayload).toEqual({
       email: "event-user@example.test",
       intendedNextPath: "/event-signup",
     });
