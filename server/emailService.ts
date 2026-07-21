@@ -154,6 +154,7 @@ interface PremiumWeeklySummaryEmailData {
   liveLocationActivations: number;
   manualScheduleUsage: number;
   parkingReportsCompleted: number;
+  period?: "week" | "month";
 }
 
 // Email templates
@@ -1869,6 +1870,8 @@ export class EmailService {
       return false;
     }
 
+    const periodLabel = data.period === "month" ? "Monthly" : "Weekly";
+
     const start = new Date(data.weekStart);
     const end = new Date(data.weekEnd);
     const weekStartLabel = Number.isNaN(start.getTime())
@@ -1886,7 +1889,7 @@ export class EmailService {
           year: "numeric",
         });
 
-    const title = `Your Premium Ops Weekly Summary (${weekStartLabel} - ${weekEndLabel})`;
+    const title = `Your Premium Ops ${periodLabel} Summary (${weekStartLabel} - ${weekEndLabel})`;
     const content = `
       <p>Hi ${operatorName},</p>
       <p>Here is your Premium Ops summary for <strong>${weekStartLabel}</strong> to <strong>${weekEndLabel}</strong>.</p>
@@ -1920,7 +1923,7 @@ export class EmailService {
     `;
 
     const html = EmailTemplates.getBaseTemplate(title, content);
-    const text = `Hi ${operatorName}, weekly premium summary (${weekStartLabel} - ${weekEndLabel}): stops covered ${data.stopsCovered}, live location activations ${data.liveLocationActivations}, manual schedule usage ${data.manualScheduleUsage}, parking reports completed ${data.parkingReportsCompleted}. Open: https://www.mealscout.us/subscribe`;
+    const text = `Hi ${operatorName}, ${periodLabel.toLowerCase()} premium summary (${weekStartLabel} - ${weekEndLabel}): stops covered ${data.stopsCovered}, live location activations ${data.liveLocationActivations}, manual schedule usage ${data.manualScheduleUsage}, parking reports completed ${data.parkingReportsCompleted}. Open: https://www.mealscout.us/subscribe`;
 
     return await this.sendEmail({
       to,

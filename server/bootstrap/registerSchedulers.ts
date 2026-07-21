@@ -95,9 +95,9 @@ export async function registerSchedulers(app: Express): Promise<void> {
     }
   });
 
-  // Premium Weekly Summary — Monday 8:30 AM (subscribed trucks)
-  scheduleCron("30 8 * * 1", async () => {
-    console.log("⏰ Triggering Premium Weekly Summary Cron");
+  // Premium Monthly Summary — 1st of the month, 8:30 AM (subscribed trucks)
+  scheduleCron("30 8 1 * *", async () => {
+    console.log("⏰ Triggering Premium Monthly Summary Cron");
     try {
       const { users, restaurantSubscriptions, restaurants } = await import(
         "@shared/schema",
@@ -123,7 +123,7 @@ export async function registerSchedulers(app: Express): Promise<void> {
         .map((r: { userId: string | null }) => String(r.userId || "").trim())
         .filter(Boolean);
       if (activeUserIds.length === 0) {
-        console.log("[premium-weekly] No active subscribers — skipping");
+        console.log("[premium-monthly] No active subscribers — skipping");
         return;
       }
       const activeUsers = await db
@@ -131,10 +131,8 @@ export async function registerSchedulers(app: Express): Promise<void> {
         .from(users)
         .where(inArray(users.id, activeUserIds));
       const now = new Date();
-      const weekNumber = Math.ceil(
-        ((now.getTime() - new Date(now.getFullYear(), 0, 1).getTime()) / 86400000 + 1) / 7,
-      );
-      const idempotencyKey = `${now.getFullYear()}-W${weekNumber}`;
+      // Cron fires on the 1st, so "this month" is the just-completed month.
+      const idempotencyKey = `${now.getFullYear()}-M${String(now.getMonth() + 1).padStart(2, "0")}`;
       let sentCount = 0;
       let skippedCount = 0;
       for (const user of activeUsers) {
@@ -151,15 +149,15 @@ export async function registerSchedulers(app: Express): Promise<void> {
           where: and(
             eq(telemetryEvents.eventName, "premium_summary_auto_emailed"),
             eq(telemetryEvents.userId, user.id),
-            sql`properties->>'week' = ${idempotencyKey}`,
+            sql`properties->>'period' = ${idempotencyKey}`,
           ),
         });
         if (alreadySent) { skippedCount++; continue; }
         // Build summary inline (same logic as buildPremiumWeeklySummary)
         try {
           const { restaurants: restaurantsTable, truckManualSchedules, truckParkingReports } = await import("@shared/schema");
-          const windowStart = new Date(now);
-          windowStart.setDate(windowStart.getDate() - 6);
+          // Full previous calendar month (cron runs on the 1st).
+          const windowStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
           windowStart.setHours(0, 0, 0, 0);
           const ownedRestaurants = await db
             .select({ id: restaurantsTable.id })
@@ -189,21 +187,22 @@ export async function registerSchedulers(app: Express): Promise<void> {
             liveLocationActivations: liveLocEvents.length,
             manualScheduleUsage: manualSchedules.length,
             parkingReportsCompleted: parkingReports.length,
+            period: "month",
           });
           await db.insert(telemetryEvents).values({
             eventName: "premium_summary_auto_emailed",
             userId: user.id,
-            properties: { week: idempotencyKey, stopsCovered: stopKeys.size },
+            properties: { period: idempotencyKey, stopsCovered: stopKeys.size },
           });
           sentCount++;
         } catch (userError) {
-          console.error(`[premium-weekly] Failed for user ${user.id}:`, userError);
+          console.error(`[premium-monthly] Failed for user ${user.id}:`, userError);
           skippedCount++;
         }
       }
-      console.log(`✅ Premium Weekly Summary: sent=${sentCount} skipped=${skippedCount}`);
+      console.log(`✅ Premium Monthly Summary: sent=${sentCount} skipped=${skippedCount}`);
     } catch (error) {
-      console.error("❌ Premium Weekly Summary Cron Failed:", error);
+      console.error("❌ Premium Monthly Summary Cron Failed:", error);
     }
   });
 
